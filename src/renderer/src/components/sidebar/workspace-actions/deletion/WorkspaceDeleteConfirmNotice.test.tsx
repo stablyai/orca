@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/hooks/useShortcutLabel', () => ({
+vi.mock('@/lib/keyboard/useShortcutLabel', () => ({
   useShortcutKeyDetails: () => ({ keys: ['⌘', '⇧', '⌫'], doubleTap: false })
 }))
 
