@@ -21,6 +21,7 @@ import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispa
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import { isEditorKeyboardTarget } from '@/lib/text-input/focus/editable-target'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
@@ -109,7 +110,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       }
     }
     const manager = managerRef.current
-    if (!manager) {
+    if (!manager || isEditorKeyboardTarget(e.target)) {
       return
     }
     const keyboardScope = keyboardScopeRef.current

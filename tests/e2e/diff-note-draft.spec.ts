@@ -8,7 +8,7 @@ const NOTE_BODY = 'This note was added from the inline draft card.'
 
 async function attachDiffScreenshot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
   const screenshotPath = testInfo.outputPath(`${name}.png`)
-  await page.locator('.monaco-diff-editor').first().screenshot({ path: screenshotPath })
+  await page.locator('diffs-container').first().screenshot({ path: screenshotPath })
   await testInfo.attach(name, { path: screenshotPath, contentType: 'image/png' })
 }
 
@@ -52,31 +52,26 @@ test.describe('Diff note draft', () => {
     }, worktreeId)
 
     const followingLine = orcaPage
-      .locator('.modified-in-monaco-diff-editor .view-lines .view-line')
+      .locator('diffs-container [data-content] [data-line]')
       .filter({ hasText: FOLLOWING_LINE })
       .first()
     await expect(followingLine).toBeVisible({ timeout: 15_000 })
-    // Let the filesystem watcher finish its model refresh before opening a draft in that model.
-    await orcaPage.waitForTimeout(3_000)
 
     const draftLine = orcaPage
-      .locator('.modified-in-monaco-diff-editor .view-lines .view-line')
+      .locator('diffs-container [data-content] [data-line]')
       .filter({ hasText: `export const line${String(DRAFT_LINE).padStart(2, '0')} = "value-06"` })
       .first()
     await draftLine.hover({ position: { x: 4, y: 8 } })
-    const addButton = orcaPage.locator('.orca-diff-comment-add-btn')
+    const addButton = orcaPage.locator('diffs-container [data-utility-button]')
     await expect(addButton).toBeVisible()
     await addButton.click()
 
-    const draftCard = orcaPage.locator('.orca-diff-comment-draft-card')
+    const draftCard = orcaPage.locator('.orca-diff-comment-popover-inline')
     const textarea = draftCard.locator('textarea')
     await expect(draftCard).toBeVisible({ timeout: 15_000 })
     await expect(draftCard).toContainText('Line 6')
     await expect(draftCard).not.toContainText('You')
-    await expect
-      .poll(() => textarea.evaluate((element) => document.activeElement === element))
-      .toBe(true)
-    await expect(orcaPage.locator('.orca-diff-comment-draft-margin')).toBeVisible()
+    await expect.poll(() => textarea.evaluate((element) => element.matches(':focus'))).toBe(true)
     await expect
       .poll(
         async () => {

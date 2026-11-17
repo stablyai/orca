@@ -20827,6 +20827,25 @@
         "noContent": "내보낼 내용이 없습니다",
         "timedOut": "내보내기 시간이 초과되었습니다"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "Diff에서 찾기",
+        "find": "찾기",
+        "regex": "정규식 사용",
+        "replaceLabel": "Diff에서 바꾸기",
+        "errors": {
+          "invalid-regex": "잘못된 정규식",
+          "replacement-too-large": "바꿀 내용이 너무 큽니다",
+          "search-failed": "이 파일을 검색할 수 없습니다",
+          "invalid-result": "검색 결과를 읽을 수 없습니다",
+          "timeout": "검색 시간이 너무 오래 걸렸습니다. 더 간단한 식을 사용해 보세요.",
+          "start-failed": "검색을 시작할 수 없습니다"
+        },
+        "searching": "검색 중…"
+      },
+      "renderFailed": "이 Diff를 표시할 수 없습니다",
+      "renderRetry": "파일을 다시 열거나 새로 고친 후 다시 시도하세요."
     }
   },
   "featureTips": {

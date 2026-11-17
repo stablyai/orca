@@ -4,7 +4,13 @@ export function isNativeChatPromptTarget(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('[data-native-chat-prompt-editor]') !== null
 }
 
-// Share the capture-listener guard so app/onboarding shortcuts cannot hijack active text edits.
+export function isEditorKeyboardTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest('[data-editor-keyboard-scope]') !== null
+}
+
+// Why: shared across global keyboard listeners (App-level shortcuts and the
+// onboarding flow) so an in-progress text edit never gets hijacked by a
+// capture-phase keydown handler.
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -15,7 +21,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
     return false
   }
 
-  if (target.isContentEditable) {
+  if (target.isContentEditable || isEditorKeyboardTarget(target)) {
     return true
   }
   return (

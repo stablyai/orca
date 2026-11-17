@@ -22236,6 +22236,25 @@
         "noContent": "エクスポートする内容がありません",
         "timedOut": "エクスポートがタイムアウトしました"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "差分内を検索",
+        "find": "検索",
+        "regex": "正規表現を使用する",
+        "replaceLabel": "差分内で置換",
+        "errors": {
+          "invalid-regex": "正規表現が無効です",
+          "replacement-too-large": "置換内容が大きすぎます",
+          "search-failed": "このファイルを検索できませんでした",
+          "invalid-result": "検索結果を読み取れませんでした",
+          "timeout": "検索に時間がかかりすぎました。より単純な式をお試しください。",
+          "start-failed": "検索を開始できませんでした"
+        },
+        "searching": "検索中…"
+      },
+      "renderFailed": "この差分を表示できませんでした",
+      "renderRetry": "ファイルを開き直すか、再読み込みしてもう一度お試しください。"
     }
   },
   "featureTips": {

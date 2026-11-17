@@ -1,3 +1,4 @@
+import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   combinedDiffViewportAttributes,
@@ -5,9 +6,7 @@ import {
 } from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslate } from '@/i18n/use-translate'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
@@ -52,7 +51,6 @@ export function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const t = useTranslate()
-  const isDark = useDocumentDarkTheme()
   const diffEntrySignature = useMemo(
     () =>
       JSON.stringify(
@@ -119,7 +117,6 @@ export function PRFilesCombinedDiffViewer({
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
   useLayoutEffect(() => {
     // Why: keep the loader/navigation callbacks reading the latest sections without a render-phase ref write.
@@ -311,96 +308,105 @@ export function PRFilesCombinedDiffViewer({
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <PRFilesDiffToolbar
-        files={files}
-        fileTreeCollapsed={fileTreeCollapsed}
-        allSectionsCollapsed={allSectionsCollapsed}
-        sideBySide={sideBySide}
-        onShowFileTree={() => setFileTreeCollapsed(false)}
-        onToggleAllCollapsed={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
-        onToggleSideBySide={() => setSideBySide((prev) => !prev)}
-      />
-      <div className="flex min-h-0 flex-1">
-        <CombinedDiffFileTree
-          mode="commit"
-          worktreePath={repoPath}
-          entries={entries}
-          sectionIndexByKey={sectionIndexByKey}
-          activeSectionKey={visibleActiveTreeSectionKey}
-          viewedSectionKeys={viewedSectionKeys}
-          collapsed={fileTreeCollapsed}
-          onCollapsedChange={setFileTreeCollapsed}
-          onNavigate={handleTreeNavigate}
+    <PierreDiffProviders
+      scrollContainerRef={scrollContainerRef}
+      overview={{ sections, virtualizer, sideBySide }}
+    >
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <PRFilesDiffToolbar
+          files={files}
+          fileTreeCollapsed={fileTreeCollapsed}
+          allSectionsCollapsed={allSectionsCollapsed}
+          sideBySide={sideBySide}
+          onShowFileTree={() => setFileTreeCollapsed(false)}
+          onToggleAllCollapsed={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
+          onToggleSideBySide={() => setSideBySide((prev) => !prev)}
         />
-        <div
-          {...combinedDiffViewportAttributes}
-          ref={scrollContainerRef}
-          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
-        >
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const section = sections[virtualItem.index]
-              if (!section) {
-                return null
-              }
-              return (
-                <div
-                  key={virtualItem.key}
-                  {...combinedDiffRowAttributes}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full"
-                  style={{ top: `${virtualItem.start}px` }}
-                >
-                  <DiffSectionItem
-                    section={section}
-                    index={virtualItem.index}
-                    isBranchMode={false}
-                    sideBySide={sideBySide}
-                    isDark={isDark}
-                    sectionHeight={sectionHeights[virtualItem.index]}
-                    worktreeId={`github-pr:${repoId}:${prNumber}`}
-                    inlineComments={inlineReviewComments}
-                    loadSection={loadSection}
-                    retrySection={retrySection}
-                    toggleSection={toggleSection}
-                    openSection={openFilesOnGitHub}
-                    openSectionTitle={t(
-                      'auto.components.GitHubItemDialog.85a2b66f54',
-                      'Open files on GitHub'
-                    )}
-                    renderHeaderTrailingContent={renderViewedCheckbox}
-                    imageUploadAddress={() =>
-                      githubCommentImageUploadAddress({
-                        repoPath,
-                        repoId,
-                        sourceContext,
-                        type: 'pr',
-                        prRepo
-                      })
-                    }
-                    onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel={t(
-                      'auto.components.GitHubItemDialog.bf43425540',
-                      'Comment'
-                    )}
-                    addLineCommentPlaceholder={t(
-                      'auto.components.GitHubItemDialog.86d84a17ca',
-                      'Add a review comment'
-                    )}
-                    getCommentableLineNumbers={getCommentableLineNumbers}
-                    setSectionHeights={setSectionHeights}
-                    setSections={setSections}
-                    modifiedEditorsRef={modifiedEditorsRef}
-                    handleSectionSaveRef={handleSectionSaveRef}
-                  />
-                </div>
-              )
-            })}
+        <div className="flex min-h-0 flex-1">
+          <CombinedDiffFileTree
+            mode="commit"
+            worktreePath={repoPath}
+            entries={entries}
+            sectionIndexByKey={sectionIndexByKey}
+            activeSectionKey={visibleActiveTreeSectionKey}
+            viewedSectionKeys={viewedSectionKeys}
+            collapsed={fileTreeCollapsed}
+            onCollapsedChange={setFileTreeCollapsed}
+            onNavigate={handleTreeNavigate}
+          />
+          <div className="relative min-w-0 flex-1">
+            <div
+              {...combinedDiffViewportAttributes}
+              ref={scrollContainerRef}
+              className="h-full overflow-auto scrollbar-editor"
+            >
+              <div
+                className="relative w-full"
+                style={{ height: `${virtualizer.getTotalSize()}px` }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const section = sections[virtualItem.index]
+                  if (!section) {
+                    return null
+                  }
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      {...combinedDiffRowAttributes}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute left-0 top-0 w-full"
+                      style={{ top: `${virtualItem.start}px` }}
+                    >
+                      <DiffSectionItem
+                        editStateKey={`${viewStateKey}:${section.key}`}
+                        section={section}
+                        index={virtualItem.index}
+                        isBranchMode={false}
+                        sideBySide={sideBySide}
+                        sectionHeight={sectionHeights[virtualItem.index]}
+                        worktreeId={`github-pr:${repoId}:${prNumber}`}
+                        inlineComments={inlineReviewComments}
+                        loadSection={loadSection}
+                        retrySection={retrySection}
+                        toggleSection={toggleSection}
+                        openSection={openFilesOnGitHub}
+                        openSectionTitle={t(
+                          'auto.components.GitHubItemDialog.85a2b66f54',
+                          'Open files on GitHub'
+                        )}
+                        renderHeaderTrailingContent={renderViewedCheckbox}
+                        imageUploadAddress={() =>
+                          githubCommentImageUploadAddress({
+                            repoPath,
+                            repoId,
+                            sourceContext,
+                            type: 'pr',
+                            prRepo
+                          })
+                        }
+                        onAddLineComment={handleAddLineComment}
+                        addLineCommentLabel={t(
+                          'auto.components.GitHubItemDialog.bf43425540',
+                          'Comment'
+                        )}
+                        addLineCommentPlaceholder={t(
+                          'auto.components.GitHubItemDialog.86d84a17ca',
+                          'Add a review comment'
+                        )}
+                        getCommentableLineNumbers={getCommentableLineNumbers}
+                        setSectionHeights={setSectionHeights}
+                        setSections={setSections}
+                        handleSectionSaveRef={handleSectionSaveRef}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </PierreDiffProviders>
   )
 }

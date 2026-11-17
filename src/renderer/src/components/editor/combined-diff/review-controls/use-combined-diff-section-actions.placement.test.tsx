@@ -77,7 +77,6 @@ it.each(['edit', 'branch', 'commit'] as const)(
         isAllMode: false,
         isBranchMode: kind === 'branch',
         isCommitMode: kind === 'commit',
-        sections: [section],
         sectionsRef: { current: [section] },
         setSectionHeights: vi.fn(),
         setSections: vi.fn()
@@ -123,7 +122,7 @@ it.each(['combined-all', 'combined-branch'] as const)(
         isAllMode: false,
         isBranchMode: true,
         isCommitMode: false,
-        sections: [],
+
         sectionsRef: { current: [] },
         setSectionHeights: vi.fn(),
         setSections: vi.fn()

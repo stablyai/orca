@@ -45,3 +45,5 @@ export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()
 
 // Full Monaco view state carries folds and horizontal scroll that scrollTop/selection caches miss.
 export const editorViewStateCache = new Map<string, editor.ICodeEditorViewState>()
+
+export const diffScrollTopCache = new Map<string, number>()

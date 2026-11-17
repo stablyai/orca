@@ -1,6 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
-import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -19,16 +18,17 @@ import { editorPathHoldKey } from '../../autosave/editor-autosave-holds'
 
 export function useCombinedDiffSectionSave({
   file,
+  retryDeferredSectionReloadRef,
   sectionsRef,
   setSectionHeights,
   setSections
 }: {
   file: OpenFile
+  retryDeferredSectionReloadRef?: React.RefObject<(index: number) => void>
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
 }) {
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const writtenBySectionRef = useRef(
     new Map<string, { operation: DiffSection['operation']; content: string }>()
   )
@@ -36,20 +36,25 @@ export function useCombinedDiffSectionSave({
     async (
       sectionKey: string,
       mode: 'overwrite' | undefined,
-      operation: NonNullable<DiffSection['operation']>
+      operation: NonNullable<DiffSection['operation']>,
+      generation: DiffSection['contentGeneration']
     ) => {
       // Why by key: rows can be rebuilt while a save waits; a gone section is not saved.
       const index = sectionsRef.current.findIndex((s) => s.key === sectionKey)
       const section = sectionsRef.current[index]
-      if (!section || section.operation !== operation) {
+      if (
+        !section ||
+        section.operation !== operation ||
+        section.contentGeneration !== generation ||
+        section.area !== 'unstaged'
+      ) {
         return
       }
-      const modifiedEditor = modifiedEditorsRef.current.get(index)
-      if (!modifiedEditor && !section.dirty) {
+      if (!section.dirty) {
         return
       }
 
-      const content = modifiedEditor?.getValue() ?? section.modifiedContent
+      const content = section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
       // Why: edits live in modifiedContent; the diff result keeps the text loaded from (or last
       // written to) disk, unless a large diff pruned it, in which case no version is known.
@@ -63,7 +68,9 @@ export function useCombinedDiffSectionSave({
       const markConflict = (): void =>
         setSections((prev) =>
           prev.map((s) =>
-            s.key === sectionKey && s.operation === operation ? { ...s, saveConflict: true } : s
+            s.key === sectionKey && s.operation === operation && s.contentGeneration === generation
+              ? { ...s, saveConflict: true }
+              : s
           )
         )
       if (loaded === undefined && mode !== 'overwrite') {
@@ -103,7 +110,8 @@ export function useCombinedDiffSectionSave({
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
         const savedIndex = sectionsRef.current.findIndex(
-          (s) => s.key === sectionKey && s.operation === operation
+          (s) =>
+            s.key === sectionKey && s.operation === operation && s.contentGeneration === generation
         )
         if (savedIndex === -1) {
           return
@@ -112,7 +120,11 @@ export function useCombinedDiffSectionSave({
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, savedIndex))
         setSections((prev) =>
           prev.map((s) => {
-            if (s.key !== sectionKey || s.operation !== operation) {
+            if (
+              s.key !== sectionKey ||
+              s.operation !== operation ||
+              s.contentGeneration !== generation
+            ) {
               return s
             }
             const written =
@@ -140,11 +152,12 @@ export function useCombinedDiffSectionSave({
             }
           })
         )
+        retryDeferredSectionReloadRef?.current(savedIndex)
       } catch (err) {
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, sectionsRef, setSectionHeights, setSections]
+    [file.filePath, retryDeferredSectionReloadRef, sectionsRef, setSectionHeights, setSections]
   )
 
   // Build each precondition after that section’s prior save settles.
@@ -159,7 +172,7 @@ export function useCombinedDiffSectionSave({
       }
       const chains = sectionSaveChainsRef.current
       const next = (chains.get(key) ?? Promise.resolve()).then(() =>
-        runSectionSave(key, mode, operation)
+        runSectionSave(key, mode, operation, section.contentGeneration)
       )
       const tracked = next.finally(() => {
         if (chains.get(key) === tracked) {
@@ -178,5 +191,5 @@ export function useCombinedDiffSectionSave({
     handleSectionSaveRef.current = handleSectionSave
   }, [handleSectionSave])
 
-  return { handleSectionSaveRef, modifiedEditorsRef }
+  return { handleSectionSaveRef }
 }

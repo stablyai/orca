@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import './monaco-unicode-tables'
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'

@@ -17,8 +17,11 @@ import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 type Props = {
   lineNumber: number
   startLine?: number
-  top: number
+  /** Overlay coordinates. Omitted when the popover renders inline in a diff annotation row. */
+  top?: number
   left?: number
+  /** `inline` drops absolute positioning so a Pierre annotation row can own the layout. */
+  layout?: 'overlay' | 'inline'
   // Anchor line height, used to flip the popover above the line near the viewport bottom; 0 for non-Monaco callers.
   lineHeight?: number
   title?: string
@@ -38,6 +41,7 @@ export function DiffCommentPopover({
   startLine,
   top,
   left,
+  layout = 'overlay',
   lineHeight = 0,
   title,
   placeholder: placeholderOverride,
@@ -64,20 +68,28 @@ export function DiffCommentPopover({
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   // Why: keep onCancel in a ref so the mousedown listener reads it fresh without re-attaching when parents pass a new callback each render.
   const onCancelRef = useRef(onCancel)
   onCancelRef.current = onCancel
   const labelId = useId()
   // Why: seed at `top` for a correct first paint when there's room below; the layout effect flips it above the line if clipped.
-  const [resolvedTop, setResolvedTop] = useState(top)
+  const [resolvedTop, setResolvedTop] = useState(top ?? 0)
 
   // Why: mirror `top` into a ref so the measure callback stays stable and the ResizeObserver isn't re-mounted each scroll frame.
-  const topRef = useRef(top)
-  topRef.current = top
+  const topRef = useRef(top ?? 0)
   const lineHeightRef = useRef(lineHeight)
-  lineHeightRef.current = lineHeight
+  const layoutRef = useRef(layout)
+  useLayoutEffect(() => {
+    topRef.current = top ?? 0
+    lineHeightRef.current = lineHeight
+    layoutRef.current = layout
+  }, [top, lineHeight, layout])
 
   const measureResolvedTop = useCallback((): void => {
+    if (layoutRef.current === 'inline') {
+      return
+    }
     const popover = popoverRef.current
     const container = popover?.parentElement
     if (!popover || !container) {
@@ -113,7 +125,14 @@ export function DiffCommentPopover({
   }, [measureResolvedTop])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
+    textareaRef.current = textarea
     textarea?.focus()
+  }, [])
+
+  useEffect(() => {
+    // Pierre assigns the annotation slot after React attaches this textarea.
+    const frame = requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+    return () => cancelAnimationFrame(frame)
   }, [])
 
   // Why: consume the add-review-note chord on the popover subtree, not window, so a repeat chord doesn't remount the draft.
@@ -182,8 +201,16 @@ export function DiffCommentPopover({
   return (
     <div
       ref={popoverRef}
-      className="orca-diff-comment-popover"
-      style={{ top: `${resolvedTop}px`, ...(left == null ? {} : { left: `${left}px` }) }}
+      className={
+        layout === 'inline'
+          ? 'orca-diff-comment-popover orca-diff-comment-popover-inline'
+          : 'orca-diff-comment-popover'
+      }
+      style={
+        layout === 'inline'
+          ? undefined
+          : { top: `${resolvedTop}px`, ...(left == null ? {} : { left: `${left}px` }) }
+      }
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelId}

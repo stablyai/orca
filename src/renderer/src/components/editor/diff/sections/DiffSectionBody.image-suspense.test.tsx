@@ -46,22 +46,12 @@ const props: ComponentProps<typeof DiffSectionBody> = {
   useIntrinsicImageHeight: false,
   isBranchMode: false,
   sideBySide: true,
-  isDark: false,
-  language: 'plaintext',
-  modelPathBase: 'image-suspense',
+  sectionBodyRef: { current: null },
+  renderDiff: () => null,
   isEditable: false,
-  typography: {
-    fontFamily: 'monospace',
-    cssFontFamily: 'monospace',
-    fontSize: 13,
-    fontWeight: 'normal',
-    lineHeight: 0,
-    fontLigatures: false
-  },
   onRetrySection: vi.fn(),
   onLoadDeferredSection: vi.fn(),
-  onSaveLimitedDiff: vi.fn(),
-  onMount: vi.fn()
+  onSaveLimitedDiff: vi.fn()
 }
 
 afterEach(() => {

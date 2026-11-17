@@ -39,9 +39,9 @@ function getMaxScrollLeft(editor: HorizontalScrollEditor): number {
 // Monaco keeps integer scroll positions and mirrors them across panes, so both panes share one remainder.
 type SubPixelRemainder = { pixels: number; lastWheelAt: number }
 
-function installPaneHorizontalWheelScroll(
+export function installPaneHorizontalWheelScroll(
   editor: HorizontalScrollEditor,
-  remainder: SubPixelRemainder
+  remainder: SubPixelRemainder = { pixels: 0, lastWheelAt: 0 }
 ): () => void {
   const container = editor.getContainerDomNode()
   const handleWheel = (event: WheelEvent): void => {

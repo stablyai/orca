@@ -1,62 +1,46 @@
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
-import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
-import { useAppStore } from '@/store/index'
 import {
-  diffViewStateCache,
-  setWithLRU
-} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
-import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { useContextualCopySetup } from '../../contextual-copy/useContextualCopySetup'
-import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
+  useDiffCommentView,
+  useOwnedDiffCommentTarget
+} from '@/components/diff-comments/use-diff-comment-owner'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
-import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
+import type { PostRenderPhase } from '@pierre/diffs'
+import { useAppStore } from '@/store'
+import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
-import {
-  installEditorSaveShortcut,
-  installMonacoEditorFindShortcut
-} from '../../commands/editor-shortcuts'
-import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
-import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
+import { installEditorSaveShortcut } from '@/components/editor/commands/editor-shortcuts'
+import { LargeDiffFallback } from '@/components/editor/diff/large-files/LargeDiffFallback'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
-import { useDiffViewerLargeDiffLifecycle } from '../large-files/useDiffViewerLargeDiffLifecycle'
-import { useDiffViewerFirstChangeAutoScroll } from './useDiffViewerFirstChangeAutoScroll'
-import { getDiffViewerLargeDiffSaveAction } from '../large-files/diff-viewer-large-diff-save-action'
+import { getDiffViewerLargeDiffSaveAction } from '@/components/editor/diff/large-files/diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
-import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import {
-  buildDiffEditorWordWrapOptions,
-  syncDiffEditorOriginalWordWrap
-} from './diff-editor-word-wrap-options'
-import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
-import { useDiffEditorRegistration } from '../review/diff-navigation-context'
-import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
-import { monacoFindOptions } from '../../monaco/monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
-import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
+  useDiffNavigatorRegistration,
+  type DiffNavigator
+} from '@/components/editor/diff/review/diff-navigation-context'
+import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
 import {
-  PLUGIN_SYNTAX_EDITOR_OPTIONS,
-  applyModelLanguage
-} from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
-import { cn } from '@/lib/class-names'
-import { wholeFileDiffTintClass } from './whole-file-diff-tint'
+  PierreDiffSurface,
+  type PierreDiffInstance
+} from '@/components/editor/pierre-diff/PierreDiffSurface'
+import type { PierreDiffInput } from '@/components/editor/pierre-diff/pierre-diff-metadata'
+import { usePierreFileDiff } from '@/components/editor/pierre-diff/use-pierre-file-diff'
+import { PierreDiffLoading } from '@/components/editor/pierre-diff/PierreDiffLoading'
+import { buildPierreParseDiffOptions } from '@/components/editor/pierre-diff/pierre-diff-options'
+import { scrollPierreDiffToLine } from '@/components/editor/pierre-diff/pierre-diff-scroll'
+import { usePierreDiffScrollRestore } from '@/components/editor/pierre-diff/use-pierre-diff-scroll-restore'
+import { getPierreDiffChangeTargets } from '@/components/editor/pierre-diff/pierre-diff-change-targets'
+import { usePierreDiffLanguage } from '@/components/editor/pierre-diff/pierre-diff-language'
+
+const EMPTY_DIFF_COMMENTS: readonly DecoratedDiffComment[] = []
 
 export default function DiffViewer({
   modelKey,
-  modelOwnerKey,
-  originalModelKey,
-  modifiedModelKey,
   originalContent,
   modifiedContent,
-  language: coreLanguage,
-  filePath,
   relativePath,
+  language,
   sideBySide,
   editable,
   worktreeId,
@@ -70,357 +54,300 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
-  const t = useTranslate()
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
-  const monacoTheme = useMonacoTheme()
-  const diffTypography = useEditorTypography('diff')
-  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const settings = useMemo(
+    () => ({ diffWordWrap, diffShowWhitespace }),
+    [diffWordWrap, diffShowWhitespace]
+  )
+  const addDiffComment = useAppStore((s) => s.addDiffComment)
+  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
     worktreeId,
     noteSource
   )
-  const addDiffComment = useAppStore((s) => s.addDiffComment)
-  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
-  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
-  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
+  const comments = useMemo(
+    () => (worktreeId ? diffComments : EMPTY_DIFF_COMMENTS),
+    [diffComments, worktreeId]
+  )
 
-  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
-  const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
-  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
-  const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
-  const wordWrapMountFrameRef = useRef(0)
-  const diffWordWrapRef = useRef(diffWordWrap)
-  useLayoutEffect(() => {
-    diffWordWrapRef.current = diffWordWrap
-  }, [diffWordWrap])
-  const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
-  useEffect(() => {
-    const models = diffEditorRef.current?.getModel()
-    applyModelLanguage([models?.original, models?.modified], language)
-  }, [modifiedEditor, language])
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const pierreHostRef = useRef<HTMLElement | null>(null)
+  const pierreInstanceRef = useRef<PierreDiffInstance | null>(null)
+  const [pendingComment, setPendingComment, draftOwner] = useOwnedDiffCommentTarget<{
+    lineNumber: number
+    startLine?: number
+  }>(worktreeId, noteSource, `note:${modelKey}`)
 
   const renderLimit = useMemo(
-    () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
+    () =>
+      largeDiffRenderLimit?.limited
+        ? largeDiffRenderLimit
+        : getLargeDiffRenderLimit({ originalContent, modifiedContent }),
     [largeDiffRenderLimit, originalContent, modifiedContent]
   )
-  const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
+  const hasLineCommentAction = Boolean(commentOwner || onAddLineComment)
+  const lang = usePierreDiffLanguage(relativePath, language)
 
-  // Forward only owned notes so viewers cannot race to acknowledge another surface’s request.
-  const pendingScrollForThisViewer = useMemo(() => {
-    if (!worktreeId || !scrollToDiffCommentId) {
-      return null
+  const diffInput = useMemo<PierreDiffInput | null>(
+    () =>
+      renderLimit.limited
+        ? null
+        : {
+            path: relativePath,
+            status: 'modified',
+            originalContent,
+            modifiedContent,
+            cacheKey: modelKey,
+            lang,
+            parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace)
+          },
+    [
+      lang,
+      relativePath,
+      originalContent,
+      modifiedContent,
+      modelKey,
+      settings?.diffShowWhitespace,
+      renderLimit.limited
+    ]
+  )
+
+  const {
+    fileDiff,
+    error: parseError,
+    retry: retryParse,
+    markEdited,
+    editReady
+  } = usePierreFileDiff(diffInput, editable)
+
+  const { registerDiffNavigator, unregisterDiffNavigator } = useDiffNavigatorRegistration()
+  const changeTargets = useMemo(() => getPierreDiffChangeTargets(fileDiff), [fileDiff])
+  const changeLines = useMemo(
+    () => changeTargets.map((target) => target.lineNumber),
+    [changeTargets]
+  )
+
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || renderLimit.limited) {
+      return
     }
-    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
-  }, [scrollToDiffCommentId, diffComments, worktreeId])
-
-  // A draft keeps its captured owner across a same-tab rename but saves under the file's current path.
-  const relativePathRef = useRef(relativePath)
-  useLayoutEffect(() => {
-    relativePathRef.current = relativePath
-  }, [relativePath])
-  const handleCreateComment = useCallback(
-    async ({
-      lineNumber,
-      startLine,
-      body
-    }: {
-      lineNumber: number
-      startLine?: number
-      body: string
-    }): Promise<boolean> => {
-      if (onAddLineComment) {
-        return onAddLineComment({
+    const navigator: DiffNavigator = {
+      id: modelKey,
+      changeLines,
+      container,
+      scrollToChange: ({ lineNumber, hunkIndex, hunkCount }) => {
+        scrollPierreDiffToLine({
+          host: pierreHostRef.current,
+          container,
           lineNumber,
-          startLine,
+          side: changeTargets[hunkIndex]?.side,
+          linePosition: pierreInstanceRef.current?.getLinePosition?.(
+            lineNumber,
+            changeTargets[hunkIndex]?.side
+          ),
+          hunkIndex,
+          hunkCount
+        })
+      }
+    }
+    registerDiffNavigator(navigator)
+    return () => unregisterDiffNavigator(navigator)
+  }, [
+    changeLines,
+    changeTargets,
+    modelKey,
+    registerDiffNavigator,
+    renderLimit.limited,
+    unregisterDiffNavigator
+  ])
+
+  const requestedCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const pendingScrollCommentId = diffComments.some((comment) => comment.id === requestedCommentId)
+    ? requestedCommentId
+    : null
+  const restoreScroll = usePierreDiffScrollRestore(
+    modelKey,
+    scrollContainerRef,
+    fileDiff,
+    pendingScrollCommentId
+  )
+  const handlePostRender = useCallback(
+    (node: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
+      pierreHostRef.current = phase === 'unmount' ? null : node
+      pierreInstanceRef.current = phase === 'unmount' ? null : instance
+      restoreScroll(node, phase, instance)
+    },
+    [restoreScroll]
+  )
+
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
+  const modifiedContentRef = useRef(modifiedContent)
+  // Why: reseed only when the prop actually changes. Pierre owns the live
+  // document and `onContentChange` only catches up after a state round-trip, so
+  // assigning every render lets an unrelated re-render mid-edit reset what
+  // Cmd+S writes back to disk.
+  useEffect(() => {
+    modifiedContentRef.current = modifiedContent
+  }, [modifiedContent])
+
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || !editable) {
+      return
+    }
+    return installEditorSaveShortcut(container, () => {
+      onSaveRef.current?.(modifiedContentRef.current)
+    })
+  }, [editable])
+
+  const handleEditChange = useCallback(
+    (file: { contents: string }) => {
+      markEdited()
+      modifiedContentRef.current = file.contents
+      onContentChange?.(file.contents)
+    },
+    [onContentChange, markEdited]
+  )
+
+  const handleAddComment = useCallback(
+    (range: { lineNumber: number; startLine?: number }) => {
+      if (commentableLineNumbers && !commentableLineNumbers.includes(range.lineNumber)) {
+        return
+      }
+      setPendingComment(range)
+    },
+    [commentableLineNumbers, setPendingComment]
+  )
+
+  const handleSubmitComment = useCallback(
+    async (body: string): Promise<boolean> => {
+      if (!pendingComment) {
+        return false
+      }
+      if (onAddLineComment) {
+        const ok = await onAddLineComment({
+          lineNumber: pendingComment.lineNumber,
+          startLine: pendingComment.startLine,
           body
         })
+        if (ok) {
+          setPendingComment(null)
+        }
+        return ok
       }
       if (!worktreeId) {
         return false
       }
-      const result = await (commentOwner
-        ? addDiffComment(commentOwner, {
+      // Why: await persistence — a null result (failed save) keeps the draft open for retry.
+      const result = await (draftOwner.current
+        ? addDiffComment(draftOwner.current, {
             worktreeId,
-            filePath: relativePathRef.current,
+            filePath: relativePath,
             source: 'diff',
-            startLine,
-            lineNumber,
+            startLine: pendingComment.startLine,
+            lineNumber: pendingComment.lineNumber,
             body,
             side: 'modified'
           })
         : null)
-      if (!result) {
+      if (result) {
+        setPendingComment(null)
+      } else {
+        // The draft stays open for retry.
         toast.error(
           translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
         )
       }
       return Boolean(result)
     },
-    [commentOwner, addDiffComment, onAddLineComment, worktreeId]
+    [
+      draftOwner,
+      addDiffComment,
+      onAddLineComment,
+      pendingComment,
+      relativePath,
+      worktreeId,
+      setPendingComment
+    ]
   )
 
-  // Only local diffs can edit notes; gate the decorator on a valid comment target.
-  useDiffCommentDecorator({
-    captureCreateComment: !onAddLineComment,
-    commentOwner,
-    editor: hasLineCommentAction ? modifiedEditor : null,
-    monacoModelIdentity: modifiedModelKey ?? modelKey,
-    filePath: relativePath,
-    worktreeId: worktreeId ?? '',
-    comments: worktreeId ? diffComments : [],
-    commentableLineNumbers,
-    addButtonLabel: addLineCommentLabel,
-    addNoteShortcutEnabled: hasLineCommentAction,
-    onCreateComment: handleCreateComment,
-    draftPlaceholder: addLineCommentPlaceholder,
-    draftSubmitLabel: addLineCommentLabel,
-    // Notes of an unknown copy can't be added to; hosted review comments have no local copy.
-    canOpenDraft: !renderLimit.limited && (commentOwner !== null || Boolean(onAddLineComment)),
-    onDeleteComment: (id) => {
+  const handleDeleteComment = useCallback(
+    (id: string) => {
       if (worktreeId) {
         void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId
-      ? (id, body) =>
-          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
-      : undefined,
-    pendingScrollCommentId: pendingScrollForThisViewer,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
-  })
-
-  useDiffViewerFirstChangeAutoScroll({
-    diffEditorRef,
-    modifiedEditor,
-    modelKey,
-    pendingScrollCommentId: pendingScrollForThisViewer
-  })
-
-  const handleEnterLargeDiffFallback = useCallback(() => {
-    // Fallback disposes Monaco; clear refs before decorators or save handlers can use them.
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = null
-    cancelAnimationFrame(wordWrapMountFrameRef.current)
-    wordWrapOptionsSubRef.current?.dispose()
-    wordWrapOptionsSubRef.current = null
-    // Capture the exact instance before clearing; unregister ignores stale identities.
-    const fallenBackEditor = diffEditorRef.current
-    diffEditorRef.current = null
-    if (fallenBackEditor) {
-      unregisterDiffEditor(fallenBackEditor)
-    }
-    setModifiedEditor(null)
-  }, [unregisterDiffEditor])
-
-  const onSaveRef = useRef(onSave)
-  onSaveRef.current = onSave
-  const onContentChangeRef = useRef(onContentChange)
-  onContentChangeRef.current = onContentChange
-
-  const { setupCopy, toastNode } = useContextualCopySetup()
-
-  const propsRef = useRef({ relativePath, language, onSave })
-  propsRef.current = { relativePath, language, onSave }
-  const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
-    limited: renderLimit.limited,
-    modelKey,
-    modelOwnerKey,
-    originalModelKey,
-    modifiedModelKey,
-    diffEditorRef,
-    onEnterFallback: handleEnterLargeDiffFallback
-  })
-
-  const handleMount: DiffOnMount = useCallback(
-    (diffEditor, monaco) => {
-      diffEditorRef.current = diffEditor
-      registerDiffEditor(diffEditor)
-      // Monaco applies its inline wrap override after mount when width is known.
-      wordWrapMountFrameRef.current = requestAnimationFrame(() => {
-        if (diffEditorRef.current !== diffEditor) {
-          return
-        }
-        wordWrapOptionsSubRef.current?.dispose()
-        wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(
-          diffEditor,
-          diffWordWrapRef.current
-        )
-      })
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
-
-      const originalEditor = diffEditor.getOriginalEditor()
-      const modifiedEditor = diffEditor.getModifiedEditor()
-      modifiedEditor.onDidDispose(() => {
-        if (diffEditorRef.current !== diffEditor) {
-          return
-        }
-        cancelAnimationFrame(wordWrapMountFrameRef.current)
-        lineNumberOptionsSubRef.current?.dispose()
-        lineNumberOptionsSubRef.current = null
-        wordWrapOptionsSubRef.current?.dispose()
-        wordWrapOptionsSubRef.current = null
-        unregisterDiffEditor(diffEditor)
-        diffEditorRef.current = null
-        setModifiedEditor(null)
-      })
-      diffEditor.onDidDispose(preserveDiffViewStateAcrossModelSwaps(diffEditor).dispose)
-
-      setupCopy(originalEditor, monaco, filePath, propsRef)
-      setupCopy(modifiedEditor, monaco, filePath, propsRef)
-      setModifiedEditor(modifiedEditor)
-
-      // Restore cursor and selection across both panes alongside scroll.
-      const savedViewState = diffViewStateCache.get(modelKey)
-      if (savedViewState) {
-        requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
-      }
-      // Auto-scroll runs separately after decorator view zones mount.
-
-      if (editable) {
-        const cleanupSaveShortcut = installEditorSaveShortcut(
-          modifiedEditor.getContainerDomNode(),
-          () => {
-            onSaveRef.current?.(modifiedEditor.getValue())
-          }
-        )
-        const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
-        const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
-
-        const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
-          onContentChangeRef.current?.(modifiedEditor.getValue())
-        })
-        modifiedEditor.onDidDispose(() => {
-          // Shortcut bridges and model subscriptions belong to this diff instance.
-          cleanupSaveShortcut()
-          cleanupOriginalFindShortcut()
-          cleanupModifiedFindShortcut()
-          modelContentSub.dispose()
-        })
-
-        modifiedEditor.focus()
-      } else {
-        diffEditor.focus()
-      }
-    },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [commentOwner, deleteDiffComment, worktreeId]
   )
 
-  // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
-  useLayoutEffect(() => {
-    return () => {
-      const de = diffEditorRef.current
-      if (de) {
-        const currentViewState = de.saveViewState()
-        if (currentViewState) {
-          setWithLRU(diffViewStateCache, modelKey, currentViewState)
-        }
-      }
-    }
-  }, [modelKey])
-
-  useEffect(() => {
-    cancelAnimationFrame(wordWrapMountFrameRef.current)
-    const diffEditor = diffEditorRef.current
-    if (!diffEditor) {
-      return () => {
-        cancelAnimationFrame(wordWrapMountFrameRef.current)
-      }
-    }
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
-    wordWrapOptionsSubRef.current?.dispose()
-    wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
-    return () => {
-      cancelAnimationFrame(wordWrapMountFrameRef.current)
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
-      wordWrapOptionsSubRef.current?.dispose()
-      wordWrapOptionsSubRef.current = null
-    }
-  }, [diffWordWrap, sideBySide])
-
-  // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
-  const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
-    () => ({
-      dropIntoEditor: { enabled: false },
-      readOnly: !editable,
-      originalEditable: false,
-      renderSideBySide: sideBySide,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-      ...monacoTypographyOptions(diffTypography),
-      lineNumbers: 'on',
-      ...buildDiffEditorWordWrapOptions(diffWordWrap),
-      ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
-      ...buildDiffEditorHideUnchangedOptions(diffCollapseUnchangedRegions),
-      automaticLayout: true,
-      renderOverviewRuler: true,
-      scrollbar: diffEditorScrollbarOptions,
-      padding: { top: 0 },
-      find: monacoFindOptions,
-      unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
-    }),
-    [
-      language,
-      editable,
-      sideBySide,
-      diffTypography,
-      diffWordWrap,
-      diffShowWhitespace,
-      diffCollapseUnchangedRegions
-    ]
+  const handleUpdateComment = useMemo(
+    () =>
+      worktreeId
+        ? (id: string, body: string) =>
+            commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+        : undefined,
+    [commentOwner, updateDiffComment, worktreeId]
   )
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex-1 min-h-0 relative">
+    <div className="relative flex flex-col flex-1 min-h-0">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto scrollbar-editor">
         {renderLimit.limited ? (
           <LargeDiffFallback
             filePath={relativePath}
             renderLimit={renderLimit}
-            action={getDiffViewerLargeDiffSaveAction(
-              {
-                editable,
-                modifiedContent,
-                onSave,
-                saveContentAvailable: largeDiffSaveContentAvailable
-              },
-              t
-            )}
+            action={getDiffViewerLargeDiffSaveAction({
+              editable,
+              modifiedContent,
+              onSave,
+              saveContentAvailable: largeDiffSaveContentAvailable
+            })}
           />
+        ) : fileDiff ? (
+          <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
+            {parseError ? <PierreDiffLoading error={parseError} onRetry={retryParse} /> : null}
+            <PierreDiffSurface
+              key={modelKey}
+              fileDiff={fileDiff}
+              modifiedContent={modifiedContent}
+              sideBySide={sideBySide}
+              settings={settings}
+              isEditable={Boolean(editable)}
+              editReady={editReady}
+              editStateKey={modelKey}
+              collapseUnchanged={diffCollapseUnchangedRegions === true}
+              autoFocusHost
+              worktreeId={worktreeId ?? ''}
+              filePath={relativePath}
+              language={language}
+              commentOwner={commentOwner}
+              comments={comments}
+              onDeleteComment={handleDeleteComment}
+              onUpdateComment={handleUpdateComment}
+              onEditChange={handleEditChange}
+              onPostRender={handlePostRender}
+              onAddComment={hasLineCommentAction ? handleAddComment : undefined}
+              commentableLineNumbers={commentableLineNumbers}
+              pendingComment={pendingComment}
+              addCommentPlaceholder={addLineCommentPlaceholder}
+              addCommentLabel={addLineCommentLabel}
+              onCancelComment={() => setPendingComment(null)}
+              onSubmitComment={handleSubmitComment}
+            />
+          </PierreDiffProviders>
         ) : (
-          <DiffEditor
-            height="100%"
-            // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
-            className={cn(
-              'code-editor-backdrop',
-              wholeFileDiffTintClass(originalContent, modifiedContent)
-            )}
-            language={language}
-            original={originalContent}
-            modified={modifiedContent}
-            theme={monacoTheme}
-            onMount={handleMount}
-            // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
-            originalModelPath={currentDiffModelPaths.originalModelPath}
-            modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
-            keepCurrentOriginalModel
-            keepCurrentModifiedModel
-            options={editorOptions}
-          />
+          <PierreDiffLoading error={parseError} onRetry={retryParse} />
         )}
       </div>
-      {toastNode}
     </div>
   )
 }

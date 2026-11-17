@@ -15,7 +15,6 @@ import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
-  modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
   openAlternateDiff: () => void
   openSection: (index: number) => void
   openSectionPreview: (section: DiffSection) => void
@@ -32,6 +31,7 @@ export function useCombinedDiffSectionActions({
   isAllMode,
   isBranchMode,
   isCommitMode,
+  retryDeferredSectionReloadRef,
   sectionsRef,
   setSectionHeights,
   setSections
@@ -46,7 +46,7 @@ export function useCombinedDiffSectionActions({
   isAllMode: boolean
   isBranchMode: boolean
   isCommitMode: boolean
-  sections: DiffSection[]
+  retryDeferredSectionReloadRef?: React.RefObject<(index: number) => void>
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
@@ -56,8 +56,9 @@ export function useCombinedDiffSectionActions({
   const openFile = useAppStore((s) => s.openFile)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openCommitDiff = useAppStore((s) => s.openCommitDiff)
-  const { handleSectionSaveRef, modifiedEditorsRef } = useCombinedDiffSectionSave({
+  const { handleSectionSaveRef } = useCombinedDiffSectionSave({
     file,
+    retryDeferredSectionReloadRef,
     sectionsRef,
     setSectionHeights,
     setSections
@@ -175,7 +176,6 @@ export function useCombinedDiffSectionActions({
 
   return {
     handleSectionSaveRef,
-    modifiedEditorsRef,
     openSection,
     openSectionPreview,
     openAlternateDiff

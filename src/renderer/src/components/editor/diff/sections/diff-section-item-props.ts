@@ -1,20 +1,21 @@
-import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy-owner'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
-import type { editor as monacoEditor } from 'monaco-editor'
-import type { DecoratedDiffComment } from '../../../diff-comments/decorated-diff-comment'
+import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import type { DiffSection } from './diff-section-types'
 
 export type DiffSectionItemProps = {
   section: DiffSection
   index: number
+  editStateKey?: string
+  /** Remount identity; changes when refetched content replaces the section. */
+  renderKey?: string
   isBranchMode: boolean
   sideBySide: boolean
-  isDark: boolean
   sectionHeight: number | undefined
   worktreeId?: string
-  /** The combined diff's tab; its review notes belong to the copy it names. */
   noteSource?: WorkspaceResource
+  imageUploadAddress?: GitHubImageIntake['address']
   loadSection: (index: number) => void
   loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void
@@ -23,7 +24,6 @@ export type DiffSectionItemProps = {
   openSectionTitle: string
   onOpenPreview?: (section: DiffSection, index: number) => void
   renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
-  imageUploadAddress?: GitHubImageIntake['address']
   onAddLineComment?: (
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
@@ -34,7 +34,6 @@ export type DiffSectionItemProps = {
   getCommentableLineNumbers?: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: Dispatch<SetStateAction<Record<number, number>>>
   setSections: Dispatch<SetStateAction<DiffSection[]>>
-  modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   /** `overwrite` comes only from the section's conflict bar. */
   handleSectionSaveRef: MutableRefObject<(index: number, mode?: 'overwrite') => Promise<void>>
 }

@@ -1,3 +1,4 @@
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import { useAppStore } from '../store/index'
 import {
@@ -27,10 +28,10 @@ export function handleTerminalWorkspaceEditorShortcut({
     isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
   // Save fallback for focus outside the editor; editor-local handlers own focused saves.
   if (!event.repeat && matchShortcut('editor.save')) {
-    const target = event.target as HTMLElement | null
+    const target = event.target
     const inEditor =
-      target?.closest('.monaco-editor, [contenteditable]') !== null ||
-      target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
+      isEditableTarget(target) ||
+      (target instanceof HTMLElement && target.closest('.monaco-editor') !== null)
     if (!inEditor) {
       const state = useAppStore.getState()
       const requestedFileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent())

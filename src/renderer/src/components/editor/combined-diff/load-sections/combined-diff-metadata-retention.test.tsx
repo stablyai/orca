@@ -1,3 +1,4 @@
+import { useCombinedDiffSectionsState } from '../use-combined-diff-sections-state'
 // @vitest-environment happy-dom
 
 import { useMemo, useRef, useState } from 'react'
@@ -10,7 +11,6 @@ import type {
   GitDiffResult,
   GitDiffTextResult
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { createCombinedDiffSectionIndexMap } from '../resolve-changes/combined-diff-section-identity'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
@@ -48,10 +48,10 @@ const noBranchEntries = []
 type Review = { status: GitStatusEntry[]; file: OpenFile; viewStateKey: string }
 
 function useReview(props: Review) {
-  const [sections, setSections] = useState<DiffSection[]>([])
+  const { sections, setSections, sectionsRef } = useCombinedDiffSectionsState()
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  const registry = useCombinedDiffSectionLoadRegistry(sections)
+  const registry = useCombinedDiffSectionLoadRegistry(sectionsRef)
   const entrySet = useCombinedDiffEntrySet({
     file: props.file,
     gitStatusEntries: props.status,
@@ -80,6 +80,7 @@ function useReview(props: Review) {
   const retry = useCombinedDiffSectionRetry({
     invalidateViewStateCache: restore.invalidateViewStateCache,
     registry,
+    sections,
     setSectionHeights,
     setSections
   })

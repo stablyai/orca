@@ -6,9 +6,9 @@ import { expect, test } from './helpers/orca-app'
 import { pressShortcut } from './helpers/shortcuts'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-// Exercise real gutter ownership and pointer tracking: the range must survive composer open without starting Monaco selection.
+// Exercise real gutter ownership and pointer tracking: the range must survive composer open without starting a text selection.
 
-const BAND = '.orca-diff-comment-range-highlight'
+const BAND = 'diffs-container [data-content] [data-line][data-selected-line]'
 const COMPOSER = '.orca-diff-comment-popover'
 const COMPOSER_LABEL = '.orca-diff-comment-popover-label'
 const COMPOSER_TEXTAREA = '.orca-diff-comment-popover-textarea'
@@ -82,7 +82,7 @@ async function seedDiffFile(page: Page, worktreeId: string, relative: string): P
     { wId: worktreeId, rel: storeRel }
   )
   await expect(
-    page.locator('.modified-in-monaco-diff-editor .margin .line-numbers').first(),
+    page.locator('diffs-container [data-column-number]').first(),
     'diff gutter never rendered'
   ).toBeVisible({ timeout: 20_000 })
   await expect
@@ -97,19 +97,12 @@ async function readGutterPoint(
   page: Page,
   lineNumber: number
 ): Promise<{ x: number; y: number } | null> {
-  return page.evaluate((target: number) => {
-    const editor = document.querySelector('.monaco-editor.modified-in-monaco-diff-editor')
-    if (!editor) {
-      return null
-    }
-    for (const cell of editor.querySelectorAll('.margin .line-numbers')) {
-      if (Number.parseInt(cell.textContent?.trim() ?? '', 10) === target) {
-        const rect = cell.getBoundingClientRect()
-        return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) }
-      }
-    }
-    return null
-  }, lineNumber)
+  const box = await page
+    .locator(
+      `diffs-container [data-column-number="${lineNumber}"][data-line-type="change-addition"]`
+    )
+    .boundingBox()
+  return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null
 }
 
 async function hasGutterLine(page: Page, lineNumber: number): Promise<boolean> {
@@ -141,25 +134,20 @@ async function gutterPoint(page: Page, lineNumber: number): Promise<{ x: number;
 async function revealAddButton(
   page: Page,
   lineNumber: number
-): Promise<{ x: number; y: number; top: string }> {
+): Promise<{ x: number; y: number; top: number }> {
   const line = await gutterPoint(page, lineNumber)
   await page.mouse.move(line.x + 260, line.y)
-  const button = page.locator('.orca-diff-comment-add-btn')
+  const button = page.locator('diffs-container [data-utility-button]')
   await expect(button, 'the "+" never appeared on the hovered line').toBeVisible()
   const box = await button.boundingBox()
   if (!box) {
     throw new Error('the "+" has no box')
   }
-  const top = await button.evaluate((node) => {
-    if (!(node instanceof HTMLElement)) {
-      throw new Error('the add button is not an HTMLElement')
-    }
-    return node.style.top
-  })
+
   return {
     x: Math.round(box.x + box.width / 2),
     y: Math.round(box.y + box.height / 2),
-    top
+    top: box.y
   }
 }
 
@@ -217,7 +205,7 @@ test.describe('Diff note line range', () => {
       orcaPage.locator(BAND),
       'the band should stay lit while the note is being written'
     ).toHaveCount(6)
-    // The gutter press belongs to us, so Monaco never started a text selection under it.
+    // The gutter press belongs to us, so the editor never started a text selection under it.
     expect(await orcaPage.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
 
     await submitNote(orcaPage, 'Collapse these six lines into a loop.')
@@ -227,7 +215,7 @@ test.describe('Diff note line range', () => {
     ])
     const card = orcaPage.locator('.orca-diff-comment-card').first()
     await expect(card, 'saved note card did not render').toBeVisible({ timeout: 15_000 })
-    await expect(card).toContainText('lines 4-9')
+    await expect(card).toContainText('Note lines 4-9')
     await expect(orcaPage.locator(BAND)).toHaveCount(0)
   })
 
@@ -262,10 +250,12 @@ test.describe('Diff note line range', () => {
     expect(await readNotes(orcaPage, worktreeId)).toEqual([
       { startLine: 4, lineNumber: 9, body: 'Dragged bottom to top.' }
     ])
-    await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText('lines 4-9')
+    await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText(
+      'Note lines 4-9'
+    )
   })
 
-  // Start on the non-Monaco + node to exercise the hit-test path that previously lost the whole drag.
+  // Start on the + button to exercise the hit-test path that previously lost the whole drag.
   test('dragging from the "+" itself selects a range and the button rides the selection', async ({
     orcaPage
   }) => {
@@ -287,12 +277,9 @@ test.describe('Diff note line range', () => {
     await expect
       .poll(
         async () =>
-          orcaPage.locator('.orca-diff-comment-add-btn').evaluate((node) => {
-            if (!(node instanceof HTMLElement)) {
-              throw new Error('the add button is not an HTMLElement')
-            }
-            return node.style.top
-          }),
+          orcaPage
+            .locator('diffs-container [data-utility-button]')
+            .evaluate((node) => node.getBoundingClientRect().y),
         { message: 'the "+" did not ride the growing end of the selection' }
       )
       .not.toBe(button.top)
@@ -325,7 +312,7 @@ test.describe('Diff note line range', () => {
     expect(await readNotes(orcaPage, worktreeId)).toEqual([
       { startLine: undefined, lineNumber: 6, body: 'Single line still works.' }
     ])
-    await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText('line 6')
+    await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText('Note line 6')
   })
 
   test('Escape abandons a drag without opening a composer', async ({ orcaPage }) => {
@@ -356,7 +343,7 @@ test.describe('Diff note line range', () => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
     await seedDiffFile(orcaPage, worktreeId, 'src/diff-note-range-chord.ts')
 
-    // Click the code column, not the gutter: Monaco still owns that side.
+    // Click the code column, not the gutter: the editor still owns that side.
     const line = await gutterPoint(orcaPage, 5)
     await orcaPage.mouse.click(line.x + 220, line.y)
     await orcaPage.keyboard.press('Shift+ArrowDown')

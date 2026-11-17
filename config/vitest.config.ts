@@ -109,6 +109,14 @@ const transforms = {
   },
   resolve: {
     alias: [
+      {
+        find: '@pierre/diffs/worker/worker.js?worker',
+        replacement: resolve('config/test-stubs/pierre-diffs-worker-stub.ts')
+      },
+      {
+        find: './pierre-diff-parse.worker?worker',
+        replacement: resolve('config/test-stubs/pierre-diffs-worker-stub.ts')
+      },
       ...(process.env.ORCA_UNIT_ZOD_BUNDLE
         ? [{ find: /^zod$/, replacement: process.env.ORCA_UNIT_ZOD_BUNDLE }]
         : []),

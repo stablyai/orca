@@ -609,6 +609,25 @@
         "timedOut": "Export timed out"
       }
     },
+    "diff": {
+      "search": {
+        "findLabel": "Find in diff",
+        "find": "Find",
+        "regex": "Use regular expression",
+        "replaceLabel": "Replace in diff",
+        "errors": {
+          "invalid-regex": "Invalid regular expression",
+          "replacement-too-large": "Replacement is too large",
+          "search-failed": "Could not search this file",
+          "invalid-result": "Could not read search results",
+          "timeout": "Search took too long. Try a simpler expression.",
+          "start-failed": "Could not start search"
+        },
+        "searching": "Searching…"
+      },
+      "renderFailed": "This diff could not be rendered",
+      "renderRetry": "Reopen the file or reload to try again."
+    },
     "gitBlame": {
       "uncommitted": "Uncommitted changes",
       "openCommitFailed": "Failed to load commit diff",

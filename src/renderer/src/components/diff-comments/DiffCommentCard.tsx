@@ -1,16 +1,18 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useRetainedDiffCommentField } from './retained-diff-comment-drafts'
 
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
 type Props = {
+  commentId?: string
   lineNumber: number
   startLine?: number
   label?: string | null
@@ -26,6 +28,8 @@ type Props = {
   observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+  /** Keeps an in-progress edit across unmounts (virtualized rows, hidden tabs). */
+  retainKey?: string
 }
 
 function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
@@ -36,6 +40,7 @@ function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
 }
 
 export function DiffCommentCard({
+  commentId,
   lineNumber,
   startLine,
   label,
@@ -49,13 +54,17 @@ export function DiffCommentCard({
   onContentResize,
   observeRenderedSize,
   onSubmitEdit,
-  headerActions
+  headerActions,
+  retainKey
 }: Props): React.JSX.Element {
   const t = useTranslate()
   // Zone cards live in separate React roots, so subscribe directly to language changes.
   useUiLanguageRevision()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(body)
+  const retained = useRetainedDiffCommentField(retainKey)
+  const [editing, setEditing] = useState(retained.restored)
+  const [draft, setDraft] = useState(retained.initialBody ?? body)
+  // A restored edit puts back its own caret and focus instead of jumping to the end.
+  const restoringEditRef = useRef(retained.restored)
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const cardRef = useRef<HTMLDivElement | null>(null)
@@ -115,10 +124,23 @@ export function DiffCommentCard({
       return
     }
     resizeDiffCommentTextarea(el)
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
+    if (restoringEditRef.current) {
+      restoringEditRef.current = false
+    } else {
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
     onContentResizeRef.current?.()
   }, [editing])
+
+  const { bind: bindRetained } = retained
+  const setTextarea = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      textareaRef.current = el
+      bindRetained(el)
+    },
+    [bindRetained]
+  )
 
   const scheduleContentResizeAfterClose = (): void => {
     // Measure after the body-only commit; async saves must not retain the textarea/footer height.
@@ -131,6 +153,7 @@ export function DiffCommentCard({
   }
 
   const handleCancel = (): void => {
+    retained.clear()
     scheduleContentResizeAfterClose()
     setEditing(false)
     setDraft(body)
@@ -156,6 +179,9 @@ export function DiffCommentCard({
     setSubmitting(true)
     try {
       const ok = await onSubmitEdit(trimmedDraft)
+      if (ok) {
+        retained.clear()
+      }
       if (ok && mountedRef.current) {
         scheduleContentResizeAfterClose()
         setEditing(false)
@@ -171,7 +197,7 @@ export function DiffCommentCard({
   }
 
   return (
-    <div ref={cardRef} className="orca-diff-comment-card">
+    <div ref={cardRef} data-diff-comment-id={commentId} className="orca-diff-comment-card">
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">
@@ -273,11 +299,14 @@ export function DiffCommentCard({
         {editing ? (
           <div className="flex flex-col gap-2 mt-1">
             <ImeTextarea
-              ref={textareaRef}
+              ref={setTextarea}
               className="orca-diff-comment-popover-textarea"
               value={draft}
+              onFocus={retained.onFocus}
+              onBlur={retained.onBlur}
               onChange={(e) => {
                 setDraft(e.target.value)
+                retained.onChange()
                 // Why: rich-review layout measures every note; skip it when this card stayed put.
                 if (resizeDiffCommentTextarea(e.currentTarget)) {
                   onContentResizeRef.current?.()

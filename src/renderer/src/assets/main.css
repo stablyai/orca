@@ -98,6 +98,7 @@
   --color-editor-surface: var(--editor-surface);
   --color-floating-surface: var(--floating-surface);
   --color-dialog-surface: var(--dialog-surface);
+  --color-editor-selection: var(--editor-selection-background);
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
@@ -227,6 +228,7 @@
   --orca-security-dialog-surface: rgba(255, 255, 255, 0.96);
   --background: #fff;
   --editor-surface: #ffffff;
+  --editor-selection-background: #add6ff;
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
   --chat-foreground-mix: 88%;
@@ -356,6 +358,7 @@
   --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
+  --editor-selection-background: #264f78;
   --foreground: #f0f0f0;
   --chat-canvas-mix: 5%;
   --chat-foreground-mix: 88%;
@@ -4100,4 +4103,21 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   .browser-agent-cursor-layer[data-agent-active]::before {
     animation: none;
   }
+}
+
+/* Why: inside a Pierre annotation row the diff already owns placement, so the
+   note draft drops the overlay's absolute positioning and fills the row. */
+.orca-diff-comment-popover-inline {
+  position: static;
+  width: 100%;
+  max-width: none;
+}
+
+/* Why: Pierre positions its gutter slot 14px into the line-number column. Pull
+   the add-note button back into the glyph margin so it never covers a number. */
+.orca-diff-comment-add-btn-gutter {
+  position: relative;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
 }

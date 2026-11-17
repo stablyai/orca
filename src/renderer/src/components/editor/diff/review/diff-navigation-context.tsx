@@ -1,10 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import type { editor } from 'monaco-editor'
-import { installMonacoDiffChangeNavigationShortcut } from '../../commands/editor-shortcuts'
+import { installDiffChangeNavigationShortcut } from '@/components/editor/commands/editor-shortcuts'
 
-export type DiffEditorRegistrationContextValue = {
-  registerDiffEditor: (editor: editor.IStandaloneDiffEditor) => void
-  unregisterDiffEditor: (editor: editor.IStandaloneDiffEditor) => void
+/** A mounted diff that can report its changes and scroll to one. */
+export type DiffNavigator = {
+  /** File identity. Re-parses keep this so F7's cursor is not reset. */
+  id: string
+  /** Modified-side start line of every hunk, in document order. */
+  changeLines: readonly number[]
+  scrollToChange: (args: { lineNumber: number; hunkIndex: number; hunkCount: number }) => void
+  /** Element the F7 / Shift+F7 listener attaches to. */
+  container: HTMLElement
+}
+
+export type DiffNavigatorRegistrationContextValue = {
+  registerDiffNavigator: (navigator: DiffNavigator) => void
+  unregisterDiffNavigator: (navigator: DiffNavigator) => void
 }
 
 export type DiffNavigationContextValue = {
@@ -15,10 +25,11 @@ export type DiffNavigationContextValue = {
 
 const noop = (): void => {}
 
-// Separate registration from counts so diff recomputation rerenders header controls without waking Monaco consumers.
-const DiffEditorRegistrationContext = createContext<DiffEditorRegistrationContextValue>({
-  registerDiffEditor: noop,
-  unregisterDiffEditor: noop
+// Why: registration stays separate from changeCount so diff recomputation only
+// rerenders the header controls, not the heavy diff consumer.
+const DiffNavigatorRegistrationContext = createContext<DiffNavigatorRegistrationContextValue>({
+  registerDiffNavigator: noop,
+  unregisterDiffNavigator: noop
 })
 
 const DiffNavigationContext = createContext<DiffNavigationContextValue>({
@@ -27,90 +38,114 @@ const DiffNavigationContext = createContext<DiffNavigationContextValue>({
   changeCount: 0
 })
 
-function countChanges(diffEditor: editor.IStandaloneDiffEditor): number {
-  return diffEditor.getLineChanges()?.length ?? 0
-}
-
 export function DiffNavigationProvider({
   children
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
-  const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
-  const updateSubRef = useRef<{ dispose: () => void } | null>(null)
-  // Share the registered editor across header buttons and F7/Shift+F7 shortcuts.
+  const navigatorRef = useRef<DiffNavigator | null>(null)
   const shortcutCleanupRef = useRef<(() => void) | null>(null)
-  // Use state so sibling header controls repaint when diff computation changes their enabled state.
+  // Why: the cursor is provider-owned because the renderer no longer tracks a
+  // "current change" of its own the way Monaco's goToDiff did.
+  const cursorRef = useRef(-1)
+  // Why: React effect re-registers by unregistering first, so identity must
+  // outlive navigatorRef or a same-file re-parse would look like a new file.
+  const fileIdRef = useRef<string | null>(null)
+  // Why: changeCount must be state, not a ref — the header is a sibling consumer
+  // and only re-renders (enabling the buttons) when the value identity changes.
   const [changeCount, setChangeCount] = useState(0)
 
-  const registerDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
-    editorRef.current = diffEditor
-    updateSubRef.current?.dispose()
-    updateSubRef.current = diffEditor.onDidUpdateDiff(() => {
-      // Ignore stale editor callbacks after a fast registration swap.
-      if (editorRef.current === diffEditor) {
-        setChangeCount(countChanges(diffEditor))
-      }
-    })
-    shortcutCleanupRef.current?.()
-    shortcutCleanupRef.current = installMonacoDiffChangeNavigationShortcut(diffEditor)
-    setChangeCount(countChanges(diffEditor))
-  }, [])
-
-  const unregisterDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
-    // A stale disposal must not clear a newly registered replacement editor.
-    if (editorRef.current !== diffEditor) {
+  const goToChange = useCallback((direction: 'next' | 'previous') => {
+    const navigator = navigatorRef.current
+    if (!navigator) {
       return
     }
-    updateSubRef.current?.dispose()
-    updateSubRef.current = null
+    const total = navigator.changeLines.length
+    if (total === 0) {
+      return
+    }
+    // Why: from the initial position, `next` lands on the first change and
+    // `previous` wraps to the last — plain modulo would send both to index 0.
+    const step = direction === 'next' ? 1 : -1
+    const nextIndex =
+      cursorRef.current === -1
+        ? direction === 'next'
+          ? 0
+          : total - 1
+        : (((cursorRef.current + step) % total) + total) % total
+    cursorRef.current = nextIndex
+    navigator.scrollToChange({
+      lineNumber: navigator.changeLines[nextIndex],
+      hunkIndex: nextIndex,
+      hunkCount: total
+    })
+  }, [])
+
+  const registerDiffNavigator = useCallback(
+    (navigator: DiffNavigator) => {
+      if (fileIdRef.current !== navigator.id) {
+        cursorRef.current = -1
+      } else {
+        const total = navigator.changeLines.length
+        if (cursorRef.current >= total) {
+          cursorRef.current = total === 0 ? -1 : total - 1
+        }
+      }
+      fileIdRef.current = navigator.id
+      navigatorRef.current = navigator
+      // Hold at most one keyboard listener; replace any prior navigator's.
+      shortcutCleanupRef.current?.()
+      shortcutCleanupRef.current = installDiffChangeNavigationShortcut(
+        navigator.container,
+        goToChange
+      )
+      setChangeCount(navigator.changeLines.length)
+    },
+    [goToChange]
+  )
+
+  const unregisterDiffNavigator = useCallback((navigator: DiffNavigator) => {
+    // Why: identity guard for the fast-swap race — a stale teardown carrying the
+    // old navigator must not wipe a freshly-registered new one.
+    if (navigatorRef.current !== navigator) {
+      return
+    }
     shortcutCleanupRef.current?.()
     shortcutCleanupRef.current = null
-    editorRef.current = null
+    navigatorRef.current = null
     setChangeCount(0)
   }, [])
 
-  const goToPreviousDiff = useCallback(() => {
-    editorRef.current?.goToDiff('previous')
-  }, [])
-
-  const goToNextDiff = useCallback(() => {
-    editorRef.current?.goToDiff('next')
-  }, [])
+  const goToPreviousDiff = useCallback(() => goToChange('previous'), [goToChange])
+  const goToNextDiff = useCallback(() => goToChange('next'), [goToChange])
 
   useEffect(() => {
     return () => {
-      updateSubRef.current?.dispose()
-      updateSubRef.current = null
       shortcutCleanupRef.current?.()
       shortcutCleanupRef.current = null
     }
   }, [])
 
   const registrationValue = useMemo(
-    () => ({ registerDiffEditor, unregisterDiffEditor }),
-    [registerDiffEditor, unregisterDiffEditor]
+    () => ({ registerDiffNavigator, unregisterDiffNavigator }),
+    [registerDiffNavigator, unregisterDiffNavigator]
   )
   const navigationValue = useMemo(
-    () => ({
-      goToPreviousDiff,
-      goToNextDiff,
-      changeCount
-    }),
+    () => ({ goToPreviousDiff, goToNextDiff, changeCount }),
     [goToPreviousDiff, goToNextDiff, changeCount]
   )
 
   return (
-    <DiffEditorRegistrationContext.Provider value={registrationValue}>
+    <DiffNavigatorRegistrationContext.Provider value={registrationValue}>
       <DiffNavigationContext.Provider value={navigationValue}>
         {children}
       </DiffNavigationContext.Provider>
-    </DiffEditorRegistrationContext.Provider>
+    </DiffNavigatorRegistrationContext.Provider>
   )
 }
 
-export function useDiffEditorRegistration(): DiffEditorRegistrationContextValue {
-  return useContext(DiffEditorRegistrationContext)
+export function useDiffNavigatorRegistration(): DiffNavigatorRegistrationContextValue {
+  return useContext(DiffNavigatorRegistrationContext)
 }
 
 export function useDiffNavigation(): DiffNavigationContextValue {

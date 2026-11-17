@@ -246,3 +246,11 @@ export function pluginMonacoTokenRules(
     ...monacoTokens.flatMap((token) => rule(token, scopeChain(token), tokenColors, color))
   ]
 }
+
+export function textmateScopeForMonacoToken(token: string): string {
+  return (
+    MONACO_TOKEN_SCOPES[token] ??
+    (BUILT_IN_SPECIFIC_TOKENS.includes(token) ? scopeChain(token)[0] : undefined) ??
+    token
+  )
+}
