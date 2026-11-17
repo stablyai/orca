@@ -40,6 +40,12 @@ describe('linear_not_connected recovery', () => {
     expect(text).toMatch(/\| \S+ linear connect\n/)
   })
 
+  it('follows an explicit runtime host over an ambient pairing code', () => {
+    const text = format([['host', 'runtime:env-2']], { ORCA_PAIRING_CODE: 'orca://pair?code=x' })
+    expect(text).toContain('selected by --host runtime:env-2')
+    expect(text).toMatch(/linear connect --environment env-2\n/)
+  })
+
   it('never echoes a pairing code', () => {
     const text = format([['pairing-code', 'orca://pair?code=secret']])
     expect(text).not.toContain('secret')

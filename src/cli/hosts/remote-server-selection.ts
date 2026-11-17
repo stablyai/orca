@@ -23,9 +23,19 @@ export function describeRemoteServerSelection(
     // Never echo a pairing code into output an agent may log.
     return { label: '--pairing-code', flag: '--pairing-code <same code>' }
   }
+  // Checked before --host: the CLI rewrites an ORCA_ENVIRONMENT selection into --host runtime:<id>.
   const ambientEnvironment = env.ORCA_ENVIRONMENT?.trim()
   if (ambientEnvironment) {
     return { label: `ORCA_ENVIRONMENT=${ambientEnvironment}` }
+  }
+  // An explicit runtime host suppresses ambient pairing codes; its id is also an --environment selector.
+  const host = flags.get('host')
+  if (typeof host === 'string' && host.startsWith('runtime:')) {
+    const environmentId = host.slice('runtime:'.length)
+    return {
+      label: `--host ${host}`,
+      flag: `--environment ${quoteCliCommandArgument(environmentId)}`
+    }
   }
   // Same precedence as RuntimeClient: an empty ORCA_PAIRING_CODE still wins and means local.
   const ambientPairing =

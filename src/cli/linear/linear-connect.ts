@@ -3,6 +3,7 @@ import { readApiKeyFromStdin } from '../arguments/stdin-api-key'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { describeRemoteServerSelection } from '../hosts/remote-server-selection'
 import { linearConnectCommand } from './linear-not-connected-recovery'
 
 // Hosts older than the multi-workspace registry answer with `viewer` only.
@@ -14,10 +15,10 @@ type LinearConnectResult =
 const LINEAR_API_KEY_MAX_LENGTH = 1024
 
 // Same RPC as Settings > Integrations > Linear, so the key is saved on the host this command reached.
-export const runLinearConnect: CommandHandler = async ({ client, json }) => {
+export const runLinearConnect: CommandHandler = async ({ client, flags, json }) => {
   const apiKey = await readApiKeyFromStdin({
     name: 'a Linear API key',
-    pipeExample: linearConnectCommand(),
+    pipeExample: linearConnectCommand(describeRemoteServerSelection(flags)?.flag),
     maxLength: LINEAR_API_KEY_MAX_LENGTH
   })
   const response = await client.call<LinearConnectResult>('linear.connect', { apiKey })
@@ -27,9 +28,10 @@ export const runLinearConnect: CommandHandler = async ({ client, json }) => {
     throw new RuntimeClientError('linear_connect_failed', `Could not connect Linear: ${reason}`)
   }
   // A host without a keyring (headless Linux) saves the key unsealed; Settings warns, so does this.
+  // The key is already saved; a failed status read only loses the unsealed note.
   const status = json
     ? null
-    : await client.call<{ credentialProtection?: string | null }>('linear.status')
+    : await client.call<{ credentialProtection?: string | null }>('linear.status').catch(() => null)
   const unsealed =
     status?.result.credentialProtection === 'plaintext'
       ? ' It is saved unencrypted: this host cannot seal secrets.'
