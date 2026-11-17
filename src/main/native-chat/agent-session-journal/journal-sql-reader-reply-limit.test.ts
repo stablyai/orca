@@ -29,6 +29,19 @@ describe('limitJournalReaderReply', () => {
     ).toMatchObject({ type: 'failed', id: 9 })
   })
 
+  it('passes a lone item over the limit, which no page can split', () => {
+    const lone = {
+      type: 'point',
+      id: 11,
+      result: {
+        kind: 'items-by-kind',
+        items: [{ itemId: 'big', text: 'x'.repeat(9 * MB) }],
+        nextOrdinal: 4
+      }
+    }
+    expect(limitJournalReaderReply(lone, 8 * MB)).toBe(lone)
+  })
+
   it('never refuses the record set, which every chat needs to open', () => {
     const recordSet = {
       type: 'database',
