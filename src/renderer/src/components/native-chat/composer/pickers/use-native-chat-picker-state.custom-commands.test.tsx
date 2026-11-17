@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiscoveredSlashCommand } from '../../../../../../shared/skills/discovery/custom-slash-commands'
-import { getVerifiedNativeChatCommands } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 const discovery = vi.hoisted(() => {
   const commandsByTab: Record<string, DiscoveredSlashCommand[]> = {}

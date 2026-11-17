@@ -3,7 +3,7 @@
 // chat picker has to discover them rather than curate them.
 
 import { stripUnsafeDisplayCharacters } from '../../text/display-text-safety'
-import { isTokenSafe } from '../../native-chat/native-chat-reported-skill'
+import { isTokenSafe } from '../../native-chat/input/composer/native-chat-reported-skill'
 
 export type CustomSlashCommandScope = 'project' | 'user'
 
