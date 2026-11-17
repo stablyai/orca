@@ -20201,14 +20201,12 @@
           "deleteAnyway": "Eliminar de todos modos",
           "appliedFilters": "Filtros aplicados",
           "removeFilter": "Quitar filtro {{value0}}",
-          "forceDeleteRisk_many": "{{count}} espacios de trabajo presentan riesgos actualmente y pueden requerir una eliminación forzada",
           "selectionVanishedCount_one": "{{count}} espacio de trabajo seleccionado ya no existe.",
           "selectionVanishedCount_other": "{{count}} espacios de trabajo seleccionados ya no existen.",
           "selectionVanishedCount_many": "{{count}} espacios de trabajo seleccionados ya no existen.",
           "selectionWithheldCount_one": "{{count}} espacio de trabajo seleccionado está oculto por los filtros actuales y se ha deseleccionado.",
           "selectionWithheldCount_other": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "selectionWithheldCount_many": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
-          "selectAllSafetyChecked_many": "Seleccionar todos los {{count}} espacios de trabajo con seguridad comprobada",
           "lastActive": "Última actividad: {{value0}}"
         },
         "scan": {
@@ -20250,6 +20248,80 @@
             "unpushed": "Sin subir",
             "unknown": "Desconocido"
           }
+        },
+        "confirm": {
+          "title_one": "¿Eliminar {{count}} espacio de trabajo?",
+          "title_many": "¿Eliminar {{count}} espacios de trabajo?",
+          "title_other": "¿Eliminar {{count}} espacios de trabajo?",
+          "localFilesSection": "Se perderán los archivos locales",
+          "back": "Atrás",
+          "deletePermanently": "Eliminar permanentemente",
+          "showMore": "Mostrar {{count}} más"
+        },
+        "review": {
+          "title": "Revisar espacios de trabajo",
+          "refresh": "Actualizar",
+          "checking": "Buscando cambios",
+          "updatesAvailable": "Hay novedades. Actualizar"
+        },
+        "row": {
+          "sizeLabel": "Tamaño",
+          "reviewLabel": "Revisión",
+          "statusLabel": "Estado",
+          "signalsLabel": "Señales",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "No es un espacio de trabajo de Git. Quita el proyecto de Orca en su lugar.",
+          "unreachable": "No se puede conectar con {{host}}. Vuelve a conectarte para eliminarlo o quítalo de Orca.",
+          "mainCheckout": "No se puede eliminar el checkout principal del proyecto.",
+          "uncommittedFiles_one": "{{count}} archivo sin confirmar",
+          "uncommittedFiles_many": "{{count}} archivos sin confirmar",
+          "uncommittedFiles_other": "{{count}} archivos sin confirmar",
+          "couldntCheck": "No se pudieron comprobar los cambios"
+        },
+        "group": {
+          "empty": "No hay espacios de trabajo aquí.",
+          "nothingLocal": "Nada local",
+          "localFiles": "Tiene archivos locales",
+          "cannotDelete": "No se puede eliminar",
+          "label": "Grupos de espacios de trabajo",
+          "selected": "{{count}} seleccionados"
+        },
+        "footer": {
+          "delete_one": "Eliminar {{count}} espacio de trabajo",
+          "delete_many": "Eliminar {{count}} espacios de trabajo",
+          "delete_other": "Eliminar {{count}} espacios de trabajo",
+          "selected": "{{count}} seleccionados",
+          "waitForDelete": "Espera a que termine la eliminación actual."
+        },
+        "selectAll": {
+          "partial": "{{selected}} de {{total}} seleccionados",
+          "all": "Seleccionar los {{count}}"
+        },
+        "runCard": {
+          "finishedTitle": "{{deleted}} de {{total}} espacios de trabajo eliminados",
+          "title": "Eliminando espacios de trabajo",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Descartar",
+          "show": "Mostrar"
+        },
+        "done": {
+          "failedLine_one": "No se pudo eliminar {{count}}.",
+          "failedLine_many": "No se pudieron eliminar {{count}}.",
+          "failedLine_other": "No se pudieron eliminar {{count}}.",
+          "title": "{{deleted}} de {{total}} espacios de trabajo eliminados",
+          "button": "Listo"
+        },
+        "deleting": {
+          "title_one": "Eliminando {{count}} espacio de trabajo",
+          "title_many": "Eliminando {{count}} espacios de trabajo",
+          "title_other": "Eliminando {{count}} espacios de trabajo",
+          "runInBackground": "Ejecutar en segundo plano",
+          "progress": "{{done}} de {{total}} eliminados",
+          "statusDeleted": "Eliminado",
+          "statusDeleting": "Eliminando…",
+          "statusFailed": "No se pudo eliminar",
+          "statusWaiting": "En espera",
+          "unconfirmed": "No se pudo confirmar la eliminación. Actualiza para comprobarlo."
         }
       },
       "creation": {

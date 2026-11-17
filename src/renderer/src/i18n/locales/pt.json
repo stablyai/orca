@@ -21923,14 +21923,12 @@
               "finishedAgents": "Agentes concluídos"
             }
           },
-          "forceDeleteRisk_many": "{{count}} espaços de trabalho apresentam riscos no momento e podem exigir uma exclusão forçada",
           "selectionVanishedCount_one": "{{count}} espaço de trabalho selecionado não existe mais.",
           "selectionVanishedCount_other": "{{count}} espaços de trabalho selecionados não existem mais.",
           "selectionVanishedCount_many": "{{count}} espaços de trabalho selecionados não existem mais.",
           "selectionWithheldCount_one": "{{count}} espaço de trabalho selecionado está oculto pelos filtros atuais e foi desmarcado.",
           "selectionWithheldCount_other": "{{count}} espaços de trabalho selecionados estão ocultos pelos filtros atuais e foram desmarcados.",
           "selectionWithheldCount_many": "{{count}} espaços de trabalho selecionados estão ocultos pelos filtros atuais e foram desmarcados.",
-          "selectAllSafetyChecked_many": "Selecionar todos os {{count}} espaços de trabalho com segurança verificada",
           "lastActive": "Última atividade: {{value0}}",
           "projectNamed": "Projeto: {{value0}}",
           "pathLabel": "Caminho",
@@ -21985,7 +21983,78 @@
           }
         },
         "confirm": {
-          "deletingTitle_many": "Excluindo {{count}} espaços de trabalho"
+          "title_one": "Excluir {{count}} espaço de trabalho?",
+          "title_many": "Excluir {{count}} espaços de trabalho?",
+          "title_other": "Excluir {{count}} espaços de trabalho?",
+          "localFilesSection": "Os arquivos locais serão perdidos",
+          "back": "Voltar",
+          "deletePermanently": "Excluir permanentemente",
+          "showMore": "Mostrar mais {{count}}"
+        },
+        "review": {
+          "title": "Revisar espaços de trabalho",
+          "refresh": "Atualizar",
+          "checking": "Verificando alterações",
+          "updatesAvailable": "Há atualizações. Atualizar"
+        },
+        "row": {
+          "sizeLabel": "Tamanho",
+          "reviewLabel": "Revisão",
+          "statusLabel": "Status",
+          "signalsLabel": "Sinais",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Não é um espaço de trabalho Git. Remova o projeto do Orca.",
+          "unreachable": "Não foi possível acessar {{host}}. Reconecte para excluir ou remova do Orca.",
+          "mainCheckout": "Não é possível excluir o checkout principal do projeto.",
+          "uncommittedFiles_one": "{{count}} arquivo não confirmado",
+          "uncommittedFiles_many": "{{count}} arquivos não confirmados",
+          "uncommittedFiles_other": "{{count}} arquivos não confirmados",
+          "couldntCheck": "Não foi possível verificar alterações"
+        },
+        "group": {
+          "empty": "Nenhum espaço de trabalho aqui.",
+          "nothingLocal": "Nada local",
+          "localFiles": "Tem arquivos locais",
+          "cannotDelete": "Não pode ser excluído",
+          "label": "Grupos de espaços de trabalho",
+          "selected": "{{count}} selecionados"
+        },
+        "footer": {
+          "delete_one": "Excluir {{count}} espaço de trabalho",
+          "delete_many": "Excluir {{count}} espaços de trabalho",
+          "delete_other": "Excluir {{count}} espaços de trabalho",
+          "selected": "{{count}} selecionados",
+          "waitForDelete": "Aguarde a exclusão atual terminar."
+        },
+        "selectAll": {
+          "partial": "{{selected}} de {{total}} selecionados",
+          "all": "Selecionar todos os {{count}}"
+        },
+        "runCard": {
+          "finishedTitle": "{{deleted}} de {{total}} espaços de trabalho excluídos",
+          "title": "Excluindo espaços de trabalho",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Dispensar",
+          "show": "Mostrar"
+        },
+        "done": {
+          "failedLine_one": "Não foi possível excluir {{count}}.",
+          "failedLine_many": "Não foi possível excluir {{count}}.",
+          "failedLine_other": "Não foi possível excluir {{count}}.",
+          "title": "{{deleted}} de {{total}} espaços de trabalho excluídos",
+          "button": "Concluído"
+        },
+        "deleting": {
+          "title_one": "Excluindo {{count}} espaço de trabalho",
+          "title_many": "Excluindo {{count}} espaços de trabalho",
+          "title_other": "Excluindo {{count}} espaços de trabalho",
+          "runInBackground": "Executar em segundo plano",
+          "progress": "{{done}} de {{total}} excluídos",
+          "statusDeleted": "Excluído",
+          "statusDeleting": "Excluindo…",
+          "statusFailed": "Não foi possível excluir",
+          "statusWaiting": "Aguardando",
+          "unconfirmed": "Não foi possível confirmar a exclusão. Atualize para verificar."
         }
       },
       "creation": {

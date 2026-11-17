@@ -20950,6 +20950,70 @@
           "ignoredFilesBlocker": "Git 忽略的本地文件",
           "ignoredFilesNamed": "Git 忽略的文件：{{value0}}",
           "ignoredFilesUnchecked": "未完整检查 Git 忽略的文件"
+        },
+        "confirm": {
+          "title_other": "删除 {{count}} 个工作区？",
+          "localFilesSection": "本地文件将丢失",
+          "back": "返回",
+          "deletePermanently": "永久删除",
+          "showMore": "再显示 {{count}} 个"
+        },
+        "review": {
+          "title": "检查工作区",
+          "refresh": "刷新",
+          "checking": "正在检查更改",
+          "updatesAvailable": "有更新。刷新"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "评审",
+          "statusLabel": "状态",
+          "signalsLabel": "信号",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目。",
+          "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除。",
+          "mainCheckout": "无法删除项目的主检出。",
+          "uncommittedFiles_other": "{{count}} 个未提交的文件",
+          "couldntCheck": "无法检查更改"
+        },
+        "group": {
+          "empty": "这里没有工作区。",
+          "nothingLocal": "无本地内容",
+          "localFiles": "有本地文件",
+          "cannotDelete": "无法删除",
+          "label": "工作区分组",
+          "selected": "已选 {{count}} 个"
+        },
+        "footer": {
+          "delete_other": "删除 {{count}} 个工作区",
+          "selected": "已选 {{count}} 个",
+          "waitForDelete": "请等待当前删除完成。"
+        },
+        "selectAll": {
+          "partial": "已选 {{selected}}/{{total}} 个",
+          "all": "全选 {{count}} 个"
+        },
+        "runCard": {
+          "finishedTitle": "已删除 {{deleted}}/{{total}} 个工作区",
+          "title": "正在删除工作区",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "关闭",
+          "show": "显示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 个无法删除。",
+          "title": "已删除 {{deleted}}/{{total}} 个工作区",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在删除 {{count}} 个工作区",
+          "runInBackground": "在后台运行",
+          "progress": "已删除 {{done}}/{{total}}",
+          "statusDeleted": "已删除",
+          "statusDeleting": "正在删除…",
+          "statusFailed": "无法删除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "无法确认已删除。请刷新以检查。"
         }
       },
       "creation": {

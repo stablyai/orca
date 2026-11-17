@@ -20147,6 +20147,70 @@
             "unpushed": "未推送",
             "unknown": "未知"
           }
+        },
+        "confirm": {
+          "title_other": "刪除 {{count}} 個工作區？",
+          "localFilesSection": "本機檔案將遺失",
+          "back": "返回",
+          "deletePermanently": "永久刪除",
+          "showMore": "再顯示 {{count}} 個"
+        },
+        "review": {
+          "title": "檢查工作區",
+          "refresh": "重新整理",
+          "checking": "正在檢查變更",
+          "updatesAvailable": "有更新。重新整理"
+        },
+        "row": {
+          "sizeLabel": "大小",
+          "reviewLabel": "審查",
+          "statusLabel": "狀態",
+          "signalsLabel": "訊號",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "不是 Git 工作區。請改為從 Orca 中移除該專案。",
+          "unreachable": "無法連線 {{host}}。重新連線後即可刪除，或將其從 Orca 中移除。",
+          "mainCheckout": "無法刪除專案的主要簽出。",
+          "uncommittedFiles_other": "{{count}} 個未提交的檔案",
+          "couldntCheck": "無法檢查變更"
+        },
+        "group": {
+          "empty": "這裡沒有工作區。",
+          "nothingLocal": "無本機內容",
+          "localFiles": "有本機檔案",
+          "cannotDelete": "無法刪除",
+          "label": "工作區分組",
+          "selected": "已選 {{count}} 個"
+        },
+        "footer": {
+          "delete_other": "刪除 {{count}} 個工作區",
+          "selected": "已選 {{count}} 個",
+          "waitForDelete": "請等待目前的刪除完成。"
+        },
+        "selectAll": {
+          "partial": "已選 {{selected}}/{{total}} 個",
+          "all": "全選 {{count}} 個"
+        },
+        "runCard": {
+          "finishedTitle": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "title": "正在刪除工作區",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "關閉",
+          "show": "顯示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 個無法刪除。",
+          "title": "已刪除 {{deleted}}/{{total}} 個工作區",
+          "button": "完成"
+        },
+        "deleting": {
+          "title_other": "正在刪除 {{count}} 個工作區",
+          "runInBackground": "在背景執行",
+          "progress": "已刪除 {{done}}/{{total}}",
+          "statusDeleted": "已刪除",
+          "statusDeleting": "正在刪除…",
+          "statusFailed": "無法刪除",
+          "statusWaiting": "等待中",
+          "unconfirmed": "無法確認已刪除。請重新整理以檢查。"
         }
       },
       "creation": {

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
-import type { WorkspaceCleanupFacetSources } from '../query/workspace-cleanup-facets'
 import {
   computeWorkspaceCleanupFacetList,
   createWorkspaceCleanupFacetListCache
@@ -22,7 +21,7 @@ describe('applyWorkspaceCleanupGitEvidence identity', () => {
   it('reuses merged rows so streamed evidence only rebuilds the rows that changed', () => {
     const rows = Array.from({ length: 300 }, (_, i) => unchecked(i))
     const evidence = new Map<string, WorkspaceCleanupCandidate>()
-    const sources: WorkspaceCleanupFacetSources = {
+    const sources: Parameters<typeof computeWorkspaceCleanupFacetList>[0]['sources'] = {
       worktreeById: new Map(),
       workspaceStatuses: [],
       sizeBytesByWorktreeId: new Map(),

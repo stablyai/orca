@@ -20608,6 +20608,75 @@
             "unpushed": "Push edilmemiş",
             "unknown": "Bilinmiyor"
           }
+        },
+        "confirm": {
+          "title_one": "{{count}} çalışma alanı silinsin mi?",
+          "title_other": "{{count}} çalışma alanı silinsin mi?",
+          "localFilesSection": "Yerel dosyalar kaybolacak",
+          "back": "Geri",
+          "deletePermanently": "Kalıcı olarak sil",
+          "showMore": "{{count}} tane daha göster"
+        },
+        "review": {
+          "title": "Çalışma alanlarını gözden geçir",
+          "refresh": "Yenile",
+          "checking": "Değişiklikler kontrol ediliyor",
+          "updatesAvailable": "Güncellemeler var. Yenile"
+        },
+        "row": {
+          "sizeLabel": "Boyut",
+          "reviewLabel": "İnceleme",
+          "statusLabel": "Durum",
+          "signalsLabel": "Sinyaller",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Git çalışma alanı değil. Bunun yerine projeyi Orca’dan kaldırın.",
+          "unreachable": "{{host}} ile bağlantı kurulamıyor. Silmek için yeniden bağlanın veya Orca’dan kaldırın.",
+          "mainCheckout": "Projenin ana checkout’u silinemez.",
+          "uncommittedFiles_one": "{{count}} commit edilmemiş dosya",
+          "uncommittedFiles_other": "{{count}} commit edilmemiş dosya",
+          "couldntCheck": "Değişiklikler kontrol edilemedi"
+        },
+        "group": {
+          "empty": "Burada çalışma alanı yok.",
+          "nothingLocal": "Yerel bir şey yok",
+          "localFiles": "Yerel dosyalar var",
+          "cannotDelete": "Silinemez",
+          "label": "Çalışma alanı grupları",
+          "selected": "{{count}} seçili"
+        },
+        "footer": {
+          "delete_one": "{{count}} çalışma alanını sil",
+          "delete_other": "{{count}} çalışma alanını sil",
+          "selected": "{{count}} seçili",
+          "waitForDelete": "Geçerli silme işleminin bitmesini bekleyin."
+        },
+        "selectAll": {
+          "partial": "{{total}} içinden {{selected}} seçili",
+          "all": "{{count}} öğenin tümünü seç"
+        },
+        "runCard": {
+          "finishedTitle": "{{total}} çalışma alanından {{deleted}} tanesi silindi",
+          "title": "Çalışma alanları siliniyor",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Kapat",
+          "show": "Göster"
+        },
+        "done": {
+          "failedLine_one": "{{count}} tanesi silinemedi.",
+          "failedLine_other": "{{count}} tanesi silinemedi.",
+          "title": "{{total}} çalışma alanından {{deleted}} tanesi silindi",
+          "button": "Bitti"
+        },
+        "deleting": {
+          "title_one": "{{count}} çalışma alanı siliniyor",
+          "title_other": "{{count}} çalışma alanı siliniyor",
+          "runInBackground": "Arka planda çalıştır",
+          "progress": "{{total}} içinden {{done}} silindi",
+          "statusDeleted": "Silindi",
+          "statusDeleting": "Siliniyor…",
+          "statusFailed": "Silinemedi",
+          "statusWaiting": "Bekliyor",
+          "unconfirmed": "Silindiği doğrulanamadı. Kontrol etmek için yenileyin."
         }
       },
       "creation": {

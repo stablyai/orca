@@ -20463,6 +20463,75 @@
             "unpushed": "Nicht gepusht",
             "unknown": "Unbekannt"
           }
+        },
+        "confirm": {
+          "title_one": "{{count}} Arbeitsbereich löschen?",
+          "title_other": "{{count}} Arbeitsbereiche löschen?",
+          "localFilesSection": "Lokale Dateien gehen verloren",
+          "back": "Zurück",
+          "deletePermanently": "Endgültig löschen",
+          "showMore": "{{count}} weitere anzeigen"
+        },
+        "review": {
+          "title": "Arbeitsbereiche prüfen",
+          "refresh": "Aktualisieren",
+          "checking": "Suche nach Änderungen",
+          "updatesAvailable": "Neuigkeiten verfügbar. Aktualisieren"
+        },
+        "row": {
+          "sizeLabel": "Größe",
+          "reviewLabel": "Review",
+          "statusLabel": "Status",
+          "signalsLabel": "Signale",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Kein Git-Arbeitsbereich. Entferne stattdessen das Projekt aus Orca.",
+          "unreachable": "{{host}} ist nicht erreichbar. Verbinde dich erneut, um zu löschen, oder entferne ihn aus Orca.",
+          "mainCheckout": "Der Haupt-Checkout des Projekts kann nicht gelöscht werden.",
+          "uncommittedFiles_one": "{{count}} nicht committete Datei",
+          "uncommittedFiles_other": "{{count}} nicht committete Dateien",
+          "couldntCheck": "Änderungen konnten nicht geprüft werden"
+        },
+        "group": {
+          "empty": "Keine Arbeitsbereiche.",
+          "nothingLocal": "Nichts lokal",
+          "localFiles": "Hat lokale Dateien",
+          "cannotDelete": "Nicht löschbar",
+          "label": "Arbeitsbereichsgruppen",
+          "selected": "{{count}} ausgewählt"
+        },
+        "footer": {
+          "delete_one": "{{count}} Arbeitsbereich löschen",
+          "delete_other": "{{count}} Arbeitsbereiche löschen",
+          "selected": "{{count}} ausgewählt",
+          "waitForDelete": "Warte, bis das aktuelle Löschen abgeschlossen ist."
+        },
+        "selectAll": {
+          "partial": "{{selected}} von {{total}} ausgewählt",
+          "all": "Alle {{count}} auswählen"
+        },
+        "runCard": {
+          "finishedTitle": "{{deleted}} von {{total}} Arbeitsbereichen gelöscht",
+          "title": "Arbeitsbereiche werden gelöscht",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Schließen",
+          "show": "Anzeigen"
+        },
+        "done": {
+          "failedLine_one": "{{count}} konnte nicht gelöscht werden.",
+          "failedLine_other": "{{count}} konnten nicht gelöscht werden.",
+          "title": "{{deleted}} von {{total}} Arbeitsbereichen gelöscht",
+          "button": "Fertig"
+        },
+        "deleting": {
+          "title_one": "{{count}} Arbeitsbereich wird gelöscht",
+          "title_other": "{{count}} Arbeitsbereiche werden gelöscht",
+          "runInBackground": "Im Hintergrund ausführen",
+          "progress": "{{done}} von {{total}} gelöscht",
+          "statusDeleted": "Gelöscht",
+          "statusDeleting": "Wird gelöscht…",
+          "statusFailed": "Löschen fehlgeschlagen",
+          "statusWaiting": "Wartet",
+          "unconfirmed": "Löschen konnte nicht bestätigt werden. Aktualisiere, um es zu prüfen."
         }
       },
       "creation": {

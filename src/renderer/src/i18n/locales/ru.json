@@ -21081,8 +21081,6 @@
               "finishedAgents": "Завершённые агенты"
             }
           },
-          "forceDeleteRisk_few": "Для {{count}} рабочих пространств сейчас выявлены риски; может потребоваться принудительное удаление",
-          "forceDeleteRisk_many": "Для {{count}} рабочих пространств сейчас выявлены риски; может потребоваться принудительное удаление",
           "selectionVanishedCount_one": "{{count}} выбранное рабочее пространство больше не существует.",
           "selectionVanishedCount_few": "{{count}} выбранных рабочих пространства больше не существуют.",
           "selectionVanishedCount_many": "{{count}} выбранных рабочих пространств больше не существуют.",
@@ -21091,8 +21089,6 @@
           "selectionWithheldCount_few": "{{count}} выбранных рабочих пространства скрыты текущими фильтрами, поэтому выбор снят.",
           "selectionWithheldCount_many": "{{count}} выбранных рабочих пространств скрыты текущими фильтрами, поэтому выбор снят.",
           "selectionWithheldCount_other": "{{count}} выбранного рабочего пространства скрыто текущими фильтрами, поэтому выбор снят.",
-          "selectAllSafetyChecked_few": "Выбрать все {{count}} рабочих пространства, прошедших проверку безопасности",
-          "selectAllSafetyChecked_many": "Выбрать все {{count}} рабочих пространств, прошедших проверку безопасности",
           "lastActive": "Последняя активность: {{value0}}"
         },
         "scan": {
@@ -21137,6 +21133,85 @@
             "unpushed": "Не отправлено",
             "unknown": "Неизвестно"
           }
+        },
+        "confirm": {
+          "title_one": "Удалить {{count}} рабочее пространство?",
+          "title_few": "Удалить {{count}} рабочих пространства?",
+          "title_many": "Удалить {{count}} рабочих пространств?",
+          "title_other": "Удалить {{count}} рабочих пространства?",
+          "localFilesSection": "Локальные файлы будут потеряны",
+          "back": "Назад",
+          "deletePermanently": "Удалить навсегда",
+          "showMore": "Показать ещё {{count}}"
+        },
+        "review": {
+          "title": "Просмотр рабочих пространств",
+          "refresh": "Обновить",
+          "checking": "Проверка изменений",
+          "updatesAvailable": "Есть обновления. Обновить"
+        },
+        "row": {
+          "sizeLabel": "Размер",
+          "reviewLabel": "Ревью",
+          "statusLabel": "Статус",
+          "signalsLabel": "Сигналы",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Это не рабочее пространство Git. Вместо этого удалите проект из Orca.",
+          "unreachable": "Нет связи с {{host}}. Переподключитесь, чтобы удалить, или удалите из Orca.",
+          "mainCheckout": "Нельзя удалить основной checkout проекта.",
+          "uncommittedFiles_one": "{{count}} незакоммиченный файл",
+          "uncommittedFiles_few": "{{count}} незакоммиченных файла",
+          "uncommittedFiles_many": "{{count}} незакоммиченных файлов",
+          "uncommittedFiles_other": "{{count}} незакоммиченных файла",
+          "couldntCheck": "Не удалось проверить изменения"
+        },
+        "group": {
+          "empty": "Здесь нет рабочих пространств.",
+          "nothingLocal": "Ничего локального",
+          "localFiles": "Есть локальные файлы",
+          "cannotDelete": "Нельзя удалить",
+          "label": "Группы рабочих пространств",
+          "selected": "Выбрано: {{count}}"
+        },
+        "footer": {
+          "delete_one": "Удалить {{count}} рабочее пространство",
+          "delete_few": "Удалить {{count}} рабочих пространства",
+          "delete_many": "Удалить {{count}} рабочих пространств",
+          "delete_other": "Удалить {{count}} рабочих пространства",
+          "selected": "Выбрано: {{count}}",
+          "waitForDelete": "Дождитесь окончания текущего удаления."
+        },
+        "selectAll": {
+          "partial": "Выбрано: {{selected}} из {{total}}",
+          "all": "Выбрать все ({{count}})"
+        },
+        "runCard": {
+          "finishedTitle": "Удалено рабочих пространств: {{deleted}} из {{total}}",
+          "title": "Удаление рабочих пространств",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Закрыть",
+          "show": "Показать"
+        },
+        "done": {
+          "failedLine_one": "Не удалось удалить: {{count}}.",
+          "failedLine_few": "Не удалось удалить: {{count}}.",
+          "failedLine_many": "Не удалось удалить: {{count}}.",
+          "failedLine_other": "Не удалось удалить: {{count}}.",
+          "title": "Удалено рабочих пространств: {{deleted}} из {{total}}",
+          "button": "Готово"
+        },
+        "deleting": {
+          "title_one": "Удаление {{count}} рабочего пространства",
+          "title_few": "Удаление {{count}} рабочих пространств",
+          "title_many": "Удаление {{count}} рабочих пространств",
+          "title_other": "Удаление {{count}} рабочих пространств",
+          "runInBackground": "Выполнять в фоне",
+          "progress": "Удалено {{done}} из {{total}}",
+          "statusDeleted": "Удалено",
+          "statusDeleting": "Удаление…",
+          "statusFailed": "Не удалось удалить",
+          "statusWaiting": "Ожидание",
+          "unconfirmed": "Не удалось подтвердить удаление. Обновите, чтобы проверить."
         }
       },
       "creation": {

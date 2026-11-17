@@ -20883,6 +20883,70 @@
           "ignoredFilesBlocker": "無視されたローカルファイル",
           "ignoredFilesNamed": "無視されたファイル: {{value0}}",
           "ignoredFilesUnchecked": "無視されたファイルを完全には確認できていません"
+        },
+        "confirm": {
+          "title_other": "{{count}} 件のワークスペースを削除しますか？",
+          "localFilesSection": "ローカルファイルは失われます",
+          "back": "戻る",
+          "deletePermanently": "完全に削除",
+          "showMore": "さらに {{count}} 件を表示"
+        },
+        "review": {
+          "title": "ワークスペースを確認",
+          "refresh": "更新",
+          "checking": "変更を確認中",
+          "updatesAvailable": "更新があります。更新する"
+        },
+        "row": {
+          "sizeLabel": "サイズ",
+          "reviewLabel": "レビュー",
+          "statusLabel": "ステータス",
+          "signalsLabel": "シグナル",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Git ワークスペースではありません。代わりにプロジェクトを Orca から削除してください。",
+          "unreachable": "{{host}} に接続できません。削除するには再接続するか、Orca から削除してください。",
+          "mainCheckout": "プロジェクトのメインチェックアウトは削除できません。",
+          "uncommittedFiles_other": "未コミットのファイル {{count}} 件",
+          "couldntCheck": "変更を確認できませんでした"
+        },
+        "group": {
+          "empty": "ここにワークスペースはありません。",
+          "nothingLocal": "ローカルの変更なし",
+          "localFiles": "ローカルファイルあり",
+          "cannotDelete": "削除不可",
+          "label": "ワークスペースのグループ",
+          "selected": "{{count}} 件選択中"
+        },
+        "footer": {
+          "delete_other": "{{count}} 件のワークスペースを削除",
+          "selected": "{{count}} 件選択中",
+          "waitForDelete": "現在の削除が終わるまでお待ちください。"
+        },
+        "selectAll": {
+          "partial": "{{total}} 件中 {{selected}} 件を選択中",
+          "all": "{{count}} 件をすべて選択"
+        },
+        "runCard": {
+          "finishedTitle": "{{total}} 件中 {{deleted}} 件のワークスペースを削除しました",
+          "title": "ワークスペースを削除中",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "閉じる",
+          "show": "表示"
+        },
+        "done": {
+          "failedLine_other": "{{count}} 件を削除できませんでした。",
+          "title": "{{total}} 件中 {{deleted}} 件のワークスペースを削除しました",
+          "button": "完了"
+        },
+        "deleting": {
+          "title_other": "{{count}} 件のワークスペースを削除中",
+          "runInBackground": "バックグラウンドで実行",
+          "progress": "{{total}} 件中 {{done}} 件を削除済み",
+          "statusDeleted": "削除済み",
+          "statusDeleting": "削除中…",
+          "statusFailed": "削除できませんでした",
+          "statusWaiting": "待機中",
+          "unconfirmed": "削除を確認できませんでした。更新して確認してください。"
         }
       },
       "creation": {
