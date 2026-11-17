@@ -117,34 +117,38 @@ describe('a Windows Codex prompt held in its paste burst', () => {
 describe('a Windows Muse prompt held in its paste burst', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('presses Enter again while Muse still shows the prompt as pasted content (#43126)', async () => {
-    vi.useFakeTimers()
-    const heldScreen = readFileSync(
-      join(__dirname, '..', '..', '__fixtures__', 'muse-1-4-20-held-paste.txt'),
-      'utf8'
-    )
-    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
-      (rt, data, writeIndex) => {
-        // The first Enter lands mid-burst and Muse keeps the paste; the next one submits it.
-        if (writeIndex === 1) {
-          rt.onPtyData('pty-prompt', heldScreen, Date.now())
-        } else if (writeIndex === 3 && data === '\r') {
-          rt.onPtyData('pty-prompt', '\x1b[2J\x1b[HWorking', Date.now())
-        }
-      },
-      'muse'
-    )
-    Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
+  // Why 300: its burst window (900 ms) is shorter than one held-prompt recheck.
+  it.each([3_300, 300])(
+    'presses Enter again while Muse still shows a %i-char prompt as pasted content (#43126)',
+    async (chars) => {
+      vi.useFakeTimers()
+      const heldScreen = readFileSync(
+        join(__dirname, '..', '..', '__fixtures__', 'muse-1-4-20-held-paste.txt'),
+        'utf8'
+      ).replace('[Pasted Content 3300 chars]', `[Pasted Content ${chars} chars]`)
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        (rt, data, writeIndex) => {
+          // The first Enter lands mid-burst and Muse keeps the paste; the next one submits it.
+          if (writeIndex === 1) {
+            rt.onPtyData('pty-prompt', heldScreen, Date.now())
+          } else if (writeIndex === 3 && data === '\r') {
+            rt.onPtyData('pty-prompt', '\x1b[2J\x1b[HWorking', Date.now())
+          }
+        },
+        'muse'
+      )
+      Object.defineProperty(runtime, 'getPtyWriteHostPlatform', { value: () => 'win32' })
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(3_300), {
-      inputKind: 'orchestration',
-      acceptQueued: true,
-      requestId: 'windows-muse-held',
-      observationTimeoutMs: 0
-    })
-    await vi.runAllTimersAsync()
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(chars), {
+        inputKind: 'orchestration',
+        acceptQueued: true,
+        requestId: 'windows-muse-held',
+        observationTimeoutMs: 0
+      })
+      await vi.runAllTimersAsync()
 
-    await expect(submission).resolves.toMatchObject({ accepted: true })
-    expect(writes.filter((write) => write === '\r')).toHaveLength(2)
-  })
+      await expect(submission).resolves.toMatchObject({ accepted: true })
+      expect(writes.filter((write) => write === '\r')).toHaveLength(2)
+    }
+  )
 })

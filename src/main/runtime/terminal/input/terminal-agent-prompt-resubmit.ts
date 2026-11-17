@@ -40,7 +40,8 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
       return 0
     }
     const recheckMs = retryDelayMs ?? HELD_PROMPT_RECHECK_MS
-    const deadline = Date.now() + held.heldBudgetMs
+    // Why one recheck past the budget: the burst can end just before it, and a held prompt still needs Enter then.
+    const deadline = Date.now() + held.heldBudgetMs + recheckMs
     let resubmits = 0
     let gatedResubmits = 0
     try {
