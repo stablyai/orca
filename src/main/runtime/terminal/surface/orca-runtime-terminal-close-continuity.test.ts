@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import '../../../../shared/workspace-layout/layout-owner-switch'
 import '../../../../shared/workspace-layout/stable-pane-id'
 
@@ -6,9 +6,11 @@ import '../../../agent-launch/agent-launch-pane-attachment'
 import {
   LEAF_ID,
   PTY_ID,
+  REPO_ID,
   SIBLING_INCARNATION_ID,
   TAB_ID,
-  WORKTREE_ID
+  WORKTREE_ID,
+  WORKTREE_PATH
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import {
   createHarness,
@@ -112,6 +114,10 @@ describe('explicit terminal close when the window does not confirm the tab close
   it('still stops the workspace terminals when closing them all times out on the window', async () => {
     const harness = await createHarness()
     harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
+    const worktree = { id: WORKTREE_ID, path: WORKTREE_PATH, repoId: REPO_ID }
+    vi.spyOn(harness.runtime as never, 'resolveWorkspaceSelector').mockResolvedValue(
+      worktree as never
+    )
 
     await expect(harness.runtime.closeTerminalsForWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'terminal_tab_close_timeout'

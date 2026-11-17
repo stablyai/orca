@@ -9,14 +9,9 @@ import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-a
 import { closeMainOwnedPaneByHandle } from '../layout/main-handle-close'
 import {
   NO_STOP,
-  OrcaRuntimeWithExplicitCloseTabPtyStops,
-  type ExplicitCloseStop,
-  type OwedPtyIncarnations
+  OrcaRuntimeWithExplicitCloseTabPtyStops
 } from './explicit-terminal-close-pty-stops'
-import {
-  closePairedHostLeafFirst,
-  isTerminalTabPinnedInSession
-} from './paired-host-terminal-close'
+import { closePairedHostLeafFirst } from './paired-host-terminal-close'
 
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -44,46 +39,6 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     committedPtyIds: Set<string>
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   }): void
-
-  protected describeTerminalClose(
-    handle: string,
-    tabId: string,
-    ptyId: string | null,
-    stop: ExplicitCloseStop
-  ): RuntimeTerminalClose {
-    const close: RuntimeTerminalClose = { handle, tabId, ptyKilled: stop.stopped }
-    if (stop.stopped || !ptyId) {
-      return close
-    }
-    const verdict = this.getPtyLivenessVerdict(ptyId)
-    if (verdict?.status === 'unverifiable') {
-      return { ...close, ptyStopVerdict: 'unverifiable', ptyStopReason: verdict.reason }
-    }
-    if (verdict?.status === 'live') {
-      return { ...close, ptyStopVerdict: 'live' }
-    }
-    return close
-  }
-
-  private isTabPinnedInAnySession(worktreeId: string, tabId: string): boolean {
-    return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId).some((hostId) =>
-      isTerminalTabPinnedInSession(this.store?.getWorkspaceSession?.(hostId), { worktreeId, tabId })
-    )
-  }
-
-  /** Main owns these PTYs once it asked the window to close their tab; only a pinned tab may keep them running. */
-  private async stopOwedPtysThenRethrow(
-    error: unknown,
-    target: { worktreeId: string; tabId: string },
-    owed: OwedPtyIncarnations,
-    addressedPtyId: string
-  ): Promise<never> {
-    const refused = error instanceof Error && error.message === 'terminal_tab_pinned'
-    if (!refused && !this.isTabPinnedInAnySession(target.worktreeId, target.tabId)) {
-      await this.stopExplicitlyClosedTabPtys([...owed.keys()], addressedPtyId, owed)
-    }
-    throw error
-  }
 
   /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
   private closeOnOwningPairedHost(
