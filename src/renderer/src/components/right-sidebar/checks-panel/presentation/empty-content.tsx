@@ -1,7 +1,7 @@
 import { githubCreationImageUploadAddress } from '@/components/github/github-creation-image-upload-address'
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import {
   getChecksPanelReviewState,

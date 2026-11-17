@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentChildRowContent } from '@/components/AgentChildRowContent'
+import {
+  AgentStateDot,
+  agentStateLabel,
+  type AgentDotState
+} from '@/components/agent/status/AgentStateDot'
+import { AgentChildRowContent } from '@/components/agent/status/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'

@@ -5,9 +5,9 @@ import {
   CHECK_COLOR,
   CHECK_ICON
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
-import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
+import type { CheckDetailsLoadState } from '@/components/github/github-checks-tab-state'
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { CheckDetailsPanel } from './details'
 import { useTranslate } from '@/i18n/use-translate'

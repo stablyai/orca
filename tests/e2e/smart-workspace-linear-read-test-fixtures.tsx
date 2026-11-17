@@ -228,9 +228,12 @@ vi.mock(
     useJiraUrlSource: () => ({ intent: false })
   })
 )
-vi.mock('../../src/renderer/src/components/use-jira-project-inventory', () => ({
-  useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
-}))
+vi.mock(
+  '../../src/renderer/src/components/task-page/jira/project-selection/use-jira-project-inventory',
+  () => ({
+    useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
+  })
+)
 
 export const repo: Repo = { ...referenceRepo, executionHostId: 'runtime:env-1' }
 // Stable identity: search effects depend on the repos array.

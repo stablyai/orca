@@ -13,7 +13,7 @@ import {
   findJiraIssueWorkspaceAttachmentsInIndex
 } from '@/lib/work-items/jira/jira-issue-workspace-attachment'
 import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
-import { sortJiraIssues } from '../../../jira-issue-sorter'
+import { sortJiraIssues } from './jira-issue-sorter'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
     accountBackedTaskSourceHostId,

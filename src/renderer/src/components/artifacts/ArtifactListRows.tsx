@@ -1,4 +1,4 @@
-import { VirtualizedList } from '@/components/virtualized-list'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { ArtifactListRow } from './ArtifactListRow'
 import { ARTIFACTS_TABLE_ROW_HEIGHT_PX } from './artifacts-table-layout'
