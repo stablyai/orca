@@ -20,14 +20,14 @@ import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import '../../key-input/terminal-accessory-keys'
-import type { TerminalAccessoryKey } from '../../key-input/terminal-accessory-keys'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../../key-input/terminal-key-definitions'
 import {
   getDefaultTerminalAccessoryLayout,
+  getTerminalKeyRowItems,
   loadTerminalAccessoryLayout,
   reorderTerminalAccessoryBuiltInIds,
   saveTerminalAccessoryLayout,
-  setTerminalAccessoryBuiltInVisible
+  setTerminalAccessoryBuiltInVisible,
+  type TerminalKeyRowItem
 } from '../../key-input/terminal-accessory-layout'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
@@ -40,7 +40,7 @@ function ShortcutBarRow({
   visible,
   onToggle
 }: {
-  shortcutKey: TerminalAccessoryKey
+  shortcutKey: TerminalKeyRowItem
   visible: boolean
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
@@ -179,13 +179,10 @@ export function TerminalShortcutSettings({
     [persistCustomKeys]
   )
 
-  const orderedAccessoryKeys = useMemo(() => {
-    const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-    return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
-      const key = byId.get(id)
-      return key ? [key] : []
-    })
-  }, [shortcutLayout.orderedBuiltInIds])
+  const orderedAccessoryKeys = useMemo(
+    () => getTerminalKeyRowItems(shortcutLayout.orderedBuiltInIds),
+    [shortcutLayout.orderedBuiltInIds]
+  )
 
   return (
     <>
