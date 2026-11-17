@@ -6,7 +6,7 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
-import { getWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
+import { useWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
 import { buildSubmoduleChildEntry } from '../../source-control/listing/submodule-expansion'
 import { SubmoduleStatusReadQueue } from './file-explorer-submodule-read-queue'
 import { areGitStatusEntriesEqual } from '@/store/slices/editor/git/git-status-reconciliation'
@@ -109,11 +109,11 @@ function useFileExplorerSubmoduleStatus({
     return selectExpandedDirtySubmodulePaths(entries, expandedRelativePaths).join('\0')
   }, [entries, expanded, worktreePath])
 
+  // Reactive so a host that resolves later (e.g. SSH reconnect) re-arms reads and the parent-read listener.
+  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
+
   useEffect(() => {
-    const target =
-      readsEnabled && activeWorktreeId && worktreePath && submodulePathsKey
-        ? getWorktreeGitOwnerTarget(activeWorktreeId)
-        : null
+    const target = readsEnabled && submodulePathsKey ? ownerTarget : null
     if (!activeWorktreeId || !worktreePath || !target) {
       queue.setWanted([], null)
       return
@@ -153,7 +153,15 @@ function useFileExplorerSubmoduleStatus({
       unsubscribe()
       queue.setWanted([], null)
     }
-  }, [activeWorktreeId, queue, readsEnabled, scopeKey, submodulePathsKey, worktreePath])
+  }, [
+    activeWorktreeId,
+    ownerTarget,
+    queue,
+    readsEnabled,
+    scopeKey,
+    submodulePathsKey,
+    worktreePath
+  ])
 
   return useMemo(() => {
     if (!submodulePathsKey || result.scopeKey !== scopeKey) {
