@@ -346,7 +346,8 @@ it('sends a queued card back to wait when the old account turns out busy as it i
   )
   expect(chat.dispatchedTo('queued next')).toEqual([])
 
-  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  // Stopped, so the agent owes no wake-up turn that this rig would never send.
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'cancelled' })])
   await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
   expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
