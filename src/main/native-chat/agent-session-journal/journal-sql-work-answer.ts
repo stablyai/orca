@@ -75,6 +75,7 @@ export async function readJournalSqlWorkAnswerOnce<K extends JournalWorkRead['ki
       kind: 'eligible-input-card',
       authority,
       allowSteer: requested.allowSteer,
+      ...(requested.awaitsAccountMove ? { awaitsAccountMove: true } : {}),
       now: requested.now,
       facts: requested.facts,
       resolved: requested.resolved

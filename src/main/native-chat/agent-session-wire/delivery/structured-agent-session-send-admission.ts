@@ -64,6 +64,27 @@ export async function admitStructuredAgentSessionSend(
     return { ok: false as const, refusal: captured.refusal }
   }
   const fromPerson = params.userSend === true || params.personsMessage === true
+  const continuation = params.usageLimitContinuationOfTurnItemId !== undefined
+  const move = params.body.from
+    ? null
+    : await context.accountTransition?.(
+        ctx.sessionId,
+        continuation ? { reader: 'sweep' } : undefined
+      )
+  // A limited worker's open Dispatch waits on its own continue: holding that would never end.
+  const passes = continuation && move?.waitsFor === 'dispatch'
+  if (passes) {
+    context.accountMoveSettled?.(ctx.sessionId, 'sweep')
+  }
+  const transition = passes ? null : move
+  if (transition) {
+    ctx.logger.warn('holding a send until the chat can move to the account it now uses', {
+      scope: 'account-transition',
+      sessionId: ctx.sessionId,
+      cause: transition.cause,
+      waitsFor: transition.waitsFor
+    })
+  }
   const source = fromPerson
     ? USER_MESSAGE_SOURCE
     : params.body.from
@@ -87,6 +108,7 @@ export async function admitStructuredAgentSessionSend(
         fromAgent: !fromPerson && params.body.from !== undefined,
         deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
         ...(queueOnly ? { queueOnly: true } : {}),
+        ...(transition ? { awaitsAccountMove: true } : {}),
         ...(params.usageLimitContinuationOfTurnItemId !== undefined
           ? { continuationOfTurnItemId: params.usageLimitContinuationOfTurnItemId }
           : {})

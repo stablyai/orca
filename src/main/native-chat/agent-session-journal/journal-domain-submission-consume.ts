@@ -31,6 +31,8 @@ type JournalDomainQueueSelection = {
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
   mail?: JournalMailCustody
+  /** Pass over cards not from another agent: the person's next work waits for the move. */
+  awaitsAccountMove?: true
 }
 
 export type JournalDomainQueuePick =
@@ -63,6 +65,13 @@ export function nextJournalDomainQueueCard(
       }
       FROM journal_queue_cards AS card WHERE card.session_id=? AND card.epoch=?
         AND card.state IN ('waiting','returned')
+        ${
+          // A card that waits for the account move is no barrier to the mail behind it, and is
+          // left in the table undecoded.
+          selection.awaitsAccountMove
+            ? "AND NOT (json_valid(card.payload_json) AND json_extract(card.payload_json,'$.body.from') IS NULL)"
+            : ''
+        }
         ${after ? 'AND (card.position,card.message_id)>(?,?)' : ''}
       ORDER BY card.position,card.message_id LIMIT 64`)
       .all(
@@ -89,11 +98,11 @@ export function nextJournalDomainQueueCard(
         : undefined
     )
     for (const row of rows) {
+      const { card } = readJournalDomainQueueRow(target.sessionId, row)
+      after = { position: card.position, messageId: card.messageId }
       if (automatic && row.edit_held) {
         return { kind: 'selected', card: null }
       }
-      const { card } = readJournalDomainQueueRow(target.sessionId, row)
-      after = { position: card.position, messageId: card.messageId }
       if (
         card.state !== 'waiting' ||
         card.holdReason !== null ||

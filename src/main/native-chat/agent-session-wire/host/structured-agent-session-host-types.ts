@@ -61,6 +61,12 @@ import type { StructuredAgentSessionStartupLimits } from '../startup/structured-
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
 
+/** What can end an account-move hold besides a journal write in its own chat: Dispatch work
+ *  ending for the named keys (see `accountMoveWakes.dispatchKey`), or the selection changing. */
+export type StructuredAgentSessionAccountMoveEdge =
+  | { kind: 'dispatch'; ended: readonly string[] }
+  | { kind: 'account' }
+
 export type StructuredAgentSessionCaller = {
   callerKey: string
   clientKind?: 'mobile' | 'runtime'
@@ -158,6 +164,9 @@ export type StructuredAgentSessionHostSession = {
   operationalRevision?: number
   /** One live restart action owns progress. */
   restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
+  /** Live: the running agent still owes work on an account the chat is leaving, so cards not
+   *  from another agent wait. Last read by admission or the queue drain; never stored. */
+  awaitsAccountMove?: true
 }
 
 export type StructuredAgentSessionHostDeps = {
@@ -205,8 +214,15 @@ export type StructuredAgentSessionHostDeps = {
   hasOpenDispatch?: (
     record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
   ) => boolean
-  /** Explicit switch admission also includes direct chat assignments, even at rest. */
-  hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Fires when a held account move may have settled with no journal write of its own: a
+   *  Dispatch closing, or the account selection changing. */
+  accountMoveWakes?: {
+    subscribe: (listener: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
+    /** The account selection as written now, compared by value: some writes fire no edge. */
+    selection?: () => readonly unknown[]
+    /** The key a chat's Dispatch ends are reported under; absent, only the recheck sees them. */
+    dispatchKey?: (sessionId: string) => string
+  }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */

@@ -43,10 +43,7 @@ import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-p
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
-import {
-  structuredWorkerOpenTaskTitle,
-  structuredWorkerOwesWork
-} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import { structuredWorkerOpenTaskTitle } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { structuredAgentSettingGates } from '../../agent-session/launch/structured-agent-setting-gates'
 import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
@@ -310,9 +307,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
           ...this.workerTurnStopReportDeps,
           openExistingDb: () => this.getExistingOrchestrationDb()
         }),
-      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
-      hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+      ...this.structuredDispatchHostDeps()
     })
     // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()

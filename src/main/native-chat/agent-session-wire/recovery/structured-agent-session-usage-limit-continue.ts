@@ -1,4 +1,5 @@
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
+import { UsageLimitMoveWaits } from './structured-agent-session-usage-limit-move-waits'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { randomUUID } from 'node:crypto'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -27,6 +28,9 @@ export class StructuredAgentSessionUsageLimitContinue {
   private running = false
   private disposed = false
   private readonly attempts = new Map<string, Attempt>()
+  private readonly awaitingMove = new UsageLimitMoveWaits((id) =>
+    this.deps.stopsAwaitingAccountMove?.(id)
+  )
   private readonly holds = new UsageLimitAccountHolds()
   private readonly cold: UsageLimitColdCuts
 
@@ -69,6 +73,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.stopSettings?.()
     this.cold.clear()
     this.attempts.clear()
+    this.awaitingMove.clear()
     this.holds.clear()
   }
 
@@ -85,6 +90,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         this.attempts.delete(id)
       }
     }
+    this.awaitingMove.retain(shown)
     this.cold.retain(shown)
     this.holds.retain(shown)
   }
@@ -110,7 +116,8 @@ export class StructuredAgentSessionUsageLimitContinue {
             ? 'scheduled'
             : 'off'
     // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if (hold.unknownReset && state === 'scheduled') {
+    // Nor while the agent still works on the account the chat is leaving.
+    if ((hold.unknownReset || this.awaitingMove.has(id)) && state === 'scheduled') {
       return undefined
     }
     return {
@@ -185,10 +192,23 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
         const attempt = this.attempts.get(id)
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
+          // No continue is due any more, so nothing waits on the chat's move for one.
+          if (this.awaitingMove.set(id, false)) {
+            this.deps.publish(id)
+          }
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
-        if (this.holds.ready(id, cut, this.deps.now(), retryAt)) {
+        const ready = this.holds.ready(id, cut, this.deps.now(), retryAt)
+        // Only due chats ask; a continue sent now would wait behind the old agent's work anyway.
+        const awaiting =
+          ready &&
+          (await this.deps.awaitsAccountMove?.(id, this.holds.launchHome(id, this.deps.host))) ===
+            true
+        if (this.awaitingMove.set(id, awaiting)) {
+          this.deps.publish(id)
+        }
+        if (ready && !awaiting) {
           due.push({ id, cut, at: attempt?.at ?? 0 })
         }
       }

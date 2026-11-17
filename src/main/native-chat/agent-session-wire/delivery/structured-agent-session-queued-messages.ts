@@ -21,6 +21,8 @@ export type QueuedMessageDrainDeps = {
     journal: SqlAgentSessionJournal
   ) => Promise<JournalAutomaticSelection>
   wakeDelivery: (sessionId: string) => void
+  /** Nothing the next selection could take; skips the claim. */
+  idle?: (sessionId: string, journal: SqlAgentSessionJournal) => Promise<boolean>
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   logger: StructuredAgentSessionLogger
@@ -68,6 +70,9 @@ export class StructuredAgentSessionQueuedMessageDrain {
       return
     }
     const journal = session.journal
+    if (await this.deps.idle?.(sessionId, journal)) {
+      return
+    }
     const fence = this.deps.conversationFence(sessionId)
     const result = await journal.claimAutomaticSubmission(
       { clientMessageId: createStructuredAgentSessionOperationId(randomUUID), fence },

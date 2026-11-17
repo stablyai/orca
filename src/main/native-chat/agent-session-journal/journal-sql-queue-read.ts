@@ -36,6 +36,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
       kind: 'eligible-input-card'
       authority: JournalCurrentWorkAuthority
       allowSteer: boolean
+      awaitsAccountMove?: true
       now: number
       resolved?: JournalSqlWorkResult
     }
@@ -82,7 +83,8 @@ export function readJournalSqlQueue(
           kind: 'input',
           now: operation.now,
           facts,
-          allowSteer: operation.allowSteer
+          allowSteer: operation.allowSteer,
+          ...(operation.awaitsAccountMove ? { awaitsAccountMove: true } : {})
         }
         const state = prior.result.kind === 'state' ? prior.result.state : undefined
         const reusable =
@@ -116,7 +118,9 @@ export function readJournalSqlQueue(
         operation.authority,
         operation.now,
         facts,
-        operation.allowSteer
+        operation.allowSteer,
+        undefined,
+        operation.awaitsAccountMove
       )
       return { kind: operation.kind, card: selected.kind === 'selected' ? selected.card : null }
     }

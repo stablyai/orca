@@ -14,6 +14,17 @@ import { readCrewApprovals } from '../../orchestration/crew/crew-query'
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
+import { accountMoveReleases } from '../../agent-session/environment/account-move-releases'
+import type { StructuredAgentSessionRuntimeDeps } from '../../agent-session/installation/structured-agent-session-runtime-contract'
+import {
+  structuredWorkerIncarnation,
+  structuredWorkerOwesWork
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import {
+  takeStructuredWorkerDispatchEnds,
+  watchStructuredWorkerDispatchEnds
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-dispatch-closes'
+
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
@@ -23,6 +34,43 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
   /** The orchestration database's own changes (Runs, Dispatches, mail), without terminal identity's. */
   private get orchestrationDbChanges(): CrewChanges {
     return (this.orchestrationDbChangesSlot ??= new CrewChanges())
+  }
+
+  /** Structured-chat host deps that follow orchestration Dispatches. */
+  protected structuredDispatchHostDeps(): Pick<
+    StructuredAgentSessionRuntimeDeps,
+    'hasOpenDispatch' | 'accountMoveWakes'
+  > {
+    return {
+      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+      hasOpenDispatch: (record) =>
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+      // A Dispatch settling can release a chat's sends held for an account move.
+      accountMoveWakes: accountMoveReleases(
+        this.orchestrationDbChanges,
+        () => {
+          try {
+            return this.requireStore()
+          } catch {
+            // A runtime without settings never moves a chat between accounts.
+            return null
+          }
+        },
+        {
+          watch: () => {
+            const db = this.getOrchestrationDbIfAvailable?.()
+            if (db) {
+              watchStructuredWorkerDispatchEnds(db)
+            }
+          },
+          take: () => {
+            const db = this.getOrchestrationDbIfAvailable?.()
+            return db ? takeStructuredWorkerDispatchEnds(db) : []
+          },
+          key: structuredWorkerIncarnation
+        }
+      )
+    }
   }
 
   protected bindCrewChanges(db: OrchestrationDb): void {

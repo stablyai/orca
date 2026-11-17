@@ -45,7 +45,9 @@ type Recoverable = { submission: AgentJournalSubmission; attemptSequence: number
 /** Pages only actual current recovery obligations, never settled attempts or chat history. */
 function recoverableSubmissions(
   db: Database.Database,
-  target: JournalDomainSubmissionTarget
+  target: JournalDomainSubmissionTarget,
+  /** Read only this attempt when the caller names one. */
+  only?: string
 ): Recoverable[] {
   const selected: Recoverable[] = []
   let after: { ordinal: number; messageId: string } | undefined
@@ -55,9 +57,15 @@ function recoverableSubmissions(
         FROM journal_submission_attempts INDEXED BY journal_submission_recovery
         WHERE session_id=? AND epoch=? AND current=1
           AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))
+          ${only === undefined ? '' : 'AND message_id=?'}
           ${after ? 'AND (ordinal,message_id)>(?,?)' : ''}
         ORDER BY ordinal,message_id LIMIT 64`)
-      .all(target.sessionId, target.epoch, ...(after ? [after.ordinal, after.messageId] : []))
+      .all(
+        target.sessionId,
+        target.epoch,
+        ...(only === undefined ? [] : [only]),
+        ...(after ? [after.ordinal, after.messageId] : [])
+      )
     for (const row of page) {
       selected.push({
         submission: JSON.parse(String(row.payload_json)),
@@ -93,7 +101,17 @@ export function applyJournalDomainInputRecovery(
     cursor,
     operation.kind === 'hold-unsent' ? null : []
   )
-  const selected = recoverableSubmissions(db, target)
+  const selected = recoverableSubmissions(
+    db,
+    target,
+    operation.kind === 'hold-unsent'
+      ? operation.hold.cause === 'accountMove'
+        ? operation.hold.select.only?.clientMessageId
+        : undefined
+      : operation.kind === 'queued-reject'
+        ? operation.select?.only?.clientMessageId
+        : undefined
+  )
   if (operation.kind === 'hold-unsent') {
     return holdUnsent(db, target, operation, facts, savedAt, selected, result)
   }
@@ -180,9 +198,11 @@ function holdUnsent(
     )
     .get(target.sessionId, target.epoch)
   let position = Math.min(0, Number(first?.position ?? 0)) - batch.length
-  const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
-    surface: 'rejection'
-  })
+  const keptForMove = hold.cause === 'accountMove'
+  const rejection = agentSessionFailureWords(
+    agentSessionFailureFact(keptForMove ? 'notDelivered' : hold.cause),
+    { surface: 'rejection' }
+  )
   const failures: unknown[] = []
   for (const { submission } of batch) {
     const restoreUnsentEvents = checkpointJournalRequestEvents(db)
@@ -256,7 +276,9 @@ function holdUnsent(
             clientMessageId: submission.clientMessageId,
             state: 'rejected',
             ...rejection,
-            ...(unrun ? { rejection: { ...rejection.rejection, neverReachedAgent: true } } : {}),
+            ...(unrun || keptForMove
+              ? { rejection: { ...rejection.rejection, neverReachedAgent: true } }
+              : {}),
             fence: operation.fence,
             recovered: true,
             ...(body ? { keptAsQueuedMessageId: submission.clientMessageId } : {})

@@ -14,6 +14,8 @@ export type JournalAutomaticSelection = {
     stopping: boolean
   } | null
   steering: StructuredMessageSteeringInputs
+  /** Live: the running agent still owes work on an account the chat is leaving. */
+  awaitsAccountMove?: true
 }
 
 export type JournalAutomaticSubmissionFacts = {

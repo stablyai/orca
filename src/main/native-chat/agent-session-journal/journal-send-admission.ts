@@ -10,6 +10,9 @@ export type JournalSendAdmission = {
   deliveryMode: 'queue' | 'steer'
   queueOnly?: true
   continuationOfTurnItemId?: string
+  /** The running agent still owes work on an account the chat is leaving: a send not from another
+   *  agent waits as a card until a start on the new account can take it. */
+  awaitsAccountMove?: true
 }
 
 export type JournalSendAdmissionResult =

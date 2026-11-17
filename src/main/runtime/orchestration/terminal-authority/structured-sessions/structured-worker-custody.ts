@@ -166,6 +166,13 @@ export function structuredWorkerOpenTaskTitle(
     : null
 }
 
+/** The incarnation a structured chat's Dispatches and terminal custody are recorded under. */
+export function structuredWorkerIncarnation(sessionId: string): string {
+  return structuredWorkerProcessIncarnation(
+    isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+  )
+}
+
 function ownedWorkerIncarnation(
   db: OrchestrationDb,
   record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
@@ -174,9 +181,7 @@ function ownedWorkerIncarnation(
   if (!hostScope) {
     return null
   }
-  const incarnation = structuredWorkerProcessIncarnation(
-    isOrcaSessionId(record.sessionId) ? canonicalOrcaSessionId(record.sessionId) : record.sessionId
-  )
+  const incarnation = structuredWorkerIncarnation(record.sessionId)
   const owned = db.db
     .prepare(
       `SELECT 1 FROM worker_terminal_resources
