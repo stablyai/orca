@@ -968,7 +968,7 @@ body[data-modal-overlay-open]
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
 }
 
-/* A horizontal rail's 4px bar, clear until hovered, so an overflowing rail reads as scrollable.
+/* A horizontal rail's 2px thumb in a 4px hit area, clear until hovered, so an overflowing rail reads as scrollable.
    Why webkit-only: standard scrollbar-width/color would override the 4px size in Chromium. */
 .hover-scrollbar-x::-webkit-scrollbar {
   height: 4px;
@@ -980,7 +980,9 @@ body[data-modal-overlay-open]
 
 .hover-scrollbar-x::-webkit-scrollbar-thumb {
   background-color: transparent;
+  border: 1px solid transparent;
   border-radius: 9999px;
+  background-clip: padding-box;
 }
 
 .hover-scrollbar-x:hover::-webkit-scrollbar-thumb {
