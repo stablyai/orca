@@ -273,6 +273,15 @@ describe('settings file sync', () => {
     expect(await readJson()).toEqual({ terminalFontSize: 28, theme: 'dark' })
   })
 
+  it('rejects the create action when the file cannot be created', async () => {
+    await writeFile(join(home, 'blocker'), '')
+    filePath = join(home, 'blocker', 'nested', 'settings.json')
+    const { sync } = await startSync({ terminalFontSize: 28 })
+
+    await expect(sync.createFromCurrentSettings()).rejects.toThrow()
+    expect(sync.getStatus().state).toBe('absent')
+  })
+
   it('picks up an external edit through the real file watcher', async () => {
     await writeSettingsText(JSON.stringify({ theme: 'dark' }))
     const store = createFakeStore({}, defaults)

@@ -46,7 +46,7 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
   let closing = false
   let disposed = false
   // Applies and flushes must not interleave, or a flush could write over values an apply is mid-way through.
-  const enqueue = createSettingsFileTaskQueue(log)
+  const { enqueue, enqueueReporting } = createSettingsFileTaskQueue(log)
 
   const readFileOrFail = async (): Promise<SettingsFileRead | null> => {
     try {
@@ -231,8 +231,9 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
     return enqueue(flushDirty)
   }
 
+  // Failures reach the caller so the Create action can report them.
   const createFromCurrentSettings = (): Promise<SettingsFileStatus> =>
-    enqueue(async () => {
+    enqueueReporting(async () => {
       if (disposed) {
         return
       }
