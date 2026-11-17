@@ -22843,6 +22843,7 @@
     "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @",
     "workspaceStartupFailed": "{{agent}}을(를) 시작할 수 없습니다. 이 설정의 인수를 확인하고 다시 시도하세요.",
     "sameAsTextDefault": "기본값과 동일 · {{value0}}",
+    "effortDefault": "기본값",
     "chatChoicesNote": "CLI 플래그가 없는 {{agent}} 모델 또는 추론 수준 선택은 채팅에 적용됩니다.",
     "composedChoicesNote": "{{agent}}의 추론 수준 및 속도 선택은 모델 인수에 포함됩니다."
   },

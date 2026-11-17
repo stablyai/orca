@@ -23556,6 +23556,7 @@
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers",
     "workspaceStartupFailed": "Impossible de démarrer {{agent}}. Vérifiez les arguments de cette configuration et réessayez.",
     "sameAsTextDefault": "Identique au modèle par défaut · {{value0}}",
+    "effortDefault": "Par défaut",
     "chatChoicesNote": "Les choix de modèle ou d’effort de {{agent}} sans option CLI s’appliquent aux chats.",
     "composedChoicesNote": "Les choix d’effort et de vitesse de {{agent}} sont inclus dans l’argument du modèle."
   },
