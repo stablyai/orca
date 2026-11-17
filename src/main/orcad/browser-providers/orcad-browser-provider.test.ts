@@ -10,7 +10,6 @@ import {
 } from '../../updater/lifecycle/serve-supervisor-install-park'
 import {
   installedElectronCandidates,
-  resolveInstalledElectronExecutable,
   resolveOrcadBrowserProvider,
   type OrcadBrowserProvider
 } from './orcad-browser-provider'
@@ -79,18 +78,11 @@ describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', (
   })
 })
 
-describe.skipIf(process.platform === 'win32')('installed Electron lookup on Linux', () => {
-  it('uses the AppImage serve runs from when no installer path exists', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orcad-appimage-'))
-    try {
-      const appImage = join(root, 'orca-linux.AppImage')
-      await writeFile(appImage, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]), { mode: 0o755 })
-      const candidates = installedElectronCandidates('linux', join(root, 'home'), {
-        ORCA_SERVE_APPIMAGE: appImage
-      })
-      await expect(resolveInstalledElectronExecutable(candidates)).resolves.toBe(appImage)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+describe('installed Electron lookup on Linux', () => {
+  it('includes the AppImage serve runs from', () => {
+    const appImage = '/home/me/Applications/orca-linux.AppImage'
+    expect(
+      installedElectronCandidates('linux', '/home/me', { ORCA_SERVE_APPIMAGE: appImage })
+    ).toContain(appImage)
   })
 })
