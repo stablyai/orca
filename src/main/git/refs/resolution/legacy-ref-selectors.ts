@@ -8,6 +8,8 @@ export type RepoSearchRefSelectorForm = 'canonical' | 'git-short' | 'unqualified
 
 // Windows caps a command line at 32K, and WSL's login-shell fallback repeats the command three times.
 const MAX_PATTERN_CHARS_PER_CALL = 6_000
+// Each nested POSIX single-quoting level grows an apostrophe from 1 to 4 characters; budget two levels.
+const QUOTED_APOSTROPHE_CHARS = 16
 
 /** Older clients display refName raw, so give one page the selectors pre-snapshot hosts sent. */
 export async function toGitShortRefSelectors(
@@ -16,8 +18,8 @@ export async function toGitShortRefSelectors(
   git: LocalGitExecOptions = {}
 ): Promise<BaseRefSearchResult[]> {
   const shortByRef = new Map<string, string>()
-  try {
-    for (const patterns of chunkByLength(refDetails.map(({ refName }) => refName))) {
+  for (const patterns of chunkByLength(refDetails.map(({ refName }) => refName))) {
+    try {
       const { stdout } = await gitExecFileAsync(
         ['for-each-ref', '--format=%(refname)%00%(refname:short)', ...patterns],
         gitExecOptions(path, git)
@@ -28,9 +30,9 @@ export async function toGitShortRefSelectors(
           shortByRef.set(full, short)
         }
       }
+    } catch (err) {
+      console.warn('[searchBaseRefs] short ref selectors failed', { path, err })
     }
-  } catch (err) {
-    console.warn('[searchBaseRefs] short ref selectors failed', { path, err })
   }
   return refDetails.map((row) => {
     const short = shortByRef.get(row.refName)
@@ -45,13 +47,15 @@ function chunkByLength(refNames: string[]): string[][] {
   let chunk: string[] = []
   let length = 0
   for (const refName of refNames) {
-    if (chunk.length > 0 && length + refName.length > MAX_PATTERN_CHARS_PER_CALL) {
+    const apostrophes = refName.split("'").length - 1
+    const quotedLength = refName.length + 1 + apostrophes * (QUOTED_APOSTROPHE_CHARS - 1)
+    if (chunk.length > 0 && length + quotedLength > MAX_PATTERN_CHARS_PER_CALL) {
       chunks.push(chunk)
       chunk = []
       length = 0
     }
     chunk.push(refName)
-    length += refName.length + 1
+    length += quotedLength
   }
   if (chunk.length > 0) {
     chunks.push(chunk)

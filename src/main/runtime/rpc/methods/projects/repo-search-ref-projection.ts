@@ -9,15 +9,6 @@ import type { RuntimeRepoSearchRefs } from '../../../../../shared/worktree/catal
 import { isQualifiedBaseRef } from '../../../../git/refs/resolution/base-ref-search-selector'
 import type { RepoSearchRefSelectorForm } from '../../../../git/refs/resolution/legacy-ref-selectors'
 
-function includesQualifiedSearchRefs(
-  clientCapabilities: readonly RuntimeCapability[] | undefined
-): boolean {
-  return (
-    clientCapabilities === undefined ||
-    clientCapabilities.includes(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
-  )
-}
-
 export function repoSearchRefSelectorForm(
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): RepoSearchRefSelectorForm {
@@ -27,7 +18,9 @@ export function repoSearchRefSelectorForm(
   ) {
     return 'canonical'
   }
-  return includesQualifiedSearchRefs(clientCapabilities) ? 'git-short' : 'unqualified'
+  return clientCapabilities.includes(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
+    ? 'git-short'
+    : 'unqualified'
 }
 
 export function projectRepoSearchRefsForClient(
@@ -35,7 +28,7 @@ export function projectRepoSearchRefsForClient(
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): RuntimeRepoSearchRefs {
   // In-process callers have no capability array; legacy remote clients have an empty one.
-  if (includesQualifiedSearchRefs(clientCapabilities)) {
+  if (repoSearchRefSelectorForm(clientCapabilities) !== 'unqualified') {
     return result
   }
   // Legacy clients could mistake a qualified selector for an ordinary branch name.
