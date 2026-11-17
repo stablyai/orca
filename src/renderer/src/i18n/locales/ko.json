@@ -16113,7 +16113,7 @@
           "documentPathCopied": "복사됨",
           "workspaceFileChipLabel": "워크스페이스 파일",
           "previewMenuControl": "미리보기 옵션",
-          "openSourceControl": "오픈 소스 파일",
+          "openSourceControl": "소스 파일 열기",
           "openExternallyControl": "기본 앱으로 열기",
           "copyDocumentRelativePathControl": "상대 경로 복사",
           "openExternallyUnknownHostError": "'{{value0}}'을(를) 열 수 없습니다. 해당 항목을 소유한 호스트를 더 이상 알 수 없습니다.",

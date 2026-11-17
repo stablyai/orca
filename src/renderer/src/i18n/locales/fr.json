@@ -16783,7 +16783,7 @@
           "documentPathCopied": "Copié",
           "workspaceFileChipLabel": "Fichier d'espace de travail",
           "previewMenuControl": "Options d'aperçu",
-          "openSourceControl": "Fichier open source",
+          "openSourceControl": "Ouvrir le fichier source",
           "openExternallyControl": "Ouvrir avec l'application par défaut",
           "copyDocumentRelativePathControl": "Copier le chemin relatif",
           "openExternallyUnknownHostError": "Impossible d'ouvrir '{{value0}}' : l'hôte qui le possède n'est plus connu.",
