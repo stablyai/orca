@@ -3,7 +3,7 @@ import {
   getOrcadSshDeployment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeEnvironmentConnectionPairingKey } from '../connections/runtime-environment-capability-evidence'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { managedOrcadRefusalNeedingUserCode } from '../../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {

@@ -20,19 +20,28 @@ export class AgentAwakeStatusLease {
   ) {}
 
   replace(statuses: AgentAwakeStatus[]): void {
-    this.statuses = new Map(statuses.map((status) => [status.paneKey, status]))
+    this.statuses = new Map(
+      statuses
+        .filter((status) => this.isEligible(status, this.now()))
+        .map((status) => [status.paneKey, status])
+    )
     this.scheduleNextExpiry()
   }
 
   /** Returns whether the renewed row is currently wake-eligible. */
   renew(status: AgentAwakeStatus): boolean {
-    this.statuses.set(status.paneKey, status)
+    this.statuses.delete(status.paneKey)
     const now = this.now()
     if (!this.isEligible(status, now)) {
       return false
     }
+    this.statuses.set(status.paneKey, status)
     this.scheduleAt(status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS, now)
     return true
+  }
+
+  remove(paneKey: string): void {
+    this.statuses.delete(paneKey)
   }
 
   countEligible(): number {

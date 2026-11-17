@@ -9,9 +9,12 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../../shared/antigravity-account-types'
-import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
-import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
@@ -24,7 +27,7 @@ import {
 } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
-import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {

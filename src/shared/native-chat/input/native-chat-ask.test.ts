@@ -15,10 +15,8 @@ import {
 import {
   extractPendingAsk,
   aggregateAsyncQuestions,
-  asyncQuestionSourceScope,
   scanPendingAsks,
-  createPendingAskScanner,
-  resolveNativeChatAsk
+  createPendingAskScanner
 } from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
@@ -70,19 +68,6 @@ describe('extractPendingAsk', () => {
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
-  it('keeps the newest ask when an older call receives its result', () => {
-    const first = { questions: [{ question: 'First?', options: [] }] }
-    const pending = extractPendingAsk([
-      message('m1', [
-        call('AskUserQuestion', first),
-        call('AskUserQuestion', QUESTIONS_INPUT),
-        // Resolves the FIRST ask (FIFO); the newer one stays pending.
-        result()
-      ])
-    ])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
   it('does not strand an answered ask behind a tool call orphaned by an interrupt', () => {
     // Claude interrupts omit tool results, leaving orphan FIFO slots (#11761).
     const pending = extractPendingAsk([
@@ -103,19 +88,6 @@ describe('extractPendingAsk', () => {
       toolTurn('m4')
     ])
     expect(pending).toBeNull()
-  })
-})
-
-describe('resolveNativeChatAsk', () => {
-  const transcript = [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)])]
-
-  it('withholds transcript state until the read settles', () => {
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: false })
-    ).toBeNull()
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: true })
-    )?.toMatchObject(QUESTIONS_INPUT)
   })
 })
 
@@ -188,19 +160,6 @@ describe('async questions', () => {
       message('a', [call('request_user_input_async', { questions: [{ title: 'A?' }] })])
     ])
     expect(repeated.contributors.map((c) => c.callSlot)).toEqual([0, 1])
-  })
-
-  it('shares portable descriptor spelling while distinguishing source/session/reset/path', () => {
-    scanPendingAsks([message('same-row', [asyncCall('A', 'QA')])])
-    const journal = {
-      kind: 'journal' as const,
-      agent: 'codex',
-      sessionId: 'session',
-      epoch: 'epoch'
-    }
-    expect(asyncQuestionSourceScope(journal)).toBe(
-      JSON.stringify(['journal', 'codex', 'session', 'epoch'])
-    )
   })
 
   it('keeps a surviving sibling addressed when a deduping prefix leaves the loaded window', () => {

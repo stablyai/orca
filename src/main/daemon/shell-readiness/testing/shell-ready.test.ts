@@ -12,7 +12,7 @@ import { getZshShellReadyMarkerRegistrationBlock } from '../../../pty/shell-star
 import {
   fishRequirementViolation,
   resolveFishBinary
-} from '../../../../shared/fish-binary-requirement'
+} from '../../../../shared/shell/testing/fish-binary-requirement'
 import {
   createShellStartupOutputScanState,
   drainShellStartupOutputScanState,

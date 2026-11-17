@@ -3,7 +3,7 @@ import type {
   CustomWorktreeVisibilitySource,
   WorktreeVisibilityDefaults
 } from '../../../../../shared/repository/repo-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
@@ -19,7 +19,7 @@ import WorktreeVisibilitySourceList, {
 } from '../../sidebar/workspace-visibility/sources/WorktreeVisibilitySourceList'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 type Props = {
   settings: GlobalSettings

@@ -12,7 +12,7 @@ import {
 import {
   encodeNdjson,
   NDJSON_MAX_LINE_BYTES
-} from '../../../../../shared/main-process-ndjson-framer'
+} from '../../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 function bufferedSocket(chunks: Buffer[]): Socket {

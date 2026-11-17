@@ -2,9 +2,9 @@ import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/re
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../shared/codex-selection-lane'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+} from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions

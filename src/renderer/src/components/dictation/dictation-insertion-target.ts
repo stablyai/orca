@@ -1,5 +1,5 @@
-import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../shared/concurrency/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../shared/text/utf8-byte-limits'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
@@ -14,7 +14,7 @@ import {
   DICTATION_TEXT_BLOCK_SELECTOR,
   dictationSeparators
 } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
-import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
+import { focusedBrowserPageId } from '@/app-shell/chrome/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 /** Each returns whether the text landed. */

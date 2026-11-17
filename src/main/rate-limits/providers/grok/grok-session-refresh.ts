@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { getGrokHome, readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
 import { grokAccessTokenNeedsCliRefresh } from './grok-auth-expiry'
 import { noteGrokAuthForScheduledRefresh } from './grok-token-refresh-schedule'

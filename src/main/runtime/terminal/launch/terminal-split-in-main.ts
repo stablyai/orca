@@ -2,14 +2,14 @@
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   recordPtySurface,
   spawnSurfaceClaimSequence
 } from '../surface/pty-recorded-surface-topology'
 import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
 import { spawnInAdmittedPane } from './runtime-pane-admission'
-import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/pty-first-size'
+import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/delivery/pty-first-size'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { randomUUID } from 'node:crypto'
 import { paneStartFailure } from '../surface/pane-start-statuses'

@@ -9,7 +9,7 @@ import {
   type WebContents
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
-import type { UpdateCheckOptions } from '../../../shared/update-status-types'
+import type { UpdateCheckOptions } from '../../../shared/updater/update-status-types'
 import type { AppMenuQuitHandlers } from '../../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
@@ -46,7 +46,7 @@ import {
 } from '../quit/quit-and-stop-all-sessions-prompt'
 import { isHoldingForNewerProtocolDaemon } from '../../daemon/providers/routing/daemon-newer-protocol-hold'
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
-import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/pty-management'
+import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/ipc/pty-management'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
 import type { DesktopActivationRequest } from '../serve-launch/serve-desktop-activation'
 

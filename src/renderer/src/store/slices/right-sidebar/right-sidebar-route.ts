@@ -1,7 +1,7 @@
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { isPluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
 
 export type RightSidebarRoute = {

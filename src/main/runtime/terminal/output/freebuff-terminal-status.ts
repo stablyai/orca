@@ -1,4 +1,4 @@
-import { FreebuffScreenStatusTracker } from '../../../../shared/freebuff-screen-status'
+import { FreebuffScreenStatusTracker } from '../../../../shared/agent-status/output/freebuff-screen-status'
 import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 

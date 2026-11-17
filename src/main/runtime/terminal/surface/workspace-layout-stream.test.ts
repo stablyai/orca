@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   localDesktopSession,
@@ -11,7 +14,7 @@ import {
   SSH_KEY
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
-import '../../orca-runtime-tests/workspace-layout-stream-events.test-fixture'
+import './workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 

@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
 import { SHELL_PREFIXES } from './pr-shell-contract-prefixes.mjs'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
 import {
@@ -41,7 +40,6 @@ export const PR_CHECK_JOBS = [
   'managed_hook_node18',
   'package',
   'package_windows',
-  'layout_oracle',
   'dependency_isolation'
 ]
 
@@ -72,9 +70,9 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
-  'src/shared/git-',
+  'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
-  'src/shared/review-head-tracking-ref',
+  'src/shared/worktree/hosted-review/review-head-tracking-ref',
   'src/shared/worktree/base-refs/local-base-branch-fast-forward',
   'src/main/git/',
   'config/scripts/git-binary-compatibility'
@@ -107,7 +105,6 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
-  'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
   'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
@@ -183,7 +180,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat/native-chat-visual-shell'
+  'src/shared/native-chat/visuals/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -207,18 +204,17 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/protocol/daemon-protocol-version.ts',
-  'src/shared/protocol-version',
+  'src/shared/remote-runtime/protocol/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
   'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/transports/websocket/ws-transport.ts',
-  'src/shared/web-origin-security.ts',
+  'src/shared/remote-runtime/pairing/web-origin-security.ts',
   'src/shared/browser/client-hosting/browser-client-host-placement',
   'src/shared/agent-launch/contracts/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
-  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
   'src/shared/agent-session/view/structured-agent-session-projection.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.test.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.ts',
@@ -294,7 +290,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-launch/choices/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
-  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db/',
@@ -333,7 +329,7 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs',
   'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
-  'src/shared/zip-extractor-command.ts',
+  'src/shared/archives/zip-extractor-command.ts',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',
@@ -540,8 +536,6 @@ function jobDetector(job) {
       return (files) => files.some(isLinuxPackagePath)
     case 'package_windows':
       return (files) => files.some(isWindowsPackagePath)
-    case 'layout_oracle':
-      return (files) => files.some(isLayoutOracleSource)
     case 'dependency_isolation':
       return (files) => files.some((file) => matchesPrefix(file, DEPENDENCY_ISOLATION_PREFIXES))
     default:

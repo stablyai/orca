@@ -4,7 +4,7 @@ import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
@@ -15,7 +15,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
@@ -188,7 +188,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
   const embedded = (
-    entry: AppState['agentStatusByPaneKey'][string],
+    entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
     worktreeId = entry.worktreeId
   ) => {
     visits++
@@ -230,7 +230,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
     embedded(entry)
   }
   const previous = cache?.contexts

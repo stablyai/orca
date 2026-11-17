@@ -15,6 +15,7 @@ import { mainAgentState } from '../../../../shared/agent-status/lifecycle/main-a
 
 /** One hook-server row projected into the shape the runtime's own readers consume. */
 export type RuntimeAgentRowSnapshot = {
+  paneSleep?: AgentStatusIpcPayload['paneSleep']
   paneKey: string
   worktreeId?: string
   tabId?: string
@@ -70,7 +71,8 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     if (
       !row.state ||
       typeof row.receivedAt !== 'number' ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS ||
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS) ||
       !(isLiveObservation(row) || isHeldRestoredPermission(row, args))
     ) {
       continue
@@ -84,6 +86,27 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     }
   }
   return best
+}
+
+/** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. A row bound to another terminal handle is not this one's. */
+export function selectLatestAgentStatusRow(args: {
+  handles: ReadonlySet<string>
+  paneKey: string | null
+  hookRows: readonly AgentStatusIpcPayload[]
+}): AgentStatusIpcPayload | null {
+  let latest: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    const ownsTerminal = row.terminalHandle
+      ? args.handles.has(row.terminalHandle)
+      : row.paneKey === args.paneKey
+    if (!ownsTerminal || !row.state || row.providerSessionOnly === true) {
+      continue
+    }
+    if (!latest || row.receivedAt > latest.receivedAt) {
+      latest = row
+    }
+  }
+  return latest
 }
 
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
@@ -130,7 +153,8 @@ export function selectFreshAgentRowForMobileTab(args: {
   for (const row of args.hookRows) {
     if (
       !isLiveObservation(row) ||
-      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
+      (!row.paneSleep &&
+        now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS)
     ) {
       continue
     }
@@ -154,6 +178,7 @@ export function selectFreshAgentRowForMobileTab(args: {
   }
   return {
     paneKey: match.paneKey,
+    ...(match.paneSleep ? { paneSleep: match.paneSleep } : {}),
     connectionId: match.connectionId ?? null,
     ...(match.worktreeId ? { worktreeId: match.worktreeId } : {}),
     ...(match.tabId ? { tabId: match.tabId } : {}),

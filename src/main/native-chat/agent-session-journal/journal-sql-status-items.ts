@@ -1,4 +1,8 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import {
+  JOURNAL_ASYNC_QUESTION_ROWS,
+  JOURNAL_PERSON_PROMPT_ROWS
+} from './database/journal-async-question-index'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import {
   readJournalDomainStopStates,
@@ -23,6 +27,7 @@ export function* sqlJournalStatusItems(
   let ascending = false
   let single = false
   let unordered = false
+  let limit = PAGE
   switch (selection.kind) {
     case 'clear':
       predicates.push('context_clear=1')
@@ -46,9 +51,32 @@ export function* sqlJournalStatusItems(
       break
     case 'prompt':
     case 'users':
-      predicates.push('prompt=1')
-      if (selection.kind === 'users' && selection.unknown) {
-        predicates.push("turn_scope_kind='unknown'")
+      predicates.push(
+        selection.kind === 'users' && selection.fromPerson ? JOURNAL_PERSON_PROMPT_ROWS : 'prompt=1'
+      )
+      if (selection.kind === 'users') {
+        if (selection.unknown) {
+          predicates.push("turn_scope_kind='unknown'")
+        }
+        if (selection.after) {
+          predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
+          params.push(
+            selection.after.sequence,
+            selection.after.sequenceIndex,
+            selection.after.ordinal
+          )
+          ascending = true
+          // The walk usually stops at the first row, so its pages start small.
+          limit = 1
+        }
+        if (selection.before) {
+          predicates.push('(sequence,sequence_index,ordinal)<(?,?,?)')
+          params.push(
+            selection.before.sequence,
+            selection.before.sequenceIndex,
+            selection.before.ordinal
+          )
+        }
       }
       single = selection.kind === 'prompt'
       break
@@ -56,6 +84,10 @@ export function* sqlJournalStatusItems(
       predicates.push(
         "root=1 AND message_role='assistant' AND command_entry=0 AND assistant_prose=1"
       )
+      break
+    case 'async-question-candidates':
+      // Newest first from the partial index; the shared rule decides which ones are questions.
+      predicates.push(JOURNAL_ASYNC_QUESTION_ROWS)
       break
     case 'assistant-exists':
       predicates.push("message_role='assistant'")
@@ -97,7 +129,7 @@ export function* sqlJournalStatusItems(
       FROM journal_items ${selection.kind === 'tools' && selection.running ? 'INDEXED BY journal_items_unsettled' : ''}
       WHERE ${predicates.join(' AND ')}${cursor}
       ${unordered ? '' : `ORDER BY ${order}`} LIMIT ?`)
-      .all(...params, ...(after ?? []), single ? 1 : PAGE)
+      .all(...params, ...(after ?? []), single ? 1 : limit)
     for (const row of rows) {
       scope.examined(row)
     }
@@ -115,9 +147,10 @@ export function* sqlJournalStatusItems(
       }
     }
     const last = rows.at(-1)
-    if (single || rows.length < PAGE || !last) {
+    if (single || rows.length < limit || !last) {
       return
     }
+    limit = Math.min(limit * 8, PAGE)
     after = columns.map((column) => Number(last[column]))
   }
 }

@@ -7,7 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
-import { mapSettledWithConcurrency } from '../../../../../../src/shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../../../src/shared/concurrency/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,

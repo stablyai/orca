@@ -1,4 +1,4 @@
-import { hostUnionArms } from '../../../../src/shared/zod-salvage'
+import { hostUnionArms } from '../../../../src/shared/validation/zod-salvage'
 
 // Pin the platform set to Node’s union so additions/removals fail typechecking.
 export const NODE_PLATFORM_NAMES = hostUnionArms<NodeJS.Platform>({

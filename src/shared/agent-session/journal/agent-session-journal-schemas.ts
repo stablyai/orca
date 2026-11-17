@@ -6,11 +6,12 @@
 // History pages lack row v: extensions must also remain safe for older clients.
 
 import * as z from 'zod'
-import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
+import { AgentSessionContextUsageSchema } from '../conversation-context/agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import { SubagentEntry } from './agent-session-journal-subagent-schema'
+import { AgentJournalApprovalSubjectSchema } from './agent-session-journal-approval-subject-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -158,14 +159,6 @@ const ApprovalMatchedAskRule = z.object({
   ruleContent: z.string().optional()
 })
 
-const KnownApprovalSubject = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('plan'), text: z.string().min(1), filePath: z.string().optional() })
-])
-export const AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS = knownTags(KnownApprovalSubject)
-/** Open like blocks; a subject this build cannot draw is never approvable here
- *  (agent-session-approval-subject.ts). */
-const ApprovalSubject = openDiscriminatedUnion(KnownApprovalSubject)
-
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
@@ -228,7 +221,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     decisionReason: z.string().optional(),
     blockedPath: z.string().optional(),
     matchedAskRule: ApprovalMatchedAskRule.optional(),
-    subject: ApprovalSubject.optional(),
+    subject: AgentJournalApprovalSubjectSchema.optional(),
     personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),

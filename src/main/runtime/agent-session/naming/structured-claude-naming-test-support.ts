@@ -20,7 +20,7 @@ import {
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
 

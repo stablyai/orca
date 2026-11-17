@@ -4,7 +4,8 @@ import type { BackendCoreProfileShutdown } from './core-profile-shutdown'
 import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   describeOrcadBindExposure,
   resolveOrcadBindHost
@@ -26,7 +27,7 @@ import {
 } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { adoptWslHostLoginEnvironmentLogged } from '../orcad/host-runtime/orcad-wsl-host-login-environment'
 import { createOrcadStartupTiming } from '../orcad/diagnostics/orcad-startup-timing'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -193,6 +194,14 @@ export async function activateBackendRuntime(
   profileShutdown.paneGrids = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
+  const { installFirstWorkRenameHookSubscription } =
+    await import('../agent-hooks/first-work/first-work-rename-hook-subscription')
+  const { firstWorkRenameDeps } =
+    await import('../agent-hooks/first-work/first-work-rename-runtime')
+  registerCleanup(
+    installFirstWorkRenameHookSubscription(firstWorkRenameDeps(profileStore, runtime))
+  )
+
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
     await import('../github/workspace-links/github-issue-link-title-wiring')
@@ -208,9 +217,13 @@ export async function activateBackendRuntime(
 
   const { installOrcadSessionSearchService } =
     await import('../orcad/host-runtime/orcad-session-search')
+  const { sessionSearchScopeCatalogFromStore } =
+    await import('../ai-vault-search/scope/session-search-store-scope-catalog')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
+    getSettings: () => profileStore.getSettings(),
+    // Workspace/Project scopes resolve through this host's own registrations, read per search.
+    getScopeCatalog: () => sessionSearchScopeCatalogFromStore(profileStore, LOCAL_EXECUTION_HOST_ID)
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
   featureReadiness.open('sessionSearch')
@@ -301,9 +314,12 @@ export async function activateBackendRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
-  // Background chat-journal maintenance and CI-line watches start once this host is serving.
+  // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
   chatJournal.serving()
   runtime.startPullRequestWatches({ admit: true })
+  const { reclaimManagedRuntimeReleasesAtLaunch } =
+    await import('../runtime/rpc/methods/host-management/managed-runtime-install')
+  reclaimManagedRuntimeReleasesAtLaunch(runtime)
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

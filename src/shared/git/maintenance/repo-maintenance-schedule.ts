@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../bounded-map'
+import { BoundedMap } from '../../collections/bounded-map'
 import {
   PACK_INDEX_MAINTENANCE_COOLDOWN_MS,
   PACK_INDEX_MAINTENANCE_FAILURE_COOLDOWN_MS,

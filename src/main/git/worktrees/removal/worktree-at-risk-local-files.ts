@@ -1,7 +1,7 @@
 import { lstat, opendir, readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/removal/at-risk-local-files'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
@@ -25,6 +25,7 @@ const MAX_VISITED_ENTRIES = 1_000
 const MAX_COMPARED_BYTES = 32 * 1024 * 1024
 const MAX_COMPARED_FILE_BYTES = 4 * 1024 * 1024
 const SAMPLE_PATH_LIMIT = 3
+const MAX_RETURNED_PATHS = 200
 
 // Dependency, build and cache output that a fresh checkout regenerates.
 const REGENERABLE_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
@@ -100,11 +101,7 @@ export async function readWorktreeAtRiskLocalFiles(args: {
   // Git's own timer starts after admission, so queueing behind other git work cannot cut the listing short.
   const listing = await listIgnoredPaths(args.worktreePath, args.gitOptions, deadlineMs)
   if (args.mainCheckoutPath === null) {
-    return {
-      count: listing.paths.length,
-      samplePaths: pickNotablePaths(listing.paths),
-      complete: listing.complete
-    }
+    return summarizeAtRiskPaths(listing.paths, listing.complete)
   }
   const signal = abortSignalWithTimeout(parentSignal, deadlineMs)
   // File reads cannot all take a signal; racing the deadline keeps a stalled mount from hanging the scan.
@@ -148,11 +145,7 @@ export async function readWorktreeAtRiskLocalFiles(args: {
   if (parentSignal?.aborted) {
     throw createAbortError()
   }
-  return {
-    count: atRiskPaths.length,
-    samplePaths: pickNotablePaths(atRiskPaths),
-    complete: listing.complete && !unverified
-  }
+  return summarizeAtRiskPaths(atRiskPaths, listing.complete && !unverified)
 }
 
 async function listIgnoredPaths(
@@ -315,14 +308,21 @@ function hasBudgetLeft(budget: ComparisonBudget): boolean {
   return budget.entries > 0 && !budget.signal.aborted
 }
 
-function pickNotablePaths(paths: readonly string[]): string[] {
+function summarizeAtRiskPaths(
+  paths: readonly string[],
+  complete: boolean
+): WorktreeAtRiskLocalFiles {
   const rank = (relativePath: string): number => (/(^|\/)\.env[^/]*\/?$/.test(relativePath) ? 0 : 1)
-  return [...paths]
-    .sort(
-      (left, right) =>
-        rank(left) - rank(right) ||
-        left.split('/').length - right.split('/').length ||
-        left.localeCompare(right)
-    )
-    .slice(0, SAMPLE_PATH_LIMIT)
+  const sorted = [...paths].sort(
+    (left, right) =>
+      rank(left) - rank(right) ||
+      left.split('/').length - right.split('/').length ||
+      left.localeCompare(right)
+  )
+  return {
+    count: paths.length,
+    samplePaths: sorted.slice(0, SAMPLE_PATH_LIMIT),
+    paths: sorted.slice(0, MAX_RETURNED_PATHS),
+    complete
+  }
 }

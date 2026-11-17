@@ -3,6 +3,8 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
+  copilotSettingsMayPickModel,
+  cursorCliConfigMayPickModel,
   ompSettingsMayPickModel,
   openCodeAgentFileMayPickModel,
   openCodeConfigMayPickModel,
@@ -101,6 +103,15 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
   pi: {
     files: files(['.pi/settings.json'], piSettingsMayPickModel),
     codeFolders: ['.pi/extensions']
+  },
+  // Cursor merges .cursor/cli.json from the project root down to the folder it runs in.
+  cursor: { files: files(['.cursor/cli.json'], cursorCliConfigMayPickModel) },
+  // Copilot layers repo settings over the user's own.
+  copilot: {
+    files: files(
+      ['.github/copilot/settings.json', '.github/copilot/settings.local.json'],
+      copilotSettingsMayPickModel
+    )
   }
 }
 
@@ -185,9 +196,9 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-// Grok uses user, managed and environment config, not project model settings.
+// Grok and Antigravity pick models from user-level config, not project model settings.
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok'
+  return agent !== 'grok' && agent !== 'antigravity'
 }
 
 export async function workspaceMayOverrideDefaultModel(input: {

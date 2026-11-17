@@ -2,7 +2,7 @@ import type { IPty } from 'node-pty'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
-} from '../../../shared/command-token-scanner'
+} from '../../../shared/shell/command-resolution/command-token-scanner'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
@@ -19,7 +19,7 @@ import {
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
 
-function executableName(command: string): string {
+export function executableName(command: string): string {
   return getCommandTokenPathBasename(getFirstCommandToken(command)).replace(/^-/, '')
 }
 

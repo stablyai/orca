@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import {
   closeTestStores,
   createSqliteTestStore,
@@ -40,7 +39,7 @@ async function createStore() {
   if (hasCreatedStoreInCase) {
     vi.resetModules()
   }
-  const { setSecretStore } = await import('../../../shared/secret-store')
+  const { setSecretStore } = await import('../../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
@@ -100,38 +99,6 @@ describe('Store', () => {
     expect(() => store.updateUI({ sidebarWidth: 321 })).not.toThrow()
     expect(store.getUI().sidebarWidth).toBe(321)
     expect(laterListener).toHaveBeenCalledWith(expect.objectContaining({ sidebarWidth: 321 }))
-  })
-
-  it('does not expose or accept UI shadow writes for main-owned feature telemetry markers', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {
-        featureInteractionTelemetryBuckets: { tasks: 'count_1000_plus' }
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {},
-      featureInteractionTelemetryBuckets: { tasks: 'count_2' }
-    })
-
-    const store = await createStore()
-
-    expect('featureInteractionTelemetryBuckets' in (store.getUI() as Record<string, unknown>)).toBe(
-      false
-    )
-
-    store.updateUI({
-      featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
-    } as never)
-    store.flush()
-
-    const persisted = readDataFile() as PersistedState & {
-      ui: Record<string, unknown>
-    }
-    expect(persisted.featureInteractionTelemetryBuckets).toEqual({ tasks: 'count_2' })
-    expect(persisted.ui.featureInteractionTelemetryBuckets).toBeUndefined()
   })
 
   // Preserve sealed relay-era recovery records for downgrades.

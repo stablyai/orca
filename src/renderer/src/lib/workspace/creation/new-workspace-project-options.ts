@@ -2,14 +2,14 @@ import { projectHostSetupProjectionFromRepos } from '../../../../../shared/proje
 import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../../../shared/execution-host/execution-host-registry-entry'
 import {
   getExecutionHostLabel,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup

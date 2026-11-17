@@ -1,8 +1,8 @@
 import {
   imagePasteWritesFollowedByText,
   separateImagePasteFromFollowingText
-} from '../../../image-paste-following-text'
-import { isWindowsAbsolutePathLike } from '../../../cross-platform-path'
+} from '../../../terminal/input/image-paste-following-text'
+import { isWindowsAbsolutePathLike } from '../../../file-access/cross-platform-path'
 import { filesystemPathToFileUri } from '../../../file-links/file-uri-path'
 
 // Whether raw-path paste is verified to create an attachment; others use file references.

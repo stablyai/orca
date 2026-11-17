@@ -1,6 +1,6 @@
 // The machine side of the connector: one held poll, two confirmations per delivery, and turn events back.
 import { z } from 'zod'
-import { delayUnlessAborted } from '../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_PATHS,
@@ -13,7 +13,7 @@ import {
   type ConnectorConversation,
   type ConnectorDeliveryResult,
   type ConnectorEvent
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type {
   ExternalConversationHost,
   ExternalConversationSeam

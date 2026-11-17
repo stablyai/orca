@@ -5,8 +5,8 @@ import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { HostRowIcon } from '../../host-row-icon'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { HostRowIcon } from '../../host-picker/host-row-icon'
 import { COMBOBOX_FIELD_SHELL } from '../type-ahead/type-ahead-combobox-styles'
 
 /** Overlay the committed selection while keeping the input ready to search. */

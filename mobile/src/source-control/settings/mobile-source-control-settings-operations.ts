@@ -1,12 +1,12 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
 import { normalizeSourceControlGroupOrder } from '../../../../src/shared/source-control/listing/source-control-group-order'
-import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome-types'
+import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { settingsMember, settingsField } from '../../settings/mobile-settings-projection'
 import {
   normalizePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../src/shared/review-refresh-policy'
+} from '../../../../src/shared/source-control/hosted-review/review-refresh-policy'
 
 export type MobileSourceControlSettings = {
   groupOrder: SourceControlGroupOrder

@@ -1,6 +1,8 @@
-import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaHooks,
+  RepoHookSettings
+} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -10,7 +12,8 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './hooks/RepositoryHooksSection'
@@ -32,6 +35,8 @@ import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
+import { RepositoryBrowserProfileSection } from './RepositoryBrowserProfileSection'
+import type { RepositoryPaneRepoUpdate } from './repository-pane-repo-update'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
@@ -45,16 +50,6 @@ import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
-
-type RepositoryPaneRepoUpdate = Omit<
-  Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'workspaceCleanupPolicy'
-> & {
-  sourceControlAi?: Repo['sourceControlAi'] | null
-  externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-  ghAccount?: GhAccountBinding | null
-  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
-}
 
 const EMPTY_WSL_DISTROS: string[] = []
 const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
@@ -299,6 +294,12 @@ export function RepositoryPane({
         />
 
         <RepositoryAgentTrustSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryBrowserProfileSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

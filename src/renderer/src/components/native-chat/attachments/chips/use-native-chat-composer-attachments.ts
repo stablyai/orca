@@ -1,10 +1,11 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import type {
   UseNativeChatComposerAttachmentsArgs,
   NativeChatComposerAttachments
 } from './native-chat-composer-attachment-contract'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { nativeChatComposerTargetIsRemote } from '../../composer/submit/native-chat-composer-target'
 import { nativeChatLocalAttachmentUnsupportedNotice } from '../intake/native-chat-attachment-notices'
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
@@ -24,7 +25,7 @@ import {
 } from './native-chat-pending-attachment-cache'
 import { nativeChatPendingAttachmentScope } from './native-chat-pending-attachment-scopes'
 import { useNativeChatComposerImageChips } from './use-native-chat-composer-image-chips'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   insertImageReferences,
   nativeChatImageRowIds,
@@ -67,12 +68,14 @@ export function useNativeChatComposerAttachments({
   useLayoutEffect(() => {
     mountedRef.acceptsImages = acceptsImages
   }, [acceptsImages, mountedRef])
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [mountedRef])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      mountedRef.current = true
+      return () => {
+        mountedRef.current = false
+      }
+    }, [mountedRef])
+  )
 
   const nextAttachmentId = useCallback(() => createUuidV4(), [])
   const serverOwnedPendingIds = useMemo(() => new Set<string>(), [])
