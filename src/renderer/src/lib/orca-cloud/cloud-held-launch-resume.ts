@@ -39,7 +39,7 @@ import {
 } from './cloud-web-host-launch-hold'
 
 /** How long a restored placeholder may take to reach the store before its record is dropped. */
-export const HELD_LAUNCH_RESTORE_WAIT_MS = 120_000
+const HELD_LAUNCH_RESTORE_WAIT_MS = 120_000
 
 const resuming = new Set<string>()
 

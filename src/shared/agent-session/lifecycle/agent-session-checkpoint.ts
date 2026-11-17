@@ -1,7 +1,7 @@
 // Per-turn file checkpoints: the host snapshots the chat's worktree before each turn starts, and
 // "Rewind to here" can put the files back. Shared by the host and every client.
 
-export type AgentSessionCheckpointUnavailableReason =
+type AgentSessionCheckpointUnavailableReason =
   /** No snapshot for this message: sent before checkpoints existed, or pruned. */
   | 'none'
   /** The chat's folder is not a git worktree. */
@@ -34,7 +34,7 @@ export type AgentSessionCheckpointRestoreResult = {
 export const AGENT_SESSION_CHECKPOINT_PREVIEW_PATHS = 200
 
 /** Why a restore refused before changing any file. */
-export const AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS = [
+const AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS = [
   'none',
   'not-a-repo',
   'busy',
@@ -44,7 +44,7 @@ export const AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS = [
   /** Not a refusal: some files changed before the restore failed; the error names the undo id. */
   'partial'
 ] as const
-export type AgentSessionCheckpointRestoreRefusal =
+type AgentSessionCheckpointRestoreRefusal =
   (typeof AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS)[number]
 
 const REFUSAL_PREFIX = 'agent_session_checkpoint_'

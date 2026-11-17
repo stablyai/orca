@@ -4,7 +4,7 @@ import type { CloudSecretKind, CloudSecretsErrorCode } from './cloud-secrets-wir
 
 const NAME = /^[A-Z_][A-Z0-9_]*$/
 const MAX_NAME_LENGTH = 128
-export const MAX_CLOUD_SECRET_VALUE_BYTES = 8 * 1024
+const MAX_CLOUD_SECRET_VALUE_BYTES = 8 * 1024
 
 /** For these, a team-shared value beats a personal one. */
 const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
@@ -210,7 +210,7 @@ export function cloudSecretValueError(name: string, value: string): CloudSecrets
 }
 
 /** https on a host that is not obviously private; the server re-checks with DNS-free rules of its own. */
-export function isPublicHttpsUrl(value: string): boolean {
+function isPublicHttpsUrl(value: string): boolean {
   let url: URL
   try {
     url = new URL(value)

@@ -20,7 +20,7 @@ export const AGENT_RELAUNCH_WATCH_MS = 60_000
  *   shown, the screen is checked again as it changes.
  * - `restart`: no word from the agent, and the pane sits at a bare shell.
  */
-export type WokeAgentStripState = 'relaunched' | 'waiting' | 'watching' | 'restart'
+type WokeAgentStripState = 'relaunched' | 'waiting' | 'watching' | 'restart'
 
 /**
  * The agent's own evidence time (its hook events), never the delivery stamp: a reconnect replays

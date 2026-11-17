@@ -25,8 +25,6 @@ export const OrcaCloudDeviceSessionSchema = z.object({
   current: z.boolean().optional()
 })
 
-export type OrcaCloudDeviceSession = z.infer<typeof OrcaCloudDeviceSessionSchema>
-
 export const OrcaCloudEnrollDeviceResultSchema = z.object({
   controlPlaneUrl: z.string().url(),
   deviceSession: OrcaCloudDeviceSessionSchema

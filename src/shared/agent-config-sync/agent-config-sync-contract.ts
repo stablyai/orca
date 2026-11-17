@@ -110,7 +110,7 @@ export const AGENT_CONFIG_PROJECT_KINDS: ReadonlySet<AgentConfigItemKind> = new 
   'claude-agent'
 ])
 
-export type AgentConfigAgent = 'claude' | 'codex'
+type AgentConfigAgent = 'claude' | 'codex'
 const CODEX_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
   'agents-skill',
   'codex-skill',
@@ -218,7 +218,6 @@ const FilePayload = z
     base64: z.string().max(Math.ceil(AGENT_CONFIG_LIMITS.fileBytes / 3) * 4 + 4)
   })
   .strict()
-export type AgentConfigFilePayload = z.infer<typeof FilePayload>
 
 export const AgentConfigSyncPutParams = z
   .object({

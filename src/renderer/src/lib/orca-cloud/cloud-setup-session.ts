@@ -11,19 +11,19 @@ import type {
 
 /** Poll every 2 s for the first 3 minutes, then every 10 s. */
 export const SETUP_FAST_POLL_MS = 2_000
-export const SETUP_FAST_WINDOW_MS = 3 * 60_000
-export const SETUP_SLOW_POLL_MS = 10_000
+const SETUP_FAST_WINDOW_MS = 3 * 60_000
+const SETUP_SLOW_POLL_MS = 10_000
 
-export type CloudSetupRowId = 'account' | 'team' | 'plan' | 'github'
+type CloudSetupRowId = 'account' | 'team' | 'plan' | 'github'
 
 /** One row of the setup panel; the same shape as the composer's CloudSetupStep for these ids. */
-export type CloudSetupSnapshotStep = {
+type CloudSetupSnapshotStep = {
   id: CloudSetupRowId
   state: 'done' | 'needed' | 'active' | 'pending' | 'failed' | 'optional'
   detail?: string
 }
 
-export type CloudSetupSnapshot = {
+type CloudSetupSnapshot = {
   steps: CloudSetupSnapshotStep[]
   finished: boolean
   error?: { kind: string; detail?: string }
@@ -164,7 +164,7 @@ export function watchCloudSetupSession(sessionId: string): Entry {
   return entry
 }
 
-export function stopWatchingCloudSetupSession(sessionId: string): void {
+function stopWatchingCloudSetupSession(sessionId: string): void {
   const entry = entries.get(sessionId)
   if (entry?.timer != null) {
     window.clearTimeout(entry.timer)
@@ -176,7 +176,7 @@ export function stopWatchingCloudSetupSession(sessionId: string): void {
  * What "Set up and start" got back: the session it opened, `cancelled` when the user cancelled the
  * sign-in (or it timed out, or a newer one replaced it), or null when setup couldn't open.
  */
-export type CloudSetupSessionStart =
+type CloudSetupSessionStart =
   | { sessionId: string; url?: string }
   | { cancelled: true }
   | null

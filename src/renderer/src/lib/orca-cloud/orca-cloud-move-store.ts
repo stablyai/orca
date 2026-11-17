@@ -70,7 +70,7 @@ export type CloudMoveState =
       hidden: boolean
     }
 
-export type CloudMoveKnownCounts = {
+type CloudMoveKnownCounts = {
   branch: string | null
   uncommittedChanges: number
   chats: number
@@ -163,7 +163,7 @@ export function closeMoveToThisComputer(): void {
 
 const MOVED_KEY = 'orca-cloud-moved-at:'
 
-export type CloudWorkspaceMoved = { at: number; localWorktreeId: string | null }
+type CloudWorkspaceMoved = { at: number; localWorktreeId: string | null }
 
 /** When this cloud workspace was last copied to this computer, and where (the panel's quiet line). */
 export function cloudWorkspaceMoved(workspaceId: string): CloudWorkspaceMoved | null {

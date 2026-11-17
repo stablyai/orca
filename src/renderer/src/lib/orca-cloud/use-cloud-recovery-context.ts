@@ -4,7 +4,7 @@ import { useCloudWorkspace, useIsCloudWorkspace } from './orca-cloud-workspace-s
 import { isWakeReadyAfterRead } from './orca-cloud-workspace-state'
 import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 
-export type CloudRecoveryContext = {
+type CloudRecoveryContext = {
   /** A wake is in flight: the waking pill already says what's happening, so no reconnect banner. */
   waking: boolean
   /** Asleep or going to sleep: nothing to reconnect to, so a calm note instead of "Reconnecting". */

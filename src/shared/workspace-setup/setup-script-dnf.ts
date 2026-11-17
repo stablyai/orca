@@ -58,7 +58,7 @@ const INSTALL_COMMAND = /^(sudo\s+)?(dnf|yum|microdnf)\s+(.*)$/
 /** A line that calls dnf or yum at all (for scanning script files). */
 const USES_DNF = /(^|[\s;&|(`])(sudo\s+)?(dnf|yum|microdnf|amazon-linux-extras)\s/
 
-export type DnfTranslation = {
+type DnfTranslation = {
   /** The setup with every translatable install line rewritten. */
   setup: string
   /** Lines rewritten to apt-get. */

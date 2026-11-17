@@ -5,11 +5,6 @@ import {
 } from './cloud-workspaces-wire'
 import {
   arrangeCloudWorkspaces,
-  dropOnto,
-  moveSection,
-  nudge,
-  reorderGroup,
-  setCollapsed,
   setPinned
 } from './cloud-workspace-arrangement'
 
@@ -58,36 +53,5 @@ describe('arrangement edits', () => {
     expect(setPinned(start, id(2), true)).toEqual(doc({ pinned: [id(1), id(2)], order: [id(3)] }))
     expect(setPinned(start, id(1), false)).toEqual(doc({ order: [id(2), id(3)] }))
     expect(setPinned(start, id(1), true)).toBe(start)
-  })
-
-  it('reorders a group without disturbing ids it does not show', () => {
-    const start = doc({ pinned: [id(1), id(2), id(3)], order: [id(7), id(8), id(9)] })
-    expect(reorderGroup(start, { kind: 'pinned' }, [id(3), id(1)]).pinned).toEqual([
-      id(3),
-      id(1),
-      id(2)
-    ])
-    expect(reorderGroup(start, { kind: 'section' }, [id(9), id(5)]).order).toEqual([
-      id(9),
-      id(5),
-      id(7),
-      id(8)
-    ])
-  })
-
-  it('moves rows by one place and onto another row', () => {
-    expect(nudge(['a', 'b', 'c'], 'a', 1)).toEqual(['b', 'a', 'c'])
-    expect(nudge(['a', 'b', 'c'], 'a', -1)).toBeNull()
-    expect(dropOnto(['a', 'b', 'c'], 'a', 'c')).toEqual(['b', 'c', 'a'])
-    expect(dropOnto(['a', 'b', 'c'], 'c', 'a')).toEqual(['c', 'a', 'b'])
-    expect(dropOnto(['a', 'b'], 'a', 'a')).toBeNull()
-  })
-
-  it('orders sections among those shown and toggles collapse', () => {
-    const start = doc({ sections: ['Old'] })
-    expect(moveSection(start, ['A', 'B'], 'B', -1)?.sections).toEqual(['B', 'A', 'Old'])
-    expect(moveSection(start, ['A', 'B'], 'A', -1)).toBeNull()
-    expect(setCollapsed(start, 'A', true).collapsed).toEqual(['A'])
-    expect(setCollapsed(doc({ collapsed: ['A'] }), 'A', false).collapsed).toEqual([])
   })
 })

@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../execution-host'
 import type { AgentApiKeyCloudOutcome, AgentApiKeysCloudState } from './agent-api-key-cloud'
 
 /** Where a stored key is injected. `hosts` lists execution host ids (`local`, `ssh:…`, `runtime:…`). */
-export type AgentApiKeyHostScope = { kind: 'all' } | { kind: 'hosts'; hostIds: ExecutionHostId[] }
+type AgentApiKeyHostScope = { kind: 'all' } | { kind: 'hosts'; hostIds: ExecutionHostId[] }
 
 /** What the renderer may see of a stored key: never the value. */
 export type AgentApiKeySummary = {
@@ -39,7 +39,7 @@ export type AgentApiKeySaveRequest = {
   hostScope: AgentApiKeyHostScope
 }
 
-export type AgentApiKeyPreset = {
+type AgentApiKeyPreset = {
   envName: string
   /** Shown next to the variable so users know which credential it takes. */
   label: string
@@ -73,7 +73,7 @@ const KEY_AGENT_ALIASES: Partial<Record<TuiAgent, TuiAgent>> = {
   'claude-agent-teams': 'claude'
 }
 
-export function apiKeyAgentFor(agent: TuiAgent): TuiAgent {
+function apiKeyAgentFor(agent: TuiAgent): TuiAgent {
   return KEY_AGENT_ALIASES[agent] ?? agent
 }
 

@@ -33,12 +33,12 @@ export type OrcaCloudEnvironmentResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: OrcaCloudEnvironmentError }
 
-export type OrcaCloudEnvironmentListData = {
+type OrcaCloudEnvironmentListData = {
   environments: HostedEnvironmentListEntry[]
   canAdmin: boolean
 }
 
-export type OrcaCloudEnvironmentDetailData = {
+type OrcaCloudEnvironmentDetailData = {
   environment: HostedEnvironmentView
   /** Newest first, at most 30. */
   builds: HostedEnvironmentBuildView[]

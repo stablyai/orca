@@ -1,19 +1,18 @@
 // How a member's cloud workspace list is arranged from their synced prefs (/v1/team/prefs): Pinned
 // on top in pin order, then sections in their order, rows in their manual order. Pure and shared,
-// so the desktop's Home and the phone follow the same rules.
+// so the desktop and the phone follow the same rules.
 import type { CloudWorkspacePrefsDocument } from './cloud-workspaces-wire'
 
 /** What arranging needs from a workspace (the desktop's and the phone's shapes both fit). */
-export type ArrangeableWorkspace = {
+type ArrangeableWorkspace = {
   id: string
   section?: string | null
   archivedAt?: number | null
 }
 
-export const MAX_PINNED = 200
-const MAX_ORDER = 500
+const MAX_PINNED = 200
 
-export type CloudWorkspaceGroup<W extends ArrangeableWorkspace = ArrangeableWorkspace> = {
+type CloudWorkspaceGroup<W extends ArrangeableWorkspace = ArrangeableWorkspace> = {
   /** Stable React key and drag scope: `pinned`, `section:<name>` or `none`. */
   key: string
   kind: 'pinned' | 'section' | 'none'
@@ -40,7 +39,7 @@ function rankBy<T extends { id: string }>(rows: readonly T[], ids: readonly stri
 }
 
 /** Archived workspaces never sit in Pinned (they keep their pin for when they come back). */
-export function isPinnedRow(w: ArrangeableWorkspace, doc: CloudWorkspacePrefsDocument): boolean {
+function isPinnedRow(w: ArrangeableWorkspace, doc: CloudWorkspacePrefsDocument): boolean {
   return (w.archivedAt ?? null) === null && doc.pinned.includes(w.id)
 }
 
@@ -105,78 +104,4 @@ export function setPinned(
         order: doc.order.filter((other) => other !== id)
       }
     : { ...doc, pinned: doc.pinned.filter((other) => other !== id) }
-}
-
-/**
- * The group's rows now read `ids` top to bottom (after a drag or Move up/down). Pinned rewrites
- * pin order; a section moves those rows to the front of the manual order, keeping their sequence.
- * Ids outside the group (other sections, or rows a filter hides) keep their places.
- */
-export function reorderGroup(
-  doc: CloudWorkspacePrefsDocument,
-  group: Pick<CloudWorkspaceGroup, 'kind'>,
-  ids: readonly string[]
-): CloudWorkspacePrefsDocument {
-  const moved = new Set(ids)
-  if (group.kind === 'pinned') {
-    const hidden = doc.pinned.filter((id) => !moved.has(id))
-    return { ...doc, pinned: [...ids, ...hidden].slice(0, MAX_PINNED) }
-  }
-  const others = doc.order.filter((id) => !moved.has(id))
-  return {
-    ...doc,
-    order: [...ids.filter((id) => !doc.pinned.includes(id)), ...others].slice(0, MAX_ORDER)
-  }
-}
-
-/** Moves `id` by `delta` places within the group's current rows (Move up / Move down). */
-export function nudge(ids: readonly string[], id: string, delta: number): string[] | null {
-  const from = ids.indexOf(id)
-  const to = from + delta
-  if (from === -1 || to < 0 || to >= ids.length) {
-    return null
-  }
-  const next = [...ids]
-  next.splice(from, 1)
-  next.splice(to, 0, id)
-  return next
-}
-
-/** Moves `id` to sit where `overId` is (drag and drop within one group). */
-export function dropOnto(ids: readonly string[], id: string, overId: string): string[] | null {
-  if (id === overId || !ids.includes(id) || !ids.includes(overId)) {
-    return null
-  }
-  return nudge(ids, id, ids.indexOf(overId) - ids.indexOf(id))
-}
-
-/** Section order after moving `section` by `delta` among the sections shown right now. */
-export function moveSection(
-  doc: CloudWorkspacePrefsDocument,
-  shown: readonly string[],
-  section: string,
-  delta: number
-): CloudWorkspacePrefsDocument | null {
-  const next = nudge(shown, section, delta)
-  if (!next) {
-    return null
-  }
-  const rest = doc.sections.filter((name) => !next.includes(name))
-  return { ...doc, sections: [...next, ...rest].slice(0, 50) }
-}
-
-export function setCollapsed(
-  doc: CloudWorkspacePrefsDocument,
-  section: string,
-  collapsed: boolean
-): CloudWorkspacePrefsDocument {
-  if (collapsed === doc.collapsed.includes(section)) {
-    return doc
-  }
-  return {
-    ...doc,
-    collapsed: collapsed
-      ? [...doc.collapsed, section].slice(-50)
-      : doc.collapsed.filter((name) => name !== section)
-  }
 }

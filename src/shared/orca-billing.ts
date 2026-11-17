@@ -2,8 +2,8 @@
 // (cloud/apps/billing) is the authority; these mirror its /v1/billing responses.
 // One self-serve plan (Team, per seat, monthly or annual) plus Enterprise (contact sales).
 
-export const ORCA_BILLING_PLAN_IDS = ['team'] as const
-export type OrcaBillingPlanId = (typeof ORCA_BILLING_PLAN_IDS)[number]
+const ORCA_BILLING_PLAN_IDS = ['team'] as const
+type OrcaBillingPlanId = (typeof ORCA_BILLING_PLAN_IDS)[number]
 export const ORCA_BILLING_INTERVALS = ['month', 'year'] as const
 export type OrcaBillingInterval = (typeof ORCA_BILLING_INTERVALS)[number]
 export const ORCA_BILLING_MAX_SEATS = 500
@@ -95,7 +95,7 @@ export type OrcaBillingOffers = {
 }
 
 /** The team's one-time trial (no card, no Stripe). Hours don't reset; a plan ends it. */
-export type OrcaBillingTrial = {
+type OrcaBillingTrial = {
   includedSeconds: number
   usedSeconds: number
   remainingSeconds: number
@@ -104,7 +104,7 @@ export type OrcaBillingTrial = {
 }
 
 /** The running-sandbox caps billing enforces for this account (its plan or trial). */
-export type OrcaBillingLimits = {
+type OrcaBillingLimits = {
   maxConcurrentSandboxes: number
   maxConcurrentSandboxesPerMember: number
 }
@@ -197,14 +197,6 @@ export type OrcaBillingTrialClaimResult =
   /** A personal account: setup creates a team first. */
   | { status: 'team-required' }
   | { status: 'failed'; error: string }
-
-export function isOrcaBillingPlanId(value: unknown): value is OrcaBillingPlanId {
-  return ORCA_BILLING_PLAN_IDS.some((plan) => plan === value)
-}
-
-export function isOrcaBillingInterval(value: unknown): value is OrcaBillingInterval {
-  return ORCA_BILLING_INTERVALS.some((interval) => interval === value)
-}
 
 /** Where Stripe's hosted pages send the browser back: the Worker's return page opens this link. */
 export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'

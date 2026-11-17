@@ -8,10 +8,10 @@ import type { Translate } from '@/i18n/use-translate'
 import { fetchOrcaCloudRepoAccess } from './use-orca-cloud-repo-access'
 
 /** What the access is for: starting workspaces from the repository, or pushing from them. */
-export type OwnerRequestPurpose = 'start' | 'push'
+type OwnerRequestPurpose = 'start' | 'push'
 
 /** How long "Copied" stays on the button. */
-export const OWNER_REQUEST_COPIED_MS = 1_500
+const OWNER_REQUEST_COPIED_MS = 1_500
 
 function repoSlugOf(repoUrl: string): string {
   return repoUrl.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '')

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 export type McpSyncAgent = 'claude' | 'codex'
-export const MCP_SYNC_AGENTS: readonly McpSyncAgent[] = ['claude', 'codex']
 
 /** Where a server came from on this computer: Claude Code user or project (local) scope, or Codex. */
 export type McpSyncSource = 'claude-user' | 'claude-project' | 'codex'

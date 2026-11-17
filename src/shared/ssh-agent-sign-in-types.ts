@@ -23,7 +23,7 @@ export type SshAgentSignInStatusResult =
   /** `disconnected`: never connected to check. `unknown`: the host didn't answer. */
   | { ok: false; error: 'disconnected' | 'unknown' }
 
-export type SshAgentSignInFlowPhase =
+type SshAgentSignInFlowPhase =
   | 'starting'
   /** Claude: open `url` (claude.ai), approve, paste the code shown there. */
   | 'needsCode'

@@ -43,7 +43,7 @@ export function cloudAgentStripReason(
 }
 
 /** Why a launch is held: account recovery, or the one-time setup. */
-export type CloudAgentHoldReason =
+type CloudAgentHoldReason =
   | 'accountExpired'
   | 'notSetUp'
   /**

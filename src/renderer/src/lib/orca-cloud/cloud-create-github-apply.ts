@@ -6,7 +6,7 @@
 import type { OrcaCloudWorkspaceApi } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 
-export type CloudGitHubAccessTarget = Parameters<
+type CloudGitHubAccessTarget = Parameters<
   NonNullable<OrcaCloudWorkspaceApi['refreshGitAccess']>
 >[0]
 

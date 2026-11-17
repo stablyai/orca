@@ -3,7 +3,7 @@
 // One draft per Orca profile, so a profile or team switch can't resume someone else's draft.
 // team-billing-ux sets `setupSessionId` when it opens a setup session.
 
-export type CloudStartDraft = {
+type CloudStartDraft = {
   prompt: string
   repoId: string
   agent: string | null

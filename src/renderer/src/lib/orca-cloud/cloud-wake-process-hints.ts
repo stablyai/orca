@@ -6,7 +6,7 @@ import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/sta
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 
 /** A shell command still running when the workspace went to sleep, read back from its prompt line. */
-export type WakeShellCommand = { command: string }
+type WakeShellCommand = { command: string }
 
 /**
  * What the woke-up strip offers: Rerun for a plain shell command, or Restart for an agent pane

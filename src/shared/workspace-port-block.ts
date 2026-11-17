@@ -21,10 +21,6 @@ export function buildWorkspacePortEnv(block: WorkspacePortBlock): Record<string,
   return { ORCA_PORT: base, ORCA_PORT_COUNT: String(block.count), CONDUCTOR_PORT: base }
 }
 
-export function isPortInWorkspaceBlock(port: number, block: WorkspacePortBlock): boolean {
-  return port >= block.base && port < block.base + block.count
-}
-
 /**
  * The block a host launcher set for everything it starts (ORCA_PORT in the host process env), or
  * null. A copy inherited from a parent Orca pane carries pane identity and names that pane's

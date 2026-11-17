@@ -5,7 +5,7 @@ import { z } from 'zod'
 export const ORCAD_DISK_USAGE_METHOD = 'orcad.diskUsage'
 export const OrcadDiskUsageParamsSchema = z.object({}).strict()
 
-export const OrcadDiskVolumeUsageSchema = z.object({
+const OrcadDiskVolumeUsageSchema = z.object({
   /** A probed path on this filesystem (the first one that resolved to it). */
   path: z.string(),
   totalBytes: z.number().nonnegative(),
@@ -28,9 +28,9 @@ const MIB = 1024 * 1024
 const GIB = 1024 * MIB
 
 /** Warn under 10% or 2 GiB available; critical under 500 MiB, where builds and git start failing. */
-export const LOW_DISK_WARNING_FRACTION = 0.1
-export const LOW_DISK_WARNING_BYTES = 2 * GIB
-export const LOW_DISK_CRITICAL_BYTES = 500 * MIB
+const LOW_DISK_WARNING_FRACTION = 0.1
+const LOW_DISK_WARNING_BYTES = 2 * GIB
+const LOW_DISK_CRITICAL_BYTES = 500 * MIB
 
 export type LowDiskLevel = 'ok' | 'warning' | 'critical'
 

@@ -10,7 +10,7 @@ export const ORCA_CLOUD_SYNC_CHANNELS = {
   changed: 'orcaCloudSync:changed'
 } as const
 
-export type CloudSyncChoiceState = { context: boolean }
+type CloudSyncChoiceState = { context: boolean }
 
 export type CloudSyncPhase =
   /** Sync off: nothing on this computer. */

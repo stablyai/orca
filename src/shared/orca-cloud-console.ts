@@ -5,7 +5,7 @@
 import { ORCA_BILLING_INTERVALS, type OrcaBillingInterval } from './orca-billing'
 
 /** Console pages the desktop can ask auth for (the ticket's `page`). */
-export const ORCA_CLOUD_CONSOLE_SECTIONS = [
+const ORCA_CLOUD_CONSOLE_SECTIONS = [
   'home',
   'team',
   'billing',
@@ -30,7 +30,7 @@ export const ORCA_CLOUD_CONSOLE_BILLING_HINT_CAPABILITY = 'console.billing_hint'
  * Desktop capability flag auth sets once its console ticket accepts the API pages (`api`,
  * `routines`). An older auth would refuse them, so they go out as `home` until it advertises this.
  */
-export const ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY = 'console.cloud_api'
+const ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY = 'console.cloud_api'
 
 const CLOUD_API_CONSOLE_SECTIONS: readonly OrcaCloudConsoleSection[] = ['api', 'routines']
 

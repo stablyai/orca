@@ -87,7 +87,7 @@ export function agentApiKeyRemoveAsksAboutAccount(
 export type LocalAgentKeySource = 'opencode-auth' | 'gemini-env-file' | 'shell-env'
 
 /** One key "Import from this Mac" found. Names, source and last four only: the value stays in main. */
-export type LocalAgentKeyFound = {
+type LocalAgentKeyFound = {
   name: string
   agent: TuiAgent
   source: LocalAgentKeySource

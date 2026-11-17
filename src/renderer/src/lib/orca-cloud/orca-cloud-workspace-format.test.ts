@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   changeKind,
   isWakeFailedFresh,
-  parseDiffStat,
-  showUpdatedAgo
+  parseDiffStat
 } from './orca-cloud-workspace-state'
 
 const NOW = 1_800_000_000_000
@@ -31,9 +30,7 @@ describe('diff stats, change kinds and staleness', () => {
     expect(changeKind('weird')).toBe('unknown')
   })
 
-  it('hides "ago" under a minute and lets failed wakes go stale after 10 min', () => {
-    expect(showUpdatedAgo(NOW - 46_000, NOW)).toBe(false)
-    expect(showUpdatedAgo(NOW - 61_000, NOW)).toBe(true)
+  it('lets failed wakes go stale after 10 min', () => {
     const failed = {
       workspaceId: 'w',
       phase: 'failed' as const,

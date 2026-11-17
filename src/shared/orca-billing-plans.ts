@@ -25,7 +25,7 @@ export type OrcaPlanPrice = {
   currency: string
 }
 
-export type OrcaSelfServePlan = {
+type OrcaSelfServePlan = {
   kind: 'self_serve'
   id: string
   name: string
@@ -47,7 +47,7 @@ export type OrcaSelfServePlan = {
   checkoutAvailable: boolean
 }
 
-export type OrcaContactSalesPlan = {
+type OrcaContactSalesPlan = {
   kind: 'contact_sales'
   id: string
   name: string
@@ -61,7 +61,7 @@ export type OrcaContactSalesPlan = {
 }
 
 /** Trial, free, or a kind a newer service added: listed, not sold here. */
-export type OrcaOtherPlan = {
+type OrcaOtherPlan = {
   kind: string
   id: string
   name: string

@@ -10,7 +10,7 @@
 //   plaintext = utf8 JSON {pairingUrl, deviceId, scope}
 // Free of node:crypto and Buffer so mobile (Hermes) can import it with its own primitives.
 
-export const SEALED_GRANT_INFO = 'orca-cloud-grant-v1'
+const SEALED_GRANT_INFO = 'orca-cloud-grant-v1'
 
 export type SealedGrant = {
   v: 1
@@ -47,7 +47,7 @@ export type SealedGrantPrimitives = {
   ): Uint8Array | Promise<Uint8Array>
 }
 
-export class SealedGrantError extends Error {
+class SealedGrantError extends Error {
   constructor(readonly code: 'malformed' | 'decrypt_failed' | 'invalid_payload') {
     super(code)
     this.name = 'SealedGrantError'

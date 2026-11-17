@@ -3,7 +3,7 @@ import { z } from 'zod'
 // Cloud setup onboarding: how the one-trip setup goes, step by step. Enum-only on purpose:
 // no email, team name, repository, org or session id may leave; unknown values become `other`.
 
-export const CLOUD_SETUP_STEP_VALUES = ['account', 'team', 'plan', 'github', 'agent'] as const
+const CLOUD_SETUP_STEP_VALUES = ['account', 'team', 'plan', 'github', 'agent'] as const
 
 /** Setup errors; matches the setup session's `error.kind`. */
 export const CLOUD_SETUP_ERROR_KIND_VALUES = [
@@ -52,8 +52,8 @@ export const cloudSetupFirstSandboxSchema = z
 export const cloudSetupPlanChosenSchema = z.object({ after_trial: z.boolean() }).strict()
 
 /** Cloud-start G: how the composer's agent was covered at this install's first cloud start. */
-export const CLOUD_START_AGENT_VALUES = ['claude', 'codex', 'other'] as const
-export const CLOUD_START_AGENT_COVERAGE_VALUES = ['account', 'key', 'none', 'unknown'] as const
+const CLOUD_START_AGENT_VALUES = ['claude', 'codex', 'other'] as const
+const CLOUD_START_AGENT_COVERAGE_VALUES = ['account', 'key', 'none', 'unknown'] as const
 
 export const cloudFirstStartAgentCoverageSchema = z
   .object({

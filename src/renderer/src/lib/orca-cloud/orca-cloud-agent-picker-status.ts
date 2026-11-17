@@ -14,7 +14,7 @@ import {
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useOrcaCloudAgentAccounts } from './orca-cloud-agent-accounts-store'
 
-export type OrcaCloudAgentPickerStatus =
+type OrcaCloudAgentPickerStatus =
   /** A new cloud workspace can run it with nothing more to do. */
   | 'ready'
   /** Not set up yet: the Orca account (Claude, Codex) or a key in Cloud secrets. */

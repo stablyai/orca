@@ -3,7 +3,7 @@
 // refused or canceled Orca Cloud attempt never becomes the default. Per Orca profile, on this device.
 import type { RunOnPreference } from '@/components/new-workspace/run-on/cloud-start-model'
 
-export type RunOnTarget = 'local' | 'orca-cloud'
+type RunOnTarget = 'local' | 'orca-cloud'
 
 type RunOnMemory = {
   lastByRepo: Record<string, RunOnTarget>

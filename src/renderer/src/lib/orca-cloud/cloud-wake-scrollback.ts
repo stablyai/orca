@@ -46,7 +46,7 @@ const PRE_REPLAY_MAX_AGE_MS = 10 * 60_000
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 const pending = new Map<string, PendingHistory>()
 
-export type ScrollbackSource = {
+type ScrollbackSource = {
   rows: number
   buffer: {
     normal: RestoreBuffer & { baseY: number }

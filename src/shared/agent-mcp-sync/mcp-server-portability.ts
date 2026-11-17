@@ -1,6 +1,6 @@
 import type { McpSyncAgent, McpSyncSkipReason, McpSyncTransport } from './mcp-sync-contract'
 
-export type PortedMcpServer = {
+type PortedMcpServer = {
   transport: McpSyncTransport | null
   target: string | null
 } & ({ ok: true; config: Record<string, unknown> } | { ok: false; reason: McpSyncSkipReason })

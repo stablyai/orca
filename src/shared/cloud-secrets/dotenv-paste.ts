@@ -9,7 +9,7 @@ export type DotenvPasteIssue =
   | 'unterminated_quote'
   | 'overridden'
 
-export type DotenvPasteEntry = {
+type DotenvPasteEntry = {
   /** 1-based line where the entry starts. */
   line: number
   /** Empty when the line could not be read as NAME=value. */
@@ -109,15 +109,4 @@ export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
       ? { ...entry, issue: 'overridden' }
       : entry
   )
-}
-
-/** The NAME -> value map a batch save sends: only clean, final entries. */
-export function dotenvPasteToBatch(entries: readonly DotenvPasteEntry[]): Record<string, string> {
-  const set: Record<string, string> = {}
-  for (const entry of entries) {
-    if (entry.issue === null) {
-      set[entry.name] = entry.value
-    }
-  }
-  return set
 }

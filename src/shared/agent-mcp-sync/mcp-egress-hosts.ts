@@ -1,7 +1,7 @@
 import type { McpSyncServerRow } from './mcp-sync-contract'
 
 /** The control plane's per-sandbox ceiling on extra egress hosts (sandbox-control egress-hosts.ts). */
-export const MCP_EGRESS_MAX_HOSTS = 32
+const MCP_EGRESS_MAX_HOSTS = 32
 
 // Mirrors the control plane's check: public DNS names only. Anything else would fail the whole PUT.
 const PUBLIC_HOST = /^([a-z0-9-]+\.)+[a-z]{2,63}$/
@@ -41,7 +41,7 @@ export function mcpEgressHostsOf(rows: readonly McpSyncServerRow[]): string[] {
   return [...hosts].sort()
 }
 
-export type EgressHostMerge = {
+type EgressHostMerge = {
   /** The sandbox's full list to PUT. */
   hosts: string[]
   /** The hosts MCP sync added and may later take back. */

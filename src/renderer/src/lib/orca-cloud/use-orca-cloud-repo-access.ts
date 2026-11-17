@@ -11,7 +11,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 
-export type OrcaCloudRepoAccessState =
+type OrcaCloudRepoAccessState =
   | 'ok'
   | 'needs-install'
   | 'pending-approval'

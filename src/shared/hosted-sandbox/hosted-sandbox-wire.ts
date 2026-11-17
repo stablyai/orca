@@ -58,7 +58,6 @@ export const HOSTED_SANDBOX_STATUSES = [
   'failed',
   'archived'
 ] as const
-export type HostedSandboxStatus = (typeof HOSTED_SANDBOX_STATUSES)[number]
 
 export const HOSTED_SANDBOX_ERROR_CODES = [
   'unauthorized',
@@ -73,7 +72,6 @@ export const HOSTED_SANDBOX_ERROR_CODES = [
   'not_configured',
   'internal_error'
 ] as const
-export type HostedSandboxErrorCode = (typeof HOSTED_SANDBOX_ERROR_CODES)[number]
 
 const Id = z
   .string()
@@ -238,7 +236,6 @@ export const HOSTED_WORKSPACE_STATES = [
   'archived',
   'failed'
 ] as const
-export type HostedWorkspaceState = (typeof HOSTED_WORKSPACE_STATES)[number]
 
 export const HostedWorkspaceStatusSchema = z
   .object({
@@ -341,11 +338,6 @@ export type HostedArchiveResponse = z.infer<typeof HostedArchiveResponseSchema>
 /** ed25519 only, one line, a plain comment: nothing sshd would read as key options. */
 export const HOSTED_SANDBOX_SSH_PUBLIC_KEY =
   /^ssh-ed25519 [A-Za-z0-9+/]{68} [A-Za-z0-9@._:+-]{1,200}$/
-
-/** POST (install) and DELETE (revoke) /v1/sandboxes/:id/ssh-keys. */
-export const HostedSandboxSshKeyRequestSchema = z
-  .object({ publicKey: z.string().regex(HOSTED_SANDBOX_SSH_PUBLIC_KEY) })
-  .strict()
 
 /** The VM's loopback sshd: the desktop pins `hostKey` instead of trusting it on first use. */
 export const HostedSandboxSshAccessResponseSchema = z

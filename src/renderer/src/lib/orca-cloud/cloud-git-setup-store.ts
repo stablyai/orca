@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react'
 import type { CloudWakeSource } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
-export type CloudGitSetupState = {
+type CloudGitSetupState = {
   /** The strip's ×, in memory only: an app restart or a wake shows it again. */
   dismissed: Readonly<Record<string, true>>
   /** A restart finished and git setup still failed ("Restarting didn't fix it"). */

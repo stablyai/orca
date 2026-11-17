@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dotenvPasteToBatch, parseDotenvPaste } from './dotenv-paste'
+import { parseDotenvPaste } from './dotenv-paste'
 
 describe('parseDotenvPaste', () => {
   it('reads comments, export, quotes, inline comments and multi-line values', () => {
@@ -55,6 +55,5 @@ describe('parseDotenvPaste', () => {
       null
     ])
     expect(entries.find((entry) => entry.name === 'ANTHROPIC_API_KEY')?.kind).toBe('agent_key')
-    expect(dotenvPasteToBatch(entries)).toEqual({ TOKEN: 'second', AFTER: 'still read' })
   })
 })

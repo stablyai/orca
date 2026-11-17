@@ -13,8 +13,8 @@ export function isOrcaCloudAccountAgent(value: unknown): value is OrcaCloudAccou
 /** A Claude setup-token, exactly as the control plane accepts it (PUT /v1/agent-credentials/claude). */
 export const CLAUDE_SETUP_TOKEN_PATTERN = /^sk-ant-oat01-[A-Za-z0-9_-]{20,500}$/
 
-export const AGENT_CREDENTIAL_STATES = ['none', 'active', 'expiring', 'expired', 'revoked'] as const
-export type AgentCredentialState = (typeof AGENT_CREDENTIAL_STATES)[number]
+const AGENT_CREDENTIAL_STATES = ['none', 'active', 'expiring', 'expired', 'revoked'] as const
+type AgentCredentialState = (typeof AGENT_CREDENTIAL_STATES)[number]
 
 /** Active or expiring: the stored credential still works for a request now. */
 export function isUsableAgentCredential(state: AgentCredentialState): boolean {
@@ -27,11 +27,10 @@ const CredentialView = z.object({
   label: z.string().max(200).optional(),
   expiresAt: z.number().finite().optional()
 })
-export type AgentCredentialView = z.infer<typeof CredentialView>
 
 // An unknown future state reads as the kill switch: unusable, and worded as temporary.
 const ProviderState = z.enum(['on', 'off', 'disabled']).catch('disabled')
-export type OrcaCloudProviderState = z.infer<typeof ProviderState>
+type OrcaCloudProviderState = z.infer<typeof ProviderState>
 
 export const AgentCredentialsResponseSchema = z.object({
   claude: CredentialView,
@@ -123,7 +122,7 @@ export type OrcaCloudAgentsStatus = {
 }
 
 /** Codes the renderer turns into copy; never a server message, which could quote input. */
-export const ORCA_CLOUD_AGENTS_ERROR_CODES = [
+const ORCA_CLOUD_AGENTS_ERROR_CODES = [
   'signed_out',
   'not_configured',
   /** The provider's flag is off or its kill switch is on (404 from the credential routes). */
@@ -149,7 +148,7 @@ export type OrcaCloudAgentsResult<T> =
   | { ok: false; error: OrcaCloudAgentsErrorCode }
 
 /** Why a setup on this computer stopped (the runner and the broker driver). */
-export const ORCA_CLOUD_AGENT_SETUP_FAILURES = [
+const ORCA_CLOUD_AGENT_SETUP_FAILURES = [
   /** `claude` isn't installed here: the row offers the paste fallback. */
   'no_cli',
   'denied',

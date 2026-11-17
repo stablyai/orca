@@ -20,8 +20,8 @@ import { base64ToBytes, type SealedGrantPrimitives } from './sealed-grant'
 // The payload parser and its bounds live in read-snapshot-parse.ts; existing imports keep working.
 export { parseReadSnapshot, READ_SNAPSHOT_LIMITS } from './read-snapshot-parse'
 
-export const READ_SNAPSHOT_INFO = 'orca-cloud-read-v1'
-export const READ_SNAPSHOT_WRAP_INFO = 'orca-cloud-read-wrap-v1'
+const READ_SNAPSHOT_INFO = 'orca-cloud-read-v1'
+const READ_SNAPSHOT_WRAP_INFO = 'orca-cloud-read-wrap-v1'
 
 export type ReadSnapshotRole = 'user' | 'assistant' | 'system'
 export type ReadSnapshotMessage = {

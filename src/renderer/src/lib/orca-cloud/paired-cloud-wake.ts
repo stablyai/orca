@@ -76,7 +76,7 @@ function notPaired(workspaceId: string, quiet: boolean | undefined): PairedWakeR
   return { ok: false, message, reason: 'not_paired' }
 }
 
-export type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
+type PairedWakeResult = { ok: true } | { ok: false; message: string; reason?: string }
 
 /** Is this sidebar id a paired cloud workspace (registered by the paired registry)? */
 export function isPairedCloudWorkspace(workspaceId: string): boolean {

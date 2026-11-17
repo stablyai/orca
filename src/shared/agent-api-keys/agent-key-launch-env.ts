@@ -22,8 +22,6 @@ export const AgentKeyLaunchEnv = z
     }
   })
 
-export type AgentKeyLaunchEnvValue = z.infer<typeof AgentKeyLaunchEnv>
-
 /** Fold carried keys into the account env a host already merges over its launch plan. */
 export function withAgentKeyLaunchEnv(
   accountEnv: Readonly<Record<string, string>> | undefined,

@@ -12,7 +12,7 @@ type StepId = 'account' | 'team' | 'plan' | 'github' | 'agent'
 /** Structural subset of the composer's CloudSetupStep; extra fields are ignored. */
 export type CloudSetupTelemetryStep = { id: StepId; state: string }
 
-export type CloudSetupTelemetryEvent =
+type CloudSetupTelemetryEvent =
   | { name: 'cloud_setup_step_started'; props: { step: StepId } }
   | {
       name: 'cloud_setup_step_done'
@@ -21,7 +21,7 @@ export type CloudSetupTelemetryEvent =
   | { name: 'cloud_setup_step_failed'; props: { step: StepId; error_kind: CloudSetupErrorKind } }
   | { name: 'cloud_setup_plan_chosen'; props: { after_trial: boolean } }
 
-export type CloudSetupTelemetryState = {
+type CloudSetupTelemetryState = {
   startedAt: number
   states: Partial<Record<StepId, string>>
   reportedErrors: ReadonlySet<CloudSetupErrorKind>
@@ -134,7 +134,7 @@ function emit(event: CloudSetupTelemetryEvent): void {
 }
 
 /** When the tracker first saw this session, for time to first sandbox. */
-export function cloudSetupSessionStartedAt(sessionId: string): number | null {
+function cloudSetupSessionStartedAt(sessionId: string): number | null {
   return sessions.get(sessionId)?.startedAt ?? null
 }
 
