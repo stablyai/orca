@@ -25,7 +25,7 @@ const REVIEW_FIELDS = `reviewRequests(first: 25) {
           ... on Team { slug: combinedSlug name }
         } }
       }
-      latestReviews(first: 25) { nodes { state author { login avatarUrl } } }`
+      latestReviews(first: 25) { totalCount nodes { state author { login avatarUrl } } }`
 const REVIEW_PATHS = new Set(['reviewRequests', 'latestReviews'])
 
 const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $checksCursor: String, $suitesCursor: String) {
@@ -221,7 +221,10 @@ export async function readPullRequestSidebarQuery(
     return connection.success ? connection.data : undefined
   }
   const reviewRequests = reviewConnection('reviewRequests')
-  const latestReviews = reviewConnection('latestReviews')
+  const reviewPage = reviewConnection('latestReviews')
+  // A cut-off page could hide a change request behind approvals, so more than one page is unknown.
+  const latestReviews =
+    reviewPage && (reviewPage.totalCount ?? 0) <= reviewPage.nodes.length ? reviewPage : undefined
   const {
     commits: _commits,
     stackEntry: _stackEntry,
