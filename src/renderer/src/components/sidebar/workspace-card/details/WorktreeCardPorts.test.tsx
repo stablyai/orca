@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { WorkspacePort } from '../../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../../shared/workspace/ports/workspace-ports'
 import { WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 
 afterEach(cleanup)
