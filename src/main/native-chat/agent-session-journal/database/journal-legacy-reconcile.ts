@@ -103,12 +103,16 @@ type Adoption = {
  * for good, so while it still matches the saved receipt, no write followed any baseline here.
  */
 function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
-  return source
-    .prepare('SELECT session_id FROM agent_session_records')
-    .all()
-    .map((row) => String(row.session_id))
+  return originalChatIds(source)
     .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
     .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+}
+
+function originalChatIds(source: Database.Database): string[] {
+  return source
+    .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
+    .all()
+    .map((row) => String(row.session_id))
 }
 
 /** True when every chat was absorbed; a failed chat is logged and retried next launch. */
@@ -120,11 +124,9 @@ function absorbChats(source: Database.Database, db: Database.Database, pass: Pas
     }
   })
   let complete = true
-  for (const { session_id: id } of source
-    .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
-    .all()) {
+  for (const id of originalChatIds(source)) {
     try {
-      absorbChat(source, db, String(id), adoption, pass)
+      absorbChat(source, db, id, adoption, pass)
     } catch (error) {
       complete = false
       // The failed chat's transaction rolled back; reread what this file now holds.
