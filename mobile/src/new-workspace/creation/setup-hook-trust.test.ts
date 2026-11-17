@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import {
   approvedCreateSetup,
+  createSetupDecision,
   persistSetupHookTrustApproval,
   resolveCreateSetupApproval
 } from './setup-hook-trust'
@@ -60,5 +61,23 @@ describe('mobile setup approval', () => {
     const shown = { repoId: 'repo-1', contentHash: 'shown-hash' }
     expect(approvedCreateSetup(REPOS, shown, false)).toEqual({ approvedSetupHash: 'shown-hash' })
     expect(approvedCreateSetup(REPOS, shown, true)).toEqual({})
+  })
+})
+
+describe('create setup decision', () => {
+  it("checks a work item's own repo regardless of the selected repo's skip policy", () => {
+    expect(
+      createSetupDecision({
+        sameRepo: false,
+        chosen: 'inherit',
+        runPolicy: 'skip-by-default'
+      })
+    ).toEqual({ decision: 'inherit', mayRun: true })
+  })
+
+  it("doesn't carry the selected repo's run choice to another repo", () => {
+    expect(
+      createSetupDecision({ sameRepo: false, chosen: 'run', runPolicy: 'run-by-default' })
+    ).toEqual({ decision: 'inherit', mayRun: true })
   })
 })

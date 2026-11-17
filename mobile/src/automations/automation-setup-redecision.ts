@@ -11,6 +11,8 @@ export function automationSetupRedecided(
     draft.setupId !== original.setupId ||
     draft.workspaceMode !== original.workspaceMode ||
     draft.workspaceId !== original.workspaceId ||
+    // Runs create from the base, so a new base's setup needs its own review and pin.
+    draft.baseBranch !== original.baseBranch ||
     draft.setupDecision !== original.setupDecision
   )
 }

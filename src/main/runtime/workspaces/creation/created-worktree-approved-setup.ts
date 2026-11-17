@@ -35,6 +35,9 @@ type ApprovedSetupRuntime = {
   ) => Promise<{ failed?: true }>
 }
 
+// Approved runs started per worktree and hash: a retried approval (a lost reply) must not open the commands again.
+const startedApprovedRuns = new Set<string>()
+
 /**
  * Start setup and default-tab commands a create skipped, once the user approved this worktree's
  * own content. Re-hashes first, so only the approved bytes run.
@@ -64,39 +67,60 @@ export async function runApprovedCreatedWorktreeSetup(
   if (mismatch) {
     return { status: 'mismatch', setupTrustMismatch: mismatch }
   }
-  const setupScript = getEffectiveHooksFromConfig(repo, yamlHooks)?.scripts.setup
-  const setup = setupScript
-    ? await createSetupRunnerScript(
-        repo,
-        hooksRoot,
-        setupScript,
-        storedRepo ? getLocalProjectWorktreeGitOptions(store, storedRepo) : undefined,
-        resolveSetupRunnerShell(store.getSettings()),
-        yamlHooks?.setupAgentStartupPolicy,
-        { worktreeId: worktree.id, displayName: worktree.displayName, workspacePath: worktree.path }
-      )
-    : undefined
-  // The create already opened the command-less default tabs.
-  const defaultTabs = defaultTabsWithCommands(getDefaultTabsLaunch(yamlHooks, repo, 'run'))
-  if (!setup && !defaultTabs) {
-    return { status: 'not_configured' }
+  const runKey = `${worktree.id}\0${approvedSetupHash}`
+  if (startedApprovedRuns.has(runKey)) {
+    return { status: 'started' }
   }
-  const provisioned = await runtime.provisionManagedWorktreeTerminals({
-    worktreeSelector: `id:${worktree.id}`,
-    worktreeId: worktree.id,
-    worktreePath: worktree.path,
-    ...(setup ? { setup: { ...setup, ...(group ? { cwd: hooksRoot } : {}) } } : {}),
-    ...(defaultTabs ? { defaultTabs, defaultTabsBesideExisting: true as const } : {}),
-    hasStartupTerminal: true,
-    setupCommandPlatform: getSetupRunnerCommandPlatformForPath(
-      setup?.runnerScriptPath ?? '',
-      process.platform === 'win32' ? 'windows' : 'posix'
-    ),
-    ...options
-  })
-  if (provisioned.failed) {
-    // An error reaches every client's existing failure handling; a new status would be ignored by older ones.
-    throw new Error('Could not start the approved setup commands in this workspace.')
+  const startApprovedSetup = async (): Promise<RunApprovedWorktreeSetupResult> => {
+    const setupScript = getEffectiveHooksFromConfig(repo, yamlHooks)?.scripts.setup
+    const setup = setupScript
+      ? await createSetupRunnerScript(
+          repo,
+          hooksRoot,
+          setupScript,
+          storedRepo ? getLocalProjectWorktreeGitOptions(store, storedRepo) : undefined,
+          resolveSetupRunnerShell(store.getSettings()),
+          yamlHooks?.setupAgentStartupPolicy,
+          {
+            worktreeId: worktree.id,
+            displayName: worktree.displayName,
+            workspacePath: worktree.path
+          }
+        )
+      : undefined
+    // The create already opened the command-less default tabs.
+    const defaultTabs = defaultTabsWithCommands(getDefaultTabsLaunch(yamlHooks, repo, 'run'))
+    if (!setup && !defaultTabs) {
+      return { status: 'not_configured' }
+    }
+    const provisioned = await runtime.provisionManagedWorktreeTerminals({
+      worktreeSelector: `id:${worktree.id}`,
+      worktreeId: worktree.id,
+      worktreePath: worktree.path,
+      ...(setup ? { setup: { ...setup, ...(group ? { cwd: hooksRoot } : {}) } } : {}),
+      ...(defaultTabs ? { defaultTabs, defaultTabsBesideExisting: true as const } : {}),
+      hasStartupTerminal: true,
+      setupCommandPlatform: getSetupRunnerCommandPlatformForPath(
+        setup?.runnerScriptPath ?? '',
+        process.platform === 'win32' ? 'windows' : 'posix'
+      ),
+      ...options
+    })
+    if (provisioned.failed) {
+      // An error reaches every client's existing failure handling; a new status would be ignored by older ones.
+      throw new Error('Could not start the approved setup commands in this workspace.')
+    }
+    return { status: 'started' }
   }
-  return { status: 'started' }
+  startedApprovedRuns.add(runKey)
+  try {
+    const started = await startApprovedSetup()
+    if (started.status !== 'started') {
+      startedApprovedRuns.delete(runKey)
+    }
+    return started
+  } catch (error) {
+    startedApprovedRuns.delete(runKey)
+    throw error
+  }
 }

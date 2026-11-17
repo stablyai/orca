@@ -66,4 +66,11 @@ describe('automation setup pin writes', () => {
       setupDecision: 'run'
     })
   })
+
+  it("re-decides setup when only the base changes, since runs use the new base's setup", () => {
+    expect(automationDraftPatch({ ...original, baseBranch: 'release' }, original)).toEqual({
+      baseBranch: 'release',
+      setupDecision: 'run'
+    })
+  })
 })

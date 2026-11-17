@@ -214,6 +214,9 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
   )
 }
 
+// Prompts already acted on: callbacks delivered before the busy render must not act twice.
+const actedPrompts = new WeakSet<OrcaYamlTrustPrompt>()
+
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
     client,
@@ -241,9 +244,10 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
   const approve = (alwaysTrust: boolean) => {
     const prompt = orcaYamlTrustPrompt
     // One choice per prompt: a second tap or a decline while this runs must not act again.
-    if (!prompt || prompt.approving) {
+    if (!prompt || prompt.approving || actedPrompts.has(prompt)) {
       return
     }
+    actedPrompts.add(prompt)
     setOrcaYamlTrustPrompt({ ...prompt, approving: true })
     void (async () => {
       let notice: string | undefined
@@ -265,6 +269,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
           return
         }
         // The prompt stays up after a failed save, so it may be approved again.
+        actedPrompts.delete(prompt)
         setOrcaYamlTrustPrompt(prompt)
         setError(
           err instanceof Error
@@ -283,13 +288,14 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
   // Declining a created workspace's setup leaves it as is and opens it.
   const decline = (create: boolean) => {
     const prompt = orcaYamlTrustPrompt
-    if (prompt?.approving) {
+    if (!prompt || prompt.approving || actedPrompts.has(prompt)) {
       return
     }
+    actedPrompts.add(prompt)
     setOrcaYamlTrustPrompt(null)
-    if (prompt?.created) {
+    if (prompt.created) {
       prompt.created.open()
-    } else if (prompt && create) {
+    } else if (create) {
       void createWithSetup(prompt)
     }
   }

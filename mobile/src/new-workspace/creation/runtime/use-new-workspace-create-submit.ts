@@ -8,7 +8,7 @@ import { triggerError, triggerSuccess } from '../../../platform/haptics/haptics'
 import type { WorktreeCreateParent } from '../worktree-create-retry'
 import { createBlankWorkspace } from '../blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
-import { createMayRunSetup, resolveCreateSetupApproval } from '../setup-hook-trust'
+import { createSetupDecision, resolveCreateSetupApproval } from '../setup-hook-trust'
 import {
   composerSetupHooksCreateSource,
   createWorkspaceFromComposerSource,
@@ -164,20 +164,6 @@ export function useNewWorkspaceCreateSubmit(args: {
           undefined,
           args.retiredWorktreeNames
         )
-      let setupDecision: WorkspaceCreateSetupDecision = 'inherit'
-      if (options.setupOverride) {
-        setupDecision = options.setupOverride
-      } else if (args.setupCommand) {
-        if (args.setupRunPolicy === 'ask') {
-          if (!args.setupDecisionChoice) {
-            args.setError('Choose whether to run the setup script.')
-            return
-          }
-          setupDecision = args.setupDecisionChoice
-        } else {
-          setupDecision = args.runSetup ? 'run' : 'skip'
-        }
-      }
       const composed = args.composer.createSelection
       // Resolve a PR/MR start point once, so the create checks out the source whose setup was shown.
       const selection =
@@ -193,9 +179,28 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError("This item's project isn't available on this host.")
         return
       }
+      const sameRepo = setupRepo.id === selectedRepo.id
+      let chosen: WorkspaceCreateSetupDecision = 'inherit'
+      if (sameRepo && !options.setupOverride && args.setupCommand) {
+        if (args.setupRunPolicy === 'ask') {
+          if (!args.setupDecisionChoice) {
+            args.setError('Choose whether to run the setup script.')
+            return
+          }
+          chosen = args.setupDecisionChoice
+        } else {
+          chosen = args.runSetup ? 'run' : 'skip'
+        }
+      }
+      const { decision: setupDecision, mayRun } = createSetupDecision({
+        sameRepo,
+        override: options.setupOverride,
+        chosen,
+        runPolicy: args.setupRunPolicy
+      })
       let setupApproval = options.setupApproval
       // The checkout may lack setup the created branch has, so check whenever setup isn't skipped.
-      if (createMayRunSetup(setupDecision, args.setupRunPolicy) && !setupApproval) {
+      if (mayRun && !setupApproval) {
         const resolved = await resolveCreateSetupApproval({
           client,
           trust: args.trustedOrcaHooks,
