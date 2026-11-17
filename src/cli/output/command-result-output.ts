@@ -5,10 +5,12 @@ import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
   json: boolean,
-  formatter: (value: TResult) => string
+  formatter: (value: TResult) => string,
+  jsonReplacer?: (key: string, value: unknown) => unknown
 ): void {
   if (json) {
-    console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
+    // Agents pay per byte of --json output; people can pipe it through `jq .` to read it.
+    console.log(JSON.stringify(prepareComputerCliJsonResult(response), jsonReplacer))
     return
   }
   console.log(formatter(response.result) + formatBrowserActionEffects(response.result))

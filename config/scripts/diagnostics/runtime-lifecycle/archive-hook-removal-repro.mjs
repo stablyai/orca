@@ -50,7 +50,7 @@ function ok(args) {
   return parsed.result
 }
 
-/** The CLI pretty-prints one JSON document to stdout. */
+/** The CLI prints one JSON document to stdout. */
 function parseJsonLine(r) {
   const text = (r.stdout ?? '').trim()
   const start = text.indexOf('{')

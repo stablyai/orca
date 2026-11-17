@@ -13,6 +13,7 @@ import { requestWorktreeRemoval } from './worktree-removal-request'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
+import { printListingResult } from '../output/listing-result-output'
 import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
@@ -90,7 +91,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     await annotateOmittedHostScope(result.result)
     const annotate = await annotatePsRows(client, result.result.worktrees)
     const worktrees = annotate(result.result.worktrees.map(projectWorktreePsTerminalVerdict))
-    printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
+    printListingResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
       formatWorktreePs({ ...result.result, worktrees: annotate(result.result.worktrees) })
     )
   },
@@ -103,7 +104,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     await annotateOmittedHostScope(result.result)
-    printResult(result, json, formatWorktreeList)
+    printListingResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {

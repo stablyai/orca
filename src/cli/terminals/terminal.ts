@@ -23,6 +23,7 @@ import {
   formatTerminalWait
 } from './terminal-format'
 import { printResult } from '../output/command-result-output'
+import { printListingResult } from '../output/listing-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -80,7 +81,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     await annotateOmittedHostScope(result.result)
-    printResult(result, json, formatTerminalList)
+    printListingResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', {

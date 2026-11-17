@@ -22,7 +22,7 @@ Use it when you need ownership, completion tracking, or a DAG. To send another a
 
 ## Output
 
-Every orchestration command prints a short view by default: the IDs and state the next command needs, with the next step last. `--json` prints the same fields as one line of JSON (`{"ok":true,"result":{...}}`). `--full --json` prints the complete record Orca returned as pretty JSON; `--full` alone prints the longer text receipt. A failed or unconfirmed outcome exits non-zero and writes `error: <code>: <message>` to stderr.
+Every orchestration command prints a short view by default: the IDs and state the next command needs, with the next step last. `--json` prints the same fields as one line of JSON (`{"ok":true,"result":{...}}`). `--full --json` prints the complete record Orca returned, also as one line of JSON; `--full` alone prints the longer text receipt. A failed or unconfirmed outcome exits non-zero and writes `error: <code>: <message>` to stderr.
 
 ## Core model
 
