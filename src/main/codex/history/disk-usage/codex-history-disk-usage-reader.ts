@@ -1,9 +1,9 @@
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
 
 export type CodexHistoryDiskUsageReader = {
-  /** `measure` runs only when no reusable or current walk exists. */
-  read: (measure: () => Promise<CodexHistoryDiskUsage>) => Promise<CodexHistoryDiskUsage>
-  /** History shrank: no later read returns a walk that started before now. */
+  /** `measure` runs only when no reusable or current walk exists; its signal aborts an obsolete walk. */
+  read: (measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>) => Promise<CodexHistoryDiskUsage>
+  /** History shrank: the running walk is stopped and no later read returns one from before now. */
   forget: () => void
 }
 
@@ -12,21 +12,20 @@ export function createCodexHistoryDiskUsageReader(
   reuseMs: number,
   now: () => number = Date.now
 ): CodexHistoryDiskUsageReader {
-  let generation = 0
   let last: { usage: CodexHistoryDiskUsage; at: number } | null = null
-  let inFlight: { generation: number; walk: Promise<CodexHistoryDiskUsage> } | null = null
+  let inFlight: { walk: Promise<CodexHistoryDiskUsage>; abort: AbortController } | null = null
   return {
     read: (measure) => {
       if (last && now() - last.at < reuseMs) {
         return Promise.resolve(last.usage)
       }
-      if (inFlight?.generation === generation) {
+      if (inFlight) {
         return inFlight.walk
       }
-      const startedIn = generation
-      const walk = measure()
+      const abort = new AbortController()
+      const walk = measure(abort.signal)
         .then((usage) => {
-          if (startedIn === generation) {
+          if (!abort.signal.aborted) {
             last = { usage, at: now() }
           }
           return usage
@@ -36,12 +35,14 @@ export function createCodexHistoryDiskUsageReader(
             inFlight = null
           }
         })
-      inFlight = { generation: startedIn, walk }
+      inFlight = { walk, abort }
       return walk
     },
     forget: () => {
-      generation += 1
       last = null
+      // Its count predates the deletion; stopping it keeps a burst of deletions to one walk.
+      inFlight?.abort.abort()
+      inFlight = null
     }
   }
 }

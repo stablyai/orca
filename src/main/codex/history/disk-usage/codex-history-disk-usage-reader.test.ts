@@ -2,33 +2,41 @@ import { describe, expect, it } from 'vitest'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
 import { createCodexHistoryDiskUsageReader } from './codex-history-disk-usage-reader'
 
-function deferred(): {
-  promise: Promise<CodexHistoryDiskUsage>
-  resolve: (usage: CodexHistoryDiskUsage) => void
-} {
-  let resolve!: (usage: CodexHistoryDiskUsage) => void
-  const promise = new Promise<CodexHistoryDiskUsage>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
-}
-
 const before = { bytes: 11_000, rollouts: 3, complete: true }
 const after = { bytes: 2_000, rollouts: 1, complete: true }
 
-describe('createCodexHistoryDiskUsageReader', () => {
-  it('never answers a read after a deletion with a walk that started before it', async () => {
-    const reader = createCodexHistoryDiskUsageReader(60_000, () => 0)
-    const first = deferred()
-    const second = deferred()
-    const stale = reader.read(() => first.promise)
-    reader.forget()
-    const fresh = reader.read(() => second.promise)
-    first.resolve(before)
-    second.resolve(after)
+/** A walk that ends with `usage`, or rejects as soon as its signal aborts. */
+function walk(
+  usage: CodexHistoryDiskUsage
+): { measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>; finish: () => void; aborted: () => boolean } {
+  let finish!: () => void
+  let signal: AbortSignal | null = null
+  return {
+    measure: (s) => {
+      signal = s
+      return new Promise((resolve, reject) => {
+        finish = () => resolve(usage)
+        s.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+    },
+    finish: () => finish(),
+    aborted: () => signal?.aborted === true
+  }
+}
 
-    await expect(stale).resolves.toEqual(before)
+describe('createCodexHistoryDiskUsageReader', () => {
+  it('stops a walk a deletion made obsolete and answers later reads from a fresh one', async () => {
+    const reader = createCodexHistoryDiskUsageReader(60_000, () => 0)
+    const first = walk(before)
+    const second = walk(after)
+    const stale = reader.read(first.measure)
+    reader.forget()
+    const fresh = reader.read(second.measure)
+    second.finish()
+
+    expect(first.aborted()).toBe(true)
+    await expect(stale).rejects.toThrow('aborted')
     await expect(fresh).resolves.toEqual(after)
-    await expect(reader.read(() => Promise.resolve(before))).resolves.toEqual(after)
+    await expect(reader.read(walk(before).measure)).resolves.toEqual(after)
   })
 })

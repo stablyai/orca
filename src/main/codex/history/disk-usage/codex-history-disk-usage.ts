@@ -53,7 +53,8 @@ function getQueue(): NonNullable<typeof queue> {
 }
 
 async function measure(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
+  signal: AbortSignal
 ): Promise<CodexHistoryDiskUsage> {
   const homes = await listHostCodexRolloutHomes(settings)
   const response = await getQueue().dispatch(
@@ -62,7 +63,9 @@ async function measure(
       homes,
       budget: { maxEntries: MAX_ENTRIES, timeMs: WALK_BUDGET_MS }
     }),
-    WORKER_TIMEOUT_MS
+    WORKER_TIMEOUT_MS,
+    // Aborting the running walk ends its worker, so a superseded walk stops visiting files.
+    signal
   )
   if (!response.ok) {
     throw new Error(response.error)
@@ -81,5 +84,5 @@ export function forgetCodexHistoryDiskUsage(): void {
 export function getCodexHistoryDiskUsage(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<CodexHistoryDiskUsage> {
-  return reader.read(() => measure(settings))
+  return reader.read((signal) => measure(settings, signal))
 }
