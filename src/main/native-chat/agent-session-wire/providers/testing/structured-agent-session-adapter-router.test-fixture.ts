@@ -57,6 +57,13 @@ export function claudeAndCodexAgents(
   ])
 }
 
+/** An adapter that has only `methods`. */
+export function adapterWith(
+  methods: Partial<StructuredAgentSessionAdapter>
+): StructuredAgentSessionAdapter {
+  return { ...NO_METHODS, ...methods }
+}
+
 /** Keep real declarations for tests that add adapter methods per case. */
 export function claudeAndCodexDeclared(): StructuredAgentRegistry {
   const unused = (): never => {

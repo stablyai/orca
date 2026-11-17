@@ -1,6 +1,8 @@
 import { expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import {
+  adapterWith,
+  claudeAndCodexAgents
+} from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
@@ -63,9 +65,7 @@ it('reports a chat whose agent has no Remote Control as unsupported, and saves n
 it('saves and broadcasts a choice made while no Claude process is running, with no link yet', async () => {
   const setProviderRemoteControl = vi.fn(() => false)
   const rig = await createRestTestRig({
-    agents: claudeAndCodexAgents({
-      setProviderRemoteControl
-    } as unknown as StructuredAgentSessionAdapter)
+    agents: claudeAndCodexAgents(adapterWith({ setProviderRemoteControl }))
   })
   try {
     await foundRestTestChat(rig)

@@ -14,6 +14,9 @@ import {
 } from './claude-structured-session-test-support'
 
 type Answer = (enabled: boolean) => Promise<{ sessionUrl?: string }>
+type AppendItem = NonNullable<
+  Parameters<ClaudeStructuredSessionAdapter['acquire']>[0]['events']
+>['appendItem']
 type Start = ReturnType<NonNullable<ClaudeStructuredSessionAdapterDeps['remoteControlStart']>>
 
 const owned: { claude: ReturnType<typeof fakeClaude>; adapter: ClaudeStructuredSessionAdapter }[] =
@@ -31,7 +34,7 @@ async function openChat({
 }) {
   const requests: boolean[] = []
   const events: ClaudeStructuredSessionEvent[] = []
-  const rows: unknown[] = []
+  const rows: Parameters<AppendItem>[] = []
   const claude = fakeClaude()
   const open = claude.openConnection
   // The shared fake has neither the Remote Control initialize fields nor the request.
@@ -208,7 +211,7 @@ describe('Claude chat Remote Control', () => {
     const { adapter, connection, rows } = await openChat({})
     const userRows = () =>
       rows.flatMap((row) => {
-        const [identity, body] = row as [{ uuid?: string }, { kind?: string; role?: string }]
+        const [identity, body] = row
         return body.kind === 'message' && body.role === 'user' ? [{ identity, body }] : []
       })
 

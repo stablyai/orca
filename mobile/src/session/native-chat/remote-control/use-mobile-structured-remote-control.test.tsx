@@ -1,6 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/view/agent-session-attention-capabilities'
+import { structuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
 import {
   useMobileStructuredRemoteControl,
@@ -23,6 +27,18 @@ vi.mock('../agent-session/mobile-structured-agent-session-rpc', () => ({
 
 let renderer: ReactTestRenderer | undefined
 
+const client: RpcClient = {
+  sendRequest: vi.fn(),
+  subscribe: () => () => {},
+  updateTerminalSubscriptionViewport: () => {},
+  getState: () => 'connected',
+  getReconnectAttempt: () => 0,
+  getLastConnectedAt: () => null,
+  onStateChange: () => () => {},
+  notifyForeground: () => {},
+  close: () => {}
+}
+
 afterEach(() => {
   act(() => renderer?.unmount())
   vi.resetAllMocks()
@@ -33,10 +49,13 @@ function remoteControlOfFailedLink(): MobileStructuredRemoteControl {
   function Probe(): null {
     seen = useMobileStructuredRemoteControl(
       {
-        client: {} as never,
+        client,
         sessionId: 'session-1',
         agent: 'claude',
-        hostSupport: { providerRemoteControl: true, statusFeed: true } as never,
+        hostSupport: structuredAgentSessionHostSupport([
+          AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY,
+          AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
+        ]),
         enabled: true
       },
       {}

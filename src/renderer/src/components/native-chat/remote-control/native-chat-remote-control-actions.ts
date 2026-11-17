@@ -42,7 +42,7 @@ export function nativeChatRemoteControlStatus(
         'components.native-chat.remoteControl.policyDisabled',
         'Remote Control is turned off by your organization'
       )
-    default:
+    case undefined:
       return translate('components.native-chat.remoteControl.off', 'Remote Control is off')
   }
 }
