@@ -177,6 +177,23 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     return { pty: live.pty, surface }
   }
 
+  /** Windowless recovery can reach a PTY before any viewer hydrates its saved tab; only the exact saved incarnation may close that tab. */
+  protected resolveSavedTabPtyCloseAuthority(
+    authority: RuntimePtyTabCloseAuthority,
+    paneKey: string | null
+  ): { pty: RuntimePtyWorktreeRecord; surface: RuntimeMobileSessionCreateTerminalResult } | null {
+    const session = this.getWorkspaceSessionForWorktree(authority.worktreeId)
+    if (
+      !paneKey ||
+      !authority.incarnationId ||
+      session?.terminalPtyIncarnationsByPaneKey?.[paneKey] !== authority.incarnationId
+    ) {
+      return null
+    }
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(authority.worktreeId)
+    return this.resolvePtyTabCloseSurfaceAuthority(authority)
+  }
+
   // Publish live-backed pending creates in main so graph-sync stalls cannot destroy sessions (#7587).
   protected ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
