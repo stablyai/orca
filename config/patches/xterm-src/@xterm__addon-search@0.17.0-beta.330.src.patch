@@ -211,10 +211,19 @@ index 1760bc2bd1fd274d23e2032fde631b39c739f0d9..5b3c5cc5e861356b87e8a15c55797f45
      return offset;
    }
 diff --git a/src/SearchLineCache.ts b/src/SearchLineCache.ts
-index 526f4bfcc74a881bb39b400ec79a25d33d602303..19b22f2f70e50a6b01d07966e15727cc5271c776 100644
+index 526f4bfcc74a881bb39b400ec79a25d33d602303..d345b68d9da35f4ece4784d73077e547c2fd64c9 100644
 --- a/src/SearchLineCache.ts
 +++ b/src/SearchLineCache.ts
-@@ -109,9 +109,13 @@ export class SearchLineCache extends Disposable {
+@@ -56,6 +56,8 @@ export class SearchLineCache extends Disposable {
+       this._linesCacheDisposables.value = combinedDisposable(
+         this._terminal.onLineFeed(() => this._destroyLinesCache()),
+         this._terminal.onCursorMove(() => this._destroyLinesCache()),
++        // In-place TUI redraws can leave the cursor unchanged.
++        this._terminal.onWriteParsed(() => this._destroyLinesCache()),
+         this._terminal.onResize(() => this._destroyLinesCache())
+       );
+     }
+@@ -109,9 +111,13 @@ export class SearchLineCache extends Disposable {
    public translateBufferLineToStringWithWrap(lineIndex: number, trimRight: boolean): LineCacheEntry {
      const strings = [];
      const lineOffsets = [0];
