@@ -357,6 +357,7 @@ export function NativeChatMessageList({
     onToggleExpandedTurn: toggleExpandedTurn,
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd,
     onRevealDiff: navigation.revealDiff
   })
 
