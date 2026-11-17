@@ -78,6 +78,9 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
     worktreeId: string,
     parentTabIds: readonly string[]
   ): Promise<number> {
+    if (parentTabIds.length === 0) {
+      return 0
+    }
     const owed = new Map<string, PtyIncarnationId | null | undefined>()
     const ptyIdsByTab = this.getPtyIdsByTabForExplicitClose(worktreeId)
     for (const parentTabId of parentTabIds) {
