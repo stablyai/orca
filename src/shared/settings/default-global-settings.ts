@@ -3,7 +3,7 @@ import type { NotificationSettings } from '../notifications/notification-setting
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
-import { TASK_PROVIDERS } from '../work-items/task-providers'
+import { DEFAULT_TASK_SELECTION_SETTINGS } from './default-task-selection-settings'
 import { getDefaultSourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from '../app-lifecycle/identity/app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from '../editor/launch/open-in-applications'
@@ -241,12 +241,7 @@ export function buildDefaultSettings(args: {
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
-    defaultTaskViewPreset: 'all',
-    defaultTaskSource: 'github',
-    visibleTaskProviders: [...TASK_PROVIDERS],
-    visibleTaskProvidersDefaultedForJira: true,
-    defaultRepoSelection: null,
-    defaultLinearTeamSelection: null,
+    ...DEFAULT_TASK_SELECTION_SETTINGS,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     minimaxGroupId: '',

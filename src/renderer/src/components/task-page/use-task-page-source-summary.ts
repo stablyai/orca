@@ -95,6 +95,21 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      // Why: repo-backed like GitHub, but served over HTTP from main — no CLI preflight to fold in.
+      'azure-devops':
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('azure-devops'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          hostAvailability: selectedRepos.flatMap((repo) => {
+            const context = getTaskPageRepoSourceContext(repo, 'azure-devops')
+            const host = context ? hostRegistryById.get(context.hostId) : undefined
+            const availability = context
+              ? getTaskSourceHostAvailabilityForHost(host, context.hostId)
+              : null
+            return availability ? [availability] : []
+          })
         }) ?? undefined
     }
   }, [

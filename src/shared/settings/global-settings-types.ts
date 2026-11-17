@@ -9,6 +9,7 @@ import type { VoiceSettings } from '../speech/speech-types'
 import type { AiVaultSearchSettings } from '../ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from '../gitlab/gitlab-types'
 import type { TaskProvider } from '../work-items/task-providers'
+import type { AzureDevOpsBoardsSettings } from '../azure-devops/boards-settings-types'
 import type { AppIconId } from '../app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from '../agent-launch/startup/claude-agent-teams-tmux-compat'
@@ -46,7 +47,9 @@ import type { WorktreeVisibilityDefaults } from '../repository/repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = GlobalSettingsBase & {
+type SettingsBase = GlobalSettingsBase & AzureDevOpsBoardsSettings
+
+export type GlobalSettings = SettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults

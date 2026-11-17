@@ -20,6 +20,7 @@ import { registerLinearHandlers } from '../linear/register-handlers'
 import { registerJiraHandlers } from '../jira/register-handlers'
 import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
+import { registerAzureDevOpsBoardsHandlers } from '../azure-devops-boards'
 import { registerFeedbackHandlers } from '../feedback/feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
 import { registerExportHandlers } from '../export'
@@ -160,6 +161,7 @@ export async function registerCoreHandlers(
     registerHostedReviewHandlers(store, stats)
     registerLinearHandlers()
     registerJiraHandlers()
+    registerAzureDevOpsBoardsHandlers(store)
     registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
     registerBitbucketHandlers()
     registerFeedbackHandlers()
