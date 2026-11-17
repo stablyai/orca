@@ -11,20 +11,22 @@ import type Database from '../../sqlite/sync-database'
 export type LegacySessionHold = {
   /** The store keeps this chat, so its history must be converted here. */
   convert: boolean
-  /** A name the person set, options or permission mode differ between the original and here. */
-  diverged: boolean
+  /**
+   * The original's own version of what both sides hold differently (its record, and text still
+   * waiting to send), kept in this store verbatim before the original goes. Undefined when the
+   * store already holds the same.
+   */
+  original?: string
 }
 
 export type LegacyClaim = { uploadId: string; sessionId: string; claimedAt: number }
 
-/** Same key the older-Orca reconcile writes once it has read a chat's person edits. */
-const PERSON_EDITS_KEY = 'journal.legacy-person-edits:'
-
 /**
  * Whether this store holds everything the original holds for one chat, read from content: its
  * history revision, its record and the text queued to send. A difference the store can't show yet
- * keeps the original. A difference both sides could have made (a person's name, options,
- * permission mode, or queued text) is reported as `diverged` for the caller to weigh.
+ * keeps the original. Where both sides hold a chat differently (a person's name, options,
+ * permission mode, or queued text), no content says which changed last, so the original's version
+ * is returned to be kept here as well.
  */
 export function legacySessionHold(
   source: Database.Database,
@@ -39,7 +41,7 @@ export function legacySessionHold(
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)
   if (!recorded) {
-    return { convert: true, diverged: false }
+    return { convert: true }
   }
   const revision = journalLegacyChatRevision(source, sessionId) ?? 'null'
   const shown = meta(store, journalLegacyChatRevisionKey(sessionId))
@@ -53,7 +55,7 @@ export function legacySessionHold(
   if (!here?.recorded && !here?.cataloged) {
     // Deleted here after reading this revision (its revision key stays): the person's choice.
     if (shown === revision || empty) {
-      return { convert: false, diverged: false }
+      return { convert: false }
     }
     throw new JournalLegacyRetentionError('an original chat is not in this store yet')
   }
@@ -65,9 +67,11 @@ export function legacySessionHold(
   const converted = here.epoch !== null && here.epoch !== undefined
   return {
     convert: true,
-    diverged:
-      personEditsDiverged(source, store, sessionId) ||
+    original:
+      personEditsDiffer(source, store, sessionId) ||
       (converted && hasQueue && !queueHeld(source, store, sessionId))
+        ? originalVersion(source, sessionId)
+        : undefined
   }
 }
 
@@ -86,11 +90,13 @@ export function legacyRecordOnlyHold(
   if (!recorded) {
     // Deleted here after reading it, or a draft an older Orca made that this store never showed.
     const read = meta(store, journalLegacyChatRevisionKey(sessionId)) !== undefined
-    return { convert: false, diverged: !read }
+    return { convert: false, original: read ? undefined : originalVersion(source, sessionId) }
   }
   return {
     convert: false,
-    diverged: personEditsDiverged(source, store, sessionId)
+    original: personEditsDiffer(source, store, sessionId)
+      ? originalVersion(source, sessionId)
+      : undefined
   }
 }
 
@@ -176,11 +182,8 @@ const PERSON_EDITS_SQL = `CASE WHEN json_valid(record_json) THEN json_array(
   json_extract(record_json,'$.options'),
   json_extract(record_json,'$.permissionMode')) END`
 
-/**
- * A name the person set, options or permission mode that differ here from the original. Equal to
- * what the reconcile last read from the original means only this store changed them since.
- */
-function personEditsDiverged(
+/** A name the person set, options or permission mode that differ here from the original. */
+function personEditsDiffer(
   source: Database.Database,
   store: Database.Database,
   sessionId: string
@@ -190,21 +193,22 @@ function personEditsDiverged(
       .prepare(`SELECT ${PERSON_EDITS_SQL} AS edits FROM agent_session_records WHERE session_id=?`)
       .get(sessionId)?.edits
   const original = hasTable(source, 'agent_session_records') ? read(source) : undefined
-  if (original === undefined || original === null) {
-    return false
-  }
-  const here = read(store)
-  if (here === original) {
-    return false
-  }
-  // The reconcile's own baseline, in its format: unchanged since it read them means they're stale.
-  const reconciled = source
-    .prepare(`SELECT CASE WHEN json_valid(record_json) THEN json_extract(record_json,
-      '$.conversationName','$.conversationNameSource','$.options','$.permissionMode') END AS edits
-      FROM agent_session_records WHERE session_id=?`)
-    .get(sessionId)?.edits
-  const baseline = meta(store, `${PERSON_EDITS_KEY}${sessionId}`)
-  return baseline === undefined || typeof reconciled !== 'string' || baseline !== reconciled
+  return original !== undefined && original !== null && read(store) !== original
+}
+
+/** The original's record and the text it still has waiting to send, verbatim. */
+function originalVersion(source: Database.Database, sessionId: string): string {
+  const record = source
+    .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+    .get(sessionId)?.record_json
+  const queued = hasTable(source, 'queued_messages')
+    ? source
+        .prepare(
+          "SELECT * FROM queued_messages WHERE session_id=? AND state IN ('waiting','returned')"
+        )
+        .all(sessionId)
+    : []
+  return JSON.stringify({ version: 1, record: record ?? null, queued })
 }
 
 function hasTable(db: Database.Database, name: string): boolean {

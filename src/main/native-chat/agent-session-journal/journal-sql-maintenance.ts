@@ -1,15 +1,13 @@
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import type { LegacyClaim } from './journal-legacy-content-proof'
 import {
+  JOURNAL_LEGACY_ORIGINAL,
   JOURNAL_LEGACY_RETIREMENT,
   type JournalLegacyRetirementState
 } from './journal-legacy-retirement-state'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
 import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
-import {
-  JOURNAL_LEGACY_CONVERTED_BY,
-  JOURNAL_LEGACY_COPIED_SOURCE
-} from './database/journal-domain-database'
+import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-domain-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -50,6 +48,7 @@ export type JournalPagedMaintenanceKind =
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
   | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
+  | { kind: 'legacy-originals-keep'; originals: readonly { sessionId: string; value: string }[] }
   | {
       kind: 'legacy-retirement-save'
       value: string
@@ -103,7 +102,6 @@ export function applyJournalSqlMaintenance(
         receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
         kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
         convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
-        copiedSource: value(JOURNAL_LEGACY_COPIED_SOURCE),
         retirement: value(JOURNAL_LEGACY_RETIREMENT)
       }
     }
@@ -113,6 +111,16 @@ export function applyJournalSqlMaintenance(
         claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
       for (const claim of operation.claims) {
         insert.run(claim.uploadId, claim.sessionId, claim.claimedAt)
+      }
+      return true
+    }
+    case 'legacy-originals-keep': {
+      // What only the original holds for a chat both sides changed, kept verbatim before it goes.
+      const keep = db.prepare(
+        'INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)'
+      )
+      for (const { sessionId, value } of operation.originals) {
+        keep.run(`${JOURNAL_LEGACY_ORIGINAL}${sessionId}`, value)
       }
       return true
     }

@@ -1,4 +1,3 @@
-import { lstat } from 'node:fs/promises'
 import {
   JournalLegacyIneligibleError,
   JournalLegacyRetentionError
@@ -22,8 +21,7 @@ import {
 import type { LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
-  sameJournalLegacySource,
-  type JournalLegacySourceReceipt
+  sameJournalLegacySource
 } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
@@ -36,7 +34,6 @@ import { JournalLegacyProof, type LegacyProofObservation } from './journal-legac
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
-type CopiedSource = Extract<JournalLegacySourceReceipt, { disposition: 'copied-source' }>
 
 /**
  * Absent means a release before this record copied the profile, which is always earlier; a copy
@@ -73,36 +70,6 @@ function absorbedWal(
   }
 }
 
-/**
- * Only settles a difference both sides could have made (a person's name, options, permission mode
- * or queued text); the content proof covers everything else. The copy record, with ctime (a write
- * can put mtime back, never ctime), says so exactly. A store v1.4.260/261 copied has no record and
- * no copy-time snapshot of its records to compare with, so it falls back to the original's ctime
- * against the store's creation; an unknown creation time (0, or libuv's ctime stand-in without
- * statx) answers no.
- */
-async function unwrittenSinceCopy(
-  domain: string,
-  copiedSource: string | null,
-  current: CopiedSource
-): Promise<boolean> {
-  if (copiedSource !== null) {
-    return sameJournalLegacySource(copiedSource, current)
-  }
-  const store = await lstat(domain, { bigint: true })
-  const created = store.birthtimeNs
-  if (created === 0n || created === store.ctimeNs) {
-    return false
-  }
-  const walWritten =
-    current.wal.kind === 'nonempty' && current.wal.mtimeNs !== undefined
-      ? BigInt(current.wal.mtimeNs)
-      : 0n
-  // ctime, not mtime: copying with preserved times or restoring a backup can put mtime back, and
-  // nothing Orca does after the copy (it only reads the original) changes ctime.
-  return BigInt(current.main.ctimeNs) <= created && walWritten <= created
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -110,10 +77,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Deletes the original journal once this store provably holds all of it, read from content: on a
  * later Orca version than the one that copied the profile, after the older-Orca reconcile absorbed
- * the original as it is now, with every chat held here (converted, or deleted here), the same
- * queued text, and no person's edit that only the original has. Tabs an older Orca opened or
- * closed are not adopted by design, so they aren't held either. Every failed check keeps the file
- * and retries later.
+ * the original as it is now, with every chat held here (converted, or deleted here) and its
+ * uploads claimed. Where a chat's record or waiting text differ on the two sides, the original's
+ * version is kept here verbatim first. Tabs an older Orca opened or closed are not adopted by
+ * design. Every failed check keeps the file and retries later.
  */
 export class JournalLegacyRetirement {
   private readonly filename: string
@@ -296,7 +263,6 @@ export class JournalLegacyRetirement {
       proof: JSON.stringify(current),
       // The store file alone: its WAL is recreated on every open, which no refusal should outlive.
       store: await legacyDestinationMain(domain),
-      unwrittenSinceCopy: await unwrittenSinceCopy(domain, saved.copiedSource, current),
       walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
     }
   }

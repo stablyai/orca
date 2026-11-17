@@ -1,8 +1,7 @@
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import {
   completeJournalLegacyProof,
-  createLegacyProofFrontier,
-  DIVERGED
+  createLegacyProofFrontier
 } from './journal-legacy-proof-frontier'
 import {
   decodeLegacySourceRefusal,
@@ -17,8 +16,6 @@ import type { JournalSqlConversions } from './journal-sql-conversions'
 export type LegacyProofObservation = {
   proof: string
   store: string
-  /** Nothing wrote the original since this store copied it, so its record edits are the copy's. */
-  unwrittenSinceCopy: boolean
 }
 
 /** One observation owns verified work, a refusal and pending conversion progress. */
@@ -76,14 +73,8 @@ export class JournalLegacyProof {
         this.boundary,
         this.signal,
         this.rest,
-        this.frontier,
-        !observation.unwrittenSinceCopy
+        this.frontier
       )
-      // Both sides could have made a difference: only an original unwritten since the copy is stale.
-      if (this.frontier.diverged && !observation.unwrittenSinceCopy) {
-        // Not saved as a refusal: either side can still change, so a later launch weighs it again.
-        throw new JournalLegacyRetentionError(DIVERGED)
-      }
     } catch (error) {
       if (error instanceof JournalLegacyRetentionError && error.reason) {
         this.refusal = {

@@ -33,14 +33,12 @@ function queue(filename: string, sessionId: string, text: string) {
   db.close()
 }
 
-const refusal = (db: Database.Database) =>
+const original = (db: Database.Database, sessionId: string) =>
   JSON.parse(
     String(
       db
-        .prepare(
-          "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'"
-        )
-        .get()?.value ?? 'null'
+        .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+        .get(`journal.legacy-original:${sessionId}`)?.value ?? 'null'
     )
   )
 
@@ -93,25 +91,6 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
   await foreign.launch('1.0.1', false).run()
   expect(companions(foreign.filename)).toContain(foreign.filename)
 
-  // An older Orca renamed a chat after the copy, with no new turn: the reconcile doesn't take
-  // renames, so the original holds a person's name the store lacks.
-  const renamed = await profile()
-  rename(renamed.filename, 'unopened', 'Renamed in the older Orca')
-  await initializeJournalDomainDatabase(renamed.root)
-  await renamed.launch().run()
-  expect(companions(renamed.filename)).toContain(renamed.filename)
-  expect(String(renamed.errors.at(-1))).toContain('differ from the original')
-  expect(refusal(renamed.db)).toBeNull()
-
-  // Text an older Orca queued after the copy that this store doesn't hold, on a converted chat.
-  const queued = await profile()
-  await queued.convert('unopened')
-  queue(queued.filename, 'unopened', 'queued in the older Orca')
-  await initializeJournalDomainDatabase(queued.root)
-  await queued.launch().run()
-  expect(companions(queued.filename)).toContain(queued.filename)
-  expect(String(queued.errors.at(-1))).toContain('differ from the original')
-
   // Content the proof can't account for is refused, and the refusal is not re-proven.
   // The smallest possible key is still read: an empty session id sorts before every other.
   const orphan = await profile({
@@ -160,21 +139,15 @@ it('after a downgrade to an older Orca, the re-upgrade takes its new chat and th
   expect(journalDomainImportState(db, 'made-after-downgrade').state).toBe('ready')
 })
 
-it('retires a store copied before the copy record existed, from its content', async () => {
+it('retires a store from its content, keeping chats deleted here deleted', async () => {
   // Every store v1.4.260/261 copied: a person's edits that differ are weighed by file times only.
   const unchanged = await profile()
-  unchanged.db.exec(
-    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v2'"
-  )
   await unchanged.launch().run()
   expect(unchanged.errors).toEqual([])
   expect(companions(unchanged.filename)).toEqual([])
 
   // A chat deleted here is not converted back from the original, and doesn't block retirement.
   const deleted = await profile()
-  deleted.db.exec(
-    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v2'"
-  )
   deleted.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
   deleted.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
   await deleted.launch().run()
@@ -233,16 +206,35 @@ it('reopens the source to conversions when the lock helper fails', async () => {
   expect(existsSync(filename)).toBe(true)
 })
 
-it('keeps an original an older Orca renamed a chat in, even with its mtime put back', async () => {
-  // The rename moves no history, and restoring mtime leaves only ctime moved; that still counts.
-  const { root, filename, launch, db } = await profile()
-  const before = statSync(filename)
-  rename(filename, 'unopened', 'Renamed in the older Orca')
-  utimesSync(filename, before.atime, before.mtime)
-  await initializeJournalDomainDatabase(root)
-  await launch().run()
-  expect(companions(filename)).toContain(filename)
-  expect(refusal(db)).toBeNull()
+it('keeps the original version of what both sides changed, then retires, with no file times', async () => {
+  // An older Orca renamed a chat after the copy, with no new turn, and then the profile was
+  // restored with the journal written first: no file time can say which side is newer.
+  const renamed = await profile()
+  const before = statSync(renamed.filename)
+  rename(renamed.filename, 'unopened', 'Renamed in the older Orca')
+  utimesSync(renamed.filename, before.atime, before.mtime)
+  await initializeJournalDomainDatabase(renamed.root)
+  await renamed.launch().run()
+  expect(renamed.errors).toEqual([])
+  expect(companions(renamed.filename)).toEqual([])
+  expect(original(renamed.db, 'unopened').record).toContain('Renamed in the older Orca')
+
+  // Text an older Orca queued after the copy, on a converted chat this store doesn't hold.
+  const queued = await profile()
+  await queued.convert('unopened')
+  queue(queued.filename, 'unopened', 'queued in the older Orca')
+  await initializeJournalDomainDatabase(queued.root)
+  await queued.launch().run()
+  expect(companions(queued.filename)).toEqual([])
+  expect(JSON.stringify(original(queued.db, 'unopened').queued)).toContain(
+    'queued in the older Orca'
+  )
+
+  // Where both sides already agree, nothing extra is kept.
+  const same = await profile()
+  await same.launch().run()
+  expect(companions(same.filename)).toEqual([])
+  expect(original(same.db, 'unopened')).toBeNull()
 })
 
 it('accepts an import marker for an epoch a /clear replaced', async () => {
@@ -326,14 +318,11 @@ it('weighs drafts and queued text from content, keeping only what only the origi
   // Text waiting in a chat not converted yet converts with it, so it doesn't block retirement.
   const unopened = await profile()
   queue(unopened.filename, 'unopened', 'queued before the copy')
-  unopened.db.exec(
-    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v2'"
-  )
   await initializeJournalDomainDatabase(unopened.root)
   await unopened.launch().run()
   expect(companions(unopened.filename)).toEqual([])
 
-  // A draft (record, no history) an older Orca renamed after the copy is still weighed.
+  // A draft (record, no history) an older Orca renamed after the copy is kept the same way.
   const draft = await profile({
     seed: (legacy) =>
       legacy
@@ -343,5 +332,6 @@ it('weighs drafts and queued text from content, keeping only what only the origi
   rename(draft.filename, 'draft', 'Draft renamed in the older Orca')
   await initializeJournalDomainDatabase(draft.root)
   await draft.launch().run()
-  expect(companions(draft.filename)).toContain(draft.filename)
+  expect(companions(draft.filename)).toEqual([])
+  expect(original(draft.db, 'draft').record).toContain('Draft renamed in the older Orca')
 })

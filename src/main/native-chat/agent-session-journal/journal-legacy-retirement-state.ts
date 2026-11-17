@@ -9,13 +9,17 @@ import {
  */
 export const JOURNAL_LEGACY_RETIREMENT = 'journal.legacy-retirement.v2'
 export const LEGACY_SOURCE_REFUSAL_POLICY = 3
+/**
+ * Per chat, the original's record and waiting text where it and this store differ, kept verbatim
+ * once the original retires: no content says which side changed last, so neither is dropped.
+ */
+export const JOURNAL_LEGACY_ORIGINAL = 'journal.legacy-original:'
 
 /** What the writer reports before an attempt; "retired" itself is the original being absent. */
 export type JournalLegacyRetirementState = {
   receipt: string | null
   kept: boolean
   convertedBy: string | null
-  copiedSource: string | null
   retirement: string | null
 }
 

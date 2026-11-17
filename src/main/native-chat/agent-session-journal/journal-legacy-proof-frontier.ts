@@ -10,8 +10,6 @@ export type LegacyProofFrontier = {
   page?: LegacyProofPage
   session: number
   pending: boolean
-  /** Some chat's person edits differ here from the original; see JournalLegacyProof. */
-  diverged: boolean
 }
 
 /** Why a proof keeps the original when a difference both sides could have made can't be settled. */
@@ -19,7 +17,7 @@ export const DIVERGED =
   "a chat's name, options, permission mode or queued text differ from the original"
 
 export function createLegacyProofFrontier(): LegacyProofFrontier {
-  return { cursor: { table: 0, after: null }, session: 0, pending: false, diverged: false }
+  return { cursor: { table: 0, after: null }, session: 0, pending: false }
 }
 
 export async function completeJournalLegacyProof(
@@ -29,8 +27,7 @@ export async function completeJournalLegacyProof(
   boundary: () => Promise<boolean>,
   signal: AbortSignal,
   rest: (started: number) => Promise<void>,
-  frontier = createLegacyProofFrontier(),
-  stopOnDivergence = false
+  frontier = createLegacyProofFrontier()
 ): Promise<void> {
   const admit = async () => {
     signal.throwIfAborted()
@@ -50,9 +47,11 @@ export async function completeJournalLegacyProof(
     if (page.retained) {
       throw new JournalLegacyRetentionError(page.retained, page.reason)
     }
-    // Decided as soon as it shows: nothing converts for a proof that can only end in keeping it.
-    if (stopOnDivergence && page.sessions.some((session) => session.diverged)) {
-      throw new JournalLegacyRetentionError(DIVERGED)
+    const originals = page.sessions.flatMap(({ sessionId, original }) =>
+      original === undefined ? [] : [{ sessionId, value: original }]
+    )
+    if (originals.length > 0) {
+      await writer.maintain({ kind: 'legacy-originals-keep', originals })
     }
     if (page.claims?.length) {
       await writer.maintain({ kind: 'legacy-claims-absorb', claims: page.claims })
@@ -60,7 +59,6 @@ export async function completeJournalLegacyProof(
     while (frontier.session < page.sessions.length) {
       await admit()
       const source = page.sessions[frontier.session]!
-      frontier.diverged ||= source.diverged
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {
         frontier.session++
