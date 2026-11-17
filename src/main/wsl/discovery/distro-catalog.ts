@@ -215,6 +215,7 @@ export async function listRunningWslDistrosAsync(
   }
   // The running-list failure backoff also caps at 5 minutes and would keep launching the installer.
   // A known install starts the wsl.exe probe before the first await so concurrent callers share it.
+  // Confirmed absence is a confirmed empty list, even under requireConfirmed.
   if (peekWslInstallation() !== 'present' && (await readWslInstallation()) === 'absent') {
     return []
   }

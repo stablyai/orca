@@ -1,5 +1,10 @@
 import { runProcess, runProcessSync } from '@orca/process-host'
+import {
+  _resetWslNotInstalledLatchForTests,
+  latchWslNotInstalled
+} from '@orca/process-host/wsl-not-installed-latch'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 
 // Why: Windows 11 24H2's inbox wsl.exe launches the installer on any invocation.
@@ -7,24 +12,17 @@ import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-direct
 // CurrentVersion\Lxss can exist when WSL is not installed, so it is not the signal.
 const WSL_SERVICE_NAMES = ['WSLService', 'LxssManager'] as const
 const SERVICE_QUERY_TIMEOUT_MS = 5_000
+// sc.exe exits with the Win32 error; only this one proves the service is not registered.
+const ERROR_SERVICE_DOES_NOT_EXIST = 1060
 
 export type WslInstallation = 'present' | 'absent' | 'unknown'
 
 let installation: WslInstallation | null = null
 let installationProbe: Promise<WslInstallation> | null = null
 
-function serviceControlProgram(): string {
-  const root = process.env.SystemRoot || process.env.windir
-  // A stripped Electron PATH may not resolve a bare sc.exe. Skip a non-Windows root.
-  if (root && /^[A-Za-z]:\\/.test(root)) {
-    return `${root}\\System32\\sc.exe`
-  }
-  return 'sc.exe'
-}
-
 function serviceQuerySpec(name: string): ProcessSpec {
   return {
-    program: serviceControlProgram(),
+    program: windowsSystem32Binary('sc.exe'),
     args: ['query', name],
     timeoutMs: SERVICE_QUERY_TIMEOUT_MS,
     cwd: resolveWslInteropSpawnCwd()
@@ -33,7 +31,11 @@ function serviceQuerySpec(name: string): ProcessSpec {
 
 function classifyServiceQuery(result: ProcessResult): WslInstallation {
   // sc query exits 0 when the service is registered, including while it is stopped.
-  return result.code === 0 ? 'present' : 'absent'
+  if (result.code === 0) {
+    return 'present'
+  }
+  // Access denied, a timeout or a signal kill says nothing about the install.
+  return result.code === ERROR_SERVICE_DOES_NOT_EXIST ? 'absent' : 'unknown'
 }
 
 function combineServiceQueries(results: readonly WslInstallation[]): WslInstallation {
@@ -50,6 +52,9 @@ function rememberInstallation(found: WslInstallation): WslInstallation {
   // An unknown sc.exe failure must stay retryable and must not hide a real WSL install.
   if (found !== 'unknown') {
     installation = found
+  }
+  if (found === 'absent') {
+    latchWslNotInstalled()
   }
   return found
 }
@@ -128,9 +133,14 @@ export function readWslInstallation(): Promise<WslInstallation> {
 export function _resetWslInstallationForTests(): void {
   installation = null
   installationProbe = null
+  _resetWslNotInstalledLatchForTests()
 }
 
 export function _setWslInstallationForTests(value: WslInstallation | null): void {
   installation = value
   installationProbe = null
+  _resetWslNotInstalledLatchForTests()
+  if (value === 'absent') {
+    latchWslNotInstalled()
+  }
 }

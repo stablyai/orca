@@ -7,6 +7,8 @@ import {
   listWslDistrosAsync
 } from './distro-catalog'
 import { isWslAvailableAsync } from './wsl-availability'
+import { readWslInstallation } from './wsl-installation'
+import { isWslNotInstalledLatched } from '@orca/process-host/wsl-not-installed-latch'
 
 const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
@@ -102,5 +104,31 @@ describe('WSL is not installed', () => {
       expect(calls.filter(isWslExe)).toEqual([])
       expect(calls.filter(isServiceQuery).length).toBeGreaterThan(0)
     })
+  })
+
+  it('latches the process-host wsl.exe refusal once both services are missing', async () => {
+    runProcessMock.mockResolvedValue(exited('', 1060))
+    await withPlatformAsync('win32', async () => {
+      await expect(readWslInstallation()).resolves.toBe('absent')
+    })
+    expect(isWslNotInstalledLatched()).toBe(true)
+  })
+
+  it.each([
+    ['access denied', exited('', 5)],
+    ['a timeout', { ...exited('', null), timedOut: true }],
+    ['a signal kill', { ...exited('', null), signal: 'SIGTERM' as const }]
+  ])('treats %s from sc.exe as unknown and keeps probing wsl.exe', async (_label, failed) => {
+    const calls: ProcessSpec[] = []
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
+      calls.push(spec)
+      return isServiceQuery(spec) ? failed : exited('Ubuntu\n')
+    })
+    await withPlatformAsync('win32', async () => {
+      await expect(readWslInstallation()).resolves.toBe('unknown')
+      await expect(listWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
+    })
+    expect(isWslNotInstalledLatched()).toBe(false)
+    expect(calls.filter(isWslExe).length).toBe(1)
   })
 })
