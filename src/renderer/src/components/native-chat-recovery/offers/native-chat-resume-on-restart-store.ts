@@ -53,7 +53,12 @@ export function useNativeChatRestartRun(store = localNativeChatRestartStore) {
 
 let launch: Promise<void> | undefined
 
-export async function loadNativeChatLaunchOffer(store: NativeChatRestartStore): Promise<void> {
+export async function loadNativeChatLaunchOffer(
+  store: Pick<
+    NativeChatRestartStore,
+    'readNativeChatRestartOffer' | 'continueNativeChatRestartOffer'
+  >
+): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
   let read = await store.readNativeChatRestartOffer()

@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../../store/index'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
-import type { NativeChatRestartStore } from './native-chat-restart-runtime-store'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
@@ -29,9 +28,9 @@ function launchWith(candidates: ResumeCandidate[]) {
   })
   const continued = vi.fn(async () => {})
   const store = {
-    readNativeChatRestartOffer: async () => ({ available: true, candidates }),
+    readNativeChatRestartOffer: async () => ({ available: true, candidates, failed: [] }),
     continueNativeChatRestartOffer: continued
-  } as unknown as NativeChatRestartStore
+  }
   return { store, continued }
 }
 
