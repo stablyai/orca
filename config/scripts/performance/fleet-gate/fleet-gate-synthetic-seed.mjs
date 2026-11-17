@@ -1,10 +1,10 @@
-// Builds a synthetic fleet profile through the app's own APIs: 1,800 worktrees, 100 folders, chat tabs at rest, terminals.
+// Builds a synthetic fleet profile through the app's own APIs: 1,800 worktrees, 100 folders, chat tabs at rest, 200 terminals.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-export const SEED_SHAPE = { worktrees: 1_800, folders: 100, chats: 1_800, terminals: 20 }
-const SEED_FORMAT = 1
+export const SEED_SHAPE = { worktrees: 1_800, folders: 100, chats: 1_800, terminals: 200 }
+const SEED_FORMAT = 2
 
 function git(cwd, args) {
   execFileSync('git', args, { cwd, stdio: 'ignore' })

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fleet-scale perf gate: OLD vs NEW on a ~1,900-workspace synthetic profile. Usage: docs/readme/fleet-perf-gate.md.
 import { _electron as electron } from '@stablyai/playwright-test'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
@@ -11,7 +11,7 @@ import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
-import { SCENARIOS } from './fleet-gate-scenarios.mjs'
+import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
   readFleetCensus,
@@ -22,6 +22,8 @@ const CACHE_ROOT =
   process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
 const KEEP_BUILDS = 4
 const KEEP_SEEDS = 2
+// Idle agents spread over this many workspaces; the #42104 report had ~500 keyed statuses on ~1,900 workspaces.
+const AGENT_PANES = 200
 
 function parseArgs(argv) {
   const options = {
@@ -131,13 +133,48 @@ function pruneCache(parentDir, markerName, keepCount, keep) {
   }
 }
 
+// Hidden windows never paint, so clicks and screenshots stall; on Linux the copy gets its own Xvfb, never a real desktop.
+let virtualDisplay = null
+
+function findOnPath(binary) {
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    const candidate = path.join(dir, binary)
+    if (dir && fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return null
+}
+
+async function startVirtualDisplay() {
+  const xvfb = process.platform === 'linux' ? findOnPath('Xvfb') : null
+  if (!xvfb) {
+    return null
+  }
+  let number = 140 + Math.floor(Math.random() * 400)
+  while (fs.existsSync(`/tmp/.X11-unix/X${number}`) || fs.existsSync(`/tmp/.X${number}-lock`)) {
+    number += 1
+  }
+  const child = spawn(xvfb, [`:${number}`, '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'], {
+    stdio: 'ignore'
+  })
+  const deadline = Date.now() + 10_000
+  while (!fs.existsSync(`/tmp/.X11-unix/X${number}`)) {
+    if (Date.now() > deadline || child.exitCode !== null) {
+      child.kill('SIGKILL')
+      return null
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return { display: `:${number}`, stop: () => child.kill('SIGTERM') }
+}
+
 function launchArgs(buildDir) {
   const keychain = ['--password-store=basic', '--use-mock-keychain']
   if (process.platform !== 'linux') {
     return [...keychain, buildDir]
   }
-  const display =
-    process.env.DISPLAY || process.env.WAYLAND_DISPLAY ? [] : ['--ozone-platform=headless']
+  const display = virtualDisplay ? [] : ['--ozone-platform=headless']
   return [
     '--no-sandbox',
     '--disable-gpu',
@@ -168,14 +205,17 @@ function isolatedEnv(runDir, userDataDir) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) =>
-        !key.startsWith('ORCA_') && key !== 'ELECTRON_RUN_AS_NODE' && key !== 'NODE_OPTIONS'
+        !key.startsWith('ORCA_') &&
+        !['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'WAYLAND_DISPLAY', 'DISPLAY'].includes(key)
     )
   )
   return {
     ...env,
+    ...(virtualDisplay
+      ? { DISPLAY: virtualDisplay.display, ORCA_E2E_HEADFUL: '1' }
+      : { ORCA_E2E_HEADLESS: '1' }),
     NODE_ENV: 'development',
     ORCA_BACKGROUND_LAUNCH: '1',
-    ORCA_E2E_HEADLESS: '1',
     ORCA_E2E_USER_DATA_DIR: userDataDir,
     ORCA_E2E_HOME_DIR: home,
     ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
@@ -331,8 +371,12 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.notes.push('store notify loop not found: store pubs/wakeups not measured')
     }
     console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
+    const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
+    if (agents.panes === 0 || agents.failed > 0) {
+      result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
+    }
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
-    result.census = await readFleetCensus(page)
+    result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
     await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
       const windowMs = name === 'idle' ? options.idleWindowMs : options.windowMs
@@ -392,6 +436,7 @@ async function main() {
   }
   const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
   fs.mkdirSync(outDir, { recursive: true })
+  virtualDisplay = await startVirtualDisplay()
   const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
   const seed = options.seed
     ? { seedDir: options.seed, receipt: null }
@@ -430,7 +475,7 @@ async function main() {
   }
   const header = [
     `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${options.runs} runs each (alternating)  ${os.hostname()} ${process.platform}`,
-    `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
+    `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentPanes)} agent panes` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
   const { text, passed } = formatTable({ rows, header, notes })
@@ -455,4 +500,7 @@ main()
     console.error(`[fleet-gate] ${error.stack ?? error}`)
     process.exitCode = 2
   })
-  .finally(() => process.exit())
+  .finally(() => {
+    virtualDisplay?.stop()
+    process.exit()
+  })

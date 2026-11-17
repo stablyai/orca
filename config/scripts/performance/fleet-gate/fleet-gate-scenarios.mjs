@@ -1,5 +1,4 @@
 // The four measured windows. Each drives the app the way a user or agent does, then the probes read the counters.
-import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -58,26 +57,73 @@ const TURN = [
   { hook_event_name: 'Stop', last_assistant_message: 'done' }
 ]
 
+/** Real terminal panes (tab + its layout leaf), so hook statuses bind to tabs the way a running agent's do. */
+async function terminalPanes(page, count) {
+  return page.evaluate((limit) => {
+    const state = window.__store.getState()
+    const panes = []
+    for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
+      for (const tab of Array.isArray(tabs) ? tabs : []) {
+        const leafId = state.terminalLayoutsByTabId?.[tab.id]?.activeLeafId
+        if (leafId && panes.length < limit) {
+          panes.push({ worktreeId, paneKey: `${tab.id}:${leafId}` })
+        }
+      }
+    }
+    return panes
+  }, count)
+}
+
+async function postHook(endpoint, pane, payload) {
+  try {
+    const response = await fetch(`http://127.0.0.1:${endpoint.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': endpoint.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify({
+        paneKey: pane.paneKey,
+        tabId: pane.paneKey.split(':')[0],
+        worktreeId: pane.worktreeId,
+        env: endpoint.ORCA_AGENT_HOOK_ENV,
+        version: endpoint.ORCA_AGENT_HOOK_VERSION,
+        payload: { session_id: `fleet-gate-${pane.paneKey}`, ...payload }
+      })
+    })
+    return response.status === 204
+  } catch {
+    return false
+  }
+}
+
+/** Setup, not measured: one finished agent turn on every seeded terminal, like a fleet of idle agents. */
+export async function seedAgentStatuses({ page, userDataDir, count }) {
+  const endpoint = readHookEndpoint(userDataDir)
+  if (!endpoint) {
+    return { panes: 0, note: 'no agent hook endpoint' }
+  }
+  const panes = await terminalPanes(page, count)
+  let failed = 0
+  for (const pane of panes) {
+    for (const payload of [TURN[0], TURN.at(-1)]) {
+      if (!(await postHook(endpoint, pane, payload))) {
+        failed += 1
+      }
+    }
+  }
+  return { panes: panes.length, failed }
+}
+
 async function streamAgentStatus({ page, userDataDir, windowMs }) {
   const endpoint = readHookEndpoint(userDataDir)
   if (!endpoint) {
     return { note: 'no agent hook endpoint' }
   }
-  const worktreeIds = await page.evaluate((count) => {
-    const state = window.__store.getState()
-    return Object.values(state.worktreesByRepo)
-      .flat()
-      .slice(0, count)
-      .map((worktree) => worktree.id)
-  }, STREAM_PANES)
-  if (worktreeIds.length === 0) {
-    return { note: 'no workspaces to stream into' }
+  const panes = (await terminalPanes(page, STREAM_PANES)).map((pane) => ({ ...pane, step: 0 }))
+  if (panes.length === 0) {
+    return { note: 'no terminal panes to stream into' }
   }
-  const panes = worktreeIds.map((worktreeId, index) => ({
-    worktreeId,
-    paneKey: `fleet-gate-${index}:${randomUUID()}`,
-    step: 0
-  }))
   const deadline = Date.now() + windowMs
   let posted = 0
   let failed = 0
@@ -85,35 +131,13 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
     const pane = panes[posted % panes.length]
     const payload = TURN[pane.step % TURN.length]
     pane.step += 1
-    try {
-      const response = await fetch(
-        `http://127.0.0.1:${endpoint.ORCA_AGENT_HOOK_PORT}/hook/claude`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': endpoint.ORCA_AGENT_HOOK_TOKEN
-          },
-          body: JSON.stringify({
-            paneKey: pane.paneKey,
-            tabId: pane.paneKey.split(':')[0],
-            worktreeId: pane.worktreeId,
-            env: endpoint.ORCA_AGENT_HOOK_ENV,
-            version: endpoint.ORCA_AGENT_HOOK_VERSION,
-            payload: { session_id: `fleet-gate-${pane.paneKey}`, ...payload }
-          })
-        }
-      )
-      if (response.status !== 204) {
-        failed += 1
-      }
-    } catch {
+    if (!(await postHook(endpoint, pane, payload))) {
       failed += 1
     }
     posted += 1
     await sleep(1_000 / STREAM_EVENTS_PER_SECOND)
   }
-  return { note: `${posted} hook events over ${panes.length} panes`, failed }
+  return { note: `${posted} hook events over ${panes.length} terminal panes`, failed }
 }
 
 // Setup, not measured: show a seeded workspace that has a terminal, so keys take the real PTY round trip.
