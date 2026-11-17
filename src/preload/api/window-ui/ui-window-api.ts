@@ -7,6 +7,8 @@ import type {
 } from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
+  // Lives here because ui-command-event-api.ts is at its line cap.
+  onDeleteCurrentWorkspace: (callback: () => void) => () => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   /** The clipboard's HTML when it may carry links; empty otherwise. */
   readClipboardLinkHtml: () => Promise<string>
