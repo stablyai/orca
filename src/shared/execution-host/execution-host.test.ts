@@ -20,8 +20,8 @@ describe('execution host identity', () => {
 
   // A non-string host id reached render and threw `e?.trim is not a function` (crash d1e50ca3).
   it('treats a non-string stored host id as absent', () => {
-    expect(parseExecutionHostId(42 as unknown as string)).toBeNull()
-    expect(parseExecutionHostId({ id: 'local' } as unknown as string)).toBeNull()
+    expect(parseExecutionHostId(42)).toBeNull()
+    expect(parseExecutionHostId({ id: 'local' })).toBeNull()
   })
 
   it('prefers explicit worktree ownership before repo and focused-host fallbacks', () => {

@@ -54,7 +54,7 @@ export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = nu
 }
 
 /** Trims a stored id; blank or non-string is absent, since no write or read path validates it. */
-export function normalizeHostPart(value: string | null | undefined): string | null {
+export function normalizeHostPart(value: unknown): string | null {
   return typeof value === 'string' ? value.trim() || null : null
 }
 
@@ -92,7 +92,7 @@ export function isOwnedSshTargetId(targetId: string | null | undefined): boolean
   )
 }
 
-export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
+export function parseExecutionHostId(value: unknown): ParsedExecutionHost | null {
   const normalized = normalizeHostPart(value)
   if (!normalized) {
     return null
