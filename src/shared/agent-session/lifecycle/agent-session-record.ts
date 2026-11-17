@@ -144,6 +144,8 @@ export type AgentSessionRecord = {
   launchArgs?: AgentSessionLaunchArgs
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
   forkedFrom?: AgentSessionForkedFrom
+  /** The continued terminal's arguments; Claude launches add them to the configured ones. */
+  sourceTerminalArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -206,8 +208,7 @@ export function isAgentSessionProcessIdentity(
     Number.isSafeInteger(identity.pid) &&
     (identity.pid as number) > 0 &&
     (identity.processStartTimeMs === null ||
-      (Number.isSafeInteger(identity.processStartTimeMs) &&
-        (identity.processStartTimeMs as number) >= 0)) &&
+      isNonNegativeSafeInteger(identity.processStartTimeMs)) &&
     isBoundedString(identity.spawnToken, MAX_ID_LENGTH) &&
     (identity.runtime === undefined || isBoundedString(identity.runtime, MAX_ID_LENGTH))
   )
@@ -276,9 +277,7 @@ function isPersistedAgentSessionObservationLease(
   return (
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
-    typeof lease.runtimeFence === 'number' &&
-    Number.isSafeInteger(lease.runtimeFence) &&
-    lease.runtimeFence >= 0 &&
+    isNonNegativeSafeInteger(lease.runtimeFence) &&
     (lease.handoffStage === null || isPersistedAgentSessionHandoffStage(lease.handoffStage)) &&
     (lease.provenHandleLinkId === null || isBoundedString(lease.provenHandleLinkId, 128)) &&
     (lease.ownerProcess === null || isAgentSessionProcessIdentity(lease.ownerProcess)) &&
@@ -329,6 +328,8 @@ export function isPersistedAgentSessionObservationRecord(
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
       (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+      (record.sourceTerminalArgs === undefined ||
+        isAgentSessionLaunchArgs(record.sourceTerminalArgs)) &&
       !Object.hasOwn(record, 'launchEnv') &&
       isPersistedAgentSessionObservationLease(record.lease) &&
       record.lease.sessionId === record.sessionId &&
