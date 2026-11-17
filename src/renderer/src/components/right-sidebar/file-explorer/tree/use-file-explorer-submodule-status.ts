@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { onGitStatusRead } from '@/store/slices/editor/git/git-status-read-signal'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { getRuntimeGitSubmoduleStatus } from '@/runtime/source-control/git/runtime-git-status-client'
@@ -11,16 +12,15 @@ import {
   buildStatusMap
 } from '../../../../../../shared/git/status/git-path-decoration'
 
-// Why: each expanded dirty submodule costs one `git status` per parent refresh.
-export const FILE_EXPLORER_SUBMODULE_STATUS_LIMIT = 8
+// Why: bounds parallel `git status` processes (and SSH round trips) without hiding any expanded submodule.
+const SUBMODULE_STATUS_CONCURRENCY = 4
 
 const NO_ENTRIES: GitStatusEntry[] = []
 
 /** Dirty submodules the user has expanded; clean or collapsed ones never trigger inner Git work. */
 export function selectExpandedDirtySubmodulePaths(
   entries: readonly GitStatusEntry[],
-  expandedRelativePaths: ReadonlySet<string>,
-  limit: number = FILE_EXPLORER_SUBMODULE_STATUS_LIMIT
+  expandedRelativePaths: ReadonlySet<string>
 ): string[] {
   const paths = new Set<string>()
   for (const entry of entries) {
@@ -36,7 +36,26 @@ export function selectExpandedDirtySubmodulePaths(
       paths.add(path)
     }
   }
-  return Array.from(paths).sort().slice(0, limit)
+  return Array.from(paths).sort()
+}
+
+/** Parent-relative inner entries, or null on failure so callers keep the last good badges. */
+async function readSubmoduleChildEntries(
+  context: Parameters<typeof getRuntimeGitSubmoduleStatus>[0],
+  submodulePath: string,
+  inFlight: Set<string>,
+  flightKey: string
+): Promise<GitStatusEntry[] | null> {
+  inFlight.add(flightKey)
+  try {
+    const status = await getRuntimeGitSubmoduleStatus(context, submodulePath)
+    return status.entries.map((innerEntry) => buildSubmoduleChildEntry(submodulePath, innerEntry))
+  } catch {
+    // A transient remote failure must not look like a clean submodule.
+    return null
+  } finally {
+    inFlight.delete(flightKey)
+  }
 }
 
 type SubmoduleStatusResult = {
@@ -65,6 +84,8 @@ export function useFileExplorerSubmoduleStatus({
   if (result.scopeKey !== scopeKey) {
     setResult({ scopeKey, entriesByPath: {} })
   }
+  const [parentReadTick, setParentReadTick] = useState(0)
+  const inFlight = useRef(new Set<string>())
 
   const submodulePathsKey = useMemo(() => {
     if (!worktreePath) {
@@ -79,6 +100,18 @@ export function useFileExplorerSubmoduleStatus({
     }
     return selectExpandedDirtySubmodulePaths(entries, expandedRelativePaths).join('\0')
   }, [entries, expanded, worktreePath])
+
+  // A second edit inside an already-dirty submodule leaves parent status identical, so follow every parent read.
+  useEffect(() => {
+    if (!activeWorktreeId || !submodulePathsKey) {
+      return
+    }
+    return onGitStatusRead((worktreeId) => {
+      if (worktreeId === activeWorktreeId) {
+        setParentReadTick((tick) => tick + 1)
+      }
+    })
+  }, [activeWorktreeId, submodulePathsKey])
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !submodulePathsKey) {
@@ -95,15 +128,20 @@ export function useFileExplorerSubmoduleStatus({
       worktreePath,
       connectionId: getConnectionId(activeWorktreeId) ?? undefined
     }
-    for (const submodulePath of submodulePathsKey.split('\0')) {
-      void getRuntimeGitSubmoduleStatus(context, submodulePath)
-        .then((status) => {
-          if (canceled) {
-            return
-          }
-          const childEntries = status.entries.map((innerEntry) =>
-            buildSubmoduleChildEntry(submodulePath, innerEntry)
-          )
+    // Skipping in-flight reads keeps slow hosts from stacking a new read per parent refresh.
+    const queue = submodulePathsKey
+      .split('\0')
+      .filter((path) => !inFlight.current.has(`${scopeKey}\0${path}`))
+    const runNext = async (): Promise<void> => {
+      for (let path = queue.shift(); path !== undefined && !canceled; path = queue.shift()) {
+        const submodulePath = path
+        const childEntries = await readSubmoduleChildEntries(
+          context,
+          submodulePath,
+          inFlight.current,
+          `${scopeKey}\0${submodulePath}`
+        )
+        if (childEntries) {
           setResult((prev) =>
             prev.scopeKey !== scopeKey
               ? prev
@@ -112,15 +150,16 @@ export function useFileExplorerSubmoduleStatus({
                   entriesByPath: { ...prev.entriesByPath, [submodulePath]: childEntries }
                 }
           )
-        })
-        // Keep the last good badges; a transient remote failure must not look like a clean submodule.
-        .catch(() => {})
+        }
+      }
+    }
+    for (let i = 0; i < Math.min(SUBMODULE_STATUS_CONCURRENCY, queue.length); i++) {
+      void runNext()
     }
     return () => {
       canceled = true
     }
-    // `entries` changes on every parent status refresh, which is when inner status may have moved.
-  }, [activeWorktreeId, entries, scopeKey, submodulePathsKey, worktreePath])
+  }, [activeWorktreeId, parentReadTick, scopeKey, submodulePathsKey, worktreePath])
 
   return useMemo(() => {
     if (!submodulePathsKey || result.scopeKey !== scopeKey) {
