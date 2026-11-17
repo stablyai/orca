@@ -168,8 +168,8 @@ function upsertTrustSlots(
   }
   // Duplicates right after the first slot are dropped, so the gap that survives is the last one's.
   let kept = slots[0]
-  while (kept.next && slots.includes(kept.next)) {
-    kept = kept.next
+  for (let index = 1; index < slots.length && kept.next === slots[index]; index += 1) {
+    kept = slots[index]
   }
   const enabled = explicitEnabled ?? !slots.some((slot) => isBlockDisabled(slot.chunks.join('')))
   const block = buildTrustBlocks(keys, hash, enabled)
