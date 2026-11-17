@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import {
+  STDERR_TAIL_MAX_CHARS,
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
   type ProviderProcessExit
@@ -254,7 +255,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   /** Redacted, since it reaches chat errors and saved chats; sign-in watching reads raw lines. */
   stderrTail(): string {
-    return redactString(this.managed.stderrTail()).trim()
+    const tail = this.managed.stderrTail()
+    // A full tail starts mid-line, where a credential may have lost the prefix that marks it.
+    const whole =
+      tail.length < STDERR_TAIL_MAX_CHARS ? tail : tail.slice(tail.indexOf('\n') + 1 || tail.length)
+    return redactString(whole).trim()
   }
 
   /** Requires advertised session listing support. */

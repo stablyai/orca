@@ -133,6 +133,17 @@ describe('ACP process-owning connection', () => {
     expect(connection.stderrTail()).not.toContain('0123456789abcdef')
   })
 
+  it('drops a credential the stderr tail cut through, which redaction can no longer recognise', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    child.stderr.write(`sk-or-v1-${'0'.repeat(30)}${'Q7'.repeat(12)}\n`)
+    // Leaves the last 24 key characters and their newline at the start of the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8166)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('Q7Q7')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))
