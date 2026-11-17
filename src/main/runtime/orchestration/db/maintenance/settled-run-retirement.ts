@@ -55,6 +55,8 @@ const RUN_DELETES = [
 export type RunPartyLiveness = {
   isLiveHandle(handle: string): boolean
   isLivePane(paneKey: string): boolean
+  /** In memory, unlike `isLiveHandle`, so every page can ask it. */
+  isWaitingForMail(handle: string): boolean
 }
 
 // A re-minted terminal keeps its pane, so every pane the Run's coordinators used counts too.
@@ -103,10 +105,19 @@ function isLiveRunParty(party: string, liveness: RunPartyLiveness): boolean {
     : liveness.isLiveHandle(party.slice('handle:'.length))
 }
 
-// A write to the Run leaves a newer updated_at, a newer row or reopened work; the full check costs ~9
-// probes per Dispatch. Reopened work counts because the pages would delete it before the final check.
+// A pane's liveness is a lookup and so is a blocked reader's; a handle's full liveness reads the database.
+function isRunPartySeenInMemory(party: string, liveness: RunPartyLiveness): boolean {
+  return party.startsWith('pane:')
+    ? liveness.isLivePane(party.slice('pane:'.length))
+    : liveness.isWaitingForMail(party.slice('handle:'.length))
+}
+
+// A write to the Run leaves a newer updated_at, a newer row, a newer Task settlement or reopened work;
+// the full check costs ~9 probes per Dispatch. Reopened work and a Task result corrected in place count
+// because the pages would delete them before the final check.
 const RUN_TOUCH_MARK = `SELECT
     (SELECT updated_at FROM runs WHERE id = ?1) AS updated,
+    (SELECT max(julianday(completed_at)) FROM tasks WHERE run_id = ?1) AS settled,
     (SELECT max(sequence) FROM messages WHERE run_id = ?1) AS message,
     (SELECT max(rowid) FROM tasks WHERE run_id = ?1) AS task,
     (SELECT max(rowid) FROM dispatch_contexts WHERE run_id = ?1) AS dispatch,
@@ -123,7 +134,7 @@ function runTouchMark(db: OrchestrationDb['db'], runId: string): unknown[] {
   return Object.values(db.prepare(RUN_TOUCH_MARK).get(runId) ?? {})
 }
 
-// Deleting rows only lowers each newest row and never reopens work, so anything above the first mark is new.
+// Deleting rows only lowers each newest value and never reopens work, so anything above the first mark is new.
 function isTouchedSince(db: OrchestrationDb['db'], runId: string, mark: unknown[]): boolean {
   const [updated, ...newest] = runTouchMark(db, runId)
   return (
@@ -144,9 +155,9 @@ function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
  * Deletes one settled Run in bounded steps, one per `next()`, each its own transaction: its parties
  * are read a page at a time, then its rows a page of one table at a time, then the Run row. It keeps
  * the Run when a coordinator it bound, a reader of its unread mail or its worker terminal is live,
- * read first and again before the Run row (panes, read in memory, on every page), or once the Run is
- * touched: fully checked first and before the Run row, and on every page by a newer `updated_at` or a
- * newer row. A step interrupted by a quit or crash leaves only fewer settled rows.
+ * read first and again before the Run row (panes and blocked readers, read in memory, on every page),
+ * or once the Run is touched: fully checked first and before the Run row, and on every page by a newer
+ * `updated_at`, Task settlement or row. A step interrupted by a quit or crash leaves only fewer settled rows.
  */
 export function* retireSettledRun(
   orchestrationDb: OrchestrationDb,
@@ -175,9 +186,9 @@ export function* retireSettledRun(
   const checkedParties = [...parties]
   const anyPartyLive = (): boolean =>
     checkedParties.some((party) => isLiveRunParty(party, liveness))
-  // A handle's liveness reads the database; a pane's is a lookup, and a re-minted terminal keeps its pane.
-  const panes = checkedParties.filter((party) => party.startsWith('pane:'))
-  const anyPaneLive = (): boolean => panes.some((party) => isLiveRunParty(party, liveness))
+  // A re-minted terminal keeps its pane; a reader that started mid-way, such as a pane-less wait, blocks.
+  const anyPartySeenLive = (): boolean =>
+    checkedParties.some((party) => isRunPartySeenInMemory(party, liveness))
   if (anyPartyLive()) {
     return false
   }
@@ -185,7 +196,7 @@ export function* retireSettledRun(
     yield
     const from = next
     const step = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
-      if (anyPaneLive() || isTouchedSince(db, runId, mark)) {
+      if (anyPartySeenLive() || isTouchedSince(db, runId, mark)) {
         return undefined
       }
       const watermark = readRemovedWorkWatermark(db)
@@ -215,7 +226,7 @@ export function* retireSettledRun(
     if (
       anyPartyLive() ||
       !isRetiredRun(db, runId) ||
-      runParties(orchestrationDb, runId).some((party) => !checkedParties.includes(party))
+      runParties(orchestrationDb, runId).some((party) => !parties.has(party))
     ) {
       return false
     }

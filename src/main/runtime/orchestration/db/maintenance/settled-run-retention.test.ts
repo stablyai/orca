@@ -13,10 +13,14 @@ import '../attempt-outcome-projection'
 
 const LONG_AGO = '2000-01-01 00:00:00'
 const PANE_LEAF = '11111111-1111-4111-8111-111111111111'
-const nobodyIsLive: RunPartyLiveness = { isLiveHandle: () => false, isLivePane: () => false }
+const nobodyIsLive: RunPartyLiveness = {
+  isLiveHandle: () => false,
+  isLivePane: () => false,
+  isWaitingForMail: () => false
+}
 const liveHandle = (live: string): RunPartyLiveness => ({
-  isLiveHandle: (handle) => handle === live,
-  isLivePane: () => false
+  ...nobodyIsLive,
+  isLiveHandle: (handle) => handle === live
 })
 
 describe('settled Run retention', () => {
@@ -221,7 +225,7 @@ describe('settled Run retention', () => {
     ageEveryTimestamp()
     let paneLive = false
     const steps = retireSettledRun(db!, run.id, {
-      isLiveHandle: () => false,
+      ...nobodyIsLive,
       isLivePane: (paneKey) => paneLive && paneKey === `tab_reattached:${PANE_LEAF}`
     })
     let step = steps.next()
@@ -278,6 +282,49 @@ describe('settled Run retention', () => {
     expect(count("tasks WHERE id = ? AND status = 'ready'", task.id)).toBe(1)
   })
 
+  it('keeps a Run whose mailbox gets a reader between pages', () => {
+    const { run } = createRunWithWorker('waited')
+    for (let n = 0; n < 200; n++) {
+      db!.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: `m${n}` })
+    }
+    settle(run.id)
+    ageEveryTimestamp()
+    let waiting = false
+    const steps = retireSettledRun(db!, run.id, {
+      ...nobodyIsLive,
+      isWaitingForMail: (handle) => waiting && handle === `run:${run.id}`
+    })
+    let step = steps.next()
+    while (!step.done && count('messages WHERE run_id = ?', run.id) === 201) {
+      step = steps.next()
+    }
+    waiting = true
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(count('messages WHERE run_id = ?', run.id)).toBeGreaterThan(0)
+  })
+
+  it('keeps a Run whose settled Task result is corrected between pages', () => {
+    const { run, task } = createRunWithWorker('corrected')
+    settle(run.id)
+    ageEveryTimestamp()
+    const steps = retireSettledRun(db!, run.id, nobodyIsLive)
+    let step = steps.next()
+    while (!step.done && count("worker_terminal_resources WHERE id = 'resource_corrected'") === 1) {
+      step = steps.next()
+    }
+    db!.updateTaskStatus(task.id, 'completed', 'corrected result')
+    while (!step.done) {
+      step = steps.next()
+    }
+
+    expect(step.value).toBe(false)
+    expect(db!.getTask(task.id)?.result).toBe('corrected result')
+  })
+
   it('keeps a settled Run while its coordinator, a reader of its unread mail or its worker terminal is live', () => {
     const { run } = createRunWithWorker('bound')
     db!.insertMessage({ runId: run.id, from: 'worker', to: 'term_reader', subject: 'note' })
@@ -288,7 +335,7 @@ describe('settled Run retention', () => {
     expect(deleteRetiredRun(db!, run.id, liveHandle(`run:${run.id}`))).toBe(false)
     expect(
       deleteRetiredRun(db!, run.id, {
-        isLiveHandle: () => false,
+        ...nobodyIsLive,
         isLivePane: (paneKey) => paneKey === `tab_bound:${PANE_LEAF}`
       })
     ).toBe(false)
