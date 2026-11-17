@@ -168,6 +168,35 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => rowByText('Full access').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
   })
+
+  it('lists a highest-first effort menu lowest first on the /effort page', async () => {
+    const effort: SessionOptionDescriptor = {
+      id: 'effort',
+      label: 'Reasoning effort',
+      category: 'thought_level',
+      kind: {
+        type: 'select',
+        currentValue: 'high',
+        choices: [
+          { value: 'xhigh', label: 'Extra high' },
+          { value: 'high', label: 'High' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'low', label: 'Low' }
+        ]
+      },
+      valueSource: 'applied',
+      transport: 'agent-session',
+      settable: true
+    }
+    mount([MODEL_DESCRIPTOR, effort], false, 'effort')
+    const levels = ['Low', 'Medium', 'High', 'Extra high']
+    const shown = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text')
+      .map((node) => node.props.children)
+      .filter((text) => levels.includes(text))
+    expect(shown).toEqual(levels)
+    await act(async () => rowByText('Low').props.onPress())
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low')
+  })
 })
 
 const PERMISSION_CHOICES: SessionOptionSelectChoice[] = [

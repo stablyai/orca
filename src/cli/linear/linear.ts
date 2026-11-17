@@ -67,11 +67,13 @@ import { LINEAR_COMMENT_WRITE_HANDLERS } from './linear-comment-write'
 import { runLinearListIssues } from './linear-list-issues'
 import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
+import { runLinearConnect } from './linear-connect'
 
 const ISSUE_CONTEXT_TIMEOUT_MS = 120_000
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 
 export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
+  'linear connect': runLinearConnect,
   'linear save-issue': runLinearSaveIssue,
   'linear list-issues': runLinearListIssues,
   'linear relation add': linearRelationWriteHandler('add'),

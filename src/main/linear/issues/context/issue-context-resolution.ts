@@ -13,6 +13,7 @@ import {
 import { ISSUE_QUERY, SEARCH_QUERY, mapIssue, pickSearchIssue } from './issue-context-graphql'
 import type { RawIssueResponse } from './issue-context-graphql'
 import { LinearAgentAccessError, linearError, toLinearAccessError } from './linear-access-errors'
+import { linearNotConnectedError } from './linear-not-connected-error'
 import { getFanoutClientEntries, workspaceFailure } from './workspace-read-fanout'
 import type { WorkspaceReadFailure } from './workspace-read-fanout'
 import { sumSearchTotals, type WorkspaceSearchResult } from './linear-search-totals'
@@ -41,9 +42,7 @@ export async function searchLinearIssuesForAgents(args: {
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the search.']
-    })
+    throw linearNotConnectedError('search')
   }
 
   const perWorkspace = await readSearchWorkspaces(
@@ -94,9 +93,7 @@ export async function resolveIssue(
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the issue read.']
-    })
+    throw linearNotConnectedError('issue read')
   }
 
   const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures, signal)
@@ -121,7 +118,7 @@ export function getRequiredEntry(
 ): LinearClientForWorkspace {
   const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
-    throw linearError('linear_not_connected', 'Linear is not connected.')
+    throw linearNotConnectedError()
   }
   return entry
 }
