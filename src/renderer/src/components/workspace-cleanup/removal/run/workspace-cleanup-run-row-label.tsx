@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupCandidate } from '../../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGroup } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { getWorkspaceCleanupRowNotice } from '../../candidate-list/workspace-cleanup-row-notice'
 import { getWorkspaceCleanupCandidateHostLabel } from '../../candidate-list/workspace-cleanup-host-label'
 

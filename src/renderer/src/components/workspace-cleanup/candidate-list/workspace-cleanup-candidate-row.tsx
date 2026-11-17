@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceCleanupReviewInfo } from '../candidate-evidence/workspace-cleanup-review-lookup'
 import { CandidateRowDetails } from './workspace-cleanup-candidate-row-details'
 import {

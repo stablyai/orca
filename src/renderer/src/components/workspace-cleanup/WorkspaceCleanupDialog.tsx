@@ -23,6 +23,7 @@ import {
 import { WorkspaceCleanupSelectAllBar } from './dialog/workspace-cleanup-select-all-bar'
 import { WorkspaceCleanupPickFooter } from './dialog/workspace-cleanup-pick-footer'
 import { useWorkspaceCleanupPickRows } from './dialog/use-workspace-cleanup-pick-rows'
+import { listenForWorkspaceCleanupListInput } from './candidate-list/workspace-cleanup-list-input'
 import { listActiveWorkspaceCleanupFacetGroups } from './browse/workspace-cleanup-active-facets'
 import type { WorkspaceCleanupGroup } from '../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { WorkspaceCleanupConfirmStopAgents } from './removal/agent-consent/workspace-cleanup-confirm-stop-agents'
@@ -148,21 +149,9 @@ function WorkspaceCleanupDialogContent({
     listInteractedRef.current = true
   }, [])
   useEffect(() => {
-    // Only the user's own input counts: wheel, touch, scrollbar drag, keys, focus, pointerdown.
-    // Programmatic scrolls (virtualizer restore, scrollIntoView) must not suppress the settle sort.
+    // Interaction stops the settle re-sort; programmatic scrolls must not count.
     const target = rowsScrollElement?.parentElement ?? rowsScrollElement
-    if (!target) {
-      return
-    }
-    const events = ['wheel', 'touchmove', 'pointerdown', 'keydown', 'focusin'] as const
-    for (const name of events) {
-      target.addEventListener(name, markListInteracted, { passive: true, capture: true })
-    }
-    return () => {
-      for (const name of events) {
-        target.removeEventListener(name, markListInteracted, { capture: true })
-      }
-    }
+    return target ? listenForWorkspaceCleanupListInput(target, markListInteracted) : undefined
   }, [markListInteracted, rowsScrollElement])
   const {
     rowsByGroup,

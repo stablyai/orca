@@ -29,8 +29,9 @@ function mount(initial: Props): {
   update: (patch: Partial<Props>) => void
 } {
   const state = { props: initial }
+  const noRows: readonly Row[] = []
   const result = {
-    rows: [] as readonly Row[],
+    rows: noRows,
     resetOrder: () => {},
     releaseRows: (_identities: readonly string[]) => {}
   }

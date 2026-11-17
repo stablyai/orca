@@ -6,6 +6,7 @@ import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type { WorkspaceCleanupFacets } from '../query/workspace-cleanup-facets'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import { makeFacets } from '../query/workspace-cleanup-facet.test.fixture'
 import { useWorkspaceCleanupBulkSelection } from './use-workspace-cleanup-bulk-selection'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
@@ -20,12 +21,8 @@ function candidate(name: string, blockers: WorkspaceCleanupCandidate['blockers']
   return makeCandidate({ worktreeId: `repo-1::/repo/${name}`, displayName: name, blockers })
 }
 function facet(c: WorkspaceCleanupCandidate): WorkspaceCleanupFacets {
-  return {
-    candidate: c,
-    identity: getWorkspaceCleanupCandidateIdentity(c),
-    // Mirrors the facet builder: dismissed rows are excluded from select-all.
-    isSelectable: !c.blockers.includes('dismissed')
-  } as WorkspaceCleanupFacets
+  // The real facet builder, so select-all exclusions (dismissed, can't queue) match production.
+  return makeFacets({ candidate: c })
 }
 
 type Harness = {
@@ -37,16 +34,17 @@ type Harness = {
 
 function mount(initial: WorkspaceCleanupCandidate[]): Harness {
   let candidates = initial
-  const out = {} as Harness
+  let api: Harness['api'] | null = null
+  let select: Harness['select'] = () => {}
   let selectedIds = new Set<string>()
   function Probe(): null {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     selectedIds = selected
-    out.select = (...names) =>
+    select = (...names) =>
       act(() =>
         setSelected(new Set(names.map((n) => getWorkspaceCleanupCandidateIdentity(candidate(n)))))
       )
-    out.api = useWorkspaceCleanupBulkSelection({
+    api = useWorkspaceCleanupBulkSelection({
       rows: candidates.map(facet),
       selectedIds: selected,
       setSelectedIds: setSelected,
@@ -60,12 +58,20 @@ function mount(initial: WorkspaceCleanupCandidate[]): Harness {
   }
   root = createRoot(document.createElement('div'))
   act(() => root!.render(<Probe />))
-  out.selected = () => [...selectedIds]
-  out.render = (next) => {
-    candidates = next
-    act(() => root!.render(<Probe />))
+  return {
+    get api() {
+      if (!api) {
+        throw new Error('Probe has not rendered')
+      }
+      return api
+    },
+    selected: () => [...selectedIds],
+    select: (...names) => select(...names),
+    render: (next) => {
+      candidates = next
+      act(() => root!.render(<Probe />))
+    }
   }
-  return out
 }
 
 const id = (name: string): string => getWorkspaceCleanupCandidateIdentity(candidate(name))

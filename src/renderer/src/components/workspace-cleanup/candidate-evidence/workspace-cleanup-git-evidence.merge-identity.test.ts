@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import type { WorkspaceCleanupFacetSources } from '../query/workspace-cleanup-facets'
 import {
   computeWorkspaceCleanupFacetList,
   createWorkspaceCleanupFacetListCache
@@ -21,7 +22,7 @@ describe('applyWorkspaceCleanupGitEvidence identity', () => {
   it('reuses merged rows so streamed evidence only rebuilds the rows that changed', () => {
     const rows = Array.from({ length: 300 }, (_, i) => unchecked(i))
     const evidence = new Map<string, WorkspaceCleanupCandidate>()
-    const sources = {
+    const sources: WorkspaceCleanupFacetSources = {
       worktreeById: new Map(),
       workspaceStatuses: [],
       sizeBytesByWorktreeId: new Map(),
@@ -41,7 +42,7 @@ describe('applyWorkspaceCleanupGitEvidence identity', () => {
       }
       const applied = applyWorkspaceCleanupGitEvidence(rows, evidence)
       rebuilt += applied.filter((candidate) => !cache.byCandidate.has(candidate)).length
-      computeWorkspaceCleanupFacetList({ candidates: applied, sources: sources as never, cache })
+      computeWorkspaceCleanupFacetList({ candidates: applied, sources, cache })
     }
     // Each row builds once unmerged and once when its own evidence lands (~600 total). Re-merging
     // every evidenced row per publish rebuilt ~9.4k of 18k facets for the same stream.
