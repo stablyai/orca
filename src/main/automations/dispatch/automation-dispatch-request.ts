@@ -5,7 +5,7 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../../shared/automations/history/automation-run'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import type { AutomationRunWriter } from '../run-history/run-writer'
 import type { AutomationLauncher } from '../launch/automation-launch'

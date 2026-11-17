@@ -84,6 +84,10 @@
     },
     "wslMoved": {
       "movedToHost": "Auf den {{distro}}-Host verschoben",
+      "sectionTitle": "Auf WSL-Hosts verschoben ({{count}})",
+      "hide": "Aus dieser Liste ausblenden",
+      "hiddenToast": "{{name}} aus dieser Liste ausgeblendet",
+      "hiddenToastDescription": "„Wieder auf diesem Computer verwenden“ bleibt in seinem Menü unter dem {{distro}}-Host.",
       "useHere": "Wieder auf diesem Computer verwenden",
       "useHereTitle": "{{name}} wieder auf diesem Computer verwenden?",
       "useHereDescription": "Orca öffnet dieses Projekt hier im Zustand vor dem Verschieben. Der Code ist davon nicht betroffen: Er wurde nie verschoben. Seit dem Verschieben auf dem {{distro}}-Host vorgenommene Änderungen, etwa neue Tabs und Chats, bleiben auf dem Host und werden nicht zurückgeholt. Zusammen mit diesem Projekt verschobene Projekte werden ebenfalls zurückgeholt. Das Projekt bleibt auch auf dem {{distro}}-Host, bis es dort entfernt wird. Dieses Fenster wird neu geladen.",
@@ -144,7 +148,11 @@
         "restartGaveUp_other": "Der Orca-Server in {{distro}} konnte nach {{count}} Versuchen nicht neu gestartet werden",
         "serviceUnconfirmed": "Der WSL-Dienst hat nicht bestätigt, ob die Distribution läuft.",
         "peerCheckFailed": "Orca konnte den WSL-Host nicht fragen, ob eine andere Orca-Instanz auf diesem Computer ihn noch nutzt: {{detail}}",
-        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}"
+        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}",
+        "installLockWait_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minute.",
+        "installLockWait_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minuten.",
+        "installLockWaitGivesUp_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minute auf zu warten.",
+        "installLockWaitGivesUp_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minuten auf zu warten."
       }
     },
     "agentSummary": {
@@ -222,6 +230,7 @@
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
       "accept": "Als Host ausführen",
       "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste.",
+      "savedUnderAnotherPath": "Dieser Ordner ist hier bereits als Projekt {{path}} vorhanden, das noch nicht auf den Host {{distro}} verschoben werden kann. Entferne dieses Projekt und füge den Ordner dann erneut hinzu, um ihn zu verschieben.",
       "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"
@@ -898,7 +907,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}",
       "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
       "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
@@ -926,9 +934,6 @@
         "extraArgs": "Zusätzliche CLI-Argumente",
         "launchOptions": "Modell und Berechtigungen",
         "savedLaunchOptions": "Gespeicherte Optionen: {{value0}}. Ältere Server verwenden ihre eigenen Berechtigungseinstellungen."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Wie {{agent}}"
       }
     },
     "general": {
@@ -4934,7 +4939,9 @@
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
             "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
             "notChecked": "Nicht geprüft",
-            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}"
+            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}",
+            "resetsIn": "Zurücksetzung in {{duration}}",
+            "resetsNow": "Zurücksetzung jetzt"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -6178,8 +6185,7 @@
           "issueCommand": "Issue-Befehl",
           "newVmRecipe": "Neues VM-Rezept",
           "vmRecipe": "VM-Rezept",
-          "thisRepository": "dieses Repository",
-          "alwaysTrustRepo": "<code>orca.yaml</code> in <repo/> immer vertrauen"
+          "thisRepository": "dieses Repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Worktree-Erstellung abbrechen",
@@ -11969,7 +11975,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, deine gespeicherten Anmeldedaten und SSH-Schlüssel verwenden, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um dessen Ansicht zu rendern. Orca zeigt, worauf er zugreifen kann, und fragt vor dem Aktivieren nach."
         },
         "PluginConsentProvenance": {
@@ -14982,9 +14988,9 @@
             "databaseCount_other": "{{value0}} Datenbanken",
             "scanning": "{{value0}} wird durchsucht",
             "checking": "{{value0}} wird geprüft",
-            "scanned": "{{value0}} durchsucht",
             "agentCheckedCount_one": "{{agent}}: {{settled}} von {{total}} möglichem Verlaufseintrag geprüft",
-            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft"
+            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft",
+            "historyRefreshed": "Verlauf aktualisiert"
           },
           "run": {
             "source": {
@@ -21545,7 +21551,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Keine passenden Sitzungen im indexierten Verlauf. Eine andere Suchanfrage oder einen anderen Suchbereich verwenden.",
       "loadMore": "Weitere Treffer laden",
       "indexedHistory": "Indexierter Verlauf",
       "hostsSkipped": "Nicht durchsucht: {{value0}}",
@@ -21581,7 +21586,9 @@
         "unreachable": "nicht erreichbar",
         "scopeNotFound": "Suchbereich dort nicht gefunden",
         "agentNotSupported": "Agent nicht unterstützt"
-      }
+      },
+      "consentTranscriptIndex": "Die Suche berücksichtigt Sitzungsdetails und Nachrichtenvorschauen. Um vollständige Unterhaltungen zu durchsuchen, die Volltextsuche aktivieren (indexiert lokale Transkripte, ohne Schwärzung). Gekoppelte Geräte können sie ebenfalls durchsuchen.",
+      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen."
     }
   },
   "sessionHistory": {
@@ -21918,7 +21925,7 @@
         "busy": "In Arbeit",
         "idle": "Inaktiv",
         "settingTitle": "Bei Kontowechsel, während Claude läuft",
-        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort.",
+        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab.",
         "keyword": {
           "restart": "Neustart",
           "running": "laufend"
@@ -21943,13 +21950,15 @@
         "review": "Prüfen",
         "restartCount_one": "{{count}} Sitzung neu starten",
         "restartCount_other": "{{count}} Sitzungen neu starten",
-        "reviewBody_one": "{{count}} weitere Claude-Sitzung wurde nicht zu {{next}} verschoben.",
-        "reviewBody_other": "{{count}} weitere Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
-        "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
-        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
+        "reviewBody_one": "{{count}} Claude-Sitzung wurde nicht zu {{next}} verschoben.",
+        "reviewBody_other": "{{count}} Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
+        "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab und starten sofort neu.",
+        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab und starten sofort neu.",
         "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
-        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
+        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
+        "strandedOne": "1 Claude-Sitzung läuft möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln.",
+        "strandedOther": "{{count}} Claude-Sitzungen laufen möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln."
       },
       "oauthUsage": {
         "title": "Claude-Nutzungsabfrage",
@@ -23251,7 +23260,6 @@
     "setupTrust": {
       "reviewTitle": "Neue Einrichtungsbefehle für diese Automatisierung genehmigen?",
       "reviewBody": "Eine Ausführung hat die Einrichtung übersprungen, weil sich die Einrichtungsbefehle in der <code>orca.yaml</code> ihres Branches geändert haben. Nach der Genehmigung verwenden spätere Ausführungen diese Befehle. Genehmige nur, wenn du <repo/> vertraust.",
-      "approve": "Genehmigen",
       "approved": "Einrichtung genehmigt. Spätere Ausführungen dieser Automatisierung führen sie aus.",
       "skippedSinceApproved": "Die Einrichtung wurde bei dieser Ausführung nicht ausgeführt, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Sie wurden inzwischen genehmigt, daher führen spätere Ausführungen sie aus.",
       "skippedReview": "Die Einrichtung wurde nicht ausgeführt: Der Branch dieser Ausführung enthält andere orca.yaml-Einrichtungsbefehle als die für diese Automatisierung genehmigten. Prüfe sie, damit spätere Ausführungen die Einrichtung ausführen.",
@@ -23588,7 +23596,6 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
-    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
     "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
@@ -23598,7 +23605,6 @@
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
-    "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
     "moreModelsWithCount": "Weitere Modelle ({{total}})",
@@ -23608,7 +23614,6 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
-    "use": "Verwenden",
     "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",

@@ -21,6 +21,7 @@ import {
   coordinatorRunAndTask,
   clearChat,
   WAIT,
+  isMailPointer,
   isWholeMail,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
@@ -78,6 +79,38 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 })
 
+describe("another agent's message in a structured chat", () => {
+  it('is shown whole in the chat but sent to the agent only as a pointer at check, unlike the person', async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+
+    // Dev builds run the CLI as `orca-dev`.
+    const pointer = turnText(chat.turns[0]!).replace('`orca-dev ', '`orca ')
+    expect(pointer).toBe(
+      `You have 1 orchestration message. Run \`orca orchestration check --run ${runId}\`.`
+    )
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
+    const card = snapshot.items.find(
+      (item) =>
+        item.body?.kind === 'message' &&
+        item.body.blocks.some((block) => block.type === 'text' && isWholeMail(block.text))
+    )
+    expect(card?.body).toMatchObject({ from: { kind: 'agent' } })
+    await settleTurn(COORDINATOR, 0)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
+
+    expect(await sendUserMessage(COORDINATOR, 'I approve the deploy')).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
+    expect(turnText(chat.turns[1]!)).toBe('I approve the deploy')
+
+    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
+    expect(unread(`run:${runId}`)).toEqual([])
+  })
+})
+
 describe('a /clear keeps the chat its orchestration address', () => {
   it("delivers the conversation's Run to its fresh context under the same address", async () => {
     await openChat(COORDINATOR)
@@ -92,12 +125,15 @@ describe('a /clear keeps the chat its orchestration address', () => {
     const next = connectionFor(cleared)
     expect(codex.connections.slice(opened)).toEqual([next])
     expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
-    expect(isWholeMail(turnText(next.turns[0]!))).toBe(true)
+    expect(isMailPointer(turnText(next.turns[0]!))).toBe(true)
     await settleTurn(cleared, 0)
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
+    await expect(call('orchestration.check', {}, { sessionId: cleared })).resolves.toMatchObject({
+      runId,
+      count: 1
+    })
     expect(db.getRunRaw(runId)).toMatchObject({
       coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation

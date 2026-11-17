@@ -1,4 +1,4 @@
-import { isNativeLocalLocation } from '../../../../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../../../../shared/execution-host/execution-host'
 import type {
   AgentSessionSwarmReadResult,
   AgentSessionSwarmTranscriptResult

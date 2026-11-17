@@ -5,6 +5,7 @@ import * as HoverCardPrimitive from 'radix-ui/hover-card'
 import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 
 const HoverCardInteractionContext = React.createContext({
@@ -101,7 +102,10 @@ function HoverCardContent({
 }: React.ComponentProps<typeof HoverCardPrimitive.Content> &
   VariantProps<typeof hoverCardContentVariants>) {
   return (
-    <HoverCardPrimitive.Portal data-slot="hover-card-portal">
+    <HoverCardPrimitive.Portal
+      data-slot="hover-card-portal"
+      container={usePortalContainer() ?? undefined}
+    >
       <HoverCardPrimitive.Content
         data-slot="hover-card-content"
         align={align}

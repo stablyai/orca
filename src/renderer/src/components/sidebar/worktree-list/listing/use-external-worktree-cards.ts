@@ -20,7 +20,7 @@ import {
   indexHiddenProjects,
   withoutHiddenFilterRepoIds
 } from '../../../../../../shared/project/catalog/hidden-projects'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]

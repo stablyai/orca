@@ -1,6 +1,6 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionAccountKind } from '../agent-session-availability'
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from '../journal/agent-session-journal-types'
 import {
   readAgentCliInstallationProblem,
@@ -13,7 +13,7 @@ import {
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from '../agent-session-argument-problem'
+} from './agent-session-argument-problem'
 import type { AgentSessionRewindReason } from '../lifecycle/rewind/agent-session-rewind-reasons'
 import { readAgentSessionLegacyRefusalFacts } from './agent-session-legacy-refusal-fields'
 import {

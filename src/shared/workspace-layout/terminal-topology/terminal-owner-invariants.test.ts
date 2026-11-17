@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../constants'
-import type { ExecutionHostId } from '../../execution-host'
+import { getDefaultWorkspaceSession } from '../../orca-profiles/constants'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../main/persistence/persistence-session-fixtures'
 import { findTerminalBindingConflict } from './terminal-owner-invariants'

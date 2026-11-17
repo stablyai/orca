@@ -9,8 +9,8 @@ import {
   CONVERSATION_COMMANDS,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
 } from './structured-agent-session-slash-menu'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import type { AgentSessionThreadGoalChange } from '../agent-session-thread-goal-wire'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionThreadGoalChange } from '../thread-goals/agent-session-thread-goal-wire'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 import {
   structuredComposerFailure,

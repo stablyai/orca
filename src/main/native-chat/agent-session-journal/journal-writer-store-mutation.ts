@@ -1,4 +1,6 @@
 import { journalForkStageHeld } from './journal-fork-stage-state'
+import { journalChatBusy } from './journal-forgotten-chats'
+import { clearSuccessor } from '../../runtime/agent-session/records/agent-session-sender-identity-revision'
 import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import { copyAgentSessionStoreCache } from '../../runtime/agent-session/records/agent-session-store-cache'
 import { journalDomainPublicCursor } from './journal-domain-context-replacement'
@@ -25,7 +27,7 @@ import { readJournalSqlUsageLimitContinueIdentity } from './journal-sql-status-c
 import {
   attributeAgentSessionRuntimeRecord,
   type AgentSessionRuntimeFacts
-} from '../../runtime/agent-session/agent-session-runtime-attribution'
+} from '../../runtime/agent-session/records/agent-session-runtime-attribution'
 
 export function emptyJournalWriterStoreRows(): AgentSessionStoreRowWrites {
   return {
@@ -99,6 +101,13 @@ export function resolveJournalWriterStoreMutation(
     }
     loadAgentSessionStoreRecordRow(state, id, String(row.record_json), false)
   }
+  if (mutation.kind === 'command' && mutation.command.kind === 'forget-idle') {
+    // Read only: a surviving /clear continuation keeps the chat it came from.
+    const successor = clearSuccessor(state.records.get(mutation.command.sessionId))
+    if (successor !== null) {
+      loadRecord(successor)
+    }
+  }
   if (identity.pruneAt !== undefined) {
     touched.operations.remove.push(...pruneJournalWriterOperations(db, identity.pruneAt))
   }
@@ -165,20 +174,26 @@ export function resolveJournalWriterStoreMutation(
     JOIN journal_chat_state AS chat ON chat.session_id=input.session_id AND chat.epoch=input.epoch
     WHERE input.session_id=? AND input.current=1 AND input.dispatch_state='pending' LIMIT 1`)
       .get(mutation.sessionId)
+  const forgetRefused =
+    mutation.kind === 'command' &&
+    mutation.command.kind === 'forget-idle' &&
+    journalChatBusy(db, mutation.command.sessionId, mutation.command.idleBefore)
   let value = sleepingWithPendingInput
     ? null
-    : applyAgentSessionStoreMutation(draft, mutation, at, {
-        planMode,
-        continueCut,
-        cursor:
-          mutation.kind === 'rewind-complete' && head
-            ? journalDomainPublicCursor(
-                db,
-                { sessionId: mutation.sessionId, epoch: String(head.epoch) },
-                Number(head.last_sequence)
-              )
-            : undefined
-      })
+    : forgetRefused
+      ? false
+      : applyAgentSessionStoreMutation(draft, mutation, at, {
+          planMode,
+          continueCut,
+          cursor:
+            mutation.kind === 'rewind-complete' && head
+              ? journalDomainPublicCursor(
+                  db,
+                  { sessionId: mutation.sessionId, epoch: String(head.epoch) },
+                  Number(head.last_sequence)
+                )
+              : undefined
+        })
   if (runtime) {
     for (const [id, after] of draft.records) {
       const before = state.records.get(id)

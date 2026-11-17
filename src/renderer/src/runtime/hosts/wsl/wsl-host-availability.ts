@@ -1,5 +1,5 @@
 import { selectWslHostsServing } from '../../../components/sidebar/use-wsl-hosts-enabled'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isWslHostRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
 import { useAppStore } from '@/store/index'

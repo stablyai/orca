@@ -1,4 +1,4 @@
-import type { AgentMessageSender } from '../agent-session-message-source'
+import type { AgentMessageSender } from './agent-session-message-source'
 
 /** Display-only creation fact; survives removal of the orchestration Task and Dispatch. */
 export type AgentJournalAgentStartItem = {

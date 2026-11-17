@@ -8,7 +8,7 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { DirectSshAuthority } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'

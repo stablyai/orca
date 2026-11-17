@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { Button } from '../../ui/button'
 import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'

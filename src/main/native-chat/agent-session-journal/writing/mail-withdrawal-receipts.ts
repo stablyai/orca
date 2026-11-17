@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionDomainFingerprint,
