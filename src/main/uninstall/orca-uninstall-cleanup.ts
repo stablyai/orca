@@ -30,7 +30,7 @@ import { forgetClaudeAgentViewMarkers } from '../claude/agent-view/agent-view-un
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 import { describeOrcaUninstallPath } from './orca-uninstall-path-display'
 
-/** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
+/** What the desktop app supplies to the cleanup. */
 export type OrcaUninstallHost = {
   platform: NodeJS.Platform
   homeDir: string
@@ -47,7 +47,6 @@ export type OrcaUninstallHost = {
   runServiceManager?: ServeServiceRun
 }
 
-export const ORCA_UNINSTALL_MANUAL_COMMAND = 'orca uninstall'
 const PLUGIN_AGENTS: ReadonlySet<string> = new Set(['opencode', 'pi', 'omp', 'prime-agent'])
 
 function errorText(error: unknown): string {
@@ -270,24 +269,19 @@ async function runSshHosts(
       results.push(entry)
       continue
     }
-    if (!entry.connected) {
-      results.push({
-        ...entry,
-        state: 'needs-user',
-        detail: 'Not connected.',
-        manualCommand: ORCA_UNINSTALL_MANUAL_COMMAND
-      })
+    // A Retry targets the host, so try it even if it was offline when the plan was built.
+    if (!entry.connected && only === null) {
+      results.push({ ...entry, state: 'needs-user', detail: 'Not connected.' })
       continue
     }
     try {
       await host.removeHostHooks(entry.hostId)
-      results.push({ ...entry, state: 'removed', detail: null, manualCommand: null })
+      results.push({ ...entry, connected: true, state: 'removed', detail: null })
     } catch (error) {
       results.push({
         ...entry,
-        state: 'error',
-        detail: errorText(error),
-        manualCommand: ORCA_UNINSTALL_MANUAL_COMMAND
+        state: entry.connected ? 'error' : 'needs-user',
+        detail: errorText(error)
       })
     }
   }
