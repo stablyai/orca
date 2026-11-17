@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import type { RuntimeBrowserClientPlacement } from '../../../../../../shared/browser/client-hosting/runtime-browser-placement'
-import { MarkupDrawButton } from '../markup-tools/MarkupDrawButton'
+import type { BrowserChromeMarkupTool } from '../../assemble-chrome/toolbar/browser-annotate-tool-button'
 import { MarkupOverlay } from '../MarkupOverlay'
 import { useBrowserPageMarkupCapture } from './use-browser-page-markup-capture'
 
@@ -63,15 +63,14 @@ export function useClientHostedBrowserMarkup({
     showOverlay
   ])
 
+  const tool: BrowserChromeMarkupTool = {
+    active: markup.isActive,
+    disabled,
+    onToggle: () => (markup.isActive ? markup.cancel() : void markup.start()),
+    canShowDiscoveryHint: isActive
+  }
   return {
-    drawButton: (
-      <MarkupDrawButton
-        onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
-        disabled={disabled}
-        active={markup.isActive}
-        surfaceActive={isActive}
-      />
-    ),
+    tool,
     overlay:
       showOverlay && markup.baseImage ? (
         <MarkupOverlay
