@@ -279,25 +279,37 @@ export async function resolveScopedWorktreeIdRow(
     return null
   }
   const repo = owners[0]
-  const ownerRows = await resolveRepoWorktreeRows(
-    deps,
-    repo,
-    store.getAllWorktreeMeta() ?? {},
-    resolveLocalProjectRuntimesForRepos(store, [repo]),
-    repoOwners.rowsFor(repo.id).length
-  )
+  const ownerCount = repoOwners.rowsFor(repo.id).length
+  const ownerScan = isFolderRepo(repo)
+    ? null
+    : await scanRepoWorktreeRows(
+        deps,
+        repo,
+        resolveLocalProjectRuntimesForRepos(store, [repo]),
+        ownerCount
+      )
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
-  const exact = ownerRows.find((worktree) => worktree.id === worktreeId)
-  const equivalent = ownerRows.filter(
-    (worktree) => worktreeIdentityKey(worktree.id) === comparisonKey
-  )
+  const isEquivalent = (id: string): boolean => worktreeIdentityKey(id) === comparisonKey
+  const candidates = joinScannedRowsWhere(deps, repo, ownerScan, ownerCount, isEquivalent)
+  const exact = candidates.find((worktree) => worktree.id === worktreeId)
+  const equivalent = candidates.filter((worktree) => isEquivalent(worktree.id))
   const target = exact ?? (equivalent.length === 1 ? equivalent[0] : null)
   if (!target) {
     return null
   }
   const lineageById = store.getAllWorktreeLineage?.() ?? {}
   const relatedIds = getConnectedWorktreeLineageIds([target.id], lineageById)
+  // Lineage links only rows in the target's connected component, so the rest of the repo is not read.
+  const ownerRows = [...relatedIds].some((id) => id !== target.id)
+    ? joinScannedRowsWhere(
+        deps,
+        repo,
+        ownerScan,
+        ownerCount,
+        (id) => relatedIds.has(id) || isEquivalent(id)
+      )
+    : candidates
   const relatedRepoIds = new Set(
     [...relatedIds]
       .map((id) => splitWorktreeIdForFilesystem(id)?.repoId)
@@ -313,19 +325,37 @@ export async function resolveScopedWorktreeIdRow(
   if (new Set(relatedRepos.map((candidate) => candidate.id)).size !== relatedRepos.length) {
     return null
   }
-  const metaById = store.getAllWorktreeMeta() ?? {}
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, relatedRepos)
   const otherRows = await Promise.all(
-    relatedRepos.map((relatedRepo) =>
-      resolveRepoWorktreeRows(
-        deps,
-        relatedRepo,
-        metaById,
-        projectRuntimeByRepoId,
-        relatedOwners.rowsFor(relatedRepo.id).length
-      )
-    )
+    relatedRepos.map(async (relatedRepo) => {
+      const count = relatedOwners.rowsFor(relatedRepo.id).length
+      const scan = isFolderRepo(relatedRepo)
+        ? null
+        : await scanRepoWorktreeRows(deps, relatedRepo, projectRuntimeByRepoId, count)
+      return joinScannedRowsWhere(deps, relatedRepo, scan, count, (id) => relatedIds.has(id))
+    })
   )
   const projected = projectResolvedWorktreeLineage([...ownerRows, ...otherRows.flat()], lineageById)
-  return projected[ownerRows.indexOf(target)] ?? null
+  return projected[ownerRows.findIndex((row) => row.id === target.id)] ?? null
+}
+
+/** Join only the scanned checkouts `keep` admits; each row's join reads only its own metadata. */
+function joinScannedRowsWhere(
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  repo: Repo,
+  scan: RepoWorktreeRowsScan | null,
+  repoOwnerCount: number,
+  keep: (worktreeId: string) => boolean
+): RepoWorktreeRow[] {
+  const kept = scan && {
+    ...scan,
+    worktrees: scan.worktrees.filter((git) => keep(composeWorktreeId(repo.id, git.path)))
+  }
+  return joinRepoWorktreeRows(
+    deps,
+    repo,
+    kept,
+    deps.store.getAllWorktreeMeta() ?? {},
+    repoOwnerCount
+  )
 }
