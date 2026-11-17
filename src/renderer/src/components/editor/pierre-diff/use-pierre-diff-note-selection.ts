@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { PostRenderPhase, SelectedLineRange } from '@pierre/diffs'
 import type { Editor } from '@pierre/diffs/edit'
 import { getShadowRootSelection } from '@/lib/shadow-root-selection'
 import { installEditorAddReviewNoteShortcut } from '@/components/editor/commands/editor-shortcuts'
 import { canCommentOnPierreRange } from './pierre-diff-comment-range'
+import { clampPierreDiffDraftTarget } from './pierre-diff-comment-annotations'
 import { getPierreSelectionRange, selectionSide } from './pierre-diff-selection'
 import type { PierreDiffInstance } from './PierreDiffSurface'
 
@@ -11,15 +12,25 @@ export function usePierreDiffNoteSelection({
   containerRef,
   editorRef,
   onAddComment,
-  pendingComment,
+  pendingComment: draft,
+  lineCount = Infinity,
   commentableLines
 }: {
   containerRef: React.RefObject<HTMLElement | null>
   editorRef: React.RefObject<Pick<Editor, 'getViewState'> | null>
   onAddComment?: (range: { lineNumber: number; startLine?: number }) => void
   pendingComment?: { lineNumber: number; startLine?: number } | null
+  lineCount?: number
   commentableLines: ReadonlySet<number> | null
 }) {
+  // Highlight the same clamped anchor the draft card shows and submits.
+  const draftLimit = draft
+    ? Math.min(lineCount, Math.max(draft.lineNumber, draft.startLine ?? 0))
+    : 0
+  const pendingComment = useMemo(
+    () => draft && clampPierreDiffDraftTarget(draft, draftLimit),
+    [draft, draftLimit]
+  )
   const view = useRef<{ host: HTMLElement; instance: PierreDiffInstance } | null>(null)
   const pointer = useRef<{ id: number; utility: boolean } | null>(null)
   const hadDraft = useRef(false)

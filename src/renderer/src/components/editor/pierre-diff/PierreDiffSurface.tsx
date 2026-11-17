@@ -217,6 +217,7 @@ export function PierreDiffSurface({
     editorRef,
     onAddComment,
     pendingComment,
+    lineCount: annotationLineCount,
     commentableLines
   })
   const navigateToNote = usePierreDiffNoteNavigation({ worktreeId, filePath, comments })
