@@ -20,7 +20,10 @@ import {
 export async function readCollection<T>(
   key: string,
   workspaceId: LinearWorkspaceSelection | null | undefined,
-  load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>,
+  load: (
+    entry: LinearClientForWorkspace,
+    yieldSlot: () => Promise<void>
+  ) => Promise<LinearCollectionResult<T>>,
   force = false,
   signal?: AbortSignal
 ): Promise<LinearCollectionResult<T>> {
@@ -35,9 +38,17 @@ export async function readCollection<T>(
       const results = await Promise.all(
         entries.map(async (entry) => {
           await acquire(signal)
+          let holdsSlot = true
+          // Multi-page loads requeue between pages so a long walk cannot starve other reads.
+          const yieldSlot = async () => {
+            release()
+            holdsSlot = false
+            await acquire(signal)
+            holdsSlot = true
+          }
           try {
             signal?.throwIfAborted()
-            return await load(entry)
+            return await load(entry, yieldSlot)
           } catch (error) {
             if (isAuthError(error)) {
               clearToken(entry.workspace.id)
@@ -49,7 +60,9 @@ export async function readCollection<T>(
             }
             return { items: [], errors: [workspaceError(entry, error)] }
           } finally {
-            release()
+            if (holdsSlot) {
+              release()
+            }
           }
         })
       )

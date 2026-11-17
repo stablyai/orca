@@ -167,7 +167,8 @@
         "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
-        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitHolderGone": "Bu dağıtımdaki diğer Orca kurulumu durdu. Orca birkaç saniye içinde devralır."
       }
     },
     "agentSummary": {
@@ -19476,6 +19477,7 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
         "chatSavedByNewerOrca": "Bu sohbet daha yeni bir Orca sürümüyle kaydedilmiş.",
@@ -20781,7 +20783,11 @@
         "turnDiffsTitle": "Tur farkları",
         "turnDiffsCopy": "Her turun değiştirdiği dosyaları satır sayılarıyla yanıtın altında gösterir.",
         "turnDiffsSearchChangedFiles": "değişen dosyalar",
-        "turnDiffsSearchEdits": "düzenlemeler"
+        "turnDiffsSearchEdits": "düzenlemeler",
+        "promptSuggestionsTitle": "Önerilen istemler",
+        "promptSuggestionsCopy": "Claude yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, Claude kullanımınıza sayılan ek bir istektir.",
+        "promptSuggestionsSearchNext": "sonraki istem",
+        "promptSuggestionsSearchGhost": "hayalet metin"
       },
       "voice": {
         "dictationLanguage": {
@@ -23793,10 +23799,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
-    "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
-    "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
-    "catalogInstall": "Modelleri yüklemek için bu sunucuya {{agent}} yükleyin, ardından ajan seçiciyi yeniden açın.",
-    "catalogUnresolved": "{{agent}} modelleri yüklenmedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
     "searchModels": "Modelleri ara",

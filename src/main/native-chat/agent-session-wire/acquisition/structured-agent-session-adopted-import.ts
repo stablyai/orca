@@ -77,7 +77,7 @@ async function readAdoptedTranscript(
     options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
   })
   if (!prepared.ok) {
-    throw new Error(prepared.error)
+    throw isAgentSessionRefusalError(prepared.cause) ? prepared.cause : new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
     throw agentSessionRefusalError('agent_session_identity_required', {

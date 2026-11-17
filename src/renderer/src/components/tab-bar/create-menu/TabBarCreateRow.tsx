@@ -3,7 +3,7 @@ import { Settings } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
   DropdownMenuItem,
   DropdownMenuShortcut,

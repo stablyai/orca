@@ -1,5 +1,5 @@
 import type { AppState } from '../../../store/types'
-import { markPatchFullResync } from '../../../store/seam-record-fields'
+import { markPatchFullResync } from '../../../store/workspace-layout/seam-record-fields'
 
 /** Host-mirror funnel: imported host snapshots replace each tracked record they touch wholesale. */
 export function markHostMirrorPatchFullResync(
