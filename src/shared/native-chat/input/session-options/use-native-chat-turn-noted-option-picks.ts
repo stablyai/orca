@@ -34,11 +34,13 @@ export function createNativeChatTurnNotedOptionPicksHook({
     isWorking: boolean
     snapshot: SessionOptionDescriptor[]
     setOption: (id: string, value: SessionOptionValue) => Promise<T>
+    /** Whether a settled write was refused, leaving the previous value in force. */
+    refused: (result: T) => boolean
   }): {
     snapshot: SessionOptionDescriptor[]
     setOption: (id: string, value: SessionOptionValue) => Promise<T>
   } {
-    const { scope, isWorking, snapshot, setOption } = args
+    const { scope, isWorking, snapshot, setOption, refused } = args
     const [noted, setNoted] = useState<{
       scope: string | null
       picks: NativeChatTurnOptionPicks
@@ -64,17 +66,27 @@ export function createNativeChatTurnNotedOptionPicksHook({
             value
           )
         }))
-        return setOption(id, value).catch((error: unknown) => {
-          // A rejected write leaves the old selection in force; put its caption back unless a later pick replaced it.
+        // A refused or failed write leaves the old selection in force; put its caption back unless a later pick replaced it.
+        const restore = () =>
           setNoted((current) =>
             current.scope === scope && (current.picks.get(id)?.value ?? before?.before) === value
               ? { scope, picks: withRestoredPick(current.picks, id, before) }
               : current
           )
-          throw error
-        })
+        return setOption(id, value).then(
+          (result) => {
+            if (refused(result)) {
+              restore()
+            }
+            return result
+          },
+          (error: unknown) => {
+            restore()
+            throw error
+          }
+        )
       },
-      [isWorking, picks, scope, setOption, snapshot]
+      [isWorking, picks, refused, scope, setOption, snapshot]
     )
     const marked = useMemo(
       () => markNativeChatTurnOptionPicks(snapshot, picks, 'noted'),

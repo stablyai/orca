@@ -89,6 +89,8 @@ export function isDefaultServiceTier(
 
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
+  /** The host refused the write, so the previous value stays in force. */
+  refused?: true
 }
 
 export type PersistedNativeChatSessionOptions = Partial<

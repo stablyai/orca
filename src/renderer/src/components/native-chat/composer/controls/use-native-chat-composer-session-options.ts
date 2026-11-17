@@ -7,6 +7,7 @@ import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-
 import { useCallback, useMemo, useState } from 'react'
 import type {
   SessionOptionDescriptor,
+  SessionOptionSetResult,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { createNativeChatTurnNotedOptionPicksHook } from '../../../../../../shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
@@ -16,6 +17,8 @@ const useNativeChatTurnNotedOptionPicks = createNativeChatTurnNotedOptionPicksHo
   useMemo,
   useState
 })
+
+const isRefusedSetResult = (result: SessionOptionSetResult): boolean => result.refused === true
 
 const NO_STRUCTURED_SNAPSHOT: SessionOptionDescriptor[] = []
 const refuseStructuredOption = (): Promise<never> =>
@@ -82,7 +85,8 @@ export function useNativeChatComposerSessionOptions({
     scope: structuredTransport?.sessionId ?? null,
     isWorking,
     snapshot: structuredTransport?.optionSnapshot ?? NO_STRUCTURED_SNAPSHOT,
-    setOption: structuredSurface?.setOption ?? refuseStructuredOption
+    setOption: structuredSurface?.setOption ?? refuseStructuredOption,
+    refused: isRefusedSetResult
   })
   const notingSurface = useMemo(
     () =>

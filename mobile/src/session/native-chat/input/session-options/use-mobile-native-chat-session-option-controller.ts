@@ -26,6 +26,8 @@ const useNativeChatTurnNotedOptionPicks = createNativeChatTurnNotedOptionPicksHo
   useState
 })
 
+const isRefusedWrite = (applied: boolean): boolean => !applied
+
 function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): boolean {
   return catalog?.listModels !== undefined && catalog.discoveredModelsAreAuthoritative === true
 }
@@ -126,7 +128,8 @@ export function useMobileNativeChatSessionOptionController(args: {
       : null,
     isWorking,
     snapshot: structuredSnapshot,
-    setOption: setStructuredOption
+    setOption: setStructuredOption,
+    refused: isRefusedWrite
   })
   // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
