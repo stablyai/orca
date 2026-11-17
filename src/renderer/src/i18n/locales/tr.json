@@ -5044,7 +5044,9 @@
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
             "footerDetailAria": "Kullanım altbilgi ayrıntısı",
             "notChecked": "Kontrol edilmedi",
-            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}"
+            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}",
+            "resetsIn": "{{duration}} içinde sıfırlanır",
+            "resetsNow": "Şimdi sıfırlanır"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",

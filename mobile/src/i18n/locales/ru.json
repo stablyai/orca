@@ -1082,7 +1082,6 @@
       "clearSearch": "Очистить поиск"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Всегда доверять и выполнять",
       "description": "Команды из orca.yaml этого репозитория выполняются перед запуском рабочего пространства. Запускайте их, только если доверяете этому репозиторию.",
       "dontRun": "Не выполнять",
       "newScriptLabel": "Новый скрипт настройки",
@@ -4098,29 +4097,21 @@
       "reconnecting": "Повторное подключение"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Всегда доверять и запускать",
       "creating": "Создание…",
       "directoriesLabel": "Каталоги",
       "directories_few": "{{count}} каталога",
       "directories_many": "{{count}} каталогов",
       "directories_one": "{{count}} каталог",
       "directories_other": "{{count}} каталога",
-      "dontRun": "Не выполнять",
       "editSparsePreset": "Изменить набор выборочной выгрузки",
       "nameLabel": "Название",
       "namePlaceholder": "Интерфейс рендерера",
-      "newSetupScript": "Новый скрипт настройки",
       "newSparsePreset": "Новый набор выборочной выгрузки",
-      "runHooks": "Выполнить хуки",
       "runSetupAndCreate": "Выполнить настройку и создать",
-      "runSetupTitle": "Запустить настройку из {{name}}?",
-      "setupChangedTitle": "Скрипт настройки {{name}} изменился",
-      "setupScript": "Скрипт настройки",
       "setupSubtitle": "Перед созданием рабочего пространства для {{name}} выберите, запускать ли скрипт настройки.",
       "setupTitle": "Запустить скрипт настройки?",
       "skipSetupAndCreate": "Пропустить настройку и создать",
-      "trustFailed": "Не удалось добавить скрипт настройки в доверенные.",
-      "trustSubtitle": "Скрипт из orca.yaml этого репозитория выполняется на вашем компьютере перед запуском рабочего пространства. Запускайте его, только если доверяете этому репозиторию."
+      "trustFailed": "Не удалось добавить скрипт настройки в доверенные."
     },
     "worktreeCreateRetry": {
       "createFailed": "Не удалось создать рабочее пространство"

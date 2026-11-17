@@ -4841,7 +4841,9 @@
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
             "footerDetailAria": "用量頁尾詳細資訊",
             "notChecked": "未檢查",
-            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}"
+            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}",
+            "resetsIn": "{{duration}}後重設",
+            "resetsNow": "現在重設"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",

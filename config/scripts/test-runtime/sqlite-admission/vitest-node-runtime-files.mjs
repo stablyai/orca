@@ -57,7 +57,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -66,7 +65,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
   'src/shared/text/own-retained-string.test.ts',
-  'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
   // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
