@@ -111,7 +111,7 @@ it('holds a Plan choice until the goal turn ends', async () => {
   expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
 })
 
-it('keeps an incompatible Send-now card intact until a new turn can use its choices', async () => {
+it('accepts Send-now on an incompatible card and sends it once a new turn can use its choices', async () => {
   await startGoalTurn()
   const choices = { model: 'gpt-ran', effort: 'high', serviceTier: 'priority' }
   const queued = rig.send('Keep my selected speed', 'queue-if-active', { carried: choices })
@@ -119,8 +119,8 @@ it('keeps an incompatible Send-now card intact until a new turn can use its choi
   const operationId = hostTestOperationId()
   for (let press = 0; press < 2; press += 1) {
     expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'turnActive' } }
+      ok: true,
+      value: { queued: { messageId: queued.id, state: 'waiting' } }
     })
   }
   expect(await rig.handoff(queued.id)).toBeUndefined()
