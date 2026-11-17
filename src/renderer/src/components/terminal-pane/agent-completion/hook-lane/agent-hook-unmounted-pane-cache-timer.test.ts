@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeTab } from '../../../../store/terminals/testing/terminal-tab.test-fixture'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   observeAgentHookCompletionForNotification,
   resetAgentHookCompletionNotificationCoordinators
@@ -25,7 +26,24 @@ function seedPlacedPane(): void {
     tabsByWorktree: { 'wt-1': [makeTab({ id: TAB, worktreeId: 'wt-1' })] },
     terminalLayoutsByTabId: {
       [TAB]: { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF, expandedLeafId: null }
-    }
+    },
+    // The host mirror's row for the pane's agent; the hook lane only times a live agent.
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [
+        PANE,
+        {
+          state: 'working',
+          prompt: 'hi',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          paneKey: PANE,
+          tabId: TAB,
+          worktreeId: 'wt-1'
+        }
+      ]
+    ])
   })
 }
 
