@@ -28,5 +28,12 @@ export function useUsageLimitContinueClock(at: number | undefined): boolean {
     },
     [at]
   )
-  return useSyncExternalStore(subscribe, () => at !== undefined && Date.now() >= at)
+  // The local day and zone ride along so a wake after a date or time-zone change re-renders the
+  // row's formatted times, not only the eligibility flip.
+  const snapshot = useSyncExternalStore(subscribe, () => {
+    const now = new Date()
+    const passed = at !== undefined && now.getTime() >= at
+    return `${passed ? 'ready' : 'waiting'}|${now.toDateString()}|${now.getTimezoneOffset()}`
+  })
+  return snapshot.startsWith('ready|')
 }
