@@ -6,8 +6,8 @@ import { claimPtyProcessTrees } from '../../memory/pty-process-trees'
 import { listRegisteredPtys } from '../../memory/pty-registry'
 import { SYSTEM_MEMORY_KEY_PREFIX } from './system-memory-details'
 
-// Why: app.getAppMetrics() cannot see PTY children (agents, shells), which can own most of the commit an OOM exhausts.
-// A whole-host sweep spawns ps/PowerShell, so it runs only while the 10 s host sample shows low headroom.
+// Why: app.getAppMetrics() cannot see PTY children (agents, shells), which can own the
+// commit an OOM exhausts. A host sweep spawns ps/PowerShell, so it runs only under pressure.
 
 type CrashReportDetails = Record<string, CrashReportDetailValue>
 
@@ -35,7 +35,7 @@ function hostDetail(details: CrashReportDetails, suffix: string): number | undef
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-/** Memory the host can still hand out: Windows commit, Linux MemAvailable, macOS free plus reclaimable (inferred). */
+/** Memory the host can still hand out: Windows commit, Linux MemAvailable, macOS free + reclaimable. */
 export function hostMemoryHeadroom(
   details: CrashReportDetails,
   platform: NodeJS.Platform
@@ -73,17 +73,15 @@ function underPressure(details: CrashReportDetails, platform: NodeJS.Platform): 
   )
 }
 
-/** Called with each committed host sample; starts at most one bounded sweep per interval, only under pressure. */
+/** Called with each committed host sample; starts at most one sweep per interval, under pressure. */
 export function notePreGoneHostMemorySample(
   hostDetails: CrashReportDetails,
   nowMs: number,
   platform: NodeJS.Platform = process.platform
 ): void {
-  if (
-    inFlight ||
-    (lastStartedAtMs !== null && nowMs - lastStartedAtMs < PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS) ||
-    !underPressure(hostDetails, platform)
-  ) {
+  const sampledRecently =
+    lastStartedAtMs !== null && nowMs - lastStartedAtMs < PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS
+  if (inFlight || sampledRecently || !underPressure(hostDetails, platform)) {
     return
   }
   const ptys = listRegisteredPtys()

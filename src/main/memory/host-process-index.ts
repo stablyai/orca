@@ -1,12 +1,10 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import os from 'node:os'
+import { runProcess } from '@orca/process-host'
 import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { getProcessMemoryMetric } from './process-memory-metric'
 import { readDarwinProcessFootprints } from './darwin-process-footprint'
 import { buildProcessIndex, parsePsOutput, type ProcIndex, type ProcRow } from './process-index'
 
-const execFileAsync = promisify(execFile)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
@@ -23,12 +21,17 @@ export async function enumerateHostProcesses(): Promise<ProcIndex> {
 async function enumerateUnix(): Promise<ProcRow[]> {
   // Force dot decimals: parseFloat silently truncates locale-formatted comma values.
   try {
-    const { stdout } = await execFileAsync('ps', ['-eo', 'pid=,ppid=,pcpu=,rss=,comm='], {
-      maxBuffer: PS_MAX_BUFFER,
-      timeout: PS_EXEC_TIMEOUT_MS,
+    const result = await runProcess({
+      program: 'ps',
+      args: ['-eo', 'pid=,ppid=,pcpu=,rss=,comm='],
+      maxOutputBytes: PS_MAX_BUFFER,
+      timeoutMs: PS_EXEC_TIMEOUT_MS,
       env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
     })
-    return parsePsOutput(stdout)
+    if (result.timedOut || result.outputTruncated || result.code !== 0) {
+      throw new Error(`ps exited ${result.code ?? 'on timeout'}`)
+    }
+    return parsePsOutput(result.stdout)
   } catch (err) {
     console.warn('[memory] ps enumeration failed', err)
     return []

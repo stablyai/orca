@@ -14,7 +14,9 @@ describe('process sweep executable names', () => {
   })
 
   it('reads the CIM Name column and typeperf instance names', () => {
-    const cim = parseWindowsProcessSample('42\t7\t1048576\t10\t20\t638000000000000000\t2048\tclaude.exe\n')
+    const cim = parseWindowsProcessSample(
+      '42\t7\t1048576\t10\t20\t638000000000000000\t2048\tclaude.exe\n'
+    )
     expect(cim.rows[0]).toMatchObject({ pid: 42, privateMemory: 2048 * 1024, name: 'claude.exe' })
 
     const typeperf = parseTypeperfProcessOutput(
