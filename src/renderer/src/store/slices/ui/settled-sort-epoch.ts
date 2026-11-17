@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/sidebar-list/sorting/sort-settle'
 import type { AppState } from '../../types'
 import { getIndexedAllWorktrees } from '../worktrees/listing/worktree-catalog-index'
+import { replacedWorktreeRows } from '../worktrees/listing/worktree-catalog-membership'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): number {
@@ -19,36 +20,6 @@ function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): numbe
   return count
 }
 
-/** True when no row was added, removed, re-hosted, or (un)archived; only touched rows are read. */
-function sameLiveRows(
-  next: AppState['worktreesByRepo'],
-  previous: AppState['worktreesByRepo']
-): boolean {
-  const repoIds = Object.keys(next)
-  if (repoIds.length !== Object.keys(previous).length) {
-    return false
-  }
-  return repoIds.every((repoId) => {
-    const rows = next[repoId]
-    const previousRows = previous[repoId]
-    if (rows === previousRows) {
-      return true
-    }
-    if (!previousRows || rows.length !== previousRows.length) {
-      return false
-    }
-    return rows.every((row, index) => {
-      const before = previousRows[index]
-      return (
-        row === before ||
-        (row.id === before.id &&
-          row.hostId === before.hostId &&
-          row.isArchived === before.isArchived)
-      )
-    })
-  })
-}
-
 /** Live-row counter for sort settling; a title-only write reuses the last count instead of rescanning every row. */
 export function createLiveWorktreeCounter(): (
   worktreesByRepo: AppState['worktreesByRepo']
@@ -56,7 +27,7 @@ export function createLiveWorktreeCounter(): (
   let counted: AppState['worktreesByRepo'] | null = null
   let count = 0
   return (worktreesByRepo) => {
-    if (!counted || !sameLiveRows(worktreesByRepo, counted)) {
+    if (!counted || replacedWorktreeRows(worktreesByRepo, counted) === null) {
       count = countLiveWorktrees(worktreesByRepo)
     }
     counted = worktreesByRepo

@@ -4,6 +4,7 @@ import {
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../types'
+import { replacedWorktreeRows, type ReplacedWorktreeRow } from './worktree-catalog-membership'
 
 type WorktreeSnapshot = {
   allWorktrees: Worktree[]
@@ -15,12 +16,53 @@ type WorktreeSnapshot = {
 // cross-render caching without pinning replaced store snapshots in memory.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
 
+// The last built map, so an in-place row replacement (a title write) patches instead of rescanning.
+let lastSnapshot: {
+  worktreesByRepo: AppState['worktreesByRepo']
+  snapshot: WorktreeSnapshot
+} | null = null
+
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
   if (cachedSnapshot) {
     return cachedSnapshot
   }
+  const replaced =
+    lastSnapshot && replacedWorktreeRows(worktreesByRepo, lastSnapshot.worktreesByRepo)
+  const snapshot =
+    lastSnapshot && replaced
+      ? patchWorktreeSnapshot(lastSnapshot.snapshot, replaced)
+      : buildWorktreeSnapshot(worktreesByRepo)
+  worktreeSnapshotCache.set(worktreesByRepo, snapshot)
+  lastSnapshot = { worktreesByRepo, snapshot }
+  return snapshot
+}
 
+/** Same membership, so only replaced rows move; every other entry keeps its slot. */
+function patchWorktreeSnapshot(
+  previous: WorktreeSnapshot,
+  replaced: readonly ReplacedWorktreeRow[]
+): WorktreeSnapshot {
+  if (replaced.length === 0) {
+    return previous
+  }
+  const swaps = new Map(replaced.map(({ before, after }) => [before, after]))
+  const swap = (worktree: Worktree): Worktree => swaps.get(worktree) ?? worktree
+  const worktreeMap = new Map(previous.worktreeMap)
+  const worktreesById = new Map(previous.worktreesById)
+  for (const { before, after } of replaced) {
+    if (worktreeMap.get(before.id) === before) {
+      worktreeMap.set(before.id, after)
+    }
+    const rows = worktreesById.get(before.id)
+    if (rows?.includes(before)) {
+      worktreesById.set(before.id, rows.map(swap))
+    }
+  }
+  return { allWorktrees: previous.allWorktrees.map(swap), worktreeMap, worktreesById }
+}
+
+function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
   // Deduplicate same-host create/fetch races, last wins. repoId::path collides across hosts; retain those rows or one workspace vanishes (STA-4343).
   const byHostAndId = new Map<string, Worktree>()
   for (const worktrees of Object.values(worktreesByRepo)) {
@@ -46,9 +88,7 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
       worktreesById.set(worktreeId, [worktree])
     }
   }
-  const snapshot = { allWorktrees, worktreeMap, worktreesById }
-  worktreeSnapshotCache.set(worktreesByRepo, snapshot)
-  return snapshot
+  return { allWorktrees, worktreeMap, worktreesById }
 }
 
 export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {

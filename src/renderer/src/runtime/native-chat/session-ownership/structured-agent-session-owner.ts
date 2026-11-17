@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
   isTwinWorkspace,
@@ -21,6 +22,10 @@ import { authorityKey } from '../../../../../shared/execution-host/host-authorit
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-sessions/local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from '../../rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import {
+  replacedWorktreeRows,
+  sameDetectedWorktreeMembership
+} from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 
 /**
  * The one mapping from a chat's owning host to the runtime that serves it. Null for an owner no
@@ -119,6 +124,29 @@ export function structuredAgentSessionOwnerInputs(state: WorktreeRuntimeOwnerSta
     state.activeWorktreeId,
     state.activeWorkspaceExecutionHostId
   ]
+}
+
+/** Compares owner inputs; a worktree map that only replaced rows in place (a title write) moves no owner. */
+export function structuredAgentSessionOwnerInputsMoved(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  previous: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  inputs: readonly unknown[],
+  previousInputs: readonly unknown[]
+): boolean {
+  const worktrees = selectWorktreesByRepo(state)
+  const detected = selectDetectedWorktreesByRepo(state)
+  return inputs.some((value, index) => {
+    if (value === previousInputs[index]) {
+      return false
+    }
+    if (value === worktrees) {
+      return replacedWorktreeRows(worktrees, selectWorktreesByRepo(previous)) === null
+    }
+    if (value === detected) {
+      return !sameDetectedWorktreeMembership(detected, selectDetectedWorktreesByRepo(previous))
+    }
+    return true
+  })
 }
 
 /** The host a runtime target serves, for bookkeeping keyed by host. */

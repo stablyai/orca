@@ -5,8 +5,7 @@ import { useAppStore } from '../../store'
 import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { patchDetectedWorktreeHeadIdentities } from '@/store/slices/worktrees/listing/detected-worktree-head-identity'
-import { buildWorktreeMetaStateUpdate } from '@/store/slices/worktrees/metadata/worktree-meta-state-update'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { applyLocalPinnedDisplayName } from './pinned-display-name-apply'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -39,14 +38,7 @@ export function registerProjectCatalogIpcBridge(
   unsubs.push(
     window.api.worktrees.onChanged(async ({ pinnedDisplayName, ...data }) => {
       if (pinnedDisplayName) {
-        // Head-watcher branch patches keep fixed titles, so apply main's new pin before the re-list.
-        useAppStore.setState((s) =>
-          buildWorktreeMetaStateUpdate(s, {
-            worktreeId: pinnedDisplayName.worktreeId,
-            updates: { displayName: pinnedDisplayName.displayName, displayNameIsPinned: true },
-            executionHostId: LOCAL_EXECUTION_HOST_ID
-          })
-        )
+        applyLocalPinnedDisplayName(pinnedDisplayName)
       }
       // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
       worktreeChangeRefreshQueue.enqueue(
