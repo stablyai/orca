@@ -5,8 +5,11 @@ import {
   type IdleRegionalRehomeResult,
   type RegionCorrectionResponse,
   isRelayCellConnectionHardCap,
+  parseRelayHostCapabilities,
   RELAY_ADMISSION_BUDGETS,
   RELAY_DEFAULT_REGION,
+  RELAY_HOST_CAPABILITIES_HEADER,
+  RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES,
   RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
   RELAY_PROTOCOL_LIMITS,
   RelayRegionSchema,
@@ -65,7 +68,7 @@ import {
   type EdgeAssignments
 } from './edge-relay.js'
 import { EDGE_CONTROL_DEFAULTS } from './edge-relay-control.js'
-import { edgeRoute } from './edge-relay-route.js'
+import { edgeAlternateCellUrls, edgeRoute } from './edge-relay-route.js'
 import { requestCountry } from './ip-country.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
@@ -527,6 +530,17 @@ export function createRelayApp(
     // 'any' (a regionless keep without a valid record) is only a cohort judgement: no region is
     // recorded (keepOnly) or routed for it.
     const cohortRegion = judgedRegion === 'any' ? undefined : judgedRegion
+    // alternateCellUrls only for a desktop that said it parses them (shipped desktops parse the
+    // answer strictly) and only where director/edge.json alternates allows it: without both, every
+    // answer is byte-identical to one without the feature.
+    const acceptsAlternates = parseRelayHostCapabilities(context.req.header(RELAY_HOST_CAPABILITIES_HEADER)).has(
+      RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES
+    )
+    const alternatesFor = (assignment: RelayAssignment): { alternateCellUrls?: string[] } => {
+      if (!acceptsAlternates || !edge) { return {} }
+      const alternateCellUrls = edgeAlternateCellUrls(edge.config, claims.relayHostId, cohortRegion, country, assignment)
+      return alternateCellUrls === undefined ? {} : { alternateCellUrls }
+    }
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
@@ -558,7 +572,8 @@ export function createRelayApp(
             v: 1,
             cellUrl: stayed.cellUrl,
             assignmentEpoch: stayed.assignmentEpoch,
-            lease: await signAssignment(stayed)
+            lease: await signAssignment(stayed),
+            ...alternatesFor(stayed)
           })
         }
         logAssignmentRejection({
@@ -614,7 +629,8 @@ export function createRelayApp(
           v: 1,
           cellUrl: moved.cellUrl,
           assignmentEpoch: moved.assignmentEpoch,
-          lease: await signAssignment(moved)
+          lease: await signAssignment(moved),
+          ...alternatesFor(moved)
         })
       }
     }
