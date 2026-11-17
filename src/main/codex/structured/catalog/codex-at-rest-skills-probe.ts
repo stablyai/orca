@@ -209,8 +209,12 @@ export async function probe(
         if (batch.length > 0) {
           try {
             await deps.prepareHome?.(pool.accountHomePath)
-            batch.forEach((request) => request.admitted())
-            await answer(rpc, batch, signal)
+            // A request cancelled while the home was prepared left the active set.
+            const live = batch.filter((request) => pool.active.has(request))
+            live.forEach((request) => request.admitted())
+            if (live.length > 0) {
+              await answer(rpc, live, signal)
+            }
           } catch (error) {
             batch.forEach((request) =>
               Pools.settle(request, error instanceof Error ? error : new Error(String(error)))
