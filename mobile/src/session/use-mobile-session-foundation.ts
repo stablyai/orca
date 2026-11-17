@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { STANDALONE_SESSION_PARAM } from '../navigation/host-stack-navigation'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/use-workspace-client'
@@ -24,13 +25,15 @@ export function useMobileSessionFoundation() {
     worktreeId,
     name: routeWorktreeName,
     created,
-    warning: createdWarning
+    warning: createdWarning,
+    [STANDALONE_SESSION_PARAM]: standaloneParam
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
     warning?: string
+    [STANDALONE_SESSION_PARAM]?: string
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
@@ -52,6 +55,7 @@ export function useMobileSessionFoundation() {
     name: worktreeName,
     path: worktreePath,
     hostId: worktreeHostId,
+    branch: worktreeBranch,
     resolution: worktreeResolution
   } = useLiveWorktreeName({
     client,
@@ -101,6 +105,7 @@ export function useMobileSessionFoundation() {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,
+    standalone: standaloneParam === '1',
     insets,
     client,
     clientId,
@@ -115,6 +120,7 @@ export function useMobileSessionFoundation() {
     worktreeName,
     worktreePath,
     worktreeHostId,
+    worktreeBranch,
     worktreeResolution,
     isWideLayout,
     activePanel,

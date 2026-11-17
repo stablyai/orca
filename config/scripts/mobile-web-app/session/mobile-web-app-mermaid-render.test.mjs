@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
-import { lucideBarrelPlugin } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
+import { mobileWebRenderCheckPlugins } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -101,7 +101,7 @@ beforeAll(async () => {
     logLevel: 'silent',
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
-    plugins: [lucideBarrelPlugin],
+    plugins: mobileWebRenderCheckPlugins,
     // Resolve web sibling; native WebView becomes text in a browser.
     resolveExtensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.js'],
     define: { __DEV__: 'false', 'process.env.NODE_ENV': '"production"' }

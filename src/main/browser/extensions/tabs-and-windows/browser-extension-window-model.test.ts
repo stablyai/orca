@@ -26,7 +26,7 @@ vi.mock('electron', async () => {
   }
   return { BrowserWindow: FakeBrowserWindow }
 })
-vi.mock('../../../window/foreground-activation-policy', () => ({
+vi.mock('../../../window/activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
   showWindowWithoutStealingFocus: () => {}
 }))

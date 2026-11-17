@@ -13,44 +13,6 @@ function deferred<T>() {
 }
 
 describe('PrActionsEngine — PR identity changes', () => {
-  it('clears reviewer optimism when switching PR identity', async () => {
-    const slow = deferred<GitHubPrMutationOutcome>()
-    const mutations: PrActionMutations = {
-      mergePR: async () => ({ ok: true }),
-      setPRAutoMerge: async () => ({ ok: true }),
-      updatePRState: async () => ({ ok: true }),
-      markReadyForReview: async () => ({ ok: true }),
-      markDraft: async () => ({ ok: true }),
-      requestReviewers: async () => slow.promise,
-      removeReviewers: async () => ({ ok: true }),
-      rerunChecks: async () => ({ ok: true })
-    }
-    const refetch = vi.fn()
-    const onChange = vi.fn()
-    const engine = new PrActionsEngine({
-      mutations,
-      prNumber: 1,
-      refetch,
-      onChange
-    })
-
-    const action = engine.requestReviewer('alice')
-    expect(engine.resolveReviewerRequested('alice', false)).toBe(true)
-
-    engine.updateConfig({
-      mutations,
-      prNumber: 2,
-      refetch,
-      onChange
-    })
-    expect(engine.resolveReviewerRequested('alice', false)).toBe(false)
-
-    slow.resolve({ ok: false, error: 'connection lost' })
-    await action
-    expect(engine.error).toBeNull()
-    expect(refetch).not.toHaveBeenCalled()
-  })
-
   it('clears in-flight state when only the GitHub host changes', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
     const mutations: PrActionMutations = {

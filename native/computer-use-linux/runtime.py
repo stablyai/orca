@@ -15,9 +15,12 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.parse
 import uuid
 from dataclasses import dataclass
 
@@ -31,12 +34,22 @@ except (ImportError, ValueError) as error:
     sys.exit(1)
 try:
     gi.require_version("Gdk", "3.0")
-    gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Gdk, GdkPixbuf
+    from gi.repository import Gdk
 except (ImportError, ValueError):
     Gdk = None
+try:
+    # Why separate: Wayland capture decodes grim's PNG with GdkPixbuf alone.
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+except (ImportError, ValueError):
     GdkPixbuf = None
 from gi.repository import Atspi
+
+try:
+    # Why separate: KDE Wayland capture talks to KWin and the desktop portal over the session bus.
+    from gi.repository import Gio, GLib
+except ImportError:
+    Gio = GLib = None
 
 try:
     gi.require_version("GdkX11", "3.0")
@@ -122,8 +135,11 @@ def pid_of(node):
 
 
 def has_state(node, state):
-    state_set = attempt(node.get_state_set)
-    return bool(state_set is not None and attempt(lambda: state_set.contains(state), False))
+    return state_set_contains(attempt(node.get_state_set), state)
+
+
+def state_set_contains(state_set, state, default=False):
+    return bool(state_set is not None and attempt(lambda: state_set.contains(state), default))
 
 
 class GeometryReader:
@@ -388,8 +404,17 @@ def accessible_id(node):
     return str(attempt(node.get_accessible_id, "") or "")
 
 
+def is_disabled(state_set):
+    # Why: toolkits set ENABLED and SENSITIVE on usable nodes; a node whose states can't be read is not called disabled.
+    usable = [getattr(Atspi.StateType, name, None) for name in ("ENABLED", "SENSITIVE")]
+    if state_set is None or None in usable:
+        return False
+    return not any(state_set_contains(state_set, state, True) for state in usable)
+
+
 def record(node, index, path):
     role = role_of(node)
+    state_set = attempt(node.get_state_set)
     return {
         "index": index,
         "runtimeId": path,
@@ -399,7 +424,8 @@ def record(node, index, path):
         "localizedControlType": role,
         "className": str(attempt(node.get_toolkit_name, "") or ""),
         "value": string_value(node),
-        "isSelected": has_state(node, Atspi.StateType.SELECTED),
+        "isSelected": state_set_contains(state_set, Atspi.StateType.SELECTED),
+        "isDisabled": is_disabled(state_set),
         "nativeWindowHandle": 0,
         "frame": None,
         "actions": action_labels(node),
@@ -461,13 +487,19 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         has_text = bool(item["name"] or item["automationId"] or item["value"])
         return role in {"panel", "filler", "unknown", "section"} and not has_text and not meaningful_actions(item["actions"]) and summary is None and child_count <= 1
 
+    def walk_children(child_items, depth, path):
+        for position, (child_index, child) in enumerate(child_items):
+            if len(records) >= MAX_NODES or depth > MAX_DEPTH:
+                truncation["truncated"] = True
+                if depth > MAX_DEPTH:
+                    truncation["maxDepthReached"] = True
+                # Marks where the walk stopped, so the agent can read that parent's subtree by index.
+                lines.append(("\t" * depth) + f"... {len(child_items) - position} more not shown (snapshot limit)")
+                return
+            walk(child, depth, path + [child_index])
+
     def walk(node, depth, path):
         nonlocal next_index
-        if len(records) >= MAX_NODES or depth > MAX_DEPTH:
-            truncation["truncated"] = True
-            if depth > MAX_DEPTH:
-                truncation["maxDepthReached"] = True
-            return
         item = record(node, next_index, path)
         role_key = (item["controlType"] or "").lower()
         title = item["name"] or item["automationId"] or ""
@@ -479,15 +511,15 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
             if len(summary_values) >= 2 and is_plain_text_subtree(node):
                 generic_summary = " ".join(summary_values)
         if should_elide(item, len(child_items), generic_summary):
-            for child_index, child in child_items:
-                walk(child, depth, path + [child_index])
+            walk_children(child_items, depth, path)
             return
         records.append(item)
         next_index += 1
         if geometry_nodes is not None:
             geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]
-        line = f'{item["index"]} {role_label} {sanitize_text(title)}'.rstrip()
+        traits = " (disabled)" if item["isDisabled"] else ""
+        line = f'{item["index"]} {role_label}{traits} {sanitize_text(title)}'.rstrip()
         line += formatted_value(role_key, title, item["value"])
         if generic_summary and generic_summary != title:
             line += ", Text: " + sanitize_text(generic_summary)
@@ -502,8 +534,7 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         if generic_summary or suppressed:
             return
         child_line_start = len(lines)
-        for child_index, child in child_items:
-            walk(child, depth + 1, path + [child_index])
+        walk_children(child_items, depth + 1, path)
         if compact_browser_tabs:
             compact_rendered_browser_tabs(records, lines, child_line_start, depth + 1)
 
@@ -590,8 +621,468 @@ def rendered_element_index(line, depth):
     return int(match.group(1)) if match else None
 
 
-def capture_png(rect):
-    if Gdk is None or GdkPixbuf is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+KWIN_SERVICE = "org.kde.KWin"
+PORTAL_SERVICE = "org.freedesktop.portal.Desktop"
+DBUS_DAEMON = ("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus")
+PERMISSION_STORE = ("org.freedesktop.impl.portal.PermissionStore", "/org/freedesktop/impl/portal/PermissionStore",
+                    "org.freedesktop.impl.portal.PermissionStore")
+KWIN_REPORT_XML = ("<node><interface name='dev.orca.ComputerUse.KWinReport'>"
+                   "<method name='Report'><arg type='s' direction='in'/></method></interface></node>")
+KWIN_QUERY_SECONDS = 2
+PORTAL_ANSWER_SECONDS = 10
+MAX_WAYLAND_PNG_BYTES = 64_000_000
+UNSUPPORTED_WAYLAND_SCREENSHOT = ("Wayland screenshots are supported on KDE Plasma, Hyprland and Sway; this desktop "
+                                  "does not tell apps where windows are. Use --no-screenshot or an X11 session")
+# One-shot KWin script: KWin is the only process on KDE Wayland that knows where windows are and what covers them.
+KWIN_LAYOUT_SCRIPT = """(function (target) {
+    function rect(value) {
+        return value ? [value.x, value.y, value.width, value.height] : null;
+    }
+    function onCurrentDesktop(window) {
+        if (window.onAllDesktops) {
+            return true;
+        }
+        var current = workspace.currentDesktopForScreen && window.output
+            ? workspace.currentDesktopForScreen(window.output) : workspace.currentDesktop;
+        if (typeof current === "number") {
+            return window.desktop === current;
+        }
+        var desktops = window.desktops || [];
+        for (var i = 0; i < desktops.length; i++) {
+            if (desktops[i].id === current.id) {
+                return true;
+            }
+        }
+        return false;
+    }
+    function onCurrentActivity(window) {
+        var activities = window.activities || [];
+        return activities.length === 0 || activities.indexOf(workspace.currentActivity) >= 0;
+    }
+    var report;
+    try {
+        var windows = workspace.windowList ? workspace.windowList() : workspace.clientList();
+        report = {workspace: rect(workspace.virtualScreenGeometry), windows: []};
+        for (var i = 0; i < windows.length; i++) {
+            var window = windows[i];
+            report.windows.push({
+                pid: window.pid,
+                caption: window.caption,
+                captionNormal: window.captionNormal === undefined ? null : window.captionNormal,
+                stackingOrder: window.stackingOrder,
+                shown: !window.minimized && !window.hidden && !window.deleted && !window.shade
+                    && onCurrentDesktop(window) && onCurrentActivity(window),
+                ownedPopup: window.popupWindow === true || window.transient === true,
+                client: window.clientGeometry === undefined ? null : rect(window.clientGeometry),
+                buffer: rect(window.bufferGeometry),
+                frame: rect(window.frameGeometry),
+                screen: rect(workspace.clientArea(KWin.FullScreenArea, window))
+            });
+        }
+    } catch (error) {
+        report = {error: String(error)};
+    }
+    callDBus(target[0], target[1], target[2], "Report", JSON.stringify(report));
+})(__ORCA_REPORT_TARGET__);
+"""
+
+
+def wayland_compositor():
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        return "hyprland"
+    if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+        return "sway"
+    return None
+
+
+def wayland_session():
+    # Why: Sway launched from a TTY leaves XDG_SESSION_TYPE=tty, where GDK root readback has nothing to read.
+    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or wayland_compositor() is not None
+
+
+def session_bus():
+    return Gio.bus_get_sync(Gio.BusType.SESSION, None) if Gio is not None else None
+
+
+def bus_call(bus, service, path, interface, method, parameters=None, reply_type=None, timeout_ms=2000):
+    return bus.call_sync(service, path, interface, method, parameters,
+                         GLib.VariantType.new(reply_type) if reply_type else None,
+                         Gio.DBusCallFlags.NONE, timeout_ms, None)
+
+
+def bus_name_owner(bus, name):
+    return attempt(lambda: bus_call(bus, *DBUS_DAEMON, "GetNameOwner", GLib.Variant("(s)", (name,)), "(s)").unpack()[0])
+
+
+def wayland_screenshot_backend():
+    compositor = wayland_compositor()
+    if compositor is not None:
+        return compositor
+    bus = attempt(session_bus)
+    return "kwin" if bus is not None and bus_name_owner(bus, KWIN_SERVICE) else None
+
+
+def wayland_screenshot_ready():
+    backend = wayland_screenshot_backend()
+    if backend != "kwin":
+        return backend is not None and bool(shutil.which("grim"))
+    bus = session_bus()
+    activatable = attempt(lambda: bus_call(bus, *DBUS_DAEMON, "ListActivatableNames", None, "(as)").unpack()[0], [])
+    return bus_name_owner(bus, PORTAL_SERVICE) is not None or PORTAL_SERVICE in activatable
+
+
+def screenshot_failure(message):
+    return {"error": {"code": "screenshot_failed", "message": message}}
+
+
+def compositor_json(command):
+    with tempfile.TemporaryFile() as output:
+        result = subprocess.run(command, stdout=output, stderr=subprocess.DEVNULL, timeout=2, check=False)
+        if result.returncode != 0 or output.tell() > 4_000_000:
+            raise ValueError("compositor query failed")
+        output.seek(0)
+        return json.load(output)
+
+
+def hyprland_windows(pid, title):
+    clients = compositor_json([shutil.which("hyprctl"), "-j", "clients"])
+    matches = [item for item in clients if item.get("pid") == pid and item.get("title") == title]
+    if len(matches) != 1:
+        return matches, False
+    monitors = compositor_json([shutil.which("hyprctl"), "-j", "monitors"])
+    shown = {monitor.get(key, {}).get("id") for monitor in monitors
+             for key in ("activeWorkspace", "specialWorkspace")}
+    item = matches[0]
+    visible = (item.get("mapped") and not item.get("hidden")
+               and (item.get("pinned") or item.get("workspace", {}).get("id") in shown))
+    return [item.get("at", []) + item.get("size", [])], bool(visible)
+
+
+def sway_windows(pid, title):
+    pending = [compositor_json([shutil.which("swaymsg"), "-t", "get_tree", "-r"])]
+    matches = []
+    while pending:
+        item = pending.pop()
+        pending.extend(item.get("nodes", []) + item.get("floating_nodes", []))
+        if item.get("pid") == pid and item.get("name") == title:
+            matches.append(item)
+    if len(matches) != 1:
+        return matches, False
+    rect = matches[0].get("rect", {})
+    content = matches[0].get("window_rect")
+    if content:
+        # Why: window_rect excludes borders and title bars drawn by Sway.
+        rect = {"x": rect["x"] + content["x"], "y": rect["y"] + content["y"],
+                "width": content["width"], "height": content["height"]}
+    return [[rect.get(key) for key in ("x", "y", "width", "height")]], matches[0].get("visible") is True
+
+
+def finite_rect(values):
+    if (not isinstance(values, list) or len(values) != 4
+            or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+                   for value in values)
+            or values[2] <= 0 or values[3] <= 0):
+        return None
+    return Rect(*(float(value) for value in values))
+
+
+def wayland_window_rect(compositor, app, window):
+    try:
+        lookup = hyprland_windows if compositor == "hyprland" else sway_windows
+        rects, visible = lookup(pid_of(app), name_of(window))
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError, KeyError):
+        return None, "could not read window geometry from the compositor"
+    if len(rects) != 1:
+        return None, "no single compositor window matches this app and window title"
+    # Why: grim captures a screen region, so a window off-workspace or behind a group tab would return other content.
+    if not visible:
+        return None, "the window is not visible on any output; switch to its workspace"
+    rect = finite_rect(rects[0])
+    if rect is None:
+        return None, "the compositor reported invalid window geometry"
+    return rect, None
+
+
+def same_size(rect, bounds):
+    return bounds is not None and abs(bounds.width - rect.width) <= 2 and abs(bounds.height - rect.height) <= 2
+
+
+def pixel_box(rect):
+    x, y = math.floor(rect.x), math.floor(rect.y)
+    return x, y, math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
+
+
+def within_capture_limit(width, height):
+    return width <= 16384 and height <= 16384 and width * height <= 67_108_864
+
+
+def capture_wayland_png(bounds, app, window):
+    backend = wayland_screenshot_backend()
+    if backend is None:
+        return screenshot_failure(UNSUPPORTED_WAYLAND_SCREENSHOT)
+    if app is None or window is None:
+        return screenshot_failure("Wayland screenshots need a target window")
+    if backend == "kwin":
+        return capture_kwin_png(bounds, app, window)
+    grim = shutil.which("grim")
+    if grim is None or GdkPixbuf is None:
+        return screenshot_failure("Wayland screenshots require grim and GdkPixbuf; install them or use --no-screenshot")
+    # AT-SPI often reports (0, 0) on Wayland, which would capture an unrelated desktop region.
+    rect, error = wayland_window_rect(backend, app, window)
+    if rect is None:
+        return screenshot_failure(f"Wayland screenshot skipped: {error}")
+    # Why: element frames are AT-SPI coordinates; a crop of another size (e.g. CSD shadows) would misplace them.
+    if not same_size(rect, bounds):
+        return screenshot_failure("Wayland screenshot skipped: the compositor window size differs from the accessibility bounds")
+    x, y, width, height = pixel_box(rect)
+    if not within_capture_limit(width, height):
+        return screenshot_failure("Wayland window exceeds the screenshot dimension limit")
+    try:
+        with tempfile.TemporaryFile() as output:
+            # Scale 1 keeps screenshot pixels aligned with window-local logical coordinates.
+            result = subprocess.run([grim, "-s", "1", "-g", f"{x},{y} {width}x{height}", "-t", "png", "-"],
+                                    stdout=output, stderr=subprocess.DEVNULL, timeout=5, check=False)
+            size = output.tell()
+            if result.returncode != 0 or not 0 < size <= MAX_WAYLAND_PNG_BYTES:
+                return screenshot_failure("grim could not capture the window; check compositor screencopy support and screen-capture access")
+            output.seek(0)
+            pixbuf = decode_png(output.read())
+            if pixbuf is None or pixbuf.get_width() != width or pixbuf.get_height() != height:
+                return screenshot_failure("grim returned an image with unexpected window dimensions")
+            return bounded_png_payload(pixbuf)
+    except Exception as error:
+        return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
+
+
+def decode_png(data):
+    loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+    loader.write(data)
+    loader.close()
+    return loader.get_pixbuf()
+
+
+def pump_until(done, seconds):
+    deadline = time.monotonic() + seconds
+    context = GLib.MainContext.default()
+    # Why: a periodic wake-up lets the deadline end a blocking iteration when no D-Bus message arrives.
+    tick = GLib.timeout_add(20, lambda: True)
+    try:
+        while not done() and time.monotonic() < deadline:
+            context.iteration(True)
+    finally:
+        GLib.source_remove(tick)
+    return done()
+
+
+def run_kwin_script(bus, script_id):
+    try:
+        bus_call(bus, KWIN_SERVICE, f"/Scripting/Script{script_id}", "org.kde.kwin.Script", "run")
+    except GLib.Error:
+        # Why: Plasma 5 exports loaded scripts at /<id> instead of /Scripting/Script<id>.
+        bus_call(bus, KWIN_SERVICE, f"/{script_id}", "org.kde.kwin.Script", "run")
+
+
+def kwin_layout(bus):
+    kwin = bus_name_owner(bus, KWIN_SERVICE)
+    if kwin is None:
+        raise ValueError("KWin is not on the session bus")
+    token = uuid.uuid4().hex
+    path = "/dev/orca/ComputerUse/KWinReport/" + token
+    reports = []
+
+    def on_call(_connection, sender, _path, _interface, method, parameters, invocation):
+        if sender == kwin and method == "Report":
+            reports.append(parameters.unpack()[0])
+        invocation.return_value(None)
+
+    interface = Gio.DBusNodeInfo.new_for_xml(KWIN_REPORT_XML).interfaces[0]
+    registration = bus.register_object(path, interface, on_call, None, None)
+    plugin = "orca-computer-use-" + token
+    descriptor, script_path = tempfile.mkstemp(prefix="orca-kwin-", suffix=".js", dir=os.environ.get("XDG_RUNTIME_DIR"))
+    try:
+        target = json.dumps([bus.get_unique_name(), path, "dev.orca.ComputerUse.KWinReport"])
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(KWIN_LAYOUT_SCRIPT.replace("__ORCA_REPORT_TARGET__", target))
+        script_id = bus_call(bus, KWIN_SERVICE, "/Scripting", "org.kde.kwin.Scripting", "loadScript",
+                             GLib.Variant("(ss)", (script_path, plugin)), "(i)").unpack()[0]
+        if script_id < 0:
+            raise ValueError("KWin refused the window layout script")
+        run_kwin_script(bus, script_id)
+        if not pump_until(lambda: reports, KWIN_QUERY_SECONDS):
+            raise ValueError("KWin did not report window geometry")
+    finally:
+        attempt(lambda: bus_call(bus, KWIN_SERVICE, "/Scripting", "org.kde.kwin.Scripting", "unloadScript",
+                                 GLib.Variant("(s)", (plugin,)), "(b)"))
+        bus.unregister_object(registration)
+        attempt(lambda: os.unlink(script_path))
+    report = json.loads(reports[0])
+    if not isinstance(report, dict) or report.get("error"):
+        raise ValueError("KWin could not list windows: " + str(report.get("error") if isinstance(report, dict) else report)[:120])
+    # Why: Plasma 6 hides windows for Show Desktop without exposing that to scripts.
+    report["showingDesktop"] = attempt(lambda: bus_call(bus, KWIN_SERVICE, "/KWin", "org.freedesktop.DBus.Properties", "Get",
+                                                        GLib.Variant("(ss)", (KWIN_SERVICE, "showingDesktop")), "(v)").unpack()[0])
+    return report
+
+
+def overlaps(a, b):
+    return a.x < b.x + b.width and b.x < a.x + a.width and a.y < b.y + b.height and b.y < a.y + a.height
+
+
+def kwin_window_rect(report, pid, title, bounds):
+    windows = [item for item in report.get("windows") or [] if isinstance(item, dict)]
+    workspace = finite_rect(report.get("workspace"))
+    matches = [item for item in windows if item.get("pid") == pid and title in (item.get("captionNormal"), item.get("caption"))]
+    if len(matches) != 1:
+        return None, "no single KWin window matches this app and window title"
+    target = matches[0]
+    if target.get("shown") is not True or report.get("showingDesktop") is True:
+        return None, "the window is minimized, hidden, or on another virtual desktop or activity"
+    # Why: Wayland AT-SPI frames are window-local; the KWin rectangle with the toolkit's size is their origin.
+    rect = next((rect for rect in (finite_rect(target.get(key)) for key in ("client", "buffer", "frame"))
+                 if rect is not None and same_size(rect, bounds)), None)
+    if rect is None:
+        return None, "the KWin window size differs from the accessibility bounds"
+    # Why: the workspace box also spans gaps between unevenly placed monitors that no screen shows.
+    screen = finite_rect(target.get("screen"))
+    if workspace is None or screen is None or not overlaps(screen, rect):
+        return None, "the window is not on any screen"
+    order = target.get("stackingOrder")
+    if isinstance(order, bool) or not isinstance(order, (int, float)):
+        return None, "KWin reported no stacking order for the window"
+    for other in windows:
+        if other is target or other.get("shown") is not True:
+            continue
+        # The app's own menus and dialogs are part of what it shows.
+        if other.get("pid") == pid and other.get("ownedPopup") is True:
+            continue
+        above = other.get("stackingOrder")
+        frame = finite_rect(other.get("frame"))
+        if (isinstance(above, bool) or not isinstance(above, (int, float)) or above > order) and frame and overlaps(frame, rect):
+            return None, "another window covers part of it; bring it to the front and retry"
+    return (rect, workspace), None
+
+
+def screenshot_permissions(bus):
+    return attempt(lambda: bus_call(bus, *PERMISSION_STORE, "Lookup", GLib.Variant("(ss)", ("screenshot", "screenshot")),
+                                    "(a{sas}v)").unpack()[0])
+
+
+def take_portal_file(uri, not_before):
+    parsed = urllib.parse.urlsplit(uri) if isinstance(uri, str) else None
+    if parsed is None or parsed.scheme != "file" or parsed.netloc not in ("", "localhost"):
+        raise ValueError("the desktop portal returned no local screenshot file")
+    path = urllib.parse.unquote(parsed.path)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    with os.fdopen(descriptor, "rb") as handle:
+        info = os.fstat(descriptor)
+        # Why: the portal saves into the user's folders; only a file it just wrote for this call is ours to read and delete.
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mtime < not_before - 1:
+            raise ValueError("the desktop portal's screenshot file is not a new file of this user")
+        try:
+            if not 0 < info.st_size <= MAX_WAYLAND_PNG_BYTES:
+                raise ValueError("the desktop portal's screenshot exceeds the size limit")
+            return handle.read(MAX_WAYLAND_PNG_BYTES + 1)
+        finally:
+            current = attempt(lambda: os.stat(path, follow_symlinks=False))
+            if current is not None and (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
+                attempt(lambda: os.unlink(path))
+
+
+def portal_screenshot_png(bus):
+    permissions = screenshot_permissions(bus)
+    token = "orca_" + uuid.uuid4().hex
+    answers = []
+    subscription = bus.signal_subscribe(None, "org.freedesktop.portal.Request", "Response", None, None,
+                                        Gio.DBusSignalFlags.NONE,
+                                        lambda _c, sender, path, _i, _s, parameters: answers.append((sender, path, parameters.unpack())))
+    started = time.time()
+    try:
+        options = {"handle_token": GLib.Variant("s", token), "interactive": GLib.Variant("b", False)}
+        try:
+            handle = bus_call(bus, PORTAL_SERVICE, "/org/freedesktop/portal/desktop", "org.freedesktop.portal.Screenshot",
+                              "Screenshot", GLib.Variant("(sa{sv})", ("", options)), "(o)", 5000).unpack()[0]
+        except GLib.Error as error:
+            if Gio.DBusError.get_remote_error(error) in ("org.freedesktop.DBus.Error.ServiceUnknown",
+                                                         "org.freedesktop.DBus.Error.UnknownInterface",
+                                                         "org.freedesktop.DBus.Error.UnknownMethod"):
+                raise ValueError("KDE Wayland screenshots need xdg-desktop-portal and xdg-desktop-portal-kde; install them or use --no-screenshot")
+            raise
+        portal = bus_name_owner(bus, PORTAL_SERVICE)
+        mine = lambda: next((answer for sender, path, answer in answers if path == handle and sender == portal), None)
+        if not pump_until(mine, PORTAL_ANSWER_SECONDS):
+            attempt(lambda: bus_call(bus, PORTAL_SERVICE, handle, "org.freedesktop.portal.Request", "Close"))
+            raise ValueError("the desktop portal did not answer; if the desktop is asking whether apps may take "
+                             "screenshots, wait for the person to answer that prompt before retrying (allowing it may "
+                             "leave one screenshot in their Pictures folder)")
+        response, results = mine()
+    finally:
+        bus.signal_unsubscribe(subscription)
+    if response != 0:
+        raise ValueError("the desktop declined the screenshot; if a screenshot prompt was denied, allow screenshots "
+                         "for this app again in the desktop's permission settings, then retry")
+    data = take_portal_file(results.get("uri"), started)
+    # Why: the first call shows a consent prompt that can still be fading out in this image.
+    if screenshot_permissions(bus) != permissions:
+        raise ValueError("screenshots were just allowed for this app; retry to capture the window")
+    return data
+
+
+def crop_workspace_png(data, rect, workspace):
+    image = decode_png(data)
+    if image is None:
+        raise ValueError("the desktop portal's screenshot is not a readable PNG")
+    # Why: KWin renders the whole workspace at its largest output scale; any other size means an unknown layout.
+    factor = image.get_width() / workspace.width
+    if abs(workspace.height * factor - image.get_height()) > 1:
+        raise ValueError("the desktop portal's screenshot does not match KWin's screen layout")
+    x, y, width, height = pixel_box(rect)
+    left, top = round((x - workspace.x) * factor), round((y - workspace.y) * factor)
+    right, bottom = round((x + width - workspace.x) * factor), round((y + height - workspace.y) * factor)
+    shown_left, shown_top = max(left, 0), max(top, 0)
+    shown_right, shown_bottom = min(right, image.get_width()), min(bottom, image.get_height())
+    if shown_right <= shown_left or shown_bottom <= shown_top:
+        raise ValueError("the window lies outside the desktop portal's screenshot")
+    if not within_capture_limit(width, height) or not within_capture_limit(right - left, bottom - top):
+        raise ValueError("the window exceeds the screenshot dimension limit")
+    if (shown_left, shown_top, shown_right, shown_bottom) == (left, top, right, bottom):
+        window = image.new_subpixbuf(left, top, right - left, bottom - top)
+    else:
+        # Why: a window partly off screen keeps its full size, transparent where no screen shows it, so frames stay aligned.
+        window = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, right - left, bottom - top)
+        window.fill(0)
+        image.copy_area(shown_left, shown_top, shown_right - shown_left, shown_bottom - shown_top,
+                        window, shown_left - left, shown_top - top)
+    # Logical size keeps screenshot pixels aligned with window-local accessibility frames.
+    if (right - left, bottom - top) != (width, height):
+        window = window.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
+    return window
+
+
+def capture_kwin_png(bounds, app, window):
+    if GdkPixbuf is None:
+        return screenshot_failure("KDE Wayland screenshots require GdkPixbuf; install it or use --no-screenshot")
+    pid, title = pid_of(app), name_of(window)
+    try:
+        bus = session_bus()
+        layout, error = kwin_window_rect(kwin_layout(bus), pid, title, bounds)
+        if layout is None:
+            return screenshot_failure(f"Wayland screenshot skipped: {error}")
+        data = portal_screenshot_png(bus)
+        # Why: the portal may wait on a consent prompt; a window that moved meanwhile would misalign the crop.
+        after, _ = kwin_window_rect(kwin_layout(bus), pid, title, bounds)
+        if after != layout:
+            return screenshot_failure("Wayland screenshot skipped: the window moved, resized or was covered while capturing; retry")
+        return bounded_png_payload(crop_workspace_png(data, *layout))
+    except ValueError as error:
+        return screenshot_failure("Wayland screenshot skipped: " + str(error)[:300])
+    except Exception as error:
+        return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
+
+
+def capture_png(rect, app=None, window=None):
+    if wayland_session():
+        return capture_wayland_png(rect, app, window)
+    if Gdk is None or GdkPixbuf is None or rect is None:
         return None
     screen = Gdk.Screen.get_default()
     root = screen.get_root_window() if screen else None
@@ -716,17 +1207,23 @@ def window_json(app, index, window):
     }
 
 
-def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False):
+def make_snapshot(query, include_screenshot, window_id=None, window_index=None, restore=False, root=None):
     app = find_app(query)
     window_index, window = choose_window(app, window_id, window_index)
     if restore:
         restore_window(app, window)
         window_index, window = choose_window(app, window_id, window_index)
     bounds = screen_rect(window)
+    tree_root, root_path = window, [window_index]
+    if root is not None:
+        tree_root = find_element(app, root)
+        if tree_root is None:
+            raise RuntimeError(f"stale element: element {root.get('index')} is gone; run get-app-state again and use a fresh element index")
+        root_path = list(root.get("runtimeId") or [])
     geometry_nodes = {}
     records, lines, truncation = render_accessibility_tree(
-        window,
-        [window_index],
+        tree_root,
+        root_path,
         compact_browser_tabs=is_browser_app(query, app),
         geometry_nodes=geometry_nodes,
     )
@@ -734,7 +1231,7 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     selection = selected_text(window)
     app_info = app_json(app)
     window_title = name_of(window)
-    screenshot = capture_png(bounds) if include_screenshot else None
+    screenshot = capture_png(bounds, app, window) if include_screenshot else None
     geometry = GeometryReader()
     for item in records:
         node = geometry_nodes[id(item)]
@@ -780,7 +1277,9 @@ def handshake_response():
     is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
-    has_screenshot = Gdk is not None and GdkPixbuf is not None and not is_wayland
+    has_screenshot = GdkPixbuf is not None and (
+        attempt(wayland_screenshot_ready, False) if wayland_session() else Gdk is not None
+    )
     return {
         "platform": "linux",
         "provider": "orca-computer-use-linux",
@@ -789,10 +1288,11 @@ def handshake_response():
         "supports": {
             "apps": {"list": True, "bundleIds": False, "pids": True},
             "windows": {"list": True, "targetById": False, "targetByIndex": True, "focus": False, "moveResize": False},
-            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False},
+            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False, "disabledState": True},
             "actions": {
                 "click": True,
                 "typeText": True,
+                "typeTextElement": True,
                 "pressKey": True,
                 "hotkey": has_hotkey,
                 "pasteText": has_clipboard,
@@ -1253,8 +1753,12 @@ def text_selection(text):
 
 
 def insert_focused_text(window, value):
-    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
     node = first_descendant(window, lambda candidate: has_state(candidate, Atspi.StateType.FOCUSED))
+    return insert_text(node, value, "focusedText")
+
+
+def insert_text(node, value, verified_property):
+    # Why: EditableText needs no window focus and still works on Wayland, where key synthesis is a no-op.
     if node is None or not has_state(node, Atspi.StateType.EDITABLE):
         return None
     editable = attempt(node.get_editable_text_iface)
@@ -1287,8 +1791,23 @@ def insert_focused_text(window, value):
                 or attempt(lambda: Atspi.Text.get_caret_offset(text)) != caret):
             raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
-    if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
-        action["verification"] = {"state": "verified", "property": "focusedText", "expected": value}
+    readback = attempt(lambda: Atspi.Text.get_text(text, start, caret))
+    if readback == value:
+        action["verification"] = {"state": "verified", "property": verified_property}
+    else:
+        reason = "readback_unsupported" if readback is None else "accessibility_action_unasserted"
+        action["verification"] = {"state": "unverified", "reason": reason}
+    return action
+
+
+def insert_element_text(node, saved, value):
+    index = saved.get("index")
+    if node is None:
+        raise RuntimeError(f"element {index} changed since the last snapshot; run get-app-state again and use a fresh element index")
+    action = insert_text(node, value, "elementText")
+    # Why: typing at focus instead would put the text in whatever field has focus, not the requested one.
+    if action is None:
+        raise RuntimeError(f"element {index} text is not settable; click it, then run type-text without --element-index")
     return action
 
 
@@ -1386,6 +1905,7 @@ def run_operation(operation):
                 operation.get("windowId"),
                 operation.get("windowIndex"),
                 bool(operation.get("restoreWindow")),
+                operation.get("root"),
             ),
         }
 
@@ -1450,7 +1970,10 @@ def run_operation(operation):
         action = {"path": "synthetic", "actionName": "drag", "fallbackReason": None}
     elif tool == "type_text":
         text = require_non_empty_string(operation.get("text"), "text")
-        action = insert_focused_text(window, text)
+        if saved:
+            action = insert_element_text(node, saved, text)
+        else:
+            action = insert_focused_text(window, text)
         if action is None:
             require_keyboard_focus(window, operation)
             type_text(text, window)

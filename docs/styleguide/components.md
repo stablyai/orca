@@ -26,6 +26,8 @@ Variants in priority order:
 
 Sizes are defined in `button.tsx` (`default`, `sm`, `xs`, `lg`, plus `icon`, `icon-xs`, `icon-sm`, `icon-lg`). Match the size to the surrounding row height — don't drop a `default` button into a 28px toolbar.
 
+Buttons, toggles and select triggers use `control-interaction`: a thin outline on hover, a solid `ring` outline on focus (including the initially focused dialog action), and a closer outline while pressed. These cues do not change layout. Preserve them in every variant, including destructive and split buttons; use the same utility for custom button controls.
+
 ## Picking the right primitive
 
 | You want…                                                    | Reach for                                  | Don't use                             |

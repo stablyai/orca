@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import {
   isCrossStoreInferredSource,
   type CrossStoreInferredSource,
@@ -48,6 +49,9 @@ type RuntimeWorktreeLineageDependencies = {
 }
 
 function worktreeParent(worktree: ResolvedWorktree): ResolvedWorkspaceParent {
+  if (isWorktreeRetiredByRemoval(worktree)) {
+    throw new Error('selector_not_found')
+  }
   return {
     type: 'worktree',
     workspaceKey: worktreeWorkspaceKey(worktree.id),

@@ -5,9 +5,12 @@ import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
-import { githubProjectHost } from '../../../../shared/github/project-identity'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
+import type {
+  GitHubProjectRow,
+  GitHubProjectTable
+} from '../../../../shared/github/projects/project-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import {
   resolveMissingRepoProjectDialogState,

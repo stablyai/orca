@@ -1,10 +1,10 @@
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { editMobileNativeChatDraft } from '../session/native-chat/composer/mobile-native-chat-draft-store'
-import { terminalInputSend } from '../terminal/mobile-terminal-operations'
+import { terminalInputSend } from '../terminal/host-operations/mobile-terminal-operations'
 import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
-} from '../terminal/terminal-send-request'
+} from '../terminal/input-delivery/terminal-send-request'
 import { insertDictationText } from './mobile-dictation-text-insertion'
 
 // Where a dictation's words go when its screen is gone or behind another: the chat's draft, or the terminal's input.

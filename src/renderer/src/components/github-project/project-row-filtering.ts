@@ -1,4 +1,7 @@
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
+import type {
+  GitHubProjectRow,
+  GitHubProjectTable
+} from '../../../../shared/github/projects/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 /** Origin matches own the slug through their own remote; upstream matches are

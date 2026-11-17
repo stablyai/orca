@@ -17,7 +17,7 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import {
   listWslMoveCutovers,
   writeWslMoveCutover
-} from '../../src/main/persistence/moving-wsl-projects/wsl-move-cutover-journal'
+} from '../../src/main/persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutoverPhase

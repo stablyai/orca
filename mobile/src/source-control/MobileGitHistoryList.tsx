@@ -330,7 +330,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           />
         }
         ListHeaderComponent={
-          ranHere && actionError ? <Text style={styles.actionError}>{actionError}</Text> : null
+          ranHere && actionError ? <Text style={styles.actionError}>{actionError}</Text> : undefined
         }
         ListFooterComponent={
           moreState === 'loading' ? (
@@ -345,7 +345,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                 {t('sourceControl.commits.loadMoreFailed', 'Couldn’t load more commits. Retry')}
               </Text>
             </Pressable>
-          ) : null
+          ) : undefined
         }
         contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
       />

@@ -1,3 +1,4 @@
+import type * as HostViewSettingsModule from '../../../host-screen/view-settings/use-host-view-settings'
 import type { MountAdapter } from '../recording-scenario'
 import { INITIAL_MOBILE_VIEW } from '../../../worktree/workspace-view-settings'
 import { hookMount, performHookAction } from '../hook-mount'
@@ -9,9 +10,9 @@ export function hostScreenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'host.view-settings': (context) => {
-      const useViewSettings = modules.load<
-        typeof import('../../../host-screen/use-host-view-settings')
-      >('mobile/src/host-screen/use-host-view-settings.ts').useHostViewSettings
+      const useViewSettings = modules.load<typeof HostViewSettingsModule>(
+        'mobile/src/host-screen/view-settings/use-host-view-settings.ts'
+      ).useHostViewSettings
       const state = observableModel(context, {
         clientRef: { current: context.client },
         view: INITIAL_MOBILE_VIEW,

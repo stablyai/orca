@@ -15,16 +15,7 @@ function featureRoute(id, specs, prefixes) {
 
 // Feature areas whose specs the nightly suite alone used to select (gap audit, Oct 2026).
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
-  featureRoute(
-    'feature.automations-ui',
-    ['automation-prompt-disclosure'],
-    [`${COMPONENTS}automations/`]
-  ),
-  featureRoute(
-    'feature.sparse-checkout',
-    ['sparse-explorer-proof', 'sparse-preset-proof'],
-    [`${COMPONENTS}sparse/`]
-  ),
+  featureRoute('feature.sparse-checkout', ['sparse-explorer-proof'], [`${COMPONENTS}sparse/`]),
   featureRoute(
     'feature.onboarding',
     ['onboarding', 'onboarding-language-catalog-retry'],

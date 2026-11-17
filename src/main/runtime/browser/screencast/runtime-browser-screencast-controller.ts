@@ -7,7 +7,7 @@ import {
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
 import type { RuntimeBrowserCommands } from '../commands/browser-commands'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 
 type RuntimeBrowserScreencastControllerDeps = {
   getCommands: () => Pick<RuntimeBrowserCommands, 'browserScreencast'>

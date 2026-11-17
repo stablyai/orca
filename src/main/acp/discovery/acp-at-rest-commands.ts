@@ -5,7 +5,7 @@ import {
   AtRestCommandCatalog,
   type AtRestCommandScan
 } from '../../native-chat/agent-session-wire/options/at-rest-command-catalog'
-import { resolveNativeChatVisualsSkillLocation } from '../../native-chat/native-chat-visuals-skill-location'
+import { resolveNativeChatVisualsSkillLocation } from '../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -15,7 +15,7 @@ import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/envi
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../native-chat/native-chat-visuals-delivery'
+} from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
@@ -129,7 +129,6 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 ...STRUCTURED_CHILD_ENV_TO_DELETE,
                 ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
                 ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
-                'ORCA_TERMINAL_HANDLE',
                 NATIVE_CHAT_SCRATCH_DIR_ENV,
                 LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
               ]

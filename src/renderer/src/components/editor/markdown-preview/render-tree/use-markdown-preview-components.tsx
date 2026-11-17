@@ -14,7 +14,12 @@ import {
   getMarkdownPreviewBlockRange,
   hasMarkdownPreviewNestedBlock
 } from '../review/markdown-preview-block-model'
-import { handleMarkdownPreviewLinkClick } from '../links/markdown-preview-link-actions'
+import { preventMiddleButtonDefault } from '@/components/tab-bar/middle-button-default-guard'
+import {
+  handleMarkdownPreviewLinkAuxClick,
+  handleMarkdownPreviewLinkClick,
+  isMarkdownPreviewExternalHttpHref
+} from '../links/markdown-preview-link-actions'
 import { isMarkdownPreviewOpenModifier } from '../../markdown/link-routing/markdown-preview-links'
 import type { MarkdownPreviewPositionNode } from './markdown-preview-types'
 import type { MarkdownPreviewAnnotationRenderers } from '../review/use-markdown-preview-annotation-renderers'
@@ -24,7 +29,7 @@ import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-v
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '../../../../../../shared/github/github-callouts'
+import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
 import { translate } from '@/i18n/i18n'
 
 function hasMermaidCodeClass(value: unknown): boolean {
@@ -129,11 +134,26 @@ export function useMarkdownPreviewComponents({
           )
         }
 
+        const isMiddleClickable = isMarkdownPreviewExternalHttpHref(href, filePath)
+
         return (
           <a
             {...props}
             href={href}
             className={className}
+            onMouseDown={isMiddleClickable ? preventMiddleButtonDefault : undefined}
+            onMouseUp={isMiddleClickable ? preventMiddleButtonDefault : undefined}
+            onAuxClick={
+              isMiddleClickable
+                ? (event) =>
+                    handleMarkdownPreviewLinkAuxClick({
+                      event,
+                      href,
+                      filePath,
+                      context: linkContext
+                    })
+                : undefined
+            }
             onClick={(event) =>
               void handleMarkdownPreviewLinkClick({ event, href, filePath, context: linkContext })
             }

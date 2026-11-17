@@ -1,5 +1,5 @@
 import { useContext, type ReactNode, type RefObject } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import {
   MobileDictationCancelButton,
@@ -21,7 +21,7 @@ export function MobileNativeChatDictationLeading({
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
-  cancelRef: RefObject<View | null>
+  cancelRef: RefObject<HostInstance | null>
   // The context ring after the leading controls; it steps aside with them.
   trailing: ReactNode
   children: ReactNode

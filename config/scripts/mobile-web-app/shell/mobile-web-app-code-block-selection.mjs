@@ -12,7 +12,6 @@ async function verifyCodeBlockSelections({
   readSurface
 }) {
   const cases = [
-    { markdown: 'selected text', html: '<p>selected text</p>', literal: 'selected text' },
     { markdown: 'first\nsecond', html: '<p>first<br>second</p>', literal: 'first\nsecond' },
     {
       markdown: 'first\n\nsecond',

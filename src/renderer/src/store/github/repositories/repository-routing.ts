@@ -3,7 +3,7 @@ import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../../shared/github/pull-request-refresh-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import { runtimeTargetForOwnerEnvironment } from '../../../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'

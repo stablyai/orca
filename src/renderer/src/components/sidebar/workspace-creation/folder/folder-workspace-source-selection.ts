@@ -10,7 +10,7 @@ import '../../../../../../shared/project-groups'
 import '../../../../../../shared/repo-kind'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import './folder-workspace-source-repos'

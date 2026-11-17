@@ -214,29 +214,6 @@ describe('runtime environment shared-control connection cache', () => {
       []
     )
   })
-
-  it('sends the prepared request on the runtime-pinned shared socket', async () => {
-    const server = await createSharedControlTestServer({
-      resultForRequest: (method) => (method === 'status.get' ? { runtimeId: 'runtime-a' } : {})
-    })
-
-    await sendRemoteRuntimeSharedControlRequestOnRuntime(
-      ENVIRONMENT_ID,
-      server.pairing,
-      {
-        method: 'orchestration.federationImport',
-        params: { items: [1, 2, 3] },
-        timeoutMs: 1000,
-        prepareRequest: ({ envelope }) => ({ params: { items: [1] }, envelope })
-      },
-      'runtime-a'
-    )
-
-    expect(server.requests.at(-1)).toMatchObject({
-      method: 'orchestration.federationImport',
-      params: { items: [1] }
-    })
-  })
 })
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

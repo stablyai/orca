@@ -8,6 +8,7 @@ import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktre
 import { orderEmptyQueryWorktrees } from '@/lib/workspace/search/palette/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
+  isPaletteSearchableWorktree,
   searchWorktreeDocuments
 } from '@/lib/workspace/search/worktrees/worktree-palette-search'
 import {
@@ -19,6 +20,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { indexHiddenProjects } from '../../../../shared/hidden-projects'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
@@ -88,6 +90,10 @@ export function useWorktreeJumpPaletteWorktrees({
     unifiedTabsByWorktree,
     structuredChatSleptAtByPaneKey
   )
+  const hiddenProjects = useMemo(
+    () => indexHiddenProjects(repos, defaultHostId),
+    [repos, defaultHostId]
+  )
   const emptyQueryVisibleWorktrees = useMemo(() => {
     // Why no project or host scope: the palette ignores the sidebar's scope; filterPredicate scopes it.
     const visible = filterWorkspaceRows(
@@ -105,6 +111,7 @@ export function useWorktreeJumpPaletteWorktrees({
       },
       buildDesktopWorkspaceRowFactReader({
         repoMap,
+        hiddenProjects,
         defaultHostId,
         pairedDeviceIdsByEnvironment,
         tabsByWorktree,
@@ -128,6 +135,7 @@ export function useWorktreeJumpPaletteWorktrees({
     pairedDeviceIdsByEnvironment,
     ptyIdsByTabId,
     repoMap,
+    hiddenProjects,
     defaultHostId,
     showSleepingWorkspaces,
     tabsByWorktree,
@@ -153,10 +161,11 @@ export function useWorktreeJumpPaletteWorktrees({
     const scope = getWorktreePaletteSearchScope({
       hasQuery,
       allWorktrees: workspaces,
-      emptyQueryWorktrees: switchableWorktreesForRows
+      emptyQueryWorktrees: switchableWorktreesForRows,
+      hiddenProjects
     })
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
-  }, [workspaces, filterPredicate, hasQuery, switchableWorktreesForRows])
+  }, [workspaces, filterPredicate, hasQuery, switchableWorktreesForRows, hiddenProjects])
   const browserSortedWorktrees = useMemo(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_SORTED_WORKTREES
@@ -187,9 +196,11 @@ export function useWorktreeJumpPaletteWorktrees({
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
-        ? browserSortedWorktrees.filter((worktree) => !worktree.isArchived)
+        ? browserSortedWorktrees.filter((worktree) =>
+            isPaletteSearchableWorktree(worktree, hiddenProjects)
+          )
         : searchScopeWorktrees,
-    [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
+    [hasQuery, browserSortedWorktrees, searchScopeWorktrees, hiddenProjects]
   )
   const paletteWorktreeIndex = useMemo(
     () => buildPaletteWorktreeIndex(browserSortedWorktrees),

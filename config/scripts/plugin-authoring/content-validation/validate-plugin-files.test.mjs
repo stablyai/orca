@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPluginFromTemplate } from '../../../../src/cli/plugin-authoring/plugin-create'
+import { createPluginFromTemplate } from '../../../../src/cli/plugins/authoring/plugin-create'
 
 const SCRIPT = path.join(import.meta.dirname, './validate-plugin-files.mjs')
 const roots = []

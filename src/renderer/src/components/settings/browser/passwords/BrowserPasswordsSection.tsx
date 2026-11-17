@@ -169,18 +169,15 @@ function BrowserPasswordsProfile({
 
   const remove = async (item: BrowserPasswordEntrySummary): Promise<void> => {
     const confirmed = await confirm({
-      title: t(
-        'settings.browser.passwords.deleteConfirmTitle',
-        'Delete the {{site}} password for {{username}}?',
-        {
-          site: browserPasswordHostOf(item.origin),
-          username: item.username || t('settings.browser.passwords.noUsername', '(no username)')
-        }
-      ),
-      description: t(
-        'settings.browser.passwords.deleteConfirmDescription',
-        'Orca won’t fill it anymore. This can’t be undone.'
-      ),
+      title: t('common.delete', 'Delete'),
+      description: [
+        browserPasswordHostOf(item.origin),
+        item.username || t('settings.browser.passwords.noUsername', '(no username)'),
+        t(
+          'settings.browser.passwords.deleteConfirmDescription',
+          'Orca won’t fill it anymore. This can’t be undone.'
+        )
+      ].join('\n'),
       confirmLabel: t('settings.browser.passwords.deleteConfirm', 'Delete'),
       confirmVariant: 'destructive'
     })
@@ -197,13 +194,13 @@ function BrowserPasswordsProfile({
 
   const deleteAll = async (): Promise<void> => {
     const confirmed = await confirm({
-      title: t('settings.browser.passwords.deleteAllConfirmTitle', 'Delete all password data?'),
+      title: t('common.delete', 'Delete'),
       description: t(
         'settings.browser.passwords.deleteAllConfirmDescription',
         'Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.',
         { profile: profileLabel }
       ),
-      confirmLabel: t('settings.browser.passwords.deleteAll', 'Delete data'),
+      confirmLabel: t('common.delete', 'Delete'),
       confirmVariant: 'destructive'
     })
     if (confirmed && (await api.deleteAll({ browserProfileId }))) {

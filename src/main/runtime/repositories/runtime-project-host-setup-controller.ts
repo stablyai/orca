@@ -40,7 +40,7 @@ import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable,
   assertWslMoveReposWritable
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { runtimeVisibleProjectHostSetups } from '../workspaces/catalog/runtime-visible-catalog'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'

@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
+import {
+  clearBrowserGuestMetadata,
+  issueBrowserGuestNavigation,
+  subscribeBrowserGuestMetadata
+} from './host-guest/browser-guest-metadata-cache'
 
 const PAGE: BrowserClientPageRendererIdentity = {
   partition: 'persist:route-a',
@@ -52,11 +57,51 @@ function attach(webview: Electron.WebviewTag): void {
 }
 
 afterEach(() => {
+  clearBrowserGuestMetadata()
   document.body.innerHTML = ''
   vi.useRealTimers()
 })
 
 describe('browser client page retained registry', () => {
+  it.each(['retire', 'dispose', 'renderer-loss'] as const)(
+    'ends unpublished metadata on %s without a post-removal destroyed event',
+    async (mode) => {
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { browser: { getGuestMetadata: async () => undefined } }
+      })
+      const { registry, webviews } = createRig()
+      const mounting = registry.mountPage(PAGE)
+      const webview = webviews[0]!
+      attach(webview)
+      await mounting
+      const remove = webview.remove.bind(webview)
+      webview.remove = () => {
+        webview.dataset.attached = 'false'
+        remove()
+      }
+      const received = vi.fn()
+      const detach = subscribeBrowserGuestMetadata(PAGE.browserPageId, webview, received)
+      if (mode !== 'dispose') {
+        issueBrowserGuestNavigation(webview, () => {})
+      }
+      await Promise.resolve()
+      if (mode === 'retire') {
+        registry.retirePage(PAGE)
+      } else if (mode === 'dispose') {
+        registry.dispose()
+      } else {
+        // The owner runs first on native loss; its removal makes the tag ID unreadable.
+        webview.dataset.attached = 'false'
+        webview.dispatchEvent(new Event('render-process-gone'))
+      }
+      expect(received).toHaveBeenCalledExactlyOnceWith(null)
+      expect(webview.isConnected).toBe(false)
+      detach()
+      registry.dispose()
+    }
+  )
+
   it('holds an attached generation until destruction and ignores wrong-generation retirement', async () => {
     const { registry, webviews } = createRig()
     const mounting = registry.mountPage(PAGE)

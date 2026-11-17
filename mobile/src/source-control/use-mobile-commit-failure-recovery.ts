@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { launchAgentWithPrompt, promptedLaunchNotice } from './review/pr-ai-triage-launch'
+import type { LaunchedAgentOpens } from '../session/agent-launch/launched-agent-opener'
 import { resolveMobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
 import {
   buildFixCommitFailurePrompt,
@@ -50,6 +51,11 @@ export function useMobileCommitFailureRecovery({
     text: string
   } | null>(null)
   const launchSuccess = success?.failure === failure ? success.text : null
+  const [opened, setOpened] = useState<{
+    failure: MobileCommitFailureRecovery
+    opens: LaunchedAgentOpens
+  } | null>(null)
+  const launchOpens = opened?.failure === failure ? opened.opens : null
   const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
   const availability = resolveMobileAgentLaunchAvailability(hostStatus)
 
@@ -96,6 +102,7 @@ export function useMobileCommitFailureRecovery({
     setLaunchError(null)
     setWarning(null)
     setSuccess(null)
+    setOpened(null)
     setUndelivered(null)
     try {
       const result = await launchAgentWithPrompt({
@@ -115,6 +122,7 @@ export function useMobileCommitFailureRecovery({
       setLaunchError(notice.error)
       setWarning(failure && notice.warning ? { failure, text: notice.warning } : null)
       setSuccess(failure && notice.success ? { failure, text: notice.success } : null)
+      setOpened(failure && notice.opens ? { failure, opens: notice.opens } : null)
       setUndelivered(
         failure && notice.undeliveredPrompt ? { failure, prompt: notice.undeliveredPrompt } : null
       )
@@ -144,6 +152,7 @@ export function useMobileCommitFailureRecovery({
     launchError,
     launchWarning,
     launchSuccess,
+    launchOpens,
     undeliveredPrompt,
     launch
   }

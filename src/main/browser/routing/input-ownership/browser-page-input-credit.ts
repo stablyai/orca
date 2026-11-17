@@ -1,5 +1,5 @@
 import { isRecentBrowserGuestInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 type Runner = { pairedDeviceId: string | null }
 

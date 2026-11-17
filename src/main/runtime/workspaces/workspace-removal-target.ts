@@ -37,6 +37,7 @@ import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/wor
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
 import { RuntimeAgentLaunchPreparation } from '../terminal/launch/runtime-agent-launch-preparation'
+import { worktreeHostIdentity } from '../../persistence/worktree-meta-host-identity'
 
 export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends RuntimeAgentLaunchPreparation {
   protected abstract resolveExplicitWorktreeIdScoped(
@@ -117,15 +118,25 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
   }
 
   protected localRemovalJobHost(store: RuntimeStore) {
+    // `removed` is heard after the purge drops the row, so its identity is read first.
+    const purgedIdentities = new Map<string, ReturnType<typeof worktreeHostIdentity>>()
     return {
       store,
       acquireWatcherRemoval: this.acquireFileWatcherRemoval,
       closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
       preservedBranchCleanup: this.preservedBranchCleanup,
-      purge: ({ worktreeId, repoId }) =>
-        this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID),
-      onRemoved: ({ worktreeId, worktreePath }) =>
-        this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath }),
+      purge: ({ worktreeId, repoId }) => {
+        purgedIdentities.set(
+          worktreeId,
+          worktreeHostIdentity(store, worktreeId, LOCAL_EXECUTION_HOST_ID)
+        )
+        return this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID)
+      },
+      onRemoved: ({ worktreeId, worktreePath }) => {
+        const identity = purgedIdentities.get(worktreeId)
+        purgedIdentities.delete(worktreeId)
+        this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath, ...identity })
+      },
       publish: (repoId) => this.publishWorktreeRemovalChange(repoId)
     }
   }

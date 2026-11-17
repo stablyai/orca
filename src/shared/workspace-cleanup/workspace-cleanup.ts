@@ -1,15 +1,42 @@
 // Type-only, so the cycle back through workspace-cleanup-filter-model erases at build.
 import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
 import type { ExecutionHostId } from '../execution-host'
+import type { HostedReviewProvider } from '../source-control/hosted-review/hosted-review-contracts'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+import type { WorktreeAtRiskLocalFiles } from '../worktree/at-risk-local-files'
+import type { AutomationWorkspaceProvenance } from '../worktree/types'
+import {
+  isFinalAutomationRunStatus,
+  type AutomationRun
+} from '../automations/history/automation-run'
 
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
-export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
+export type WorkspaceCleanupReason =
+  | 'archived'
+  | 'inactive'
+  | 'merged'
+  | 'unchanged'
+  | 'automation-run'
+  | 'orchestration-worker'
 
-export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
+/** What HEAD holds beyond the workspace's base ref (worktree base, else project base, else repo default). */
+export type WorkspaceCleanupMergeEvidence = {
+  /** Merged review for the branch; `containsHead` when HEAD is its head or the provider confirmed it. */
+  mergedReview?: {
+    number: number
+    provider: Exclude<HostedReviewProvider, 'unsupported'>
+    containsHead: boolean
+  }
+  /** Every change on HEAD is in the base: an ancestor, or Git proved a squash or rebase landed it. */
+  headInDefaultBranch: boolean
+  /** Commits on HEAD the base ref cannot reach. */
+  aheadOfDefault: number
+  /** Set only for a released orchestration worker's workspace: every change on HEAD is in its coordinator's branch. */
+  headInCoordinatorBranch?: boolean
+}
 
 export type WorkspaceCleanupInactivityInput = {
   isArchived: boolean
@@ -24,12 +51,12 @@ export type WorkspaceCleanupBlocker =
   | 'running-terminal'
   | 'terminal-liveness-unknown'
   | 'dirty-editor-buffer'
-  | 'volatile-local-context'
   | 'recent-visible-context'
   | 'live-agent'
   | 'ssh-disconnected'
   | 'git-status-error'
   | 'dirty-files'
+  | 'ignored-files'
   | 'unpushed-commits'
   | 'unknown-base'
   | 'dismissed'
@@ -58,10 +85,6 @@ export type WorkspaceCleanupCandidate = {
   displayName: string
   branch: string
   path: string
-  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
-  tier: WorkspaceCleanupTier
-  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
-  selectedByDefault: boolean
   reasons: WorkspaceCleanupReason[]
   blockers: WorkspaceCleanupBlocker[]
   lastActivityAt: number
@@ -79,6 +102,10 @@ export type WorkspaceCleanupCandidate = {
     upstreamAhead: number | null
     upstreamBehind: number | null
     checkedAt: number | null
+    /** Absent when Git was not read or the base ref could not be resolved. */
+    merge?: WorkspaceCleanupMergeEvidence
+    /** Absent from older hosts, which never checked ignored files. */
+    atRiskLocalFiles?: WorktreeAtRiskLocalFiles | null
   }
   fingerprint: string
 }
@@ -143,25 +170,6 @@ export type WorkspaceCleanupDismissArgs = {
   restoredDismissalKeys?: string[]
 }
 
-const LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
-  'main-worktree',
-  'folder-repo',
-  'pinned',
-  'active-workspace',
-  'running-terminal',
-  'terminal-liveness-unknown',
-  'dirty-editor-buffer',
-  'volatile-local-context',
-  'live-agent',
-  'recent-visible-context',
-  'ssh-disconnected',
-  'git-status-error',
-  'dirty-files',
-  'unpushed-commits',
-  'unknown-base',
-  'dismissed'
-])
-
 const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
@@ -191,34 +199,13 @@ export function shouldForceWorkspaceCleanupRemoval(
   )
 }
 
-function canSelectWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'reasons'>
+/** Rows the user must review before removal; ignored files never make git refuse, so they need no force. */
+export function needsWorkspaceCleanupRemovalApproval(
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git'>
 ): boolean {
   return (
-    candidate.reasons.length > 0 &&
-    candidate.git.clean === true &&
-    candidate.git.checkedAt !== null &&
-    !candidate.blockers.some((blocker) => LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker))
+    shouldForceWorkspaceCleanupRemoval(candidate) || candidate.blockers.includes('ignored-files')
   )
-}
-
-type WorkspaceCleanupPolicyInput = Omit<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'> &
-  Partial<Pick<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'>>
-
-export function applyWorkspaceCleanupPolicy(
-  candidate: WorkspaceCleanupPolicyInput
-): WorkspaceCleanupCandidate {
-  const canSelect = canSelectWorkspaceCleanupCandidate(candidate)
-  const hasHardBlocker = candidate.blockers.some((blocker) =>
-    LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
-  )
-  const tier: WorkspaceCleanupTier = hasHardBlocker ? 'protected' : canSelect ? 'ready' : 'review'
-
-  return {
-    ...candidate,
-    tier,
-    selectedByDefault: tier === 'ready' && canSelect
-  }
 }
 
 export function createWorkspaceCleanupFingerprint(args: {
@@ -251,9 +238,64 @@ export function getWorkspaceCleanupInactivityReasons(
     reasons.push('archived')
   }
   if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
-    reasons.push('idle-clean')
+    reasons.push('inactive')
   }
   return reasons
+}
+
+/** HEAD's commits already live in the base, a merged review or the coordinator's branch, so removing it loses no commits. */
+export function isWorkspaceCleanupHeadLanded(
+  merge: WorkspaceCleanupMergeEvidence | undefined
+): boolean {
+  return (
+    merge !== undefined &&
+    (merge.headInDefaultBranch ||
+      merge.mergedReview?.containsHead === true ||
+      merge.headInCoordinatorBranch === true)
+  )
+}
+
+/** A workspace a worker start created, whose worker was released, and whose work already landed. */
+export function getWorkspaceCleanupOrchestrationWorkerReasons(
+  releasedWorker: boolean,
+  merge: WorkspaceCleanupMergeEvidence | undefined
+): WorkspaceCleanupReason[] {
+  return releasedWorker && isWorkspaceCleanupHeadLanded(merge) ? ['orchestration-worker'] : []
+}
+
+export function getWorkspaceCleanupMergeReasons(
+  merge: WorkspaceCleanupMergeEvidence | undefined
+): WorkspaceCleanupReason[] {
+  if (!merge) {
+    return []
+  }
+  // A Git-proved squash or rebase is a merge even when no review was cached for the branch.
+  const merged =
+    merge.mergedReview?.containsHead === true ||
+    (merge.headInDefaultBranch && (merge.aheadOfDefault > 0 || merge.mergedReview !== undefined))
+  if (merged) {
+    return ['merged']
+  }
+  return merge.aheadOfDefault === 0 ? ['unchanged'] : []
+}
+
+export type WorkspaceCleanupAutomationRunLookup = (
+  runId: string
+) => Pick<AutomationRun, 'status' | 'terminalPtyId'> | undefined
+
+/** The run that created this workspace is over and its automation no longer holds the run's terminal. */
+export function getWorkspaceCleanupAutomationRunReasons(
+  provenance: AutomationWorkspaceProvenance | undefined,
+  findRun: WorkspaceCleanupAutomationRunLookup
+): WorkspaceCleanupReason[] {
+  // A client-origin label names another owner's run, which this host cannot see finish.
+  if (!provenance || provenance.origin === 'client') {
+    return []
+  }
+  const run = findRun(provenance.automationRunId)
+  return run && isFinalAutomationRunStatus(run.status) && !run.terminalPtyId
+    ? ['automation-run']
+    : []
 }
 
 /** Newest activity stamp Orca itself persisted; 0 when it never observed the workspace. */

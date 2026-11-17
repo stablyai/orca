@@ -25,9 +25,37 @@ export function getLocalWorktreeScanGeneration(repoId: string): number {
   return generation
 }
 
+const routeInputListeners = new Set<() => void>()
+let routeInputsRevision = 0
+let routeInputNotificationQueued = false
+
+/** Repo, project and runtime-setting writes change which route runs a repo's Git; listeners run after the write. */
+export function onWorktreeRouteInputsChanged(listener: () => void): void {
+  routeInputListeners.add(listener)
+}
+
+/** Advances synchronously so readers never trust a route snapshot taken before the write. */
+export function getWorktreeRouteInputsRevision(): number {
+  return routeInputsRevision
+}
+
+export function markWorktreeRouteInputsChanged(): void {
+  routeInputsRevision += 1
+  if (routeInputListeners.size > 0 && !routeInputNotificationQueued) {
+    routeInputNotificationQueued = true
+    queueMicrotask(() => {
+      routeInputNotificationQueued = false
+      for (const listener of routeInputListeners) {
+        listener()
+      }
+    })
+  }
+}
+
 export function bumpLocalWorktreeScanGeneration(repoId: string): void {
   generationByRepoId.set(repoId, ++generationSequence)
   mutationRevision += 1
+  markWorktreeRouteInputsChanged()
 }
 
 export function forgetLocalWorktreeScanGeneration(repoId: string): void {

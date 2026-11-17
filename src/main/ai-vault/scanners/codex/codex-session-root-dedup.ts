@@ -2,8 +2,8 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import { sessionFileExecutionNamespace } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { sessionSortTime } from '../../session-scanner-accumulator'
+import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { sessionSortTime } from '../../parsing/session-scanner-accumulator'
 
 // Bridging and backfill expose one rollout through multiple roots; list only its canonical alias (#7521).
 

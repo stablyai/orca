@@ -18,7 +18,9 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
-vi.mock('../../github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../../repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: resolverMock
+}))
 const children: ChildProcess[] = []
 function spawn(): ChildProcess {
   const child = createFakeSpawnedChild(children.length + 100)

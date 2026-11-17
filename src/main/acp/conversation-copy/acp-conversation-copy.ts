@@ -1,4 +1,4 @@
-import { agentConversationCopyRefusal } from '../../native-chat/agent-conversation-copy-error'
+import { agentConversationCopyRefusal } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionConversationCopyInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'

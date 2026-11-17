@@ -1,4 +1,6 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { interactivePromptLabel } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { sayNativeChatApprovalTranslated } from '../native-chat/prompts/native-chat-interactive-prompt'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '@/store/types'
 import {
@@ -241,7 +243,15 @@ export function buildDashboardSnapshot(
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
         unseen,
-        askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        askSummary:
+          bucket === 'attention'
+            ? interactivePromptLabel(
+                row.entry.interactivePrompt,
+                row.entry.toolName,
+                row.agentType,
+                sayNativeChatApprovalTranslated
+              )
+            : undefined,
         conversationName: boundedLabelOrUndefined(
           rowConversationName(
             row,

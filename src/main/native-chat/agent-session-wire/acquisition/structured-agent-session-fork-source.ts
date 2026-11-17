@@ -22,7 +22,7 @@ import {
   AgentConversationCopyError,
   AgentConversationCopyStartError,
   agentConversationCopyRefusal
-} from '../../agent-conversation-copy-error'
+} from '../../conversation-adoption/agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'

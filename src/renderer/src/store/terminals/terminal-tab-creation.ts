@@ -4,8 +4,8 @@ import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-i
 import {
   isValidHostTerminalTabId,
   isValidMirroredHostTerminalTabId
-} from '../../../../shared/workspace-layout/terminal-tab-id'
-import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
+import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-topology/terminal-tab-ordinal'
 import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -18,7 +18,7 @@ import {
   updateGroup
 } from '../slices/tabs/tab-group-state'
 import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-selection-history'
-import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'

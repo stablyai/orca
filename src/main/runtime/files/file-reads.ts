@@ -40,7 +40,7 @@ import type {
   DocPreviewFileChunk,
   DocPreviewFileTarget
 } from '../../../shared/document-preview/doc-preview-file-access'
-import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
+import type { LocalFilesystemProvider } from '../../providers/filesystem/local-provider'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
 

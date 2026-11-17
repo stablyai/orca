@@ -1,7 +1,5 @@
 import { materializeScenario } from './scenario-execution-mode'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
-import { driveReplyMatrix, replyMatrixGoldenId, matrixSites } from './reply-matrix'
-import { replyMatrixNormalResult } from './reply-matrix-normal-result'
 import {
   bindCompletions,
   interruptionSchedules,
@@ -17,11 +15,7 @@ export type DerivedGolden = {
   title: string
   family: string
   lineage: ScenarioLineage
-  /** The matrix site this golden drives; absent for a pilot or schedule golden. */
-  site?: string
-  /** Lazy, so a family with no replayable success fails its own test instead of collection. */
   scenarios: () => RecordingScenario[]
-  timeoutMs?: number
 }
 
 const SIBLING_SCHEDULE_BASES = [
@@ -93,36 +87,7 @@ export function familyGoldens(
   mode: ExecutionMode = 'native'
 ): DerivedGolden[] {
   const manifest = input.map((scenario) => materializeScenario(scenario, mode))
-  const families = new Map<string, RecordingScenario[]>()
-  for (const scenario of manifest) {
-    families.set(scenario.family, [...(families.get(scenario.family) ?? []), scenario])
-  }
   const goldens: DerivedGolden[] = []
-  const ids = new Set<string>()
-  for (const [family, scenarios] of families) {
-    const [base] = scenarios
-    if (!base) {
-      throw new Error(`Family has no scenario: ${family}`)
-    }
-    // No-demand producers still have a pilot recording, but no RPC replies to partition.
-    for (const { id: site, bridgeOnly } of matrixSites(base)) {
-      const id = `${bridgeOnly ? 'bridge-' : ''}${replyMatrixGoldenId(family, site)}`
-      if (ids.has(id)) {
-        throw new Error(`Two matrix sites share a golden: ${id}`)
-      }
-      ids.add(id)
-      goldens.push({
-        id,
-        title: `${id}: ${family} reply partitions at ${site}`,
-        family,
-        lineage: { ...base.lineage!, site, domain: bridgeOnly ? 'bridge-only' : 'paired' },
-        site,
-        timeoutMs: 30_000,
-        scenarios: () =>
-          driveReplyMatrix(base, site, replyMatrixNormalResult(family, scenarios, site))
-      })
-    }
-  }
   for (const id of SIBLING_SCHEDULE_BASES) {
     const base = baseScenario(manifest, id)
     const replies = base.steps.flatMap((step) => ('complete' in step ? [step] : []))
@@ -161,7 +126,7 @@ export function familyGoldens(
       ? ['unmount']
       : id.includes('context')
         ? ['unmount', 'blur']
-        : ['reset', 'unmount', 'blur']
+        : ['reset', 'unmount']
     goldens.push({
       id: `lifecycle-${id}`,
       title: `lifecycle-${id}: lifecycle boundaries`,

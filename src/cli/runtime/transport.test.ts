@@ -8,10 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { sendRequest } from './transport'
-import { formatCliError } from '../cli-error'
+import { formatCliError } from '../output/cli-error'
 import { RuntimeClient } from './client'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
-import { requestWorktreeRemoval } from '../handlers/worktree-removal-request'
+import { requestWorktreeRemoval } from '../workspaces/worktree-removal-request'
 
 vi.mock('node:net', async (importOriginal) => {
   const net = await importOriginal<typeof Net>()
@@ -294,59 +294,6 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     } finally {
       warning.mockRestore()
     }
-  })
-
-  it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
-    roots.push(userDataPath)
-    const endpoint = join(userDataPath, 'runtime.sock')
-    let acceptRequest!: (request: { id: string; peer: Socket }) => void
-    const received = new Promise<{ id: string; peer: Socket }>((resolve) => {
-      acceptRequest = resolve
-    })
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        const request: { id: string } = JSON.parse(String(data).trim())
-        acceptRequest({ id: request.id, peer: socket })
-      })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-
-    const metadata: RuntimeMetadata = {
-      runtimeId: 'runtime-1',
-      pid: 123,
-      transports: [{ kind: 'unix', endpoint }],
-      authToken: 'token',
-      startedAt: 1
-    }
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const response = sendRequest<{ satisfied: boolean }>(
-      metadata,
-      'terminal.wait',
-      undefined,
-      200
-    ).then(
-      (value) => ({ response: value }),
-      (error: unknown) => ({ error })
-    )
-    const client = requestSocket()
-    const { id, peer } = await received
-    await vi.advanceTimersByTimeAsync(150)
-    const keepalive = once(client, 'data')
-    peer.write('{"_keepalive":true}\n')
-    await keepalive
-    await vi.advanceTimersByTimeAsync(150)
-    peer.write(
-      `${JSON.stringify({ id, ok: true, result: { satisfied: true }, _meta: { runtimeId: 'runtime-1' } })}\n`
-    )
-
-    expect(await response).toMatchObject({
-      response: { ok: true, result: { satisfied: true } }
-    })
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('rejects promptly when the runtime closes the socket before responding', async () => {

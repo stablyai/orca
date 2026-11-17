@@ -1,5 +1,5 @@
 import { resolveOrcadBindHost } from '../../shared/orcad-bind-address'
-import { getPresentStringFlag } from '../flags'
+import { getPresentStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from './types'
 
 /** Convert a CLI bind value into the normalized literal address used by serve. */

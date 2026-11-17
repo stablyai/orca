@@ -66,7 +66,7 @@ const cliPath = '../../../../../cli/index'
 await import(cliPath)
 const harnessPath = '../../../../../cli/index-test-harness'
 await import(harnessPath)
-const fixturesPath = '../../../../../cli/test-fixtures'
+const fixturesPath = '../../../../../cli/runtime/fixtures/runtime-rpc-fixtures'
 await import(fixturesPath)
 const agentFixturesPath = '../../../../../cli/agent-launch-test-fixtures'
 await import(agentFixturesPath)

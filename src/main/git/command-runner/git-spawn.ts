@@ -1,22 +1,22 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { startGitSpan } from '../../observability/instrumentation'
-import { createAbortError } from './abort-error'
-import { resolveGitCommand } from './git-command-resolution'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
-import { untranslatedGitOutputEnv } from './git-process-env'
-import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
-import type { GitAdmissionTier } from './git-exec-options'
-import { acquireGitAdmission } from './git-subprocess-admission'
+import { createAbortError } from './process-capture/abort-error'
+import { resolveGitCommand } from './host-routing/git-command-resolution'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import { untranslatedGitOutputEnv } from './git-environment/git-process-env'
+import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
-import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
+import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
 import {
   admitWslGit,
   isLocalGitRuntimeRouterInstalled,
   noteWslGitFailure,
   routeLocalGitOptions
-} from './local-git-runtime-route'
-import { gitRunsIn } from './git-runs-in'
+} from './host-routing/local-git-runtime-route'
+import { gitRunsIn } from './host-routing/git-runs-in'
 
 export type GitSpawnOptions = SpawnOptions & {
   cwd: string

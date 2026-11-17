@@ -1,0 +1,131 @@
+import { z } from 'zod'
+
+// Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
+export const RepoList = z.object({
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
+})
+import {
+  OptionalBoolean,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from '../rpc-param-primitives'
+import { createRepoUpdateSchema } from './repo-update-params'
+import { RepoSelector, RepoShow } from '../github/github-repo-target-params'
+
+export const RepoPath = z.object({
+  path: requiredString('Missing repo path'),
+  kind: z.enum(['git', 'folder']).optional(),
+  displayName: OptionalString
+})
+
+export const RepoCreate = z.object({
+  parentPath: requiredString('Missing parent path'),
+  name: requiredString('Missing repo name'),
+  kind: z.enum(['git', 'folder']).optional()
+})
+
+export const RepoClone = z.object({
+  url: requiredString('Missing clone URL'),
+  destination: requiredString('Missing clone destination'),
+  folderName: z.string().optional()
+})
+
+export const RepoSetBaseRef = z.object({
+  repo: requiredString('Missing repo selector'),
+  ref: requiredString('Missing base ref')
+})
+
+export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
+
+/** `repo.setHidden`: sidebar-only; `repoHostId` picks one host's copy of a repo id set up on several. */
+export const RepoSetHidden = RepoShow.extend({
+  hidden: z.boolean()
+})
+
+/** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
+export const RepoHooksCheck = RepoSelector.extend({
+  background: z.boolean().optional(),
+  wakeWslDistro: OptionalBoolean
+})
+
+export const RepoSearchRefs = z.object({
+  namespace: z.literal('remote').optional(),
+  repo: requiredString('Missing repo selector'),
+  query: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : undefined))
+    .pipe(z.string({ message: 'Missing query' })),
+  limit: OptionalFiniteNumber
+})
+
+export const RepoReorder = z.object({
+  orderedIds: z.array(z.string())
+})
+
+export const ProjectGroupCreate = z.object({
+  name: requiredString('Missing group name'),
+  parentPath: OptionalString,
+  connectionId: OptionalString.nullable().optional(),
+  parentGroupId: OptionalString.nullable().optional(),
+  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
+})
+
+export const ProjectGroupUpdate = z.object({
+  groupId: requiredString('Missing group id'),
+  updates: z.object({
+    name: OptionalString,
+    isCollapsed: z.boolean().optional(),
+    tabOrder: OptionalFiniteNumber,
+    rootProjectOrder: z.number().finite().nullable().optional(),
+    color: OptionalString.nullable().optional()
+  })
+})
+
+export const ProjectGroupSelector = z.object({
+  groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupUpdateMany = z.object({
+  mutations: z.array(ProjectGroupUpdate)
+})
+
+// Why `connectionId` is optional: older clients omit it, and older hosts strip it (bare selector).
+export const ProjectGroupMoveProject = z.object({
+  repo: requiredString('Missing repo selector'),
+  groupId: OptionalString.nullable(),
+  order: OptionalFiniteNumber,
+  connectionId: z.string().nullable().optional()
+})
+
+export const ProjectGroupScanNested = z.object({
+  path: requiredString('Missing folder path')
+})
+
+export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
+  z.object({
+    parentPath: requiredString('Missing parent path'),
+    groupName: z.string().optional().default(''),
+    projectPaths: z.array(z.string()),
+    mode: z.literal('group')
+  }),
+  z.object({
+    parentPath: requiredString('Missing parent path'),
+    // Blank group names use the scanned folder basename; separate imports share the payload but create no group.
+    groupName: z.string().optional().default(''),
+    projectPaths: z.array(z.string()),
+    mode: z.literal('separate')
+  })
+])
+
+/** `wakeWslDistro`: the user saving their own edit, which may start a stopped WSL distro; older hosts drop it. */
+export const RepoIssueCommandWrite = RepoSelector.extend({
+  content: z.string(),
+  wakeWslDistro: OptionalBoolean
+})
+
+export const RepoSparsePresetSave = RepoSelector.extend({
+  id: OptionalString,
+  name: requiredString('Missing preset name'),
+  directories: z.array(z.string())
+})

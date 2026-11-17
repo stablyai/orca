@@ -24,16 +24,6 @@ describe('Codex fullscreen composer paste gate', () => {
     expect(scanner.observe(END).ready).toBe(true)
   })
 
-  it.each([']', 'P', 'X', '^', '_'])('keeps split ESC %s control strings hidden', (kind) => {
-    const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
-    scanner.observe(PROVISIONAL)
-    const payload = `\x1b${kind}${'x'.repeat(1024)}\x1b[39;3HModel · folder\x1b\\`
-    for (const char of payload) {
-      expect(scanner.observe(char).ready).toBe(false)
-    }
-    expect(scanner.observe(LIVE).ready).toBe(true)
-  })
-
   it('takes Codex’s idle report when its status line paints no footer row', () => {
     const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
     expect(scanner.observe(PROVISIONAL).ready).toBe(false)

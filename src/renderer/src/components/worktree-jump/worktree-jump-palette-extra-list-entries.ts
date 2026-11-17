@@ -9,8 +9,11 @@ export type VisiblePaletteExtraSection = {
   leads: boolean
 }
 
-/** 'all' is the empty query; typed queries place each section by leadership, then its placement hint. */
-export type PaletteExtraSlot = 'all' | 'leading' | PaletteExtraSource['typedPlacement']
+/** The empty query places sections by their empty-query placement; typed queries by leadership, then their placement hint. */
+export type PaletteExtraSlot =
+  | { emptyQuery: NonNullable<PaletteExtraSource['emptyQueryPlacement']> }
+  | 'leading'
+  | PaletteExtraSource['typedPlacement']
 
 export function buildPaletteExtraSectionEntries(
   sections: readonly VisiblePaletteExtraSection[],
@@ -21,7 +24,11 @@ export function buildPaletteExtraSectionEntries(
   const entries: PaletteListEntry[] = []
   for (const { source, visible, overflowCount, leads } of sections) {
     const inSlot =
-      slot === 'all' || (slot === 'leading' ? leads : !leads && source.typedPlacement === slot)
+      typeof slot === 'object'
+        ? (source.emptyQueryPlacement ?? 'last') === slot.emptyQuery
+        : slot === 'leading'
+          ? leads
+          : !leads && source.typedPlacement === slot
     if (!inSlot || visible.length === 0) {
       continue
     }

@@ -197,6 +197,8 @@ export function createStructuredAgentSessionConversationLifetime(
       stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
         cause: 'host-stop'
       }),
+    startTimed: (sessionId, child) =>
+      host.context().runtimeState.startupAttempts.onClock(sessionId, child),
     closeConversation: (sessionId) => closeConversation(sessionId, true),
     logger: deps().logger,
     ...deps().idleSweep

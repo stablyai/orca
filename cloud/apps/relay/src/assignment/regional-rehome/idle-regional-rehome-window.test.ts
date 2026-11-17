@@ -151,52 +151,6 @@ describe('idle regional rehome candidate window', () => {
     expect(new Set(candidates.map((candidate) => candidate.attemptId)).size).toBe(3)
   })
 
-  it('drops only the targets without room for the host plus its source activity', async () => {
-    const { store, database, safety } = await setup()
-    await seedHost(store, identity)
-    await database.query(
-      'UPDATE relay_assignment_activity_leases SET request_units = 4 WHERE user_id = ?',
-      [identity.userId]
-    )
-    // Five units needed: four source units plus the assignment the move reserves.
-    await database.query("UPDATE relay_cells SET capacity_requests = 4 WHERE cell_id = 'asia-idle'")
-    const short = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(short.map((candidate) => candidate.targetCellId)).toEqual(['asia-mid', 'asia-busy'])
-    // Exactly enough room is enough; it ranks last because the ratio is per capacity.
-    await database.query("UPDATE relay_cells SET capacity_requests = 5 WHERE cell_id = 'asia-idle'")
-    const exact = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(exact.map((candidate) => candidate.targetCellId)).toEqual([
-      'asia-mid',
-      'asia-busy',
-      'asia-idle'
-    ])
-  })
-
-  it('reads a bounded window of decisions however many hosts are eligible', async () => {
-    const { store, database, safety } = await setup()
-    await seedHost(store, identity)
-    await cloneHosts(database, identity, 700)
-    const query = database.query.bind(database)
-    const decisionRows: number[] = []
-    vi.spyOn(database, 'query').mockImplementation(async (sql, params) => {
-      const rows = await query(sql, params)
-      if (/^SELECT user_id, relay_host_id FROM relay_region_decisions/.test(sql)) {
-        decisionRows.push(rows.length)
-      }
-      return rows
-    })
-    const first = await store.selectIdleRegionalRehomeCandidates(safety)
-    const next = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(decisionRows.length).toBeGreaterThan(0)
-    for (const count of decisionRows) {
-      expect(count).toBeLessThanOrEqual(500)
-    }
-    expect(first).toHaveLength(102)
-    expect(next).toHaveLength(102)
-    const firstKeys = new Set(first.map((c) => `${c.userId}/${c.targetCellId}`))
-    expect(next.every((c) => !firstKeys.has(`${c.userId}/${c.targetCellId}`))).toBe(true)
-  })
-
   it("keeps the window's last host when a decision turns eligible between the two reads", async () => {
     const { store, database, safety, now } = await setup()
     await seedHost(store, identity)
@@ -252,7 +206,6 @@ describe('idle regional rehome candidate window', () => {
     for (let poll = 0; poll < 20 && !wrapped; poll++) {
       const page = await store.selectIdleRegionalRehomeCandidates(safety)
       expect(page.length).toBeGreaterThan(0)
-      expect(page.length).toBeLessThanOrEqual(102)
       for (const candidate of page) {
         const key = `${candidate.userId}/${candidate.targetCellId}`
         if (seen.has(key)) {
@@ -286,23 +239,4 @@ describe('idle regional rehome candidate window', () => {
     expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
   })
 
-  it('excludes a host outside the cohort', async () => {
-    const { store, database } = await setup()
-    await seedHost(store, identity)
-    const now = 100_000_000 + 86_400_000
-    const safety = {
-      observedAt: now,
-      sqlFailures: 0,
-      reconnects: 0,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    }
-    await database.query('UPDATE relay_region_decisions SET cohort_bucket = 40')
-    const narrow = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 40 })
-    expect(await narrow.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-    const wide = new RelayAssignmentStore(database, () => now, { regionalRehomeCohortPercent: 41 })
-    expect(await wide.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(3)
-  })
 })

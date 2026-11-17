@@ -1,3 +1,4 @@
+import type * as UseMobileTasksProjectFileMergeActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-file-merge-actions'
 import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -190,7 +191,6 @@ function mountModelHook<Actions>(
 export function taskProjectRowMergeMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -202,9 +202,9 @@ export function taskProjectRowMergeMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowFilesMerge: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-file-merge-actions')
-    >('use-mobile-tasks-project-file-merge-actions.tsx').useMobileTasksProjectFileMergeActions
+    const useActions = modules.load<typeof UseMobileTasksProjectFileMergeActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-file-merge-actions.tsx'
+    ).useMobileTasksProjectFileMergeActions
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
       observedFields: [

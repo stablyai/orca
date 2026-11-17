@@ -1,5 +1,5 @@
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { JournalItemRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 
 /** An open PR; the fields a watch reads come from `fields`. */

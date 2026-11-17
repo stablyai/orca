@@ -222,6 +222,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
   }
 
+  confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // OMP cannot prove that a finished parent has no background work or pending results.
+    return session?.spec.agent === 'omp' && !session.connection.exited
+      ? Promise.resolve('unknown')
+      : undefined
+  }
+
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session?.acquisitionGeneration === generation && !session.connection.exited

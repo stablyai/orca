@@ -2,7 +2,7 @@ import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { openVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
-import { asRecord } from '../../ai-vault/session-scanner-record-value'
+import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 

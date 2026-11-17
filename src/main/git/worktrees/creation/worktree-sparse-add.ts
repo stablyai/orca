@@ -1,5 +1,5 @@
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'
 import type {

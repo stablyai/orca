@@ -3,8 +3,8 @@ import {
   runCoalescedProbe,
   type CoalescedProbes
 } from '../../../git/remotes/coalesced-probe'
-import type { GitHubApiRepository } from '../../github-api-repository'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
 import type { GhExecOptions } from '../github-exec-scope'
 import type { PullRequestLookupData } from './pull-request-lookup-data'

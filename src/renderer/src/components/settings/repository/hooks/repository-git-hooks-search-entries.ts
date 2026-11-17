@@ -145,6 +145,10 @@ export function getRepositoryGitHooksSearchEntries(
           'auto.components.settings.repository.search.waitForSetupBeforeAgent',
           'wait for setup before starting agent'
         ),
+        ...translateSearchKeyword(
+          'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+          'Wait for setup to complete before starting agent'
+        ),
         ...translateSearchKeyword('auto.components.settings.repository.search.80c490b012', 'ask'),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.a69c5cbe90',

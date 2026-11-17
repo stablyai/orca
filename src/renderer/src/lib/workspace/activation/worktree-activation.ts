@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
@@ -28,7 +29,10 @@ import {
   type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
+import {
+  isWorktreeInHiddenProject,
+  liftSidebarFiltersHidingWorktree
+} from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
@@ -155,7 +159,7 @@ export function activateAndRevealWorktreeWithOutcome(
     return { opened: { primaryTabId: null } }
   }
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
-  if (!wt) {
+  if (!wt || isWorktreeRetiredByRemoval(wt)) {
     return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
@@ -254,11 +258,13 @@ export function activateAndRevealWorktreeWithOutcome(
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
-  if (opts?.clearSidebarFilters !== false) {
+  // No sidebar card to reveal; lifting filters for it would only discard the user's.
+  const inHiddenProject = isWorktreeInHiddenProject(wt)
+  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
     liftSidebarFiltersHidingWorktree(wt)
   }
 
-  if (opts?.revealInSidebar !== false) {
+  if (opts?.revealInSidebar !== false && !inHiddenProject) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
       state.revealWorktreeInSidebar(worktreeId, {
         ...(opts.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {}),

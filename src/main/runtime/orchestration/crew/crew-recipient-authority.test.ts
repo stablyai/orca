@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'

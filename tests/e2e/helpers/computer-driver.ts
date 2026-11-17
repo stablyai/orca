@@ -19,6 +19,7 @@ let safariDraftTitle: string | null = null
 let linuxTempDir: string | null = null
 let windowsTempDir: string | null = null
 let geditProcess: ChildProcess | null = null
+let extraGeditProcesses: ChildProcess[] = []
 let notepadProcess: ChildProcess | null = null
 let notepadAppSelector: string | null = null
 
@@ -161,15 +162,32 @@ export async function ensureGeditLaunched(): Promise<void> {
   await waitForComputerWindowTitle('gedit', fileName, 15000)
 }
 
+/** Opens a second window in the test-owned gedit instance. */
+export async function openGeditWindow(fileName: string): Promise<void> {
+  if (!linuxTempDir) {
+    throw new Error('gedit has not been launched')
+  }
+  const filePath = join(linuxTempDir, fileName)
+  await writeFile(filePath, 'seed', 'utf8')
+  const launcher = spawn('gedit', ['--new-window', filePath], { detached: true, stdio: 'ignore' })
+  launcher.unref()
+  extraGeditProcesses.push(launcher)
+  await waitForComputerWindowTitle('gedit', fileName, 15000)
+}
+
 export async function killGedit(): Promise<void> {
-  if (geditProcess?.pid) {
+  for (const owned of [geditProcess, ...extraGeditProcesses]) {
+    if (!owned?.pid) {
+      continue
+    }
     try {
-      process.kill(-geditProcess.pid, 'SIGTERM')
+      process.kill(-owned.pid, 'SIGTERM')
     } catch {
       // The test-owned gedit process may already be closed.
     }
-    geditProcess = null
   }
+  geditProcess = null
+  extraGeditProcesses = []
   if (linuxTempDir) {
     await rm(linuxTempDir, { force: true, recursive: true })
     linuxTempDir = null

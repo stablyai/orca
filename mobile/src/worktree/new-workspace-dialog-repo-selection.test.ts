@@ -17,21 +17,6 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('mobile new workspace dialog repo selection', () => {
-  it('refreshes the selected repo from the fresh repo list', () => {
-    const staleSelectedRepo = makeRepo('repo', { path: '/cached/repo' })
-    const freshRepo = makeRepo('repo', { path: '/fresh/repo' })
-
-    expect(refreshMobileNewWorkspaceDialogSelectedRepo([freshRepo], staleSelectedRepo)).toBe(
-      freshRepo
-    )
-  })
-
-  it('clears a cached selected repo that is missing from the fresh repo list', () => {
-    expect(
-      refreshMobileNewWorkspaceDialogSelectedRepo([makeRepo('fresh')], makeRepo('stale'))
-    ).toBe(null)
-  })
-
   it('keeps a repo picked on a server when the desktop lists one with the same id', () => {
     const onDesktop = makeRepo('repo', { path: '/mac/repo' })
     const onServer = makeRepo('repo', { path: '/srv/repo', executionHostId: 'runtime:env-1' })

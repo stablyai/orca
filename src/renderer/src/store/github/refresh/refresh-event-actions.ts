@@ -23,12 +23,15 @@ import {
 } from '../pull-requests/linked-review-clear'
 import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
 import { getRefreshAliasExecutionHostId } from '../repositories/repository-routing'
-import { buildWorktreeLookupIndex, isStaleExactLinkedPRLookup } from './worktree-refresh'
+import {
+  buildWorktreeLookupIndex,
+  isStaleExactLinkedPRLookup,
+  type WorktreeLookupIndex
+} from './worktree-refresh'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../../shared/github/linked-pr-staleness'
-import type { WorktreeLookupIndex } from './worktree-refresh'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 
 export const createRefreshEventActions = (
   set: Parameters<StateCreator<AppState>>[0],

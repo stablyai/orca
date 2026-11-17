@@ -4,23 +4,23 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
-import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { WorktreeCreateParent } from '../tasks/worktree-create-retry'
-import { createBlankWorkspace } from '../tasks/blank-workspace-create'
-import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
+import type { WorktreeCreateParent } from '../new-workspace/creation/worktree-create-retry'
+import { createBlankWorkspace } from '../new-workspace/creation/blank-workspace-create'
+import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'
 import {
   isSetupHookTrusted,
   persistSetupHookTrustApproval,
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
-} from '../tasks/setup-hook-trust'
-import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
-import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
-import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import type { AgentLaunchSupport } from '../tasks/agent-launch-request'
-import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
-import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'
+} from '../new-workspace/creation/setup-hook-trust'
+import { createWorkspaceFromComposerSource } from '../new-workspace/creation/source-workspace-create'
+import { normalizeWorkspaceAgent } from '../new-workspace/creation/workspace-agent-selection'
+import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../src/shared/worktree/create-types'
+import type { AgentLaunchSupport } from '../session/agent-launch/agent-launch-request'
+import type { WorkspaceSshGate } from '../new-workspace/creation/workspace-ssh-gate'
+import type { useMobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
+import type { WorktreeCreateIdempotencySupport } from '../new-workspace/creation/worktree-create-idempotency-policy'
 import {
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,

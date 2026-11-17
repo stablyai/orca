@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
   PEER_CHAT,

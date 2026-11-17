@@ -25,6 +25,7 @@ const DESTRUCTIVE_CONTROL_RE = /variant=["']destructive["']|variant:\s*["']destr
 const CONFIRMATION_DIALOG_RE = /<(?:Alert)?Dialog(?:Content|Footer)\b/
 const NATIVE_MESSAGE_BOX_RE = /\bshowMessageBox(?:Sync)?\(/
 const PROTECTED_COPY_PRAGMA_RE = /^\s*\/\/ @protected-copy\b/m
+const PROTECTED_COPY_FILE_SCOPE_RE = /^\s*\/\/ @protected-copy scope=file\s*$/m
 const RELATIVE_IMPORT_RE = /(?:^|\n)\s*(?:import|export)\s[^'"]*?from\s+['"](\.\/[^'"]+)['"]/g
 const PLURAL_SUFFIX_RE = /_(?:zero|one|two|few|many|other)$/
 const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '/index.ts', '/index.tsx']
@@ -75,6 +76,9 @@ export function collectProtectedCopyKeys(sources, englishPaths) {
   const marked = [...sources.keys()].filter((file) => protectedCopyMarker(sources.get(file)))
   const files = new Set(marked)
   for (const file of marked) {
+    if (PROTECTED_COPY_FILE_SCOPE_RE.test(sources.get(file))) {
+      continue
+    }
     for (const imported of siblingImports(file, sources.get(file))) {
       if (sources.has(imported)) {
         files.add(imported)

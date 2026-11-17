@@ -1,6 +1,6 @@
 import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 
 export type OrcadMigrationPaneLeasePredicate = (lease: SshRemotePtyLease) => boolean

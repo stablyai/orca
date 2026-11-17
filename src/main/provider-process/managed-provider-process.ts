@@ -3,6 +3,7 @@ import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
+import { processEnvWithoutAgentSession } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   PROVIDER_BRIEF_SIGTERM_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
@@ -93,11 +94,18 @@ export function spawnManagedProviderProcess(
 ): ManagedProviderProcess {
   const platform = options.platform ?? process.platform
   const closePolicy = options.policy ?? rootOnlyProviderClosePolicy
-  const spec = createProviderSpawnSpec(launch, options.inheritedEnv ?? process.env, platform, {
-    // Owner death must request the same close as an explicit provider close.
-    closeRequest: closePolicy(true).signalSupervisorOnClose ? 'stdin-end-and-sigterm' : 'stdin-end',
-    ...(options.lifetime ? { lifetime: options.lifetime } : {})
-  })
+  const spec = createProviderSpawnSpec(
+    launch,
+    options.inheritedEnv ?? processEnvWithoutAgentSession(platform),
+    platform,
+    {
+      // Owner death must request the same close as an explicit provider close.
+      closeRequest: closePolicy(true).signalSupervisorOnClose
+        ? 'stdin-end-and-sigterm'
+        : 'stdin-end',
+      ...(options.lifetime ? { lifetime: options.lifetime } : {})
+    }
+  )
   const policy = closePolicy(spec.supervised)
   if (spec.supervised && !(policy.gracefulExitMs >= PROVIDER_SUPERVISOR_MAX_STOP_MS)) {
     throw new RangeError(

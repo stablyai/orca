@@ -10,6 +10,7 @@ import {
 } from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
 import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/vitest-shared-worker-files.mjs'
+import { gitSigningOffEnv } from './scripts/test-runtime/environment/vitest-git-signing-env.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
@@ -22,6 +23,8 @@ const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
+// An Orca terminal publishes its WSL hosts gate to children; empty reads as unset, so tests resolve their own.
+const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
@@ -88,7 +91,7 @@ const testOptions = {
   // Keyed by ci-unit-module-cache.mjs in CI and vitest-local-module-cache.mjs locally.
   fsModuleCache: Boolean(moduleCachePath),
   ...(moduleCachePath ? { fsModuleCachePath: moduleCachePath } : {}),
-  env: { ORCA_VITEST_RUNTIME: 'node' },
+  env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
@@ -104,7 +107,7 @@ const nodeProject = {
   test: {
     ...testOptions,
     name: process.versions.bun ? 'node-runtime' : 'node',
-    env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
+    env: { ...gitEnv, ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? nodeRuntimeInclude : UNIT_INCLUDE,
     sequence: { groupOrder: 1 },
     ...(process.versions.bun
@@ -118,7 +121,7 @@ const bunProject = {
   test: {
     ...testOptions,
     name: 'bun',
-    env: { ORCA_VITEST_RUNTIME: 'bun' },
+    env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'bun' },
     pool: 'forks',
     exclude: [...testOptions.exclude, ...nodeRuntimeInclude],
     sequence: { groupOrder: 1 }

@@ -45,15 +45,6 @@ it('updates the task name after editing its text', () => {
   expect(editor.names()).toEqual(['First task updated'])
 })
 
-it('keeps an emptied task control named', () => {
-  const editor = mount('- [ ] Remove text')
-  editor.root.querySelector('p')!.replaceChildren()
-  editor.surface.dispatchEvent(
-    new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })
-  )
-  expect(editor.names()).toEqual(['Task'])
-})
-
 it('names a task from its own line rather than its code block', () => {
   const editor = mount('- [ ] Install:\n  ```sh\n  pnpm install\n  ```')
   expect(editor.surface.querySelector('li pre')).not.toBeNull()

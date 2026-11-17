@@ -39,7 +39,7 @@ import {
   readWindowPairedServerHosts,
   readWindowPairedServerRows
 } from '@/components/sidebar/worktree-list/parity/sidebar-paired-server-rows.test-fixture'
-import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
+import type { SidebarInputsFeedDomain } from '../../../../../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
 import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
 import { buildSidebarFeedCatalog } from '../../../../../../shared/sidebar-list/sidebar-feed-catalog'
 import {

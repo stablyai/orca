@@ -4,7 +4,7 @@ import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-su
 import { MOBILE_MARKDOWN_EDIT_MAX_BYTES } from '../../../../src/shared/mobile-markdown-document'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
-import { codeFenceFor } from './markdown-code-fence'
+
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
 afterEach(() => {
@@ -13,18 +13,6 @@ afterEach(() => {
 })
 
 describe('code-block fence sizing', () => {
-  it.each([
-    { code: '', length: 3 },
-    { code: 'no backticks 😀\uD800\uDC00\u0000', length: 3 },
-    { code: '`a`\n``b``', length: 3 },
-    { code: 'before```after', length: 4 },
-    { code: '````\n``\r\n```', length: 5 },
-    { code: '\uD800````\uDC00`````😀', length: 6 },
-    { code: '`'.repeat(8192), length: 8193 }
-  ])('chooses a fence of $length characters for the whole code block', ({ code, length }) => {
-    expect(codeFenceFor(code)).toBe('`'.repeat(length))
-  })
-
   it('serializes an admitted editable document without collecting every backtick run', () => {
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const posted: MobileRichMarkdownEditorMessage[] = []

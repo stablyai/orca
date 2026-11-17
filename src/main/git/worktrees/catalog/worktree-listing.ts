@@ -68,7 +68,7 @@ export async function listWorktreesUnshared(
 }
 
 /** Only a missing path or confirmed non-repo permits an authoritative empty listing. */
-async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+export async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
   if (getErrorCode(err) === 'ENOENT') {
     try {
       await stat(repoPath)
@@ -94,21 +94,6 @@ export async function listWorktreesStrict(
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
-}
-
-/** Reject scan failures to prevent pruning valid worktrees and tabs; confirmed missing/non-repos return []. */
-export async function listWorktreesStrictAllowingTrueEmpty(
-  repoPath: string,
-  options: GitWorktreeExecOptions = {}
-): Promise<GitWorktreeInfo[]> {
-  try {
-    return await listWorktreesStrict(repoPath, options)
-  } catch (err) {
-    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
-      return []
-    }
-    throw err
-  }
 }
 
 export async function annotateSparseCheckoutStatus(

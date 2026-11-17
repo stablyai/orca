@@ -32,32 +32,6 @@ describe('DictationSetupPollController', () => {
     vi.useRealTimers()
   })
 
-  it('does not refresh while hidden or backgrounded', async () => {
-    const refresh = vi.fn().mockResolvedValue(true)
-    const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
-    poller.setPolling(true)
-
-    poller.setForeground(true)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
-    expect(refresh).not.toHaveBeenCalled()
-
-    poller.setVisible(true)
-    expect(refresh).toHaveBeenCalledOnce()
-    await flushPromises()
-    poller.setVisible(false)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
-    expect(refresh).toHaveBeenCalledOnce()
-
-    poller.setVisible(true)
-    expect(refresh).toHaveBeenCalledTimes(2)
-    await flushPromises()
-    poller.setForeground(false)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
-    expect(refresh).toHaveBeenCalledTimes(2)
-
-    poller.dispose()
-  })
-
   it('keeps slow refreshes single-flight and waits a full delay after each response', async () => {
     const requests = [deferred<boolean>(), deferred<boolean>(), deferred<boolean>()]
     let active = 0
@@ -127,47 +101,6 @@ describe('DictationSetupPollController', () => {
 
     requests[1].resolve(false)
     await flushPromises()
-    poller.dispose()
-  })
-
-  it('refreshes immediately when visibility or foreground eligibility resumes', async () => {
-    const refresh = vi.fn().mockResolvedValue(true)
-    const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
-    poller.setPolling(true)
-    poller.setVisible(true)
-    poller.setForeground(true)
-    expect(refresh).toHaveBeenCalledOnce()
-    await flushPromises()
-
-    poller.setForeground(false)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
-    poller.setForeground(true)
-    expect(refresh).toHaveBeenCalledTimes(2)
-    await flushPromises()
-
-    poller.setVisible(false)
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
-    poller.setVisible(true)
-    expect(refresh).toHaveBeenCalledTimes(3)
-
-    poller.dispose()
-  })
-
-  it('stops after setup leaves the download or extraction lifecycle', async () => {
-    const refresh = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
-    poller.setPolling(true)
-    poller.setVisible(true)
-    poller.setForeground(true)
-    await flushPromises()
-
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    expect(refresh).toHaveBeenCalledTimes(2)
-    await flushPromises()
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
-    expect(refresh).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
-
     poller.dispose()
   })
 

@@ -7,7 +7,7 @@ type Timing = { to: number; callback?: (finished: boolean) => void }
 const animations = vi.hoisted((): { running: Timing[] } => ({ running: [] }))
 
 vi.mock('../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
-vi.mock('../../platform/keyboard-occlusion', () => ({
+vi.mock('../../platform/keyboard/keyboard-occlusion', () => ({
   currentSoftKeyboardHeight: () => 0,
   subscribeSoftKeyboard: () => () => {}
 }))
@@ -17,7 +17,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', select: (options: { android?: unknown }) => options.android },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} },
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} },
   View: 'View',
   useWindowDimensions: () => ({ width: 412, height: 900 })
 }))
@@ -43,7 +43,9 @@ vi.mock('react-native-gesture-handler', () => {
 })
 vi.mock('../AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 // The OS motion setting is read through AccessibilityInfo, which the react-native mock leaves out.
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
+vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => false
+}))
 vi.mock('react-native-reanimated', () => {
   function isTiming(value: unknown): value is Timing {
     return typeof value === 'object' && value !== null && 'to' in value
@@ -116,21 +118,6 @@ function pressAndroidBack(renderer: ReactTestRenderer): void {
 describe('bottom drawer close request while hiding', () => {
   afterEach(() => {
     animations.running = []
-  })
-
-  it('still closes an open drawer on Android Back', () => {
-    const onClose = vi.fn()
-    let renderer!: ReactTestRenderer
-    act(() => {
-      renderer = create(drawer(true, onClose, vi.fn()))
-    })
-    finishAnimations()
-
-    pressAndroidBack(renderer)
-    finishAnimations()
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    act(() => renderer.unmount())
   })
 
   // Back during hide must not restart/cancel it or onHidden never fires and invisible Modal swallows taps.

@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   GitHubWorkItem,
   ListWorkItemsResult
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from '../github-slice-test-harness'
 

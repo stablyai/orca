@@ -1,13 +1,13 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
-import type { getPullRequestDraftContext } from '../../../text-generation/pull-request-context'
+import type { getPullRequestDraftContext } from '../../../text-generation/pull-request-context/pull-request-context'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
 import type {
   SourceControlAiSettingsInput,
   ResolvedSourceControlAiGenerationParams
 } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlAiOperation } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/execution/commit-message-agent-environment'
 import type { CommitMessageGenerationTarget } from '../../../text-generation/source-control-text-generation-types'
 import type { PullRequestLinkedIssueMeta } from '../../../source-control/pull-request-linked-issue'
 import {

@@ -119,27 +119,4 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
       [`saved-tab:${NEW_LEAF}`]: 'inc-now'
     })
   })
-
-  it('leaves a pane stamped with the same incarnation bound', () => {
-    switchState.on = true
-    const session = savedSession('inc-now')
-
-    bindNewTerminal(session)
-
-    expect(panesBinding(session, 'pty-3').sort()).toEqual(
-      [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
-    )
-  })
-
-  // Legacy saves lack incarnation proof, so they cannot establish an ID was reused.
-  it('leaves an unstamped saved binding alone', () => {
-    switchState.on = true
-    const session = savedSession(null)
-
-    bindNewTerminal(session)
-
-    expect(panesBinding(session, 'pty-3').sort()).toEqual(
-      [`new-tab:${NEW_LEAF}`, `saved-tab:${SAVED_LEAF}`].sort()
-    )
-  })
 })

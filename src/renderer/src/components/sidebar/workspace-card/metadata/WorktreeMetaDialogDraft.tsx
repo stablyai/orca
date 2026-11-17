@@ -91,6 +91,8 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     items: getWorkspaceAttachments(worktree ?? {})
   }))
   const [displayNameInput, setDisplayNameInput] = useState(initial.displayName)
+  // Why: retyping the automatic branch name is still an explicit name, so editing pins it.
+  const [displayNameEdited, setDisplayNameEdited] = useState(false)
   const [commentInput, setCommentInput] = useState(initial.comment)
   const [items, setItems] = useState<WorkspaceAttachment[]>(initial.items)
   const [notesOpen, setNotesOpen] = useState(
@@ -114,7 +116,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     setSaveError(null)
     try {
       const updates = {
-        ...(displayNameInput.trim() !== initial.displayName
+        ...(displayNameEdited || displayNameInput.trim() !== initial.displayName
           ? { displayName: displayNameInput.trim() }
           : {}),
         ...(commentInput.trim() !== initial.comment ? { comment: commentInput.trim() } : {}),
@@ -220,7 +222,10 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             disabled={saving}
             inputRef={displayNameInputRef}
             onEnter={handleSave}
-            onValueChange={setDisplayNameInput}
+            onValueChange={(value) => {
+              setDisplayNameInput(value)
+              setDisplayNameEdited(true)
+            }}
             portalContainer={dialogElement}
             value={displayNameInput}
           />

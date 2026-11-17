@@ -3,7 +3,7 @@ import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import type { AcpSessionModelDiscovery } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'

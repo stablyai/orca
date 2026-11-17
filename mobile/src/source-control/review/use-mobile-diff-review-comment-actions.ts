@@ -1,7 +1,7 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
 import type { DiffComment, MobileDiffReviewState } from '../../../../src/shared/diff-comment-types'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { interpretOrThrowRefusalMessage } from '../../transport/rpc/rpc-refusal-message'

@@ -6,8 +6,8 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { releaseTerminalLayoutPtyIds } from './terminal-session-row-hydration'
 import { normalizeTerminalLayoutSnapshot } from '../../components/terminal-pane/layout/terminal-layout-normalization'
 import { resolvePtyBoundActiveLeafId } from '../../components/terminal-pane/layout/ownership/terminal-layout-active-leaf'
-import { resolveTerminalLayoutPtyOwnershipTransfers } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { resolveTerminalLayoutPtyOwnershipTransfers } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import type { TerminalLayoutPtyOwnershipTransfer } from './workspace-terminal-hydration-patch'
 
 export function buildWorkspaceTerminalLayoutPlan({

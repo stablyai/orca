@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   PluginDevEmitParams,
   PluginDevHookParams
-} from '../../../../../shared/rpc-contract/plugins-params'
+} from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import { firePluginDevHook } from '../../../../plugins/hooks/plugin-dev-hook-fire'
 import { emitPluginDevEvent } from '../../../../plugins/plugin-dev-event-emit'
 import { requirePluginService } from './plugins'

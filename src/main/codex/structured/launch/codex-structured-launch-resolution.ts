@@ -5,7 +5,7 @@ import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
 //
 // Every input except the account is read back from the record the store already made durable,
@@ -35,7 +35,7 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]

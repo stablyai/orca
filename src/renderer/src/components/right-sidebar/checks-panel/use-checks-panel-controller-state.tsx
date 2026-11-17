@@ -20,9 +20,9 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { PRRefreshErrorType } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {

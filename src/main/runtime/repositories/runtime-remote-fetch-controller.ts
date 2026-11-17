@@ -1,14 +1,16 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { GitExecOptions } from '../../git/command-runner/git-exec-options'
-import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
-import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../../shared/git/fetch/git-fetch-auto-maintenance'
-import { getCanonicalRepoKey, type CanonicalRepoKeyOptions } from '../../git/canonical-repo-key'
+import type { LocalGitExecOptions } from '../../git/refs/resolution/repo-default-base-ref'
+import { runRemoteTrackingBaseFetch } from './runtime-remote-tracking-base-fetch'
+import { getCanonicalRepoKey } from '../../git/repositories/canonical-repo-key'
+import type { CanonicalRepoKeyOptions } from '../../git/repositories/canonical-repo-key'
 import {
   armLocalRepoRefMaintenance,
   setRepoRefMaintenanceBusyProbe
 } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { setBoundedMapEntry } from './remote-fetch-cache'
+import { withRepositoryGitCause } from '../../git/repository-git-cause'
 
 export type RemoteFetchResult = { ok: true } | { ok: false; errorKind: 'git_error' }
 
@@ -18,8 +20,6 @@ export type RemoteTrackingBase = {
   ref: string
   base: string
 }
-
-type GitOptions = LocalGitExecOptions
 
 // Why: reuse recent fetches across create and drift probes without hiding remote changes for long.
 const FETCH_FRESHNESS_MS = 30_000
@@ -55,8 +55,8 @@ export class RuntimeRemoteFetchController {
     return resolved
   }
 
-  /** Exact-base fetch skips auto-maintenance and leaves loose refs; arm repo maintenance after quiet time, extended by each fetch. */
-  private armRefMaintenance(repoPath: string, gitOptions: GitOptions): void {
+  /** Exact-base fetch skips auto-maintenance and leaves loose refs; retain one idle repo-maintenance opportunity. */
+  private armRefMaintenance(repoPath: string, gitOptions: LocalGitExecOptions): void {
     void this.getCanonicalRepoKey(repoPath, gitOptions)
       .then((key) => {
         setRepoRefMaintenanceBusyProbe(key, () => this.hasInflightFetchForRepo(key))
@@ -110,7 +110,7 @@ export class RuntimeRemoteFetchController {
   async getOrStartRemoteFetch(
     repoPath: string,
     remote: string,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteFetchResult> {
     const key = await this.getCanonicalFetchKey(repoPath, remote, gitOptions)
     if (this.getFreshFetchCompletedAt(key) !== null) {
@@ -121,11 +121,17 @@ export class RuntimeRemoteFetchController {
       return existing
     }
     const promise = this.enqueueRemoteFetch(key, () =>
-      gitExecFileAsync(['fetch', remote], {
-        cwd: repoPath,
-        ...gitOptions,
-        timeout: REMOTE_FETCH_TIMEOUT_MS
-      })
+      withRepositoryGitCause(
+        repoPath,
+        gitOptions,
+        { family: 'fetch', reason: 'remote-fetch', cache: 'miss' },
+        () =>
+          gitExecFileAsync(['fetch', remote], {
+            cwd: repoPath,
+            ...gitOptions,
+            timeout: REMOTE_FETCH_TIMEOUT_MS
+          })
+      )
         .then((): RemoteFetchResult => {
           this.rememberFreshFetchCompletedAt(key)
           return { ok: true }
@@ -145,7 +151,7 @@ export class RuntimeRemoteFetchController {
   async getOrStartRemoteTrackingBaseRefresh(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteFetchResult> {
     const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote, gitOptions)
     const key = await this.getCanonicalFetchKey(
@@ -176,7 +182,7 @@ export class RuntimeRemoteFetchController {
   async refreshRemoteTrackingBaseForPreview(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteFetchResult> {
     const expiresAt = Date.now() + PREVIEW_FETCH_BUDGET_MS
     const expiry = new AbortController()
@@ -209,7 +215,12 @@ export class RuntimeRemoteFetchController {
         if (this.getFreshFetchCompletedAt(key) !== null) {
           return Promise.resolve<RemoteFetchResult>({ ok: true })
         }
-        return this.runExactBaseRefresh(repoPath, base, key, previewOptions, remainingMs)
+        return withRepositoryGitCause(
+          repoPath,
+          gitOptions,
+          { family: 'fetch', reason: 'conflict-preview', cache: 'refresh' },
+          () => this.runExactBaseRefresh(repoPath, base, key, previewOptions, remainingMs)
+        )
       }).finally(() => this.armRefMaintenance(repoPath, gitOptions))
     })()
     try {
@@ -225,24 +236,10 @@ export class RuntimeRemoteFetchController {
     repoPath: string,
     base: RemoteTrackingBase,
     key: string,
-    gitOptions: GitOptions & Pick<GitExecOptions, 'signal' | 'canStart'>,
+    gitOptions: LocalGitExecOptions & Pick<GitExecOptions, 'signal' | 'canStart'>,
     timeout = REMOTE_FETCH_TIMEOUT_MS
   ): Promise<RemoteFetchResult> {
-    return gitExecFileAsync(
-      [
-        ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
-        'fetch',
-        '--no-tags',
-        base.remote,
-        `+refs/heads/${base.branch}:${base.ref}`
-      ],
-      {
-        cwd: repoPath,
-        ...gitOptions,
-        useConfiguredSshCommandForNetwork: true,
-        timeout
-      }
-    )
+    return runRemoteTrackingBaseFetch(repoPath, base, gitOptions, timeout)
       .then((): RemoteFetchResult => {
         this.rememberFreshFetchCompletedAt(key)
         return { ok: true }
@@ -259,7 +256,7 @@ export class RuntimeRemoteFetchController {
   async fetchRemoteWithCache(
     repoPath: string,
     remote: string,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<void> {
     await this.getOrStartRemoteFetch(repoPath, remote, gitOptions)
   }
@@ -267,7 +264,7 @@ export class RuntimeRemoteFetchController {
   async resolveRemoteTrackingBase(
     repoPath: string,
     baseBranch: string,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     const remoteRefPrefix = 'refs/remotes/'
     if (baseBranch.startsWith('refs/') && !baseBranch.startsWith(remoteRefPrefix)) {
@@ -311,7 +308,7 @@ export class RuntimeRemoteFetchController {
   async hasRemoteTrackingRef(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: GitOptions = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<boolean> {
     try {
       await gitExecFileAsync(['rev-parse', '--verify', `${base.ref}^{commit}`], {

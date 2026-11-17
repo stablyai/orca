@@ -1,11 +1,12 @@
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import { AgentModelCatalogStore } from './agent-model-catalog-store'
+import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 const HOME: AgentSessionAccountHome = { variable: 'GROK_HOME', path: '/homes/grok' }
 

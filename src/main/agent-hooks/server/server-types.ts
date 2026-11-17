@@ -1,4 +1,5 @@
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
+import type { RowAgentIdentity } from '../identity/pane-agent-identities'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -7,7 +8,7 @@ import type { AgentStatusState } from '../../../shared/agent-status/contracts/ag
 import type { AgentStatusObservation } from '../../../shared/agent-status/contracts/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex-state'
+import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 
 export type HookServerStartOptions = {
@@ -54,6 +55,11 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatus?: ProgramStatusFacet
   /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
+  /** A settled agent id republished to window readers; never a transition or hook event. */
+  identityOnly?: true
+  /** The conversation's terminal agent id on this host, named when the row's provider key
+   *  changed; publication copies it. Never persisted. */
+  agentIdentity?: RowAgentIdentity
   /** The lead's full final reply for the turn `leadTurnKey` names; main-process only, never persisted or published. */
   acceptedReply?: { text: string; leadTurnKey: number }
 }

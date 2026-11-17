@@ -71,28 +71,6 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
-  it('lists the lines an action added and the console errors it logged', async () => {
-    const guest = fakeGuest()
-    const { host } = fakeHost(guest, [UNCHANGED, INVALID_LOGIN])
-
-    const result = await runWithActionEffects(host, async () => {
-      guest.emit('console-message', { level: 'error', message: 'Uncaught TypeError: x' })
-      guest.emit('console-message', { level: 'info', message: 'booted' })
-      return { clicked: '@e6' }
-    })
-
-    expect(readBrowserActionEffects(result)).toEqual({
-      settled: true,
-      consoleErrors: ['Uncaught TypeError: x'],
-      page: {
-        lines: ['    - StaticText "Invalid username or password"'],
-        removedLines: 0,
-        full: false,
-        truncated: false
-      }
-    })
-  })
-
   it('waits for a navigation the action started and reports where it landed', async () => {
     const guest = fakeGuest()
     const appTree = '- heading "Welcome ada" [level=1, ref=e9]\n- button "Submit ticket" [ref=e10]'

@@ -15,7 +15,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { PreflightStatus } from '../../../../preload/api/preflight-api'
+import type { PreflightStatus } from '../../../../preload/api/preflight/preflight-api'
 import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   const t = useTranslate()

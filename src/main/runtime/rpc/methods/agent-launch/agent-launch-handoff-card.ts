@@ -2,13 +2,13 @@ import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contr
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
 
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import {
   prepareAgentCreationCard,
   startedAgentSender
 } from '../../../orchestration/workers/launch/worker-start-card'
 import type { RpcContext } from '../../core'
-import { isAgentRpcCaller } from '../../rpc-caller-identity'
+import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 
 /** An agent that hands work to another from its chat leaves a card there linking to it.
  *  Display bookkeeping: nothing here refuses, holds or fails the launch, whose result passes through. */

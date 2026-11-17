@@ -23,16 +23,16 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean

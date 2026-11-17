@@ -1,4 +1,4 @@
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/status-hooks/legacy-shared-config-dir'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
 import { restoreOrStripOverlayEnv } from '../../../shared/agent-launch/startup/agent-overlay-env'
 import { delimiter } from 'node:path'
@@ -30,7 +30,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { PtySubprocessOptions } from './pty-subprocess'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
-import { stripInheritedClaudeSessionEnv } from '../../../shared/agent-launch/startup/claude-parent-session-env'
+import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -187,7 +187,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
-  stripInheritedClaudeSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
+  stripInheritedAgentSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
   if (opts.env?.TERM) {
@@ -232,7 +232,7 @@ export function finalizeDaemonPtyEnvironment(
   requestedEnv: Record<string, string> | undefined,
   envToDelete?: readonly string[]
 ): void {
-  stripInheritedClaudeSessionEnv(env, { launchEnv: requestedEnv, envToDelete })
+  stripInheritedAgentSessionEnv(env, { launchEnv: requestedEnv, envToDelete })
   expandWindowsPathEnvironmentVariables(env)
   collapseWindowsPathEnvKeys(env, requestedEnv)
   const requestedPath = requestedEnv

@@ -22,7 +22,7 @@ import type { AgentSessionRecordStore } from '../../../agent-session/records/age
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
-import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from '../../dispatch/dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-sessions/structured-agent-session'
 import { commitStructuredAgentSessionCreate } from '../structured-sessions/creation/structured-agent-session-create'

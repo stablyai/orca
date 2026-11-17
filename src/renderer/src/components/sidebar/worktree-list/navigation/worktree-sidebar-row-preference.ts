@@ -1,6 +1,6 @@
 import {
   getFolderWorkspaceHostIdentity,
-  folderWorkspaceToWorktree
+  getFolderWorkspaceWorktree
 } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -66,7 +66,7 @@ export function getRenderedWorkspaceRowsInSidebarOrder(
       renderedRows.push({ worktree: row.worktree, repo: row.repo, rowKey: row.rowKey })
     } else if (row.type === 'folder-workspace') {
       renderedRows.push({
-        worktree: folderWorkspaceToWorktree(row.folderWorkspace),
+        worktree: getFolderWorkspaceWorktree(row.folderWorkspace),
         repo: undefined,
         rowKey: getFolderWorkspaceHostIdentity(row.folderWorkspace)
       })

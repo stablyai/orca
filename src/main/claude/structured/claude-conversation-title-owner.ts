@@ -1,8 +1,8 @@
 import { resolve } from 'node:path'
-import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { agentSessionAccountHomesEqual } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { claudeNamingContextId } from '../claude-conversation-naming'
-import { CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS } from '../claude-cli-flag-support'
+import { claudeNamingContextId } from '../conversation-naming/claude-conversation-naming'
+import { CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS } from '../cli-capabilities/claude-cli-flag-support'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudeSession } from './claude-structured-session-state'
 

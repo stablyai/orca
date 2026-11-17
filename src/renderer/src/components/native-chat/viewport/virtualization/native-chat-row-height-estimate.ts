@@ -4,6 +4,7 @@ import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/
 import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { agentMessageIsCompact } from '../../../../../../shared/agent-session/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
@@ -111,7 +112,7 @@ export function nativeChatRowContentMetrics(
   ) {
     return cached.metrics
   }
-  const content = deriveNativeChatRowContent(message.blocks)
+  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
   const maxLines = Math.ceil(ROW_MAX_PX / typography.lineHeightPx)
   const markdown = nativeChatProseToMarkdown(
     content.prose,

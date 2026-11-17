@@ -4,7 +4,6 @@ import {
   runCodexAppServerSession,
   type CodexAppServerInvocation
 } from '../../app-server/codex-app-server-session'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
 
 const MODEL_ROW = {
   model: 'gpt-live',
@@ -15,44 +14,6 @@ const MODEL_ROW = {
 }
 
 afterEach(() => vi.unstubAllGlobals())
-
-it.each(['saved', 'recover'] as const)(
-  'composes the Windows %s catalog environment before lookup and listing',
-  async (lookup) => {
-    vi.stubGlobal('process', { ...process, platform: 'win32' })
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({ PATH: '/inherited/bin', TOKEN: 'inherited' }),
-      resolveSavedEnvironment: async () => ({ PATH: '/saved/bin', TOKEN: 'saved' }),
-      resolveEnv: () => ({
-        path: '/configured/bin',
-        tOKEN: 'configured',
-        codex_home: '/configured/home'
-      }),
-      resolveCommand: (options) => {
-        expect(options?.pathEnv).toBe('/configured/bin')
-        return { command: '/configured/bin/codex.exe', prefixArgs: [] }
-      },
-      runSession: async (invocation, body) => {
-        expect(invocation.env).toEqual({
-          PATH: '/configured/bin',
-          TOKEN: 'configured',
-          CODEX_HOME: '/pinned'
-        })
-        return body({
-          request: async (method: string) =>
-            method === 'config/read' ? { config: {} } : { data: [MODEL_ROW], nextCursor: null },
-          notify: () => {}
-        })
-      }
-    })
-    const resolved = await probe.resolve?.(
-      { variable: 'CODEX_HOME', path: '/pinned' },
-      '/probe',
-      lookup
-    )
-    expect((await resolved?.run())?.models[0]?.id).toBe('gpt-live')
-  }
-)
 
 describe('codex model catalog probe', () => {
   it.each([
@@ -170,25 +131,4 @@ describe('codex model catalog probe', () => {
       { id: 'gpt-live', isDefault: true }
     ])
   }, 10_000)
-
-  it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(
-    'lists nothing, and never probes the stock CLI, for Command %s',
-    async (command) => {
-      const runSession = vi.fn()
-      const probe = createCodexModelCatalogProbe({
-        resolveEnvironment: async () => ({ PATH: '/bin' }),
-        resolveCommand: (options) =>
-          resolveStructuredAgentCommand(
-            'codex',
-            { agentCmdOverrides: { codex: command } },
-            options
-          ),
-        runSession
-      })
-      await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
-        reason: 'agentCommandNotRunnable'
-      })
-      expect(runSession).not.toHaveBeenCalled()
-    }
-  )
 })

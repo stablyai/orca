@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
+import { ProjectOptionDetail } from '@/components/new-workspace/project-selection/ProjectComboboxRow'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { useTranslate } from '@/i18n/use-translate'

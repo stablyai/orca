@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { projectRepoVisibilityForClient } from '../../repo-visibility-projection'
+import { projectRepoVisibilityForClient } from '../../workspace-client-views/repo-visibility-projection'
 import {
   ProjectGroupCreate,
   ProjectGroupImportNested,
@@ -8,7 +8,7 @@ import {
   ProjectGroupSelector,
   ProjectGroupUpdate,
   ProjectGroupUpdateMany
-} from '../../../../../shared/rpc-contract/repo-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
 
 export const PROJECT_GROUP_METHODS = [
   defineMethod({

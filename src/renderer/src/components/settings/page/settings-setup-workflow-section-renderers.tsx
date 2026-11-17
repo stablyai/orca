@@ -12,6 +12,7 @@ import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 export function renderOrcaAccountSettingsSection(
   context: SettingsRenderContext,
@@ -28,7 +29,11 @@ export function renderOrcaAccountSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('orca-account')}
     >
-      {view.isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}
+      {view.isSectionMounted('orca-account') ? (
+        <SettingsGroup bodyClassName="py-4">
+          <OrcaAccountSettingsPane />
+        </SettingsGroup>
+      ) : null}
     </SettingsSection>
   ) : null
 }
@@ -47,7 +52,7 @@ export function renderSetupGuideSettingsSection(
         'Finish the core workflows that make Orca useful for parallel agent work.'
       )}
       searchEntries={navigation.getSectionSearchEntries('setup-guide')}
-      bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
+      bodyClassName="overflow-hidden"
     >
       {view.isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
     </SettingsSection>
@@ -62,7 +67,6 @@ export function renderGeneralSettingsSection(
   return (
     <SettingsSection
       id="general"
-      grouped
       hideHeader
       title={t('auto.components.settings.Settings.7807c11c4d', 'General')}
       description={t(
@@ -109,14 +113,12 @@ export function renderIntegrationsSettingsSection(
   return (
     <SettingsSection
       id="integrations"
-      grouped
       title={t('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
       description={t(
         'auto.components.settings.Settings.b07041697f',
         'Connect GitHub, GitLab, Linear, and source-hosting services.'
       )}
       searchEntries={navigation.getSectionSearchEntries('integrations')}
-      bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
     >
       {view.isSectionMounted('integrations') ? <IntegrationsPane /> : null}
     </SettingsSection>
@@ -131,7 +133,6 @@ export function renderMobileSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile"
-      grouped
       title={t('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
       badge="Beta"
       description={t(
@@ -153,7 +154,6 @@ export function renderAutomationsSettingsSection(
   return (
     <SettingsSection
       id="automations"
-      grouped
       title={t('auto.components.settings.automations.title', 'Automations')}
       description={t(
         'auto.components.settings.automations.description',
@@ -176,7 +176,6 @@ export function renderArtifactsSettingsSection(
   return (
     <SettingsSection
       id="artifacts"
-      grouped
       title={t('auto.components.settings.artifacts.title', 'Artifacts')}
       badge="Beta"
       description={t(
@@ -200,7 +199,6 @@ export function renderShareSkillsSettingsSection(
   return (
     <SettingsSection
       id="share-skills"
-      grouped
       title={t('auto.components.settings.shareSkills.ca754fefa1', 'Share skills')}
       badge="Beta"
       description={t(
@@ -222,7 +220,6 @@ export function renderSessionHistorySettingsSection(
   return (
     <SettingsSection
       id="session-history"
-      grouped
       title={t('sessionHistory.settings.title', 'Agent Session Search')}
       description={t(
         'sessionHistory.settings.description',

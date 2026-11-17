@@ -172,9 +172,11 @@ describe('useEditorExternalWatch subscriptions', () => {
         {
           worktreePath: '/runtime/repo',
           events: [{ kind: 'overflow', absolutePath: '/runtime/repo' }],
+          connectionId: 'nested-ssh',
           resync: true
         },
-        'runtime-1'
+        'runtime-1',
+        runtimeTarget()
       )
     } finally {
       warning.mockRestore()

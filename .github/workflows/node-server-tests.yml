@@ -247,7 +247,7 @@ jobs:
         run: node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
       - name: Verify a structured chat from the desktop server template
         if: runner.os == 'Linux'
-        run: pnpm test:node-server --artifact src/main/orcad/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
+        run: pnpm test:node-server --artifact src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts --maxWorkers=2
       # Only a Windows runner compiles it; arm64 cross-compiles here.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
       # orcad's instance lock and stop proof read a PID's creation time through it; the x64 binary this

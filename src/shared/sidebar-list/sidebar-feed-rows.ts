@@ -1,6 +1,5 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
-  getWorktreeExecutionHostId,
   normalizeExecutionHostOrder,
   parseExecutionHostId,
   type ExecutionHostId,
@@ -17,10 +16,12 @@ import {
 } from '../workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { hiddenProjectRowFacts, indexHiddenProjects } from '../hidden-projects'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
   feedPairedDeviceIdsByEnvironment,
+  feedWorktreeHostId,
   indexSidebarFeed,
   rankSidebarFeedWorktrees,
   type SidebarFeedIndex
@@ -157,12 +158,10 @@ export function planSidebarFeedRows(
     filters: view.filters,
     facts: {
       isArchived: (worktree) => worktree.isArchived,
+      ...hiddenProjectRowFacts(indexHiddenProjects(repos, defaultHostId)),
       isFolderWorkspace: () => false,
       repoId: (worktree) => worktree.repoId,
-      hostId: (worktree) => {
-        const repo = index.repoOf(worktree)
-        return repo ? getWorktreeExecutionHostId(worktree, repo, defaultHostId) : null
-      },
+      hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
       isOtherClient: (worktree) =>
         isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
       isDefaultBranch: (worktree) => factsOf(worktree)?.defaultBranch === true,
@@ -217,7 +216,8 @@ export function planSidebarFeedRows(
     repos: visibleRepos,
     worktreesByRepo,
     visibleWorktrees,
-    filterRepoIds: view.filters.filterRepoIds
+    filterRepoIds: view.filters.filterRepoIds,
+    hiddenProjects: indexHiddenProjects(repos, defaultHostId)
   })
   const plan = planSidebarRows({
     groupBy,

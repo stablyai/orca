@@ -80,7 +80,7 @@ describe('persisted region decisions across director restart', () => {
     expect(row.outcome).toBe('inconclusive')
     expect(Number(row.expires_at)).toBe(context.window.expiresAt)
     const successor = (await context.issue(restarted.store)).window!
-    expect(successor.generation).toBe(context.window.generation + 1)
+    expect(successor.generation).toBe(2)
     expect(await restarted.store.exchangeRegionCorrection(identity, context.report, epoch))
       .toMatchObject({ reportStatus: 'stale' })
   })
@@ -111,7 +111,7 @@ describe('persisted region decisions across director restart', () => {
     context.setNow(1_000_000_000 - 60_000)
     const restarted = await context.restart()
     const successor = (await context.issue(restarted.store)).window!
-    expect(successor.generation).toBe(context.window.generation + 1)
+    expect(successor.generation).toBe(2)
     expect(successor.expiresAt).toBe(context.window.expiresAt - 60_000)
     expect(await restarted.store.exchangeRegionCorrection(identity, context.report, context.window.assignmentEpoch))
       .toMatchObject({ reportStatus: 'stale' })

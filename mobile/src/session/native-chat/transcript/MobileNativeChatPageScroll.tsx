@@ -1,5 +1,11 @@
 import type { Ref } from 'react'
-import { ScrollView, View, type ScrollViewProps, type ViewStyle } from 'react-native'
+import {
+  ScrollView,
+  View,
+  type ScrollViewProps,
+  type ViewStyle,
+  type ScrollViewInstance
+} from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -10,7 +16,7 @@ export function MobileNativeChatPageScroll({
   children,
   contentContainerStyle,
   ...props
-}: ScrollViewProps & { ref?: Ref<ScrollView> }) {
+}: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
   useMobileColorScheme()
   return (
     <ScrollView

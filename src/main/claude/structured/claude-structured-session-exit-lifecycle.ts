@@ -14,8 +14,8 @@ import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
-import { claudeHeldSends } from '../claude-command-lifecycle'
-import { ClaudePluginInputError } from '../claude-plugin-ui'
+import { claudeHeldSends } from './turns/claude-command-lifecycle'
+import { ClaudePluginInputError } from '../sdk-transport/claude-plugin-ui'
 import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import {

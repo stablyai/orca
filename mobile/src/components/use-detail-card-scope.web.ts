@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { DetailCardScopeOptions } from './use-detail-card-scope'
-import { isTextField } from '../platform/keyboard-persisting-taps'
+import { isTextField } from '../platform/keyboard/keyboard-persisting-taps'
 
 function element(value: unknown): HTMLElement | null {
   return value instanceof HTMLElement ? value : null

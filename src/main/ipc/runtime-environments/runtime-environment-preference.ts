@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { Store } from '../../persistence/loading-store/store'
-import { watchFileAcrossReplacement } from '../filesystem/watcher-process/rebinding-file-watch'
+import { watchFileAcrossReplacement } from '../filesystem/watcher-process/native-subscriptions/rebinding-file-watch'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>
 

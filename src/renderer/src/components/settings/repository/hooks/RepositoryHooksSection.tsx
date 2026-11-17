@@ -26,7 +26,8 @@ import {
 } from './RepositoryHookScriptSetting'
 import {
   RepositoryHookCommandSourceSetting,
-  RepositorySetupPolicySetting
+  RepositorySetupAgentStartupSetting,
+  RepositorySetupRunPolicySetting
 } from './RepositoryHookPolicySettings'
 import { RepositoryIssueCommandSetting } from './RepositoryIssueCommandSetting'
 import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
@@ -165,13 +166,29 @@ export function RepositoryHooksSection({
           forceVisible={forceVisible}
           keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
         >
-          <RepositorySetupPolicySetting
+          <RepositorySetupRunPolicySetting
             isFolder={isFolder}
             setupRunPolicy={selectedSetupRunPolicy}
-            setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}
             onRunPolicyChange={(setupRunPolicy) =>
               updateHookSettingsPolicyDraft({ setupRunPolicy })
             }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={t(
+            'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+            'Wait for setup to complete before starting agent'
+          )}
+          className="py-4"
+          forceVisible={forceVisible}
+          keywords={[
+            'wait for setup before starting agent',
+            'wait for setup to complete before starting agent',
+            'setup'
+          ]}
+        >
+          <RepositorySetupAgentStartupSetting
+            setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}
             onStartupPolicyChange={(setupAgentStartupPolicy) =>
               updateHookSettingsPolicyDraft({ setupAgentStartupPolicy })
             }

@@ -263,12 +263,15 @@ export class BrowserHostLeaseRegistry {
     identity: BrowserHostCommandResultIdentity,
     params: BrowserHostCommandResultParams
   ): boolean {
-    const state = this.requireLeaseState(identity)
-    const ledger = requireBrowserHostCommandResultLedger(state, identity)
+    const ledger = this.requireCommandResultLedger(identity)
     if (!ledger.isUnplacedPageResult(params)) {
       this.requireClientPage(params)
     }
     return ledger.settle(params)
+  }
+
+  requireCommandResultLedger(identity: BrowserHostCommandResultIdentity) {
+    return requireBrowserHostCommandResultLedger(this.requireLeaseState(identity), identity)
   }
 
   getPlacement(browserPageId: string): RuntimeBrowserPlacement | undefined {

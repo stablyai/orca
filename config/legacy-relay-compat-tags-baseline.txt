@@ -17,7 +17,7 @@ src/main/ssh/migration-source/orcad-migration-terminal-gate.ts
 src/main/ssh/host-server/ssh-host-server-on-connect.ts
 src/main/ssh/targets/ssh-target-orcad-preflight.ts
 src/preload/api-types.ts
-src/preload/api/legacy-relay-bridge-api.ts
+src/preload/api/mobile/legacy-relay-bridge-api.ts
 src/renderer/src/components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes.ts
 src/renderer/src/components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-transport.ts
 src/renderer/src/components/terminal-pane/pty-connection/output/foreground-output-refresh.ts

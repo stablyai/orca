@@ -9,7 +9,7 @@ import {
   keysMayMatch,
   recordConversationKey,
   type ConversationKey
-} from '../../structured-conversation-key'
+} from '../../conversation-adoption/structured-conversation-key'
 
 export type StructuredProviderSessionOwnership = {
   wslDistro: string | null

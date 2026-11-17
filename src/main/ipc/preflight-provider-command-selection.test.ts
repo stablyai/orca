@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { ghExecFileAsync } from '../git/command-runner/gh-exec-file'
-import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
-import { execFileCaptureToTermination } from '../git/command-runner/exec-file-capture'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
+import { execFileCaptureToTermination } from '../git/command-runner/process-capture/exec-file-capture'
 import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand

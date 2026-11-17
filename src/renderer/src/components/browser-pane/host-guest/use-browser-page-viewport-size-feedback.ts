@@ -72,8 +72,11 @@ export function useBrowserPageViewportSizeFeedback(
       previousHostDip = hostDip
       // Why skip the flash but keep the baseline: a size computed at a guessed zoom is worse than
       // no size, yet the first resize after dom-ready must still be announced.
+      if (!previous || (previous.width === hostDip.width && previous.height === hostDip.height)) {
+        return
+      }
       const guestZoomLevel = readGuestZoomLevel(webviewRef.current)
-      if (!previous || guestZoomLevel === null) {
+      if (guestZoomLevel === null) {
         return
       }
       // Why: the renderer's devicePixelRatio includes UI zoom; the guest's scale is the screen's.

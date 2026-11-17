@@ -87,6 +87,8 @@ export function resolveCycleAnchorWorktreeId(args: {
   return null
 }
 
+export type SidebarWorkspacePreview = { row: RenderedWorkspaceRow; fromWorktreeId: string | null }
+
 export type LastActiveCycleWorkspace = {
   worktreeId: string
   executionHostId: ExecutionHostId | null
@@ -166,4 +168,20 @@ export function resolveCycledWorkspaceRow(args: {
     return null
   }
   return worktreeRows.find((row) => getCyclableRowIdentity(row) === nextIdentity) ?? null
+}
+
+/** A held arrow previews its row as active before the workspace switch commits. */
+export function withKeyboardPreview<
+  P extends {
+    activeWorktreeId: string | null
+    activeWorkspaceExecutionHostId: ExecutionHostId | null
+  }
+>(props: P, preview: LastActiveCycleWorkspace | null): P {
+  return preview
+    ? {
+        ...props,
+        activeWorktreeId: preview.worktreeId,
+        activeWorkspaceExecutionHostId: preview.executionHostId
+      }
+    : props
 }

@@ -1,9 +1,9 @@
-import type {
-  RoadmapSpan,
-  RoadmapTick,
-  RoadmapZoom
-} from '../../../../shared/github/project-roadmap-timeline'
-import { ROADMAP_DAY_MS } from '../../../../shared/github/project-roadmap-timeline'
+import {
+  type RoadmapSpan,
+  type RoadmapTick,
+  type RoadmapZoom,
+  ROADMAP_DAY_MS
+} from '../../../../shared/github/projects/project-roadmap-timeline'
 
 export type RoadmapTickLabel = { label: string; sublabel: string | null }
 

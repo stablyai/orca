@@ -62,13 +62,13 @@ vi.mock('expo-file-system', () => ({
       return device.files.get(this.uri)?.byteLength ?? 0
     }
     create(): void {}
-    write(): void {}
+    writeSync(): void {}
     delete(): void {
       device.deleted.push(this.uri)
       device.files.delete(this.uri)
     }
-    open(): { offset: number | null; readBytes: () => Uint8Array; close: () => void } {
-      return { offset: 0, readBytes: () => new Uint8Array(), close: () => {} }
+    open(): { offset: number | null; readBytesSync: () => Uint8Array; close: () => void } {
+      return { offset: 0, readBytesSync: () => new Uint8Array(), close: () => {} }
     }
   },
   Paths: { cache: 'file:///cache' }

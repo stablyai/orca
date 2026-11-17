@@ -49,13 +49,13 @@ const LISTED = {
 
 const HOST = { kind: 'environment', environmentId: 'env-1' } as const
 
-function renderEditor(model?: string): void {
+function renderEditor(): void {
   render(
     <TooltipProvider>
       <AgentLaunchChoiceEditor
         agent="codex"
-        label="Codex"
-        choices={model ? { model } : undefined}
+        label="codex"
+        choices={undefined}
         userArgs=""
         permission={undefined}
         catalogTarget={HOST}

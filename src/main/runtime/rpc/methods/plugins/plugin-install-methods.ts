@@ -6,7 +6,7 @@ import {
   PluginInstallParams,
   PluginUninstallParams,
   PluginUpdateParams
-} from '../../../../../shared/rpc-contract/plugins-params'
+} from '../../../../../shared/rpc-contract/plugins/plugins-params'
 import {
   PLUGIN_NOT_FOUND_CODE,
   PluginCliError

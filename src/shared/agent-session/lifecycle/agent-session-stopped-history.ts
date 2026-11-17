@@ -13,7 +13,7 @@ import {
   classifyDispatchRejection,
   dispatchWasWithdrawn
 } from '../requests/structured-agent-session-dispatch-rejection'
-import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session-message-params'
+import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
 
 /** The record Claude writes for its own Stop, carried after each stopped message. */
 export const STOPPED_MESSAGE_INTERRUPTED_MARKER = '[Request interrupted by user]'

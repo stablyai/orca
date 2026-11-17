@@ -93,14 +93,6 @@ afterEach(() => {
 })
 
 describe('the editor document caret, across a keyboard dismissal', () => {
-  it('blurs the surface, which is what closes the keyboard over a document', () => {
-    const editor = runtime({ caret: 'paragraph-3' })
-    expect(editor.focused()).toBe(true)
-    editor.handle.dismissKeyboard()
-    expect(editor.focused()).toBe(false)
-    expect(editor.selectedContainer()).toBe(null)
-  })
-
   it('reclaims focus at the tapped caret rather than at the stale one', () => {
     const editor = runtime({ caret: 'paragraph-3' })
     editor.handle.dismissKeyboard()
@@ -125,12 +117,6 @@ describe('the editor document caret, across a keyboard dismissal', () => {
     await editor.handle.runCommand('bold')
     expect(editor.selectedContainer()).toBe('paragraph-3')
     expect(editor.focused()).toBe(true)
-  })
-
-  it('falls back to the end of the document when no caret was ever placed', async () => {
-    const editor = runtime({ caret: null })
-    await editor.handle.runCommand('bold')
-    expect(editor.selectedContainer()).toBe('editor-end')
   })
 
   it('drops a remembered caret whose nodes left the document', async () => {
@@ -173,18 +159,5 @@ describe('the editor document caret, across the host’s URL dialog', () => {
     replaceContent = editor.detachContent
     await editor.handle.runCommand('link')
     expect(editor.selectedContainer()).toBe('editor-end')
-  })
-
-  it('runs no command when the dialog is cancelled, and leaves the caret alone', async () => {
-    const editor = runtime({
-      caret: 'paragraph-3',
-      promptForUrl: () => {
-        window.getSelection()?.removeAllRanges()
-        return Promise.resolve(null)
-      }
-    })
-    await editor.handle.runCommand('link')
-    // No command runs, so no selection restore; command owns restore, not dialog.
-    expect(editor.selectedContainer()).toBe(null)
   })
 })

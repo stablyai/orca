@@ -1,0 +1,109 @@
+import { describe, expect, it, beforeEach, vi } from 'vitest'
+
+vi.mock('./bundled-skill-guides.js', () => ({
+  BUNDLED_SKILL_GUIDES: [
+    {
+      name: 'alpha',
+      description: 'Use when alpha work is needed.',
+      markdown: '# Alpha\n\nShort.\n',
+      aliases: ['legacy-alpha'],
+      references: [
+        { name: 'first-gate', markdown: '# First gate\n\nDo the first thing.\n' },
+        { name: 'second-gate', markdown: '# Second gate\n\nDo the second thing.\n' }
+      ]
+    },
+    {
+      name: 'zeta',
+      description: 'Use when zeta work is needed.',
+      markdown: '# Zeta\n',
+      aliases: [],
+      references: []
+    }
+  ]
+}))
+
+vi.mock('../runtime/client', () => {
+  class RuntimeClient {
+    constructor() {
+      throw new Error('skills get constructed a RuntimeClient')
+    }
+  }
+  return { RuntimeClient }
+})
+
+vi.mock('../runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: vi.fn()
+}))
+
+vi.mock('../runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: vi.fn(() => '/tmp/orca-user-data')
+}))
+
+import { main } from '../index'
+
+describe('orca skills get --reference', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = undefined
+  })
+
+  it('reports a topic that ships no references', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'zeta', '--references'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Guide "zeta" has no bundled references.')
+  })
+
+  it('names the available references for an unknown one', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'alpha', '--reference', 'nope'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown reference "nope" for alpha. Available: first-gate, second-gate'
+    )
+  })
+
+  it('rejects --reference on a topic with no references', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'zeta', '--reference', 'first-gate'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Guide "zeta" has no bundled references.')
+  })
+
+  it('rejects --reference without a value', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'alpha', '--reference'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Missing required --reference')
+  })
+
+  it('rejects combining --full with --reference', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'alpha', '--full', '--reference', 'first-gate'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Use either --full or --reference, not both.')
+  })
+
+  it('rejects combining --references with --full or --reference', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'get', 'alpha', '--references', '--full'], '/tmp/repo')
+    await main(['skills', 'get', 'alpha', '--references', '--reference', 'first-gate'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenNthCalledWith(1, 'Use either --references or --full, not both.')
+    expect(errorSpy).toHaveBeenNthCalledWith(2, 'Use either --references or --reference, not both.')
+  })
+})

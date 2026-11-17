@@ -4,7 +4,10 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RpcAcceptedResult } from '../transport/rpc/rpc-accepted-result'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
+import {
+  taskLinearStatusRead,
+  taskPreflightRead
+} from '../tasks/screen-state/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
@@ -13,9 +16,9 @@ import {
 import {
   readJiraConnectionProbeReply,
   type MobileJiraConnection
-} from '../tasks/jira-mobile-connection'
-import { jiraConnectionStatusProbe } from '../tasks/mobile-jira-operations'
-import { useMobileJiraConnectionState } from '../tasks/use-mobile-jira-connection-state'
+} from '../tasks/providers/jira/jira-mobile-connection'
+import { jiraConnectionStatusProbe } from '../tasks/providers/jira/mobile-jira-operations'
+import { useMobileJiraConnectionState } from '../tasks/providers/jira/use-mobile-jira-connection-state'
 import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
 import { newWorkspaceUiStateRead } from './new-workspace-operations'
 

@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -126,14 +127,20 @@ export function getAttachedWorktreesForFolderWorkspace({
     rootLineageByChildId.set(child.worktreeId, entries)
   }
   const members = new Map<string, AttachedWorktreeOwner>()
+  const visited = new Set<string>()
   const queue: Worktree[] = []
   const add = (worktree: Worktree, attachedAt: number) => {
     const identity = getWorktreeHostIdentity(worktree)
     if (
       worktree.isArchived ||
-      members.has(identity) ||
+      visited.has(identity) ||
       selectedById.get(worktree.id) !== worktree
     ) {
+      return
+    }
+    visited.add(identity)
+    queue.push(worktree)
+    if (isWorktreeRetiredByRemoval(worktree)) {
       return
     }
     members.set(identity, {
@@ -143,7 +150,6 @@ export function getAttachedWorktreesForFolderWorkspace({
       worktree,
       attachedAt
     })
-    queue.push(worktree)
   }
   for (const row of rows.values()) {
     const lineage = rootLineageByChildId
@@ -231,7 +237,8 @@ export function getLineageChildrenByParentId(
   const descendantsByParentId = new Map<string, Worktree[]>()
   for (const parentId of includedIds) {
     const children = (projectedChildrenByParentId.get(parentId) ?? []).filter(
-      (child) => includedIds.has(child.id) && !child.isArchived
+      (child) =>
+        includedIds.has(child.id) && !child.isArchived && !isWorktreeRetiredByRemoval(child)
     )
     if (children.length > 0) {
       descendantsByParentId.set(parentId, children)
@@ -245,7 +252,7 @@ export function getLineageChildrenByParentId(
   return descendantsByParentId
 }
 
-/** Exported so the composer's parent picker offers exactly the roots this view attaches. */
+/** Resolve traversal roots even when retirement makes only their descendants selectable. */
 export function getLineageChildWorktree(
   lineage: WorkspaceLineage,
   worktreeById: Map<string, Worktree>

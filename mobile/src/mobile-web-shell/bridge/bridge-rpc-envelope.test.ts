@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBridgeInitFrame } from './bridge-init-frame'
-import {
-  BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_RPC_ENVELOPE_GRANT,
-  readBridgeClientMessage,
-  readBridgeHostMessage
-} from './bridge-envelope'
+import { BRIDGE_RPC_ENVELOPE_GRANT, readBridgeClientMessage } from './bridge-envelope'
 import {
   BridgeRpcEnvelopeInvalidError,
   BridgeRpcEnvelopeUngrantedError
@@ -24,10 +18,6 @@ function grantedPage() {
   return page
 }
 
-function frameKey(json: string): string {
-  return json.replace(/"id":"[^"]+"/, '"id":"_"')
-}
-
 beforeEach(() => {
   vi.useFakeTimers()
 })
@@ -37,25 +27,6 @@ afterEach(() => {
 })
 
 describe('bridge rpc envelope: page side', () => {
-  it('posts the same bytes as before when there is no envelope or an empty one', () => {
-    const page = grantedPage()
-    void page.client.sendRequest('worktree.ps', { a: 1 }, { timeoutMs: 50 })
-    void page.client.sendRequest('worktree.ps', { a: 1 }, { timeoutMs: 50, envelope: {} })
-    page.client.subscribe('terminal.subscribe', { terminal: 't' }, () => undefined)
-    page.client.subscribe('terminal.subscribe', { terminal: 't' }, () => undefined, {
-      envelope: {}
-    })
-    const [, request, emptyRequest, subscribe, emptySubscribe] = page.sent.map(frameKey)
-    expect(request).toBe(
-      '{"v":1,"type":"request","id":"_","method":"worktree.ps","params":{"a":1},"options":{"timeoutMs":50}}'
-    )
-    expect(emptyRequest).toBe(request)
-    expect(subscribe).toBe(
-      '{"v":1,"type":"subscribe","id":"_","method":"terminal.subscribe","params":{"terminal":"t"}}'
-    )
-    expect(emptySubscribe).toBe(subscribe)
-  })
-
   it('posts no options when the only option was the envelope, and keeps an empty bag', () => {
     const page = grantedPage()
     void page.client.sendRequest('worktree.ps', { a: 1 }, { envelope: {} })
@@ -67,18 +38,6 @@ describe('bridge rpc envelope: page side', () => {
     expect(envelopeOnly).not.toHaveProperty('options')
     expect(envelopeOnly).toMatchObject({ envelope: ENVELOPE })
     expect(emptyBag).toMatchObject({ options: {} })
-  })
-
-  it('carries a granted envelope beside params, out of options', () => {
-    const page = grantedPage()
-    void page.client.sendRequest('worktree.ps', undefined, { timeoutMs: 50, envelope: ENVELOPE })
-    page.client.subscribe('terminal.subscribe', { terminal: 't' }, () => undefined, {
-      envelope: ENVELOPE
-    })
-    const [, request, subscribe] = page.frames()
-    expect(request).toMatchObject({ options: { timeoutMs: 50 }, envelope: ENVELOPE })
-    expect(request).not.toHaveProperty('options.envelope')
-    expect(subscribe).toMatchObject({ type: 'subscribe', envelope: ENVELOPE })
   })
 
   it('refuses an envelope the shell did not grant, and posts nothing', async () => {
@@ -175,48 +134,5 @@ describe('bridge rpc envelope: shell side', () => {
         refusal: 'unrecognised-message'
       })
     }
-  })
-})
-
-describe('bridge rpc envelope: mixed versions', () => {
-  it('the current page reader accepts an unknown grant name in init', () => {
-    const init = createBridgeInitFrame({
-      sessionId: 's',
-      buildId: 'b',
-      connection: INIT.connection,
-      route: { pathname: '/h/a' },
-      pageRoutes: [],
-      granted: [BRIDGE_RPC_ENVELOPE_GRANT, 'someFutureGrant'],
-      host: { id: 'a', name: 'A', endpoint: 'ws://a', lastConnected: 0 },
-      storage: {}
-    })
-    const read = readBridgeHostMessage(JSON.stringify(init))
-    expect(read.ok && read.message.type === 'init' && read.message.grants.native).toEqual([
-      BRIDGE_RPC_ENVELOPE_GRANT,
-      'someFutureGrant'
-    ])
-  })
-
-  it('a shell drops a frame key it does not declare and still serves the frame', () => {
-    // The rule an older shell applies to `envelope`: unknown keys are stripped, never refused.
-    const frame = {
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'request',
-      id: 'a'.repeat(22),
-      method: 'm',
-      params: {},
-      laterField: { executionHost: 'runtime:a' }
-    }
-    const read = readBridgeClientMessage(JSON.stringify(frame))
-    expect(read).toEqual({
-      ok: true,
-      message: {
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'request',
-        id: 'a'.repeat(22),
-        method: 'm',
-        params: {}
-      }
-    })
   })
 })

@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
-import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'

@@ -1,4 +1,4 @@
-import type { CodexHistoryRecord } from '../../codex-local-history'
+import type { CodexHistoryRecord } from '../../transcript-history/codex/codex-local-history'
 import { readRecord, readString } from '../../../codex/app-server/codex-item-field-readers'
 import { codexRolloutItem } from '../../../codex/history/rollouts/codex-rollout-item-projection'
 import {

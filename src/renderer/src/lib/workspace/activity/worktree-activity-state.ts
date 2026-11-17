@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { getTabIdToWorktreeId } from '../tabs/tab-worktree-index'
 import { createAgentStatusEpochSelector } from '../../agent-status/evidence/agent-status-epoch-selector'
 import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -50,12 +51,7 @@ export function getLiveAgentStatusByWorktreeId(
   if (entries.length === 0) {
     return new Map()
   }
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
+  const worktreeIdByTabId = getTabIdToWorktreeId(tabsByWorktree)
   const result = new Map<string, LiveAgentWorktreeStatus>()
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)

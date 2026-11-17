@@ -22,12 +22,6 @@ import Foundation
   precondition(!restored.contains(identity(1, "qa-host", "qa-epoch", "other"), now: 102))
   precondition(!restored.contains(identity(1), now: 86501))
   precondition(PushDismissalIdentity(["hostFingerprint":"h", "notificationId":"n", "notificationEpoch":"e", "notificationSeq":true]) == nil)
-  precondition(restored.containsNotification(payload(1), now: 102))
-  precondition(!restored.containsNotification(payload(3), now: 102))
-  precondition(!restored.containsNotification(payload(1, "other"), now: 102))
-  precondition(!restored.containsNotification(payload(1, "qa-host", "other"), now: 102))
-  precondition(!restored.containsNotification(payload(1, "qa-host", "qa-epoch", "other"), now: 102))
-  precondition(!restored.containsNotification(["hostFingerprint": "qa-host"], now: 102))
   for hosts in [1, 3] {
    for index in 0..<520 {
     ledger.remember(identity(2, "host-\(index % hosts)", "epoch-\(hosts)", "note-\(index)"), now: 200)

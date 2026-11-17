@@ -8,7 +8,7 @@ import {
   agentMessageSenderView,
   type AgentMessageSenderView
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
-import { resolveMobileTerminalTabAgentId } from '../../../terminal/session/mobile-terminal-tab-agent'
+import { resolveMobileTerminalTabAgentId } from '../../tabs/mobile-terminal-tab-agent'
 import { agentDotState } from '../../../worktree/agent-row-display'
 
 type Sender = AgentMessageSource['senders'][number]

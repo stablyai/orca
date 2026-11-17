@@ -5,6 +5,7 @@ import {
 } from '../plugin-discovery'
 import { readPluginLockfile } from './plugin-install'
 import { PluginLogBuffer, type PluginLogLine } from '../plugin-log-buffer'
+import { notifyPluginRemoved } from './plugin-removal-events'
 
 export class PluginInstallationState {
   discovered: DiscoveredPlugin[] = []
@@ -49,6 +50,7 @@ export class PluginInstallationState {
       await remove()
       this.logs.clear(pluginKey)
       this.discovered = this.discovered.filter((entry) => entry !== plugin)
+      notifyPluginRemoved(pluginKey)
       this.options.notifyChanged()
     } finally {
       this.removing = null

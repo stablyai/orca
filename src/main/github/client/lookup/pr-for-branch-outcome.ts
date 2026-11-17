@@ -1,13 +1,18 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
+import {
+  withGitHubRepoExecution,
+  ghRepoExecOptions,
+  githubRepoContext
+} from '../../repositories/github-repository-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   hostedReviewRepoScope,
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
-import { acquire, release, ghRepoExecOptions, githubRepoContext } from '../../gh-utils'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import { acquire, release } from '../../execution/github-operation-slots'
+
 import { hostedReviewLocalGitOptionArgs, githubPRStackExecutionScope } from './../github-exec-scope'
 import type { GitHubPRBranchLookupOptions } from './pull-request-lookup-data'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
@@ -114,6 +119,7 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
+        options.includeDerivedData !== false,
         scope.readScope
       ])
       return runCoalescedProbe(
@@ -140,7 +146,10 @@ export async function getPRForBranchOutcome(
           } finally {
             release()
           }
-          const narrowed = options.checkPageLimit !== undefined || options.exactRepository
+          const narrowed =
+            options.checkPageLimit !== undefined ||
+            options.exactRepository ||
+            options.includeDerivedData === false
           recordPRLastOutcome(lastOutcomeKey(repoPath, branchName, scope), {
             start,
             linkedPRNumber: linkedPRNumber ?? null,

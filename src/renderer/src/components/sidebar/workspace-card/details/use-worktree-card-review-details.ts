@@ -5,7 +5,7 @@ import { getWorkspaceAttachmentSourceContext } from '../review/workspace-attachm
 import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-reference-details'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
-import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'

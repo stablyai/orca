@@ -8,17 +8,22 @@ const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "control-interaction inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow] outline-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive:
-          'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40',
+        destructive: 'bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive/60',
         outline: outlineButtonClasses,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // Keep icon states visible on muted fields, which share accent's light-theme fill.
+        'muted-field-icon':
+          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
+        // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
+        'queued-head-steer':
+          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
@@ -37,6 +42,8 @@ const buttonVariants = cva(
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
+        // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
+        'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
@@ -44,8 +51,6 @@ const buttonVariants = cva(
         'icon-xs-round': "size-6 rounded-full [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
         'icon-lg': 'size-10',
-        // As tall as the composer's round Send button, so swapping between them keeps the row's height.
-        pill: 'h-8 gap-1.5 rounded-full px-3 has-[>svg]:px-2.5 pointer-coarse:h-10',
         chip: "h-4 gap-0.5 rounded px-0.5 text-[10px] leading-none has-[>svg]:px-0.5 [&_svg:not([class*='size-'])]:size-2.5"
       }
     },

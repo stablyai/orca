@@ -1,4 +1,5 @@
 import type { Repo } from '../repo-types'
+import { isRepoHidden, withoutHiddenFilterRepoIds, type HiddenProjects } from '../hidden-projects'
 import type { Worktree } from '../worktree/types'
 import type { WorktreeGroupBy } from './row-types'
 
@@ -8,6 +9,8 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   visibleWorktrees: readonly Worktree[]
   filterRepoIds: readonly string[]
+  /** Over every loaded repo row: a filter id with no listed copy is ignored, as the row filter does. */
+  hiddenProjects: HiddenProjects
   /** Repos whose checkout a VM create in progress has not adopted; its pending row stands for them. */
   pendingVmRepoIds?: ReadonlySet<string>
 }): Set<string> {
@@ -15,11 +18,16 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
     return new Set()
   }
 
-  const filterSet = args.filterRepoIds.length > 0 ? new Set(args.filterRepoIds) : null
+  const listedFilterIds = withoutHiddenFilterRepoIds(args.filterRepoIds, args.hiddenProjects)
+  const filterSet = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   const visibleRepoIds = new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
   const placeholderRepoIds = new Set<string>()
   for (const repo of args.repos) {
-    if ((filterSet && !filterSet.has(repo.id)) || args.pendingVmRepoIds?.has(repo.id)) {
+    if (
+      (filterSet && !filterSet.has(repo.id)) ||
+      args.pendingVmRepoIds?.has(repo.id) ||
+      isRepoHidden(repo)
+    ) {
       continue
     }
     const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0

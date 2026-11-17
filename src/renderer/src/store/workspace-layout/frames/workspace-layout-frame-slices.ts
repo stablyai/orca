@@ -5,14 +5,14 @@ import type {
   CarriedSessionFields,
   DesktopLayoutView,
   LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { workspaceLayoutModelFromPublished } from '../../../../../shared/workspace-layout/workspace-layout-from-published'
-import { editorTabShowsFile } from '../../../../../shared/workspace-layout/workspace-layout-editor-tab-file'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { workspaceLayoutModelFromPublished } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-from-published'
+import { editorTabShowsFile } from '../../../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
-import { saveWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-save'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import { saveWorkspaceLayout } from '../../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { projectHydratedBrowserSession } from '../../slices/browser/hydration/browser-hydration-state'
 import { buildHydratedEditorSessionState } from '../../slices/editor/hydration/hydrated-editor-session-state'

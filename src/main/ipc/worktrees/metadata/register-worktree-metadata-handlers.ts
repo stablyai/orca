@@ -22,7 +22,7 @@ import {
   isWslMoveWorkspaceBlocked,
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context

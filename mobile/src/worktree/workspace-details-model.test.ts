@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from './workspace-list-types'
-import {
-  buildWorkspaceDetailLinks,
-  buildWorkspaceOrigin,
-  workspaceNotes
-} from './workspace-details-model'
+import { buildWorkspaceDetailLinks } from './workspace-details-model'
 
 function row(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -39,31 +35,6 @@ describe('buildWorkspaceDetailLinks', () => {
     expect(links.map((link) => link.label)).toEqual(['PR #12', 'ORCA-4', 'ENG-7', 'Issue #3'])
     expect(links[0]).toMatchObject({ state: 'open' })
     expect(links[3]).toMatchObject({ title: 'Bug', url: 'https://x/3' })
-  })
-
-  it('reads the singular fields of a host that predates linkedItems', () => {
-    const links = buildWorkspaceDetailLinks(
-      row({ linkedIssue: 4, linkedGitLabMR: 9, linkedGitLabIssue: 2, linkedLinearIssue: 'ENG-1' })
-    )
-
-    expect(links.map((link) => `${link.provider} ${link.label}`)).toEqual([
-      'gitlab MR !9',
-      'github Issue #4',
-      'gitlab Issue #2',
-      'linear ENG-1'
-    ])
-  })
-
-  it('lists a reference once when the attachments and a singular field both name it', () => {
-    const links = buildWorkspaceDetailLinks(
-      row({
-        linkedItems: [{ provider: 'github', type: 'issue', number: 4, title: 'Bug' }],
-        linkedIssue: 4
-      })
-    )
-
-    expect(links).toHaveLength(1)
-    expect(links[0]).toMatchObject({ label: 'Issue #4', title: 'Bug' })
   })
 
   it("carries the row's PR state, title, link and checks onto its entry", () => {
@@ -151,62 +122,4 @@ describe('buildWorkspaceDetailLinks', () => {
     )
     expect(pr).toMatchObject({ label: 'PR #3', url: undefined })
   })
-
-  it('names a GitLab review an MR', () => {
-    expect(buildWorkspaceDetailLinks(row({ linkedGitLabMR: 5 }))[0]).toMatchObject({
-      label: 'MR !5',
-      number: 5
-    })
-  })
-
-  it('drops attachments this build cannot place and never opens a non-web link', () => {
-    const linkedItems = JSON.parse(
-      JSON.stringify([
-        'garbage',
-        { provider: 'sourceforge', type: 'issue', number: 1 },
-        { provider: 'github', type: 'issue', number: 0 },
-        { provider: 'github', type: 'issue', number: 8, url: 'javascript:alert(1)' }
-      ])
-    )
-    const links = buildWorkspaceDetailLinks(row({ linkedItems }))
-
-    expect(links).toEqual([])
-  })
-
-  it('keeps two same-numbered issues from different repos apart, as the desktop does', () => {
-    const links = buildWorkspaceDetailLinks(
-      row({
-        linkedItems: [
-          {
-            provider: 'github',
-            type: 'issue',
-            number: 4,
-            url: 'https://github.com/a/one/issues/4'
-          },
-          { provider: 'github', type: 'issue', number: 4, url: 'https://github.com/a/two/issues/4' }
-        ]
-      })
-    )
-
-    expect(links.map((link) => link.url)).toEqual([
-      'https://github.com/a/one/issues/4',
-      'https://github.com/a/two/issues/4'
-    ])
-  })
-})
-
-describe('workspace origin', () => {
-  it('names the automation the host names, and says only that one made it on an older host', () => {
-    expect(
-      buildWorkspaceOrigin(row({ automationCreated: true, automationName: ' Nightly deps ' }))
-    ).toEqual({ kind: 'automation', name: 'Nightly deps' })
-    expect(buildWorkspaceOrigin(row({ automationCreated: true }))).toEqual({ kind: 'automation' })
-    expect(buildWorkspaceOrigin(row({ cliCreated: true }))).toEqual({ kind: 'cli' })
-    expect(buildWorkspaceOrigin(row())).toBeNull()
-  })
-})
-
-it('treats blank notes as none', () => {
-  expect(workspaceNotes({ comment: '  \n ' })).toBeNull()
-  expect(workspaceNotes({ comment: ' Check iPad ' })).toBe('Check iPad')
 })

@@ -1,3 +1,4 @@
+import { legacyBaseRefSearchResult } from '../../../src/shared/base-ref-search-result'
 import { translate } from '../i18n/mobile-i18n'
 import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
@@ -137,7 +138,7 @@ export async function searchMobilePrBaseRefs(
   )
   const result = repoBaseRefSearchRead.interpret(reply)
   return normalizeCreateReviewBaseSearchResults(
-    result.refDetails ?? (result.refs ?? []).map((refName) => ({ refName, localBranchName: '' }))
+    result.refDetails ?? (result.refs ?? []).map(legacyBaseRefSearchResult)
   )
 }
 

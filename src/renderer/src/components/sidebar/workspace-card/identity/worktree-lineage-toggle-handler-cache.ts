@@ -13,7 +13,6 @@ export const createLineageToggleHandlerCache = (
       return cached
     }
     const handler: LineageToggleHandler = (event) => {
-      event.preventDefault()
       event.stopPropagation()
       toggleGroup(groupKey)
     }

@@ -4,7 +4,7 @@ import { create } from 'zustand'
 import { createGitHubSlice } from '../github'
 import { createHostedReviewSlice } from '../../slices/hosted-review/hosted-review'
 import type { AppState } from '../../types'
-import type { GitHubPRRefreshEvent } from '../../../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshEvent } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 const mockApi = {
   gh: {

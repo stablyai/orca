@@ -13,6 +13,7 @@ import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { WorkspaceMetadataSet } from './worktree/workspace-metadata-set'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
+import type { WorkspaceCleanupRunFinishedEvent } from './workspace-cleanup/workspace-cleanup-run'
 
 export type RuntimeClientEvent =
   | {
@@ -67,6 +68,8 @@ export type RuntimeClientEvent =
     }
   // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
   | { type: 'browserProfilesChanged' }
+  // Old clients drop the unknown type; the report RPC has the same run.
+  | WorkspaceCleanupRunFinishedEvent
   | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string

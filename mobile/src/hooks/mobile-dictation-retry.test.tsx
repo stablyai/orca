@@ -10,7 +10,7 @@ import {
 import type {
   DictationCapture,
   DictationCaptureChunk
-} from '../platform/dictation-capture-contract'
+} from '../platform/audio-capture/dictation-capture-contract'
 
 type Seam = {
   chunkHandlers: Set<(chunk: DictationCaptureChunk) => void>
@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
 }))
 
 // Keep capture identity stable like both real seams; a fresh object on render would rerun teardown and cancel dictation.
-vi.mock('../platform/dictation-capture', () => {
+vi.mock('../platform/audio-capture/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,

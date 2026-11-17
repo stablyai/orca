@@ -22,7 +22,7 @@ import {
 import { isPathAbsentError } from './access/filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'

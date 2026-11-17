@@ -12,7 +12,7 @@ import {
   addOrcaWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
 } from '../../../pty/shell-startup/wsl-orca-env'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
 import { getRuntimeSourceStamp } from '../../../runtime/hosts/platform-probe/host-descriptor'

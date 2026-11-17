@@ -15,6 +15,7 @@ export type WorktreeBatchDeleteOptions = {
 export type WorktreeDeleteIdentity = Pick<Worktree, 'id' | 'instanceId' | 'hostId'>
 
 export type WorktreeDeleteOptions = {
+  forceConfirm?: boolean
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId

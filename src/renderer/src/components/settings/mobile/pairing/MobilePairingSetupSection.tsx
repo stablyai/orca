@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
+import { useSettingsTargetReveal } from '../../section-layout/settings-target-highlight'
+import { MOBILE_SETTING_ANCHORS } from '../mobile-pane-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -53,6 +55,9 @@ export function MobilePairingSetupSection({
   const t = useTranslate()
   const usingRelay = connectionMode === 'automatic'
   const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
+  const addressRevealRef = useSettingsTargetReveal<HTMLDivElement>(() =>
+    setAddressDisclosureOpen(true)
+  )
   // Render search/custom-address pickers outright; a collapse trigger cannot close pinned-open state.
   const addressDisclosurePinned = addressDisclosureForcedOpen || selectedAddressIsCustom
   // Relay can use main’s default LAN endpoint; LAN-only requires an explicit reachable address.
@@ -64,7 +69,7 @@ export function MobilePairingSetupSection({
   )
 
   const addressControls = (
-    <div className="space-y-2">
+    <div id={MOBILE_SETTING_ANCHORS.networkInterface} className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <NetworkInterfacePicker
           networkInterfaces={networkInterfaces}
@@ -145,7 +150,11 @@ export function MobilePairingSetupSection({
         </div>
       ) : usingRelay ? (
         // Keep Relay’s optional direct path available in a disclosure without dominating setup.
-        <Collapsible open={addressDisclosureOpen} onOpenChange={setAddressDisclosureOpen}>
+        <Collapsible
+          ref={addressRevealRef}
+          open={addressDisclosureOpen}
+          onOpenChange={setAddressDisclosureOpen}
+        >
           <CollapsibleTrigger asChild>
             <Button
               type="button"
@@ -162,7 +171,8 @@ export function MobilePairingSetupSection({
               />
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          {/* Mounted while closed so a settings jump can find and reveal the address picker. */}
+          <CollapsibleContent forceMount className="data-[state=closed]:hidden">
             <div className="mt-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
               {addressControls}
             </div>

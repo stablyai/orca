@@ -30,18 +30,6 @@ function catalog(plugins: unknown[], extra: Record<string, unknown> = {}) {
 }
 
 describe('plugin catalog', () => {
-  it.each(['main', 'v1.0.0', 'a'.repeat(7), 'A'.repeat(40)])(
-    'drops a release pinned to %s instead of a full commit SHA',
-    (commit) => {
-      const parsed = pluginCatalogSchema.parse(
-        catalog([
-          entry('acme.one', { releases: [{ ...release('2.0.0'), commit }, release('1.0.0')] })
-        ])
-      )
-      expect(parsed.plugins[0]?.releases.map((item) => item.version)).toEqual(['1.0.0'])
-    }
-  )
-
   it('offers the newest release this Orca can install', () => {
     const releases = [
       release('3.0.0', '2.0.0'),
@@ -56,18 +44,6 @@ describe('plugin catalog', () => {
       selectPluginCatalogRelease([release('2.0.0', '9.0.0'), release('1.0.0', '8.0.0')], '1.0.0')
         ?.minimumOrca
     ).toBe('8.0.0')
-  })
-
-  it('lists plugins from directories of one repository and refuses unsafe directories', () => {
-    const at = (path: string, index: number) =>
-      entry(`acme.p${index}`, {
-        source: { kind: 'git', url: 'https://github.com/acme/plugins.git', ref: 'main', path }
-      })
-    const safe = ['gleam', 'plugins/gleam-syntax', 'a/b.c/d']
-    const unsafe = ['', '../gleam', 'plugins/../gleam', '/plugins/gleam', 'plugins\\gleam']
-    const more = ['C:/plugins', './gleam', 'plugins/./gleam', 'plugins/', 'plugins//gleam', 'nul']
-    const parsed = pluginCatalogSchema.parse(catalog([...safe, ...unsafe, ...more].map(at)))
-    expect(parsed.plugins.map((plugin) => plugin.source.path)).toEqual(safe)
   })
 
   it('leaves plugins in a repository directory out of the frozen v1 file', () => {

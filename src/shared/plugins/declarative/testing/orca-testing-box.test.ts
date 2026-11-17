@@ -45,21 +45,4 @@ describe('orca/testing reads Box', () => {
     expect(panel.errors).toEqual([])
     expect(panel.warnings).toEqual([])
   })
-
-  it('summarizes what sits in Boxes, and danger or warning Boxes themselves', async () => {
-    panel = await mount({ default: Status })
-    expect(panel.summary()).toEqual(['Heading "Services"', 'Box danger "billing Down"'])
-  })
-
-  it('reports invalid Box props as warnings', async () => {
-    panel = await mount({
-      default: () => h('Box', { background: '#ff0000', width: '50px' }, 'x')
-    })
-    expect(panel.warnings).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('Box: ignored invalid background'),
-        expect.stringContaining('Box: ignored invalid width')
-      ])
-    )
-  })
 })

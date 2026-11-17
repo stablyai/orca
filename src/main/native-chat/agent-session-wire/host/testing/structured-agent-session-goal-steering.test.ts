@@ -108,3 +108,41 @@ it('holds a Plan choice until the goal turn ends', async () => {
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
   expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
 })
+
+it('keeps an incompatible Send-now card intact until a new turn can use its choices', async () => {
+  await startGoalTurn()
+  const choices = { model: 'gpt-ran', effort: 'high', serviceTier: 'priority' }
+  const queued = rig.send('Keep my selected speed', 'queue-if-active', { carried: choices })
+  expect(await queued.result).toMatchObject({ ok: true, value: { queued: {} } })
+  const operationId = hostTestOperationId()
+  for (let press = 0; press < 2; press += 1) {
+    expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
+      ok: false,
+      refusal: { details: { reason: 'turnActive' } }
+    })
+  }
+  expect(await rig.handoff(queued.id)).toBeUndefined()
+  expect(
+    rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.get(queued.id)
+  ).toMatchObject({
+    state: 'waiting',
+    body: { blocks: [{ type: 'text', text: 'Keep my selected speed' }] },
+    options: choices
+  })
+
+  native.activeTurnIds = new Set()
+  rig
+    .providerEvents()
+    .appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'goal-turn', ordinal: 99 },
+      { kind: 'turn', turnId: 'goal-turn', state: 'completed' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await rig.host.flushStreamedEvents(SESSION)
+  await eventually(async () => expect((await rig.handoff(queued.id))?.handedOverAt).toBeDefined())
+  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
+  expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
+    ok: true,
+    value: { submission: { queuedMessageId: queued.id } }
+  })
+})

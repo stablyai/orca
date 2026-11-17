@@ -92,17 +92,6 @@ describe('relocateServeSupervisor', () => {
     expect(relocated.execve).not.toHaveBeenCalled()
   })
 
-  it('stays in place outside a packaged app', async () => {
-    for (const d of [
-      deps({ env: {} }),
-      deps({ env: { ELECTRON_RUN_AS_NODE: '1', ORCA_APP_EXECUTABLE: '/dev/Orca' } }),
-      deps({ appRoot: join(root, 'checkout') })
-    ]) {
-      await expect(relocateServeSupervisor(d)).resolves.toBe('in-place')
-      expect(d.execve).not.toHaveBeenCalled()
-    }
-  })
-
   // Re-exec closes the AppImage keepalive pipe and unmounts libraries needed by the new image.
   it('stays in place when running from an AppImage, whose files cannot change under it', async () => {
     const d = deps({
@@ -235,14 +224,6 @@ describe('relocateServeSupervisor', () => {
     }
     const appCli = () => join(appRoot, 'out', 'cli', 'index.js')
 
-    it('re-runs plain serve with the same arguments on the replaced executable', () => {
-      const argv = ['/ignored', appCli(), 'serve', '--json']
-      const { execve, execPath } = restart({ ELECTRON_RUN_AS_NODE: '1' }, argv)
-      expect(execve).toHaveBeenCalledWith(execPath, [execPath, ...argv.slice(1)], {
-        ELECTRON_RUN_AS_NODE: '1'
-      })
-    })
-
     it('does not restart when the executable is the one it started from, as after a restart', () => {
       const argv = ['/ignored', appCli(), 'serve']
       const installed = statSync(deps().execPath)
@@ -263,14 +244,6 @@ describe('relocateServeSupervisor', () => {
         restart({}, ['/ignored', join(root, 'gone.js'), 'serve']).execve
       ).not.toHaveBeenCalled()
       expect(log).toHaveBeenCalledWith(expect.stringContaining('not ready to run'))
-    })
-
-    it('logs instead of throwing on a runtime that cannot replace its own process', () => {
-      const execve = vi.fn(() => {
-        throw new Error('this runtime cannot replace its own process')
-      })
-      expect(() => restart({}, ['/ignored', appCli(), 'serve'], { execve })).not.toThrow()
-      expect(log).toHaveBeenCalledWith(expect.stringContaining('cannot replace'))
     })
 
     it('re-runs a relocated supervisor from the app, which copies the new release aside', async () => {

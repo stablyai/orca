@@ -9,7 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ScrollState } from './terminal-scroll/pane-scroll-snapshot'
 import type { TerminalWebglAutoDecision } from './terminal-rendering/terminal-webgl-auto-policy'
 

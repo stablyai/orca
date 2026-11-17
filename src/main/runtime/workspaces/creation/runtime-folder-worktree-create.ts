@@ -31,6 +31,7 @@ import {
   type RuntimeFolderWorktreeSetupDeps
 } from './runtime-folder-worktree-setup'
 import { buildRuntimeSetupReceipt } from './runtime-local-worktree-setup'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
@@ -146,7 +147,8 @@ export async function createRuntimeFolderWorktree(args: {
     kind: 'created',
     worktreeId: worktree.id,
     path: worktree.path,
-    branch: worktree.branch
+    branch: worktree.branch,
+    ...createdWorktreeLifecycleIdentity(worktree)
   })
   const setupResult = deps.setup
     ? await prepareFolderWorktreeSetup({

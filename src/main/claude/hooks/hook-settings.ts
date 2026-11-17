@@ -1,0 +1,341 @@
+import { homedir } from 'node:os'
+import { basename, extname, join, win32 } from 'node:path'
+import {
+  buildManagedCommandHook,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
+  type HookCommandConfig,
+  type HooksConfig
+} from '../../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands,
+  withPreviousManagedAsync
+} from '../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
+import { isSafeUnicodeWindowsBatchHookPath } from '../../agent-hooks/installation/commands/windows-hook-command'
+import { wrapWindowsPowerShellEncodedCommand } from '../../agent-hooks/installation/commands/windows-powershell-hook-launcher'
+import { quotePowerShellLiteral } from '../../../shared/powershell-native-argument'
+import { getWindowsNativeHookAgent } from '../../agent-hooks/installation/commands/windows-native-hook-executable'
+import {
+  wrapRuntimeHomeHookCommand,
+  wrapRuntimeHomePosixHookCommand
+} from '../../agent-hooks/installation/commands/runtime-home-hook-command'
+import { wrapWindowsDirectCmdHookCommand } from '../../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
+import {
+  claudeManagedHookForms,
+  withClaudeAsyncPermissionRequest
+} from './claude-async-permission-request'
+
+export type ClaudeCompatibleHookSettings = {
+  configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
+  scriptBaseName:
+    | 'claude-hook'
+    | 'openclaude-hook'
+    | 'qoder-hook'
+    | 'qoder-cn-hook'
+    | 'qwen-code-hook'
+    | 'codebuddy-hook'
+  usesWindowsCompatLauncher: boolean
+  windowsHookShell?: 'powershell'
+}
+
+export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.claude',
+  scriptBaseName: 'claude-hook',
+  usesWindowsCompatLauncher: true
+}
+
+export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
+  configDirName: '.openclaude',
+  scriptBaseName: 'openclaude-hook',
+  usesWindowsCompatLauncher: false
+}
+
+/** Exec form (`args`) is only valid for Claude versions that support it. */
+export type NativeHookFormOptions = { execForm?: boolean }
+
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
+  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
+}
+
+export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return settings.scriptBaseName.replace(/-hook$/, '-statusline')
+}
+
+export function getStatusLineScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return process.platform === 'win32'
+    ? `${getStatusLineScriptBaseName(settings)}.cmd`
+    : getPosixStatusLineScriptFileName(settings)
+}
+
+export function getPosixStatusLineScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${getStatusLineScriptBaseName(settings)}.sh`
+}
+
+export function getStatusLineScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(getStatusLineScriptFileName(settings))
+}
+
+export function getManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return process.platform === 'win32'
+    ? `${settings.scriptBaseName}.cmd`
+    : getPosixManagedScriptFileName(settings)
+}
+
+export function getPosixManagedScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${settings.scriptBaseName}.sh`
+}
+
+export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(getManagedScriptFileName(settings))
+}
+
+export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
+}
+
+function getScriptBaseName(scriptPath: string): string {
+  const scriptFileName = basename(scriptPath)
+  const extension = extname(scriptFileName)
+  return extension ? scriptFileName.slice(0, -extension.length) : scriptFileName
+}
+
+export function getManagedCommand(
+  scriptPath: string,
+  options: { neutralJsonWhenMissing?: boolean } = {}
+): string {
+  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
+}
+
+// Claude adds the full PostCompact command to the model's context after compaction.
+export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
+  return eventName === 'PostCompact'
+    ? wrapRuntimeHomePosixHookCommand(getScriptBaseName(scriptPath))
+    : getRemoteManagedCommand(scriptPath)
+}
+
+export function getManagedLifecycleHook(
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS,
+  nativeHookPath: string | null = null,
+  options: NativeHookFormOptions = {}
+): HookCommandConfig {
+  if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
+    return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
+  }
+  // Native exe plus agent name launches consistently across Git Bash, PowerShell and CreateProcess.
+  const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
+  if (nativeCommand) {
+    const agent = getWindowsNativeHookAgent(scriptPath)
+    return {
+      type: 'command',
+      command: `${nativeCommand} ${agent}`,
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  // Git Bash needs a spaced path quoted, which the no-Git-Bash PowerShell host cannot parse.
+  if (nativeHookPath && options.execForm) {
+    return {
+      type: 'command',
+      command: nativeHookPath,
+      // The exe ignores argv[2]; the script path lets builds without exec-form support replace this entry.
+      args: [getWindowsNativeHookAgent(scriptPath), scriptPath],
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  if (settings.windowsHookShell === 'powershell') {
+    return {
+      type: 'command',
+      command: getWindowsPowerShellLifecycleCommand(scriptPath),
+      shell: 'powershell',
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  return getWindowsManagedLifecycleHook(scriptPath)
+}
+
+// Some compatible consumers ignore args, so keep the invocation self-contained.
+export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  const directCommand = wrapWindowsDirectCmdHookCommand(scriptPath)
+  if (directCommand) {
+    return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
+  }
+  return {
+    type: 'command',
+    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath), {
+      useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath)
+    }),
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+function getWindowsPowerShellLifecycleCommand(scriptPath: string): string {
+  const scriptFileName = win32.basename(scriptPath)
+  const quotedRelativePath = quotePowerShellLiteral(`.orca\\agent-hooks\\${scriptFileName}`)
+  return (
+    `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
+    'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
+    "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
+  )
+}
+
+export function hasSameManagedHookInvocation(
+  actual: HookCommandConfig,
+  expected: HookCommandConfig
+): boolean {
+  return (
+    actual.command === expected.command &&
+    actual.shell === expected.shell &&
+    JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
+  )
+}
+
+/** Report the first matching invocation form per event, or list the event as missing. */
+export function findManagedEventHookForms(
+  config: HooksConfig,
+  eventNames: string[],
+  formsFor: (eventName: string) => HookCommandConfig[]
+): { missing: string[]; matchedForms: number[] } {
+  const missing: string[] = []
+  const matchedForms: number[] = []
+  for (const eventName of eventNames) {
+    const definitions = config.hooks?.[eventName]
+    const hooks = Array.isArray(definitions)
+      ? definitions.flatMap((definition) => definition.hooks ?? [])
+      : []
+    const form = claudeManagedHookForms(eventName, formsFor(eventName)).findIndex((expected) =>
+      hooks.some((hook) => hasSameManagedHookInvocation(hook, expected))
+    )
+    if (form === -1) {
+      missing.push(eventName)
+    } else {
+      matchedForms.push(form)
+    }
+  }
+  return { missing, matchedForms }
+}
+
+export function getRemoteManagedCommand(scriptPath: string): string {
+  return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
+}
+
+export function applyManagedHooks(
+  config: HooksConfig,
+  hookForEvent: (eventName: string) => HookCommandConfig,
+  scriptFileName: string,
+  plan: ClaudeManagedHookPlan,
+  posixCommands: boolean
+): HooksConfig {
+  const nextHooks = { ...config.hooks }
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+
+  for (const event of plan.install) {
+    const current = nextHooks[event.eventName]
+    const previous = Array.isArray(current) ? current : []
+    const hook = withClaudeAsyncPermissionRequest(
+      event.eventName,
+      withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand),
+      posixCommands
+    )
+    const cleaned = removeManagedCommands(previous, isManagedCommand)
+    nextHooks[event.eventName] = [...cleaned, { ...event.definition, hooks: [hook] }]
+  }
+
+  for (const event of plan.retire) {
+    const current = nextHooks[event.eventName]
+    if (!Array.isArray(current) || current.length === 0) {
+      continue
+    }
+    const cleaned = removeManagedCommands(current, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[event.eventName]
+    } else {
+      nextHooks[event.eventName] = cleaned
+    }
+  }
+
+  return { ...config, hooks: nextHooks }
+}
+
+export type StatusLineSlotState = 'managed' | 'user' | 'empty'
+
+// An empty slot after a prior install is a user opt-out, distinct from a fresh empty slot.
+export function getStatusLineSlotState(
+  config: HooksConfig,
+  scriptFileName = getStatusLineScriptFileName()
+): StatusLineSlotState {
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const current = config.statusLine
+  const currentCommand =
+    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
+  if (!currentCommand) {
+    return 'empty'
+  }
+  return isManagedCommand(currentCommand) ? 'managed' : 'user'
+}
+
+export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.installed`)
+}
+
+// A user-owned status line takes precedence over Orca's usage feed.
+export function applyManagedStatusLine(
+  config: HooksConfig,
+  command: string,
+  scriptFileName = getStatusLineScriptFileName()
+): HooksConfig {
+  if (getStatusLineSlotState(config, scriptFileName) === 'user') {
+    return config
+  }
+  return { ...config, statusLine: { type: 'command', command } }
+}
+
+export function removeManagedStatusLine(
+  config: HooksConfig,
+  scriptFileName = getStatusLineScriptFileName()
+): { config: HooksConfig; changed: boolean } {
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const current = config.statusLine
+  const currentCommand =
+    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
+  if (!currentCommand || !isManagedCommand(currentCommand)) {
+    return { config, changed: false }
+  }
+  const next = { ...config }
+  delete next.statusLine
+  return { config: next, changed: true }
+}
+
+export function removeManagedHooks(
+  config: HooksConfig,
+  scriptFileName = getManagedScriptFileName()
+): {
+  config: HooksConfig
+  changed: boolean
+} {
+  const nextHooks = { ...config.hooks }
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  let changed = false
+
+  for (const [eventName, definitions] of Object.entries(nextHooks)) {
+    if (!Array.isArray(definitions)) {
+      continue
+    }
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    if (JSON.stringify(cleaned) !== JSON.stringify(definitions)) {
+      changed = true
+    }
+    if (cleaned.length === 0) {
+      delete nextHooks[eventName]
+    } else {
+      nextHooks[eventName] = cleaned
+    }
+  }
+
+  return {
+    config: { ...config, hooks: nextHooks },
+    changed
+  }
+}

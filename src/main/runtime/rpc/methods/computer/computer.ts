@@ -5,7 +5,7 @@ import {
   callComputerSidecarListWindows,
   callComputerSidecarSnapshot,
   resetComputerSidecarForTest
-} from '../../../../computer/sidecar-client'
+} from '../../../../computer/sidecar-transport/sidecar-client'
 import { defineMethod } from '../../core'
 import {
   Click,
@@ -21,11 +21,11 @@ import {
   Scroll,
   SetValue,
   TypeText
-} from '../../../../../shared/rpc-contract/computer-schemas-params'
+} from '../../../../../shared/rpc-contract/computer/computer-schemas-params'
 import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
-} from '../../../../../shared/rpc-contract/computer-params'
+} from '../../../../../shared/rpc-contract/computer/computer-params'
 
 export function resetComputerSessionsForTest(): void {
   resetComputerSidecarForTest()
@@ -54,7 +54,7 @@ export const COMPUTER_METHODS = [
     params: ComputerPermissions,
     handler: async (params) => {
       const { openComputerUsePermissions } =
-        await import('../../../../computer/macos-computer-use-permissions')
+        await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
       return openComputerUsePermissions(params.id)
     }
   }),
@@ -64,7 +64,7 @@ export const COMPUTER_METHODS = [
     params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { computerUsePermissionStatusGate } =
-        await import('../../../../computer/macos-computer-use-permission-status-gate')
+        await import('../../../../computer/macos-permissions/macos-computer-use-permission-status-gate')
       return computerUsePermissionStatusGate.read()
     }
   }),

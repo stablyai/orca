@@ -6,7 +6,7 @@ import type {
   ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/agent-session-argument-problem'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError,

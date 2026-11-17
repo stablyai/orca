@@ -97,6 +97,25 @@ const resolution = {
 }
 
 describe('deleting the active workspace', () => {
+  it('navigates on durable retirement while retaining the checkout and its draft state', async () => {
+    const store = setup()
+    const before = store.getState()
+    store.setState({ worktreesByRepo: { repo1: [{ ...active, removing: true }, sibling, main] } })
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    store.setState({
+      worktreesByRepo: {
+        repo1: [{ ...active, removing: true, removalRecorded: true }, sibling, main]
+      }
+    })
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith(sibling.id, {
+      revealInSidebar: false,
+      executionHostId: 'local'
+    })
+    expect(store.getState().worktreesByRepo.repo1.find((row) => row.id === active.id)).toBeDefined()
+    expect(store.getState().tabsByWorktree).toBe(before.tabsByWorktree)
+  })
   it('respects a user closing the last browser tab after startup dropped its row', async () => {
     const store = setup()
     layoutMain = await drawTabsFromMain(store)

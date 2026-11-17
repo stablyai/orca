@@ -8,7 +8,7 @@ import {
   type PrSidebarData,
   type PrSidebarState
 } from '../../source-control/review/mobile-pr-sidebar-state'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { PrSidebarLoadOptions } from '../../source-control/review/use-mobile-pr-sidebar-controller'
 import {
   prActionSlices,

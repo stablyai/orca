@@ -13,7 +13,7 @@ import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
-import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'

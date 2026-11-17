@@ -1,5 +1,5 @@
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
-import { assertStructuredAgentResolutionCurrent } from '../../native-chat/structured-agent-command-resolution'
+import { assertStructuredAgentResolutionCurrent } from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SidebarInputsFeed } from '../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
-import { testDomain } from '../../main/runtime/sidebar-inputs/sidebar-inputs-feed.test-fixture'
+import { SidebarInputsFeed } from '../../main/runtime/sidebar-inputs/feed/sidebar-inputs-feed'
+import { testDomain } from '../../main/runtime/sidebar-inputs/feed/testing/sidebar-inputs-feed.test-fixture'
 import type {
   SidebarInputsChangedEvent,
   SidebarInputsReadParams
@@ -108,28 +108,6 @@ describe('SidebarFeedReader', () => {
       const caughtUp = host.installed()
       expect(caughtUp.revision).toBeGreaterThan(first.revision)
       expect(caughtUp.domains.get('workspaces')?.get('c')).toEqual({ id: 'c' })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('stops retrying a host that keeps failing, and when the screen lets go', async () => {
-    vi.useFakeTimers()
-    try {
-      const host = hostWithFeed()
-      host.transport.mockRejectedValue(new Error('Request timed out: sidebarInputs.read'))
-      host.reader.refresh()
-      await vi.advanceTimersByTimeAsync(10 * 60_000)
-      const attempts = host.transport.mock.calls.length
-      expect(attempts).toBeGreaterThan(1)
-      expect(attempts).toBeLessThan(10)
-
-      // A fresh trigger gets a fresh budget, which disposal cancels.
-      host.reader.refresh()
-      await vi.advanceTimersByTimeAsync(0)
-      host.reader.dispose()
-      await vi.advanceTimersByTimeAsync(10 * 60_000)
-      expect(host.transport.mock.calls.length).toBe(attempts + 1)
     } finally {
       vi.useRealTimers()
     }

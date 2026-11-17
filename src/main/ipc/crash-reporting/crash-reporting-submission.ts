@@ -8,12 +8,12 @@ import {
   formatUncapturedCrashReportText
 } from '../../../shared/crash-reporting'
 import { submitFeedback } from '../feedback'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import {
   diagnosticBundleForReportOnlyRetry,
   prepareCrashDiagnosticBundle,
   resolveSubmittedDiagnosticBundle
-} from '../../crash-reporting/crash-feedback-diagnostic-bundle'
+} from '../../crash-reporting/reports/crash-feedback-diagnostic-bundle'
 import {
   getRequestedCrashReport,
   inFlightSubmissions,

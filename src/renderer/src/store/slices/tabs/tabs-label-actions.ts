@@ -8,7 +8,7 @@ import {
   dedupeTabOrder,
   partitionPinnedTabOrder,
   reorderProjectedTabOrder
-} from '../../../../../shared/workspace-layout/tab-order'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,

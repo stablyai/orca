@@ -28,21 +28,21 @@ import {
   TabSwitch,
   Upload,
   Wait
-} from '../../../../../shared/rpc-contract/browser-params'
-import { Screenshot, Snapshot } from '../../../../../shared/rpc-contract/browser-observation-params'
+} from '../../../../../shared/rpc-contract/browser/browser-params'
+import * as browserObservationParams from '../../../../../shared/rpc-contract/browser/browser-observation-params'
 import {
   BrowserOpenUrlParams,
   BrowserTabCreateParams
-} from '../../../../../shared/rpc-contract/browser-tab-create-params'
+} from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
-import { CertificateProceed } from '../../../../../shared/rpc-contract/browser-core-params'
+import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
 export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     permission: 'workspace',
-    params: Snapshot,
+    params: browserObservationParams.Snapshot,
     handler: async (params, { runtime }) => runtime.browserSnapshot(params)
   }),
   defineMethod({
@@ -91,7 +91,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.screenshot',
     permission: 'workspace',
-    params: Screenshot,
+    params: browserObservationParams.Screenshot,
     handler: async (params, { runtime }) => runtime.browserScreenshot(params)
   }),
   defineMethod({

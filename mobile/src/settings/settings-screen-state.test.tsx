@@ -55,36 +55,6 @@ afterEach(() => {
   act(() => renderer?.unmount())
 })
 describe('shared settings screen state', () => {
-  it('shows a desktop on Auto as Auto and switches it to plain Toggle', async () => {
-    const operations: VoiceSettingsOperations = {
-      load: vi.fn<VoiceSettingsOperations['load']>().mockResolvedValue({
-        enabled: true,
-        dictationMode: 'toggle',
-        dictationHoldToRecord: true,
-        selectedModelId: '',
-        models: []
-      }),
-      configure: vi.fn<VoiceSettingsOperations['configure']>(() => new Promise(() => {})),
-      download: vi.fn(),
-      delete: vi.fn()
-    }
-    await act(async () => {
-      renderer = create(
-        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
-      )
-    })
-    const modeProps = () => renderer.root.findByProps({ testIDPrefix: 'voice-mode-' }).props
-    expect(modeProps().selected).toBe('auto')
-
-    await act(async () => {
-      modeProps().onSelect('toggle')
-    })
-    expect(operations.configure).toHaveBeenCalledWith({
-      dictationMode: 'toggle',
-      dictationHoldToRecord: false
-    })
-    expect(modeProps().selected).toBe('toggle')
-  })
   it('flips the Voice switch before the desktop replies and surfaces a rejected save', async () => {
     const loaded = {
       enabled: true,

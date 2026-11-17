@@ -4,7 +4,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSourceControlSettings } from './mobile-source-control-settings-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
 import { useFocusEffect } from 'expo-router'
-import { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -59,7 +59,7 @@ export type MobileSourceControlLoaders = {
   screenState: ScreenState
   branchCompareState: MobileBranchCompareState
   mountedRef: MutableRefObject<boolean>
-  setRootRef: (node: View | null) => void
+  setRootRef: (node: HostInstance | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
   // Shown rows are being re-read; feeds the header's refresh line.
   refreshing: boolean
@@ -137,7 +137,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     })
   }, [hostId, queryClient, target])
   const mountedRef = useRef(true)
-  const setRootRef = useCallback((node: View | null): void => {
+  const setRootRef = useCallback((node: HostInstance | null): void => {
     // Invalidate route-detached RPC writes without waiting for passive cleanup.
     mountedRef.current = node !== null
   }, [])

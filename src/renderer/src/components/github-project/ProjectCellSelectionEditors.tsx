@@ -6,7 +6,7 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 import { EmptyProjectCell } from './ProjectCellValueEditors'
 

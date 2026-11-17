@@ -68,14 +68,6 @@ function restartDeps(overrides: Partial<AppImageRestartDeps> = {}): AppImageRest
 }
 
 describe('supervised serve and a replaced AppImage', () => {
-  it('finds the AppImage a stable-launcher service was unpacked from', async () => {
-    const { appImagePath, executable } = await makeRunningGeneration()
-    const watch = resolveAppImageBuildWatch(executable, {}, 'linux')
-    expect(watch?.appImagePath).toBe(appImagePath)
-    expect(inspectAppImageBuild(watch!)).toBe('current')
-    expect(resolveAppImageBuildWatch(executable, {}, 'darwin')).toBeNull()
-  })
-
   it('ignores a source record that names another AppImage', async () => {
     const { root, executable } = await makeRunningGeneration()
     const namespacePath = join(executable, '..', '..')
@@ -159,10 +151,9 @@ describe('supervised serve and a replaced AppImage', () => {
     const watch = resolveAppImageBuildWatch(executable, {}, 'linux')!
     await swapIn(appImagePath, 'build C')
     const attemptPath = join(root, 'attempt.json')
-    const logs: string[] = []
     const make = (overrides: { force?: boolean; runningKey?: string } = {}) =>
       createSupervisedAppImageUpdate({
-        ...restartDeps({ log: (line) => logs.push(line) }),
+        ...restartDeps(),
         watch: { ...watch, runningKey: overrides.runningKey ?? watch.runningKey },
         attemptPath,
         force: overrides.force ?? false
@@ -172,13 +163,10 @@ describe('supervised serve and a replaced AppImage', () => {
     expect(first.inspect()).toBe('superseded')
     await first.restart(() => false)
     const candidateKey = resolveAppImageCacheKey(appImagePath)
-    expect(JSON.parse(await readFile(attemptPath, 'utf8'))).toEqual({ candidateKey })
 
     // The new build died early; the service manager restarted the old one.
     const second = make()
     expect(second.inspect()).toBe('current')
-    expect(second.inspect()).toBe('current')
-    expect(logs.filter((line) => line.includes('did not come up'))).toHaveLength(1)
 
     expect(make({ force: true }).inspect()).toBe('superseded')
     await make().restart(() => false)

@@ -6,7 +6,7 @@ import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../../shared/local-bui
 import { NODE_RUNTIME_DARWIN_MINIMUM_OS } from '../../../../shared/node-runtime-pin'
 import { runProcess } from '@orca/process-host'
 import { rm } from '../../../filesystem/asar-transparent-fs'
-import { compareDottedVersions } from '../../../orcad/native-host-abi'
+import { compareDottedVersions } from '../../../orcad/native-runtime/native-host-abi'
 import { DaemonClient } from '../../transport/client/daemon-client'
 import {
   DaemonEndpointOwnershipError,

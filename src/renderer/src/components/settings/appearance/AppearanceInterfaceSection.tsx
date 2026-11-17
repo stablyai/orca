@@ -5,7 +5,7 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
-import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
+import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import {
   SettingsSearchableSelect,
   type SettingsSearchableSelectOption
@@ -17,6 +17,7 @@ import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import {
+  APPEARANCE_EDITOR_THEME_SETTING_ID,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getThemeEntries,
@@ -141,7 +142,7 @@ export function AppearanceInterfaceSection({
   const languageTitle = t('settings.appearance.language.title', 'Language')
 
   return (
-    <div className="divide-y divide-border/40">
+    <>
       <SearchableSetting
         title={themeLabel}
         description={themeEntry?.description}
@@ -200,6 +201,8 @@ export function AppearanceInterfaceSection({
       {editorThemeSlots.map((slot) => (
         <SearchableSetting
           key={slot.base}
+          // The light row comes first, so it stands for both editor theme rows.
+          id={slot.base === 'light' ? APPEARANCE_EDITOR_THEME_SETTING_ID : undefined}
           title={slot.title}
           description={editorThemeEntry?.description}
           keywords={editorThemeEntry?.keywords ?? []}
@@ -338,78 +341,76 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       {showAdvanced ? (
-        <AppearanceAdvancedDisclosure showTopBorder={false}>
-          <div className="divide-y divide-border/40">
+        <SettingsGroupDisclosure>
+          <SearchableSetting
+            title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
+            description={titlebarEntry?.description}
+            keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
+          >
+            <SettingsSwitchRow
+              label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
+              checked={settings.showTitlebarAppName}
+              onChange={() =>
+                updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+              }
+            />
+          </SearchableSetting>
+
+          <ReduceVisualEffectsSetting
+            entry={reduceVisualEffectsEntry}
+            enabled={settings.reduceVisualEffects === true}
+            updateSettings={updateSettings}
+          />
+
+          {isDesktopWindows ? (
             <SearchableSetting
-              title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
-              description={titlebarEntry?.description}
-              keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
+              title={t(
+                'auto.components.settings.AppearancePane.95a5581f66',
+                'Minimize to tray on close'
+              )}
+              description={systemTrayEntry?.description}
+              keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
             >
               <SettingsSwitchRow
-                label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
-                checked={settings.showTitlebarAppName}
-                onChange={() =>
-                  updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
-                }
-              />
-            </SearchableSetting>
-
-            <ReduceVisualEffectsSetting
-              entry={reduceVisualEffectsEntry}
-              enabled={settings.reduceVisualEffects === true}
-              updateSettings={updateSettings}
-            />
-
-            {isDesktopWindows ? (
-              <SearchableSetting
-                title={t(
+                label={t(
                   'auto.components.settings.AppearancePane.95a5581f66',
                   'Minimize to tray on close'
                 )}
-                description={systemTrayEntry?.description}
-                keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
-              >
-                <SettingsSwitchRow
-                  label={t(
-                    'auto.components.settings.AppearancePane.95a5581f66',
-                    'Minimize to tray on close'
-                  )}
-                  // Explain the non-obvious platform restriction and keep-running consequence.
-                  description={t(
-                    'auto.components.settings.AppearancePane.b707773a0d',
-                    'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
-                  )}
-                  checked={settings.minimizeToTrayOnClose === true}
-                  onChange={() =>
-                    updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
+                // Explain the non-obvious platform restriction and keep-running consequence.
+                description={t(
+                  'auto.components.settings.AppearancePane.b707773a0d',
+                  'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+                )}
+                checked={settings.minimizeToTrayOnClose === true}
+                onChange={() =>
+                  updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
+                }
+              />
+            </SearchableSetting>
+          ) : null}
 
-            {isDesktopMac ? (
-              <SearchableSetting
-                title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
-                description={menuBarIconEntry?.description}
-                keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
-              >
-                <SettingsSwitchRow
-                  label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
-                  // Hiding the status item preserves Dock activation and close-keeps-running behavior.
-                  description={t(
-                    'settings.appearance.menuBarIcon.description',
-                    'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
-                  )}
-                  checked={settings.showMenuBarIcon !== false}
-                  onChange={() =>
-                    updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
-          </div>
-        </AppearanceAdvancedDisclosure>
+          {isDesktopMac ? (
+            <SearchableSetting
+              title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
+              description={menuBarIconEntry?.description}
+              keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
+            >
+              <SettingsSwitchRow
+                label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
+                // Hiding the status item preserves Dock activation and close-keeps-running behavior.
+                description={t(
+                  'settings.appearance.menuBarIcon.description',
+                  'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
+                )}
+                checked={settings.showMenuBarIcon !== false}
+                onChange={() =>
+                  updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
+                }
+              />
+            </SearchableSetting>
+          ) : null}
+        </SettingsGroupDisclosure>
       ) : null}
-    </div>
+    </>
   )
 }

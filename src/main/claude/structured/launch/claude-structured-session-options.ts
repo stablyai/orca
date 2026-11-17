@@ -213,7 +213,6 @@ export function claudeStructuredSessionOptionsFrom(
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const reportsPick = !session.modelPickAwaitingTurn
   const model = current.id === 'default' ? undefined : current.id
   const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
     ...row,
@@ -231,7 +230,7 @@ export function claudeStructuredSessionOptionsFrom(
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
   const confirmed = [
-    ...(current.confirmed && reportsPick ? ['model'] : []),
+    ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
     ...(fastMode !== undefined &&
     (session.confirmedOptions.has('fastMode') || !session.options.has('fastMode'))
@@ -244,7 +243,6 @@ export function claudeStructuredSessionOptionsFrom(
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
-      reportedModel: reportsPick ? session.reportedOptions.reportedModel : undefined,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),

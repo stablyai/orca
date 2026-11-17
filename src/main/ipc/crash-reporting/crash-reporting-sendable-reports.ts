@@ -1,4 +1,4 @@
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 
 export const inFlightSubmissions = new Set<string>()
 export const submittedReportIds = new Set<string>()

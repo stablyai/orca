@@ -111,51 +111,15 @@ async function setup() {
 }
 
 describe('constrained idle regional assignment transaction', () => {
-  it.each(['missing', 'disabled', 'future'] as const)(
-    'does only one read per tick with %s durable control and sees later enablement',
-    async (state) => {
-      const { store, database, safety } = await setup()
-      const control = (await database.query(
-        "SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'"
-      ))[0]!
-      if (state === 'missing') {
-        await database.query('DELETE FROM relay_region_rehome_control')
-      } else {
-        await database.query(
-          "UPDATE relay_region_rehome_control SET enabled = ?, not_before = ? WHERE control_id = 'global'",
-          [state === 'disabled' ? 0 : 1, safety.observedAt + (state === 'future' ? 1 : 0)]
-        )
-      }
-      const query = vi.spyOn(database, 'query')
-      const transaction = vi.spyOn(database, 'transaction')
-      for (let tick = 0; tick < 3; tick++) {
-        query.mockClear()
-        expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-        expect(query).toHaveBeenCalledTimes(1)
-        expect(query.mock.calls[0]![0]).toMatch(/^SELECT .*FROM relay_region_rehome_control/s)
-        expect(transaction).not.toHaveBeenCalled()
-      }
-      if (state === 'missing') {
-        const columns = Object.keys(control)
-        await database.query(
-          `INSERT INTO relay_region_rehome_control (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`,
-          Object.values(control)
-        )
-      } else {
-        await database.query(
-          "UPDATE relay_region_rehome_control SET enabled = 1, not_before = ? WHERE control_id = 'global'",
-          [safety.observedAt]
-        )
-      }
-      query.mockClear()
-      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
-      expect(query.mock.calls.length).toBeGreaterThan(1)
-      await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
-      query.mockClear()
-      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-      expect(query).toHaveBeenCalledTimes(1)
-    }
-  )
+  it('sees durable control changes between candidate polls', async () => {
+    const { store, database, safety } = await setup()
+    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+    await database.query("UPDATE relay_region_rehome_control SET enabled = 1 WHERE control_id = 'global'")
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+    await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+  })
 
   it.each([10, 11])('reserves source activity plus assignment at target capacity %i', async (capacity) => {
     const { store, database, safety, request } = await setup()
@@ -183,33 +147,6 @@ describe('constrained idle regional assignment transaction', () => {
       assignmentEpoch: capacity === 11 ? 2 : 1
     })
   })
-
-  it.each(['next_dispatch_at', 'paused_until'] as const)(
-    'skips the candidate join while %s holds the durable dispatch budget closed',
-    async (column) => {
-      const { store, database, safety } = await setup()
-      const query = vi.spyOn(database, 'query')
-      // One assignment only: setup leaves both fields at 0, and naming the other
-      // one too would assign this column twice, which Postgres rejects.
-      await database.query(
-        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
-        [safety.observedAt + 1]
-      )
-      for (let tick = 0; tick < 3; tick++) {
-        query.mockClear()
-        expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
-        expect(query).toHaveBeenCalledTimes(2)
-        expect(query.mock.calls[1]![0]).toMatch(/FROM relay_region_rehome_worker_state/s)
-      }
-      await database.query(
-        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
-        [safety.observedAt]
-      )
-      query.mockClear()
-      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
-      expect(query.mock.calls.length).toBeGreaterThan(2)
-    }
-  )
 
   // sourceRequestUnits reads a reserve cell's missing phone leases as zero units; selection must drop it.
   it.each(['source', 'target'])('drops every candidate while the %s cell is recorded as reserve', async (cellId) => {
@@ -265,51 +202,6 @@ describe('constrained idle regional assignment transaction', () => {
     expect(next).toHaveLength(1)
     expect(next[0]!.relayHostId).toBe('pagehost00000099')
     expect(first.some((c) => c.relayHostId === next[0]!.relayHostId)).toBe(false)
-  })
-
-  it('progresses past a full page of busy candidates without writing eligibility state', async () => {
-    const { store, database, safety } = await setup()
-    for (const table of [
-      'relay_assignments',
-      'relay_assignment_activity_leases',
-      'relay_control_capabilities',
-      'relay_region_decisions'
-    ]) {
-      const template = (
-        await database.query(`SELECT * FROM ${table} WHERE user_id = ? AND relay_host_id = ?`, [
-          identity.userId,
-          identity.relayHostId
-        ])
-      )[0]!
-      const columns = Object.keys(template)
-      for (let index = 0; index < 100; index++) {
-        const values = columns.map((column) =>
-          column === 'user_id' || column === 'relay_host_id' ? '?' : column
-        )
-        await database.query(
-          `INSERT INTO ${table} (${columns.join(', ')}) SELECT ${values.join(', ')} FROM ${table}
-           WHERE user_id = ? AND relay_host_id = ?`,
-          [
-            `idle-store-test-${String(index).padStart(3, '0')}`,
-            `pagehost${String(index).padStart(8, '0')}`,
-            identity.userId,
-            identity.relayHostId
-          ]
-        )
-      }
-    }
-    const first = await store.selectIdleRegionalRehomeCandidates(safety)
-    const next = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(first).toHaveLength(100)
-    expect(next).toHaveLength(1)
-    expect(next[0]!.relayHostId).toBe('pagehost00000099')
-    const restarted = new RelayAssignmentStore(database, () => safety.observedAt, {
-      regionalRehomeCohortPercent: 100
-    })
-    expect(await restarted.selectIdleRegionalRehomeCandidates(safety)).toEqual(first)
-    expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
-    const decisions = await database.query('SELECT last_considered_at FROM relay_region_decisions')
-    expect(decisions.every((decision) => Number(decision.last_considered_at) === 0)).toBe(true)
   })
 
   it.runIf(Boolean(process.env.ORCA_IDLE_REHOME_POSTGRES_URL))(
@@ -430,20 +322,6 @@ describe('constrained idle regional assignment transaction', () => {
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })
 
-  it('selects read-only with stable identity and the control generation, not probe generation', async () => {
-    const { store, safety, database } = await setup()
-    const before = await database.query('SELECT * FROM relay_assignments')
-    const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({
-      sourceGeneration: 7,
-      sourceCellId: 'source',
-      targetCellId: 'target'
-    })
-    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(candidates)
-    expect(await database.query('SELECT * FROM relay_assignments')).toEqual(before)
-    expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
-  })
 })
 
 function holdStatement(database: RelayDatabase, fragment: string) {

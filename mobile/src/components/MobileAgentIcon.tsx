@@ -5,7 +5,7 @@ import { Terminal } from 'lucide-react-native'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors, radii } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
+import { MOBILE_AGENT_CATALOG } from '../agents/mobile-agent-catalog'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
 import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
 

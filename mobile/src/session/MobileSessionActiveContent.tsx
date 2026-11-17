@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
+import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
 import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
-} from '../terminal/session/mobile-terminal-pane-layout'
+} from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
-import { TerminalPaneView } from '../terminal/session/TerminalPaneView'
-import { MountedTerminalPanes } from '../terminal/session/mounted-terminal-lru'
+import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
+import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
@@ -21,8 +21,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { useMobileSessionContentKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
-import { useOpenUrlInOrca } from '../browser/use-open-url-in-orca'
+import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
+import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -32,7 +32,7 @@ import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
-import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
   controller

@@ -26,8 +26,6 @@ import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
 import { writtenRow } from './written-row'
 
-export type { RemotePlacementRow }
-
 export function getRemotePlacement(
   db: OrchestrationDb,
   taskId: string

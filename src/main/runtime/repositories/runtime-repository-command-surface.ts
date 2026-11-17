@@ -70,6 +70,7 @@ export type RuntimeRepositoryCommandSurface = {
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
+  setRepoHidden: RuntimeRepositorySettingsController['setHidden']
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
@@ -166,6 +167,7 @@ export function installRuntimeRepositoryCommandSurface(
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
+    setRepoHidden: settings.setHidden.bind(settings),
     removeProject: settings.remove.bind(settings),
     reorderRepos: settings.reorder.bind(settings),
     getRepoBaseRefDefault: refs.getDefault.bind(refs),

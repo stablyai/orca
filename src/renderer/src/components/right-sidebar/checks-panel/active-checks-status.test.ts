@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearActiveChecksStatusCacheForTests, getActiveChecksStatus } from './active-checks-status'
 import type { AppState } from '../../../store/types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 function makePR(status: PRInfo['checksStatus']): PRInfo {
   return {

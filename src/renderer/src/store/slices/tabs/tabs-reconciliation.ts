@@ -1,7 +1,7 @@
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
-import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { ensureWorktreeGroup, updateGroup } from './tab-group-state'
 import { sanitizeRecentTabIds } from './tab-selection-history'
 import { pruneTabGroupLayoutForGroups } from './tabs-hydration'

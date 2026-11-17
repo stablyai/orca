@@ -1,14 +1,24 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
+// Footer buttons and the card's inner shapes follow the floating card's curve inward.
+const MIN_TOUCH_TARGET = 44
+export const ASK_CARD_PADDING = spacing.md
+export const ASK_CHOICE_RADIUS = concentricRadius(radii.floating, ASK_CARD_PADDING)
+
 export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
+  // Floats like the composer it replaces, with its own edge instead of a full-width rule.
   card: {
     flexShrink: 1,
     minHeight: 0,
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
+    marginHorizontal: spacing.sm,
+    marginBottom: 6,
+    backgroundColor: colors.composerSurface,
+    borderRadius: radii.floating,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.floatingCardBorder,
+    overflow: 'hidden'
   },
   tabs: {
     flexGrow: 0,
@@ -17,7 +27,7 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     borderBottomColor: colors.borderSubtle
   },
   tabsContent: {
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: ASK_CARD_PADDING,
     gap: spacing.xs,
     alignItems: 'center'
   },
@@ -43,12 +53,13 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     color: colors.textPrimary
   },
   scroll: {
-    paddingHorizontal: spacing.md
+    paddingHorizontal: ASK_CARD_PADDING,
+    paddingTop: spacing.xs
   },
   questionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   questionText: {
     flex: 1,
-    marginVertical: spacing.sm
+    marginVertical: 10
   },
   other: {
     marginBottom: spacing.xs
@@ -57,32 +68,39 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
+    paddingTop: spacing.sm,
+    paddingHorizontal: ASK_CARD_PADDING,
+    paddingBottom: ASK_CARD_PADDING,
+    gap: spacing.sm
   },
   cancel: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: ASK_CHOICE_RADIUS
   },
   cancelText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
   },
   progress: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: typography.metaSize
   },
   next: {
-    paddingVertical: spacing.sm,
+    minHeight: MIN_TOUCH_TARGET,
+    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.control,
+    borderRadius: ASK_CHOICE_RADIUS,
+    borderWidth: 1,
+    borderColor: colors.textPrimary,
     backgroundColor: colors.textPrimary
   },
+  // An outline, not a grey fill: Skip is a real choice and must not read as disabled.
   nextSkip: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: 'transparent',
+    borderColor: colors.choiceBorder
   },
   nextText: {
     color: colors.bgBase,
@@ -90,6 +108,6 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     fontWeight: '700'
   },
   nextSkipText: {
-    color: colors.textMuted
+    color: colors.textPrimary
   }
 }))

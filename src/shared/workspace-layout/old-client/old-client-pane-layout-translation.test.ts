@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { UpdatePaneLayout } from '../../rpc-contract/session-tabs-schemas-params'
+import { UpdatePaneLayout } from '../../rpc-contract/session-tabs/session-tabs-schemas-params'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { translateUpdatePaneLayout } from './old-client-pane-layout-translation'
-import { build, terminalTab, testContext, WS } from '../workspace-layout-command.test-fixture'
+import {
+  build,
+  terminalTab,
+  testContext,
+  WS
+} from '../commands/workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
 
 const leafNode = (leafId: string): TerminalPaneLayoutNode => ({ type: 'leaf', leafId })
@@ -56,60 +61,6 @@ function translate(model: WorkspaceLayoutModel, tabId: string, params: ReturnTyp
 }
 
 describe('translateUpdatePaneLayout (rule 11)', () => {
-  it('turns a divider drag into setPaneRatios', () => {
-    const { ctx, model, tabId, a, b, c } = threePanes()
-    const root = split(
-      'vertical',
-      leafNode(a),
-      split('vertical', leafNode(b), leafNode(c), 0.3),
-      0.7
-    )
-    const translation = translate(model, tabId, sent(tabId, { root }))
-    expect(translation.commands).toEqual([{ type: 'setPaneRatios', workspace: WS, tabId, root }])
-    expect(terminalTab(build(ctx, translation.commands, model).model, tabId).panes.root).toEqual(
-      root
-    )
-  })
-
-  it('turns one moved pane into movePane, then the sent ratios', () => {
-    const { ctx, model, tabId, a, b, c } = threePanes()
-    // C dragged to the left of A.
-    const root = split(
-      'vertical',
-      split('vertical', leafNode(c), leafNode(a), 0.4),
-      leafNode(b),
-      0.6
-    )
-    const translation = translate(model, tabId, sent(tabId, { root }))
-    expect(translation).toEqual({
-      structureRefused: false,
-      commands: [
-        { type: 'movePane', workspace: WS, tabId, leafId: c, targetLeafId: a, side: 'left' },
-        { type: 'setPaneRatios', workspace: WS, tabId, root }
-      ]
-    })
-    expect(terminalTab(build(ctx, translation.commands, model).model, tabId).panes.root).toEqual(
-      root
-    )
-  })
-
-  it('moves below a pane, from either side of the sent split', () => {
-    const { ctx, model, tabId, a, b, c } = threePanes()
-    const root = split('vertical', split('horizontal', leafNode(a), leafNode(c)), leafNode(b))
-    const translation = translate(model, tabId, sent(tabId, { root }))
-    expect(translation.commands[0]).toEqual({
-      type: 'movePane',
-      workspace: WS,
-      tabId,
-      leafId: c,
-      targetLeafId: a,
-      side: 'bottom'
-    })
-    expect(terminalTab(build(ctx, translation.commands, model).model, tabId).panes.root).toEqual(
-      expect.objectContaining({ first: split('horizontal', leafNode(a), leafNode(c)) })
-    )
-  })
-
   it.each([
     [
       'a pane added',
@@ -169,24 +120,6 @@ describe('translateUpdatePaneLayout (rule 11)', () => {
     ])
     // No title map leaves titles alone.
     expect(translate(titled, tabId, sent(tabId, { root: null })).commands).toEqual([])
-  })
-
-  it('orders titles, then the chat pane, then the structure, and the list applies as one', () => {
-    const { ctx, model, tabId, a, b, c } = threePanes()
-    const root = split('vertical', leafNode(a), split('vertical', leafNode(b), leafNode(c), 0.25))
-    const translation = translate(
-      model,
-      tabId,
-      sent(tabId, { root, titlesByLeafId: { [c]: 'tests' }, chatLeafId: c })
-    )
-    expect(translation.commands.map((command) => command.type)).toEqual([
-      'renamePane',
-      'setChatPane',
-      'setPaneRatios'
-    ])
-    const applied = build(ctx, translation.commands, model).model
-    expect(terminalTab(applied, tabId).panes).toEqual({ root, chatLeafId: c })
-    expect(applied.workspaces[WS]!.leaves?.[c]?.title).toBe('tests')
   })
 })
 

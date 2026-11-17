@@ -10,15 +10,15 @@ import {
   hostWorktreeCatalogKey,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
-import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
-import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
+} from '../host-screen/catalog/host-list-queries'
+import { hostViewFamily, hostViewKey } from '../host-screen/view-settings/host-view-memory'
+import { hostProjectSectionsQuery } from '../host-screen/catalog/use-host-project-sections'
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'
 import { storedTabChatTranscriptIdentity } from '../session/native-chat/transcript/mobile-native-chat-transcript-store'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
-import { firstPaintTaskKeys } from '../tasks/task-query-storage'
+import { firstPaintTaskKeys } from '../tasks/screen-state/task-query-storage'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'
 

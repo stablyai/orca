@@ -1,7 +1,7 @@
 import { runStandalonePreparation } from './worktree-preparation-standalone'
 import { performPreparedWorktreeFinalization } from './worktree-preparation-finalization-work'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-ref'
 import type {
   AddWorktreeOptions,

@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { TextInput, TextInputProps } from 'react-native'
+import type { TextInputProps, TextInputInstance } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
@@ -14,7 +14,7 @@ export type MobileNativeChatComposerFieldProps = Omit<
   onWebPaste?: (event: ClipboardEvent) => void
   // Dictation heard so far, shown between the draft's halves without becoming part of its value.
   dictationPreview?: { before: string; text: string; after: string } | null
-  ref?: RefObject<TextInput | null>
+  ref?: RefObject<TextInputInstance | null>
 }
 
 // Use the field’s exact font so the web overlay and transparent textarea occupy identical space.

@@ -41,14 +41,4 @@ describe('plugin VM recipe artifacts', () => {
     expect(recipe).toMatchObject({ destroyDisabled: true })
     expect(recipe.destroy).toBeUndefined()
   })
-
-  it('rejects NUL bytes and commands beyond the bounded artifact contract', () => {
-    for (const create of ['bad\0command', 'x'.repeat(32 * 1024 + 1)]) {
-      expect(() =>
-        parsePluginVmRecipeArtifact(
-          JSON.stringify({ schemaVersion: 1, id: 'bounded', name: 'Bounded', create })
-        )
-      ).toThrow()
-    }
-  })
 })

@@ -1,4 +1,4 @@
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { formatOrcaSessionAddress as address } from '../../../../shared/orca-session-address'

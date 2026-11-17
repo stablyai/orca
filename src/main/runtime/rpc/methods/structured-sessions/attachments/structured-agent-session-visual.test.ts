@@ -9,8 +9,8 @@ import {
   agentSessionRecordFixture
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { nativeChatScratchFolderFor } from '../../../../../native-chat/native-chat-scratch-folder'
-import { nativeChatVisualRevision } from '../../../../../native-chat/native-chat-visual-file-read'
+import { nativeChatScratchFolderFor } from '../../../../../native-chat/conversation-files/native-chat-scratch-folder'
+import { nativeChatVisualRevision } from '../../../../../native-chat/conversation-files/native-chat-visual-file-read'
 import { Store } from '../../../../../persistence/loading-store/store'
 import {
   closeTestStores,

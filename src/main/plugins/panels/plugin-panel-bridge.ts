@@ -26,10 +26,14 @@ import { z } from 'zod'
 
 const PLUGIN_JSON_VALUE = z.json()
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
-import { PluginHostCallError } from '../workers/plugin-host-call-scope'
-import type { PluginRuntimeDelegate } from '../workers/plugin-host-service-bindings'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
+import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'
+import type { PluginRuntimeDelegate } from '../workers/host-api/plugin-host-service-bindings'
 import { readPluginWorkspaceChange } from '../plugin-runtime-binding'
+import {
+  pluginFrameEventPayload,
+  pluginFrameWorkspaceContext
+} from '../workers/host-api/plugin-workspace-projection'
 
 type PushChannel = {
   pluginKey: string
@@ -125,7 +129,8 @@ export class PluginPanelBridge {
     }
     this.replays.delete(panelId)
     for (const event of owed) {
-      const payload = (await readPluginWorkspaceChange(delegate)).change
+      const { context } = (await readPluginWorkspaceChange(delegate)).change
+      const payload = { context: pluginFrameWorkspaceContext(context) }
       if (
         this.channels.get(panelId) === channel &&
         this.subscriptions.get(panelId)?.has(event) &&
@@ -213,7 +218,7 @@ export class PluginPanelBridge {
     if (!projected.success) {
       return 0
     }
-    const payload = projected.data
+    const payload = pluginFrameEventPayload(event, projected.data)
     let delivered = 0
     for (const [panelId, channel] of this.channels) {
       if (

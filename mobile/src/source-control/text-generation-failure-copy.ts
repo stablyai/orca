@@ -5,6 +5,7 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
 import { TEXT_GENERATION_PLAN_FAILURE_COPY } from './text-generation-plan-failure-copy'
+import { DICTATION_CLEANUP_FAILURE_COPY } from './dictation-cleanup-failure-copy'
 
 type CopyValues = Record<string, string | number>
 
@@ -256,7 +257,8 @@ const COPY: Record<TextGenerationFailureCode, (values: CopyValues) => string> = 
       values
     ),
   ...TEXT_GENERATION_PLAN_FAILURE_COPY,
-  ...AGENT_OUTPUT_FAILURE_COPY
+  ...AGENT_OUTPUT_FAILURE_COPY,
+  ...DICTATION_CLEANUP_FAILURE_COPY
 }
 
 function isTextGenerationFailureCode(code: unknown): code is TextGenerationFailureCode {

@@ -54,7 +54,7 @@ import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/host-lifecy
 import {
   isHostSpawnFencedForWslMoveUndo,
   wslMoveUndoSpawnFencedResponse
-} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
+} from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 

@@ -6,13 +6,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubProjectSettings,
   GitHubProjectSummary
-} from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
-import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/project-ref-input'
+} from '../../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/projects/project-result-types'
+import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/projects/project-ref-input'
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github/project-identity'
+} from '../../../../shared/github/projects/project-identity'
 import type { ProjectPickerChoice } from './project-picker-selection'
 import {
   ProjectPickerError,

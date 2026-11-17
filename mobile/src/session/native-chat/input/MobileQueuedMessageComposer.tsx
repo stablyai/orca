@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef } from 'react'
 import { MobileQueuedMessageComposerContext } from './mobile-queued-message-composer-context'
-import { Text, type TextInput, View } from 'react-native'
+import { Text, View, type TextInputInstance } from 'react-native'
 import { MobileNativeChatComposer } from '../composer/MobileNativeChatComposer'
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 import { useMobileNativeChatFileAttachments } from '../composer/use-mobile-native-chat-file-attachments'
@@ -27,7 +27,7 @@ export function MobileQueuedMessageComposer({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const context = useContext(MobileQueuedMessageComposerContext)
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   const emptyHandle = useRef<string | null>(null)
   const inputs = useMobileNativeChatDraftInputs(editor.scopeKey)
   const files = useMobileNativeChatFileAttachments({

@@ -15,7 +15,6 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   canCreateChildWorktree,
   planWorkspaceStatusAssignment,
@@ -206,9 +205,6 @@ export function useWorktreeContextMenuCommands(args: {
   }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
-    args.scopeRef.current
-      ?.closest('[data-worktree-sidebar]')
-      ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
     const intent = createWorktreeContextMenuDeleteIntent({
       worktree: args.worktree,
       batchDeleteWorktrees: args.batchDeleteWorktrees,

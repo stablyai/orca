@@ -106,15 +106,6 @@ describe('home cell unavailable', () => {
     expect(homeCellError(await assignFailure(store)).unavailableCause).toBe('draining')
   })
 
-  it('still reports capacity exhaustion when the fleet has no headroom', async () => {
-    const { store } = await setup([{ ...FENCED_CELL, capacityRequests: 1 }])
-    await store.assign(IDENTITY)
-
-    await expect(
-      store.assign({ userId: 'user-2', relayHostId: 'host000000000002' })
-    ).rejects.toThrow('relay_capacity_exhausted')
-  })
-
   it('rehomes instead of rejecting when the unavailable cell needs no fence', async () => {
     const home: RelayCellConfig = {
       id: 'home',

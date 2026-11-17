@@ -34,10 +34,20 @@ const boundary = vi.hoisted(() => ({
     email: 'proof@example.invalid'
   }
 }))
-vi.mock('../../src/cli/runtime-client', async () => {
+vi.mock('../../src/cli/runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('../../src/cli/index-test-harness.js')
   return createRuntimeClientModuleMock(boundary)
 })
+
+vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: boundary.serveOrcaAppMock
+}))
+
+vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: boundary.getDefaultUserDataPathMock
+}))
 vi.mock('../../src/main/linear/accounts/linear-token-store', () => ({
   loadToken: () => 'local-proof-token',
   saveWorkspaceToken: boundary.save,

@@ -11,16 +11,16 @@ import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
   GitHubProjectViewSummary
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   hasBoundedGitHubProjectRefInputText,
   isGitHubProjectRefInputTooLarge
-} from '../../../../shared/github/project-ref-input'
+} from '../../../../shared/github/projects/project-ref-input'
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github/project-identity'
+} from '../../../../shared/github/projects/project-identity'
 import { filterGitHubProjectPickerProjects } from './github-project-picker-filter'
 import { ProjectPickerBrowse } from './ProjectPickerBrowse'
 import { ProjectViewPickStep } from './ProjectPickerPanels'

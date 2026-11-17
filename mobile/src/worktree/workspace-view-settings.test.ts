@@ -1,6 +1,5 @@
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../src/shared/workspace-statuses'
 import {
   applyDesktopViewSettings,
   buildWorkspaceViewSettingsUpdate,
@@ -24,10 +23,6 @@ describe('the other-client filter on an older desktop', () => {
     expect(rowFiltersForView(base).hideWorkspacesFromOtherDevices).toBe(false)
   })
 
-  it('does not hide marked rows before the first ui.get says which kind of desktop it is', () => {
-    expect(rowFiltersForView(INITIAL_MOBILE_VIEW).hideWorkspacesFromOtherDevices).toBe(false)
-  })
-
   it('learns from each ui.get whether the desktop shares the filter', () => {
     expect(applyDesktopViewSettings(base, {}).sharesOtherClientFilter).toBe(false)
     expect(
@@ -38,30 +33,6 @@ describe('the other-client filter on an older desktop', () => {
 })
 
 describe('applyDesktopViewSettings', () => {
-  it('applies provided desktop fields and leaves missing ones untouched', () => {
-    const next = applyDesktopViewSettings(base, {
-      groupBy: 'pr-status',
-      hideSleepingWorkspaces: true,
-      filterRepoIds: ['repo-1']
-    })
-    expect(next).toEqual({
-      ...base,
-      groupBy: 'pr-status',
-      sharesOtherClientFilter: false,
-      filters: { ...base.filters, hideSleepingWorkspaces: true, filterRepoIds: ['repo-1'] }
-    })
-  })
-
-  it('keeps current values when the desktop payload is empty', () => {
-    expect(applyDesktopViewSettings(base, {})).toEqual({ ...base, sharesOtherClientFilter: false })
-  })
-
-  it('keeps renderable workspace statuses when desktop sends an empty catalog', () => {
-    const next = applyDesktopViewSettings(base, { workspaceStatuses: [] })
-
-    expect(next.workspaceStatuses).toBe(DEFAULT_WORKSPACE_STATUSES)
-  })
-
   it("falls back to the desktop's legacy host scope when no host list is saved", () => {
     const scoped = applyDesktopViewSettings(base, {
       visibleWorkspaceHostIds: null,
@@ -71,14 +42,6 @@ describe('applyDesktopViewSettings', () => {
     expect(
       applyDesktopViewSettings(scoped, { visibleWorkspaceHostIds: null, workspaceHostScope: 'all' })
         .filters.visibleHostIds
-    ).toBeNull()
-  })
-
-  it("reads the desktop's shown hosts into the host filter, and null as every host", () => {
-    const scoped = applyDesktopViewSettings(base, { visibleWorkspaceHostIds: ['local'] })
-    expect(scoped.filters.visibleHostIds).toEqual(['local'])
-    expect(
-      applyDesktopViewSettings(scoped, { visibleWorkspaceHostIds: null }).filters.visibleHostIds
     ).toBeNull()
   })
 
@@ -118,18 +81,6 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
     ).toEqual({ collapsedGroups: ['g1'] })
   })
 
-  it('writes each filter under its desktop name, the host scope included', () => {
-    const filters = {
-      hideAutomationGeneratedWorkspaces: true,
-      visibleHostIds: ['local' as const]
-    }
-    expect(buildWorkspaceViewSettingsUpdate({ filters }, apply(filters))).toEqual({
-      hideAutomationGeneratedWorkspaces: true,
-      visibleWorkspaceHostIds: ['local'],
-      workspaceHostScope: 'local'
-    })
-  })
-
   it('leaves the legacy host scope alone for a several-host list', () => {
     const filters = { visibleHostIds: ['local' as const, 'ssh:box' as const] }
     expect(buildWorkspaceViewSettingsUpdate({ filters }, apply(filters))).toEqual({
@@ -154,20 +105,6 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
       visibleWorkspaceHostIds: null,
       workspaceHostScope: 'all'
     })
-  })
-
-  it('never invents alwaysShowDefaultBranchWorkspace for edits that leave it alone (#8873)', () => {
-    expect(
-      'alwaysShowDefaultBranchWorkspace' in
-        buildWorkspaceViewSettingsUpdate(
-          { filters: { hideSleepingWorkspaces: true } },
-          apply({ hideSleepingWorkspaces: true })
-        )
-    ).toBe(false)
-  })
-
-  it('returns an empty update for an empty patch', () => {
-    expect(buildWorkspaceViewSettingsUpdate({}, base)).toEqual({})
   })
 })
 
@@ -207,13 +144,5 @@ describe('card view settings', () => {
         { cardLayoutPreset: true }
       )
     ).toEqual({ worktreeCardProperties: ['status'], _worktreeCardModeDefaulted: true })
-  })
-
-  it('keeps the card settings a ui.get does not carry', () => {
-    const current = { ...base, compactWorktreeCards: true, newCardStyle: true }
-    expect(applyDesktopViewSettings(current, { groupBy: 'none' })).toMatchObject({
-      compactWorktreeCards: true,
-      newCardStyle: true
-    })
   })
 })

@@ -5,7 +5,7 @@ import type {
   PRCheckJob,
   PRCheckRunDetails,
   PRCheckStep
-} from '../../../../src/shared/github/check-types'
+} from '../../../../src/shared/github/checks/check-types'
 import { prCount, prText } from './github-pr-entity-reply-schema'
 
 // Require check name; default optional details because hosts may omit fields the panel renders unguarded.

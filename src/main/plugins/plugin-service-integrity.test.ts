@@ -10,7 +10,7 @@ import {
 import { hashPluginTree } from './plugin-content-hash'
 import { PluginContentVerifier } from './plugin-content-integrity'
 import { PluginService } from './plugin-service'
-import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 
 const roots: string[] = []
 

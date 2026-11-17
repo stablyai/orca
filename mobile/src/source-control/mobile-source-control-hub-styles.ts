@@ -85,7 +85,7 @@ export const hubStyles = themedStyleSheet(() => ({
   },
   // A pushed screen (Checks, Comments) covers the hub until the shared pager owns the motion.
   screenLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase
   }
 }))

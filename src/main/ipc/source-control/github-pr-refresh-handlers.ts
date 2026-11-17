@@ -5,7 +5,7 @@ import type {
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
   PRRefreshOutcome
-} from '../../../shared/github/pull-request-refresh-types'
+} from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
@@ -17,9 +17,9 @@ import {
   reportVisiblePRRefreshCandidates,
   addPRRefreshOutcomeObserver,
   setPRRefreshRegistrationCheck
-} from '../../github/pr-refresh-coordinator'
-import { setPRRefreshRendererPort } from '../../github/pr-refresh-renderer-port'
-import { pullRequestChangeObserver } from '../../github/pull-request-changed-events'
+} from '../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { setPRRefreshRendererPort } from '../../github/pull-requests/refresh/pr-refresh-renderer-port'
+import { pullRequestChangeObserver } from '../../github/pull-requests/refresh/pull-request-changed-events'
 import { electronPRRefreshRenderer } from '../../host/electron-pr-refresh-renderer'
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'

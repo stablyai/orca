@@ -1,5 +1,12 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native'
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  type HostInstance,
+  type StyleProp,
+  type TextStyle
+} from 'react-native'
 import {
   loadMobileMathTypesetter,
   type MobileMathTypesetter
@@ -58,7 +65,7 @@ export const MobileMarkdownMath = memo(function MobileMarkdownMath({
     () => typesetter?.(value, display, githubSizes) ?? null,
     [typesetter, value, display, githubSizes]
   )
-  const hostRef = useRef<Text>(null)
+  const hostRef = useRef<HostInstance>(null)
 
   useLayoutEffect(() => {
     const host = hostRef.current

@@ -106,7 +106,7 @@ function DropdownMenuItem({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
-  /** `launch`: rows in the shared agent menu. */
+  /** `launch`: rows in the shared agent menu; at least 36px tall so every launch menu matches. */
   variant?: 'default' | 'destructive' | 'launch'
 }) {
   return (
@@ -115,7 +115,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 aria-disabled:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-[color-mix(in_srgb,var(--destructive)_78%,black)] dark:data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5] data-[variant=destructive]:*:[svg]:text-current! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1 data-[variant=launch]:text-[12px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium",
+        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 aria-disabled:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-[color-mix(in_srgb,var(--destructive)_78%,black)] dark:data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5] data-[variant=destructive]:*:[svg]:text-current! data-[variant=launch]:min-h-9 data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1.5 data-[variant=launch]:text-[13px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium",
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
@@ -239,7 +239,9 @@ const dropdownMenuSubTriggerVariants = cva(
         default:
           'focus:bg-black/8 dark:focus:bg-white/14 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
         'launch-row':
-          'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[search-default]:bg-accent data-[search-default]:text-accent-foreground has-[[data-context-menu-open]]:bg-accent has-[[data-context-menu-open]]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
+          'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[search-default]:bg-accent data-[search-default]:text-accent-foreground has-[[data-context-menu-open]]:bg-accent has-[[data-context-menu-open]]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+        'header-chip':
+          'h-[22px] max-w-[9.5rem] min-w-0 gap-1 rounded-md px-1.5 py-0 text-2xs font-medium text-muted-foreground hover:bg-black/8 hover:text-foreground focus:bg-black/8 focus:text-foreground data-[state=open]:bg-black/8 data-[state=open]:text-foreground dark:hover:bg-white/14 dark:focus:bg-white/14 dark:data-[state=open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
       }
     },
     defaultVariants: { variant: 'default' }
@@ -257,7 +259,7 @@ function DropdownMenuSubTrigger({
   inset?: boolean
   // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
   hideChevron?: boolean
-  variant?: 'default' | 'launch-row'
+  variant?: 'default' | 'launch-row' | 'header-chip'
 }) {
   return (
     <DropdownMenuPrimitive.SubTrigger

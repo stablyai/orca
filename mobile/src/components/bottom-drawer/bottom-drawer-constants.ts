@@ -1,5 +1,5 @@
 import { Easing, useReducedMotion } from 'react-native-reanimated'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from '../sheet-motion-values'
 
 export const BOTTOM_DRAWER_EASING = Easing.bezier(...SHEET_CURVE)

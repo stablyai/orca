@@ -88,6 +88,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       hasHostSidebarActivity: false,
       ...getWorkspaceRowKindFacts(worktree, repo),
       ...(worktree.removalError ? { removalError: worktree.removalError } : {}),
+      ...(worktree.removing ? { removing: true } : {}),
+      ...(worktree.removalRecorded ? { removalRecorded: true } : {}),
       ...(worktree.instanceId !== undefined ? { worktreeInstanceId: worktree.instanceId } : {}),
       ...(lineage?.worktreeInstanceId !== undefined
         ? { lineageWorktreeInstanceId: lineage.worktreeInstanceId }

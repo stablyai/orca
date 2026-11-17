@@ -4,13 +4,13 @@ import {
   type CrashReportSubmitArgs,
   formatCrashReportText
 } from '../../../shared/crash-reporting'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
 } from '../../../shared/clipboard-text'
-import { formatCrashReportCopyText } from '../../crash-reporting/crash-report-copy-text'
+import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
 import {
   recentRendererErrorReportKeys,
   recordRendererErrorReport
@@ -19,7 +19,7 @@ import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer
 import {
   profiledRendererFor,
   profileRendererMemoryBreadcrumb
-} from '../../crash-reporting/renderer-heap-allocation-profile'
+} from '../../crash-reporting/memory/renderer-heap-allocation-profile'
 import {
   getLatestPendingReport,
   getLatestSendableReport,

@@ -12,7 +12,7 @@ import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/for
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 import { buildPRCommentsResolutionPrompt } from '../../../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'
-import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { PRCommentGroup } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { useTranslate } from '@/i18n/use-translate'
 

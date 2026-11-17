@@ -8,8 +8,9 @@ import {
 import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
-import { gitExecFileSync } from '../git/command-runner/git-exec-file-sync'
-import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/local-git-runtime-route'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import { withRepositoryGitCause } from '../git/repository-git-cause'
+import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/host-routing/local-git-runtime-route'
 import { readWorktreeGitPath } from '../git/worktrees/catalog/worktree-git-path'
 import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree-git-path'
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'
@@ -37,12 +38,20 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-h
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 
-function getGitPath(cwd: string, relativePath: string): string {
-  return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
+async function getGitPath(cwd: string, relativePath: string): Promise<string> {
+  const { stdout } = await withRepositoryGitCause(
     cwd,
-    // Host Git on purpose: a read-only path lookup, kept off a synchronous wsl.exe.
-    hostGit: true
-  }).trim()
+    {},
+    { family: 'setup', reason: 'setup-runner', cache: 'uncached' },
+    () =>
+      gitExecFileAsync(['rev-parse', '--git-path', relativePath], {
+        cwd,
+        // Preserve the native fallback even for a Windows-drive WSL-runtime project.
+        hostGit: true,
+        timeout: 15_000
+      })
+  )
+  return stdout.trim()
 }
 
 export async function createSetupRunnerScript(
@@ -176,7 +185,7 @@ async function resolveGitRunnerScriptPath(
     : isLocalGitRuntimeRouterInstalled()
       ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
       : null
-  let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
+  let runnerScriptPath = fromLink ?? (await getGitPath(worktreePath, gitRelPath))
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
   if (wslWorktree && !fromLink) {

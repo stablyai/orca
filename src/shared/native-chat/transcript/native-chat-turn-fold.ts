@@ -6,9 +6,9 @@ import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../agent-session/j
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session/lifecycle/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session/journal/agent-session-turn-notice'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
-import { NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION } from '../native-chat-generated-image'
 import { isStoppedBeforeStartBlock } from '../native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from '../native-chat-trailing-run'
+import { isGeneratedImageOperation } from '../native-chat-generated-image'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -29,7 +29,7 @@ export type NativeChatTurnFoldRow = {
   outlivesTurn: boolean
   /** System failures compete as final answers so failed turns end on visible errors. */
   reportsFailure: boolean
-  /** Plans, turn notices and generated images remain visible independently of the agent's answer. */
+  /** Plans and turn notices remain visible independently of the agent's answer. */
   explainsTurn: boolean
   /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
   sendsBack: boolean
@@ -59,7 +59,8 @@ function deriveTurnFoldRow(
   return {
     turnKey,
     role: message.role,
-    rendersProse: nativeChatRowRendersProse(message),
+    rendersProse:
+      nativeChatRowRendersProse(message) && !message.blocks.some(isGeneratedImageOperation),
     draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
     outlivesTurn:
@@ -77,17 +78,19 @@ function deriveTurnFoldRow(
         (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
         block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
     ),
-    explainsTurn: message.blocks.some(
-      (block) =>
-        block.type === 'text' &&
-        (block.presentation === 'plan-document' ||
-          block.presentation === 'compaction' ||
-          block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
-          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
-          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
-          block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
-          block.presentation === NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION)
-    ),
+    explainsTurn:
+      message.blocks.some(
+        (block) =>
+          block.type === 'text' &&
+          (block.presentation === 'plan-document' ||
+            block.presentation === 'compaction' ||
+            block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
+            block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
+            block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
+            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
+      ) ||
+      (message.blocks.some(isGeneratedImageOperation) &&
+        message.blocks.some((block) => block.type === 'image-ref')),
     sendsBack: message.blocks.some(
       (block) =>
         block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION

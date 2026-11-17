@@ -1,4 +1,4 @@
-import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
+import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 

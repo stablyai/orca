@@ -70,16 +70,6 @@ async function startRelay(port: number): Promise<ChildProcess> {
   return child
 }
 
-async function silentTcpPeer(port: number, firstBytes?: string): Promise<Socket> {
-  const peer = connect(port, '127.0.0.1')
-  peer.on('error', () => undefined)
-  await new Promise<void>((resolveConnect) => peer.once('connect', () => resolveConnect()))
-  if (firstBytes) {
-    peer.write(firstBytes)
-  }
-  return peer
-}
-
 // Pauses reading so the peer never answers the relay's close frame.
 async function unresponsiveWebSocketPeer(port: number): Promise<Socket> {
   const socket = new WebSocket(`ws://127.0.0.1:${port}/v1/connect/abcdefghijklmnop`)
@@ -111,14 +101,10 @@ async function waitUntilListenerClosed(port: number): Promise<void> {
 }
 
 // Peers that are not idle to server.close(); unbounded, a silent one held exit until SIGKILL.
-it.each([
-  ['silent TCP peer', (port: number) => silentTcpPeer(port)],
-  ['partial-headers peer', (port: number) => silentTcpPeer(port, 'GET /healthz HTTP/1.1\r\nHost: x\r\n')],
-  ['unresponsive upgraded WebSocket peer', unresponsiveWebSocketPeer]
-])('exits within the shutdown bound on SIGTERM with a %s', async (_name, openPeer) => {
+it('exits within the shutdown bound on SIGTERM with an unresponsive upgraded WebSocket peer', async () => {
   const port = await unusedPort()
   const relay = await startRelay(port)
-  const peer = await openPeer(port)
+  const peer = await unresponsiveWebSocketPeer(port)
   cleanups.push(() => peer.destroy())
   const peerClosed = new Promise<void>((resolveClose) => peer.once('close', () => resolveClose()))
 

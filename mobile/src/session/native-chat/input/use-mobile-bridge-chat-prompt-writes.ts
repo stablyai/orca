@@ -20,7 +20,7 @@ export function useMobileBridgeChatPromptWrites(args: {
 }): {
   answerAsk: MobileNativeChatAnswerSend['answerAsk']
   cancelAsk: () => Promise<boolean>
-  respondPermission: (send: string) => Promise<boolean>
+  respondPermission: (send: string, requireStartupDialog?: string) => Promise<boolean>
   stop: () => Promise<boolean>
 } {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, onSendError } = args

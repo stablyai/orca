@@ -6,7 +6,7 @@ import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { toast } from 'sonner'
 
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { translate } from '@/i18n/i18n'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import './WorktreeCardMeta'

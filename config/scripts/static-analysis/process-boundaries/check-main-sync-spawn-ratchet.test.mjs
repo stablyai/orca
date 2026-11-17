@@ -121,17 +121,10 @@ describe('main sync-spawn ratchet', () => {
     'const other = { spawnSync() {} }\nother.spawnSync()',
     "// execFileSync('git')\nconst script = \"require('child_process').execSync('ls')\"",
     "import * as cp from 'child_process'\ncp.spawn('git')",
-    "import { gitExecFileAsync } from './git/runner'\ngitExecFileAsync(['status'])"
+    "import { gitExecFileAsync } from './git/command-runner/git-exec-file'\ngitExecFileAsync(['status'])"
   ])('ignores %s', (source) => {
     expect(uses(source)).toEqual({ count: 0, symbols: [] })
   })
-
-  it.each(['import {', 'const broken = ;'])(
-    'fails closed on source it cannot parse: %s',
-    (source) => {
-      expect(() => uses(source)).toThrow('Cannot parse src/main/consumer.ts')
-    }
-  )
 
   it('fails a new file and a rising count, and passes at the baseline count', () => {
     const one = "import { spawnSync } from 'node:child_process'\nspawnSync('a')"

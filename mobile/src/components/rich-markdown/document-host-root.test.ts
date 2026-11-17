@@ -54,16 +54,6 @@ describe('two editor documents on one page', () => {
     expect(surfaceOf(second.host).textContent).toBe('second')
   })
 
-  it('serializes the surface it was started against rather than the page’s first one', () => {
-    const first = mountedIn('first')
-    const second = mountedIn('second')
-    surfaceOf(first.host).innerHTML = '<p>from the first</p>'
-    surfaceOf(second.host).innerHTML = '<p>from the second</p>'
-
-    expect(first.started.send.currentMarkdown()).toBe('from the first')
-    expect(second.started.send.currentMarkdown()).toBe('from the second')
-  })
-
   it('reports an edit in the second host to the second host’s own host', () => {
     const first = mountedIn('first')
     const second = mountedIn('second')
@@ -87,21 +77,5 @@ describe('two editor documents on one page', () => {
     surfaceOf(second.host).dispatchEvent(new Event('input', { bubbles: true }))
 
     expect(second.posts).toEqual([{ type: 'change', markdown: 'still here', generation: 0 }])
-  })
-
-  it('reads the whole page when no root is named, which is what the WebView gets', () => {
-    document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
-    const posts: MobileRichMarkdownEditorMessage[] = []
-    const started = createRichMarkdownEditorDocument(
-      quietRichMarkdownEditorHost({
-        postToHost: (message) => posts.push(message),
-        keyboardInsetSource: () => null
-      })
-    )
-    startedDocuments.push(started)
-
-    started.send.setMarkdown('# native', 1)
-
-    expect(document.querySelector('#editor')!.textContent).toBe('native')
   })
 })

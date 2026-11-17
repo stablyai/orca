@@ -28,9 +28,9 @@ import { LayoutCommandPersistence } from '../terminal-topology/layout-command-pe
 import { SshProfileOperations } from './ssh-state/ssh-profile-operations'
 import { RetiredWorktreeNamePersistence } from './project-catalog/retired-worktree-name-persistence'
 import { SshLeaseRecoveryOperations } from './ssh-state/ssh-lease-recovery-operations'
-import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/orcad-source-export'
+import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/source/catalog/orcad-source-export'
 import { OrcadCatalogImportPersistence } from '../migrating-orcad-catalog/orcad-catalog-import'
-import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog/orcad-migration-blob-install-persistence'
+import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog/blob-transfer/orcad-migration-blob-install-persistence'
 
 export type StoreDomainOperations = WriteSchedulingOperations &
   PrimaryStateWriteOperations &

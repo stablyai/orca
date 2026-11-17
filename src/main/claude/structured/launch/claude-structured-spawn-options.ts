@@ -8,7 +8,7 @@ import {
   claudeEffortLevel,
   restoredClaudeStructuredSessionOptions
 } from './claude-structured-options'
-import type { ClaudeCliFlagFact } from '../../claude-cli-flag-support'
+import type { ClaudeCliFlagFact } from '../../cli-capabilities/claude-cli-flag-support'
 
 /** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(

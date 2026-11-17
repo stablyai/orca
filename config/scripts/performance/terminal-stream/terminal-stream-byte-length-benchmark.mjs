@@ -68,7 +68,10 @@ const {
   measureTerminalStreamByteLength,
   terminalStreamByteLengthExceeds
 } = await import(
-  new URL('../../../../src/main/runtime/rpc/terminal-stream-byte-length.ts', import.meta.url).href
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-stream-byte-length.ts',
+    import.meta.url
+  ).href
 )
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = (() => {

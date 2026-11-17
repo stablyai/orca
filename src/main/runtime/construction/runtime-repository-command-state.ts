@@ -14,7 +14,7 @@ import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repositor
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
-import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
 import {
   createBranchSwitchHost,

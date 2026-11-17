@@ -188,8 +188,8 @@ importers:
   apps/push:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.5
-        version: 2.1.5(hono@4.13.13)
+        specifier: ^2.1.6
+        version: 2.1.6(hono@4.13.17)
       '@orca-cloud/cloud-database':
         specifier: workspace:*
         version: link:../../packages/cloud-database
@@ -200,8 +200,8 @@ importers:
         specifier: ^11.3.1
         version: 11.3.1(supports-color@10.2.2)
       hono:
-        specifier: ^4.13.13
-        version: 4.13.13
+        specifier: ^4.13.17
+        version: 4.13.17
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
@@ -231,8 +231,8 @@ importers:
   apps/relay:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.5
-        version: 2.1.5(hono@4.13.13)
+        specifier: ^2.1.6
+        version: 2.1.6(hono@4.13.17)
       '@orca-cloud/postgres-schema':
         specifier: workspace:*
         version: link:../../packages/postgres-schema
@@ -240,11 +240,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/relay-contract
       hono:
-        specifier: ^4.13.13
-        version: 4.13.13
+        specifier: ^4.13.17
+        version: 4.13.17
       jose:
-        specifier: ^6.2.13
-        version: 6.2.13
+        specifier: ^6.2.16
+        version: 6.2.16
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -252,8 +252,8 @@ importers:
         specifier: ^1.0.3
         version: 1.0.3
       ws:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.22.2
+        version: 8.22.2
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -286,8 +286,8 @@ importers:
         specifier: ^8.23.1
         version: 8.23.1
       jose:
-        specifier: ^6.2.13
-        version: 6.2.13
+        specifier: ^6.2.16
+        version: 6.2.16
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -320,17 +320,17 @@ importers:
         specifier: ^4.157.0
         version: 4.157.0(@cloudflare/workers-types@5.20261104.1)(@types/node@24.19.2)
       ws:
-        specifier: ^8.22.0
-        version: 8.22.0
+        specifier: ^8.22.2
+        version: 8.22.2
 
   apps/relay-fence-broker:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.1.5
-        version: 2.1.5(hono@4.13.13)
+        specifier: ^2.1.6
+        version: 2.1.6(hono@4.13.17)
       hono:
-        specifier: ^4.13.13
-        version: 4.13.13
+        specifier: ^4.13.17
+        version: 4.13.17
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -647,8 +647,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@hono/node-server@2.1.5':
-    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
+  '@hono/node-server@2.1.6':
+    resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
@@ -1208,16 +1208,16 @@ packages:
     resolution: {integrity: sha512-1R6uiq6XhXW2ZrcGtZpGgVDsYGzSmveVOn8Pp37qe1fbThHZ34e3t3eXj5mVu6PFSVx9fvB1KNVnYgVtq/BRcA==}
     engines: {node: '>=22'}
 
-  hono@4.13.13:
-    resolution: {integrity: sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==}
+  hono@4.13.17:
+    resolution: {integrity: sha512-vZIcbkvjOR5hHRWERbGkr8fGfF0GGM1ooYkuH448iO3b2AdVEr3AXZSw4Z3Kn+1L5z0CVoVeyV29VGYmFh05kQ==}
     engines: {node: '>=16.9.0'}
 
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
-  jose@6.2.13:
-    resolution: {integrity: sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ==}
+  jose@6.2.16:
+    resolution: {integrity: sha512-4LSJpbuBuPdGrONCdZUy0xnxtLf8eEz+EY0SMXdHQEBU7bgUHDVblU/JAjryv3wID9/LK7/YuwFwq+AQNfMscQ==}
 
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
@@ -1609,8 +1609,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.22.0:
-    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+  ws@8.22.2:
+    resolution: {integrity: sha512-/rEZ2ejown2N5gxVTHUu9bVVC7ttu0/Tgzf5hbTOixR3Fs7mbbXgn2DbdbcKgJOmpQMtrIUWivtYuVMnp/W/yA==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -1748,9 +1748,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@hono/node-server@2.1.5(hono@4.13.13)':
+  '@hono/node-server@2.1.6(hono@4.13.17)':
     dependencies:
-      hono: 4.13.13
+      hono: 4.13.17
 
   '@img/colour@1.1.0': {}
 
@@ -2149,7 +2149,7 @@ snapshots:
 
   google-logging-utils@2.1.0: {}
 
-  hono@4.13.13: {}
+  hono@4.13.17: {}
 
   https-proxy-agent@7.0.6(supports-color@10.2.2):
     dependencies:
@@ -2158,7 +2158,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  jose@6.2.13: {}
+  jose@6.2.16: {}
 
   json-bigint@1.0.0:
     dependencies:
@@ -2506,7 +2506,7 @@ snapshots:
 
   ws@8.21.0: {}
 
-  ws@8.22.0: {}
+  ws@8.22.2: {}
 
   xtend@4.0.2: {}
 

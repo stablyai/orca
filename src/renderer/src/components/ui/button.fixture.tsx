@@ -55,3 +55,25 @@ export const sizes = defineFixture({
     </div>
   )
 })
+
+function focusedButtonFixture(variant: (typeof VARIANTS)[number]) {
+  return defineFixture({
+    width: 320,
+    render: () => (
+      <div className="flex items-center justify-center gap-3 p-4">
+        <Button variant="outline">Cancel</Button>
+        <Button variant={variant} data-fixture-focus>
+          {variant === 'destructive' ? <Trash2 /> : <Plus />}
+          {variant === 'destructive' ? 'Delete' : 'Create'}
+        </Button>
+      </div>
+    ),
+    interact: (frame) => frame.querySelector<HTMLButtonElement>('[data-fixture-focus]')?.focus()
+  })
+}
+
+export const focusedPrimary = focusedButtonFixture('default')
+
+export const focusedDestructive = focusedButtonFixture('destructive')
+
+export const focusedOutline = focusedButtonFixture('outline')

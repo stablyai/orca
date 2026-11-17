@@ -11,8 +11,8 @@ import {
 import type {
   DictationCapture,
   DictationCaptureChunk
-} from '../platform/dictation-capture-contract'
-import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
+} from '../platform/audio-capture/dictation-capture-contract'
+import type { OnDeviceSpeech } from '../platform/speech/on-device-speech-contract'
 import type {
   BridgeSpeechFinish,
   BridgeSpeechRead,
@@ -40,7 +40,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 
-vi.mock('../platform/dictation-capture', () => {
+vi.mock('../platform/audio-capture/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,
@@ -55,7 +55,7 @@ vi.mock('../platform/dictation-capture', () => {
   return { useDictationCapture: () => capture }
 })
 
-vi.mock('../platform/on-device-speech', () => {
+vi.mock('../platform/speech/on-device-speech', () => {
   const speech: OnDeviceSpeech = {
     status: async () => ({
       status: 'ready',
@@ -198,62 +198,5 @@ describe('a phone recognizer that fails at the finish', () => {
     expect(transcripts).toEqual([])
     expect(held.errors).toHaveLength(1)
     expect(dictation().status).toBe('error')
-  })
-})
-
-describe('a phone recognizer that fails after a long dictation', () => {
-  it('replays all of it to the computer instead of calling the connection slow', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    const transcripts: string[] = []
-    mount(rpc, (text) => transcripts.push(text))
-    await act(async () => {
-      await dictation().start()
-    })
-    // 40 s of 16 kHz PCM: more than the 30 s the host may have pending at once.
-    for (let second = 0; second < 40; second += 1) {
-      speak(Array.from({ length: 32_000 }, () => second))
-    }
-    seam.finish = { text: null, failure: 'failed' }
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    expect(held.errors).toEqual([])
-    expect(chunkAudio(sent).map(([seq]) => seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
-    expect(transcripts).toEqual(['from the computer'])
-  })
-})
-
-describe('a stop while a failed phone dictation is reaching the computer', () => {
-  it('finishes on the computer once its start lands, with the audio kept so far', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    const transcripts: string[] = []
-    mount(rpc, (text) => transcripts.push(text))
-    await act(async () => {
-      await dictation().start()
-    })
-    speak([1, 2, 3])
-    seam.read = { revision: 1, committed: '', tentative: '', failure: 'failed' }
-    // The drain tick reads the failure and starts the computer's session.
-    await act(async () => {
-      await vi.waitFor(() =>
-        expect(rpc.requests.map((request) => request.method)).toEqual(['speech.dictation.start'])
-      )
-    })
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    expect(sent.map((request) => request.method)).toEqual([
-      'speech.dictation.start',
-      'speech.dictation.chunk',
-      'speech.dictation.finish'
-    ])
-    expect(transcripts).toEqual(['from the computer'])
-    expect(dictation().status).toBe('idle')
   })
 })

@@ -1,4 +1,4 @@
-import { Pressable, type View } from 'react-native'
+import { Pressable, type HostInstance } from 'react-native'
 import { useContext, type RefObject } from 'react'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
@@ -41,7 +41,7 @@ export function MobileNativeChatComposerMic({
 }: MobileNativeChatMicProps & {
   disabled: boolean
   // The composer's ✕ that a held mic may be released over.
-  cancelRef?: RefObject<View | null>
+  cancelRef?: RefObject<HostInstance | null>
 }): React.JSX.Element {
   useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)

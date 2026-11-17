@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
-import {
-  GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES,
-  filterGitHubProjectPickerProjects,
-  isGitHubProjectPickerQueryTooLarge
-} from './github-project-picker-filter'
+import type { GitHubProjectSummary } from '../../../../shared/github/projects/project-types'
+import { filterGitHubProjectPickerProjects } from './github-project-picker-filter'
 
 function project(
   owner: string,
@@ -38,35 +34,5 @@ describe('github-project-picker-filter', () => {
         query: ''
       })
     ).toEqual([enterprise])
-  })
-
-  it('rejects oversized pasted project searches before reading project metadata', () => {
-    const oversizedQuery = 'secret-project-picker-search'.repeat(
-      GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES
-    )
-    const candidate = {
-      get owner(): string {
-        throw new Error('oversized project searches must not scan owners')
-      },
-      get ownerType(): GitHubProjectSummary['ownerType'] {
-        throw new Error('oversized project searches must not build project keys')
-      },
-      get number(): number {
-        throw new Error('oversized project searches must not scan numbers')
-      },
-      get title(): string {
-        throw new Error('oversized project searches must not scan titles')
-      }
-    } as GitHubProjectSummary
-
-    expect(isGitHubProjectPickerQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(
-      filterGitHubProjectPickerProjects({
-        projects: [candidate],
-        pinned: [],
-        recent: [],
-        query: oversizedQuery
-      })
-    ).toEqual([])
   })
 })

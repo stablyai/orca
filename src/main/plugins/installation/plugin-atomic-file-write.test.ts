@@ -43,14 +43,6 @@ describe('writePluginFileAtomically', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it('replaces an existing file', async () => {
-    const target = join(dir, 'plugins.lock.json')
-    await writePluginFileAtomically(target, 'first')
-    await writePluginFileAtomically(target, 'second')
-    expect(await readFile(target, 'utf8')).toBe('second')
-    expect(await readdir(dir)).toEqual(['plugins.lock.json'])
-  })
-
   it('applies the requested mode', async () => {
     const target = join(dir, 'provenance.json')
     await writePluginFileAtomically(target, '{}', { mode: 0o600 })

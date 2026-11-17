@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { appendTranscriptEntries } from '../../../claude/claude-provider-session-rename'
+import { appendTranscriptEntries } from '../../../claude/transcripts/claude-provider-session-rename'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { fakeClaude } from '../../../claude/structured/claude-structured-session-test-support'
 import type { FakeConnection } from '../../../claude/structured/claude-structured-session-test-support'

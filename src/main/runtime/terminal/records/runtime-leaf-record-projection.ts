@@ -4,16 +4,16 @@
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import {
   paneKeyOf,
   tabsInOrder,
   type LayoutTerminalTab
 } from '../../../../shared/workspace-layout/workspace-layout-model'
-import type { PaneTerminalFact } from '../../../../shared/workspace-layout/workspace-layout-pane-status'
-import { resolveWorkspaceSelection } from '../../../../shared/workspace-layout/workspace-layout-views'
-import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
+import type { PaneTerminalFact } from '../../../../shared/workspace-layout/commands/workspace-layout-pane-status'
+import { resolveWorkspaceSelection } from '../../../../shared/workspace-layout/client-views/workspace-layout-views'
+import { pickStoredFields } from '../../../../shared/workspace-layout/persistence/stored-record-fields'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { getPtyTerminalState } from '../wait/terminal-wait-results'
 

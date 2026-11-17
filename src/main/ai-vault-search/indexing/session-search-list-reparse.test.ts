@@ -26,18 +26,6 @@ afterEach(async () => {
   await index.close()
 })
 
-it('still indexes new appended messages', () => {
-  replayTranscriptRead({ messages })
-  replayTranscriptRead({
-    candidate: syntheticCandidate({ sizeBytes: 5000 }),
-    mode: 'append',
-    previousByteOffset: 4096,
-    messages,
-    outcome: { byteOffset: 5000 }
-  })
-  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 4 })
-})
-
 it('keeps the index current when a second fold appends a span it already holds', () => {
   // Pi and OMP can publish the same append when folding one shared transcript.
   replayTranscriptRead({ messages })

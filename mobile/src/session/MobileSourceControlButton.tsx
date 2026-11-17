@@ -6,7 +6,7 @@ import {
   HOST_LIST_TARGET,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostQuery } from '../query/host-query'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

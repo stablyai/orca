@@ -30,10 +30,6 @@ describe('native dialog localization coverage', () => {
     ])
   })
 
-  it('does not change the existing renderer scan by default', () => {
-    expect(collectLocalizationCandidates(path, source, '/repo')).toEqual([])
-  })
-
   it('fails the opt-in check for a new native dialog literal', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-localization-'))
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})

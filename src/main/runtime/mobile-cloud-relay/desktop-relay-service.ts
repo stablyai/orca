@@ -8,22 +8,22 @@ import type {
   PairingProvisionRelayParams
 } from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import { readRelayAuthContext } from './relay-auth-context'
-import { relayIdentityKey } from './relay-auth-identity'
-import { RelayAuthCoordinator } from './relay-auth-coordinator'
-import { RelayUnavailableError } from './relay-readiness'
-import { RelaySessionBroker } from './relay-session-broker'
+import { readRelayAuthContext } from './authentication/relay-auth-context'
+import { relayIdentityKey } from './authentication/relay-auth-identity'
+import { RelayAuthCoordinator } from './authentication/relay-auth-coordinator'
+import { RelayUnavailableError } from './authentication/relay-readiness'
+import { RelaySessionBroker } from './session-lifecycle/relay-session-broker'
 import type { MobileRelayStatusPublisher } from '../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
   RelayRevokeOutbox,
   RelayDeviceBinding,
   RelayRevokeOutboxItem
-} from './relay-revoke-outbox'
-import { pairingAuthorizationForContext } from './relay-pairing-authorization'
-import { deriveRelayHostId } from './relay-http-client'
-import { RelayDemandLedger } from './relay-demand-ledger'
-import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
+} from './pairing/relay-revoke-outbox'
+import { pairingAuthorizationForContext } from './pairing/relay-pairing-authorization'
+import { deriveRelayHostId } from './director/relay-http-client'
+import { RelayDemandLedger } from './demand/relay-demand-ledger'
+import { createRelayRegionPreferenceReader } from './region-selection/relay-region-preference-reader'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig

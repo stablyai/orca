@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 type UnstoppedPtyRuntime = Pick<OrcaRuntimeService, 'getPtyLivenessVerdict'>

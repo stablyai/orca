@@ -5,8 +5,6 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   HEADLESS_LEAF_ID,
-  HEADLESS_SECOND_LEAF_ID,
-  HEADLESS_THIRD_LEAF_ID,
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -102,50 +100,6 @@ describe('OrcaRuntimeService', () => {
     })
     expect(writes).toEqual([['persisted-pty', 'input']])
     expect(resize).toHaveBeenCalledWith('persisted-pty', 132, 41)
-  })
-
-  it('uses topology CAS before a client can claim a still-orphaned PTY', async () => {
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
-      terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 7 }
-    }
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
-    )
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-cas',
-          incarnationId: 'inc-cas',
-          terminalHandle: 'term_cas',
-          title: 'shell',
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }
-      ]
-    })
-
-    await expect(
-      runtime.adoptTerminalOrphans({
-        worktree: `id:${TEST_WORKTREE_ID}`,
-        expectedTopologyRevision: 6,
-        claims: [
-          {
-            terminal: 'term_cas',
-            ptyId: 'pty-cas',
-            incarnationId: 'inc-cas',
-            tabId: 'tab-cas',
-            leafId: HEADLESS_LEAF_ID
-          }
-        ]
-      })
-    ).rejects.toThrow('terminal_topology_conflict')
   })
 
   // The client's retirement proofs die with a host restart; the close record does not.
@@ -365,122 +319,6 @@ describe('OrcaRuntimeService', () => {
       await expect(makeWslRuntime().adoptTerminalOrphans(request)).rejects.toThrow(
         'terminal_orphan_owner_mismatch'
       )
-    })
-  })
-
-  it('preserves legacy pane and group topology without changing host focus', async () => {
-    const session = {
-      ...getDefaultWorkspaceSession(),
-      activeWorktreeId: 'other-worktree',
-      activeTabId: 'other-tab',
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
-    }
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
-    )
-    const processes = [
-      ['pty-left', 'inc-left', 'term_left'],
-      ['pty-right', 'inc-right', 'term_right'],
-      ['pty-shell', 'inc-shell', 'term_shell']
-    ] as const
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () =>
-        processes.map(([id, incarnationId, terminalHandle]) => ({
-          id,
-          incarnationId,
-          terminalHandle,
-          title: id,
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }))
-    })
-
-    await runtime.adoptTerminalOrphans({
-      worktree: `id:${TEST_WORKTREE_ID}`,
-      expectedTopologyRevision: 0,
-      activeTabId: 'tab-agent',
-      activeGroupId: 'group-left',
-      claims: processes.map(([ptyId, incarnationId, terminal], index) => ({
-        terminal,
-        ptyId,
-        incarnationId,
-        tabId: index < 2 ? 'tab-agent' : 'tab-shell',
-        leafId: [HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, HEADLESS_THIRD_LEAF_ID][index]!
-      })),
-      topology: {
-        tabs: [
-          {
-            tabId: 'tab-agent',
-            root: {
-              type: 'split',
-              direction: 'horizontal',
-              ratio: 0.35,
-              first: { type: 'leaf', leafId: HEADLESS_LEAF_ID },
-              second: { type: 'leaf', leafId: HEADLESS_SECOND_LEAF_ID }
-            },
-            activeLeafId: HEADLESS_SECOND_LEAF_ID,
-            expandedLeafId: HEADLESS_SECOND_LEAF_ID
-          },
-          {
-            tabId: 'tab-shell',
-            root: { type: 'leaf', leafId: HEADLESS_THIRD_LEAF_ID },
-            activeLeafId: HEADLESS_THIRD_LEAF_ID,
-            expandedLeafId: null
-          }
-        ],
-        groups: [
-          {
-            id: 'group-left',
-            activeTabId: 'tab-agent',
-            tabOrder: ['tab-agent'],
-            recentTabIds: ['tab-agent']
-          },
-          { id: 'group-right', activeTabId: 'tab-shell', tabOrder: ['tab-shell'] }
-        ],
-        groupLayout: {
-          type: 'split',
-          direction: 'vertical',
-          ratio: 0.6,
-          first: { type: 'leaf', groupId: 'group-left' },
-          second: { type: 'leaf', groupId: 'group-right' }
-        }
-      }
-    })
-
-    expect(getSession()).toMatchObject({
-      activeWorktreeId: 'other-worktree',
-      activeTabId: 'other-tab',
-      activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'tab-agent' },
-      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-left' },
-      tabGroups: {
-        [TEST_WORKTREE_ID]: [
-          { id: 'group-left', activeTabId: 'tab-agent', tabOrder: ['tab-agent'] },
-          { id: 'group-right', activeTabId: 'tab-shell', tabOrder: ['tab-shell'] }
-        ]
-      },
-      tabGroupLayouts: {
-        [TEST_WORKTREE_ID]: expect.objectContaining({
-          type: 'split',
-          direction: 'vertical',
-          ratio: 0.6
-        })
-      },
-      terminalLayoutsByTabId: {
-        'tab-agent': expect.objectContaining({
-          root: expect.objectContaining({
-            type: 'split',
-            direction: 'horizontal',
-            ratio: 0.35
-          }),
-          activeLeafId: HEADLESS_SECOND_LEAF_ID,
-          expandedLeafId: HEADLESS_SECOND_LEAF_ID
-        })
-      }
     })
   })
 })

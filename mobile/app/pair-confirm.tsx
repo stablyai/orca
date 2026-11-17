@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, Pressable, BackHandler } from 'react-native'
+import { View, Text, Pressable, BackHandler, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -27,7 +27,7 @@ import {
   PairingProgress,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
-import { triggerSuccess } from '../src/platform/haptics'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
@@ -86,7 +86,7 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
     }, [cancel])
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+  const setPairConfirmRootRef = useCallback((node: HostInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return

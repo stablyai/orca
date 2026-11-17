@@ -13,7 +13,7 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { translateWslOutputPaths } from '../../command-runner/wsl-path-translation'
+import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
@@ -117,9 +117,11 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     listWorktrees: async (repoPath) => {
-      const { stdout } = await gitExecFileAsync(
-        ['worktree', 'list', '--porcelain'],
-        execOptions(repoPath)
+      const { stdout } = await withRepositoryGitCause(
+        repoPath,
+        options,
+        { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
+        () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
       )
       return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, options))
     }
@@ -135,3 +137,4 @@ function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | unde
     })
   ]).finally(() => clearTimeout(timer))
 }
+import { withRepositoryGitCause } from '../../repository-git-cause'

@@ -1,4 +1,4 @@
-import type { PairedTerminalTabCloseIntent } from '../../../../shared/workspace-layout/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../../../../shared/workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import {
   clearPairedTerminalTabCloseIntents,
   recordPairedTerminalTabCloseIntent,
