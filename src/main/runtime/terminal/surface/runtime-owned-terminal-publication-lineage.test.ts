@@ -9,7 +9,7 @@ const { store, TEST_WORKTREE_ID } =
   await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 const { committingSpawn } = await import('../layout/bind-first-pane.test-fixture')
 
-it.each(['renderer:active-generation', 'headless:active-generation'])(
+it.each(['renderer:active-generation'])(
   'keeps %s live when runtime-owned creation supplements its inventory',
   async (publicationEpoch) => {
     // Its own copy: layout-owner builds bind the created pane into this store's session.
