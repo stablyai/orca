@@ -18,6 +18,8 @@ export type RelayControlClientOptions = {
   onPendingChanged?: () => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
   connectDeadlineMs?: number
+  /** Arms the path-stall detector (two-path failover); unset keeps liveness exactly as before. */
+  onStall?: () => void
   // Test seam: deterministic probe jitter.
   livenessRandom?: () => number
 }

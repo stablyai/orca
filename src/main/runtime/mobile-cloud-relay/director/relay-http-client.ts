@@ -59,7 +59,7 @@ export type RelayAssignment = Omit<
   'alternateCellUrls'
 > & {
   // Other origins reaching the same host session as cellUrl, in preference order; never cellUrl.
-  // TODO(relay client two-path, failover PR): consumed by the control-origin failover; unused today.
+  // RelayControlOrigin resumes the control on these when the cellUrl path stalls (desktop only).
   alternateCellUrls?: string[]
 }
 
