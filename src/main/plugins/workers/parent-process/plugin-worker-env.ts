@@ -48,6 +48,8 @@ export function buildPluginWorkerEnv(
     }
   }
   removeChromiumDisabledSessionBus(env)
+  // Workers have no terminal; a git credential prompt would hang or grab the launching terminal.
+  env.GIT_TERMINAL_PROMPT = '0'
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
 }

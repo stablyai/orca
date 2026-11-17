@@ -221,9 +221,12 @@ export function useMonacoGitBlame(params: {
     }
 
     const disposables = [
-      ed.onDidChangeModelContent(() => {
-        // Only the user's own typing hides blame; agent writes and format-on-save don't.
-        if (ed.hasTextFocus()) {
+      ed.onDidChangeModelContent((event) => {
+        // Only the user's own typing hides blame; agent writes and format-on-save don't. Undo and
+        // redo restore known text and move the cursor with no explicit reason, so show it at once.
+        if (event.isUndoing || event.isRedoing) {
+          typing = false
+        } else if (ed.hasTextFocus()) {
           typing = true
         }
         update()

@@ -39,7 +39,10 @@ type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
 export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = Repo> {
   constructor(private readonly deps: RuntimeRepositoryHooksCommandsDeps<TRepo>) {}
 
-  async getRepoHooks(repoSelector: string) {
+  async getRepoHooks(
+    repoSelector: string,
+    options: { createSource?: SetupHooksCreateSource } = {}
+  ) {
     const repo = await this.deps.resolveRepo(repoSelector)
     const connectionId = getRepoDialableSshTargetId(repo)
     // Why: an `ssh:` repo is not served here, nor a folder another host owns; neither reports hooks.
@@ -53,7 +56,13 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
     }
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
-    const sharedHooks = scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)
+    // A create's setup prompt shows the orca.yaml of the ref it checks out; unreadable falls back to the checkout.
+    const created = options.createSource
+      ? await this.deps.readCreateSourceHooks(repo, options.createSource)
+      : undefined
+    const sharedHooks = created
+      ? created.hooks
+      : scopeHooksToRepoKind(repo, hasFile ? loadHooks(repo.path) : null)
     const setupConfig = getSetupConfig(repo, sharedHooks)
     return {
       hasHooksFile: hasFile,

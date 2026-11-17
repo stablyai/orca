@@ -1361,13 +1361,18 @@
       "newScriptLabel": "New setup script",
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
       "dontRun": "Don't run",
       "runArchiveTitle": "Run archive script from {{repoName}}?",
       "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
       "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
       "archiveScriptLabel": "Archive script",
-      "newArchiveScriptLabel": "New archive script"
+      "newArchiveScriptLabel": "New archive script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking.",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersDescription": "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository.",
+      "branchSetupLabel": "Branch's setup script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -4172,6 +4177,11 @@
       "loading": "Loading",
       "downloading": "Downloading",
       "downloadProgress": "Downloading… {{progress}}"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "runFailed": "Could not start setup."
     }
   },
   "tasks": {
@@ -4630,15 +4640,7 @@
       "creating": "Creating...",
       "runSetupAndCreate": "Run setup and create",
       "skipSetupAndCreate": "Skip setup and create",
-      "setupChangedTitle": "{{name}}'s setup script changed",
-      "runSetupTitle": "Run setup from {{name}}?",
-      "trustSubtitle": "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository.",
-      "newSetupScript": "New setup script",
-      "setupScript": "Setup script",
-      "trustFailed": "Failed to trust setup script.",
-      "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "trustFailed": "Failed to trust setup script."
     },
     "sparsePresetDraft": {
       "repoRelativeDirectoriesRequired": "Use repo-relative directories, not root, absolute paths, or parent segments.",

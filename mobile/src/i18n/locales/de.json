@@ -1006,7 +1006,6 @@
       "clearSearch": "Suche leeren"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "description": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs ausgeführt. Nur ausführen, wenn das Repository vertrauenswürdig ist.",
       "dontRun": "Nicht ausführen",
       "newScriptLabel": "Neues Einrichtungsskript",
@@ -3906,27 +3905,19 @@
       "reconnecting": "Wird erneut verbunden"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "creating": "Wird erstellt…",
       "directoriesLabel": "Verzeichnisse",
       "directories_one": "{{count}} Verzeichnis",
       "directories_other": "{{count}} Verzeichnisse",
-      "dontRun": "Nicht ausführen",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
       "namePlaceholder": "Renderer-Oberfläche",
-      "newSetupScript": "Neues Einrichtungsskript",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
-      "runHooks": "Hooks ausführen",
       "runSetupAndCreate": "Einrichten und erstellen",
-      "runSetupTitle": "Einrichtung von {{name}} ausführen?",
-      "setupChangedTitle": "Einrichtungsskript von {{name}} geändert",
-      "setupScript": "Einrichtungsskript",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
       "setupTitle": "Einrichtungsskript ausführen?",
       "skipSetupAndCreate": "Ohne Einrichtung erstellen",
-      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden.",
-      "trustSubtitle": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs auf deinem Rechner ausgeführt. Nur ausführen, wenn du diesem Repository vertraust."
+      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden."
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."

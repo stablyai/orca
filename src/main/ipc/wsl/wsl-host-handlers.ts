@@ -2,7 +2,7 @@ import { canCreateWslHostService } from './wsl-host-service-availability'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import type {
   WslHostAddResult,
@@ -25,8 +25,8 @@ import type { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-au
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
 import { wslHostsAcceptNewWork } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
-  publishWslHostStatus,
-  pushWslHostCapabilityOnNewWorkChange
+  pushWslHostCapabilityOnNewWorkChange,
+  wslHostWindowPublishers
 } from './wsl-host-window-broadcast'
 import { wslHostAddRefusal } from '../../wsl/host-lifecycle/wsl-host-add-admission'
 import {
@@ -113,7 +113,7 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     ...runGate,
-    publish: publishWslHostStatus,
+    ...wslHostWindowPublishers,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId, distro) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {

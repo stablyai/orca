@@ -219,7 +219,8 @@ export class StructuredAgentSessionHost {
 
   revealSession = this.reads.revealSession
 
-  private serialize = this.tasks.serialize.bind(this.tasks)
+  /** The chat's conversation lane: opens, attaches and creates hold it, so open-or-absent is exact. */
+  serialize = this.tasks.serialize.bind(this.tasks)
   withForkSourceAdmission = this.serialize
 
   private readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())

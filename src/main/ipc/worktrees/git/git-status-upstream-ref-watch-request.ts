@@ -6,7 +6,7 @@ import { resolveRegisteredWorktreePath } from '../removal/registered-worktree-ro
 import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
-} from '../../local-worktree-runtime-options'
+} from '../local-worktree-runtime-options'
 import { setWorktreeGitStatusRefWatch } from '../creation/worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'

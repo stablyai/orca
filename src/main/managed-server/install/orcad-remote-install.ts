@@ -16,7 +16,7 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import type { OrcadHostTransport } from './orcad-host-transport'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
-import { acquireInstallLock } from './remote-install-lock'
+import { acquireInstallLock, type InstallLockWait } from './remote-install-lock'
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
 import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../activation/orcad-held-fence-tokens'
 import { exitedOwnLockProof } from '../activation/orcad-exited-own-lock'
@@ -42,6 +42,10 @@ export async function installOrcadBundle(
     nodeRuntimeHostConnectTimeoutSeconds?: number
     /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
     recordedNodeRuntimeProbe?: boolean
+    /** WSL opt-in: wait through to stale takeover instead of giving up at the step timeout. */
+    localWslHost?: boolean
+    /** Another holder keeps the install lock: called at each recheck, then with null once taken. */
+    onInstallLockWait?: (wait: InstallLockWait | null) => void
     signal?: AbortSignal
   },
   fullVersion: string,
@@ -73,23 +77,34 @@ export async function installOrcadBundle(
   }
   // Persist the token so a relaunch can prove ownership of an interrupted upload lock.
   const token = randomUUID()
+  const owner = { fileName: ORCAD_FENCE_OWNER_FILENAME, token }
   rememberHeldOrcadFence(token)
-  try {
-    await acquireInstallLock(options.conn, remoteDir, options.host, {
-      signal: options.signal,
-      owner: { fileName: ORCAD_FENCE_OWNER_FILENAME, token },
-      // SFTP uploads and chmod leave no host workload after this client exits.
-      exitedOwner: exitedOwnLockProof(options, {
-        baseDir: orcadWindowsBaseDir(options.host, remoteDir),
-        guardsStateMutation: false
-      })
-    })
-  } catch (error) {
-    if (!isUnconfirmedSshCommandTermination(error)) {
-      forgetHeldOrcadFence(token)
-    }
-    throw error
+  let waited = false
+  // No forget on failure: a lost reply may follow a committed create or steal, and the token is
+  // the only proof a relaunch has. Unused entries age out of the store in 24h.
+  await acquireInstallLock(options.conn, remoteDir, options.host, {
+    signal: options.signal,
+    owner,
+    // SFTP uploads and chmod leave no host workload after this client exits.
+    exitedOwner: exitedOwnLockProof(options, {
+      baseDir: orcadWindowsBaseDir(options.host, remoteDir),
+      guardsStateMutation: false
+    }),
+    // SSH keeps its bounded wait: a slow live upload elsewhere never refreshes the lock's age.
+    ...(options.localWslHost
+      ? {
+          waitThroughStaleTakeover: true,
+          onWait: (wait: InstallLockWait) => {
+            waited = true
+            options.onInstallLockWait?.(wait)
+          }
+        }
+      : {})
+  })
+  if (waited) {
+    options.onInstallLockWait?.(null)
   }
+
   let preserveInstallLock = false
   try {
     // A sibling may have completed deployment while this client waited for the lock.
@@ -137,7 +152,8 @@ export async function installOrcadBundle(
   } finally {
     if (!preserveInstallLock) {
       // Retain ownership proof if interrupted cleanup cannot confirm lock removal.
-      if (await abandonInstall(options.conn, remoteDir, options.host)) {
+      // Token-checked: a cleanup that runs after a takeover leaves the successor's lock alone.
+      if (await abandonInstall(options.conn, remoteDir, options.host, owner)) {
         forgetHeldOrcadFence(token)
       }
     }

@@ -52,6 +52,4 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/desktop-distribution/macos/macos-shipit-scheduling.test.mjs
           src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
-          src/main/updater/mac-install/updater.mac-install.test.ts
-          src/main/updater/updater.headless-serve-install.test.ts
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts

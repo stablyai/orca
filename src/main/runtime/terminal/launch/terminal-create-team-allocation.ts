@@ -1,5 +1,5 @@
 import type { ClaudeAgentTeamsService } from '../agent-teams/claude-agent-teams-service'
-import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
+import type { PtySpawnOutcome } from '../../../ipc/pty/spawn/spawn-outcome'
 import { buildRuntimeAgentTeamsLaunchPlan } from './agent-teams-launch-plan'
 
 /** Only the exact allocation belongs to this start until the process accepts it. */

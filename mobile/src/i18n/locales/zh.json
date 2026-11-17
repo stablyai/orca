@@ -1156,7 +1156,6 @@
       "clearSearch": "清除搜索"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "始终信任并运行",
       "description": "此仓库的 orca.yaml 会在工作区启动前运行。请仅在信任此仓库时运行",
       "dontRun": "不运行",
       "runArchiveTitle": "运行 {{repoName}} 的归档脚本？",
@@ -4637,27 +4636,19 @@
       "reconnecting": "重新连接中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "始终信任并运行",
       "creating": "创建中…",
       "directoriesLabel": "目录",
       "directories_one": "{{count}} 个目录",
       "directories_other": "{{count}} 个目录",
-      "dontRun": "不运行",
       "editSparsePreset": "编辑稀疏检出预设",
       "nameLabel": "名称",
       "namePlaceholder": "渲染器界面",
-      "newSetupScript": "新设置脚本",
       "newSparsePreset": "新建稀疏检出预设",
-      "runHooks": "运行钩子",
       "runSetupAndCreate": "运行设置脚本并创建",
-      "runSetupTitle": "运行 {{name}} 的设置脚本？",
-      "setupChangedTitle": "{{name}} 的设置脚本已更改",
-      "setupScript": "设置脚本",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
       "setupTitle": "运行设置脚本？",
       "skipSetupAndCreate": "跳过设置脚本并创建",
-      "trustFailed": "无法将设置脚本设为可信",
-      "trustSubtitle": "工作区启动前，此仓库的 orca.yaml 会在您的电脑上运行。请仅在信任此仓库时运行"
+      "trustFailed": "无法将设置脚本设为可信"
     },
     "worktreeCreateRetry": {
       "createFailed": "创建工作区失败"

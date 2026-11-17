@@ -11,7 +11,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import { getWorktreePathSettings } from '../../../ipc/worktrees/paths/worktree-logic'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalLaunchScopeRuntime,
