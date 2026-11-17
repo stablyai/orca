@@ -1,0 +1,10 @@
+/* DS-q: a persistent cloud toast moved back on top of the stack (cloud-toast-stack.tsx) must look
+   like it stayed put: the new card skips sonner's slide-in, and the card it replaces leaves at once. */
+[data-sonner-toaster] [data-sonner-toast].cloud-toast-readd,
+[data-sonner-toaster] [data-sonner-toast].cloud-toast-readd > * {
+  transition: none !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast].cloud-toast-gone {
+  display: none !important;
+}

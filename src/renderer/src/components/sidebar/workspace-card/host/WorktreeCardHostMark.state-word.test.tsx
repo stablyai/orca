@@ -1,0 +1,91 @@
+// @vitest-environment happy-dom
+
+import { act, cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+
+const view = vi.hoisted(() => {
+  const initial: { isCloud: boolean; state: CloudDotState } = { isCloud: true, state: 'running' }
+  return initial
+})
+
+vi.mock('@/components/orca-cloud/use-cloud-workspace-view', () => ({
+  useCloudWorkspaceView: () => ({
+    isCloud: view.isCloud,
+    state: view.state,
+    entry: undefined,
+    wake: undefined,
+    oom: null,
+    pending: undefined
+  })
+}))
+vi.mock('@/store', () => ({
+  useAppStore: (select: (state: { ephemeralVmRuntimesByWorkspaceId: object }) => unknown) =>
+    select({ ephemeralVmRuntimesByWorkspaceId: {} })
+}))
+
+import { WorktreeCardHostStateWord } from './WorktreeCardHostMark'
+import {
+  clearWorktreeGoingToSleep,
+  markSleepCopySaving,
+  markWorktreeGoingToSleep,
+  noteSleepCopyRead,
+  resetWorktreeSleepViewForTests
+} from '@/lib/worktree-sleep-view'
+
+const word = (container: HTMLElement): Element | null =>
+  container.querySelector('[data-host-state-word]')
+
+describe('the sidebar row state word', () => {
+  afterEach(() => {
+    cleanup()
+    resetWorktreeSleepViewForTests()
+    view.isCloud = true
+    view.state = 'running'
+  })
+
+  it('says "Going to sleep…" from Sleep until the sleep ends, then Asleep with the view', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)).toBeNull()
+    act(() => markWorktreeGoingToSleep('ws'))
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    expect(word(container)?.getAttribute('data-host-state-word')).toBe('goingToSleep')
+    // The suspended record lands before the sleep ends: the row keeps "Going to sleep…" until the
+    // view flips too (same flag), never Asleep ahead of it.
+    view.state = 'sleeping'
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    act(() => clearWorktreeGoingToSleep('ws'))
+    expect(word(container)?.textContent).toBe('Asleep')
+  })
+
+  it('keeps saying it is saving after the sleep returns, until the copy is read', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    view.state = 'sleeping'
+    act(() => markSleepCopySaving('ws', 1_000))
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    act(() => noteSleepCopyRead('ws', 999))
+    expect(word(container)?.textContent).toBe('Going to sleep · Saving copy…')
+    act(() => noteSleepCopyRead('ws', 1_000))
+    expect(word(container)?.textContent).toBe('Asleep')
+  })
+
+  it('a failure during the sleep still names itself', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    act(() => markWorktreeGoingToSleep('ws'))
+    view.state = 'failed'
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)?.getAttribute('data-host-state-word')).toBe('failed')
+  })
+
+  it('names nothing for another workspace going to sleep, or a non-cloud row', () => {
+    const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
+    act(() => markWorktreeGoingToSleep('other'))
+    expect(word(container)).toBeNull()
+    view.isCloud = false
+    act(() => markWorktreeGoingToSleep('ws'))
+    rerender(<WorktreeCardHostStateWord worktreeId="ws" />)
+    expect(word(container)).toBeNull()
+  })
+})

@@ -41,11 +41,11 @@ export default function WorktreeCreationTabStrip({
           type="button"
           title={t('auto.components.worktree.creation.WorktreeCreationPanel.532aea14ce', 'Cancel')}
           aria-label={t(
-            'auto.components.worktree.creation.WorktreeCreationPanel.a3346fc6ed',
-            'Cancel worktree creation'
+            'auto.components.worktree.creation.WorktreeCreationTabStrip.cancelLabel',
+            'Cancel workspace creation'
           )}
           onClick={onCancel}
-          className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >
           <X className="size-3" />
         </button>

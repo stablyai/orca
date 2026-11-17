@@ -1,0 +1,404 @@
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { cloudWorkspaceAnnouncement } from '@/lib/orca-cloud/cloud-workspace-name-copy'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { returnFocusToWorkspace } from './cloud-focus-return'
+import {
+  MENU_FOCUS_RETURN_MS,
+  coveredPaneHadFocus,
+  isEditable,
+  useInertSiblings
+} from './cloud-cover-focus'
+import { useNow } from '@/lib/window-activity/use-now'
+import { useTranslate } from '@/i18n/use-translate'
+import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import {
+  dismissCloudOom,
+  dismissCloudWake,
+  useIsCloudWorkspace
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import type { CloudOfflineSnapshot } from '../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
+import { CloudArchivedWorkspaceView } from './CloudArchivedWorkspaceView'
+import { useArchiveLoad } from './use-cloud-archive-load'
+import { CloudWakingOverlay } from './CloudWakingOverlay'
+import { useWakeOverlay } from './use-wake-overlay'
+import { PairedCloudWorkspaceSurface, useIsPairedCloudRow } from './PairedCloudWorkspaceSurface'
+import {
+  CloudArchiveFailedNotice,
+  CloudMovingNotice,
+  CloudWorkspaceNotice
+} from './CloudWorkspaceNotice'
+import { useIsMovingAsleep } from '@/lib/orca-cloud/orca-cloud-move-asleep-hold'
+import { CloudSetupNoticesDock } from './CloudSetupNotices'
+import { useConfirmedRestart } from './use-cloud-panel-actions'
+import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
+import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
+import { useAsleepCopyData } from './offline/CloudSleepCopyState'
+import { useCloudWorkspaceView } from './use-cloud-workspace-view'
+import {
+  useIsWorktreeGoingToSleep,
+  useIsWorktreeSleepViewHeld,
+  useIsWorktreeSuspendCommitted
+} from '@/lib/worktree-sleep-view'
+import { useWakeInput, useWakeInputNotices } from './use-wake-input'
+import { useWakeAttachHold } from './use-wake-attach-hold'
+import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
+import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
+import {
+  runArchiveCloudWorkspace,
+  runUnarchiveCloudWorkspace,
+  wakeCloudWorkspace
+} from './cloud-workspace-actions'
+import {
+  setCloudArchiveFailure,
+  useCloudArchiveFailure
+} from '@/lib/orca-cloud/optimistic-cloud-archive'
+import { openMoveToThisComputer } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { useCloudWorkspaceActions } from './use-cloud-workspace-actions'
+import { keepWorkspaceAwakeDuringSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
+
+/** Machine sizes live on the team's cloud environments (MEMGUARD's "Consider a larger machine"). */
+function openMachineSizes(): void {
+  const store = useAppStore.getState()
+  store.openSettingsTarget({ pane: 'cloud-environments', repoId: null })
+  store.openSettingsPage()
+}
+
+/**
+ * The Orca Cloud layer over the active workspace, one mount for all of it: the archived view,
+ * the "Waking…" overlay, the asleep (cached, read-only) view, and the not-responding / out-of-
+ * memory notices. Covering layers make the panes under them inert and take focus when the
+ * covered pane had it. Renders nothing for workspaces that are not on Orca Cloud.
+ */
+export function OrcaCloudWorkspaceSurface({
+  worktreeId
+}: {
+  worktreeId: string | null
+}): React.JSX.Element | null {
+  const isCloud = useIsCloudWorkspace(worktreeId)
+  const isPaired = useIsPairedCloudRow(worktreeId)
+  if (!worktreeId || !isCloud) {
+    // A PAIRED row (no runtime record here) gets its own waking, asleep and saving layers.
+    return worktreeId && isPaired ? (
+      <PairedCloudWorkspaceSurface key={worktreeId} workspaceId={worktreeId} />
+    ) : null
+  }
+  // Keyed: switching worktrees resets every piece of per-workspace state.
+  return <CloudSurface key={worktreeId} workspaceId={worktreeId} />
+}
+
+function emptySnapshot(workspaceId: string): CloudOfflineSnapshot {
+  return { workspaceId, asleep: true, capturedAt: null, git: null, terminals: [], chats: [] }
+}
+
+function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Element | null {
+  const t = useTranslate()
+  const view = useCloudWorkspaceView(workspaceId)
+  const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
+  // Ready means the server answers; the pill stays ("Connecting…") until the pane in front has
+  // re-attached and can take keys.
+  const attachHold = useWakeAttachHold(workspaceId, view.wake)
+  // Wake pressed while main still suspends the VM: shown as waking from the press, before main
+  // can report (and with the same start once it does).
+  const wakeAfterSleep = useWakeAfterSleep(workspaceId)
+  const shownWake = attachHold.wake ?? view.wake ?? wakeAfterSleep
+  const now = useNow(1_000, shownWake !== undefined)
+  // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
+  const wakeInput = useWakeInput(workspaceId)
+  useWakeInputNotices(workspaceId)
+  const overlay = useWakeOverlay(
+    shownWake,
+    Math.max(now, shownWake?.at ?? 0),
+    t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.'),
+    wakeInput.pending > 0 || wakeAfterSleep !== undefined
+  )
+  const archived = view.state === 'archived'
+  const maybeAsleep =
+    view.state === 'sleeping' || view.state === 'failed' || view.state === 'unknown'
+  // Just put to sleep from here: stays on screen read-only, never woken by being shown.
+  const viewOnly = useIsWorktreeSleepViewHeld(workspaceId) && !archived
+  // Moved while asleep: the move wakes it to pack it, but the page stays on the asleep view.
+  const movingAsleep = useIsMovingAsleep(workspaceId) && !archived
+  const goingToSleep = useIsWorktreeGoingToSleep(workspaceId) && viewOnly
+  // Past main's last reopen check Keep awake can't work: Wake to continue (an honest wake) instead.
+  const suspendCommitted = useIsWorktreeSuspendCommitted(workspaceId)
+  // Archive pressed here: the metadata is captured at the end, so it's read once it's real.
+  const [archiveLoad, retryArchive] = useArchiveLoad(
+    workspaceId,
+    archived && !view.optimisticArchive
+  )
+  const archiveFailure = useCloudArchiveFailure(workspaceId)
+  const offline = useAsleepCopyData(
+    workspaceId,
+    (maybeAsleep || viewOnly || movingAsleep) && !archived
+  )
+  const asleep = (Boolean(offline.snapshot?.asleep) && maybeAsleep) || viewOnly
+  const wakeInFlight =
+    wakeInput.waking ||
+    Boolean(
+      view.wake &&
+      view.wake.phase !== 'failed' &&
+      view.wake.phase !== 'ready' &&
+      isWakeActive(view.wake, Math.max(now, view.wake.at))
+    )
+
+  const layer: 'archived' | 'waking' | 'asleep' | null = archived
+    ? 'archived'
+    : movingAsleep
+      ? 'asleep'
+      : overlay.wake
+        ? 'waking'
+        : asleep && !wakeInFlight
+          ? 'asleep'
+          : null
+  const typeThrough = layer === 'waking' && overlay.wake?.phase !== 'failed'
+
+  // "Copy from 14 min ago" only needs a coarse clock, and only while the asleep view shows.
+  const slowNow = useNow(30_000, layer === 'asleep')
+  const coverRef = useRef<HTMLDivElement | null>(null)
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
+  const [takeFocus, setTakeFocus] = useState(false)
+  useInertSiblings(coverRef, layer !== null && !typeThrough && !overlay.leaving)
+  useLayoutEffect(() => {
+    // Decide once per layer change, before the cover moves focus anywhere. A type-through wake
+    // leaves focus in the terminal the person is typing into; Sleep from here lands on the heading.
+    setTakeFocus(
+      layer !== null &&
+        !typeThrough &&
+        ((layer === 'asleep' && viewOnly) || coveredPaneHadFocus(coverRef.current))
+    )
+  }, [layer, typeThrough, viewOnly])
+  useEffect(() => {
+    if (!takeFocus || (layer !== 'archived' && layer !== 'asleep')) {
+      return
+    }
+    headingRef.current?.focus()
+    if (!viewOnly) {
+      return
+    }
+    // Sleep was chosen from a menu, which hands focus back to its trigger as it closes.
+    const timer = setTimeout(() => {
+      if (!isEditable(document.activeElement)) {
+        headingRef.current?.focus()
+      }
+    }, MENU_FOCUS_RETURN_MS)
+    return () => clearTimeout(timer)
+  }, [takeFocus, layer, viewOnly])
+  // The sleep ended: re-read the copy so it says asleep, as of the capture main just made.
+  const refreshOffline = offline.refresh
+  const wasGoingToSleep = useRef(goingToSleep)
+  useEffect(() => {
+    if (wasGoingToSleep.current && !goingToSleep) {
+      void refreshOffline()
+    }
+    wasGoingToSleep.current = goingToSleep
+  }, [goingToSleep, refreshOffline])
+  const hadLayer = useRef(false)
+  useEffect(() => {
+    if (layer) {
+      hadLayer.current = true
+      return
+    }
+    if (!hadLayer.current) {
+      return
+    }
+    hadLayer.current = false
+    // The cover unmounted (wake ready, Dismiss, Unarchive); focus it held fell to <body>.
+    const frame = requestAnimationFrame(() =>
+      returnFocusToWorkspace(useAppStore.getState().activeTabId, (tabId) =>
+        focusTerminalTabSurface(tabId, null, { onlyIfFocusUnclaimed: true })
+      )
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [layer])
+
+  // Checked once the sandbox answers; inside the protocol range nothing shows.
+  const versionSkewNotice = useCloudVersionSkewNotice(workspaceId, view.state === 'running')
+  const restart = useConfirmedRestart(workspaceId)
+  // LIFECYCLE-MATRIX: the pages offer what the menus offer in this state.
+  const lifecycle = useCloudWorkspaceActions(workspaceId)
+  const move = lifecycle?.allows('moveToComputer')
+    ? () => openMoveToThisComputer(workspaceId, name ?? workspaceId)
+    : undefined
+  const wake = useCallback(() => {
+    dismissCloudWake(workspaceId)
+    void wakeCloudWorkspace(workspaceId)
+  }, [workspaceId])
+
+  // One persistent, initially empty live region for this surface: phase changes only. A failed
+  // wake is announced by its own alert card, so not here too.
+  const announcement =
+    layer === 'waking' && overlay.wake && overlay.wake.phase !== 'failed'
+      ? cloudWorkspaceAnnouncement(
+          overlay.wake.source === 'restart'
+            ? 'restarting'
+            : overlay.wake.source === 'unarchive'
+              ? 'unarchiving'
+              : 'waking',
+          name,
+          t
+        )
+      : layer === 'archived'
+        ? cloudWorkspaceAnnouncement('archived', name, t)
+        : layer === 'asleep' && !goingToSleep
+          ? cloudWorkspaceAnnouncement('asleep', name, t)
+          : ''
+
+  const notices: React.ReactNode[] = []
+  if ((layer === null || movingAsleep) && view.pending === 'move') {
+    notices.push(<CloudMovingNotice key="moving" />)
+  }
+  if (layer === null && view.state === 'unresponsive') {
+    notices.push(
+      <CloudWorkspaceNotice
+        key="unresponsive"
+        notice={{ kind: 'unresponsive' }}
+        restarting={view.pending === 'restart'}
+        onRestart={restart}
+      />
+    )
+  }
+  // A failed archive left it asleep (Sleep runs first): say so over the asleep page too.
+  if ((layer === null || layer === 'asleep') && archiveFailure) {
+    notices.push(
+      <CloudArchiveFailedNotice
+        key="archive-failed"
+        workspaceName={name}
+        message={archiveFailure}
+        onRetry={() => {
+          setCloudArchiveFailure(workspaceId, null)
+          void runArchiveCloudWorkspace(workspaceId, { name })
+        }}
+        onDismiss={() => setCloudArchiveFailure(workspaceId, null)}
+      />
+    )
+  }
+  if (layer === null && versionSkewNotice) {
+    notices.push(versionSkewNotice)
+  }
+  // What the environment check found that didn't need to stop the create (env-check-ux).
+  const showSetupNotices = layer === null && view.state !== 'sleeping' && view.state !== 'archived'
+  if (layer === null && view.oom) {
+    notices.push(
+      <CloudWorkspaceNotice
+        key="oom"
+        notice={{ kind: 'oom', oom: view.oom }}
+        restarting={view.pending === 'restart'}
+        onRestart={restart}
+        onMachineSize={openMachineSizes}
+        onDismiss={() => dismissCloudOom(workspaceId)}
+      />
+    )
+  }
+
+  return (
+    <>
+      <div role="status" className="sr-only" data-cloud-surface="">
+        {announcement}
+      </div>
+      {layer ? (
+        <div
+          ref={coverRef}
+          className={
+            typeThrough
+              ? 'pointer-events-none absolute inset-0 z-30'
+              : layer === 'asleep'
+                ? 'absolute inset-0 z-20'
+                : 'absolute inset-0 z-30'
+          }
+          data-cloud-cover={layer}
+        >
+          {layer === 'archived' ? (
+            <CloudArchivedWorkspaceView
+              workspaceName={name}
+              archivedAt={
+                view.optimisticArchive?.startedAt ?? view.entry?.status?.archive?.archivedAt ?? null
+              }
+              pending={view.optimisticArchive}
+              onMove={move}
+              expiresAt={view.entry?.status?.archive?.expiresAt ?? null}
+              load={archiveLoad}
+              unarchiving={view.pending === 'unarchive'}
+              onUnarchive={() => void runUnarchiveCloudWorkspace(workspaceId)}
+              onRetry={retryArchive}
+              onOpenUrl={(url) => void window.api.shell.openUrl(url)}
+              headingRef={headingRef}
+            />
+          ) : layer === 'waking' && overlay.wake ? (
+            <CloudWakingOverlay
+              wake={overlay.wake}
+              workspaceName={name}
+              leaving={overlay.leaving}
+              autoFocus={takeFocus}
+              typeThrough={typeThrough}
+              pendingInput={wakeInput.pending}
+              onClearPending={() => clearWakeInput(workspaceId)}
+              terminalStalled={attachHold.terminalStalled}
+              onRetry={attachHold.terminalStalled ? attachHold.retry : wake}
+              onRestart={restart}
+              onDismiss={
+                attachHold.terminalStalled
+                  ? attachHold.dismiss
+                  : () => dismissCloudWake(workspaceId)
+              }
+            />
+          ) : layer === 'asleep' && (offline.snapshot || viewOnly || movingAsleep) ? (
+            <div className="absolute inset-0 flex justify-center overflow-hidden bg-background">
+              <CloudWorkspaceOfflineView
+                // Kept on screen before (or without) a copy: the header and Wake still show.
+                snapshot={offline.snapshot ?? emptySnapshot(workspaceId)}
+                queued={offline.queued}
+                workspaceName={name}
+                now={Math.max(now, slowNow)}
+                goingToSleep={goingToSleep}
+                copySave={offline.copySave}
+                idleDeleteAt={view.entry?.status?.idleDeleteAt ?? null}
+                onKeepAwake={
+                  suspendCommitted ? undefined : () => keepWorkspaceAwakeDuringSleep(workspaceId)
+                }
+                viewOnly={viewOnly}
+                headingRef={headingRef}
+                onWake={wake}
+                onMove={move}
+                onQueue={async (sessionId, text) => {
+                  const answer = await window.api.orcaCloudOffline.queuePrompt({
+                    workspaceId,
+                    sessionId,
+                    text
+                  })
+                  if (!answer.ok) {
+                    toast.error(answer.message)
+                    return false
+                  }
+                  void offline.refresh()
+                  return true
+                }}
+                onCancel={(id) =>
+                  void window.api.orcaCloudOffline
+                    .cancelQueuedPrompt({ id })
+                    .then(() => offline.refresh())
+                }
+                onEdit={async (id, text) => {
+                  const saved = await window.api.orcaCloudOffline.editQueuedPrompt({ id, text })
+                  void offline.refresh()
+                  return saved
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {showSetupNotices ? <CloudSetupNoticesDock workspaceId={workspaceId} /> : null}
+      {notices.length > 0 ? (
+        <div
+          data-cloud-surface=""
+          className="pointer-events-none absolute top-11 right-3 z-30 flex flex-col items-end gap-2"
+        >
+          {notices}
+        </div>
+      ) : null}
+    </>
+  )
+}

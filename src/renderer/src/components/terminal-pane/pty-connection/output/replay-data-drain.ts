@@ -19,6 +19,14 @@ import {
 } from '../reattach/cursor-agent-reattach-screen'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import {
+  abandonCloudReplayScrollback,
+  beginCloudReplayScrollback,
+  cloudReplayHoldRender,
+  finishCloudReplayScrollback,
+  settleCloudReplayScrollback,
+  type CloudReplayScrollback
+} from './replay-cloud-scrollback'
 
 export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   session.sendFocusedReattachFocusInAfterReplay = (
@@ -110,11 +118,18 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // Relay replay may overlap painted output; eager replay decides earlier so metadata-only frames preserve saved scrollback.
       // Clear before source-grid resize to avoid reflowing history that replay immediately discards.
       let replayPayload = data
+      let cloudScrollback: CloudReplayScrollback | null = null
       if (clearBeforeReplay) {
+        cloudScrollback = await beginCloudReplayScrollback(session, payload.ptyId, isCurrentPayload)
+        if (!cloudScrollback) {
+          continue
+        }
+        // From here every stale exit puts the pre-sleep restore back and releases its render hold.
         if (carriesNormalBuffer) {
           // Wait for queued alt-screen transitions before choosing replay’s target buffer.
           await waitForTerminalOutputParsed(session.pane.terminal)
           if (!isCurrentPayload()) {
+            abandonCloudReplayScrollback(session, cloudScrollback)
             continue
           }
           const image = buildFoldedImageReplayWrites(
@@ -123,12 +138,17 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
             carriesHistory === true
           )
           replayPayload = image.payload
-          await session.writeReplayDataAsync(image.preamble)
+          await session.writeReplayDataAsync(
+            `${image.preamble}${cloudReplayHoldRender(cloudScrollback)}`
+          )
         } else {
           // Reconnect can sever DEC 2026 mid-frame; clear-screen does not release its latch, leaving replay invisible until timeout.
-          await session.writeReplayDataAsync(`${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H`)
+          await session.writeReplayDataAsync(
+            `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${cloudReplayHoldRender(cloudScrollback)}`
+          )
         }
         if (!isCurrentPayload()) {
+          abandonCloudReplayScrollback(session, cloudScrollback)
           continue
         }
       }
@@ -159,8 +179,15 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       session.applySnapshotKittyKeyboardModes(data, payload)
       await session.writeReplayDataAsync(replayPayload)
       if (!isCurrentPayload()) {
+        abandonCloudReplayScrollback(session, cloudScrollback)
         continue
       }
+      if (!(await finishCloudReplayScrollback(session, cloudScrollback, isCurrentPayload))) {
+        // The next clearing replay wipes what this one restored: it restores the capture again.
+        abandonCloudReplayScrollback(session, cloudScrollback)
+        continue
+      }
+      settleCloudReplayScrollback(cloudScrollback)
       if (clearBeforeReplay || data.length > 0) {
         await session.writeReplayEpilogue(
           session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner, lastTitle),

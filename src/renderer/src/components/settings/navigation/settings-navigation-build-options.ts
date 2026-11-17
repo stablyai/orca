@@ -14,6 +14,10 @@ export type SettingsNavigationBuildOptions = {
   mobileEmulatorCreationEnabled: boolean
   isDev: boolean
   isLinearConnected: boolean
+  /** Orca Cloud programmatic access (API keys, routines): only builds with a control plane. */
+  isOrcaCloudApiAvailable?: boolean
+  /** Owner or admin of the active Orca team: Settings › Cloud workspaces is theirs alone. */
+  isOrcaTeamAdmin?: boolean
   projectGroups?: readonly ProjectGroupSettingsEntry[]
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel

@@ -272,7 +272,8 @@ function safeScrollCall(fn: () => void): boolean {
   }
 }
 
-function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {
+// Exported for a deliberate scroll that a restore captured before it must not undo.
+export function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {
   const pending = pendingFitScrollRestores.get(terminal)
   if (!pending) {
     return

@@ -71,6 +71,7 @@ export function AgentLaunchPickerMenu({
   model,
   draftScope,
   shortcutLabels,
+  statusLabels,
   disabled,
   setupDisabled,
   mode,
@@ -90,6 +91,7 @@ export function AgentLaunchPickerMenu({
   model?: NewTabAgentMenuModel
   draftScope?: object
   shortcutLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
+  statusLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
   disabled?: boolean
   setupDisabled?: boolean
   mode?: 'launch' | 'select'
@@ -250,6 +252,7 @@ export function AgentLaunchPickerMenu({
                 isDefault={defaultAgent === entry.agent}
                 onSetDefault={onSetDefault}
                 shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+                status={statusLabels?.get(entry.agent)}
               />
             )
           })}

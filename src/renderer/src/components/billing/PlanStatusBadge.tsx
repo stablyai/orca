@@ -1,0 +1,69 @@
+import { Badge } from '@/components/ui/badge'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
+import { statusLabel } from './plan-billing-copy'
+
+type PlanHealth = { label: string; dot: 'destructive' | 'warning' | null }
+
+/** Names what is actually wrong (not just Stripe's status) so the badge never says "Active" in red. */
+export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): PlanHealth {
+  if (entitlement.reason === 'payment_grace_expired' || entitlement.payment.suspendRunning) {
+    return {
+      label: t('auto.components.billing.paymentFailed', 'Payment failed'),
+      dot: 'destructive'
+    }
+  }
+  if (entitlement.payment.pastDueSince !== null || entitlement.status === 'past_due') {
+    return {
+      label: t('auto.components.billing.paymentFailed', 'Payment failed'),
+      dot: 'destructive'
+    }
+  }
+  if (entitlement.reason === 'overage_cap_reached') {
+    return {
+      label: t('auto.components.billing.health.spendCapReached', 'Spend cap reached'),
+      dot: 'warning'
+    }
+  }
+  if (entitlement.reason === 'included_hours_exhausted') {
+    return {
+      label: t('auto.components.billing.health.outOfSandboxHours', 'Out of sandbox hours'),
+      dot: 'warning'
+    }
+  }
+  if (entitlement.reason === 'trial_used_up') {
+    // Still the trial; the dot says it's used up and the line below says what to do.
+    return { label: t('auto.components.billing.statusTrial', 'Trial'), dot: 'warning' }
+  }
+  if (entitlement.cancelAtPeriodEnd) {
+    return { label: t('auto.components.billing.health.ending', 'Ending'), dot: 'warning' }
+  }
+  return { label: statusLabel(entitlement.status, t), dot: null }
+}
+
+/** Quiet outline badge; a small dot carries the alarm. Banners elsewhere explain what to do. */
+export function PlanStatusBadge({
+  entitlement,
+  className
+}: {
+  entitlement: OrcaBillingEntitlement
+  className?: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const health = planHealth(entitlement, t)
+  return (
+    <Badge variant="outline" className={className}>
+      {health.dot ? (
+        <span
+          aria-hidden
+          className={cn(
+            'size-1.5 rounded-full',
+            health.dot === 'destructive' ? 'bg-destructive' : 'bg-status-warning'
+          )}
+        />
+      ) : null}
+      {health.label}
+    </Badge>
+  )
+}

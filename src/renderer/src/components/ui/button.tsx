@@ -7,28 +7,44 @@ import { cn } from '@/lib/class-names'
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
+// A slight press on the solid and outlined buttons; motion-safe so reduced motion keeps them still.
+const pressClasses = 'motion-safe:active:scale-[0.98]'
+
+// Disabled solid buttons fade like every other disabled variant, from a muted fill instead of a primary slab.
+// aria-disabled (focusable, e.g. to explain why via a tooltip) gets the same muted look unless it is
+// a pending action (aria-busy), which keeps full colour and a progress cursor; pending callers must
+// show a spinner or change the label, and must guard onClick themselves.
+const disabledSolidClasses =
+  'disabled:bg-muted disabled:text-muted-foreground aria-disabled:not-aria-busy:bg-muted aria-disabled:not-aria-busy:text-muted-foreground aria-disabled:not-aria-busy:hover:bg-muted'
+
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 aria-disabled:not-aria-busy:cursor-not-allowed aria-disabled:not-aria-busy:opacity-50 aria-busy:cursor-progress aria-disabled:active:scale-100 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive:
-          'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40',
-        outline: outlineButtonClasses,
+        default: `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses}`,
+        // Primary that stays focusable while unavailable (aria-disabled): reads muted like disabled.
+        'default-held': `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses} aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:hover:bg-muted`,
+        destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60 dark:disabled:bg-muted dark:aria-disabled:not-aria-busy:bg-muted ${disabledSolidClasses}`,
+        outline: `${outlineButtonClasses} ${pressClasses}`,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 ${pressClasses}`,
+        /** Secondary pill floating over scrolling content (e.g. "Jump to latest"). */
+        'secondary-floating': `rounded-full bg-secondary text-secondary-foreground shadow-md hover:bg-secondary/80 ${pressClasses}`,
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // Secondary text action that only takes the foreground colour on hover.
+        quiet:
+          'text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-accent/50',
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
         // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
-        // A quiet secondary link, such as a dialog footer's "Manual steps".
+        link: 'text-primary underline-offset-4 hover:underline focus-visible:underline',
+        // A secondary escape hatch under a row's detail (e.g. "Paste a token instead"): muted, link-styled.
         'link-muted':
-          'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+          'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -39,12 +55,19 @@ const buttonVariants = cva(
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
+          'border border-destructive/40 bg-destructive/10 text-destructive-text hover:bg-destructive/15 hover:text-destructive-text',
+        // A destructive way out set apart from the recovery actions (e.g. "Delete sandbox"): red text, no fill.
+        'destructive-ghost':
+          'text-destructive-text hover:bg-destructive/10 hover:text-destructive-text dark:hover:bg-destructive/15'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
+        // A text action inside a dense status line: shorter than xs, body-weight text.
+        // 20px tall to sit in a status line; the ::after pads the hit area to 24px (WCAG 2.5.8).
+        statusAction:
+          "relative h-5 gap-1 rounded-md px-1 text-2xs font-normal after:absolute after:-inset-0.5 after:content-[''] [&_svg]:size-3",
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',

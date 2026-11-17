@@ -1,4 +1,4 @@
-import { Laptop, Server } from 'lucide-react'
+import { Monitor, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -34,7 +34,7 @@ export function SessionHistoryComputerRow({
   action = null
 }: SessionHistoryComputerRowProps): React.JSX.Element {
   const t = useTranslate()
-  const Icon = kind === 'local' ? Laptop : Server
+  const Icon = kind === 'local' ? Monitor : Server
   return (
     <div
       data-settings-row=""

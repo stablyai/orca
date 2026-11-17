@@ -6,6 +6,7 @@ import { GeneralPane } from '../general/GeneralPane'
 import { IntegrationsPane } from '../integrations/IntegrationsPane'
 import { MobileSettingsPane } from '../mobile/MobileSettingsPane'
 import { OrcaAccountSettingsPane } from '../accounts/orca/OrcaAccountSettingsPane'
+import { OrcaAccountBillingPane } from '../orca-cloud/OrcaAccountBillingPane'
 import { SettingsSetupGuidePane } from '../setup-guide/SettingsSetupGuidePane'
 import { ShareSkillsSettingsPane } from '../skills/sharing/ShareSkillsSettingsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -21,23 +22,39 @@ export function renderOrcaAccountSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
-  return model.showDesktopOnlySettings ? (
+  if (!model.showDesktopOnlySettings) {
+    return null
+  }
+  // Orca Cloud builds: one Account + Billing page (title and description from the nav, which
+  // gathers it into the Orca Cloud group).
+  const combined = model.orcaCloudApiAvailable
+  const meta = combined
+    ? navigation.navSections.find((section) => section.id === 'orca-account')
+    : undefined
+  return (
     <SettingsSection
       id="orca-account"
-      title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
-      description={t(
-        'auto.components.settings.orcaAccount.description',
-        'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-      )}
+      title={meta?.title ?? t('auto.components.settings.orcaAccount.title', 'Orca account')}
+      description={
+        meta?.description ??
+        t(
+          'auto.components.settings.orcaAccount.description',
+          'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+        )
+      }
       searchEntries={navigation.getSectionSearchEntries('orca-account')}
     >
       {view.isSectionMounted('orca-account') ? (
-        <SettingsGroup bodyClassName="py-4">
-          <OrcaAccountSettingsPane />
-        </SettingsGroup>
+        combined ? (
+          <OrcaAccountBillingPane />
+        ) : (
+          <SettingsGroup bodyClassName="py-4">
+            <OrcaAccountSettingsPane />
+          </SettingsGroup>
+        )
       ) : null}
     </SettingsSection>
-  ) : null
+  )
 }
 
 export function renderSetupGuideSettingsSection(
@@ -222,7 +239,7 @@ export function renderSessionHistorySettingsSection(
   return (
     <SettingsSection
       id="session-history"
-      title={t('sessionHistory.settings.title', 'Agent Session Search')}
+      title={t('sessionHistory.settings.title', 'Agent session search')}
       description={t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'

@@ -4,6 +4,7 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { WorktreeCardMetaBadges } from '../metadata/WorktreeCardMetaBadges'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
+import { WorktreeCardOwnerChangedDetails } from './WorktreeCardOwnerChangedDetails'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
 /** Ports and linked-item badges; the new card style leaves the review to the status lane.
@@ -134,7 +135,10 @@ export function WorktreeCardIdentityHover({
       workspaceTitle={workspaceTitle}
       workspaceTitleRenameDisabled={card.isDeleting || affiliateListMode}
       detailsAfter={
-        workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
+        <>
+          {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+          <WorktreeCardOwnerChangedDetails worktree={worktree} />
+        </>
       }
       openDelay={100}
       hoverControl={{

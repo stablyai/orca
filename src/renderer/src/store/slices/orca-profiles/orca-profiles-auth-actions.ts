@@ -1,6 +1,8 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { isSignInNoticeVisible } from '@/lib/orca-cloud/sign-in-notice-visibility'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../../../shared/orca-profile-reconnect-reason'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
@@ -15,10 +17,16 @@ export type OrcaProfilesAuthActions = {
     orgId?: string
     name?: string
   }) => Promise<CreateCloudLinkedOrcaProfileResult | null>
-  connectCurrentOrcaProfile: () => Promise<ConnectCurrentOrcaProfileResult | null>
-  refreshCurrentOrcaProfileAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult | null>
+  /** `openBrowser: false` starts sign-in without opening the browser. */
+  connectCurrentOrcaProfile: (args?: {
+    openBrowser?: boolean
+  }) => Promise<ConnectCurrentOrcaProfileResult | null>
+  /** `silent`: an automatic check the person didn't ask for; failures don't toast. */
+  refreshCurrentOrcaProfileAuth: (args?: {
+    silent?: boolean
+  }) => Promise<RefreshCurrentOrcaProfileAuthResult | null>
   signOutCurrentOrcaProfile: () => Promise<SignOutCurrentOrcaProfileResult | null>
-  selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
+  selectOrcaProfileOrg: (orgId: string | null) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
 export const createOrcaProfilesAuthActions: StateCreator<
@@ -73,11 +81,11 @@ export const createOrcaProfilesAuthActions: StateCreator<
       }
     },
 
-    connectCurrentOrcaProfile: async () => {
+    connectCurrentOrcaProfile: async (args) => {
       const attempt = ++nextConnectAttempt
       try {
         // Pending PKCE must not block retry; newer linked waits supersede older callbacks.
-        const result = await window.api.orcaProfiles.connectCurrent()
+        const result = await window.api.orcaProfiles.connectCurrent(args)
         if (attempt < appliedConnectAttempt) {
           return result
         }
@@ -108,9 +116,32 @@ export const createOrcaProfilesAuthActions: StateCreator<
               description: result.auth.setupMessage
             }
           )
-        } else if (result.status === 'timed-out' && !alreadyConnected) {
+        } else if (result.status === 'timed-out' && !alreadyConnected && !isSignInNoticeVisible()) {
+          // Calm, not an error. Said inline where a sign-in notice is on screen; toast otherwise.
+          toast(
+            translate(
+              'auto.store.slices.orca.profiles.signInDidNotFinish',
+              'Sign-in didn’t finish. Try again.'
+            )
+          )
+        } else if (
+          result.status === 'failed' &&
+          !alreadyConnected &&
+          result.auth.state !== 'connected' &&
+          result.error === ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR
+        ) {
+          // Not a failure to report as one: say what to do.
           toast.error(
-            translate('auto.store.slices.orca.profiles.signInTimedOut', 'Sign-in timed out')
+            translate(
+              'auto.store.slices.orca.profiles.ssoRequired',
+              'Your team requires single sign-on'
+            ),
+            {
+              description: translate(
+                'auto.store.slices.orca.profiles.ssoRequiredBody',
+                'Sign in again and choose Sign in with SSO.'
+              )
+            }
           )
         } else if (
           result.status === 'failed' &&
@@ -140,7 +171,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
       }
     },
 
-    refreshCurrentOrcaProfileAuth: async () => {
+    refreshCurrentOrcaProfileAuth: async ({ silent = false } = {}) => {
       try {
         const result = await window.api.orcaProfiles.refreshAuth()
         set({
@@ -152,6 +183,9 @@ export const createOrcaProfilesAuthActions: StateCreator<
               }
             : {})
         })
+        if (silent) {
+          return result
+        }
         if (result.status === 'reconnect-required') {
           toast.error(
             translate('auto.store.slices.orca.profiles.d6e764e7db', 'Reconnect this profile')
@@ -168,6 +202,9 @@ export const createOrcaProfilesAuthActions: StateCreator<
         return result
       } catch (err) {
         console.error('Failed to refresh Orca profile auth:', err)
+        if (silent) {
+          return null
+        }
         toast.error(
           translate('auto.store.slices.orca.profiles.2f6c78a039', 'Failed to refresh profile auth'),
           {
@@ -215,28 +252,11 @@ export const createOrcaProfilesAuthActions: StateCreator<
               }
             : {})
         })
-        if (result.status === 'reconnect-required') {
-          toast.error(
-            translate('auto.store.slices.orca.profiles.d6e764e7db', 'Reconnect this profile')
-          )
-        } else if (result.status === 'failed') {
-          toast.error(
-            translate(
-              'auto.store.slices.orca.profiles.76deec8f58',
-              'Failed to switch organization'
-            ),
-            { description: result.error }
-          )
-        }
+        // Quiet: each caller says what failed in its own words (teamSwitchFailedCopy), so one
+        // failure is one toast.
         return result
       } catch (err) {
         console.error('Failed to switch Orca profile org:', err)
-        toast.error(
-          translate('auto.store.slices.orca.profiles.76deec8f58', 'Failed to switch organization'),
-          {
-            description: err instanceof Error ? err.message : String(err)
-          }
-        )
         return null
       }
     }

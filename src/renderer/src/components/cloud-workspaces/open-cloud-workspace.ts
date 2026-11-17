@@ -1,0 +1,340 @@
+// Opening a cloud workspace from the team list or a link. The owner already has it locally (the
+// hosted runtime they created); anyone else pairs this device through a per-device E2EE grant and
+// the workspace's server joins the sidebar like any remote Orca server.
+import { uniqueCloudServerName } from './cloud-server-name'
+import { hasLocalSidebarRow } from './cloud-local-row'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { pickWorkspaceWorktree, type WorkspaceWorktreeCandidate } from './workspace-worktree-pick'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/ipc-events/workspace-catalog/runtime-project-refresh-scheduler'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  getWorktreeExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
+import {
+  type OpenFeedbackFailure,
+  withCloudWorkspaceOpenFeedback
+} from './cloud-workspace-open-feedback'
+import { openCloudWorkspacePicker } from './cloud-workspace-picker-store'
+import { waitForHostWorktree } from './wait-for-host-worktree'
+
+/** On success, the worktree that was revealed (null when its projects are still syncing). */
+export type OpenOutcome =
+  | { ok: true; worktreeId: string | null; hostId?: string }
+  /**
+   * `unknownServerError`: the wake failed on the server for no known reason (shared copy).
+   * `notified`: a toast already said what happened; the caller shows nothing more.
+   */
+  | {
+      ok: false
+      message: string
+      unknownServerError?: boolean
+      failure?: OpenFeedbackFailure
+      notified?: true
+    }
+
+/** A refusal that has its own toast: still starting (timeout) or gone (not found). */
+export function openFailureKind(error: string | undefined): OpenFeedbackFailure | undefined {
+  if (error === 'timeout') {
+    return 'timeout'
+  }
+  return error === 'not_found' ? 'gone' : undefined
+}
+
+// Rejections that mean this device's pairing is no longer accepted (revoked grant, rebuilt VM).
+const PAIRING_REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])
+
+export function cloudWorkspaceTitle(
+  w: Pick<CloudWorkspace, 'title' | 'repo' | 'workspaceId'>,
+  t: Translate = translate
+): string {
+  if (w.title) {
+    return w.title
+  }
+  const repoName = w.repo?.url
+    .replace(/\/+$/, '')
+    .split('/')
+    .at(-1)
+    ?.replace(/\.git$/, '')
+  return w.repo?.branch
+    ? `${repoName ?? t('auto.components.cloudWorkspaces.workspaceFallback', 'workspace')} · ${w.repo.branch}`
+    : (repoName ?? w.workspaceId)
+}
+
+/**
+ * The workspace's row on its server: with `branch`, the worktree on that branch (never the
+ * sandbox's base checkout while the workspace has its own); without, the first row on the server.
+ */
+export function firstWorktreeOnHost(hostId: string, branch?: string | null): string | null {
+  const state = useAppStore.getState()
+  const onHost: WorkspaceWorktreeCandidate[] = []
+  for (const [repoId, worktrees] of Object.entries(selectWorktreesByRepo(state))) {
+    const repo = state.repos.find((r) => r.id === repoId)
+    for (const worktree of worktrees) {
+      if (getWorktreeExecutionHostId(worktree, repo) === hostId) {
+        onHost.push(worktree)
+      }
+    }
+  }
+  return branch === undefined ? (onHost[0]?.id ?? null) : pickWorkspaceWorktree(onHost, branch)
+}
+
+function isPairingRejected(error: unknown): boolean {
+  if (error instanceof RuntimeRpcCallError) {
+    return PAIRING_REJECTED_CODES.has(error.code)
+  }
+  return error instanceof Error && /\b(unauthori[sz]ed|device_revoked)\b/i.test(error.message)
+}
+
+type OpenCloudWorkspaceOptions = {
+  /**
+   * The server this open connects to, before any of its rows load. A GitHub-only create's sheet
+   * hides that server's rows until it hands off to them, so its pending row never doubles up.
+   */
+  onHost?: (hostId: string) => void
+  /** False: the caller shows the open's progress itself (a GitHub-only create's pending row). */
+  feedback?: false
+}
+
+async function connectAndReveal(
+  environmentId: string,
+  name: string,
+  options: OpenCloudWorkspaceOptions = {},
+  /** The workspace's branch: its own worktree is the one to open. */
+  branch: string | null = null
+): Promise<OpenOutcome> {
+  options.onHost?.(toRuntimeExecutionHostId(environmentId))
+  const environments = await window.api.runtimeEnvironments.list()
+  useAppStore.getState().setRuntimeEnvironments(environments)
+  const environment = environments.find((e) => e.id === environmentId)
+  if (!environment) {
+    return {
+      ok: false,
+      message: translate(
+        'auto.components.cloudWorkspaces.serverNotSaved',
+        "Couldn't add the workspace to this computer. Your files are safe. Try again."
+      )
+    }
+  }
+  const response = await window.api.runtimeEnvironments.connect({
+    selector: environment.id,
+    timeoutMs: 20_000
+  })
+  unwrapRuntimeRpcResult(response)
+  const store = useAppStore.getState()
+  await store.readRuntimeHostStatusSnapshots()
+  const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
+  await refreshRuntimeProjectWorktreesAndLineage(
+    environment.id,
+    repos,
+    (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+    (options) => useAppStore.getState().fetchWorktreeLineage(options)
+  )
+  const hostId = toRuntimeExecutionHostId(environment.id)
+  const worktreeId = await waitForHostWorktree(() => firstWorktreeOnHost(hostId, branch))
+  if (worktreeId) {
+    activateAndRevealWorktree(worktreeId, { executionHostId: hostId })
+  } else {
+    toast.success(
+      translate(
+        'auto.components.cloudWorkspaces.connected',
+        '{{value0}} is connected. Its projects are in the sidebar.',
+        { value0: name }
+      )
+    )
+  }
+  return { ok: true, worktreeId, hostId }
+}
+
+/** Drops this device's previous pairing so re-pairing does not leave a dead server and grant. */
+async function forgetPairing(
+  workspaceId: string,
+  binding: { environmentId: string; grantId: string | null },
+  environmentStillSaved: boolean
+): Promise<void> {
+  if (environmentStillSaved) {
+    await window.api.runtimeEnvironments
+      .remove({ selector: binding.environmentId })
+      .catch(() => undefined)
+  }
+  if (binding.grantId) {
+    await window.api.cloudWorkspaces
+      .revokeGrant(workspaceId, binding.grantId)
+      .catch(() => undefined)
+  }
+}
+
+/** Wakes a sleeping workspace before connecting to it; the failed outcome when it was refused. */
+async function wakeIfAsleep(workspace: CloudWorkspace): Promise<OpenOutcome | null> {
+  if (workspace.status !== 'suspended' && workspace.status !== 'suspending') {
+    return null
+  }
+  const woke = await window.api.cloudWorkspaces.wake(workspace.id)
+  if (woke.ok) {
+    return null
+  }
+  const owner = {
+    self: workspace.access === 'owner',
+    name: workspace.memberNames?.[workspace.ownerUserId] ?? null
+  }
+  const failure = openFailureKind(woke.error)
+  return {
+    ok: false,
+    message: describeError(woke.error, woke.reason, translate, owner),
+    unknownServerError: isUnknownServerFailure(woke.error, woke.status),
+    ...(failure ? { failure } : {})
+  }
+}
+
+async function pairAndReveal(
+  workspace: CloudWorkspace,
+  name: string,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
+  const api = window.api.cloudWorkspaces
+  const binding = (await api.environmentBindings())[workspace.id]
+  if (binding) {
+    const environments = await window.api.runtimeEnvironments.list()
+    const saved = environments.some((e) => e.id === binding.environmentId)
+    if (saved) {
+      // An existing pairing connects straight to the VM, which a sleeping one can't
+      // answer; wake it first (billing refusals read like a teammate's grant refusal below).
+      const refused = await wakeIfAsleep(workspace)
+      if (refused) {
+        return refused
+      }
+      try {
+        return await connectAndReveal(
+          binding.environmentId,
+          name,
+          options,
+          workspace.repo?.branch ?? null
+        )
+      } catch (error) {
+        // Only a rejected pairing is fixed by pairing again; anything else is surfaced as is.
+        if (!isPairingRejected(error)) {
+          throw error
+        }
+      }
+    }
+    await forgetPairing(workspace.id, binding, saved)
+  }
+  const grant = await api.openGrant(workspace.id)
+  if (!grant.ok) {
+    // Waking counts against the owner's seat, so a teammate is told whose sandboxes to put to sleep.
+    const owner = {
+      self: workspace.access === 'owner',
+      name: workspace.memberNames?.[workspace.ownerUserId] ?? null
+    }
+    const failure = openFailureKind(grant.error)
+    return {
+      ok: false,
+      message: describeError(grant.error, grant.reason, translate, owner),
+      unknownServerError: isUnknownServerFailure(grant.error, grant.status),
+      ...(failure ? { failure } : {})
+    }
+  }
+  const added = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+    name: await uniqueCloudServerName(name, workspace.number ?? null),
+    pairingCode: grant.value.pairingCode
+  })
+  if (!added.ok) {
+    await api.revokeGrant(workspace.id, grant.value.grantId).catch(() => undefined)
+    return {
+      ok: false,
+      message: translate(
+        'auto.components.cloudWorkspaces.verifyFailed',
+        "Couldn't connect this computer to the workspace. Your files are safe. Try again."
+      )
+    }
+  }
+  try {
+    await api.bindEnvironment(workspace.id, added.environment.id, grant.value.grantId)
+  } catch (error) {
+    // Unbound, the next open could not find or clean up this pairing; undo it now instead.
+    await forgetPairing(
+      workspace.id,
+      { environmentId: added.environment.id, grantId: grant.value.grantId },
+      true
+    )
+    throw error
+  }
+  return await connectAndReveal(added.environment.id, name, options, workspace.repo?.branch ?? null)
+}
+
+async function openOnce(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions
+): Promise<OpenOutcome> {
+  const name = cloudWorkspaceTitle(workspace)
+  try {
+    if (workspace.access === 'owner') {
+      const local = (await window.api.cloudWorkspaces.localWorkspaces()).find(
+        (l) => l.sandboxId === workspace.id
+      )
+      // Only with this window's row: a record alone (after a re-sign-in) would reveal nothing.
+      if (local && hasLocalSidebarRow(local)) {
+        activateAndRevealWorktree(
+          local.worktreeId,
+          local.runtimeEnvironmentId
+            ? { executionHostId: toRuntimeExecutionHostId(local.runtimeEnvironmentId) }
+            : undefined
+        )
+        return { ok: true, worktreeId: local.worktreeId }
+      }
+      // Owned but created on another device (or reassigned to me): pair this device with a grant.
+    }
+    if (workspace.access === 'none') {
+      return {
+        ok: false,
+        message: translate(
+          'auto.components.cloudWorkspaces.noAccessOwnerOnly',
+          "You don't have access to this workspace. Only its owner can open it."
+        )
+      }
+    }
+    return await pairAndReveal(workspace, name, options)
+  } catch (error) {
+    // Raw transport/RPC messages are not user copy; keep them for diagnostics only.
+    console.warn('[cloud-workspaces] open failed', error)
+    return {
+      ok: false,
+      message: translate(
+        'auto.components.cloudWorkspaces.openFailed',
+        "Couldn't open the workspace. Your files are safe. Try again."
+      )
+    }
+  }
+}
+
+// One open per workspace at a time: a double click, a link and the menu all share the same attempt
+// instead of minting parallel grants.
+const opening = new Map<string, Promise<OpenOutcome>>()
+
+export function openCloudWorkspace(
+  workspace: CloudWorkspace,
+  options: OpenCloudWorkspaceOptions = {}
+): Promise<OpenOutcome> {
+  const existing = opening.get(workspace.id)
+  if (existing) {
+    return existing
+  }
+  const run = (): Promise<OpenOutcome> => openOnce(workspace, options)
+  const attempt = (
+    options.feedback === false
+      ? run()
+      : withCloudWorkspaceOpenFeedback(workspace.id, cloudWorkspaceTitle(workspace), run, {
+          retry: () => void openCloudWorkspace(workspace, options),
+          showWorkspaces: () => openCloudWorkspacePicker()
+        })
+  ).finally(() => opening.delete(workspace.id))
+  opening.set(workspace.id, attempt)
+  return attempt
+}

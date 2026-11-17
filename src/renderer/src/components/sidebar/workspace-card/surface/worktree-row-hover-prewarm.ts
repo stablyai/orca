@@ -1,4 +1,15 @@
 import { setTerminalPrewarmWorktrees } from '../../../terminal/worktree-prewarm/terminal-worktree-prewarm'
+import {
+  notePredictiveRowHoverEnd,
+  notePredictiveRowHoverStart,
+  notePredictiveRowPress
+} from './worktree-row-predictive-wake'
+
+export {
+  ROW_DRAG_SLOP_PX,
+  noteWorktreeRowDragEnd,
+  noteWorktreeRowDragStart
+} from './worktree-row-predictive-wake'
 
 // Long enough that sweeping or scrolling past rows never mounts them; short enough to finish before a typical press.
 export const HOVER_PREWARM_DWELL_MS = 120
@@ -57,6 +68,7 @@ function installWheelListener(): void {
 }
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
+  notePredictiveRowHoverStart(worktreeId)
   installWheelListener()
   if (prewarmedWorktreeId === worktreeId) {
     clearDwell()
@@ -67,13 +79,15 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
 }
 
 /** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
-export function noteWorktreeRowPress(worktreeId: string): void {
+export function noteWorktreeRowPress(worktreeId: string, x = 0, y = 0): void {
+  notePredictiveRowPress(worktreeId, x, y)
   if (prewarmedWorktreeId !== worktreeId) {
     armDwell(worktreeId, 0)
   }
 }
 
 export function noteWorktreeRowHoverEnd(worktreeId: string): void {
+  notePredictiveRowHoverEnd(worktreeId)
   if (dwellWorktreeId === worktreeId) {
     clearDwell()
   }

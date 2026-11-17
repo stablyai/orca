@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { sleepWorktreeBrowserTabs, wakeWorktreeBrowserTabs } from './browser-tab-sleep'
 import {
   captureWorkspaceSelection,
   restoreWorkspaceSelection
@@ -13,6 +14,16 @@ import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-positi
 import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
 import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
 import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
+import {
+  beginCloudFollowedSleep,
+  endCloudFollowedSleep,
+  isReopenedAfterSleep,
+  markWorktreeSuspendCommitted,
+  settleCloudFollowedSleep,
+  watchReopenDuringSleep
+} from './workspace-sleep-follower-cloud'
+
+export { keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower-cloud'
 
 type FollowedSleep = {
   settle: (stop: HostTerminalStop) => void
@@ -20,23 +31,11 @@ type FollowedSleep = {
   teardown: Promise<Error | null>
   /** The selection to put back if the sleep fails and the user picked nothing meanwhile. */
   selectionBeforeSleep: WorkspaceSelection | null
+  /** It stayed selected, read-only, instead of leaving for Home. */
+  stayed: boolean
 }
 
 const followed = new Map<string, FollowedSleep>()
-
-/** Tells main once if the user opens the workspace before its sleep ends: its VM then keeps running. */
-function watchReopenDuringSleep(worktreeId: string): () => void {
-  const unsubscribe = useAppStore.subscribe((state) => {
-    if (state.activeWorktreeId === worktreeId) {
-      unsubscribe()
-      // Best effort: a missed note only suspends a VM the user can resume.
-      void Promise.resolve()
-        .then(() => window.api.worktrees.sleepReopened(worktreeId))
-        .catch(() => {})
-    }
-  })
-  return unsubscribe
-}
 
 /** On main’s started notice, guard panes before exits; on ended, commit teardown or restore failed sleeps. */
 export function followWorkspaceSleep(
@@ -48,6 +47,10 @@ export function followWorkspaceSleep(
     toastWorkspaceSleepOutcome(notice.outcome)
     return
   }
+  if (notice.phase === 'suspending') {
+    markWorktreeSuspendCommitted(worktreeId)
+    return
+  }
   if (notice.phase === 'started') {
     const previous = followed.get(worktreeId)
     previous?.stopWatchingReopen()
@@ -57,13 +60,16 @@ export function followWorkspaceSleep(
     const selectionBeforeSleep = wasActive ? captureWorkspaceSelection(state) : null
     // Why first: clearing the active workspace unmounts its panes, whose exits must not stamp activity.
     markWorktreeSleepIntent(worktreeId)
-    if (wasActive) {
+    const { kept, stayed } = beginCloudFollowedSleep(worktreeId, wasActive, notice)
+    if (wasActive && !stayed) {
       const restoreSidebarPosition = preserveSidebarWorktreePosition(worktreeId)
       state.setActiveWorktree(null)
       restoreSidebarPosition()
     }
     if (!options.keepBrowserTabs) {
-      state.shutdownWorktreeBrowsers(worktreeId)
+      // Sleep never changes the tab layout: the tabs, their order and the active one stay;
+      // only their pages are dropped, and each reloads in place when shown after the wake.
+      sleepWorktreeBrowserTabs(worktreeId)
     }
     let settle!: (stop: HostTerminalStop) => void
     const hostStop = new Promise<HostTerminalStop>((resolve) => (settle = resolve))
@@ -83,13 +89,15 @@ export function followWorkspaceSleep(
       settle,
       teardown,
       selectionBeforeSleep,
-      stopWatchingReopen: watchReopenDuringSleep(worktreeId)
+      stayed,
+      stopWatchingReopen: watchReopenDuringSleep(worktreeId, kept)
     })
     return
   }
   const entry = followed.get(worktreeId)
   followed.delete(worktreeId)
   entry?.stopWatchingReopen()
+  const cloudEnd = endCloudFollowedSleep(worktreeId, notice.slept)
   entry?.settle(
     notice.slept
       ? { failed: false, records: notice.records }
@@ -97,11 +105,22 @@ export function followWorkspaceSleep(
   )
   return (entry?.teardown ?? Promise.resolve(null)).then((error) => {
     const state = useAppStore.getState()
+    const reopened = isReopenedAfterSleep(worktreeId, state.activeWorktreeId)
     // A failed sleep leaves the workspace awake and retryable; one the user reopened is theirs.
-    if (!notice.slept || state.activeWorktreeId === worktreeId) {
+    if (!notice.slept || reopened) {
       clearWorktreeSleepIntent(worktreeId)
+      // Still awake: its tabs count as activity again.
+      wakeWorktreeBrowserTabs(worktreeId)
     }
-    if (!notice.slept && entry?.selectionBeforeSleep && state.activeWorktreeId === null) {
+    // Put the awake workspace back after a failed sleep, or one kept on screen and reopened.
+    // One the user left is not pulled back.
+    const stillShown = state.activeWorktreeId === worktreeId
+    if (
+      !settleCloudFollowedSleep(worktreeId, cloudEnd, notice.slept, stillShown) &&
+      (!notice.slept || (entry?.stayed && reopened)) &&
+      entry?.selectionBeforeSleep &&
+      (entry.stayed ? stillShown : state.activeWorktreeId === null)
+    ) {
       restoreWorkspaceSelection(state, entry.selectionBeforeSleep)
     }
     if (error && options.reportTeardownFailure) {

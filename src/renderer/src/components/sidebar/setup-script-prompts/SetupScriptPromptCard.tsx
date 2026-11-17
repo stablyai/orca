@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useIsCloudRepoHost, useSetupScriptAsleepCloud } from '../use-setup-script-asleep-cloud'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { useCloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-store'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -49,6 +53,12 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const dismissedRepoIds = useAppStore((s) => s.setupScriptPromptDismissedRepoIds)
   const dismissSetupScriptPrompt = useAppStore((s) => s.dismissSetupScriptPrompt)
+  // A cloud workspace booted from an org environment build already has its dependencies installed.
+  const provisionedByEnvironmentBuild = useAppStore((s) =>
+    activeWorktreeId
+      ? Boolean(s.ephemeralVmRuntimesByWorkspaceId[activeWorktreeId]?.environmentBuildId)
+      : false
+  )
   const [promptState, setPromptState] = useState<SetupScriptPromptState | null>(null)
   const [detectedSetupDraft, setDetectedSetupDraft] = useState('')
   const [importingRepoHostIdentity, setImportingRepoHostIdentity] = useState<string | null>(null)
@@ -61,9 +71,27 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
-  const isDismissed = activeRepoHostIdentity
-    ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
-    : false
+  // An asleep or waking Orca Cloud workspace can't be inspected: wait until it's up instead of
+  // flashing "Couldn't verify this repo's setup script" with Retry.
+  // Going to sleep, or kept on screen read-only after Sleep, counts too.
+  const asleepCloud = useSetupScriptAsleepCloud(activeWorktreeId)
+  // Orca Cloud never shows this nudge: a cloud workspace reports a setup script that hasn't run in
+  // its own notice, and while a create is setting up, starting or stopped on a check the card would
+  // flip between states under the start screen.
+  const cloudWorkspace = useIsCloudWorkspace(activeWorktreeId)
+  const cloudRepo = useIsCloudRepoHost(activeRepo)
+  const creationShown = useAppStore(selectWorktreeCreationSurfaceShown)
+  const cloudSetupOpen = useCloudSetupPageRequest() !== null
+  const isDismissed =
+    provisionedByEnvironmentBuild ||
+    asleepCloud ||
+    cloudWorkspace ||
+    cloudRepo ||
+    creationShown ||
+    cloudSetupOpen ||
+    (activeRepoHostIdentity
+      ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
+      : false)
 
   useSetupScriptPromptInspection({
     activeRepo,

@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
       activeWorktreeId: null,
       setActiveWorktree: vi.fn(),
       shutdownWorktreeBrowsers: vi.fn(),
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {},
       shutdownWorktreeTerminals: vi.fn<AppState['shutdownWorktreeTerminals']>(),
       tabsByWorktree,
       ptyIdsByTabId,
@@ -19,9 +21,14 @@ const mocks = vi.hoisted(() => {
       detectedWorktreesByRepo: {}
     },
     persist: vi.fn(async () => {}),
-    payload: vi.fn(() => ({}))
+    payload: vi.fn(() => ({})),
+    evictGuests: vi.fn()
   }
 })
+vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
+  destroyWorktreeBrowserGuests: (_tabs: unknown, _pages: unknown, worktreeId: string) =>
+    mocks.evictGuests(worktreeId)
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mocks.state, subscribe: () => () => {} }
 }))
@@ -203,7 +210,9 @@ describe('project move renderer completion', () => {
       records: []
     })
     await f.persist()
-    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt')
+    // Sleep keeps the tabs; only their pages are dropped.
+    expect(mocks.state.shutdownWorktreeBrowsers).not.toHaveBeenCalled()
+    expect(mocks.evictGuests).toHaveBeenCalledWith('wt')
     expect(f.responses.at(-1)).toMatchObject({
       phase: 'error',
       error: 'project_move_pause_sleep_superseded'

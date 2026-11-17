@@ -1,8 +1,8 @@
+import { ORCA_CLOUD_NEEDS_REPO_ID } from '../run-on/cloud-start-view'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
-import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ButtonKeyHint } from '@/components/ui/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
@@ -17,6 +17,7 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'createDisabled'
   | 'creating'
   | 'primaryActionLabel'
+  | 'cloudStart'
 > & {
   submitShortcutModifierLabel: string
 }
@@ -30,9 +31,13 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel
+  submitShortcutModifierLabel,
+  cloudStart = null
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
+  // Why Create waits (a folder project on Orca Cloud), on hover and for screen readers.
+  // Set only after a Create stopped for it; the button stays enabled and points at the error.
+  const needsRepo = Boolean(cloudStart?.needsGitHubRepo)
   return (
     <>
       {createError ? (
@@ -52,38 +57,40 @@ export function NewWorkspaceComposerFooter({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          'flex items-center gap-3',
-          showCreateMultiple ? 'justify-between' : 'justify-end'
-        )}
-      >
+      {/* One row: "Create more" on the left, the one primary button on the right. Run on never
+          adds buttons here; Orca Cloud setup happens on its own page after the button. */}
+      <div className="flex items-center justify-between gap-3">
         {showCreateMultiple ? (
           <button
             type="button"
             role="switch"
             aria-checked={createMultiple}
             onClick={() => onCreateMultipleChange?.(!createMultiple)}
-            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="group flex w-fit shrink-0 cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
           >
             <SwitchIndicator checked={createMultiple} />
-            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+            <span className="whitespace-nowrap text-muted-foreground transition-colors group-hover:text-foreground">
               {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>
         ) : null}
-        <Button
-          onClick={() => void onCreate()}
-          disabled={createDisabled}
-          size="sm"
-          className="text-xs"
-          // Why: the title already says what is created; the button keeps the full name for AT.
-          aria-label={primaryActionLabel}
-        >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
-          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
-        </Button>
+        <span className="ml-auto shrink-0">
+          <Button
+            onClick={() => void onCreate()}
+            disabled={createDisabled}
+            size="sm"
+            // Why: the title already says what is created; the button keeps the full name for AT.
+            aria-label={primaryActionLabel}
+            {...(needsRepo ? { 'aria-describedby': ORCA_CLOUD_NEEDS_REPO_ID } : {})}
+          >
+            {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+              {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
+              <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+            </span>
+          </Button>
+        </span>
       </div>
     </>
   )

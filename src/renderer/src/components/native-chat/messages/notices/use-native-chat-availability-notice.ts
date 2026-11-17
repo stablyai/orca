@@ -74,6 +74,8 @@ export function useNativeChatAvailabilityNotice(input: {
   submissions?: readonly NoticeSubmission[]
   /** The lines under the chat's messages, by message key: a refused send's says why. */
   deliveryNotices?: ReadonlyMap<string, unknown>
+  /** An Orca Cloud agent signed in inside the workspace: "not signed in" says so, with its button. */
+  signInInside?: { text: string; actionLabel: string } | null
 }): NativeChatComposerNotice | null {
   const t = useTranslate()
   const { unavailable, journalItems } = input
@@ -109,9 +111,20 @@ export function useNativeChatAvailabilityNotice(input: {
     return null
   }
   const agentName = structuredAgentLabel(input.agent)
+  const inside = unavailable.reason === 'notSignedIn' ? (input.signInInside ?? null) : null
+  const action = nativeChatSetupAction(unavailable.reason, input.setup, t)
+  if (inside) {
+    return {
+      key: 'availability',
+      action: action && !action.disabled ? { ...action, label: inside.actionLabel } : action,
+      kind: 'error',
+      text: inside.text,
+      onDismiss: () => setDismissal({ key, dismissed: true })
+    }
+  }
   return {
     key: 'availability',
-    action: nativeChatSetupAction(unavailable.reason, input.setup, t),
+    action,
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'

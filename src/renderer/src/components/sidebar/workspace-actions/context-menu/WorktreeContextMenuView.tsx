@@ -6,21 +6,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { usePairedSleepRefusalHint } from '../sleep/use-paired-sleep-refusal'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
+import { CloudWorkspaceMenuItems } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
+import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { prefetchCloudWorkspaceRecord } from '@/components/orca-cloud/use-cloud-workspace-record'
+import { useIsCloudHostRow, usePrimeCloudRowBindings } from '@/lib/orca-cloud/cloud-host-rows'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
+import { WorktreeCloudTransferMenuItem } from './WorktreeCloudTransferMenuItem'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
+import { usePrimeCloudEnvironmentIds } from '@/lib/cloud-remote-desktop/cloud-environment-ids'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
+import { useCloudWorkspaceActions } from '@/components/orca-cloud/use-cloud-workspace-actions'
 import {
   WorktreeCopySubMenu,
   WorktreeLineageSubMenu,
@@ -75,15 +84,25 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  usePrimeCloudEnvironmentIds()
+  usePrimeCloudRowBindings()
+  // Paired rows too: a workspace opened here but created elsewhere is still cloud.
+  const isCloud = useIsCloudHostRow(worktree)
+  // LIFECYCLE-MATRIX: what this cloud workspace offers in its state (null off Orca Cloud).
+  const cloudActions = useCloudWorkspaceActions(worktree.id)
+  const sleepRefusedHint = usePairedSleepRefusalHint(worktree.id)
+  // "Move to this computer" is capturing this cloud workspace: Sleep waits until it ends.
+  const moving = useCloudWorkspace((s) => s.pending[worktree.id] === 'move')
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
       sleepLabel={sleepLabel}
-      sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
+      sleepDisabled={deletingContext || moving || sleepableWorktrees.length === 0}
       descendantCount={lineageDescendantCount}
       subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
       onSleep={handleCloseTerminals}
       onSleepSubtree={handleSleepSubtree}
+      sleepRefusedHint={sleepRefusedHint}
     />
   )
   return (
@@ -91,6 +110,17 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       ref={scopeRef}
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
+      // The cloud menu's Share and link rows need the team's record: fetch it while the pointer is
+      // on the row, so it's there when the menu opens (cached; a fresh one isn't fetched again).
+      onPointerEnter={
+        isCloud
+          ? () =>
+              void prefetchCloudWorkspaceRecord(
+                worktree.id,
+                getWorktreeExecutionHostId(worktree, repo ?? undefined)
+              )
+          : undefined
+      }
       onContextMenuCapture={(event) => {
         if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
           return
@@ -153,6 +183,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               hasSleepableActivity={sleepableWorktrees.length > 0}
               disabled={
                 deletingContext ||
+                moving ||
                 (deletingSubtree &&
                   subtreeSleepableWorktrees.some((target) => target.id !== worktree.id))
               }
@@ -166,6 +197,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             />
           )}
           {!isMultiContext && (
+            <CloudWorkspaceMenuItems
+              worktreeId={worktree.id}
+              hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
+              // Next to Restart / Archive, not after the cloud group.
+              moveItem={<WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
+            />
+          )}
+          {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
               {showsUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
               {showsUnread
@@ -176,7 +215,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
-          <WorktreeContextMenuDeleteItems model={model} />
+          {/* Cloud rows end with Delete, alone (its own danger group); local rows keep it here. */}
+          {isCloud ? null : <WorktreeContextMenuDeleteItems model={model} />}
           <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
@@ -202,14 +242,17 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <>
               <DropdownMenuSeparator />
-              <WorktreeRowOpenInSubMenu
-                worktree={worktree}
-                connectionId={repo?.connectionId ?? null}
-                disabled={isDeleting}
-              />
-              <WorktreeCopySubMenu model={model} />
-              <WorktreeLineageSubMenu model={model} />
-              <WorktreeProjectGroupSubMenu model={model} />
+              {cloudActions && !cloudActions.offers('openIn') ? null : (
+                <WorktreeOpenInAndSshSubMenus
+                  worktree={worktree}
+                  connectionId={repo?.connectionId ?? null}
+                  disabled={isDeleting}
+                />
+              )}
+              <WorktreeCopySubMenu model={model} cloudActions={cloudActions} />
+              {/* Nesting and project groups are this computer's arrangement; not for cloud. */}
+              {isCloud ? null : <WorktreeLineageSubMenu model={model} />}
+              {isCloud ? null : <WorktreeProjectGroupSubMenu model={model} />}
               <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
@@ -226,6 +269,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <>
               <DropdownMenuSeparator />
               <WorktreeDeveloperMenu worktreeId={worktree.id} disabled={isDeleting} />
+            </>
+          ) : null}
+          {isCloud ? (
+            <>
+              <DropdownMenuSeparator />
+              <WorktreeContextMenuDeleteItems model={model} />
             </>
           ) : null}
         </DropdownMenuContent>

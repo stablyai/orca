@@ -4,6 +4,7 @@ import { RuntimeEnvironmentsPane } from '../runtime-environments/catalog/Runtime
 import { RuntimeServersHeaderActions } from '../runtime-environments/runtime-servers-header-actions'
 import { RuntimeServersPageProvider } from '../runtime-environments/runtime-servers-page-context'
 import { SshPane } from '../ssh/SshPane'
+import { PortsPane } from '../ports/PortsPane'
 import { SshHostsHeaderSlot, SshHostsHeaderSlotProvider } from '../ssh/ssh-hosts-header-slot'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -77,6 +78,26 @@ export function renderSshSettingsSection(
   ) : null
 }
 
+export function renderPortsSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="ports"
+      title={t('auto.components.settings.Settings.portsTitle', 'Ports')}
+      description={t(
+        'auto.components.settings.Settings.portsDescriptionSandboxes',
+        'Forward dev servers in sandboxes and on remote hosts to this computer.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('ports')}
+    >
+      {view.isSectionMounted('ports') ? <PortsPane settings={model.settings} /> : null}
+    </SettingsSection>
+  ) : null
+}
+
 export function renderDeveloperPermissionsSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
@@ -85,7 +106,7 @@ export function renderDeveloperPermissionsSettingsSection(
   return model.showDesktopOnlySettings && model.isMac ? (
     <SettingsSection
       id="developer-permissions"
-      title={t('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
+      title={t('auto.components.settings.Settings.65660d4548', 'macOS permissions')}
       description={t(
         'auto.components.settings.Settings.9b83cc62c2',
         'macOS privacy access for terminal-launched developer tools.'

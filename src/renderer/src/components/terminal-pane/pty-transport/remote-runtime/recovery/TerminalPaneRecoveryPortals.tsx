@@ -22,6 +22,7 @@ import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stoppe
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
+import { useCloudPaneRecovery } from './cloud-pane-recovery-portals'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
@@ -106,6 +107,7 @@ export function TerminalPaneRecoveryPortals({
     clearStoppedHostErrors
   )
   const retryingOutageEnvironmentId = useRetryingOutageEnvironmentId(controller.worktreeId)
+  const cloudRecovery = useCloudPaneRecovery(controller)
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(
@@ -120,7 +122,8 @@ export function TerminalPaneRecoveryPortals({
     !wslHostUnavailable &&
     // Why: "retrying automatically" would be false; each pane offers Start instead.
     stoppedWslDistro === null &&
-    pairingRefusedEnvironmentId === null
+    pairingRefusedEnvironmentId === null &&
+    !cloudRecovery.holdsReconnect
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
@@ -150,6 +153,7 @@ export function TerminalPaneRecoveryPortals({
           key={noticeEnvironmentId}
           environmentId={noticeEnvironmentId}
           reveal={noticeReveal}
+          cloudWorkspaceName={cloudRecovery.workspaceName}
         />
       ) : null}
       {managedPanes.map((pane) => {
@@ -186,6 +190,10 @@ export function TerminalPaneRecoveryPortals({
             `wsl-host-stopped-${pane.id}`
           )
         }
+        const cloudPortal = cloudRecovery.renderPanePortal(pane)
+        if (cloudPortal) {
+          return cloudPortal
+        }
         // Why mounted with no recovery: the banner's minimum time and hold outlive the recovery itself.
         return createPortal(
           <CalmRemoteRuntimeReconnectBanner
@@ -195,13 +203,15 @@ export function TerminalPaneRecoveryPortals({
             environmentId={paneEnvironmentId}
             // Why stopped panes too: a card flashing over the notice's hold is the overlap this avoids.
             heldByServer={
-              !isolated &&
-              !awaitingSignIn &&
-              !wslHostUnavailable &&
-              pairingRefusedEnvironmentId === null &&
-              notice.quiet &&
-              paneEnvironmentId === ownerEnvironmentId
+              cloudRecovery.holdsReconnect ||
+              (!isolated &&
+                !awaitingSignIn &&
+                !wslHostUnavailable &&
+                pairingRefusedEnvironmentId === null &&
+                notice.quiet &&
+                paneEnvironmentId === ownerEnvironmentId)
             }
+            cloudWorkspaceName={cloudRecovery.workspaceName}
             onReconnect={onReconnect}
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}

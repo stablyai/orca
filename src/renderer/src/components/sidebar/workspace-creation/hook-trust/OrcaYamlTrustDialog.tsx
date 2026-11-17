@@ -47,7 +47,9 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
         ? 'issueCommand'
         : modalData.scriptKind === 'vmRecipe'
           ? 'vmRecipe'
-          : 'setup'
+          : modalData.scriptKind === 'run'
+            ? 'run'
+            : 'setup'
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const versionOnly = modalData.versionOnly === true
@@ -149,7 +151,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
               onClick={() => resolveAndClose('run')}
             >
               {versionOnly
-                ? t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')
+                ? t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run')
                 : t('worktree.setupTrust.runOnce', 'Run once')}
             </Button>
           )}

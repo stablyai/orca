@@ -1,4 +1,9 @@
 import { useCallback } from 'react'
+import { useCloudChatSignInInside } from '../../../agent-sign-in-strip/cloud-chat-sign-in-notice'
+import {
+  useCloudHeldChatUnavailable,
+  useIsCloudHeldChat
+} from '@/lib/orca-cloud/cloud-structured-launch-hold'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -55,7 +60,13 @@ export function useNativeChatStructuredPaneNotices({
   hostNotice: NativeChatComposerNotice | null
 }) {
   const t = useTranslate()
-  const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  // Held on its Orca Cloud strip: nothing was created, so no start can have failed or gone unconfirmed.
+  const cloudHeld = useIsCloudHeldChat(props.sessionId)
+  const launch = {
+    ...provisionalLaunch,
+    lifecycle: cloudHeld ? null : provisionalLaunch.lifecycle,
+    retry: submits.retryLaunch
+  }
   const details = provisionalLaunch.failure?.details
   const { demandModelCatalog } = controller.optionSurface
   const launchFailed = provisionalLaunch.lifecycle === 'failed'
@@ -82,14 +93,16 @@ export function useNativeChatStructuredPaneNotices({
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
-    unavailable: controller.unavailable,
+    // A chat held on its Orca Cloud strip says what to do there, not the generic sign-in.
+    unavailable: useCloudHeldChatUnavailable(props.sessionId, controller.unavailable),
     setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,
-    launchFailure: provisionalLaunch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
+    launchFailure: launch.lifecycle === 'failed' ? provisionalLaunch.failure : null,
     journalItems: controller.journalItems,
     submissions: controller.submissions,
-    deliveryNotices
+    deliveryNotices,
+    signInInside: useCloudChatSignInInside(props.agent)
   })
   const wslHostOffer = useAppStore(
     useShallow((s) => readWslHostChatOfferForLaunch(s, provisionalLaunch, ownerWorktreeId))
@@ -101,9 +114,15 @@ export function useNativeChatStructuredPaneNotices({
       launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
       agentLabel,
       // Said once: on the pane when the failure took it, else in the composer's notices.
-      sessionError:
-        viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
-      readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
+      sessionError: cloudHeld
+        ? null
+        : viewState.kind === 'error' || !readFailure
+          ? controller.error
+          : readFailure.text,
+      readRefusal:
+        !cloudHeld && viewState.kind !== 'error' && readFailure
+          ? controller.readRefusal
+          : undefined,
       composerError: composerError ?? continuation.continueError,
       setup,
       availability,

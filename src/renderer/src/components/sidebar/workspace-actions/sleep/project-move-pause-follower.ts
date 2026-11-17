@@ -110,7 +110,7 @@ export function createProjectMovePauseFollower(
       }
     },
     follow: (notice) => {
-      if (notice.phase === 'failed') {
+      if (notice.phase === 'failed' || notice.phase === 'suspending') {
         followWorkspaceSleep(notice)
         return
       }

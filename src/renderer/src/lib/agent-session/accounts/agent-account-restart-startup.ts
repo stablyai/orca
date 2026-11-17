@@ -21,6 +21,10 @@ import type {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import {
+  isOrcaCloudPane,
+  withOrcaCloudSessionEnv
+} from '@/lib/orca-cloud/cloud-restart-session-env'
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
@@ -131,11 +135,37 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  // On Orca Cloud a Claude pane with no session to resume starts a new conversation.
+  const fresh = agent === 'codex' || isOrcaCloudPane(args)
+  const startup = resume ?? (fresh ? buildFreshAccountRestartStartup(agent, args) : null)
+  // Orca Cloud: refresh the shell's session env first, so a renewed account reaches the agent.
+  return startup ? withOrcaCloudSessionEnv(startup, args) : null
+}
+
+/**
+ * The command that starts this pane's agent fresh (a new conversation), with the Orca Cloud
+ * session-env refresh in front. Used when a resume finds no conversation to pick up.
+ */
+export function buildFreshAccountRestartCommand(
+  agent: AccountRestartAgent,
+  args: AccountRestartPane,
+  /** The pane's recorded launch args (model, effort, …); the defaults when absent. */
+  agentArgs?: string | null
+): string {
+  return withOrcaCloudSessionEnv(buildFreshAccountRestartStartup(agent, args, agentArgs), args)
+    .command
 }
 
 export function buildCodexAccountRestartStartup(
   args: AccountRestartTarget
+): AgentAccountRestartStartup {
+  return buildFreshAccountRestartStartup('codex', args)
+}
+
+function buildFreshAccountRestartStartup(
+  agent: AccountRestartAgent,
+  args: AccountRestartTarget,
+  agentArgs?: string | null
 ): AgentAccountRestartStartup {
   const state = useAppStore.getState()
   const target = resolveAccountRestartLaunchTarget(
@@ -144,11 +174,12 @@ export function buildCodexAccountRestartStartup(
     getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   )
   const command = resolveAgentLaunchCommand({
-    agent: 'codex',
+    agent,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
-    shell: resolveStartupShell(target.platform, target.shell)
+    shell: resolveStartupShell(target.platform, target.shell),
+    ...(agentArgs?.trim() ? { agentArgs } : {})
   })
   if (!command.ok) {
     throw new Error(command.error)
@@ -156,7 +187,7 @@ export function buildCodexAccountRestartStartup(
   return {
     command: command.command,
     startupCommandDelivery: 'shell-ready',
-    launchAgent: 'codex'
+    launchAgent: agent
   }
 }
 

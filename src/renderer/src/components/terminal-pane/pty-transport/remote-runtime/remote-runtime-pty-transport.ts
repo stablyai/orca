@@ -329,6 +329,13 @@ export function createRemoteRuntimePtyTransport(
   let sameHandleEndReuseAttachedAt: number | null = null
   let attachGeneration = 0
   let subscriptionGeneration = 0
+  // This pane mount holds no copy of the host's history until its first subscribe lands, so
+  // only that subscribe asks for full depth; reconnects already hold the history and fill the gap
+  // from the 1000-row cut.
+  let fullHistoryReceived = false
+  const FULL_HISTORY_DEPTH = 'full' as const
+  // A quit-and-reopen is a new mount, so the host gives it depth even right after the last one.
+  const historyMountId = createBrowserUuid()
   // A terminal this pane just created has no history, so an empty first image there is not a gap.
   let spawnedHandle: string | null = null
   let inputReadySubscription: number | null = null
@@ -1345,6 +1352,12 @@ export function createRemoteRuntimePtyTransport(
 
     if (!isCurrent() || recovery.currentPhase === 'disconnected') {
       return undefined
+    }
+    if (paneHandle && paneHandle !== hostHandle) {
+      // Why: the host replaced this tab's shell (a VM woke from sleep). Keys held for the old one must
+      // never reach it (#10065), and an attach never settles its hold, so leaving it armed for the old
+      // handle would swallow every key typed into the restored pane while its output still streams.
+      discardPendingInput()
     }
     handle = hostHandle
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
@@ -3078,6 +3091,7 @@ export function createRemoteRuntimePtyTransport(
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
       outputCadence: desiredOutputCadence,
+      ...(fullHistoryReceived ? {} : { historyDepth: FULL_HISTORY_DEPTH, historyMountId }),
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -3092,6 +3106,7 @@ export function createRemoteRuntimePtyTransport(
           if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
             // Why printable: a host model holding only mode/cursor bytes paints a cursor-only pane.
             subscriptionSnapshotHadContent ||= restoredSnapshotPaintsPrintableContent({ data })
+            fullHistoryReceived = true
             if (subscribedPtyId && bufferPtyShutdownReplayData(subscribedPtyId, data)) {
               return
             }

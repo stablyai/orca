@@ -1,4 +1,5 @@
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { resumeHeldCloudLaunches } from '@/lib/orca-cloud/cloud-held-launch-resume'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../../store/index'
@@ -188,4 +189,5 @@ export function handleGlobalSessionInventoryEvent({
     })
   // Each subscription opens with one census: recheck launches now that the host is reachable.
   recheckUnconfirmedStructuredAgentLaunches(toRuntimeExecutionHostId(environmentId))
+  resumeHeldCloudLaunches(environmentId)
 }

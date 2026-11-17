@@ -6,6 +6,7 @@ import { applyDocumentTheme } from '../app-shell/appearance/document-theme'
 import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
 import { useAppStore } from '../store/index'
 import { installWebPreloadApi } from '../web/web-preload-api'
+import { setOrcaCloudEnabledForTests } from '../hooks/useOrcaCloudEnabled'
 import type { ComponentFixtureTheme } from './component-fixture'
 import {
   listComponentFixtures,
@@ -34,6 +35,8 @@ markComponentFixtureState('loading')
 installWebPreloadApi()
 // Fixtures preview the desktop renderer; keep web-only component branches off.
 Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
+// Fixtures preview a desktop where Orca Cloud is rolled out; `?cloud=0` previews it hidden.
+setOrcaCloudEnabledForTests(params.get('cloud') !== '0')
 const defaultSettings = getDefaultSettings('/home/fixture')
 useAppStore.setState({ settings: { ...defaultSettings, theme: pageTheme } })
 const baseStoreState = useAppStore.getState()

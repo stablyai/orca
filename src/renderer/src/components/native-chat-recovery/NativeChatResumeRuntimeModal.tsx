@@ -4,6 +4,7 @@ import type { NativeChatRestartStore } from './offers/native-chat-restart-runtim
 import { NativeChatResumeOccurrenceModal } from './NativeChatResumeOnRestartModal'
 import { useLocalStructuredChatsInUse } from '../../runtime/native-chat/local-sessions/local-structured-chats'
 import { useNativeChatRestartRuntimes } from './offers/native-chat-restart-runtimes'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element {
   const enabled = useLocalStructuredChatsInUse()
@@ -15,7 +16,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element {
         <NativeChatResumeRuntimeModal
           key={environment.id}
           store={store}
-          machineName={environment.name}
+          machineName={runtimeEnvironmentDisplayName(environment)}
           offerEnabled
         />
       ))}

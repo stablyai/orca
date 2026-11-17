@@ -1,0 +1,171 @@
+import { useMemo, useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts,
+  withOrcaCloudHosts,
+  type HiddenVmCheckouts
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { orcaCloudAccountId } from '../../../../shared/hosted-sandbox/orca-cloud-account'
+import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
+import type { Repo } from '../../../../shared/repository/repo-types'
+
+type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
+  Partial<
+    Pick<
+      AppState,
+      'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId' | 'pendingWorktreeCreations'
+    >
+  >
+
+/**
+ * Every Orca Cloud server this desktop runs, `+host` when the active team owns it and `-host`
+ * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
+ * compares by value.
+ *
+ * A PAIRED server (`orcaCloudPaired`) of the active account is `~host`: its owner is
+ * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and on a
+ * GitHub-only create its primary checkout IS the workspace's row. So its primary hides only beside a
+ * linked worktree of the same project (otherwise a teammate's shared workspace listed "master" too).
+ * A paired server stamped with ANOTHER account is `-host`, like another team's owned sandbox;
+ * one saved before pairings were stamped is `~host` until the prune stamps it.
+ */
+export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
+  // Several selectors run this on every store write; most writes touch none of its inputs.
+  const cloud = state.orcaProfileAuthStatus?.cloud
+  const cached = scopeKeyCache
+  if (
+    cached &&
+    cached.runtimeEnvironments === state.runtimeEnvironments &&
+    cached.owners === state.cloudAccountIdByEnvironmentId &&
+    cached.pending === state.pendingWorktreeCreations &&
+    cached.cloud === cloud
+  ) {
+    return cached.key
+  }
+  const key = computeOrcaCloudHostScopeKey(state)
+  scopeKeyCache = {
+    runtimeEnvironments: state.runtimeEnvironments,
+    owners: state.cloudAccountIdByEnvironmentId,
+    pending: state.pendingWorktreeCreations,
+    cloud,
+    key
+  }
+  return key
+}
+
+let scopeKeyCache: {
+  runtimeEnvironments: CloudScopeState['runtimeEnvironments']
+  owners: CloudScopeState['cloudAccountIdByEnvironmentId']
+  pending: CloudScopeState['pendingWorktreeCreations']
+  cloud: NonNullable<CloudScopeState['orcaProfileAuthStatus']>['cloud'] | undefined
+  key: string
+} | null = null
+
+function computeOrcaCloudHostScopeKey(state: CloudScopeState): string {
+  const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
+  const owners = state.cloudAccountIdByEnvironmentId ?? {}
+  // A GitHub-only create's pending row stands for its server's rows until the
+  // hand-off removes it; both change in one store update, so the row never shows twice.
+  const handingOff = Object.values(state.pendingWorktreeCreations ?? {}).flatMap((entry) =>
+    entry.request.githubSource && entry.pairingHostId ? [`-${entry.pairingHostId}`] : []
+  )
+  const scoped = (state.runtimeEnvironments ?? [])
+    .filter((environment) => isOrcaCloudRuntimeEnvironment(environment))
+    .flatMap((environment) => {
+      const hostId = toRuntimeExecutionHostId(environment.id)
+      if (environment.orcaCloudPaired === true) {
+        const account = environment.orcaCloudPairedAccountId
+        return [`${account && account !== active ? '-' : '~'}${hostId}`]
+      }
+      const inTeam = active !== null && owners[environment.id] === active
+      return [`${inTeam ? '+' : '-'}${hostId}`]
+    })
+  return [...scoped, ...handingOff].join('\n')
+}
+
+export function parseOrcaCloudHostScopeKey(key: string): {
+  primaryHostIds: ReadonlySet<string>
+  pairedHostIds: ReadonlySet<string>
+  hiddenHostIds: ReadonlySet<string>
+} {
+  const primaryHostIds = new Set<string>()
+  const pairedHostIds = new Set<string>()
+  const hiddenHostIds = new Set<string>()
+  for (const entry of key ? key.split('\n') : []) {
+    const set = entry.startsWith('+')
+      ? primaryHostIds
+      : entry.startsWith('~')
+        ? pairedHostIds
+        : hiddenHostIds
+    set.add(entry.slice(1))
+  }
+  return { primaryHostIds, pairedHostIds, hiddenHostIds }
+}
+
+let hiddenCache: { key: string; ids: ReadonlySet<string> } | null = null
+
+/**
+ * The Orca Cloud hosts the sidebar scopes out (another team's sandbox, owned or
+ * PAIRED). Run on and the reconnect banner use the same rule, so a team switch never leaves another
+ * team's workspace listed as a place to run, or announced as reconnecting, where it can't be used.
+ */
+export function selectOrcaCloudHiddenHostIds(state: CloudScopeState): ReadonlySet<string> {
+  const key = selectOrcaCloudHostScopeKey(state)
+  if (hiddenCache?.key !== key) {
+    hiddenCache = { key, ids: parseOrcaCloudHostScopeKey(key).hiddenHostIds }
+  }
+  return hiddenCache.ids
+}
+
+/**
+ * What sidebar lists hide: VM checkouts whose create is in progress, an Orca Cloud clone beside its
+ * listed workspace, and every row of another team's sandbox.
+ */
+export function useSidebarHiddenCheckouts(): HiddenVmCheckouts {
+  const pending = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
+  const scopeKey = useAppStore(selectOrcaCloudHostScopeKey)
+  return useMemo(
+    () => withOrcaCloudHosts(pending, parseOrcaCloudHostScopeKey(scopeKey)),
+    [pending, scopeKey]
+  )
+}
+
+/**
+ * Runtime servers without another team's cloud sandboxes, so the status bar's
+ * host list and count follow the same team scope as the sidebar (not "3 hosts" after a team switch).
+ */
+export function withoutHiddenHostEnvironments<E extends { id: string }>(
+  environments: readonly E[],
+  hiddenHostIds: ReadonlySet<string>
+): readonly E[] {
+  if (hiddenHostIds.size === 0) {
+    return environments
+  }
+  const kept = environments.filter(
+    (environment) => !hiddenHostIds.has(toRuntimeExecutionHostId(environment.id))
+  )
+  return kept.length === environments.length ? environments : kept
+}
+
+/** Repos without another team's sandbox projects, so none surfaces as its own project header. */
+export function withoutHiddenHostRepos<R extends Pick<Repo, 'connectionId' | 'executionHostId'>>(
+  repos: readonly R[],
+  checkouts: HiddenVmCheckouts
+): readonly R[] {
+  const hidden = checkouts.hiddenHostIds
+  if (!hidden?.size) {
+    return repos
+  }
+  const kept = repos.filter((repo) => !hidden.has(getRepoExecutionHostId(repo)))
+  return kept.length === repos.length ? repos : kept
+}
+
+/** The store's repos scoped like the sidebar's rows (useSidebarHiddenCheckouts). */
+export function useSidebarScopedRepos(): readonly Repo[] {
+  const repos = useAppStore((state) => state.repos)
+  const hidden = useSidebarHiddenCheckouts()
+  return useMemo(() => withoutHiddenHostRepos(repos, hidden), [repos, hidden])
+}

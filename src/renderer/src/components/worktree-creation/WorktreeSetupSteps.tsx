@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatElapsedTime } from './worktree-creation-clock'
 import type { WorktreeSetupStep, WorktreeSetupStepId } from './worktree-setup-steps'
+import { stepStateLabel } from './vm-build-sheet-copy'
 
 function stepLabel(id: WorktreeSetupStepId, agentLabel: string, t: Translate = translate): string {
   switch (id) {
@@ -31,14 +32,14 @@ export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): Reac
   switch (state) {
     case 'running':
       return (
-        <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        <Loader2 aria-hidden className="size-3.5 shrink-0 text-muted-foreground animate-spin" />
       )
     case 'done':
-      return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+      return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-foreground" />
     case 'failed':
       return <CircleX aria-hidden className="size-3.5 shrink-0 text-destructive" />
     case 'pending':
-      return <Circle aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
+      return <Circle aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
   }
 }
 
@@ -76,11 +77,12 @@ export function WorktreeSetupSteps({
               >
                 {stepLabel(step.id, agentLabel, t)}
               </span>
+              <span className="sr-only">{stepStateLabel(step.state, t)}</span>
               {step.percent !== null ? (
                 <span className="text-xs tabular-nums text-muted-foreground">{step.percent}%</span>
               ) : null}
               {step.elapsedMs !== null ? (
-                <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                <span className="min-w-12 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
                   {formatElapsedTime(step.elapsedMs)}
                 </span>
               ) : null}
@@ -97,7 +99,10 @@ export function WorktreeSetupSteps({
       </ol>
       {error !== null ? (
         <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
-          <p className="break-words text-xs text-muted-foreground">{error}</p>
+          {/* The failure is the one thing that changed; announce it like the VM sheet's card does. */}
+          <p role="alert" className="break-words text-xs text-foreground">
+            {error}
+          </p>
           <div className="flex items-center gap-1.5">
             <Button type="button" variant="outline" size="xs" onClick={onRetry}>
               <RotateCcw />

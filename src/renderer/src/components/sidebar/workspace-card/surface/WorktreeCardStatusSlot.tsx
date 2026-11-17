@@ -1,4 +1,5 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
+import { useCloudWorkspace, useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import React from 'react'
 import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,6 +17,7 @@ import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-sta
 import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
+import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import {
   selectEphemeralVmWorkspaceRuntime,
   selectEphemeralVmWorkspaceWaking
@@ -57,7 +59,7 @@ function getDefaultBranchIdentityLabel(t: Translate = translate): string {
   return t('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
 function getSleepingStatusLabel(t: Translate = translate): string {
-  return t('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Sleeping')
+  return t('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Asleep')
 }
 // Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
@@ -141,7 +143,7 @@ export function WorktreeCardStatusSlot({
   const t = useTranslate()
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
-  const status = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
+  const liveStatus = useWorktreeActivityStatus(worktreeId)
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
   const { isSleeping, vmRuntime, vmWaking } = useAppStore(
     useShallow((state) => ({
@@ -150,7 +152,28 @@ export function WorktreeCardStatusSlot({
       vmWaking: selectEphemeralVmWorkspaceWaking(state, worktreeId)
     }))
   )
-  const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  // Orca Cloud workspaces show their state on the cloud mark; the VM badge would be a second indicator.
+  const isCloud = useIsCloudWorkspace(worktreeId)
+  const cloudAsleep = useCloudWorkspace((state) => {
+    const reported = state.status[worktreeId]?.status?.state
+    return reported === 'sleeping' || reported === 'stopping' || reported === 'archived'
+  })
+  // An asleep sandbox runs no agent: a terminal restored from before the sleep is not activity.
+  // Until the first status read, the local VM record says it is suspended.
+  // From the Sleep click on: the sandbox is still up, but its agents are being stopped.
+  const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
+  const asleepCloud = isCloud && (cloudAsleep || goingToSleep || vmRuntime?.status === 'suspended')
+  // A collapsed descendant's louder state still shows; only this card's own activity is quieted.
+  const status: WorktreeStatus = laneStatusWithLineage(
+    asleepCloud && (liveStatus === 'active' || liveStatus === 'working') ? 'inactive' : liveStatus,
+    lineageStatus
+  )
+  const vmHostState =
+    vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  // The host glyph's badge carries suspended, waking and provisioning; the lane keeps only the
+  // failures, whose badge holds the reason and the recovery actions.
+  const vmState =
+    vmHostState === 'resume_failed' || vmHostState === 'provision_failed' ? vmHostState : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.

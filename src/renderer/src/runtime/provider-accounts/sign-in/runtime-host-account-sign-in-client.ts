@@ -38,6 +38,8 @@ type Attempt = {
   provider: HostAccountSignInProvider
   pairingRevision: number | undefined
   stage: 'checking' | 'starting' | 'following'
+  /** Browser sign-in whose localhost callback this client forwards to the host. */
+  callback: boolean
   cancelRequested: boolean
   /** The host acknowledged the cancel (its flow is stopping or settled). */
   cancelDelivered: boolean
@@ -127,7 +129,10 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
   advance(
     attempt,
     await retryLostAnswers(() =>
-      call(attempt, 'accounts.hostSignInStart', { provider: attempt.provider })
+      call(attempt, 'accounts.hostSignInStart', {
+        provider: attempt.provider,
+        ...(attempt.callback ? { callback: true } : {})
+      })
     )
   )
   attempt.stage = 'following'
@@ -191,7 +196,8 @@ function settle(attempt: Attempt): HostAccountSignInStatus {
 /** Starts a sign-in on `owner`, or joins the one this client already runs there. */
 function runHostAccountSignIn(
   owner: EnvironmentTarget,
-  provider: HostAccountSignInProvider
+  provider: HostAccountSignInProvider,
+  options: { callback?: boolean } = {}
 ): Promise<HostAccountSignInStatus> {
   const key = keyOf(owner, provider)
   const running = attempts.get(key)
@@ -211,6 +217,7 @@ function runHostAccountSignIn(
     provider,
     pairingRevision: captureRuntimeEnvironmentRequestRevision(owner.environmentId),
     stage: 'checking',
+    callback: options.callback === true,
     cancelRequested: false,
     cancelDelivered: false,
     status: null,
@@ -287,6 +294,25 @@ export async function addCodexAccountOnHost(
     throw new Error('Codex signed in, but the server sent no account list.')
   }
   return status.codex
+}
+
+/** Signs `provider` in on `owner` for an agent about to start there; `callback` uses the browser
+ *  sign-in whose localhost redirect this client forwards (hosts with the callback capability only). */
+export function signInAgentOnHost(
+  owner: EnvironmentTarget,
+  provider: HostAccountSignInProvider,
+  options: { callback: boolean }
+): Promise<HostAccountSignInStatus> {
+  return runHostAccountSignIn(owner, provider, options)
+}
+
+/** Resolves once this client's run for `provider` on `owner` has ended, however it ended. */
+export async function hostAccountSignInEnded(
+  owner: RuntimeClientTarget,
+  provider: HostAccountSignInProvider
+): Promise<void> {
+  const attempt = owner.kind === 'environment' ? attempts.get(keyOf(owner, provider)) : undefined
+  await attempt?.done?.catch(() => {})
 }
 
 export async function submitHostAccountSignInCode(

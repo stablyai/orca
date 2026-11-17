@@ -5,7 +5,7 @@ import { getFolderSourceRepos } from '../../../../../shared/folder-workspaces/fo
 // oxfmt-ignore
 import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getSelectedRepoSshGate } from '@/lib/workspace/creation/new-workspace-ssh-gate'
-import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connection'
+import { selectComposerRepoSshGate } from '../selected-repo-ssh-gate'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
@@ -254,16 +254,17 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
 
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
 
-  // Only probe enabled experiments or hidden features can raise setup errors.
-  const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
-
   const {
     recipes: ephemeralVmRecipes,
     selectedRecipeId: selectedEphemeralVmRecipeId,
     setSelectedRecipeId: setSelectedEphemeralVmRecipeId,
-    error: ephemeralVmRecipeError
+    error: ephemeralVmRecipeError,
+    offered: ephemeralVmsEnabled,
+    orcaCloud: orcaCloudAvailability,
+    orcaCloudDropped
   } = useEphemeralVmRecipeOptions({
-    enabled: ephemeralVmsEnabled,
+    // Only probe enabled experiments or hidden features can raise setup errors.
+    customRecipesEnabled: settings?.experimentalEphemeralVms === true,
     repoId: selectedRecipeRepoId,
     repoIsGit: selectedRepoIsGit,
     repoConnectionId: selectedRecipeRepoConnectionId,
@@ -272,23 +273,16 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     initialRecipeId: initialEphemeralVmRecipeId
   })
 
-  // Why the shared gate: a paired server's own SSH target is read from that server (#25887).
-  const selectedRepoSshGateInput = selectedRepo
-    ? selectRepoSshGateInput(
-        { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
-        selectedRepo
-      )
-    : null
-  const selectedRepoConnectionId = selectedRepoSshGateInput?.connectionId ?? null
-  const selectedRepoSshState = selectedRepoConnectionId
-    ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
-    : null
-
-  const { selectedRepoSshStatus, selectedRepoRequiresConnection, selectedRepoConnectInProgress } =
-    getSelectedRepoSshGate({
-      connectionId: selectedRepoConnectionId,
-      status: selectedRepoSshGateInput?.status ?? null
-    })
+  const {
+    selectedRepoConnectionId,
+    selectedRepoSshState,
+    selectedRepoSshStatus,
+    selectedRepoRequiresConnection,
+    selectedRepoConnectInProgress
+  } = selectComposerRepoSshGate(
+    { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+    selectedRepo
+  )
 
   const repoIdRef = useRef(resolvedRepoId)
 
@@ -331,6 +325,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     selectedRecipeRepoId,
     selectedRecipeRepoConnectionId,
     ephemeralVmsEnabled,
+    orcaCloudAvailability,
+    orcaCloudDropped,
     ephemeralVmRecipes,
     selectedEphemeralVmRecipeId,
     setSelectedEphemeralVmRecipeId,

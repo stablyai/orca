@@ -1,0 +1,366 @@
+import React, { useMemo, useState } from 'react'
+import {
+  ArchiveRestore,
+  ChevronRight,
+  Cloud,
+  File,
+  Folder,
+  GitPullRequest,
+  Loader2,
+  Monitor,
+  Undo2
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
+import { useNow } from '@/lib/window-activity/use-now'
+import { useTranslate } from '@/i18n/use-translate'
+import { prStateLabel } from './read-snapshot/cloud-read-snapshot-format'
+import { getIntlLocale } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import {
+  buildFileTree,
+  formatRelative,
+  type FileTreeNode
+} from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import type { CloudArchiveInfo } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { CloudGitChanges } from './CloudGitChanges'
+import { archivedCountdownShort } from './archive-snapshot-copy'
+import { CloudWorkspaceHeader } from './CloudWorkspaceHeader'
+import { FOCUS_RING } from './cloud-focus'
+import type { OptimisticArchive } from '@/lib/orca-cloud/optimistic-cloud-archive'
+import { CloudArchivePendingBody, archivePendingStateLine } from './CloudArchivePending'
+
+export type ArchiveLoad =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; archive: CloudArchiveInfo | null }
+
+const PR_TONE: Record<HostedArchivePullRequest['state'], string> = {
+  open: 'text-status-success',
+  draft: 'text-muted-foreground',
+  merged: 'text-[var(--callout-important)]',
+  closed: 'text-destructive'
+}
+
+function Section({
+  title,
+  count,
+  children
+}: {
+  title: string
+  count?: number
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <section className="flex flex-col gap-2">
+      <SettingsGroupHeader
+        title={
+          <span className="flex items-baseline gap-1.5">
+            {title}
+            {count ? (
+              <span className="text-sm font-normal tabular-nums text-muted-foreground">
+                {new Intl.NumberFormat(getIntlLocale()).format(count)}
+              </span>
+            ) : null}
+          </span>
+        }
+      />
+      {children}
+    </section>
+  )
+}
+
+function TreeList({ nodes, depth }: { nodes: FileTreeNode[]; depth: number }): React.JSX.Element {
+  return (
+    <ul className="flex flex-col">
+      {nodes.map((node) => (
+        <TreeItem key={node.path} node={node} depth={depth} />
+      ))}
+    </ul>
+  )
+}
+
+function TreeItem({ node, depth }: { node: FileTreeNode; depth: number }): React.JSX.Element {
+  const isDir = node.children.length > 0
+  const [open, setOpen] = useState(depth === 0 && isDir)
+  const indent = { paddingLeft: `${depth * 12 + 4}px` }
+  if (!isDir) {
+    return (
+      <li className="flex h-6 items-center gap-1.5 truncate text-xs" style={indent}>
+        <span className="w-3" />
+        <File className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="truncate">{node.name}</span>
+      </li>
+    )
+  }
+  return (
+    <li>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          'flex h-6 w-full items-center gap-1.5 rounded text-left text-xs hover:bg-accent/50',
+          FOCUS_RING
+        )}
+        style={indent}
+      >
+        <ChevronRight
+          className={cn(
+            'size-3 shrink-0 text-muted-foreground motion-safe:transition-transform',
+            open && 'rotate-90'
+          )}
+          aria-hidden="true"
+        />
+        <Folder className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="truncate">{node.name}</span>
+      </button>
+      {open ? <TreeList nodes={node.children} depth={depth + 1} /> : null}
+    </li>
+  )
+}
+
+/** Shaped like the loaded sections, so nothing jumps when they arrive. */
+function ArchiveSkeleton(): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true">
+      {[2, 4, 5].map((rows, section) => (
+        <div key={section} className="flex flex-col gap-2">
+          <Skeleton className="mx-1 h-4 w-28" />
+          <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            {Array.from({ length: rows }, (_, row) => (
+              <Skeleton key={row} className="h-3" style={{ width: `${55 + ((row * 17) % 40)}%` }} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * What an archived Orca Cloud workspace shows without waking it: PRs, last changes and the file
+ * tree, from metadata the control plane captured at archive. Unarchive restores the same disk.
+ */
+export function CloudArchivedWorkspaceView({
+  workspaceName,
+  archivedAt,
+  expiresAt,
+  load,
+  unarchiving,
+  onUnarchive,
+  onRetry,
+  onOpenUrl,
+  headingRef,
+  now: nowOverride,
+  pending,
+  onMove
+}: {
+  workspaceName: string | null
+  archivedAt: number | null
+  expiresAt: number | null
+  load: ArchiveLoad
+  unarchiving: boolean
+  onUnarchive: () => void
+  /** ARCHIVE-NOW: Archive was just pressed; the page shows while it runs. */
+  pending?: OptimisticArchive
+  /** "Move to this computer", the same flow as the menu; absent where it doesn't apply. */
+  onMove?: () => void
+  onRetry: () => void
+  onOpenUrl: (url: string) => void
+  headingRef?: React.Ref<HTMLHeadingElement>
+  now?: number
+}): React.JSX.Element {
+  const t = useTranslate()
+  const liveNow = useNow(60_000, nowOverride === undefined)
+  const now = nowOverride ?? liveNow
+  const archive = load.status === 'ready' ? load.archive : null
+  const checkouts = archive?.metadata.checkouts ?? []
+  const prs = archive?.metadata.pullRequests ?? []
+  const primary = checkouts[0]
+  const tree = useMemo(() => buildFileTree(primary?.files ?? []), [primary])
+  const hiddenFiles = primary ? Math.max(0, primary.fileCount - primary.files.length) : 0
+  const nothing = load.status === 'ready' && prs.length === 0 && checkouts.length === 0
+  const stateLine = [
+    archivedAt
+      ? t('orcaCloudWorkspace.archived.since', 'Archived {{when}}', {
+          when: formatRelative(archivedAt, now)
+        })
+      : t('orcaCloudWorkspace.state.archived', 'Archived'),
+    expiresAt ? archivedCountdownShort(t, expiresAt, now) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const pendingLine = pending ? archivePendingStateLine(t, pending) : null
+
+  return (
+    <div
+      className="absolute inset-0 z-30 overflow-y-auto bg-background scrollbar-sleek"
+      data-cloud-archived-view=""
+    >
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
+        <CloudWorkspaceHeader
+          icon={Cloud}
+          title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
+          state="archived"
+          stateLine={pendingLine ?? stateLine}
+          // The countdown is in the state line; without a date, the note names the 30-day rule.
+          note={
+            pending?.phase === 'undo' && pending.skipHook
+              ? t(
+                  'orcaCloudWorkspace.archiveHook.wakeFirst',
+                  'It wakes first to run the archive script in orca.yaml.'
+                )
+              : pending
+                ? undefined
+                : expiresAt
+                  ? t(
+                      'orcaCloudWorkspace.archiveSnapshot.archivedNote',
+                      'Read-only. Unarchive it to keep working.'
+                    )
+                  : t(
+                      'orcaCloudWorkspace.archiveSnapshot.archived',
+                      'Read-only. Deletes 30 days after archiving unless you unarchive it.'
+                    )
+          }
+          headingRef={headingRef}
+          action={
+            pending?.phase === 'undo' ? (
+              <div className="flex items-center gap-2">
+                {pending.skipHook ? (
+                  <Button size="sm" variant="ghost" onClick={pending.skipHook}>
+                    {t('orcaCloudWorkspace.archiveHook.skip', 'Skip script')}
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="outline" onClick={pending.undo}>
+                  <Undo2 />
+                  {t('orcaCloudWorkspace.undo', 'Undo')}
+                </Button>
+              </div>
+            ) : pending ? null : (
+              <div className="flex items-center gap-2">
+                {onMove ? (
+                  <Button size="sm" variant="outline" disabled={unarchiving} onClick={onMove}>
+                    <Monitor />
+                    {t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="default-held"
+                  aria-disabled={unarchiving || undefined}
+                  onClick={() => {
+                    if (!unarchiving) {
+                      onUnarchive()
+                    }
+                  }}
+                >
+                  {unarchiving ? <Loader2 className="animate-spin" /> : <ArchiveRestore />}
+                  {unarchiving
+                    ? t('orcaCloudWorkspace.archived.unarchiving', 'Unarchiving…')
+                    : t('orcaCloudWorkspace.unarchive', 'Unarchive')}
+                </Button>
+              </div>
+            )
+          }
+        />
+
+        {pending ? (
+          <CloudArchivePendingBody pending={pending} skeleton={<ArchiveSkeleton />} />
+        ) : load.status === 'loading' ? (
+          <ArchiveSkeleton />
+        ) : load.status === 'error' ? (
+          <InlineError
+            title={t(
+              'orcaCloudWorkspace.archived.loadFailed',
+              'Couldn’t load the archive details.'
+            )}
+            // The raw reason stays out of the card; the plain line says what matters.
+            detail={t(
+              'orcaCloudWorkspace.archived.loadFailedDetail',
+              'Your files are safe in the archive.'
+            )}
+            retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
+            onRetry={onRetry}
+          />
+        ) : nothing ? (
+          <p className="max-w-[60ch] text-sm text-muted-foreground">
+            {t('orcaCloudWorkspace.archived.nothing', 'Nothing was captured.')}
+          </p>
+        ) : (
+          <>
+            {prs.length > 0 ? (
+              <Section
+                title={t('orcaCloudWorkspace.archived.pullRequests', 'Pull requests')}
+                count={prs.length}
+              >
+                <ul className="flex flex-col gap-0.5 rounded-lg border border-border p-1">
+                  {prs.map((pr) => (
+                    <li key={pr.url}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenUrl(pr.url)}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent/50',
+                          FOCUS_RING
+                        )}
+                      >
+                        <GitPullRequest
+                          className={cn('size-3.5 shrink-0', PR_TONE[pr.state])}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1 truncate">{pr.title}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          #{pr.number}
+                        </span>
+                        <span className={cn('shrink-0', PR_TONE[pr.state])}>
+                          {prStateLabel(pr.state, t)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
+            {checkouts.length > 0 ? (
+              <Section title={t('orcaCloudWorkspace.archived.lastChanges', 'Last changes')}>
+                {checkouts.map((checkout) => (
+                  <CloudGitChanges key={checkout.path} data={checkout} now={now} />
+                ))}
+              </Section>
+            ) : null}
+
+            {tree.length > 0 ? (
+              <Section
+                title={t('orcaCloudWorkspace.archived.filesTitle', 'Files')}
+                count={primary?.fileCount}
+              >
+                <div className="relative rounded-lg border border-border">
+                  <div className="max-h-96 overflow-y-auto p-1.5 scrollbar-sleek [mask-image:linear-gradient(to_bottom,black_calc(100%-2rem),transparent)]">
+                    <TreeList nodes={tree} depth={0} />
+                    {hiddenFiles > 0 ? (
+                      <p className="px-1 pt-1 pb-4 text-2xs text-muted-foreground">
+                        {t(
+                          'orcaCloudWorkspace.archived.moreFiles',
+                          '{{count}} more files not shown',
+                          {
+                            count: hiddenFiles,
+                            defaultValue_one: '{{count}} more file not shown'
+                          }
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </Section>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

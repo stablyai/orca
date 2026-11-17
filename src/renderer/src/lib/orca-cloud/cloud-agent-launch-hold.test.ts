@@ -1,0 +1,194 @@
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from 'vitest'
+import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import {
+  cloudAgentHoldReason,
+  cloudAgentLaunchHoldReason,
+  cloudAgentLaunchNeedsHold,
+  cloudAgentSignsInInsideWorkspace,
+  cloudAgentStripReason,
+  holdCloudAgentLaunch,
+  readCloudAgentHold,
+  releaseCloudAgentHold
+} from './cloud-agent-launch-hold'
+import {
+  setOrcaCloudAgentAccountsStateForTest,
+  type OrcaCloudAgentAccountsState
+} from './orca-cloud-agent-accounts-store'
+
+function accounts(
+  claude: OrcaCloudAgentsStatus['credentials']['claude'],
+  extra: Partial<OrcaCloudAgentsStatus['credentials']> = {},
+  covered = false
+): OrcaCloudAgentAccountsState {
+  return {
+    load: {
+      kind: 'ready',
+      status: {
+        credentials: {
+          claude,
+          codex: { state: 'none' },
+          providerEnabled: { claude: true, codex: true },
+          ...extra
+        },
+        sources: { defaults: {}, coveredByKey: { claude: covered, codex: false } }
+      }
+    },
+    setups: { claude: { phase: 'idle' }, codex: { phase: 'idle' } },
+    keyKinds: { claude: covered ? 'team' : null, codex: null },
+    queue: { agents: [], index: 0 }
+  }
+}
+
+describe('cloud agent launch hold', () => {
+  it('maps the Orca account to the strip reason, never from the sandbox', () => {
+    expect(cloudAgentStripReason('claude', accounts({ state: 'active' }))).toBeNull()
+    expect(cloudAgentStripReason('claude', accounts({ state: 'expired' }))).toBe('accountExpired')
+    expect(cloudAgentStripReason('claude', accounts({ state: 'revoked' }))).toBe('accountExpired')
+    // A key covers it: no strip, requests fall back to the key.
+    expect(cloudAgentStripReason('claude', accounts({ state: 'expired' }, {}, true))).toBeNull()
+    expect(
+      cloudAgentStripReason(
+        'claude',
+        accounts(
+          { state: 'active' },
+          {
+            providerEnabled: { claude: false, codex: true },
+            providerState: { claude: 'disabled', codex: 'on' }
+          }
+        )
+      )
+    ).toBe('paused')
+    expect(
+      cloudAgentStripReason(
+        'claude',
+        accounts(
+          { state: 'none' },
+          {
+            providerEnabled: { claude: false, codex: true },
+            providerState: { claude: 'off', codex: 'on' }
+          }
+        )
+      )
+    ).toBe('notOffered')
+  })
+
+  it('never holds a ready launch, and decides from the cached read', () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(false)
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(true)
+  })
+
+  it('a renewal never launches; every held pane waits for its own Start', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
+    let firstOutcome = 'pending'
+    let secondOutcome = 'pending'
+    void holdCloudAgentLaunch({ paneKey: 'tab:a', agent: 'claude', prompt: 'fix it' }).then(
+      (o) => (firstOutcome = o)
+    )
+    void holdCloudAgentLaunch({ paneKey: 'tab:b', agent: 'claude', prompt: null }).then(
+      (o) => (secondOutcome = o)
+    )
+    await vi.waitFor(() => expect(readCloudAgentHold('tab:b')).not.toBeNull())
+    expect(readCloudAgentHold('tab:a')).toMatchObject({ prompt: 'fix it' })
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    for (const key of ['tab:a', 'tab:b']) {
+      expect(readCloudAgentHold(key)).toMatchObject({
+        reason: 'awaitingStart',
+        awaiting: 'renewed'
+      })
+    }
+    expect([firstOutcome, secondOutcome]).toEqual(['pending', 'pending'])
+    // Start in one tab launches that one; the other keeps waiting.
+    releaseCloudAgentHold('tab:a', 'proceed')
+    await vi.waitFor(() => expect(firstOutcome).toBe('proceed'))
+    expect(secondOutcome).toBe('pending')
+    expect(readCloudAgentHold('tab:b')).toMatchObject({ awaiting: 'renewed' })
+    releaseCloudAgentHold('tab:b', 'cancel')
+  })
+
+  it('cancel releases only that pane', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
+    const held = holdCloudAgentLaunch({ paneKey: 'tab:c', agent: 'claude', prompt: null })
+    await vi.waitFor(() => expect(readCloudAgentHold('tab:c')).not.toBeNull())
+    releaseCloudAgentHold('tab:c', 'cancel')
+    await expect(held).resolves.toBe('cancel')
+  })
+
+  it('holds a launch whose agent is not set up, and waits for Start, never starting unasked', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    expect(cloudAgentHoldReason('claude', accounts({ state: 'none' }))).toBe('notSetUp')
+    expect(cloudAgentLaunchHoldReason('claude')).toBe('notSetUp')
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(true)
+    const held = holdCloudAgentLaunch({ paneKey: 'tab:d', agent: 'claude', prompt: 'go' })
+    await vi.waitFor(() =>
+      expect(readCloudAgentHold('tab:d')).toMatchObject({ reason: 'notSetUp' })
+    )
+    // Set up finishes: the strip offers Start; the launch still waits for it.
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    // Let any subscriber run (zero-delay yields); the hold must still be waiting for Start.
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    expect(readCloudAgentHold('tab:d')).not.toBeNull()
+    releaseCloudAgentHold('tab:d', 'proceed')
+    await expect(held).resolves.toBe('proceed')
+  })
+
+  it('a key covering the agent never holds it as not set up', () => {
+    expect(cloudAgentHoldReason('claude', accounts({ state: 'none' }, {}, true))).toBeNull()
+  })
+
+  it('tells the composer the hold is unknown while the account read is loading', () => {
+    setOrcaCloudAgentAccountsStateForTest({
+      ...accounts({ state: 'none' }),
+      load: { kind: 'loading' }
+    })
+    expect(cloudAgentLaunchHoldReason('claude')).toBe('unknown')
+  })
+
+  it('a decided hold whose account is already covered starts at once', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await expect(
+      holdCloudAgentLaunch({ paneKey: 'tab:e', agent: 'claude', prompt: null, decided: true })
+    ).resolves.toBe('proceed')
+    expect(readCloudAgentHold('tab:e')).toBeNull()
+  })
+
+  it('signing in inside the workspace never holds, and choosing it on "Set up once" starts the held launch', async () => {
+    const inside = (state: OrcaCloudAgentAccountsState): OrcaCloudAgentAccountsState =>
+      state.load.kind === 'ready'
+        ? {
+            ...state,
+            load: {
+              kind: 'ready',
+              status: {
+                ...state.load.status,
+                sources: {
+                  ...state.load.status.sources,
+                  inWorkspace: { claude: true, codex: false }
+                }
+              }
+            }
+          }
+        : state
+    // Even with an expired account: Orca injects nothing for the agent, so there is nothing to renew.
+    expect(cloudAgentHoldReason('claude', inside(accounts({ state: 'expired' })))).toBeNull()
+    expect(cloudAgentStripReason('claude', inside(accounts({ state: 'expired' })))).toBeNull()
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
+    expect(cloudAgentSignsInInsideWorkspace('claude')).toBe(false)
+    const held = holdCloudAgentLaunch({ paneKey: 'tab:f', agent: 'claude', prompt: null })
+    await vi.waitFor(() =>
+      expect(readCloudAgentHold('tab:f')).toMatchObject({ reason: 'notSetUp' })
+    )
+    setOrcaCloudAgentAccountsStateForTest(inside(accounts({ state: 'none' })))
+    await expect(held).resolves.toBe('proceed')
+    expect(readCloudAgentHold('tab:f')).toBeNull()
+    expect(cloudAgentSignsInInsideWorkspace('claude')).toBe(true)
+    expect(cloudAgentLaunchNeedsHold('claude')).toBe(false)
+  })
+})

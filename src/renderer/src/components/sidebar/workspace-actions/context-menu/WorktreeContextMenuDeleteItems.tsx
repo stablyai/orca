@@ -4,10 +4,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import { useIsCloudPrimaryRow, usePrimeCloudRowBindings } from '@/lib/orca-cloud/cloud-host-rows'
 
 export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
+  usePrimeCloudRowBindings()
   const {
     batchDeleteWorktrees,
     contextDeletePending,
@@ -16,24 +18,33 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
     handleDelete,
     isMultiContext,
     lineageDescendantCount,
-    removesProject,
+    removesProject: modelRemovesProject,
     worktree
   } = model
-  const projectMissing = !isMultiContext && worktree.isMainWorktree && !removesProject
+  // An Orca Cloud workspace's own checkout is deletable: it destroys the sandbox (never "Remove Project").
+  const cloudPrimary = useIsCloudPrimaryRow(worktree) && !isMultiContext
+  const removesProject = !cloudPrimary && modelRemovesProject
+  const projectMissing =
+    !isMultiContext && !cloudPrimary && worktree.isMainWorktree && !removesProject
   const label = contextDeletePending
     ? t('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
     : isMultiContext
       ? deleteLabel
-      : folderWorkspaceId
-        ? t('auto.components.sidebar.WorktreeContextMenu.250de158fd', 'Remove Workspace')
-        : removesProject
-          ? t('auto.components.sidebar.WorktreeContextMenu.f5ac91531d', 'Remove Project from Orca')
-          : lineageDescendantCount > 0
+      : cloudPrimary
+        ? t('auto.components.sidebar.WorktreeContextMenu.deleteCloudWorkspace', 'Delete workspace…')
+        : folderWorkspaceId
+          ? t('auto.components.sidebar.WorktreeContextMenu.250de158fd', 'Remove Workspace')
+          : removesProject
             ? t(
-                'auto.components.sidebar.WorktreeContextMenu.deleteWithDescendants',
-                'Delete with Descendants…'
+                'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
+                'Remove Project from Orca'
               )
-            : t('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')
+            : lineageDescendantCount > 0
+              ? t(
+                  'auto.components.sidebar.WorktreeContextMenu.deleteWithDescendants',
+                  'Delete with Descendants…'
+                )
+              : t('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')
   return (
     <>
       {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}

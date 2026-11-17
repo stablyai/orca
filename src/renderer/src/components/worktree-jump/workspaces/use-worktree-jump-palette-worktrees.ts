@@ -23,6 +23,7 @@ import { indexHiddenProjects } from '../../../../../shared/project/catalog/hidde
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from '../worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from '../tabs/worktree-jump-palette-document-index'
+import { usePaletteCloudNumberForWorktree } from './use-palette-cloud-number'
 import {
   buildWorktreeJumpPaletteWorktreeMaps,
   createPaletteWorktreeArrayReuse
@@ -234,6 +235,7 @@ export function useWorktreeJumpPaletteWorktrees({
       }),
     [workspaces, hostedReviewCache, prCache, repoByHostIdentity, settings]
   )
+  const cloudNumberForWorktree = usePaletteCloudNumberForWorktree()
   const worktreeDocuments = useMemo(
     () =>
       buildWorktreeJumpPaletteDocumentIndex({
@@ -245,11 +247,13 @@ export function useWorktreeJumpPaletteWorktrees({
         prCache,
         issueCache,
         workspacePortScan,
-        checksReviewByWorktree
+        checksReviewByWorktree,
+        cloudNumberForWorktree
       }),
     [
       workspaces,
       checksReviewByWorktree,
+      cloudNumberForWorktree,
       hostFilterActive,
       hostOptions,
       issueCache,

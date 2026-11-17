@@ -1,6 +1,7 @@
 import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
 import { buildSetupRunnerCommand } from '../../creation/setup/setup-runner'
 import { translate } from '@/i18n/i18n'
+import { armAutoRunAfterSetup } from '@/lib/run-actions/run-action-events'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
@@ -42,6 +43,8 @@ export function queueSetupAndIssueCommands(
     store.setTabCustomTitle(setupTab.id, translate('worktree.setupTerminalTitle', 'Setup'), {
       recordInteraction: false
     })
+    // orca.yaml may ask for a run action (a dev server) once setup succeeds.
+    armAutoRunAfterSetup(worktreeId, setupTab.id)
   }
 
   // Queue issue work independently in its own split so setup and automation run in parallel.

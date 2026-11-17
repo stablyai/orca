@@ -1,8 +1,8 @@
-import { Minus } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
+import { ProgressCardHeader } from '../progress-card/ProgressCard'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -39,26 +39,14 @@ export function UpdateDownloadingContent({
     release?.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        {release ? (
-          <h3 className="text-sm font-semibold">
-            {t('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
-          </h3>
-        ) : (
-          <h3 className="text-sm font-semibold">
-            {t('auto.components.UpdateCard.558842597d', 'Downloading Update')}
-          </h3>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
-          onClick={onCollapse}
-          aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
-        >
-          <Minus className="size-3.5" />
-        </Button>
-      </div>
+      <ProgressCardHeader
+        title={
+          release
+            ? `${t('auto.components.UpdateCard.f58b5c57a6', 'New:')} ${release.title}`
+            : t('auto.components.UpdateCard.558842597d', 'Downloading Update')
+        }
+        onMinimize={onCollapse}
+      />
       {showMedia && release?.mediaUrl && (
         <div className="relative overflow-hidden rounded-md">
           {!mediaLoaded && (
@@ -124,20 +112,10 @@ export function UpdateReadyToInstallContent({
   const t = useTranslate()
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold">
-          {t('auto.components.UpdateCard.17412483da', 'Ready to Install')}
-        </h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
-          onClick={onClose}
-          aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
-        >
-          <Minus className="size-3.5" />
-        </Button>
-      </div>
+      <ProgressCardHeader
+        title={t('auto.components.UpdateCard.17412483da', 'Ready to Install')}
+        onMinimize={onClose}
+      />
       <p className="text-sm text-muted-foreground">
         {t(
           'auto.components.UpdateCard.6714206e5a',

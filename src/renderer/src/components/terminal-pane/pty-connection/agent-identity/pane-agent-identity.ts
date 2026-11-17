@@ -1,3 +1,4 @@
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
@@ -214,7 +215,12 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     session.visibleForegroundSamplePending = false
     const shouldDeferStatusDrop = session.paneForegroundAgentTracker.onCommandFinished()
     // Commands can change HEAD/index; nudge git UI immediately instead of waiting for polling.
-    dispatchTerminalCommandFinishedEvent(session.deps.worktreeId, bestEffortExitCode)
+    dispatchTerminalCommandFinishedEvent(
+      session.deps.worktreeId,
+      bestEffortExitCode,
+      session.deps.tabId,
+      parsePaneKey(session.cacheKey)?.leafId
+    )
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     const inferenceResult = session.flushPendingInterruptInference()

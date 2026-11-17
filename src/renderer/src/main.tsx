@@ -30,12 +30,24 @@ import { handleGuestWindowCloseMessage } from './components/browser-pane/host-gu
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
+import { registerPlanBillingMenuItem } from './components/billing/register-plan-billing-menu-item'
+import { installOrcaCloudSessionEvents } from './lib/orca-cloud-session-events'
+import { installCloudWorkspaceLinks } from './components/cloud-workspaces/cloud-workspace-links'
+import { installRunActionEvents } from './lib/run-actions/run-action-events'
 import { trackPageFocusLossForTerminalIme } from './components/terminal-pane/input/focus/regular-terminal-focus-ownership'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+const disposePlanBillingMenuItem = registerPlanBillingMenuItem()
+import.meta.hot?.dispose(disposePlanBillingMenuItem)
+const disposeRunActionEvents = installRunActionEvents()
+import.meta.hot?.dispose(disposeRunActionEvents)
+const disposeOrcaCloudSessionEvents = installOrcaCloudSessionEvents()
+import.meta.hot?.dispose(disposeOrcaCloudSessionEvents)
+const disposeCloudWorkspaceLinks = installCloudWorkspaceLinks()
+import.meta.hot?.dispose(disposeCloudWorkspaceLinks)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()

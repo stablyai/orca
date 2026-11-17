@@ -76,6 +76,7 @@ export const AgentLaunchPicker = memo(
     onCatalogOpen,
     defaultAgent,
     onSetDefault,
+    statusLabels,
     launchDefaults,
     launchDefaultsContainer,
     onPick
@@ -105,6 +106,8 @@ export const AgentLaunchPicker = memo(
     /** The saved default; with onSetDefault, right-clicking an agent offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
     onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
+    /** A muted status per agent row, shown only inside the open menu (Orca Cloud). */
+    statusLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
     /** Settings forms: the picked agent's Permissions and Arguments, as fields under the picker. */
     launchDefaults?: boolean
     /** Renders those fields here instead, e.g. full width under a narrow picker column. */
@@ -344,6 +347,7 @@ export const AgentLaunchPicker = memo(
                 onClose={close}
                 choices={choices?.map(closing)}
                 blankTerminal={blankTerminal ? closing(blankTerminal) : undefined}
+                statusLabels={statusLabels}
               />
             ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu
@@ -362,6 +366,7 @@ export const AgentLaunchPicker = memo(
                 onSelectAgent={selectAgent}
                 defaultAgent={defaultAgent}
                 onSetDefault={onSetDefault}
+                statusLabels={statusLabels}
                 runLaunch={runLaunch}
               />
             ) : (

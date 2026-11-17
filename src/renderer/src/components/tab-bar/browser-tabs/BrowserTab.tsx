@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
+import { X, Pin, PinOff, Volume2, VolumeX, Monitor } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,6 +13,7 @@ import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { isCloudRemoteDesktopTabUrl } from '../../../../../shared/hosted-sandbox/cloud-remote-desktop'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getLiveBrowserUrl } from '../../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../../tab-group/drag/tab-drag-data'
@@ -100,6 +101,7 @@ export default function BrowserTab({
     // invalid URL — leave disabled
   }
   const tabLabel = getBrowserTabLabel(tab, t)
+  const isRemoteDesktop = isCloudRemoteDesktopTabUrl(tab.url)
   const audible = useAppStore((s) =>
     (s.browserPagesByWorkspace[tab.id] ?? []).some((page) => s.browserAudiblePageIds[page.id])
   )
@@ -184,6 +186,8 @@ export default function BrowserTab({
           />
           <AgentCursorGlyph className="pointer-events-none absolute inset-0 size-3" />
         </span>
+      ) : isRemoteDesktop ? (
+        <Monitor className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       ) : (
         <BrowserFavicon
           faviconUrl={tab.faviconUrl}
@@ -244,7 +248,13 @@ export default function BrowserTab({
             <TabHoverCard
               title={tabLabel}
               showWhenUnclipped={controllerHost !== null}
-              icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
+              icon={
+                isRemoteDesktop ? (
+                  <Monitor className="size-4 text-muted-foreground" aria-hidden />
+                ) : (
+                  <BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />
+                )
+              }
               programName={
                 agentDriving
                   ? agentDrivingLabel

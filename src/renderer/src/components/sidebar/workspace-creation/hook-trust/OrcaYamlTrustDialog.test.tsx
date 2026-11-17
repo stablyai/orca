@@ -103,7 +103,7 @@ describe('OrcaYamlTrustDialog repo on two hosts', () => {
         (button) => button.textContent === 'Always trust'
       )
     ).toBe(false)
-    clickButton('Run hooks')
+    clickButton('Run')
     await expect(first).resolves.toBe('run')
 
     expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
@@ -196,7 +196,7 @@ describe('OrcaYamlTrustDialog repo approval', () => {
       'vm'
     )
     await waitForPrompt()
-    clickButton('Run hooks')
+    clickButton('Run')
     await expect(vm).resolves.toEqual({
       decision: 'run',
       approvedContentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'
@@ -213,7 +213,7 @@ describe('OrcaYamlTrustDialog repo approval', () => {
       'vm'
     )
     await waitForPrompt()
-    clickButton('Run hooks')
+    clickButton('Run')
     await expect(changedVm).resolves.toEqual({
       decision: 'run',
       approvedContentHash: '702e948d947e109310cb2bf19c157b5bb8142b88c87e02ae87a7594c9b797893'
@@ -258,7 +258,7 @@ describe('automation setup approval', () => {
     serveSetupScript('pnpm install')
     const approval = approveAutomationSetup('repo-1', 'local', 'origin/main')
     await waitForPrompt()
-    clickButton('Run hooks')
+    clickButton('Run')
     await expect(approval).resolves.toEqual({
       decision: 'run',
       approvedContentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90'

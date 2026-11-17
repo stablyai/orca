@@ -1,4 +1,5 @@
 /** Keep store-level command status while parked; foreground confirmation and input-intent inference remain with mounted panes. */
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolvePaneAgentOwner } from '../../../../../../shared/agent-status/identity/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
@@ -181,7 +182,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
         return
       }
       // Commands can change HEAD/index; nudge git UI immediately rather than wait for polling.
-      dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
+      dispatchTerminalCommandFinishedEvent(
+        worktreeId,
+        bestEffortExitCode,
+        tabId,
+        parsePaneKey(paneKey)?.leafId
+      )
       void retireForegroundAgentUnlessConfirmed()
       // Mirror SSH’s unprobed same-turn drop; local PTYs require mounted foreground confirmation against nested-shell 133;D.
       if (parseAppSshPtyId(ptyId) === null) {

@@ -116,7 +116,9 @@ export function SetupScriptPromptCardShell({
           repoDisplayName={repoDisplayName}
           setup={detectedSetupPreview.setup}
           archive={detectedSetupPreview.archive}
+          runActions={detectedSetupPreview.runActions}
           skippedFields={detectedSetupPreview.skippedFields}
+          ubuntuNote={detectedSetupPreview.ubuntuNote}
           provenance={candidateProvenance}
           isSaving={isImporting}
           onSave={onImport}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
@@ -9,6 +10,7 @@ import {
 } from '../../../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
+import { vmWorkspacePortsAreStale } from '@/lib/workspace-ports/vm-workspace-stale-ports'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -19,8 +21,19 @@ import {
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import { useIsCloudHostRow } from '@/lib/orca-cloud/cloud-host-rows'
+import { useHostStateWord } from '../host/WorktreeCardHostMark'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+
+
+/** Cloud lifecycle states that already explain an unreachable host (no "offline" beside them). */
+const LIFECYCLE_HOST_STATES: ReadonlySet<CloudDotState> = new Set<CloudDotState>([
+  'sleeping',
+  'waking',
+  'wakeFailed',
+  'archived'
+])
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -153,11 +166,21 @@ export function useWorktreeCardFoundation({
   })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
-  const workspacePorts = useAppStore(
-    (s) =>
-      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
-      EMPTY_WORKSPACE_PORTS
-  )
+  const workspacePorts = useAppStore((s) => {
+    const scan = s.workspacePortScan?.result
+    // A sleeping VM's ports died with it: none while asleep or waking, nor after the wake until a
+    // newer scan finds them again.
+    if (
+      vmWorkspacePortsAreStale({
+        runtime: s.ephemeralVmRuntimesByWorkspaceId?.[worktree.id],
+        waking: Boolean(s.wakingEphemeralVmWorkspaceIds?.[worktree.id]),
+        scannedAt: scan?.scannedAt
+      })
+    ) {
+      return EMPTY_WORKSPACE_PORTS
+    }
+    return getWorkspacePortsByWorktreeId(scan).get(worktree.id) ?? EMPTY_WORKSPACE_PORTS
+  })
 
   // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>
@@ -200,7 +223,21 @@ export function useWorktreeCardFoundation({
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
   // Missing runtime probe data means unknown, not disconnected.
-  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
+  const runtimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
+  // An Orca Cloud row (owned or paired) shows its cloud mark, not a host pill too.
+  const isCloudHostRow = useIsCloudHostRow(worktree)
+  // Line 2 stays for a state word ("Asleep ·") now that a cloud row has no host pill to hold it.
+  const hostStateWord = useHostStateWord(worktree.id)
+  const hasHostStateWord = hostStateWord !== null
+  // A cloud row whose lifecycle already says why its host is unreachable (asleep, waking, a wake
+  // that failed, archived) is not "offline": its paired server's reconnect attempts flip the
+  // connection between disconnected and connecting, which re-dimmed the row and toggled the
+  // offline slot on every attempt (n84 flicker).
+  const lifecycleExplainsHost =
+    isCloudHostRow &&
+    (hostStateWord?.going === true ||
+      (hostStateWord?.state != null && LIFECYCLE_HOST_STATES.has(hostStateWord.state)))
+  const isRuntimeDisconnected = runtimeDisconnected && !lifecycleExplainsHost
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
@@ -245,6 +282,8 @@ export function useWorktreeCardFoundation({
     parsedRepoHost,
     runtimeHostLabel,
     isRuntimeDisconnected,
+    isCloudHostRow,
+    hasHostStateWord,
     titleRenaming,
     setTitleRenaming,
     showRenameErrorDialog,

@@ -1,0 +1,251 @@
+import React, { useId, useState } from 'react'
+import { Clock3, Pencil } from 'lucide-react'
+import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/class-names'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
+import {
+  canQueueVmCreationPrompt,
+  queueVmCreationPrompt,
+  vmCreationFirstPrompt,
+  vmCreationPromptIsDraft
+} from '@/lib/workspace/creation/vm-creation-queued-prompt'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isOrcaCloudAccountAgent } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { cloudAgentHoldReason } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
+
+type OrcaCloudQueuedPromptViewProps = {
+  agentName: string
+  /** The prompt the agent starts with; empty when none is queued. */
+  prompt: string
+  /** False once the build has moved past provisioning and the prompt is handed to the launch. */
+  editable: boolean
+  /** The prompt is typed into the agent unsent rather than sent. */
+  draft?: boolean
+  /** The agent isn't set up for Orca Cloud: its launch, and so this prompt, wait for that. */
+  held?: boolean
+  onQueue: (text: string) => void
+}
+
+type Translate = ReturnType<typeof useTranslate>
+
+/** The queued prompt's heading: when, and whether, it goes to the agent. */
+function queuedTitle(
+  t: Translate,
+  agent: string,
+  { held, editable, draft }: { held: boolean; editable: boolean; draft: boolean }
+): string {
+  if (held) {
+    return t(
+      'auto.components.orcaCloud.QueuedPrompt.held',
+      'First prompt for {{agent}} · Sends once {{agent}} is set up',
+      { agent }
+    )
+  }
+  if (editable) {
+    return draft
+      ? t(
+          'auto.components.orcaCloud.QueuedPrompt.draftQueued',
+          'Draft for {{agent}}, typed in when ready',
+          { agent }
+        )
+      : t(
+          'auto.components.orcaCloud.QueuedPrompt.queuedUntilReady',
+          'First prompt for {{agent}} · Sends when the workspace is ready',
+          { agent }
+        )
+  }
+  return draft
+    ? t('auto.components.orcaCloud.QueuedPrompt.drafting', 'Ready as a draft in {{agent}}', {
+        agent
+      })
+    : t('auto.components.orcaCloud.QueuedPrompt.sending', 'Sending to {{agent}} next', { agent })
+}
+
+/** Queue the agent's first prompt while the workspace builds; it starts with it once ready. */
+export function OrcaCloudQueuedPromptView({
+  agentName,
+  prompt,
+  editable,
+  draft: isDraftDelivery = false,
+  held = false,
+  onQueue
+}: OrcaCloudQueuedPromptViewProps): React.JSX.Element | null {
+  const t = useTranslate()
+  const inputId = useId()
+  const hintId = useId()
+  const [draft, setDraft] = useState<string | null>(prompt ? null : '')
+  const editing = editable && draft !== null
+  // Typing that the build outran stays on screen, so the text isn't lost silently.
+  const lateDraft =
+    !editable && draft !== null && draft.trim() && draft.trim() !== prompt.trim()
+      ? draft.trim()
+      : null
+  if (!editable && !prompt && !lateDraft) {
+    return null
+  }
+  const submit = (): void => {
+    const text = (draft ?? '').trim()
+    if (!text) {
+      return
+    }
+    onQueue(text)
+    setDraft(null)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1.5" data-orca-cloud-queued-prompt="editing">
+        <label htmlFor={inputId} className="text-xs font-medium text-foreground">
+          {t('auto.components.orcaCloud.QueuedPrompt.label', 'First prompt for {{agent}}', {
+            agent: agentName
+          })}
+        </label>
+        <Textarea
+          id={inputId}
+          aria-describedby={hintId}
+          value={draft}
+          rows={3}
+          className="min-h-16 resize-none"
+          placeholder={t(
+            'auto.components.orcaCloud.QueuedPrompt.placeholder',
+            'What should {{agent}} work on?',
+            { agent: agentName }
+          )}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault()
+              submit()
+            } else if (event.key === 'Escape' && prompt) {
+              event.preventDefault()
+              setDraft(null)
+            }
+          }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <p id={hintId} className="text-xs text-muted-foreground">
+            {held
+              ? t(
+                  'auto.components.orcaCloud.QueuedPrompt.heldHint',
+                  'Sends once {{agent}} is set up.',
+                  { agent: agentName }
+                )
+              : t(
+                  'auto.components.orcaCloud.QueuedPrompt.hint',
+                  '{{agent}} starts with it as soon as the workspace is ready.',
+                  { agent: agentName }
+                )}
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {prompt ? (
+              <Button size="xs" variant="ghost" onClick={() => setDraft(null)}>
+                {t('auto.components.orcaCloud.QueuedPrompt.cancelEdit', 'Cancel')}
+              </Button>
+            ) : null}
+            <Button size="xs" variant="secondary" disabled={!draft.trim()} onClick={submit}>
+              {t('auto.components.orcaCloud.QueuedPrompt.queue', 'Queue prompt')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (lateDraft) {
+    return (
+      <div
+        className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/30 px-3 py-2"
+        data-orca-cloud-queued-prompt="late"
+        role="status"
+      >
+        <p className="text-xs font-medium text-foreground">
+          {prompt
+            ? t(
+                'auto.components.orcaCloud.QueuedPrompt.lateEdit',
+                'Too late to change: {{agent}} is starting with the queued prompt. Send your edit once the workspace opens:',
+                { agent: agentName }
+              )
+            : t(
+                'auto.components.orcaCloud.QueuedPrompt.lateQueue',
+                'Too late to queue: {{agent}} is already starting. Send this once the workspace opens:',
+                { agent: agentName }
+              )}
+        </p>
+        <p className="line-clamp-4 text-xs whitespace-pre-wrap break-words text-muted-foreground select-text">
+          {lateDraft}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      // A held prompt waits on the agent's setup (warning); a queued one is info.
+      className={cn(
+        'flex items-start gap-2 rounded-md border px-3 py-2',
+        BANNER_TONE[held ? 'warning' : 'info'].surface,
+        BANNER_TONE[held ? 'warning' : 'info'].border
+      )}
+      data-orca-cloud-queued-prompt="queued"
+    >
+      <Clock3
+        className={cn('mt-0.5 size-3.5 shrink-0', BANNER_TONE[held ? 'warning' : 'info'].icon)}
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-foreground">
+          {queuedTitle(t, agentName, { held, editable, draft: isDraftDelivery })}
+        </p>
+        <p
+          className={cn(
+            'mt-0.5 line-clamp-3 text-xs whitespace-pre-wrap break-words',
+            BANNER_BODY_TEXT
+          )}
+        >
+          {prompt}
+        </p>
+      </div>
+      {editable ? (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t('auto.components.orcaCloud.QueuedPrompt.edit', 'Edit queued prompt')}
+          onClick={() => setDraft(prompt)}
+        >
+          <Pencil className="size-3.5" aria-hidden="true" />
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
+/** Mount in a VM create's build surface; renders nothing for creates without an agent. */
+export function OrcaCloudQueuedPrompt({
+  creationId
+}: {
+  creationId: string
+}): React.JSX.Element | null {
+  const entry = useAppStore((state) => state.pendingWorktreeCreations[creationId])
+  const agent = entry?.request.agent ?? null
+  const accountAgent = isOrcaCloudAccountAgent(agent) ? agent : null
+  const accounts = useOrcaCloudAgentAccounts(accountAgent !== null)
+  if (!entry?.request.ephemeralVmRecipe || agent === null) {
+    return null
+  }
+  const held = accountAgent !== null && cloudAgentHoldReason(accountAgent, accounts) === 'notSetUp'
+  return (
+    <OrcaCloudQueuedPromptView
+      key={creationId}
+      agentName={tuiAgentDisplayName(agent) ?? agent}
+      prompt={vmCreationFirstPrompt(entry)}
+      draft={vmCreationPromptIsDraft(entry)}
+      held={held}
+      editable={canQueueVmCreationPrompt(entry)}
+      onQueue={(text) => queueVmCreationPrompt(creationId, text)}
+    />
+  )
+}

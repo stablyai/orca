@@ -24,6 +24,24 @@ import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-pale
 import type { WorktreeJumpPaletteStoreState } from '../state/use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { recomputeOn } from '@/lib/recompute-on'
+import {
+  refreshCloudEnvironmentIds,
+  useCloudEnvironmentIds
+} from '@/lib/cloud-remote-desktop/cloud-environment-ids'
+import { openCloudWorkspacePicker } from '@/components/cloud-workspaces/cloud-workspace-picker-store'
+import { useCloudWorkspacesPresent } from '@/components/cloud-workspaces/use-cloud-workspaces'
+
+function openCloudWorkspacePickerAction(): void {
+  // After the palette closes, so focus lands in the picker's search field.
+  queueMicrotask(() => openCloudWorkspacePicker())
+}
+
+function openCloudRemoteDesktopAction(worktreeId: string): void {
+  // Loaded on use, like the palette's other cloud actions.
+  void import('@/lib/cloud-remote-desktop/open-cloud-remote-desktop').then((module) =>
+    module.openCloudRemoteDesktop(worktreeId)
+  )
+}
 
 /** Prefetch the repo New workspace will seed, mapping a per-workspace VM repo to its visible checkout. */
 function getComposerPrefetchRepoId(
@@ -51,6 +69,7 @@ type WorktreeJumpPaletteQuickActionsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteOpenTabs, never>
 
 export function useWorktreeJumpPaletteQuickActions({
+  visible,
   openModal,
   openSettingsPage,
   openSettingsTarget,
@@ -73,6 +92,15 @@ export function useWorktreeJumpPaletteQuickActions({
   deferredQuery,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
+  // "Open remote desktop" shows only for Orca Cloud workspaces: read the list fresh on open.
+  const cloudEnvironmentIds = useCloudEnvironmentIds()
+  // "Open cloud workspace…" shows only while signed in to Orca Cloud.
+  const cloudPresent = useCloudWorkspacesPresent()
+  useEffect(() => {
+    if (visible) {
+      void refreshCloudEnvironmentIds()
+    }
+  }, [visible])
   const graphScope = useGitGraphScope(activeWorktreeId ?? '')
   const graphOwner = JSON.stringify([activeWorktreeId, graphScope?.route])
   const [graphProbe, setGraphProbe] = useState<{ owner: string; support: boolean | null }>()
@@ -153,9 +181,12 @@ export function useWorktreeJumpPaletteQuickActions({
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
-        openAddQuickCommand: openAddQuickCommandAction
+        openAddQuickCommand: openAddQuickCommandAction,
+        openCloudRemoteDesktop: openCloudRemoteDesktopAction,
+        openCloudWorkspacePicker: cloudPresent ? openCloudWorkspacePickerAction : undefined
       }),
     [
+      cloudPresent,
       activeGroupSnapshotRef,
       deleteActiveWorkspaceAction,
       openAddQuickCommandAction,
@@ -181,7 +212,9 @@ export function useWorktreeJumpPaletteQuickActions({
           unifiedTabsByWorktree,
           isLoading,
           settings?.activeRuntimeEnvironmentId,
-          runtimeStatusByEnvironmentId
+          runtimeStatusByEnvironmentId,
+          cloudEnvironmentIds,
+          cloudPresent
         ],
         () => {
           const context = buildQuickActionContext()
@@ -225,7 +258,9 @@ export function useWorktreeJumpPaletteQuickActions({
       unifiedTabsByWorktree,
       isLoading,
       settings?.activeRuntimeEnvironmentId,
-      runtimeStatusByEnvironmentId
+      runtimeStatusByEnvironmentId,
+      cloudEnvironmentIds,
+      cloudPresent
     ]
   )
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {

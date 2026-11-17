@@ -17,12 +17,23 @@
       }
     }
   },
+  "agentHostPanel": {
+    "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_other": "{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_one": "{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_other": "{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM."
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
       "unsupportedLaunch": "OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.",
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
     }
+  },
+  "agentSources": {
+    "shared": "Personal accounts aren’t used in shared workspaces."
   },
   "aiVault": {
     "scanIssues": {
@@ -219,12 +230,45 @@
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
         }
       },
+      "billing": {
+        "plans": {
+          "sandboxHoursLeftResets_one": "{{count}} sandbox hour left · resets {{date}}",
+          "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
+          "seatsBilled_one": "{{count}} seat · {{billed}}",
+          "seatsBilled_other": "{{count}} seats · {{billed}}"
+        },
+        "sandboxHoursLeftCount_one": "{{count}} sandbox hour left",
+        "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
+        "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",
+        "sandboxHoursOverIncluded_other": "{{count}} sandbox hours over the included amount this month",
+        "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
+        "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used"
+      },
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
           "errorCapture": "Could not capture the page to draw on.",
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
+      },
+      "cloudWorkspaces": {
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
+        "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "rowSandboxHours_one": "{{hours}} sandbox hour",
+        "rowSandboxHours_other": "{{hours}} sandbox hours"
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
@@ -362,6 +406,14 @@
           }
         }
       },
+      "new": {
+        "workspace": {
+          "RunTargetCombobox": {
+            "orcaCloudSandboxHoursLeft_one": "{{hours}} sandbox hour left",
+            "orcaCloudSandboxHoursLeft_other": "{{hours}} sandbox hours left"
+          }
+        }
+      },
       "onboarding": {
         "AgentStep": {
           "showMoreAgents": "Show {{value0}} more agents →",
@@ -414,6 +466,10 @@
           "BulkActionBar": {
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
+          },
+          "RuntimeForwardedPorts": {
+            "connectionCount_one": "{{count}} connection",
+            "connectionCount_other": "{{count}} connections"
           },
           "Search": {
             "fileCount_one": "{{count}} file",
@@ -727,11 +783,11 @@
           "terminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
         "Settings": {
-          "084d8fac5b": "Privacy & Security",
-          "23931df7e8": "Remote Hosts",
-          "23c6874fdf": "AI Capabilities",
+          "084d8fac5b": "Privacy & security",
+          "23931df7e8": "Remote hosts",
+          "23c6874fdf": "AI capabilities",
           "8bd117d669": "Interface",
-          "9abb9be3bc": "Set Up",
+          "9abb9be3bc": "Set up",
           "e1578cd4bc": "Workflows"
         },
         "SshPane": {
@@ -823,6 +879,11 @@
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
+        "orcaCloudPredictiveWake": {
+          "description": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Early wakes add to your usage.",
+          "description_one": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minute. Early wakes add to your usage.",
+          "description_other": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minutes. Early wakes add to your usage."
+        },
         "repository": {
           "search": {
             "keepForkUpToDate": "Keep Fork Up to Date"
@@ -882,6 +943,10 @@
         "AddRepoNestedImportStep": {
           "foundRepositories_one": "Found {{count}} repository in {{path}}.",
           "foundRepositories_other": "Found {{count}} repositories in {{path}}."
+        },
+        "DeleteCloudWorkspace": {
+          "uncommitted_one": "{{count}} uncommitted change",
+          "uncommitted_other": "{{count}} uncommitted changes"
         },
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
@@ -1254,6 +1319,10 @@
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
       },
+      "teamMfa": {
+        "soonTitle_one": "{{value0}} requires two-factor authentication in {{count}} day",
+        "soonTitle_other": "{{value0}} requires two-factor authentication in {{count}} days"
+      },
       "terminal": {
         "pane": {
           "TerminalErrorToast": {
@@ -1276,6 +1345,34 @@
                 "uploadingFiles_other": "Uploading {{count}} files to runtime…"
               }
             }
+          }
+        }
+      },
+      "worktree": {
+        "creation": {
+          "BlockedSandboxHoursNote": {
+            "sleepsIn_one": "Sleeps in {{count}} minute if unused.",
+            "sleepsIn_other": "Sleeps in {{count}} minutes if unused."
+          },
+          "VmBuildErrorDetails": {
+            "earlierLines_one": "…{{count}} earlier line. Copy details includes it.",
+            "earlierLines_other": "…{{count}} earlier lines. Copy details includes them."
+          },
+          "VmBuildFailureCard": {
+            "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
+            "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
+            "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitBodyCount_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitBodyCount_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
+          },
+          "VmBuildLog": {
+            "hiddenTechnicalLines_one": "{{count}} technical line hidden. Copy log includes it.",
+            "hiddenTechnicalLines_other": "{{count}} technical lines hidden. Copy log includes them."
           }
         }
       }
@@ -1335,6 +1432,10 @@
       "emulator": {
         "androidSdkNotFound": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
         "xcodeSimulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`."
+      },
+      "orcaCloudSession": {
+        "sandboxRestartsInMinutes_one": "{{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "{{name}} restarts in {{count}} minutes"
       },
       "rateLimits": {
         "errors": {
@@ -1534,6 +1635,83 @@
       "manyOtherSites_other": "Read and change your data on {{hosts}} and {{count}} other sites"
     }
   },
+  "cloudEnvironment": {
+    "staleness": {
+      "branchMovedInRepo_one": "{{branch}} in {{repo}} is {{count}} commit ahead of build #{{number}}",
+      "branchMovedInRepo_other": "{{branch}} in {{repo}} is {{count}} commits ahead of build #{{number}}",
+      "branchMoved_one": "{{branch}} is {{count}} commit ahead of build #{{number}}",
+      "branchMoved_other": "{{branch}} is {{count}} commits ahead of build #{{number}}"
+    }
+  },
+  "cloudMcpSync": {
+    "summary": {
+      "found": "{{count}} found",
+      "found_one": "{{count}} found",
+      "found_other": "{{count}} found",
+      "notSynced": "{{count}} found, not synced yet",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped": "{{count}} skipped",
+      "skipped_one": "{{count}} skipped",
+      "skipped_other": "{{count}} skipped",
+      "synced": "{{count}} synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
+    }
+  },
+  "cloudSecrets": {
+    "paste": {
+      "blocked": "{{count}} need a fix and will be skipped",
+      "blocked_one": "{{count}} needs a fix and will be skipped",
+      "blocked_other": "{{count}} need a fix and will be skipped",
+      "duplicates": "{{count}} duplicates ignored",
+      "duplicates_one": "{{count}} duplicate ignored",
+      "duplicates_other": "{{count}} duplicates ignored",
+      "save": "Save {{count}} secrets",
+      "save_one": "Save {{count}} secret",
+      "save_other": "Save {{count}} secrets",
+      "unreadable_one": "{{count}} unreadable line skipped",
+      "unreadable_other": "{{count}} unreadable lines skipped"
+    },
+    "value": {
+      "lines": "Multi-line value · {{count}} lines",
+      "lines_one": "Multi-line value · {{count}} line",
+      "lines_other": "Multi-line value · {{count}} lines"
+    }
+  },
+  "cloudSecretsAsk": {
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets"
+  },
+  "cloudSetupPage": {
+    "trial": {
+      "lead": "{{hours}} sandbox hours to try Orca Cloud. No card needed.",
+      "lead_one": "{{hours}} sandbox hour to try Orca Cloud. No card needed.",
+      "lead_other": "{{hours}} sandbox hours to try Orca Cloud. No card needed."
+    }
+  },
+  "cloudSkillsSync": {
+    "row": {
+      "localRefs_one": "Imports 1 file from elsewhere on this computer; it isn’t copied",
+      "localRefs_other": "Imports {{count}} files from elsewhere on this computer; those aren’t copied",
+      "settingsLocalRefs_one": "Permissions, model and output style only. 1 rule mentions a path on this computer and stays here. Changes made in a workspace stay there.",
+      "settingsLocalRefs_other": "Permissions, model and output style only. {{count}} rules mention paths on this computer and stay here. Changes made in a workspace stay there.",
+      "withheld_one": "Synced without 1 file that looks like a key or credential",
+      "withheld_other": "Synced without {{count}} files that look like keys or credentials"
+    },
+    "summary": {
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped_one": "{{count}} not synced",
+      "skipped_other": "{{count}} not synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
+    }
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",
@@ -1612,6 +1790,18 @@
       "keywordCookies": "cookies",
       "keywordProfile": "browser profile",
       "keywordSignIn": "sign in"
+    },
+    "cloudWorkspaces": {
+      "picker": {
+        "inSidebarNote_one": "{{count}} more is already in your sidebar.",
+        "inSidebarNote_other": "{{count}} more are already in your sidebar."
+      }
+    },
+    "confirmation": {
+      "itemList": {
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
+      }
     },
     "native-chat": {
       "approval": {
@@ -1911,6 +2101,12 @@
         "resolver": "Answered on {{device}}",
         "unavailable": "Selected answer unavailable"
       },
+      "rewind": {
+        "restoreChangedFiles_one": "Also restore {{count}} changed file",
+        "restoreChangedFiles_other": "Also restore {{count}} changed files",
+        "restoredFiles_one": "Restored {{count}} file",
+        "restoredFiles_other": "Restored {{count}} files"
+      },
       "sessionOptionErrors": {
         "afterStartOnly": "This option is only available after the session starts.",
         "agentPickerOnly": "This option must be changed in the agent picker.",
@@ -2124,6 +2320,20 @@
         "waitMoment": "Wait a moment."
       }
     },
+    "newWorkspace": {
+      "cloudHours": {
+        "planChip_one": "{{hours}} sandbox hour left",
+        "planChip_other": "{{hours}} sandbox hours left",
+        "trialChip_one": "Trial · {{hours}} sandbox hour left",
+        "trialChip_other": "Trial · {{hours}} sandbox hours left",
+        "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
+      },
+      "cloudSetup": {
+        "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
+        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud"
+      }
+    },
     "onboarding": {
       "integrations": {
         "capabilities": {
@@ -2134,11 +2344,25 @@
         }
       }
     },
+    "orcaCloud": {
+      "read": {
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages"
+      }
+    },
     "orchestrationCrew": {
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you",
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
+    },
+    "runtimeDownload": {
+      "fileCount_one": "{{files}} file",
+      "fileCount_other": "{{files}} files",
+      "folderFilesProgress_one": "{{files}} file",
+      "folderFilesProgress_other": "{{files}} files",
+      "skipped_one": "{{count}} item couldn’t be read and was left out.",
+      "skipped_other": "{{count}} items couldn’t be read and were left out."
     },
     "settings": {
       "workspaceCleanup": {
@@ -2292,17 +2516,25 @@
     "errors": {
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "cleanupStopped": "Cleanup stopped by user.",
+      "cloudCloneFailed": "Orca Cloud couldn’t clone this repository, so it deleted the sandbox. Try again.",
+      "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.",
+      "cloudDeleteNotConfirmed": "Orca Cloud couldn’t confirm this sandbox was deleted, so it may still be running. Sign in with the Orca account that started it, then try again.",
+      "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
+      "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
+      "cloudPlanRequired": "Orca Cloud needs a Team plan. Open Plan & billing to choose one.",
+      "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
+      "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "defaultStartRefUnresolved": "Could not resolve a default provisioned-root start ref.",
       "destroyDisabled": "Destroy is disabled for this recipe.",
       "destroyExited": "Destroy exited with code {{exitCode}}.",
-      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "destroyExitedWithoutCode": "Destroy exited without an exit code.",
       "destroyFailed": "Destroy failed.",
       "provisionCancelled": "Provisioning cancelled.",
       "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources.",
       "provisionedRootNotConfigured": "Recipe result requests provisioned-root checkout, but the recipe is not configured for it.",
       "provisionedRootResultRequired": "Provisioned-root recipes must return schemaVersion 2 with checkoutMode \"provisioned-root\".",
       "recipeExited": "Recipe exited with code {{exitCode}}.",
-      "recipeExitedWithoutCode": "Recipe exited with code unknown.",
+      "recipeExitedWithoutCode": "Recipe exited without an exit code.",
       "recipeNotFound": "Recipe not found: {{recipeId}}",
       "recipeResultMissing": "Recipe produced no JSON result.",
       "recipeResultNotJsonObject": "Recipe stdout must be one JSON object.",
@@ -2312,13 +2544,13 @@
       "remoteRepoUnsupported": "Ephemeral VM recipes run on the local desktop host in v1.",
       "repoNotFound": "Repo not found: {{repoId}}",
       "resumeExited": "Resume exited with code {{exitCode}}.",
-      "resumeExitedWithoutCode": "Resume exited with code unknown.",
+      "resumeExitedWithoutCode": "Resume exited without an exit code.",
       "runtimeNotFound": "Unknown ephemeral VM runtime: {{runtimeId}}",
       "runtimeRepoMissing": "Ephemeral VM runtime has no repo id: {{runtimeId}}",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
       "startRefUnresolved": "Could not resolve provisioned-root start ref: {{ref}}",
       "suspendExited": "Suspend exited with code {{exitCode}}.",
-      "suspendExitedWithoutCode": "Suspend exited with code unknown."
+      "suspendExitedWithoutCode": "Suspend exited without an exit code."
     }
   },
   "jira": {
@@ -2335,6 +2567,14 @@
     "liveTerminals_one": "{{count}} live terminal will reconnect after restart.",
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
   },
+  "localCommands": {
+    "prompt": {
+      "timeoutMinutes_one": "Stops after {{count}} minute",
+      "timeoutMinutes_other": "Stops after {{count}} minutes",
+      "timeoutSeconds_one": "Stops after {{count}} second",
+      "timeoutSeconds_other": "Stops after {{count}} seconds"
+    }
+  },
   "menu": {
     "about": "About Orca",
     "hide": "Hide Orca",
@@ -2345,6 +2585,63 @@
     "toggleFullScreen": "Toggle Full Screen",
     "unhide": "Show All",
     "zoom": "Zoom"
+  },
+  "orcaCloudMove": {
+    "confirm": {
+      "stopsAgents_one": "Stops {{count}} running agent",
+      "stopsAgents_other": "Stops {{count}} running agents"
+    },
+    "done": {
+      "archivedShort_one": "Cloud copy archived; deleted in {{count}} day.",
+      "archivedShort_other": "Cloud copy archived; deleted in {{count}} days."
+    }
+  },
+  "orcaCloudSync": {
+    "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
+    "editedHere_other": "{{count}} files changed on this computer. Edits here don’t sync back. The cloud copy replaces them when it changes.",
+    "fileCount_one": "{{n}} file",
+    "fileCount_other": "{{n}} files",
+    "removalEdited_one": "{{count}} changed file on this computer will be removed.",
+    "removalEdited_other": "{{count}} changed files on this computer will be removed."
+  },
+  "orcaCloudWorkspace": {
+    "archiveSnapshot": {
+      "definition_one": "Stops the workspace and keeps it for {{count}} day, then deletes it.",
+      "definition_other": "Stops the workspace and keeps it for {{count}} days, then deletes it.",
+      "deletesIn_one": "Read-only. Deletes in {{count}} day unless you unarchive it.",
+      "deletesIn_other": "Read-only. Deletes in {{count}} days unless you unarchive it.",
+      "dialogKept_one": "It’s kept for {{count}} day, then deleted. You can unarchive it until then.",
+      "dialogKept_other": "It’s kept for {{count}} days, then deleted. You can unarchive it until then."
+    },
+    "archived": {
+      "deletesInShort_one": "deletes in {{count}} day",
+      "deletesInShort_other": "deletes in {{count}} days",
+      "files": "{{count}} files",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "moreFiles_one": "{{count}} more file not shown",
+      "moreFiles_other": "{{count}} more files not shown"
+    },
+    "archivedDetailLocalCopy_one": "Kept for {{count}} day, then deleted. The copy on this computer will be removed.",
+    "archivedDetailLocalCopy_other": "Kept for {{count}} days, then deleted. The copy on this computer will be removed.",
+    "archivedDetailLocalEdits_one": "Kept for {{days}} days, then deleted. {{count}} changed file on this computer will be removed.",
+    "archivedDetailLocalEdits_other": "Kept for {{days}} days, then deleted. {{count}} changed files on this computer will be removed.",
+    "archivedDetail_one": "Kept for {{count}} day, then deleted.",
+    "archivedDetail_other": "Kept for {{count}} days, then deleted.",
+    "asleep": {
+      "deletesInShort_one": "deletes in {{count}} day",
+      "deletesInShort_other": "deletes in {{count}} days"
+    },
+    "card": {
+      "sleepsIn_one": "Sleeps in {{count}} min if idle",
+      "sleepsIn_other": "Sleeps in {{count}} min if idle"
+    },
+    "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
+    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
+    "overlay": {
+      "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
+      "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up"
+    }
   },
   "pet": {
     "defaultLabels": {
@@ -2425,6 +2722,10 @@
       }
     }
   },
+  "secretRequest": {
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests"
+  },
   "sessionSearch": {
     "panel": {
       "resultCount_one": "{{count}} result",
@@ -2459,6 +2760,9 @@
         "sendingDisabled": "sending diagnostics is disabled",
         "sendingNotConfigured": "sending diagnostics is not configured for this build"
       }
+    },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
     },
     "mcp": {
       "serverCount_one": "{{count}} server",
@@ -2536,6 +2840,10 @@
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
       }
+    },
+    "teamWorkspaces": {
+      "shownOf_one": "{{shown}} of {{count}} workspace",
+      "shownOf_other": "{{shown}} of {{count}} workspaces"
     },
     "uninstall": {
       "hookTargets": {

@@ -11,6 +11,8 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
+import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
+import { isKnownCloudEnvironment } from '@/lib/cloud-remote-desktop/cloud-environment-ids'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type CmdJUnavailableReason =
@@ -20,6 +22,8 @@ export type CmdJUnavailableReason =
   | 'no-active-group'
   | 'no-active-chat'
   | 'client-action-unsupported'
+  | 'not-cloud-workspace'
+  | 'no-orca-cloud'
 
 export type CmdJQuickActionAvailability =
   | { available: true }
@@ -46,6 +50,11 @@ export type CmdJQuickActionContext = {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  /** The active workspace's Orca Cloud environment; null for every other workspace. */
+  activeCloudEnvironmentId?: string | null
+  openCloudRemoteDesktop?: (worktreeId: string, environmentId: string) => void
+  /** Set only while signed in to Orca Cloud: "Open cloud workspace…". */
+  openCloudWorkspacePicker?: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -160,6 +169,8 @@ export function buildCmdJQuickActionContext(args: {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  openCloudRemoteDesktop?: (worktreeId: string, environmentId: string) => void
+  openCloudWorkspacePicker?: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
   const activeWorktree = activeWorktreeId
@@ -184,6 +195,7 @@ export function buildCmdJQuickActionContext(args: {
     args.state.activeView === 'terminal'
       ? resolveActiveNativeChatSplitTarget(args.state, activeWorktreeId, activeGroupId)
       : null
+  const activeEnvironmentId = selectWorkspaceRuntimeEnvironmentId(args.state, activeWorktreeId)
 
   return {
     activeView: args.state.activeView,
@@ -201,6 +213,12 @@ export function buildCmdJQuickActionContext(args: {
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand,
+    activeCloudEnvironmentId:
+      activeEnvironmentId && isKnownCloudEnvironment(activeEnvironmentId)
+        ? activeEnvironmentId
+        : null,
+    openCloudRemoteDesktop: args.openCloudRemoteDesktop,
+    openCloudWorkspacePicker: args.openCloudWorkspacePicker,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
@@ -242,6 +260,18 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
         'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
+    case 'not-cloud-workspace':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.notCloudWorkspace',
+        'Can’t run “{{action}}” — the active workspace isn’t a cloud workspace.',
+        options
+      )
+    case 'no-orca-cloud':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noOrcaCloud',
+        'Can’t run “{{action}}” — sign in to Orca Cloud first.',
         options
       )
     case 'client-action-unsupported':

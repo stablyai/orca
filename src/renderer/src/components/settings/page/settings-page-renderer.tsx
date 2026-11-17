@@ -10,6 +10,7 @@ import type { SettingsInteractionController } from './use-settings-interaction-c
 import type { SettingsRenderContext } from './settings-render-context'
 import {
   renderAccountsSettingsSection,
+  renderAgentApiKeysSettingsSection,
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
   renderLinearSettingsSection,
@@ -50,7 +51,8 @@ import {
   renderDeveloperPermissionsSettingsSection,
   renderPrivacySettingsSection,
   renderServersSettingsSection,
-  renderSshSettingsSection
+  renderSshSettingsSection,
+  renderPortsSettingsSection
 } from './settings-remote-security-section-renderers'
 import {
   renderAdvancedSettingsSection,
@@ -59,6 +61,11 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
+import {
+  orcaCloudAgentAccountsLead,
+  orcaCloudAgentAccountsParts
+} from './settings-orca-cloud-agent-accounts-sections'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -162,7 +169,13 @@ export function renderSettingsPage(
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
                   {renderAgentsSettingsSection(context, t)}
-                  {renderAccountsSettingsSection(context, t)}
+                  {renderAccountsSettingsSection(
+                    context,
+                    t,
+                    orcaCloudAgentAccountsParts(context, t),
+                    orcaCloudAgentAccountsLead(context)
+                  )}
+                  {renderAgentApiKeysSettingsSection(context, t)}
                   {renderOrchestrationSettingsSection(context, t)}
                   {renderLinearSettingsSection(context, t)}
                   {renderDesktopCapabilitySettingsSections(context, t)}
@@ -172,6 +185,7 @@ export function renderSettingsPage(
                   {renderWorkspaceCleanupSettingsSection(context, t)}
                   {renderIntegrationsSettingsSection(context, t)}
                   {renderMobileSettingsSection(context, t)}
+                  {renderOrcaCloudSettingsSections(context, t)}
                   {renderAutomationsSettingsSection(context, t)}
                   {renderArtifactsSettingsSection(context, t)}
                   {renderShareSkillsSettingsSection(context, t)}
@@ -191,6 +205,7 @@ export function renderSettingsPage(
                   {renderStatsSettingsSection(context, t)}
                   {renderServersSettingsSection(context, t)}
                   {renderSshSettingsSection(context, t)}
+                  {renderPortsSettingsSection(context, t)}
                   {renderDeveloperPermissionsSettingsSection(context, t)}
                   {renderPrivacySettingsSection(context, t)}
                   {renderAdvancedSettingsSection(context, t)}

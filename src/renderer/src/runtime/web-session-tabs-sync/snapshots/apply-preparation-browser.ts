@@ -1,5 +1,6 @@
 import { browserInitializationReceiptStale } from '../tab-projection/browser-initialization-presentation'
 import { buildWebSessionExistingTabIndex } from '../placement/web-session-existing-tab-index'
+import { isSleptBrowserTabAwaitingReopen } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { resolveWebSessionVisibleTabId } from '../navigation/web-session-focus-intent'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from '../placement/tab-group-layout-tree'
 import {
@@ -87,6 +88,11 @@ export function prepareWebSessionTabsSnapshotBrowser(
       .filter((tab) => {
         if (mirroredBrowserWorkspaceIds.has(tab.id)) {
           return true
+        }
+        // Slept with its VM: the host's pages died with it, so its snapshot no
+        // longer lists them. The tab stays and reopens its page after the wake.
+        if (isSleptBrowserTabAwaitingReopen(state, tab.id)) {
+          return false
         }
         if (!browserWorkspaceHasRemoteEnvironmentPage(state, tab, environmentId)) {
           return false

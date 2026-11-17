@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Loader2, X } from 'lucide-react'
+import { AlertTriangle, Loader2, RotateCw, X } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import {
@@ -8,6 +8,8 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
+import { usePendingRowCloud } from './pending-worktree-row-cloud'
 
 function statusLabel(entry: PendingWorktreeCreation, t: Translate = translate): string {
   if (entry.status === 'error') {
@@ -47,11 +49,15 @@ export function PendingWorktreeRow({
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const active = useAppStore((s) => s.activePendingCreationId === creationId)
+  const cloud = usePendingRowCloud(entry, t)
   if (!entry) {
     return <HostCreationRow repoName={repoName} />
   }
 
   const isError = entry.status === 'error'
+  const name = entry.request.displayName || entry.request.name
+  const iconButton =
+    'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100'
   return (
     <div
       className={cn(
@@ -73,7 +79,9 @@ export function PendingWorktreeRow({
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
       >
         <span className="flex size-4 shrink-0 items-center justify-center">
-          {isError ? (
+          {cloud.icon ? (
+            cloud.icon
+          ) : isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
           ) : (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -86,23 +94,46 @@ export function PendingWorktreeRow({
           <span
             className={cn(
               'block truncate text-[11px] tabular-nums',
-              isError ? 'text-destructive/90' : 'text-muted-foreground'
+              isError && !cloud.refused ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >
-            {statusLabel(entry, t)}
+            {cloud.errorTitle ?? statusLabel(entry, t)}
           </span>
         </span>
       </button>
+      {isError ? (
+        // A failed create keeps its prompt; Retry runs it again from here.
+        <button
+          type="button"
+          title={t('auto.components.sidebar.PendingWorktreeRow.retry', 'Retry')}
+          aria-label={t('auto.components.sidebar.PendingWorktreeRow.retryLabel', 'Retry {{name}}', {
+            name
+          })}
+          data-pending-retry={creationId}
+          onClick={() => retryBackgroundWorktreeCreation(creationId)}
+          className={cn(iconButton, 'opacity-100')}
+        >
+          <RotateCw className="size-3.5" />
+        </button>
+      ) : null}
       <button
         type="button"
-        title={t('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')}
-        aria-label={t(
-          'auto.components.sidebar.PendingWorktreeRow.af21e953d1',
-          'Cancel worktree creation'
-        )}
+        title={
+          isError
+            ? t('auto.components.sidebar.PendingWorktreeRow.dismiss', 'Dismiss')
+            : t('auto.components.sidebar.PendingWorktreeRow.188f6922a0', 'Cancel')
+        }
+        aria-label={
+          isError
+            ? t('auto.components.sidebar.PendingWorktreeRow.dismissLabel', 'Dismiss {{name}}', {
+                name
+              })
+            : t('auto.components.sidebar.PendingWorktreeRow.af21e953d1', 'Cancel worktree creation')
+        }
+        data-pending-dismiss={creationId}
         onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
         className={cn(
-          'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100',
+          iconButton,
           isError ? 'opacity-100' : 'can-hover:opacity-0 group-hover:opacity-100'
         )}
       >

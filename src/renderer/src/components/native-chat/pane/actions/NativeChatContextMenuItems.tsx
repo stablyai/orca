@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
+import { Copy, ExternalLink, FileClock, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -65,6 +65,9 @@ export function NativeChatContextMenuTargetItems({
       {rewindItemId && rewind ? (
         <NativeChatRewindMenuItem itemId={rewindItemId} rewind={rewind} />
       ) : null}
+      {rewindItemId && rewind?.restoreFiles ? (
+        <NativeChatRestoreFilesMenuItem itemId={rewindItemId} restore={rewind.restoreFiles} />
+      ) : null}
     </>
   )
 }
@@ -107,6 +110,24 @@ function NativeChatRewindMenuItem({
           </span>
         ) : null}
       </span>
+    </DropdownMenuItem>
+  )
+}
+
+/** Files only: the chat stays as it is (Claude Code's code-only rewind). */
+function NativeChatRestoreFilesMenuItem({
+  itemId,
+  restore
+}: {
+  itemId: string
+  restore: NonNullable<NativeChatRewindSurface['restoreFiles']>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const confirm = useConfirmationDialog()
+  return (
+    <DropdownMenuItem onSelect={() => void restore(itemId, confirm)}>
+      <FileClock />
+      {t('components.native-chat.rewind.restoreFilesAction', 'Restore files to here')}
     </DropdownMenuItem>
   )
 }

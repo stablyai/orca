@@ -19,6 +19,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getNativeChatSplitQuickActions } from './native-chat-split-quick-actions'
+import { getRemoteDesktopQuickAction } from './remote-desktop-quick-action'
+import { getOpenCloudWorkspaceQuickAction } from './open-cloud-workspace-quick-action'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -177,6 +179,8 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
   },
   ...getNativeChatSplitQuickActions(),
+  getRemoteDesktopQuickAction(),
+  getOpenCloudWorkspaceQuickAction(),
   {
     id: CREATE_WORKSPACE_QUICK_ACTION_ID,
     kind: 'action',

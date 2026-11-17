@@ -1,0 +1,239 @@
+// In the composer, while Orca Cloud is picked, the Project picker also offers GitHub
+// repositories with no clone here. Picking one keeps Orca Cloud and starts it from GitHub.
+import { useCallback, useMemo, useState } from 'react'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { clearCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
+import {
+  invalidateOrcaCloudGitHubRepositories,
+  useOrcaCloudGitHubRepositories,
+  type OrcaCloudGitHubRepository
+} from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
+import { startCloudWorkspaceFromGitHub } from '@/lib/orca-cloud/start-cloud-workspace-from-github'
+import type { CloudFirstAgentLaunch } from '@/lib/orca-cloud/github-create-source'
+import type { CloudSetupStep } from './cloud-start-model'
+import {
+  isRemoteServerProject,
+  pickCloudOnlyRepository,
+  remoteServerProjectGitHubKey
+} from './cloud-only-project'
+import { useGitHubAccessHandoff, type GitHubAccessHandoffPhase } from './use-github-access-handoff'
+
+type StartRequest = { name: string; agent: string | null; firstAgent?: CloudFirstAgentLaunch }
+
+export type CloudOnlyRepo = {
+  repos: readonly OrcaCloudGitHubRepository[] | null
+  /** Fetches GitHub's next pages; null when everything is listed. */
+  showMore: (() => void) | null
+  /** GitHub's list couldn't be read: read it again. Null while it reads fine. */
+  retryRepos: (() => void) | null
+  /** That Retry is reading now. */
+  retryingRepos: boolean
+  picked: OrcaCloudGitHubRepository | null
+  /** The project is a plain folder: Orca Cloud needs a GitHub repository. */
+  folderProject: boolean
+  /**
+   * Orca Cloud can only start this project from a picked GitHub repository: a folder, or a project
+   * cloned only on a remote server. Create waits until one is picked.
+   */
+  needsGitHubPick: boolean
+  /** A GitHub project cloned only on a remote server. */
+  remoteServerProject: boolean
+  /** The GitHub row is done for a repository listed from the team's installations. */
+  githubStep: CloudSetupStep | null
+  pick: (fullName: string) => void
+  clear: () => void
+  moreAccess: () => void
+  /** Back from GitHub's access page: the list re-reads until the new repository shows up. */
+  githubHandoff: GitHubAccessHandoffPhase
+  /** After the wait ran out with nothing new: read once more and wait again. */
+  checkGitHubAgain: () => void
+  start: (request: StartRequest) => Promise<boolean>
+}
+
+export function useCloudOnlyRepo({
+  repoId,
+  initialPicked = null,
+  cloudSelected,
+  cloudOffered,
+  signedIn,
+  onAutoPick
+}: {
+  repoId: string
+  /** `owner/repo` picked when the composer opens (Back to draft from its build sheet). */
+  initialPicked?: string | null
+  /** Orca Cloud is the Run on target. */
+  cloudSelected: boolean
+  /** This build offers Orca Cloud (the Run on segment is enabled). */
+  cloudOffered: boolean
+  /** The list needs an account; signed out, setup comes first. */
+  signedIn: boolean
+  /** A repository granted on GitHub was picked for the person: Run on becomes Orca Cloud. */
+  onAutoPick?: () => void
+}): CloudOnlyRepo {
+  const { folderProject, folderStep } = useFolderGitHubStep(repoId)
+  const project = useAppStore((s) => s.repos.find((repo) => repo.id === repoId) ?? null)
+  const remoteServer = isRemoteServerProject(project)
+  const projectKey = remoteServerProjectGitHubKey(project)
+  // Cloud-only rows show while Orca Cloud is picked, or for a folder, which only starts from GitHub.
+  const enabled = (cloudSelected || folderProject) && cloudOffered
+  const [refreshSignal, setRefreshSignal] = useState(0)
+  const { repos, showMore, unavailable, retrying, retry } = useOrcaCloudGitHubRepositories(
+    enabled && signedIn,
+    refreshSignal
+  )
+  const [pickedName, setPickedName] = useState<string | null>(initialPicked)
+  const handoff = useGitHubAccessHandoff({
+    repos,
+    onReread: () => setRefreshSignal((n) => n + 1),
+    onNewRepository: (fullName) => {
+      setPickedName(fullName)
+      onAutoPick?.()
+    }
+  })
+  const picked = useMemo(
+    () => (enabled ? pickCloudOnlyRepository(repos, pickedName, projectKey) : null),
+    [enabled, pickedName, projectKey, repos]
+  )
+  const githubStep = useMemo<CloudSetupStep | null>(
+    () =>
+      picked
+        ? {
+            id: 'github',
+            state: 'done',
+            label: translate('orcaCloud.setup.github.label', 'GitHub access'),
+            detail: picked.fullName
+          }
+        : null,
+    [picked]
+  )
+  const { begin: beginHandoff, cancel: cancelHandoff } = handoff
+  const clear = useCallback(() => {
+    cancelHandoff()
+    setPickedName(null)
+  }, [cancelHandoff])
+  const pick = useCallback(
+    (fullName: string) => {
+      cancelHandoff()
+      setPickedName(fullName)
+    },
+    [cancelHandoff]
+  )
+  const moreAccess = useCallback(() => {
+    invalidateOrcaCloudGitHubRepositories()
+    beginHandoff()
+    void window.api.orcaCloudWorkspace.connectGitHub()
+  }, [beginHandoff])
+  const start = useCallback(
+    (request: StartRequest) =>
+      picked
+        ? startCloudWorkspaceFromGitHub({
+            repoUrl: picked.url,
+            fullName: picked.fullName,
+            composerRepoId: repoId,
+            ...request
+          })
+        : Promise.resolve(false),
+    [picked, repoId]
+  )
+  return {
+    repos,
+    showMore,
+    retryRepos: unavailable ? retry : null,
+    retryingRepos: retrying,
+    picked,
+    githubStep: githubStep ?? folderStep ?? (remoteServer ? remoteServerStep() : null),
+    folderProject,
+    needsGitHubPick: folderProject || remoteServer,
+    remoteServerProject: remoteServer,
+    pick,
+    clear,
+    moreAccess,
+    githubHandoff: enabled ? handoff.phase : 'idle',
+    checkGitHubAgain: handoff.checkAgain,
+    start
+  }
+}
+
+/** A remote-server project whose GitHub repository isn't picked (or reachable) yet: Create waits. */
+function remoteServerStep(): CloudSetupStep {
+  return {
+    id: 'github',
+    state: 'failed',
+    need: 'github',
+    blocksStart: true,
+    label: translate('orcaCloud.setup.github.repositoryLabel', 'GitHub repository'),
+    status: translate('orcaCloud.setup.github.neededStatus', 'Needed'),
+    detail: translate(
+      'components.newWorkspace.cloudOnly.remoteServerUnreachable',
+      'Orca Cloud starts from a GitHub repository and can’t reach this project’s. Give Orca access to it, or pick another repository.'
+    )
+  }
+}
+
+/**
+ * The composer's create while a cloud-only repository is picked: start it from GitHub, close the
+ * composer, and say which hours it uses. Otherwise the ordinary create.
+ */
+export function useCloudOnlyCreate({
+  cloudOnly,
+  createWorkspace,
+  name,
+  agent,
+  firstAgent,
+  profileId,
+  onClose
+}: {
+  cloudOnly: CloudOnlyRepo
+  createWorkspace: () => void
+  /** The composer's name field: the workspace's name, never the agent's prompt. */
+  name: string
+  agent: string | null
+  firstAgent?: CloudFirstAgentLaunch
+  profileId: string | null
+  onClose?: () => void
+}): () => void {
+  const { picked, start } = cloudOnly
+  return useCallback(() => {
+    if (!picked) {
+      createWorkspace()
+      return
+    }
+    clearCloudStartDraft(profileId)
+    void start({ name, agent, ...(firstAgent ? { firstAgent } : {}) })
+    onClose?.()
+  }, [agent, createWorkspace, firstAgent, name, onClose, picked, profileId, start])
+}
+
+/**
+ * A plain folder can't start in Orca Cloud (a sandbox clones from GitHub), but picking Orca Cloud
+ * still works: the panel's GitHub repository row says so and offers the way forward, and
+ * the Project picker lists GitHub repositories with no clone here.
+ */
+function useFolderGitHubStep(repoId: string): {
+  folderProject: boolean
+  folderStep: CloudSetupStep | null
+} {
+  const folderProject = useAppStore(
+    (s) => s.repos.find((repo) => repo.id === repoId)?.kind === 'folder'
+  )
+  const folderStep = useMemo<CloudSetupStep | null>(
+    () =>
+      folderProject
+        ? {
+            id: 'github',
+            state: 'failed',
+            need: 'github',
+            blocksStart: true,
+            label: translate('orcaCloud.setup.github.repositoryLabel', 'GitHub repository'),
+            status: translate('orcaCloud.setup.github.neededStatus', 'Needed'),
+            detail: translate(
+              'components.newWorkspace.cloudOnly.folderDetail',
+              'Orca Cloud starts from a GitHub repository. This project is a folder on this computer.'
+            )
+          }
+        : null,
+    [folderProject]
+  )
+  return { folderProject, folderStep }
+}

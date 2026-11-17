@@ -17,6 +17,7 @@ export type PaletteSupportingKind =
   | 'port'
   | 'task'
   | 'automation'
+  | 'cloudWorkspace'
 
 export function getPaletteSupportingAccessibilityLabel(kind: PaletteSupportingKind): string {
   switch (kind) {
@@ -37,6 +38,11 @@ export function getPaletteSupportingAccessibilityLabel(kind: PaletteSupportingKi
       return translate('auto.lib.worktreePaletteEvidence.linkedIssue', 'Linked issue')
     case 'port':
       return translate('auto.lib.worktreePaletteEvidence.listeningPort', 'Listening port')
+    case 'cloudWorkspace':
+      return translate(
+        'auto.lib.worktreePaletteEvidence.cloudWorkspaceNumber',
+        'Cloud workspace number'
+      )
   }
 }
 
@@ -204,6 +210,21 @@ export function buildWorktreeIssueEvidence(args: {
       },
       { key: 'title', text: args.title ?? '', profile: 'prose' }
     ]
+  })
+}
+
+/** A cloud workspace's number: "W-123" (searching 123, w123 or W-123 finds it). */
+export function buildWorktreeCloudNumberEvidence(
+  number: number | null | undefined
+): PaletteComposedEvidence | null {
+  if (!number) {
+    return null
+  }
+  return composePaletteEvidence({
+    id: `cloud-number:${number}`,
+    kind: 'cloudWorkspace',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('cloudWorkspace'),
+    parts: [{ key: 'number', text: `W-${number}`, profile: 'structured-label' }]
   })
 }
 

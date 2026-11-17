@@ -41,6 +41,10 @@ function getHostMetadata(host: SidebarHostOption, t: Translate = translate): str
   if (host.kind === 'local') {
     return translateExecutionHostDetail(host.detail)
   }
+  // Orca Cloud names itself: "1 running · 1 asleep".
+  if (host.orcaCloud) {
+    return host.detail
+  }
   if (host.kind === 'ssh') {
     const presenceLabel =
       host.presence === 'configured'

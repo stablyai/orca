@@ -92,6 +92,11 @@ export function TabBarQuickCommandItem({
           {showHostLabel ? (
             <span className="shrink-0 text-[11px] text-muted-foreground">{entry.hostLabel}</span>
           ) : null}
+          {entry.suggested ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground">
+              {t('auto.components.tab.bar.TabBarQuickCommandItem.suggested', 'From package.json')}
+            </span>
+          ) : null}
         </span>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">
           {isTerminalAgentQuickCommand(command)
@@ -130,38 +135,42 @@ export function TabBarQuickCommandItem({
         >
           {status === 'copied' ? <Check className="size-3" /> : <Copy className="size-3" />}
         </button>
-        <button
-          type="button"
-          onPointerDown={stopRowSelect}
-          onClick={(event) => {
-            stopRowSelect(event)
-            onEdit()
-          }}
-          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label={t(
-            'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
-            'Edit {{value0}}',
-            { value0: command.label }
-          )}
-        >
-          <Pencil className="size-3" />
-        </button>
-        <button
-          type="button"
-          onPointerDown={stopRowSelect}
-          onClick={(event) => {
-            stopRowSelect(event)
-            onDelete()
-          }}
-          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-          aria-label={t(
-            'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
-            'Remove {{value0}}',
-            { value0: command.label }
-          )}
-        >
-          <Trash2 className="size-3" />
-        </button>
+        {entry.suggested ? null : (
+          <>
+            <button
+              type="button"
+              onPointerDown={stopRowSelect}
+              onClick={(event) => {
+                stopRowSelect(event)
+                onEdit()
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={t(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
+                'Edit {{value0}}',
+                { value0: command.label }
+              )}
+            >
+              <Pencil className="size-3" />
+            </button>
+            <button
+              type="button"
+              onPointerDown={stopRowSelect}
+              onClick={(event) => {
+                stopRowSelect(event)
+                onDelete()
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+              aria-label={t(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
+                'Remove {{value0}}',
+                { value0: command.label }
+              )}
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </>
+        )}
       </span>
     </div>
   )

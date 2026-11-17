@@ -1,4 +1,6 @@
 import type React from 'react'
+import { useSidebarShowsHostSlot } from '@/components/sidebar/workspace-card/host/WorktreeCardHostMark'
+import { WorkspaceHostGlyph } from '@/components/orca-cloud/WorkspaceHostGlyph'
 import { Server, ServerOff } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteWorktreeStatusDot } from '@/components/cmd-j/palette-live-status'
@@ -39,6 +41,7 @@ export function WorktreeJumpPaletteWorktreeRow({
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
   const t = useTranslate()
+  const showsHostSlot = useSidebarShowsHostSlot()
   const {
     repoMap,
     activeWorktreeId,
@@ -73,11 +76,9 @@ export function WorktreeJumpPaletteWorktreeRow({
     ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
     : null
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  const hostBadge = getPaletteHostBadge(
-    getPaletteWorktreeExecutionHostId(worktree) ?? (repo && getRepoExecutionHostId(repo)),
-    hostOptions,
-    hostFilterActive
-  )
+  const paletteHostId =
+    getPaletteWorktreeExecutionHostId(worktree) ?? (repo && getRepoExecutionHostId(repo))
+  const hostBadge = getPaletteHostBadge(paletteHostId, hostOptions, hostFilterActive)
 
   return (
     <CommandItem
@@ -108,6 +109,15 @@ export function WorktreeJumpPaletteWorktreeRow({
                     <Server className="size-3.5 text-muted-foreground" aria-hidden="true" />
                   )}
                 </span>
+              )}
+              {!sshConnectionId && (
+                <WorkspaceHostGlyph
+                  worktreeId={worktree.id}
+                  hostId={paletteHostId}
+                  size={14}
+                  hideLocal={!showsHostSlot}
+                  badgeRingClassName="bg-popover group-data-[selected=true]:bg-accent"
+                />
               )}
               <span className="truncate text-[14px] font-semibold text-foreground">
                 <HighlightedText text={worktreeLabel} matchRanges={entry.match.displayNameRanges} />

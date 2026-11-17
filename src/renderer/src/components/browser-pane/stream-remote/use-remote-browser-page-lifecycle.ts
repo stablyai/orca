@@ -28,6 +28,7 @@ import {
 } from './remote-browser-page-observation'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
+import { useSleptRemotePageLifecycle } from './use-slept-remote-page'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -76,6 +77,7 @@ export function useRemoteBrowserPageLifecycle({
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   // Stable for the provider's life, so the once-built lifecycle may hold it.
   const confirm = useConfirmationDialog()
+  const sleptPage = useSleptRemotePageLifecycle(browserTab, lifecycleRef, mountedRef)
 
   useLayoutEffect(() => {
     currentWorkspaceIdRef.current = browserTab.workspaceId
@@ -131,7 +133,7 @@ export function useRemoteBrowserPageLifecycle({
         // Every transition invalidates the pane notice; stale direct feedback would outrank the stream’s failure beside Reconnect.
         setPaneNotice(null)
       },
-      applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
+      applyTabInfo: (tab) => sleptPage.answered(() => streamBridgeRef.current.applyTabInfo(tab)),
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
       closeMissingRemotePage: (remotePageId) =>
@@ -173,6 +175,9 @@ export function useRemoteBrowserPageLifecycle({
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
       lifecycle.abandonRemotePage()
+      if (sleptPage.handleMissing(clearStreamFrame)) {
+        return
+      }
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
@@ -198,7 +203,8 @@ export function useRemoteBrowserPageLifecycle({
       lifecycle,
       resetRemoteInputQueue,
       setPaneBusy,
-      setPaneNotice
+      setPaneNotice,
+      sleptPage
     ]
   )
 

@@ -1,6 +1,7 @@
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
+import { observeRuntimeHostStatusForAgentSignInPrecheck } from '@/lib/agent-sign-in/host-agent-sign-in-precheck'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
@@ -48,6 +49,7 @@ import { registerWorkspaceShortcutIpcBridge } from '../app-commands/workspace-sh
 import { registerZoomIpcBridge } from './native-app/zoom-ipc-bridge'
 import { registerWslAccountNoticeIpcBridge } from '../../runtime/hosts/wsl/wsl-account-notice-ipc-bridge'
 import { registerWslHostIpcBridge } from '../../runtime/hosts/wsl/wsl-host-ipc-bridge'
+import { installLeaveOutOfTeamCloudWorkspace } from '@/lib/orca-cloud/leave-out-of-team-cloud-workspace'
 
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
@@ -81,6 +83,7 @@ export function installAppLifetimeIpcEvents(): () => void {
       observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
       observeJiraImageHostStatus(snapshot)
+      observeRuntimeHostStatusForAgentSignInPrecheck(snapshot)
     }
     let stopped = false
     unsubs.push(statusApi.onStatusChanged(apply), () => {
@@ -99,6 +102,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
   registerEphemeralVmLifecycleIpcBridge(unsubs)
+  // After a team switch, the old team's open cloud workspace leaves the main pane.
+  unsubs.push(installLeaveOutOfTeamCloudWorkspace(useAppStore))
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,

@@ -71,6 +71,12 @@ export function getTitle(
           "{{repo}}'s VM recipe changed — run the new version?",
           repo
         )
+      case 'run':
+        return t(
+          'auto.components.sidebar.OrcaYamlTrustDialog.runChangedTitle',
+          "{{repo}}'s run actions changed — run the new version?",
+          repo
+        )
     }
   }
   switch (kind) {
@@ -96,6 +102,12 @@ export function getTitle(
       return t(
         'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeRunTitle',
         'Run VM recipe from {{repo}}?',
+        repo
+      )
+    case 'run':
+      return t(
+        'auto.components.sidebar.OrcaYamlTrustDialog.runRunTitle',
+        'Run actions from {{repo}}?',
         repo
       )
   }
@@ -129,6 +141,11 @@ export function getDescription(
           'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeChangedBody',
           '<code>orca.yaml</code> changed since you last approved. Re-review before it runs before provisioning a VM.'
         )
+      case 'run':
+        return t(
+          'auto.components.sidebar.OrcaYamlTrustDialog.runChangedBody',
+          '<code>orca.yaml</code> changed since you last approved. Re-review before these run from the Run button.'
+        )
     }
   }
   switch (kind) {
@@ -151,6 +168,11 @@ export function getDescription(
       return t(
         'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeRunBody',
         "This repository's <code>orca.yaml</code> runs on your machine before provisioning a VM. Only run if you trust <repo/>."
+      )
+    case 'run':
+      return t(
+        'auto.components.sidebar.OrcaYamlTrustDialog.runRunBody',
+        "This repository's <code>orca.yaml</code> defines these run actions. They run in this workspace's terminal when you start them. Only run if you trust <repo/>."
       )
   }
 }
@@ -177,5 +199,9 @@ export function getScriptHeading(
       return previouslyApproved
         ? t('auto.components.sidebar.OrcaYamlTrustDialog.newVmRecipe', 'New VM recipe')
         : t('auto.components.sidebar.OrcaYamlTrustDialog.vmRecipe', 'VM recipe')
+    case 'run':
+      return previouslyApproved
+        ? t('auto.components.sidebar.OrcaYamlTrustDialog.newRunActions', 'New run actions')
+        : t('auto.components.sidebar.OrcaYamlTrustDialog.runActions', 'Run actions')
   }
 }

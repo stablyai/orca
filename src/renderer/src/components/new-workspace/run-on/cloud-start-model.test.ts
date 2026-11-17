@@ -1,0 +1,317 @@
+import { describe, expect, it } from 'vitest'
+import {
+  deriveCloudSetupSteps,
+  getOrcaCloudSegmentState,
+  resolveDefaultRunOn,
+  type CloudSetupStep,
+  withReachableGitHub
+} from './cloud-start-model'
+import {
+  cloudSetupPageModel,
+  cloudSetupRequired,
+  sessionNeedsFrom
+} from '../../orca-cloud-setup/cloud-setup-page-model'
+import { setupActionFor } from './cloud-start-actions'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+
+describe('Orca Cloud availability', () => {
+  it('keeps Orca Cloud visible but disabled when it cannot be reached', () => {
+    expect(getOrcaCloudSegmentState('unreachable')).toBe('unreachable')
+    expect(getOrcaCloudSegmentState('unavailable')).toBe('hidden')
+    expect(getOrcaCloudSegmentState('needs-sign-in')).toBe('enabled')
+    expect(getOrcaCloudSegmentState('needs-capability')).toBe('enabled')
+    expect(getOrcaCloudSegmentState('offered')).toBe('enabled')
+  })
+})
+
+describe('setup rows and the setup page', () => {
+  const page = (steps: Parameters<typeof cloudSetupPageModel>[0]) =>
+    cloudSetupPageModel(steps).action
+
+  it('starts directly when the account is entitled', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 }
+    })
+    expect(cloudSetupRequired(steps)).toBe(false)
+    expect(page(steps)).toBe('done')
+  })
+
+  it('an agent with no account never opens the page: the create starts at once', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 }
+    })
+    expect(steps.find((s) => s.id === 'agent')?.state).toBe('optional')
+    expect(cloudSetupRequired(steps)).toBe(false)
+    expect(cloudSetupPageModel(steps).action).toBe('done')
+  })
+
+  it('signed out: sign-in first, plan checked after sign-in', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-sign-in',
+      access: { state: 'loading' }
+    })
+    expect(steps.map((s) => [s.id, s.state])).toEqual([
+      ['account', 'needed'],
+      ['plan', 'pending'],
+      ['agent', 'optional']
+    ])
+    expect(page(steps)).toBe('sign-in')
+  })
+
+  it.each([
+    [
+      'owner, no plan',
+      'needs-capability',
+      { state: 'no-plan', lapsed: false, canManageBilling: true }
+    ],
+    ['owner, plan ended', 'offered', { state: 'no-plan', lapsed: true, canManageBilling: true }],
+    [
+      'member, no plan',
+      'needs-capability',
+      { state: 'no-plan', lapsed: false, canManageBilling: false }
+    ],
+    [
+      'owner, trial used up',
+      'offered',
+      { state: 'no-plan', lapsed: false, canManageBilling: true, trialUsedUp: true }
+    ],
+    [
+      'member, trial used up',
+      'offered',
+      { state: 'no-plan', lapsed: false, canManageBilling: false, trialUsedUp: true }
+    ],
+    [
+      'owner out of hours',
+      'offered',
+      { state: 'out-of-hours', cause: 'hours', canManageBilling: true }
+    ],
+    [
+      'member out of hours',
+      'offered',
+      { state: 'out-of-hours', cause: 'hours', canManageBilling: false }
+    ],
+    ['member, payment failed', 'offered', { state: 'payment-issue', canManageBilling: false }]
+  ] as const)(
+    'progressive billing: %s is not a setup step; Create goes on and the sheet shows any blocker',
+    (_name, availability, access) => {
+      const steps = deriveCloudSetupSteps({ availability, access })
+      expect(steps.find((s) => s.id === 'plan')?.state).toBe('done')
+      expect(steps.some((s) => s.id === 'agent')).toBe(true)
+      expect(cloudSetupRequired(steps)).toBe(false)
+    }
+  )
+
+  it('a missing GitHub grant alone is the GitHub step', () => {
+    expect(
+      page([
+        { id: 'account', state: 'done' },
+        { id: 'plan', state: 'done' },
+        { id: 'github', state: 'needed', need: 'github', canFix: true },
+        { id: 'agent', state: 'optional' }
+      ])
+    ).toBe('github-install')
+  })
+
+  it('a team that can still get its trial: an owner starts it in the browser, a member asks one', () => {
+    const steps = (canManageBilling: boolean) =>
+      deriveCloudSetupSteps({
+        availability: 'offered',
+        access: { state: 'no-plan', lapsed: false, canManageBilling, trialOfferSeconds: 7200 }
+      })
+    expect(steps(true).find((s) => s.id === 'plan')).toMatchObject({
+      need: 'trial',
+      trialSeconds: 7200,
+      canFix: true
+    })
+    expect(page(steps(true))).toBe('start-trial')
+    // The console's billing page is an owner's or admin's: a member is asked to get one of them.
+    expect(steps(false).find((s) => s.id === 'plan')).toMatchObject({
+      need: 'trial',
+      canFix: false
+    })
+    expect(page(steps(false))).toBe('ask-owner')
+    expect(steps(true).some((s) => s.id === 'agent')).toBe(true)
+  })
+
+  it('signed out: the trial row is included and GitHub is checked up front', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-sign-in',
+      access: { state: 'signed-out' },
+      github: { id: 'github', state: 'needed', need: 'github', canFix: true }
+    })
+    expect(steps.map((s) => s.id)).toEqual(['account', 'plan', 'github', 'agent'])
+    expect(steps.find((s) => s.id === 'plan')?.need).toBe('trial')
+    expect(sessionNeedsFrom(steps)).toEqual(['account', 'plan', 'github'])
+    expect(page(steps)).toBe('sign-in')
+  })
+
+  it('GitHub waiting on an owner: the page waits and starts on its own', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 },
+      github: {
+        id: 'github',
+        state: 'pending',
+        need: 'github',
+        blocksStart: true
+      }
+    })
+    expect(cloudSetupRequired(steps)).toBe(true)
+    expect(page(steps)).toBe('github-waiting')
+  })
+
+  it('no GitHub remote outranks account and plan rows', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-sign-in',
+      access: { state: 'signed-out' },
+      github: {
+        id: 'github',
+        state: 'failed',
+        need: 'github',
+        blocksStart: true
+      }
+    })
+    expect(steps.map((s) => s.id)).toEqual(['github'])
+    expect(page(steps)).toBe('needs-repository')
+  })
+
+  it('checks while GitHub or billing are still being read', () => {
+    const github = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'entitled', remainingSeconds: 3600 },
+      github: { id: 'github', state: 'loading' }
+    })
+    expect(page(github)).toBe('checking')
+    const billing = deriveCloudSetupSteps({
+      availability: 'offered',
+      access: { state: 'loading' }
+    })
+    expect(page(billing)).toBe('checking')
+  })
+
+  it('a team switch is its own step and always opens the page', () => {
+    const steps: CloudSetupStep[] = [
+      { id: 'account', state: 'done' },
+      { id: 'team', state: 'needed' }
+    ]
+    expect(cloudSetupRequired(steps, { teamSwitch: true })).toBe(true)
+    expect(cloudSetupPageModel(steps, { teamSwitch: true }).action).toBe('switch-team')
+  })
+
+  it('a still-loading agent row never holds a ready start', () => {
+    const steps: CloudSetupStep[] = [
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done' },
+      { id: 'agent', state: 'loading' }
+    ]
+    expect(cloudSetupRequired(steps)).toBe(false)
+    expect(cloudSetupPageModel(steps).action).toBe('done')
+  })
+})
+
+describe('remembered Run on default', () => {
+  it('uses the project, then the global last choice, then this computer', () => {
+    expect(
+      resolveDefaultRunOn({
+        preference: 'last',
+        lastForRepo: 'orca-cloud',
+        globalLast: 'local',
+        cloudUsable: true
+      })
+    ).toEqual({ target: 'orca-cloud', cloudFellBack: false })
+    expect(
+      resolveDefaultRunOn({
+        preference: 'last',
+        lastForRepo: null,
+        globalLast: 'orca-cloud',
+        cloudUsable: true
+      })
+    ).toEqual({ target: 'orca-cloud', cloudFellBack: false })
+    expect(
+      resolveDefaultRunOn({
+        preference: 'last',
+        lastForRepo: null,
+        globalLast: null,
+        cloudUsable: true
+      })
+    ).toEqual({ target: 'local', cloudFellBack: false })
+  })
+
+  it('never preselects a blocked Orca Cloud', () => {
+    expect(
+      resolveDefaultRunOn({
+        preference: 'last',
+        lastForRepo: 'orca-cloud',
+        globalLast: null,
+        cloudUsable: false
+      })
+    ).toEqual({ target: 'local', cloudFellBack: true })
+    expect(
+      resolveDefaultRunOn({
+        preference: 'orca-cloud',
+        lastForRepo: null,
+        globalLast: null,
+        cloudUsable: false
+      })
+    ).toEqual({ target: 'local', cloudFellBack: true })
+  })
+
+  it('a project setting wins over memory', () => {
+    expect(
+      resolveDefaultRunOn({
+        preference: 'local',
+        lastForRepo: 'orca-cloud',
+        globalLast: 'orca-cloud',
+        cloudUsable: true
+      })
+    ).toEqual({ target: 'local', cloudFellBack: false })
+  })
+})
+
+describe('withReachableGitHub', () => {
+  const session = [
+    { id: 'account', state: 'done' },
+    { id: 'plan', state: 'done', detail: 'subscription' },
+    { id: 'github', state: 'active' }
+  ] as const
+
+  it("marks the session's GitHub row done once this desktop reaches the repository", () => {
+    expect(withReachableGitHub([...session], true)).toEqual([
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done', detail: 'subscription' },
+      { id: 'github', state: 'done' }
+    ])
+    expect(cloudSetupPageModel([...withReachableGitHub([...session], true)]).action).toBe('done')
+  })
+
+  it('leaves the rows alone while the repository is still unreachable', () => {
+    const steps = [...session]
+    expect(withReachableGitHub(steps, false)).toBe(steps)
+  })
+})
+
+describe('a plan but no Orca Cloud capability', () => {
+  const accesses: [string, OrcaCloudRunTargetAccess][] = [
+    ['entitled', { state: 'entitled', remainingSeconds: 3600 }],
+    ['unknown billing', { state: 'unknown' }]
+  ]
+  it.each(accesses)('%s: "isn’t turned on yet", never checkout', (_label, access) => {
+    const steps = deriveCloudSetupSteps({ availability: 'needs-capability', access })
+    expect(steps.find((step) => step.id === 'plan')).toMatchObject({
+      state: 'needed',
+      need: 'capability'
+    })
+    expect(cloudSetupPageModel(steps).action).toBe('capability-off')
+    expect(setupActionFor(steps, access, 'needs-capability')).toBeNull()
+  })
+
+  it('a team with no plan keeps its usual path (never "isn’t turned on")', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-capability',
+      access: { state: 'no-plan', lapsed: false, canManageBilling: true, trialOfferSeconds: 3600 }
+    })
+    expect(cloudSetupPageModel(steps).action).toBe('start-trial')
+  })
+})

@@ -4,6 +4,11 @@ import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
+import {
+  beginCloudSleep,
+  boundPairedHostSleep,
+  finishCloudSleep
+} from './sleep-worktree-flow-cloud'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -68,12 +73,33 @@ function describeChatStopFailure(): string {
 export async function runSleepWorktrees(
   worktreeIds: readonly string[]
 ): Promise<WorkspaceSleepResult[]> {
-  const { errors, results, vmStillRunningIds } = await sleepWorktreesReportingFailures(
-    worktreeIds,
-    { markChatsAsleep: true }
+  return (await runSleepWorktreesWithOutcome(worktreeIds)).results
+}
+
+async function runSleepWorktreesWithOutcome(
+  worktreeIds: readonly string[]
+): Promise<WorktreeSleepOutcome> {
+  beginCloudSleep(worktreeIds)
+  const outcome = await sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
+  const vmStillRunning = await finishCloudSleep(worktreeIds, outcome, (ids) => {
+    void runSleepWorktrees(ids)
+  })
+  toastSleepFailures(new Set(worktreeIds).size, outcome.errors, vmStillRunning)
+  return outcome
+}
+
+/**
+ * The user's Sleep, answering whether this workspace really slept. Decided from the outcome, not
+ * from chat receipts: a refused target, a rejected IPC or a host timeout carries no receipts, and
+ * an empty list must never read as "slept" (an archive after it would stop a VM with unsaved work).
+ * A paired sandbox whose host timed out has no outcome on purpose: the control plane sleeps it.
+ */
+export async function runSleepWorktreeVerified(worktreeId: string): Promise<boolean> {
+  const outcome = await runSleepWorktreesWithOutcome([worktreeId])
+  return (
+    !outcome.failedWorktreeIds.includes(worktreeId) &&
+    !outcome.unsleptWorktreeIds.includes(worktreeId)
   )
-  toastSleepFailures(new Set(worktreeIds).size, errors, vmStillRunningIds.length > 0)
-  return results
 }
 
 /** A phone or CLI's sleep that did not fully succeed: the same toast as the window's own Sleep. */
@@ -123,6 +149,8 @@ export type WorktreeSleepOutcome = {
   /** Slept, but the VM suspend failed: the workspace is asleep and its machine still runs. */
   vmStillRunningIds: string[]
   results: WorkspaceSleepResult[]
+  /** Refused or failed outright: still awake (a chat stop left unconfirmed is not here). */
+  unsleptWorktreeIds: string[]
 }
 
 /** The sleep without the toast, for callers that report failures themselves. */
@@ -134,7 +162,13 @@ export async function sleepWorktreesReportingFailures(
   // Host twins share one ID and must sleep only once.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
   if (worktreeIds.length === 0) {
-    return { failedWorktreeIds: [], errors: [], vmStillRunningIds: [], results: [] }
+    return {
+      failedWorktreeIds: [],
+      errors: [],
+      vmStillRunningIds: [],
+      results: [],
+      unsleptWorktreeIds: []
+    }
   }
   const state = useAppStore.getState()
   const errors: string[] = []
@@ -151,16 +185,19 @@ export async function sleepWorktreesReportingFailures(
   })
   const outcomes =
     targets.length > 0
-      ? await window.api.worktrees
-          .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
-          .catch((error: unknown): WorkspaceSleepOutcome[] =>
-            targets.map(({ worktreeId }) => ({
-              worktreeId,
-              failure: error instanceof Error ? error.message : String(error),
-              chatFailed: false,
-              receipts: []
-            }))
-          )
+      ? await boundPairedHostSleep(
+          targets,
+          window.api.worktrees
+            .sleep({ targets, markChatsAsleep: options.markChatsAsleep === true })
+            .catch((error: unknown): WorkspaceSleepOutcome[] =>
+              targets.map(({ worktreeId }) => ({
+                worktreeId,
+                failure: error instanceof Error ? error.message : String(error),
+                chatFailed: false,
+                receipts: []
+              }))
+            )
+        )
       : []
   const results: WorkspaceSleepResult[] = []
   const vmStillRunningIds: string[] = []
@@ -192,6 +229,7 @@ export async function sleepWorktreesReportingFailures(
     ],
     errors: [...new Set(errors)],
     vmStillRunningIds,
-    results
+    results,
+    unsleptWorktreeIds: [...failedWorktreeIds]
   }
 }

@@ -6,6 +6,8 @@ import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
+import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { setArchiveTtlDaysForTest } from '@/lib/orca-cloud/archive-ttl'
 
 const repo: Repo = {
   id: 'orca-plugins',
@@ -272,3 +274,47 @@ export const alwaysDeleteMenu = dialogFixture(
     document.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click()
   }
 )
+
+/** An Orca Cloud workspace: sandbox + disk copy, Archive instead, no Force step. */
+export const cloudWorkspace = defineFixture({
+  width: 640,
+  store: {
+    repos: [repo],
+    worktreesByRepo: { [repo.id]: [worktree] },
+    gitStatusByWorktree: { [worktree.id]: [] },
+    activeModal: 'delete-worktree',
+    modalData: { worktreeId: worktree.id }
+  },
+  setup: () => seedCloudWorkspaceSnapshot({ ids: new Set([worktree.id]), idsLoaded: true }),
+  render: () => (
+    <div className="h-[440px] bg-background">
+      <DeleteWorktreeDialog />
+    </div>
+  )
+})
+
+/** Waits for an element the dialog renders after mount, then focuses it (opens its tooltip). */
+async function focusWhenShown(find: () => HTMLElement | null | undefined): Promise<void> {
+  const deadline = performance.now() + 3000
+  let el = find()
+  while (!el && performance.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    el = find()
+  }
+  el?.focus()
+}
+
+/** "Archive instead" focused: the shared snapshot definition (until today + the archive TTL). */
+export const cloudWorkspaceArchiveTooltip = defineFixture({
+  ...cloudWorkspace,
+  setup: () => {
+    setArchiveTtlDaysForTest(30)
+    return seedCloudWorkspaceSnapshot({ ids: new Set([worktree.id]), idsLoaded: true })
+  },
+  interact: () =>
+    focusWhenShown(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+        (button) => button.textContent?.trim() === 'Archive'
+      )
+    )
+})

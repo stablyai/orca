@@ -16,6 +16,14 @@ import {
   beginVmEnvironmentCheckRun,
   endVmEnvironmentCheckRun
 } from './ephemeral-vm-environment-check-decision'
+import {
+  cloudEnvironmentCheckGate,
+  resumeBuildClock,
+  throwIfSimulatedEnvCheckFault,
+  type CloudEnvironmentCheckContext,
+  type CloudFetchConfirm,
+  type VmEnvironmentCheckGateResult
+} from './ephemeral-vm-environment-check-cloud'
 
 // Two 20s network probes, local probes and a login-shell PATH refresh, with headroom for a slow VM.
 const ENVIRONMENT_CHECK_TIMEOUT_MS = 150_000
@@ -35,18 +43,20 @@ async function supportsEnvironmentChecks(environmentId: string): Promise<boolean
 }
 
 /** A call that could not finish is reported as a failed check, so the user decides instead of a silent skip. */
-async function runVmEnvironmentCheck(
-  creationId: string,
+export async function runVmEnvironmentCheck(
+  creationId: string | null,
   environmentId: string,
   path: string
 ): Promise<EnvironmentDoctorResult> {
-  const signal = beginVmEnvironmentCheckRun(creationId)
+  // Null: a re-check from the opened workspace, with no create to abort it.
+  const signal = creationId ? beginVmEnvironmentCheckRun(creationId) : undefined
   try {
+    throwIfSimulatedEnvCheckFault()
     return await callRuntimeRpc<EnvironmentDoctorResult>(
       { kind: 'environment', environmentId },
       ENVIRONMENT_DOCTOR_METHOD,
       { path },
-      { timeoutMs: ENVIRONMENT_CHECK_TIMEOUT_MS, signal }
+      { timeoutMs: ENVIRONMENT_CHECK_TIMEOUT_MS, ...(signal ? { signal } : {}) }
     )
   } catch (error) {
     const unreachable: EnvironmentDoctorCheck = {
@@ -61,54 +71,96 @@ async function runVmEnvironmentCheck(
     }
     return { worktreePath: path, ok: false, checks: [unreachable] }
   } finally {
-    endVmEnvironmentCheckRun(creationId, signal)
+    if (creationId && signal) {
+      endVmEnvironmentCheckRun(creationId, signal)
+    }
   }
 }
 
 /**
  * Check the freshly provisioned VM before creating the workspace. A failure pauses the create on the
- * build sheet; it resolves true to continue (passed, unsupported, or "Open anyway") and false to cancel.
+ * build sheet; it resolves `proceed` to continue (passed, unsupported, or "Open anyway"), `stop` to
+ * cancel, `restart` to cancel and start on a new sandbox. Orca Cloud (`cloud`) stops only on a fatal check.
  * Nothing here tears the VM down: only cancelling does, so a degraded open keeps the VM that provisioned.
  */
 export async function gateVmCreateOnEnvironmentCheck(
   creationId: string,
   environmentId: string,
-  path: string
-): Promise<boolean> {
+  path: string,
+  cloud?: CloudEnvironmentCheckContext,
+  confirmFetch?: CloudFetchConfirm
+): Promise<VmEnvironmentCheckGateResult> {
   const update = useAppStore.getState().updatePendingWorktreeCreation
   const isPending = (): boolean =>
     Boolean(useAppStore.getState().pendingWorktreeCreations[creationId])
+  const cloudGate = cloud
+    ? cloudEnvironmentCheckGate({
+        creationId,
+        environmentId,
+        path,
+        cloud,
+        confirmFetch,
+        runCheck: runVmEnvironmentCheck
+      })
+    : null
   if (!(await supportsEnvironmentChecks(environmentId))) {
-    update(creationId, { environmentCheck: { status: 'skipped' } })
-    return isPending()
+    const at = Date.now()
+    update(creationId, { environmentCheck: { status: 'skipped', startedAt: at, finishedAt: at } })
+    return isPending() ? 'proceed' : 'stop'
   }
   for (;;) {
     // A dismiss during the probe or the previous pause registered nothing to abort.
     if (!isPending()) {
-      return false
+      return 'stop'
     }
-    update(creationId, { environmentCheck: { status: 'running' } })
+    const startedAt = Date.now()
+    update(creationId, { environmentCheck: { status: 'running', startedAt } })
     const result = await runVmEnvironmentCheck(creationId, environmentId, path)
     if (!isPending()) {
-      return false
+      return 'stop'
     }
-    if (result.ok) {
-      update(creationId, { environmentCheck: { status: 'passed', checks: result.checks } })
-      return true
+    const failedChecks = cloudGate
+      ? cloudGate.blockingChecks(result)
+      : result.ok
+        ? null
+        : result.checks
+    if (!failedChecks) {
+      const finishedAt = Date.now()
+      update(creationId, {
+        environmentCheck: { status: 'passed', checks: result.checks, startedAt, finishedAt }
+      })
+      cloudGate?.passed(result)
+      return 'proceed'
     }
-    update(creationId, { environmentCheck: { status: 'failed', checks: result.checks } })
+    const failedAt = Date.now()
+    update(creationId, {
+      environmentCheck: {
+        status: 'failed',
+        checks: failedChecks,
+        startedAt,
+        finishedAt: failedAt,
+        ...cloudGate?.failedFields(failedAt)
+      },
+      waitingSince: failedAt
+    })
     if (useAppStore.getState().activePendingCreationId !== creationId) {
       // The paused build keeps its VM running, so a background create must say it needs the user.
       toast.error(
-        translate(
-          'auto.lib.ephemeralVmEnvironmentCheck.backgroundFailed',
-          'Environment checks failed for a new VM workspace. Open it in the sidebar to continue.'
-        )
+        cloudGate?.backgroundFailedMessage() ??
+          translate(
+            'auto.lib.ephemeralVmEnvironmentCheck.backgroundFailed',
+            'Environment checks failed for a new VM workspace. Open it in the sidebar to continue.'
+          )
       )
     }
-    const decision = await awaitVmEnvironmentCheckDecision(creationId, PAUSE_TIMEOUT_MS)
+    const decision = await (cloudGate?.awaitDecision(failedAt) ??
+      awaitVmEnvironmentCheckDecision(creationId, PAUSE_TIMEOUT_MS))
     if (decision === 'cancel' || !isPending()) {
-      return false
+      return 'stop'
+    }
+    resumeBuildClock(creationId)
+    if (decision === 'restart') {
+      return 'restart'
     }
     if (decision === 'open-anyway') {
       toast.warning(
@@ -117,7 +169,7 @@ export async function gateVmCreateOnEnvironmentCheck(
           'Creating the workspace on a VM whose environment checks failed.'
         )
       )
-      return true
+      return 'proceed'
     }
   }
 }

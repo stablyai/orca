@@ -7,6 +7,7 @@ import { Card } from '../../ui/card'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
+import { ProgressCard, progressCardAnimationClass } from '../progress-card/ProgressCard'
 import { UpdateCardStateContent } from './UpdateCardStateContent'
 import { buildUpdateCardErrorModel } from './update-card-error-model'
 import { getUpdateCardAriaLabel, isUpdateCardVisible } from './update-card-visibility'
@@ -198,11 +199,7 @@ export function UpdateCard(): React.JSX.Element | null {
       setExiting(false)
     }, 150)
   }
-  const handleKeyDown = (event: React.KeyboardEvent): void => {
-    if (event.key !== 'Escape') {
-      return
-    }
-    event.preventDefault()
+  const handleEscape = (): void => {
     if (
       status.state === 'downloading' ||
       status.state === 'downloaded' ||
@@ -234,49 +231,44 @@ export function UpdateCard(): React.JSX.Element | null {
     />
   )
 
-  const animationClass = prefersReducedMotion
-    ? ''
-    : exiting
-      ? 'animate-update-card-exit'
-      : 'animate-update-card-enter'
+  const animationClass = progressCardAnimationClass(prefersReducedMotion, exiting)
   const showReassurance =
     !reassuranceSeen &&
     ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
   return (
     <div ref={cardRootRef} className="flex flex-col gap-2">
       {showReassurance && (
-        <Card className={`py-0 gap-0 ${animationClass}`}>
-          <div className="flex items-center gap-3 p-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'auto.components.UpdateCard.b1d867f4fb',
-                  "Your terminal sessions won't be interrupted during the update."
-                )}
-              </p>
+        <div className={animationClass}>
+          <Card size="flush">
+            <div className="flex items-center gap-3 p-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.UpdateCard.b1d867f4fb',
+                    "Your terminal sessions won't be interrupted during the update."
+                  )}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 shrink-0"
+                onClick={markReassuranceSeen}
+                aria-label={t('auto.components.UpdateCard.7274ef6e59', 'Dismiss tip')}
+              >
+                <X className="size-3.5" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 shrink-0"
-              onClick={markReassuranceSeen}
-              aria-label={t('auto.components.UpdateCard.7274ef6e59', 'Dismiss tip')}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        </div>
       )}
-      <Card
-        role="complementary"
-        aria-label={getUpdateCardAriaLabel(status, t)}
-        aria-live="polite"
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
-        className={`py-0 gap-0 ${animationClass}`}
+      <ProgressCard
+        ariaLabel={getUpdateCardAriaLabel(status, t)}
+        animationClass={animationClass}
+        onEscape={handleEscape}
       >
         {cardContent}
-      </Card>
+      </ProgressCard>
     </div>
   )
 }

@@ -1,4 +1,8 @@
 import { replayIntoTerminal, replayIntoTerminalAsync } from '../../snapshots/replay-guard'
+import {
+  HOLD_RENDER_UNTIL_RESTORED,
+  hasPendingWakeScrollback
+} from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
 import {
   buildPostReplayLiveAgentReattachReset,
@@ -186,6 +190,12 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   session.prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
     const hadRestoredViewport = session.consumeRestoredViewportBlankingMarker()
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
+      return
+    }
+    // A woken cloud pane keeps showing its pre-sleep output (render held) until its
+    // restore rewrites the whole pane; blanking here is the blank frame before it.
+    if (hasPendingWakeScrollback(session.pane.leafId)) {
+      session.writeReplayData(HOLD_RENDER_UNTIL_RESTORED)
       return
     }
     if (!hadRestoredViewport && isTerminalBlank(session.pane.terminal)) {

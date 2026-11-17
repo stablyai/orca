@@ -15,6 +15,7 @@ import {
   getTrustedStoreGitStatus,
   orderDeleteWorktreeStatusHydrationTargets
 } from './delete-worktree-dirty-change-counts'
+import { mayContactDeleteTargetHost } from './delete-target-host-contact'
 
 /** Routes a delete target's git reads to its owning host; null when no host can serve it. */
 export function resolveDeleteTargetGitContext(
@@ -96,7 +97,10 @@ export function useDeleteWorktreeStatusHydration({
         publish(existingStatus)
         continue
       }
-      const gitContext = resolveDeleteTargetGitContext(target, repos)
+      // An asleep Orca Cloud sandbox is not woken (or waited on) to count changes for a dialog.
+      const gitContext = mayContactDeleteTargetHost(target, 'git-status')
+        ? resolveDeleteTargetGitContext(target, repos)
+        : null
       if (!gitContext) {
         publish(null)
         continue

@@ -13,7 +13,10 @@ import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from '../linked-work-items/source-selection-decisions'
-import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { composerCreateLaunchRoute } from '../composer-create-launch-route'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
+import { parentWorktreeForRunOn } from '@/components/new-workspace/run-on/cloud-advanced-options'
+import { reportCloudStartAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-agent-coverage'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -125,27 +128,28 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           sourceRepoId: repoId,
           recipeId: activeEphemeralVmRecipeId,
           projectId: selectedWorkspaceTarget.target.projectId,
-          ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {})
+          ...(selectedRecipe?.checkoutMode ? { checkoutMode: selectedRecipe.checkoutMode } : {}),
+          ...(selectedRecipe?.provider ? { provider: selectedRecipe.provider } : {})
+        }
+        if (activeEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID) {
+          reportCloudStartAgentCoverage(agent)
         }
       }
 
       const promptDelivery = quickDraftPrompt ? 'draft' : 'auto-submit'
       // Why: the verdict is persisted on the request as data and re-entered once the worktree exists.
-      const agentLaunchRoute = !agent
-        ? 'terminal-tui'
-        : (options?.launchChoice?.route ??
-          resolveAgentSessionLaunchRoute(useAppStore.getState(), {
-            agent,
-            workspace: {
-              kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-              repoId,
-              executionHostId: ephemeralVmRecipe
-                ? 'runtime:pending-ephemeral-vm'
-                : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined)
-            },
-            prompt: quickDraftPrompt ?? quickPrompt,
-            promptDelivery
-          }))
+      const agentLaunchRoute = composerCreateLaunchRoute(useAppStore.getState(), {
+        agent,
+        launchChoice: options?.launchChoice,
+        vmRecipeId: ephemeralVmRecipe?.recipeId,
+        workspace: {
+          kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+          repoId,
+          executionHostId: workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? undefined
+        },
+        prompt: quickDraftPrompt ?? quickPrompt,
+        promptDelivery
+      })
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const quickStartup = await prepareQuickComposerStartup({
@@ -204,7 +208,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssueOrganizationUrlKey,
         branchNameOverride: effectiveBranchNameOverride,
         branchIntent,
-        parentWorktreeId,
+        // DS-j: a parent picked before switching to Orca Cloud would fail the create cross-host.
+        parentWorktreeId:
+          parentWorktreeForRunOn(activeEphemeralVmRecipeId, parentWorktreeId) ?? null,
         // A lane's host-only column applies only when creating on that host.
         workspaceStatus:
           resolvedInitialWorkspaceStatus &&

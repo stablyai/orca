@@ -9,20 +9,20 @@
     "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
     "inlineRepo": "!vars.classic && repo != null && !place.hideRepoBadge && !vars.folder && !vars.pinnedRepo",
     "metaRepo": "vars.classic && repo != null && !place.hideRepoBadge && !vars.pinnedRepo",
-    "hostLabel": "options.show.host ? host.contextLabel : null",
+    "hostLabel": "options.show.host && host.kind != 'local' && !host.cloud ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
     "detailsRow": "!vars.newStyle || options.detailsRow",
     "metaRow": "!vars.compact && vars.detailsRow",
     "detachedInMeta": "vars.metaRow && !vars.folder && ws.detachedHead",
-    "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
-    "identityInMeta": "vars.newStyle && vars.metaRow && options.show.branch && ws.identity != null",
+    "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && ws.branch != ws.name && ws.branch != trim(ws.title)",
+    "identityInMeta": "vars.newStyle && vars.metaRow && options.show.branch && ws.identity != null && ws.identity != trim(ws.title)",
     "folderInMeta": "vars.newStyle ? vars.metaRow && options.show.branch && vars.folder && ws.identity != null : vars.folder",
     "conflict": "git.conflictOperation == 'cherry-pick'",
     "hasComment": "len(trim(ws.comment)) > 0",
     "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli)",
     "ports": "options.show.ports && ports.count > 0",
     "indicators": "vars.details || vars.ports",
-    "metaLead": "vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
+    "metaLead": "vars.metaRepo || vars.hostBadge || host.stateWord || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
     "metaIndicators": "vars.metaRow && vars.indicators && (vars.classic || vars.metaLead)",
     "titleIndicators": "vars.indicators && !vars.metaIndicators",
     "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
@@ -54,11 +54,9 @@
               "children": [
                 { "el": "RepoChip", "when": "vars.pinnedRepo" },
                 {
-                  "el": "SshControl",
-                  "when": "host.kind == 'ssh'",
-                  "props": { "iconOnly": "=!vars.classic" }
+                  "el": "HostMark",
+                  "props": { "runtime": "=host.kind == 'runtime'" }
                 },
-                { "el": "RuntimeHostMark", "when": "host.kind == 'runtime'" },
                 { "el": "RepoChip", "when": "vars.inlineRepo" },
                 {
                   "el": "Title",
@@ -135,6 +133,8 @@
                   "when": "vars.metaRow && vars.hostBadge",
                   "props": { "label": "=vars.hostLabel" }
                 },
+                { "el": "SshConnect", "when": "vars.classic && host.kind == 'ssh'" },
+                { "el": "HostStateWord" },
                 {
                   "el": "IdentityLabel",
                   "when": "vars.identityInMeta",

@@ -13,12 +13,24 @@ import { isWithinComboboxRoot, useTypeAheadCombobox } from '../type-ahead/use-ty
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   buildRunTargetRows,
-  getEphemeralVmLabel,
-  getRecipeDetail,
+  getRunTargetFieldText,
+  getRecipeSubmenuItemKey,
+  getRunTargetSubmenuItemKeys,
+  closingFirst,
+  getRunTargetCurrentRowKey,
+  getRunTargetOptionId,
   RUN_TARGET_ADD_HOST_KEY,
-  type EphemeralVmRecipeOption
+  RUN_TARGET_ADD_REMOTE_SERVER_ITEM,
+  RUN_TARGET_ADD_SSH_HOST_ITEM,
+  type EphemeralVmRecipeOption,
+  type RunTargetSubmenu
 } from './run-target-options'
-import { AddHostSubmenuRow } from './RunTargetSubmenus'
+import { AddHostSubmenuRow, type RunTargetSubmenuArm } from './RunTargetSubmenus'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import { useRunTargetSubmenu } from '../use-run-target-submenu'
+import { getRunTargetOrcaCloudOffer, useRunTargetOrcaCloud } from '../use-run-target-orca-cloud'
+import type { OrcaCloudAvailability } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import { handleRunTargetKeyDown } from '../run-target-keyboard'
 import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
@@ -35,6 +47,15 @@ type RunTargetComboboxProps = {
   onAddSshHost?: () => void
   onConnectHost?: (option: NeedsSetupProjectHostOption) => Promise<void> | void
   onSetLocation?: (option: NeedsSetupProjectHostOption) => void
+  /** Fixtures/tests pin the entitlement; otherwise it is read from billing while the picker is open. */
+  orcaCloudAccess?: OrcaCloudRunTargetAccess
+  /** From main: drives the sign-in/upsell row when there is no Orca Cloud recipe. */
+  orcaCloudAvailability?: OrcaCloudAvailability
+  /**
+   * The composer's pick: Orca Cloud is selected even while the account needs setup, which then
+   * happens on a page after Start. Without it, a blocked account's pick runs the fix instead.
+   */
+  onSelectOrcaCloud?: () => void
 }
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
@@ -51,27 +72,15 @@ export default function RunTargetCombobox({
   onAddRemoteServer,
   onAddSshHost,
   onConnectHost,
-  onSetLocation
+  onSetLocation,
+  orcaCloudAccess: orcaCloudAccessOverride,
+  orcaCloudAvailability = 'unavailable',
+  onSelectOrcaCloud
 }: RunTargetComboboxProps): React.JSX.Element {
   const t = useTranslate()
-  const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
   const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
 
-  const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
-  const deriveRowKeys = useCallback(
-    (query: string): string[] =>
-      buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }).rows.map((row) => row.key),
-    [hasAddHost, hostOptions, recipes]
-  )
-  const combobox = useTypeAheadCombobox(deriveRowKeys)
-  const { query, setQuery, open, setOpen, armedKey, arm, moveArm, inputRef, listId, setListNode } =
-    combobox
-
-  const { rows, matchedRecipes, hiddenHostCount } = useMemo(
-    () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }),
-    [hasAddHost, hostOptions, query, recipes]
-  )
   const readyHostOptions = useMemo(
     () => hostOptions.filter((option) => option.kind === 'ready'),
     [hostOptions]
@@ -85,14 +94,50 @@ export default function RunTargetCombobox({
     // An unlisted target (e.g. a per-workspace VM) shows "Choose target", never another host's name (#38669).
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
+  // Opening highlights the committed row, so only one row reads as chosen.
+  const currentRowKey = getRunTargetCurrentRowKey(selectedRecipe, selectedHost)
+
+  const hasAddHost = Boolean(onAddSshHost || onAddRemoteServer)
+  const orcaCloudOffer = getRunTargetOrcaCloudOffer({
+    recipes,
+    availability: orcaCloudAvailability,
+    override: orcaCloudAccessOverride
+  })
+  const orcaCloudOffered = orcaCloudOffer !== null
+  const deriveRowKeys = useCallback(
+    (query: string): string[] =>
+      buildRunTargetRows({ hostOptions, recipes, query, hasAddHost, orcaCloudOffered }).rows.map(
+        (row) => row.key
+      ),
+    [hasAddHost, hostOptions, orcaCloudOffered, recipes]
+  )
+  const combobox = useTypeAheadCombobox(deriveRowKeys, currentRowKey)
+  const { query, setQuery, open, setOpen, armedKey, arm, moveArm, inputRef, listId, setListNode } =
+    combobox
+
+  const { rows, matchedRecipes, hiddenHostCount } = useMemo(
+    () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost, orcaCloudOffered }),
+    [hasAddHost, hostOptions, orcaCloudOffered, query, recipes]
+  )
+  const submenuItemKeys = useCallback(
+    (which: RunTargetSubmenu): string[] =>
+      getRunTargetSubmenuItemKeys(which, {
+        matchedRecipes,
+        hasAddSshHost: Boolean(onAddSshHost),
+        hasAddRemoteServer: Boolean(onAddRemoteServer)
+      }),
+    [matchedRecipes, onAddRemoteServer, onAddSshHost]
+  )
+  const { submenu, armedItemKey, openSubmenu, closeSubmenu, armItem, moveItemArm, armItemEdge } =
+    useRunTargetSubmenu(submenuItemKeys)
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
   const committed = query.length === 0 && (selectedRecipe !== null || selectedHost !== null)
 
   // Closing also drops any open submenu, which the shared hook doesn't know about.
   const close = useCallback((): void => {
     combobox.close()
-    setSubmenu(null)
-  }, [combobox])
+    closeSubmenu()
+  }, [closeSubmenu, combobox])
 
   const selectHost = useCallback(
     (option: ReadyProjectHostSetupOption): void => {
@@ -109,6 +154,47 @@ export default function RunTargetCombobox({
       close()
     },
     [close, onRecipeChange]
+  )
+
+  const {
+    access: orcaCloudAccess,
+    pending: orcaCloudPending,
+    runBlockedAction: runOrcaCloudBlockedAction,
+    select: selectOrcaCloud
+  } = useRunTargetOrcaCloud({
+    recipes,
+    offer: orcaCloudOffer,
+    override: orcaCloudAccessOverride,
+    open,
+    close,
+    selectRecipe,
+    ...(onSelectOrcaCloud ? { onSelectOrcaCloud } : {})
+  })
+
+  const addSshHost = useMemo(() => closingFirst(close, onAddSshHost), [close, onAddSshHost])
+  const addRemoteServer = useMemo(
+    () => closingFirst(close, onAddRemoteServer),
+    [close, onAddRemoteServer]
+  )
+
+  const commitSubmenuItem = useCallback(
+    (key: string): void => {
+      if (key === RUN_TARGET_ADD_SSH_HOST_ITEM) {
+        addSshHost?.()
+        return
+      }
+      if (key === RUN_TARGET_ADD_REMOTE_SERVER_ITEM) {
+        addRemoteServer?.()
+        return
+      }
+      const recipe = matchedRecipes.find(
+        (candidate) => getRecipeSubmenuItemKey(candidate.id) === key
+      )
+      if (recipe) {
+        selectRecipe(recipe.id)
+      }
+    },
+    [addRemoteServer, addSshHost, matchedRecipes, selectRecipe]
   )
 
   const connectHost = useCallback(
@@ -156,40 +242,40 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'needs-setup') {
-        setLocation(row.option)
+        // Enter does what the row's inline action does: Connect is not a Tab stop of its own.
+        if (row.option.connectAction && onConnectHost) {
+          void connectHost(row.option)
+        } else {
+          setLocation(row.option)
+        }
         return
       }
-      setSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host')
+      if (row.kind === 'orca-cloud') {
+        selectOrcaCloud(row.recipe)
+        return
+      }
+      // Keyboard opening moves the arm into the submenu so arrows and Enter reach its rows.
+      openSubmenu(row.kind === 'recipes' ? 'recipes' : 'add-host', true)
     },
-    [rows, selectHost, setLocation]
+    [connectHost, onConnectHost, openSubmenu, rows, selectHost, selectOrcaCloud, setLocation]
   )
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        setOpen(true)
-        moveArm(event.key === 'ArrowDown' ? 1 : -1)
-        setSubmenu(null)
-        return
+  const inSubmenu = submenu !== null && armedItemKey !== null
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void =>
+    handleRunTargetKeyDown(
+      event,
+      { open, query, submenu, armedItemKey, armedRow },
+      {
+        setOpen,
+        moveArm,
+        moveItemArm,
+        armItemEdge,
+        activate,
+        commitSubmenuItem,
+        closeSubmenu,
+        close
       }
-      if ((event.key === 'Enter' || event.key === 'ArrowRight') && open) {
-        event.preventDefault()
-        activate(armedRow?.key ?? null)
-        return
-      }
-      if (event.key === 'Escape' && (open || query.length > 0)) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (submenu !== null) {
-          setSubmenu(null)
-          return
-        }
-        close()
-      }
-    },
-    [activate, armedRow, close, moveArm, open, query, setOpen, submenu]
-  )
+    )
 
   const handleOpenChange = useCallback(
     (next: boolean): void => {
@@ -202,12 +288,21 @@ export default function RunTargetCombobox({
     [close, setOpen]
   )
 
-  const fieldLabel = selectedRecipe
-    ? `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
-    : (selectedHost?.label ?? '')
-  const fieldDetail = selectedRecipe
-    ? getRecipeDetail(selectedRecipe, t)
-    : (selectedHost?.path ?? '')
+  const optionIdFor = useCallback(
+    (key: string): string => getRunTargetOptionId(listId, key),
+    [listId]
+  )
+  const submenuArmFor = (which: RunTargetSubmenu): RunTargetSubmenuArm => ({
+    listId: `${listId}-${which}`,
+    armedItemKey: submenu === which ? armedItemKey : null,
+    optionIdFor,
+    onArmItem: armItem
+  })
+  const activeDescendantKey = inSubmenu ? armedItemKey : (armedRow?.key ?? null)
+  const activeDescendantId = activeDescendantKey ? optionIdFor(activeDescendantKey) : undefined
+  const addHostOptionId = optionIdFor(RUN_TARGET_ADD_HOST_KEY)
+
+  const field = getRunTargetFieldText(selectedRecipe, selectedHost, t)
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -216,23 +311,25 @@ export default function RunTargetCombobox({
         onQueryChange={(value) => {
           setQuery(value)
           setOpen(true)
-          setSubmenu(null)
+          closeSubmenu()
         }}
         open={open}
         onOpenRequest={() => setOpen(true)}
         onToggle={() => setOpen(!open)}
         committed={committed}
-        isRecipe={selectedRecipe !== null}
+        recipeKind={field.recipeKind}
         hostId={selectedHost?.hostId ?? null}
-        label={fieldLabel}
-        detail={fieldDetail}
-        listId={listId}
-        hasArmedRow={armedRow !== null}
+        label={field.label}
+        detail={field.detail}
+        controlsId={submenu ? `${listId} ${listId}-${submenu}` : listId}
+        activeDescendantId={activeDescendantId}
         inputRef={inputRef}
         onKeyDown={handleKeyDown}
       />
       <PopoverContent
-        align="start"
+        // Right column of the composer: grow leftwards from the trigger so the menu stays inside
+        // the dialog.
+        align="end"
         sideOffset={4}
         className={cn(
           'flex w-[var(--radix-popover-trigger-width)] min-w-[18rem] flex-col p-0',
@@ -252,43 +349,59 @@ export default function RunTargetCombobox({
           }
         }}
       >
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={t('auto.components.new.workspace.RunTargetCombobox.listLabel', 'Run targets')}
-          className="flex min-h-0 flex-col"
-        >
+        {/* @container: narrow menus drop secondary specs. Only options live inside the listbox; the
+            pinned Add host row joins it through aria-owns. */}
+        <div className="@container flex min-h-0 flex-col">
+          {rows.filter((row) => row.kind !== 'add-host').length === 0 ? (
+            <p className="flex h-8 items-center justify-center px-2 pt-1 text-sm text-muted-foreground">
+              {t(
+                'auto.components.NewWorkspaceComposerCard.noRunTargets',
+                'No run targets are ready for this project.'
+              )}
+            </p>
+          ) : null}
           <div
             ref={setListNode}
-            role="presentation"
+            id={listId}
+            role="listbox"
+            aria-label={t(
+              'auto.components.new.workspace.RunTargetCombobox.listLabel',
+              'Run targets'
+            )}
+            aria-owns={hasAddHost ? addHostOptionId : undefined}
             className="max-h-72 min-h-0 flex-1 overflow-y-auto p-1 scrollbar-sleek"
           >
-            {rows.filter((row) => row.kind !== 'add-host').length === 0 ? (
-              <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
-                {t(
-                  'auto.components.NewWorkspaceComposerCard.noRunTargets',
-                  'No run targets are ready for this project.'
-                )}
-              </p>
-            ) : null}
             <RunTargetRowList
               rows={rows}
               armedKey={armedRow?.key ?? null}
-              listId={listId}
               selectedHost={selectedRecipe === null ? selectedHost : null}
               selectedRecipeId={selectedRecipe?.id ?? null}
               matchedRecipes={matchedRecipes}
               recipesOpen={submenu === 'recipes'}
+              inSubmenu={inSubmenu}
+              optionIdFor={optionIdFor}
+              recipesSubmenuArm={submenuArmFor('recipes')}
+              orcaCloudAccess={orcaCloudAccess}
+              orcaCloudPending={orcaCloudPending}
               connectingHostIds={connectingHostIds}
               canConnect={Boolean(onConnectHost)}
               canSetLocation={Boolean(onSetLocation)}
               onArm={(key, nextSubmenu) => {
                 arm(key)
-                setSubmenu(nextSubmenu)
+                if (nextSubmenu === null) {
+                  closeSubmenu()
+                } else if (submenu !== nextSubmenu) {
+                  openSubmenu(nextSubmenu, false)
+                }
               }}
-              onRecipesOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
+              onRecipesOpenChange={(next) =>
+                next ? openSubmenu('recipes', false) : closeSubmenu()
+              }
               onSelectHost={selectHost}
               onSelectRecipe={selectRecipe}
+              onSelectOrcaCloud={selectOrcaCloud}
+              onOrcaCloudBlockedAction={runOrcaCloudBlockedAction}
+              orcaCloudSetupAfterStart={Boolean(onSelectOrcaCloud)}
               onConnectHost={(option) => void connectHost(option)}
               onSetLocation={setLocation}
             />
@@ -297,29 +410,19 @@ export default function RunTargetCombobox({
           {hasAddHost ? (
             <AddHostSubmenuRow
               open={submenu === 'add-host'}
-              onOpenChange={(next) => setSubmenu(next ? 'add-host' : null)}
+              onOpenChange={(next) => (next ? openSubmenu('add-host', false) : closeSubmenu())}
               armed={armedRow?.key === RUN_TARGET_ADD_HOST_KEY}
-              optionId={armedRow?.key === RUN_TARGET_ADD_HOST_KEY ? `${listId}-armed` : undefined}
+              armedInSubmenu={inSubmenu && submenu === 'add-host'}
+              optionId={addHostOptionId}
+              submenuArm={submenuArmFor('add-host')}
               onArm={() => {
                 arm(RUN_TARGET_ADD_HOST_KEY)
-                setSubmenu('add-host')
+                if (submenu !== 'add-host') {
+                  openSubmenu('add-host', false)
+                }
               }}
-              {...(onAddSshHost
-                ? {
-                    onAddSshHost: () => {
-                      close()
-                      onAddSshHost()
-                    }
-                  }
-                : {})}
-              {...(onAddRemoteServer
-                ? {
-                    onAddRemoteServer: () => {
-                      close()
-                      onAddRemoteServer()
-                    }
-                  }
-                : {})}
+              {...(addSshHost ? { onAddSshHost: addSshHost } : {})}
+              {...(addRemoteServer ? { onAddRemoteServer: addRemoteServer } : {})}
             />
           ) : null}
         </div>

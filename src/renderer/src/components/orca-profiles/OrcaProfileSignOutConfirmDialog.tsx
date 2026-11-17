@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -8,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { DialogCancel } from '@/components/ui/dialog-parts'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function OrcaProfileSignOutConfirmDialog({
@@ -24,31 +24,27 @@ export function OrcaProfileSignOutConfirmDialog({
   const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent size="confirm" busy={signingOut}>
         <DialogHeader>
           <DialogTitle>
             {t('auto.components.orca.profiles.signout.confirm.title', 'Sign out of Orca?')}
           </DialogTitle>
           <DialogDescription>
             {t(
-              'auto.components.orca.profiles.signout.confirm.description',
-              "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected."
+              'auto.components.orca.profiles.signout.confirm.description2',
+              "You'll lose access to your cloud workspaces until you sign in again. Local workspaces aren't affected."
             )}
           </DialogDescription>
         </DialogHeader>
 
         <DialogFooter>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            disabled={signingOut}
-          >
+          <DialogCancel>
             {t('auto.components.orca.profiles.signout.confirm.cancel', 'Cancel')}
-          </Button>
+          </DialogCancel>
           <Button size="sm" onClick={onConfirm} disabled={signingOut}>
-            {signingOut ? <Loader2 className="size-4 animate-spin" /> : null}
-            {t('auto.components.orca.profiles.signout.confirm.action', 'Sign out')}
+            {signingOut
+              ? t('auto.components.orca.profiles.signout.confirm.signingOut', 'Signing out…')
+              : t('auto.components.orca.profiles.signout.confirm.action', 'Sign out')}
           </Button>
         </DialogFooter>
       </DialogContent>

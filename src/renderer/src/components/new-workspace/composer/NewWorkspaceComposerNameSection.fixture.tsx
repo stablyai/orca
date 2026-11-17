@@ -2,19 +2,31 @@ import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { NewWorkspaceComposerNameSection } from './NewWorkspaceComposerNameSection'
 import { buildWorkspaceSourceSelection } from '../../../../../shared/new-workspace/workspace-source'
+import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
+
+const orcaCloudRecipe: EphemeralVmRecipeOption = {
+  id: 'cloud',
+  name: 'Orca Cloud',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create'
+}
 
 function BranchReusePreview({
   busy = false,
   remote = true,
   initialReuse = true,
   initialBranchName,
-  existingBranch = 'feature/nested'
+  existingBranch = 'feature/nested',
+  cloud = false
 }: {
   busy?: boolean
   remote?: boolean
   initialReuse?: boolean
   initialBranchName?: string
   existingBranch?: string
+  /** Run on is Orca Cloud: the branch choice is titled for a workspace, not a worktree. */
+  cloud?: boolean
 }) {
   const [reuse, setReuse] = useState(initialReuse)
   const [branchName, setBranchName] = useState<string | undefined>(initialBranchName)
@@ -51,6 +63,8 @@ function BranchReusePreview({
         }}
         onOpenSelectedBranchWorkspace={busy && reuse ? () => {} : undefined}
         baseBranch={baseBranch}
+        ephemeralVmRecipes={cloud ? [orcaCloudRecipe] : []}
+        selectedEphemeralVmRecipeId={cloud ? orcaCloudRecipe.id : null}
         onNamePlainEnter={() => {}}
       />
     </div>
@@ -82,4 +96,8 @@ export const namedNewBranch = defineFixture({
       initialBranchName="feature/my-review"
     />
   )
+})
+export const orcaCloudRemoteBranch = defineFixture({
+  width: 480,
+  render: () => <BranchReusePreview cloud />
 })

@@ -1,6 +1,7 @@
 import { useSupportedGroupHookSettings } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
+import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
@@ -121,6 +122,8 @@ export function useSettingsStoreModel() {
   const showDesktopOnlySettings = !isWebClient
   // Match navigation’s gate so the Linear entry and pane appear together.
   const linearConnected = useLinearProviderConnected()
+  // Orca Cloud API keys + routines: private/hosted builds only, same gate as navigation.
+  const orcaCloudApiAvailable = useOrcaCloudApiAvailable()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -244,6 +247,7 @@ export function useSettingsStoreModel() {
     isWebClient,
     showDesktopOnlySettings,
     linearConnected,
+    orcaCloudApiAvailable,
     orchestrationSkill,
     linearSkill,
     computerUseSkill,

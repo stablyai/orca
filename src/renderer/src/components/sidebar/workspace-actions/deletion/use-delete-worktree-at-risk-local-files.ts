@@ -8,6 +8,7 @@ import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { resolveDeleteTargetGitContext } from './use-delete-worktree-status-hydration'
+import { mayContactDeleteTargetHost } from './delete-target-host-contact'
 
 export type DeleteWorktreeLocalFilesState =
   | { status: 'checking' }
@@ -49,7 +50,12 @@ export function useDeleteWorktreeAtRiskLocalFiles({
 
   const startScans = useEffectEvent((signal: AbortSignal) => {
     for (const target of deleteTargets) {
-      if (target.isMainWorktree || isFolderWorkspaceDelete(repoMap, target)) {
+      if (
+        target.isMainWorktree ||
+        isFolderWorkspaceDelete(repoMap, target) ||
+        // An Orca Cloud sandbox is never contacted for this: its dialog shows no file list.
+        !mayContactDeleteTargetHost(target, 'at-risk-scan')
+      ) {
         continue
       }
       const identity = getWorktreeHostIdentity(target)

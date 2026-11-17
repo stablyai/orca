@@ -18,6 +18,7 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
+import { installPaneWakeInput } from './pty-wake-input-forward'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -154,10 +155,14 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
   // Bind once so provenance survives deferred input without allocating per-keystroke closures.
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
+  const wakeInput = installPaneWakeInput(session, forwardUserInput)
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
+      if (wakeInput.capture(data, wasUserInput)) {
+        return
+      }
       const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
       if (session.deps.deferPtyInput) {
         session.deps.deferPtyInput(session.pane.id, data, forward)
@@ -166,6 +171,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       forward(data)
     }
   )
+  session.onDataDisposable = wakeInput.wrapDisposable(session.onDataDisposable)
   session.imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
     terminalElement: session.pane.terminal.element,
     terminal: session.pane.terminal,

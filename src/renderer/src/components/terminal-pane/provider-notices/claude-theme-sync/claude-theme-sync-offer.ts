@@ -6,6 +6,8 @@ import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
+import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 
 const OFFER_TOAST_ID = 'claude-theme-sync-offer'
 
@@ -64,6 +66,48 @@ function showClaudeThemeSyncOffer(): void {
   })
 }
 
+/**
+ * The sync changes Claude Code on THIS computer. Hold the offer while the active workspace runs
+ * elsewhere (Orca Cloud, a VM, SSH, an Orca server) or is still being created: a brand-new cloud
+ * workspace is not in the cloud id list yet when its Claude terminal appears.
+ */
+function isAwayFromThisComputer(state: AppState): boolean {
+  if (state.activePendingCreationId) {
+    return true
+  }
+  const id = state.activeWorktreeId
+  if (!id) {
+    return false
+  }
+  if (getCloudWorkspaceSnapshot().ids.has(id) || state.ephemeralVmRuntimesByWorkspaceId?.[id]) {
+    return true
+  }
+  const host = state.activeWorkspaceExecutionHostId
+  return Boolean(host && host !== LOCAL_EXECUTION_HOST_ID)
+}
+
+/**
+ * The sync changes Claude Code on this computer, which an Orca Cloud workspace's Claude doesn't
+ * use: hold the offer while one is active and make it once a local workspace is.
+ */
+function offerOnLocalWorkspace(): () => void {
+  if (!isAwayFromThisComputer(useAppStore.getState())) {
+    showClaudeThemeSyncOffer()
+    return () => {}
+  }
+  const unsubscribe = useAppStore.subscribe((state, previous) => {
+    const moved =
+      state.activeWorktreeId !== previous.activeWorktreeId ||
+      state.activePendingCreationId !== previous.activePendingCreationId ||
+      state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+    if (moved && !isAwayFromThisComputer(state)) {
+      unsubscribe()
+      showClaudeThemeSyncOffer()
+    }
+  })
+  return unsubscribe
+}
+
 /** Offers theme sync once, when Claude Code first runs in an Orca terminal. */
 export function useClaudeThemeSyncOffer(): void {
   const due = useAppStore(isOfferDue)
@@ -73,6 +117,13 @@ export function useClaudeThemeSyncOffer(): void {
     if (!due || isPairedWebClientWindow()) {
       return
     }
-    return whenAgentTerminalAppears('claude', showClaudeThemeSyncOffer)
+    let stopWaitingForLocal: () => void = () => {}
+    const stopWatching = whenAgentTerminalAppears('claude', () => {
+      stopWaitingForLocal = offerOnLocalWorkspace()
+    })
+    return () => {
+      stopWatching()
+      stopWaitingForLocal()
+    }
   }, [due])
 }

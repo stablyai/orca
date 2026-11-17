@@ -30,6 +30,12 @@ import type { Translate } from '@/i18n/use-translate'
 import type { EnvironmentDoctorCheck } from '../../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  orcaCloudCreationProgressLabel,
+  type PendingVmEnvironmentCheckCloudFields,
+  type PendingWorktreeCreationCloudFields,
+  type WorktreeCreationRequestCloudFields
+} from './pending-worktree-creation-cloud'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
 export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
@@ -62,6 +68,8 @@ export type WorktreeCreationRequest = {
     recipeId: string
     projectId: string
     checkoutMode?: 'orca-worktree' | 'provisioned-root'
+    /** Set for the built-in hosted provider, whose build sheet speaks in plain language. */
+    provider?: 'orca-cloud'
   }
   // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
@@ -142,13 +150,13 @@ export type WorktreeCreationRequest = {
   suppressTerminalFocusOnCompletion?: boolean
   /** "None" in the composer: when setup runs, open only its tab instead of an extra shell. */
   setupOnly?: boolean
-}
+} & WorktreeCreationRequestCloudFields
 
 export type PendingVmEnvironmentCheck = {
   /** `skipped`: the VM's server predates the checks. */
   status: 'running' | 'passed' | 'skipped' | 'failed'
   checks?: readonly EnvironmentDoctorCheck[]
-}
+} & PendingVmEnvironmentCheckCloudFields
 
 /** Session-only creation status drives sidebar/panel and vanishes on reload; completed worktrees reconcile normally. request owns display fields and retry intent so they cannot drift. */
 export type PendingWorktreeCreation = {
@@ -179,7 +187,7 @@ export type PendingWorktreeCreation = {
   /** When the worktree was ready and the chat's agent began starting. */
   chatHandedOffAt?: number
   request: WorktreeCreationRequest
-}
+} & PendingWorktreeCreationCloudFields
 
 export function pendingWorktreeCreationIsVisible(
   entry: PendingWorktreeCreation | undefined
@@ -282,7 +290,13 @@ export function getVisibleCheckoutProgress(
 export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
-    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress' | 'environmentCheck'
+    | 'status'
+    | 'phase'
+    | 'indeterminate'
+    | 'request'
+    | 'checkoutProgress'
+    | 'environmentCheck'
+    | 'provisioningLog'
   >,
   t: Translate = translate
 ): string {
@@ -293,6 +307,10 @@ export function getCreationProgressLabel(
       'Checking out files… {{percent}}%',
       { percent: checkout.percent }
     )
+  }
+  const cloudLabel = orcaCloudCreationProgressLabel(entry, t)
+  if (cloudLabel) {
+    return cloudLabel
   }
   if (entry.phase === 'provisioning-vm') {
     if (entry.environmentCheck?.status === 'failed') {

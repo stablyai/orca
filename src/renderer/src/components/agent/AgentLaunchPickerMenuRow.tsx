@@ -54,6 +54,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   terminalBlocked,
   runLaunch,
   shortcut,
+  status,
   onSelectAgent,
   isDefault = false,
   onSetDefault
@@ -83,6 +84,8 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   terminalBlocked?: boolean
   runLaunch: AgentPickerMenuLaunch
   shortcut?: string
+  /** Muted status after the label, such as "Ready" or "Set up" for Orca Cloud. */
+  status?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
   isDefault?: boolean
   /** Base agent rows only; setup rows are presets, not default-agent choices. */
@@ -133,6 +136,12 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               <span className="truncate text-xs text-muted-foreground">{entry.description}</span>
             ) : null}
           </span>
+          {status ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="sr-only">, </span>
+              {status}
+            </span>
+          ) : null}
           {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
       </AgentDefaultContextMenu>
@@ -209,6 +218,12 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               <AgentIcon agent={entry.agent} size={14} />
               <span className="min-w-0 flex-1 truncate text-left">{label}</span>
               {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {status && !launchBlocked ? (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="sr-only">, </span>
+                  {status}
+                </span>
+              ) : null}
               {launchBlocked ? (
                 <span
                   id={reasonId}

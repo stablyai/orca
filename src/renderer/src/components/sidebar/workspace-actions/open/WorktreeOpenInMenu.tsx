@@ -38,6 +38,9 @@ type WorktreeOpenInMenuItemsProps = {
   disabled?: boolean
   /** Builds the whole translated item label so callers never prepend English fragments. */
   formatLabel?: (appName: string) => string
+  /** Editors that reach this workspace another way (Orca Cloud over SSH); they replace the
+   *  entries that would only say "Local only". */
+  cloudEditors?: React.ReactNode
 }
 
 export type OpenInMenuEntry = {
@@ -223,7 +226,8 @@ export function WorktreeOpenInMenuItems({
   ownerUnresolved,
   workspace,
   disabled,
-  formatLabel
+  formatLabel,
+  cloudEditors
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const t = useTranslate()
   const openInWorktreePath = useOpenInWorktreePath({
@@ -242,6 +246,7 @@ export function WorktreeOpenInMenuItems({
 
   return (
     <>
+      {cloudEditors}
       {entries.map((entry) => {
         const availability = getOpenInEntryAvailability(
           entry,
@@ -251,6 +256,10 @@ export function WorktreeOpenInMenuItems({
           runtimeSshHost,
           t
         )
+        // Why: a cloud workspace opens over SSH above; its "Local only" editor rows would contradict that.
+        if (cloudEditors && entry.target === 'external-editor' && availability.disabled) {
+          return null
+        }
         const item = (
           <DropdownMenuItem
             key={entry.id}
@@ -296,7 +305,8 @@ export function WorktreeOpenInSubMenu({
   runtimeEnvironmentId,
   ownerUnresolved,
   workspace,
-  disabled
+  disabled,
+  cloudEditors
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -317,6 +327,7 @@ export function WorktreeOpenInSubMenu({
           ownerUnresolved={ownerUnresolved}
           workspace={workspace}
           disabled={disabled}
+          cloudEditors={cloudEditors}
         />
         <DropdownMenuSeparator />
         <DropdownMenuItem

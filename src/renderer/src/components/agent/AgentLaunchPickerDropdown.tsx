@@ -52,6 +52,8 @@ type AgentLaunchPickerDropdownProps = {
   choices?: readonly AgentPickerChoice[]
   /** A tile ahead of the agent tabs, also listed by search; current when the form holds no agent. */
   blankTerminal?: AgentPickerChoice
+  /** A muted status per agent, such as Orca Cloud's "Not set up"; none means ready. */
+  statusLabels?: ReadonlyMap<Agent, string>
 }
 
 /** A form's agent dropdown: agent tabs over the shared setup card, then where the agent opens. */
@@ -102,6 +104,7 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         entries={entries}
         pane={terminalPane ? null : pane.agent}
         blankTerminal={blankTerminal}
+        statusLabels={props.statusLabels}
         defaultAgent={props.defaultAgent}
         onSetDefault={props.onSetDefault}
         onSelect={(next) => {

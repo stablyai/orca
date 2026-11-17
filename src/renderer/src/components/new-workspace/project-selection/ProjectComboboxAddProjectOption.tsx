@@ -12,6 +12,8 @@ export type ProjectComboboxAddProjectMenu = {
   defaultHostId?: ExecutionHostId | null
   onOpenEntryRequest: (request: AddRepoDialogEntryRequest) => void
   onOpenRemoteHostDialog: (mode: AddRemoteHostMode) => void
+  /** Extra menu entries; `closeMenus` closes the cascade and the project picker. */
+  extraItems?: (closeMenus: () => void) => React.ReactNode
 }
 
 export function focusCascadedAddProjectMenuFirstItem(): void {
@@ -67,6 +69,15 @@ export function ProjectComboboxAddProjectOption({
         onOpenEntryRequest={addProjectMenu.onOpenEntryRequest}
         onBeforeLaunchAction={onCloseCombobox}
         onOpenRemoteHostDialog={addProjectMenu.onOpenRemoteHostDialog}
+        extraItems={
+          addProjectMenu.extraItems
+            ? (closeMenu) =>
+                addProjectMenu.extraItems?.(() => {
+                  closeMenu()
+                  onCloseCombobox()
+                })
+            : undefined
+        }
         onNavigateBack={() => {
           onCascadeOpenChange(false)
           onFocusSearchInput()

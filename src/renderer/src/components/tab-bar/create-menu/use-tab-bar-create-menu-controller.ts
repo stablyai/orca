@@ -12,6 +12,8 @@ import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agen
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { TabAgentLaunchOption } from '../create-entry/tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
+import * as remoteDesktopTab from '@/lib/cloud-remote-desktop/remote-desktop-tab'
+import { openCloudRemoteDesktop } from '@/lib/cloud-remote-desktop/open-cloud-remote-desktop'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
 import type {
@@ -154,6 +156,7 @@ export function useTabBarCreateMenuController({
     windowsTerminalCapabilities.gitBashAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
+  const remoteDesktop = remoteDesktopTab.useRemoteDesktopMenuOption(worktreeId, terminalOnly)
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({
@@ -167,9 +170,11 @@ export function useTabBarCreateMenuController({
           mobileEmulatorEnabled &&
           mobileEmulatorCreationEnabled &&
           Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
+        simulatorIsGoTo: workspaceHasSimulatorTab,
+        remoteDesktop
       }),
     [
+      remoteDesktop,
       mobileEmulatorEnabled,
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
@@ -202,6 +207,9 @@ export function useTabBarCreateMenuController({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'open-remote-desktop':
+        openCloudRemoteDesktop(worktreeId)
         break
       case 'new-markdown':
         onNewFileTab?.()

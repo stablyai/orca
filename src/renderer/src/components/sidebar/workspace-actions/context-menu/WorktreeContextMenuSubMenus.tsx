@@ -19,6 +19,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import type { CloudWorkspaceActions } from '@/lib/orca-cloud/cloud-lifecycle-actions'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import {
@@ -26,8 +27,16 @@ import {
   isWorktreeParentPickerDisabled
 } from './worktree-context-menu-policy'
 
-export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel }) {
+export function WorktreeCopySubMenu({
+  model,
+  cloudActions = null
+}: {
+  model: WorktreeContextMenuModel
+  /** LIFECYCLE-MATRIX: an archived cloud workspace has no path to copy; its names stay. */
+  cloudActions?: CloudWorkspaceActions | null
+}) {
   const t = useTranslate()
+  const branch = cloudActions ? model.worktree.branch?.replace(/^refs\/heads\//, '') : undefined
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={model.isDeleting}>
@@ -35,14 +44,25 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
         {t('auto.components.sidebar.WorktreeContextMenu.copySubmenu', 'Copy')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
-        <DropdownMenuItem onSelect={model.handleCopyPath} disabled={model.isDeleting}>
-          <Copy className="size-3.5" />
-          {t('auto.components.sidebar.WorktreeContextMenu.copyPathOption', 'Path')}
-        </DropdownMenuItem>
+        {cloudActions && !cloudActions.offers('copyPath') ? null : (
+          <DropdownMenuItem onSelect={model.handleCopyPath} disabled={model.isDeleting}>
+            <Copy className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeContextMenu.copyPathOption', 'Path')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={model.handleCopyName} disabled={model.isDeleting}>
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Worktree Name')}
         </DropdownMenuItem>
+        {branch ? (
+          <DropdownMenuItem
+            onSelect={() => void window.api.ui.writeClipboardText(branch)}
+            disabled={model.isDeleting}
+          >
+            <Copy className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeContextMenu.copyBranchOption', 'Branch Name')}
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

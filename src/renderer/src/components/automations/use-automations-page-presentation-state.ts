@@ -13,6 +13,7 @@ import type { AutomationsPageListState } from './listing/use-automations-page-li
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 import { useTranslate } from '../../i18n/use-translate'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { translateLocalExecutionHostLabel } from '../../runtime/hosts/display/execution-host-label'
 
 /** Display labels and action availability derived from the selected host row. */
@@ -98,7 +99,10 @@ export function useAutomationsPagePresentationState({
       labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
     }
     for (const environment of runtimeEnvironments) {
-      labels.set(`runtime:${encodeURIComponent(environment.id)}`, environment.name)
+      labels.set(
+        `runtime:${encodeURIComponent(environment.id)}`,
+        runtimeEnvironmentDisplayName(environment)
+      )
     }
     for (const [hostId, label] of hostLabelOverrides) {
       labels.set(hostId, label)

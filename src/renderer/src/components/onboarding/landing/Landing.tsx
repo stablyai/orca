@@ -1,3 +1,7 @@
+import { LandingCloudCard } from '../../landing/LandingCloudCard'
+import { LandingCloudSignInCard, useSignedOutOfOrcaCloud } from '../../landing/LandingCloudSignInCard'
+import { LandingAddProjectMenu } from '../../landing/LandingAddProjectMenu'
+import { useCloudWorkspacesPresent } from '../../cloud-workspaces/use-cloud-workspaces'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../../../lib/class-names'
@@ -217,6 +221,11 @@ export default function Landing(): React.JSX.Element {
   const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
+  const cloudPresent = useCloudWorkspacesPresent()
+  const signedOutOfCloud = useSignedOutOfOrcaCloud()
+  const reconnectRequired = useAppStore(
+    (s) => s.orcaProfileAuthStatus?.state === 'reconnect-required'
+  )
 
   const createActionLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
@@ -268,10 +277,12 @@ export default function Landing(): React.JSX.Element {
           </p>
 
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
-            <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
-              <FolderPlus className="size-3.5" />
-              {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-            </button>
+            <LandingAddProjectMenu>
+              <button className={LANDING_ACTION_BUTTON_CLASS}>
+                <FolderPlus className="size-3.5" />
+                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              </button>
+            </LandingAddProjectMenu>
 
             <button
               className={LANDING_ACTION_BUTTON_CLASS}
@@ -281,6 +292,13 @@ export default function Landing(): React.JSX.Element {
               {createActionLabel}
             </button>
           </div>
+
+          {/* Signed out, the team's cloud workspaces can't be opened; say so here. */}
+          {hasProjects && signedOutOfCloud ? (
+            <LandingCloudSignInCard reconnect={reconnectRequired} />
+          ) : hasProjects ? (
+            <LandingCloudCard cloudWorkspacesPresent={cloudPresent} />
+          ) : null}
 
           <LandingShortcutList shortcuts={shortcuts} />
         </div>

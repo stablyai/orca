@@ -11,6 +11,9 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import { WorkspaceLowDiskBanner } from '../components/low-disk/WorkspaceLowDiskBanner'
+import { CloudSetupPageLayer } from '../components/orca-cloud-setup/CloudSetupPageLayer'
+import { CloudOpenCoverLayer } from '../components/worktree-creation/CloudOpenCoverLayer'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
@@ -228,6 +231,9 @@ export function AppWorkspaceShell(props: {
                       </Suspense>
                     </TerminalWorkbenchContainer>
                   ) : null}
+                  {layout.shouldMountTerminalWorkbench ? (
+                    <WorkspaceLowDiskBanner visible={layout.terminalWorkbenchVisible} />
+                  ) : null}
                   <Suspense fallback={null}>
                     <RecoverableRenderErrorBoundary
                       boundaryId={`page.${layout.activeView}`}
@@ -243,6 +249,10 @@ export function AppWorkspaceShell(props: {
                     </RecoverableRenderErrorBoundary>
                   </Suspense>
                 </div>
+                <CloudSetupPageLayer />
+                <CloudOpenCoverLayer
+                  reserveCollapsedSidebarHeaderSpace={layout.leftTitlebarChromeLayout.isFloating}
+                />
                 {floatingWorkspace.showToggleButton && !capturingPluginShot ? (
                   <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}

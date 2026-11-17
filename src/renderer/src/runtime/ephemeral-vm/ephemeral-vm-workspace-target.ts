@@ -29,6 +29,8 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   branch?: string
   ref?: string
   provisionId?: string
+  /** Orca Cloud: the Create press's key (one press, one sandbox). */
+  idempotencyKey?: string
   setupExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
   ) => Promise<ProjectHostSetupResult | null>
@@ -48,6 +50,8 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
   | {
       ok: false
       error: string
+      /** Catalogued failure code, e.g. cloudPlanRequired for the Orca Cloud upsell. */
+      errorCode?: string
       stderr: string
     }
 
@@ -61,10 +65,16 @@ export async function prepareEphemeralVmWorkspaceTarget(
     workspaceName: args.workspaceName,
     ...(args.branch ? { branch: args.branch } : {}),
     ...(args.ref ? { ref: args.ref } : {}),
-    ...(args.provisionId ? { provisionId: args.provisionId } : {})
+    ...(args.provisionId ? { provisionId: args.provisionId } : {}),
+    ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {})
   })
   if (!provisioned.ok) {
-    return { ok: false, error: ephemeralVmErrorText(provisioned), stderr: provisioned.stderr }
+    return {
+      ok: false,
+      error: ephemeralVmErrorText(provisioned),
+      ...(provisioned.errorCode ? { errorCode: provisioned.errorCode } : {}),
+      stderr: provisioned.stderr
+    }
   }
 
   const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)

@@ -1,0 +1,216 @@
+// Fixture-only fake of the cloud secrets bridge: canned names and hints, never values.
+import type {
+  CloudSecretScope,
+  CloudSecretView,
+  CloudSecretsCaller,
+  CloudSecretsEffective,
+  CloudSecretsErrorCode
+} from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
+import type { CloudSecretsApi } from './use-cloud-secrets'
+
+const NOW = Date.now()
+const HOUR = 3_600_000
+
+export const FIXTURE_ADMIN: CloudSecretsCaller = {
+  userId: 'u_me',
+  orgId: 'org_acme',
+  orgRole: 'admin',
+  canWrite: { personal: true, org: true, repo: true }
+}
+export const FIXTURE_MEMBER: CloudSecretsCaller = {
+  ...FIXTURE_ADMIN,
+  orgRole: 'member',
+  canWrite: { personal: true, org: false, repo: false }
+}
+export const FIXTURE_SOLO: CloudSecretsCaller = {
+  userId: 'u_me',
+  orgId: null,
+  orgRole: null,
+  canWrite: { personal: true, org: false, repo: true }
+}
+
+function view(
+  scope: CloudSecretScope,
+  name: string,
+  kind: CloudSecretView['kind'],
+  hint: string | null,
+  ageHours: number,
+  updatedBy = 'u_me'
+): CloudSecretView {
+  return { scope, name, kind, hint, updatedAt: NOW - ageHours * HOUR, updatedBy }
+}
+
+export const FIXTURE_SECRETS: Record<CloudSecretScope, CloudSecretView[]> = {
+  personal: [
+    view('personal', 'ANTHROPIC_API_KEY', 'agent_key', 'x7Qa', 2),
+    view('personal', 'GITHUB_PACKAGES_TOKEN', 'env', '9fd2', 50),
+    view('personal', 'SENTRY_ENV', 'env', null, 400),
+    // Not swappable at egress: no tag on its row (the Add/Replace and paste views warn).
+    view('personal', 'AWS_ACCESS_KEY_ID', 'agent_key', 'Q7MP', 6),
+    view('personal', 'AWS_SECRET_ACCESS_KEY', 'agent_key', 'k2Vd', 6),
+    view('personal', 'OPENROUTER_API_KEY', 'env', 'r9Tw', 8)
+  ],
+  org: [
+    view('org', 'AI_GATEWAY_API_KEY', 'agent_key', 'M3kz', 30, 'u_dana'),
+    view('org', 'ANTHROPIC_MODEL', 'agent_key', 'et-4', 30, 'u_dana'),
+    view('org', 'NPM_TOKEN', 'env', 'c0de', 170, 'u_ravi')
+  ],
+  repo: [
+    view('repo', 'DATABASE_URL', 'env', '/app', 5, 'u_ravi'),
+    view('repo', 'STRIPE_SECRET_KEY', 'env', 'Lq1T', 26),
+    view('repo', 'ANTHROPIC_API_KEY', 'agent_key', 'p0Zz', 72, 'u_dana')
+  ]
+}
+
+export const FIXTURE_EFFECTIVE_SECRETS: CloudSecretsEffective['secrets'] = [
+  {
+    name: 'AI_GATEWAY_API_KEY',
+    kind: 'agent_key',
+    scope: 'org',
+    hint: 'M3kz',
+    updatedAt: NOW,
+    shadowed: []
+  },
+  {
+    name: 'ANTHROPIC_API_KEY',
+    kind: 'agent_key',
+    scope: 'repo',
+    hint: 'p0Zz',
+    updatedAt: NOW,
+    shadowed: [{ scope: 'personal', hint: 'x7Qa' }]
+  },
+  {
+    name: 'AWS_SECRET_ACCESS_KEY',
+    kind: 'agent_key',
+    scope: 'personal',
+    hint: 'k2Vd',
+    updatedAt: NOW,
+    shadowed: []
+  },
+  {
+    name: 'DATABASE_URL',
+    kind: 'env',
+    scope: 'repo',
+    hint: '/app',
+    updatedAt: NOW,
+    shadowed: []
+  },
+  {
+    name: 'NPM_TOKEN',
+    kind: 'env',
+    scope: 'org',
+    hint: 'c0de',
+    updatedAt: NOW,
+    shadowed: []
+  },
+  {
+    name: 'SENTRY_ENV',
+    kind: 'env',
+    scope: 'personal',
+    hint: null,
+    updatedAt: NOW,
+    shadowed: [{ scope: 'org', hint: null }]
+  }
+]
+
+export const FIXTURE_NAMES: Record<string, string> = { u_dana: 'Dana Reyes', u_ravi: 'Ravi Shah' }
+
+const never = <T>(): Promise<T> => new Promise<T>(() => {})
+
+/** What the server answers for a shared workspace: personal values never win or count. */
+function withoutPersonal(
+  secrets: CloudSecretsEffective['secrets']
+): CloudSecretsEffective['secrets'] {
+  return secrets.flatMap((secret) => {
+    const others = secret.shadowed.filter((entry) => entry.scope !== 'personal')
+    if (secret.scope !== 'personal') {
+      return [{ ...secret, shadowed: others }]
+    }
+    const [next, ...rest] = others
+    return next ? [{ ...secret, scope: next.scope, hint: next.hint, shadowed: rest }] : []
+  })
+}
+
+/** Like the server's `hintVisible`: only people who may write a scope get its hints. */
+function hintsFor(
+  caller: CloudSecretsCaller,
+  secrets: CloudSecretsEffective['secrets']
+): CloudSecretsEffective['secrets'] {
+  const seen = (scope: CloudSecretScope, hint: string | null): string | null =>
+    caller.canWrite[scope] ? hint : null
+  return secrets.map((secret) => ({
+    ...secret,
+    hint: seen(secret.scope, secret.hint),
+    shadowed: secret.shadowed.map((entry) => ({ ...entry, hint: seen(entry.scope, entry.hint) }))
+  }))
+}
+
+export function fixtureCloudSecretsApi(options: {
+  caller?: CloudSecretsCaller
+  secrets?: Partial<Record<CloudSecretScope, CloudSecretView[]>>
+  effective?: CloudSecretsEffective['secrets']
+  /** Every list read fails with this code. */
+  listError?: CloudSecretsErrorCode
+  /** Reads never answer (loading state). */
+  pending?: boolean
+  /** Writes never answer (saving state). */
+  pendingWrites?: boolean
+}): CloudSecretsApi {
+  const caller = options.caller ?? FIXTURE_ADMIN
+  const secrets = options.secrets ?? FIXTURE_SECRETS
+  const ok = <T>(value: T) => Promise.resolve({ ok: true as const, value })
+  return {
+    status: () => Promise.resolve({ available: true }),
+    list: (target) =>
+      options.pending
+        ? never()
+        : options.listError
+          ? Promise.resolve({ ok: false as const, error: options.listError })
+          : ok(
+              (secrets[target.scope] ?? []).map((secret) =>
+                caller.canWrite[target.scope] ? secret : { ...secret, hint: null }
+              )
+            ),
+    put: ({ target, name }) =>
+      options.pendingWrites ? never() : ok(view(target.scope, name, 'env', null, 0, caller.userId)),
+    remove: () => (options.pendingWrites ? never() : ok(true as const)),
+    workspaceSharing: () => ok({ shared: false, ownerName: null, isOwner: true }),
+    batch: ({ target, set }) =>
+      options.pendingWrites
+        ? never()
+        : ok({
+            secrets: Object.keys(set ?? {}).map((name) =>
+              view(target.scope, name, 'env', null, 0, caller.userId)
+            ),
+            deleted: [],
+            errors: []
+          }),
+    effective: ({ workspace }) =>
+      options.pending
+        ? never()
+        : ok({
+            caller,
+            workspace: workspace ?? 'private',
+            precedence: {
+              env: ['repo', 'personal', 'org'],
+              agent_key: ['org', 'repo', 'personal']
+            },
+            secrets: hintsFor(
+              caller,
+              workspace === 'shared'
+                ? withoutPersonal(options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
+                : (options.effective ?? FIXTURE_EFFECTIVE_SECRETS)
+            )
+          }),
+    refreshEnv: () => ok(true),
+    saveDesktopKey: ({ envName }) =>
+      ok({
+        scope: 'personal' as const,
+        name: envName,
+        kind: 'agent_key' as const,
+        hint: 'x4Qa',
+        updatedAt: 0,
+        updatedBy: caller.userId
+      })
+  }
+}

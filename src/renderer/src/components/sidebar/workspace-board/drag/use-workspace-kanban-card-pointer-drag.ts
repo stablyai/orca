@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
+import * as rowIntent from '../../workspace-card/surface/worktree-row-hover-prewarm'
 import {
   CARD_SELECTOR,
   getCardDropTarget,
@@ -117,6 +118,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
 
       isPointerDragActiveRef.current = false
+      rowIntent.noteWorktreeRowDragEnd()
       suppressClickUntilRef.current = performance.now() + 250
       if (!commit || !commitTarget) {
         return
@@ -139,6 +141,7 @@ export function useWorkspaceKanbanCardPointerDrag({
     (state: DragState) => {
       state.started = true
       isPointerDragActiveRef.current = true
+      rowIntent.noteWorktreeRowDragStart()
       setDraggedCardsDragging({
         board: boardRef.current,
         worktreeIdentities: state.worktreeIdentities,

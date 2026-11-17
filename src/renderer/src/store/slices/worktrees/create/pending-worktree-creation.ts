@@ -12,10 +12,17 @@ import {
 import { deleteNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
 import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import {
+  nextErrorAt,
+  replaceStaleRefusedCreations,
+  trackOrcaCloudCancelCleanup
+} from './pending-worktree-creation-cloud'
+
+export { isStaleRefusedCreation } from './pending-worktree-creation-cloud'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
-  _get: WorktreeSliceGet
+  get: WorktreeSliceGet
 ): WorktreeSlice['beginPendingWorktreeCreation'] {
   return (entry) => {
     const logged = { ...entry, phaseLog: [{ phase: entry.phase, at: entry.startedAt }] }
@@ -23,6 +30,7 @@ export function createBeginPendingWorktreeCreation(
       pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: logged },
       activePendingCreationId: entry.creationId
     }))
+    replaceStaleRefusedCreations(get, entry.creationId)
   }
 }
 
@@ -81,10 +89,11 @@ export function createUpdatePendingWorktreeCreation(
       if (!hasChange) {
         return s
       }
+      const errorAt = nextErrorAt(entry, changes)
       return {
         pendingWorktreeCreations: {
           ...s.pendingWorktreeCreations,
-          [creationId]: { ...entry, ...changes, phaseLog: nextPhaseLog(entry, changes) }
+          [creationId]: { ...entry, ...changes, phaseLog: nextPhaseLog(entry, changes), errorAt }
         }
       }
     })
@@ -128,9 +137,10 @@ export function createRemovePendingWorktreeCreation(
         .catch(() => undefined)
     }
     if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
+      trackOrcaCloudCancelCleanup(creationId, removedEntry, null)
       return
     }
-    void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
+    const cleanup = cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
       deleteProjectHostSetup: (setupId, hostId) =>
         get().deleteProjectHostSetup({ setupId, hostId }),
       cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
@@ -138,7 +148,11 @@ export function createRemovePendingWorktreeCreation(
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
       reportRuntimeError: (error) =>
         console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
-    }).then((cleanedUp) => settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp))
+    }).then((cleanedUp) => {
+      settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp)
+      return cleanedUp
+    })
+    trackOrcaCloudCancelCleanup(creationId, removedEntry, cleanup)
   }
 }
 

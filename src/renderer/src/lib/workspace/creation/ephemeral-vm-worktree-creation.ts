@@ -1,4 +1,3 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { prepareEphemeralVmWorkspaceTarget } from '@/runtime/ephemeral-vm/ephemeral-vm-workspace-target'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
@@ -15,6 +14,15 @@ import {
   appendProvisioningLog,
   appendProvisioningWarnings
 } from '@/lib/workspace/creation/pending-creation-provisioning-log'
+import {
+  beginCloudCreate,
+  cloudCreateIdempotency,
+  cloudEnvironmentCheckContext,
+  gateCloudCreateBeforeWorkspace,
+  notePhase,
+  notifyVmCreateFailed,
+  restartVmCreate
+} from './ephemeral-vm-worktree-creation-cloud'
 
 export async function prepareRequestForCreate(
   creationId: string,
@@ -41,8 +49,12 @@ async function prepareEphemeralVmRecipeRequest(
   }
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
-    provisioningLog: ''
+    provisioningLog: '',
+    provisioningLogStamps: [],
+    // A retry provisions a new VM; the sheet must not act on the last one.
+    vmEnvironmentId: undefined
   })
+  beginCloudCreate(creationId, recipe)
   const unsubscribeProvisionEvents = window.api.ephemeralVm.onProvisionEvent?.((event) => {
     if (event.provisionId !== creationId || event.stream !== 'stderr') {
       return
@@ -64,8 +76,17 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
+      ...cloudCreateIdempotency(recipe.recipeId, creationId),
       setupExistingFolder: async (args) => {
-        const setup = await store.setupProjectExistingFolder(args)
+        // The VM's checkout folder is named "project"; register it under the real project's name.
+        const displayName =
+          useAppStore.getState().projects.find((project) => project.id === args.projectId)
+            ?.displayName ?? sourceRepo?.displayName
+        // Why: the user picked an existing project; the VM's checkout joining it is not a new project.
+        const setup = await store.setupProjectExistingFolder(
+          displayName ? { ...args, displayName } : args,
+          { quiet: true }
+        )
         if (setup) {
           // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
           hideVmCreateCheckout(creationId, { repoId: setup.repo.id, path: setup.repo.path })
@@ -77,26 +98,31 @@ async function prepareEphemeralVmRecipeRequest(
     unsubscribeProvisionEvents?.()
   }
   if (!preparedTarget.ok) {
+    notePhase(creationId, 'failed')
     if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
       return null
     }
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
-      error: preparedTarget.error
+      error: preparedTarget.error,
+      errorCode: preparedTarget.errorCode
     })
-    if (useAppStore.getState().activePendingCreationId !== creationId) {
-      toast.error(preparedTarget.error)
-    }
+    notifyVmCreateFailed(creationId, preparedTarget)
     return null
   }
   appendProvisioningWarnings(creationId, preparedTarget.warnings)
   if (preparedTarget.environmentId) {
+    useAppStore
+      .getState()
+      .updatePendingWorktreeCreation(creationId, { vmEnvironmentId: preparedTarget.environmentId })
     // Why: the VM's first connect may have just deployed this server; host badges and removal read it.
+    notePhase(creationId, 'runtime-catalog-start')
     try {
       useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
     } catch {
       // A stale catalog only delays host badges; removal re-reads it.
     }
+    notePhase(creationId, 'runtime-catalog-end')
   }
   const preparedRequest: WorktreeCreationRequest = {
     ...request,
@@ -121,22 +147,33 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
-  const proceed =
-    Boolean(useAppStore.getState().pendingWorktreeCreations[creationId]) &&
-    (!preparedTarget.environmentId ||
-      (await gateVmCreateOnEnvironmentCheck(
-        creationId,
-        preparedTarget.environmentId,
-        preparedTarget.setup.repo.path
-      )))
-  if (!proceed) {
+  notePhase(creationId, 'env-check-start')
+  const gate = !useAppStore.getState().pendingWorktreeCreations[creationId]
+    ? 'stop'
+    : !preparedTarget.environmentId
+      ? 'proceed'
+      : await gateVmCreateOnEnvironmentCheck(
+          creationId,
+          preparedTarget.environmentId,
+          preparedTarget.setup.repo.path,
+          cloudEnvironmentCheckContext(recipe, request, preparedTarget)
+        )
+  notePhase(creationId, gate === 'proceed' ? 'env-check-end' : 'failed')
+  if (
+    gate !== 'proceed' ||
+    !(await gateCloudCreateBeforeWorkspace(creationId, recipe, preparedTarget.environmentId))
+  ) {
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
+    if (gate === 'restart') {
+      await restartVmCreate(creationId)
+    }
     return null
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
     phase: 'fetching',
     request: preparedRequest
   })
+  notePhase(creationId, 'workspace-create-start')
   return preparedRequest
 }
 

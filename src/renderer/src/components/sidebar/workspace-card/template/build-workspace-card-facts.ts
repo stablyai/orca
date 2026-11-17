@@ -65,7 +65,9 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
     host: {
       kind: repo?.connectionId ? 'ssh' : runtimeHost ? 'runtime' : 'local',
       contextLabel: card.hostContextLabel || null,
-      runtimeDisconnected: card.isRuntimeDisconnected
+      runtimeDisconnected: card.isRuntimeDisconnected,
+      cloud: card.isCloudHostRow,
+      stateWord: card.hasHostStateWord
     },
     git: {
       conflictOperation: card.conflictOperation ?? null,

@@ -1,3 +1,4 @@
+import { formatRunActionsForTrust } from '../../../../shared/orca-yaml-run-actions'
 import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
 import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
@@ -211,14 +212,13 @@ export async function ensureHooksApproved(
         scriptContent = getIssueCommandTrustContent(result)
       } else {
         const repo = findHookRepo(state, repoId, hostId)
-        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+        const localScript =
+          scriptKind === 'run' ? '' : repo?.hookSettings?.scripts?.[scriptKind]?.trim()
         const sourcePolicy = resolveHookCommandSourcePolicy(
           repo?.hookSettings?.commandSourcePolicy,
-          {
-            hasLocalScript: Boolean(localScript)
-          }
+          { hasLocalScript: Boolean(localScript) }
         )
-        if (sourcePolicy === 'local-only') {
+        if (sourcePolicy === 'local-only' && scriptKind !== 'run') {
           return RUN_ANY
         }
         const group = state.projectGroups.find(
@@ -236,11 +236,13 @@ export async function ensureHooksApproved(
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
         scriptContent =
-          scriptKind === 'setup'
-            ? getSetupTrustContent(yamlHooks)
-            : scriptKind === 'vmRecipe'
-              ? getVmRecipeTrustContent(yamlHooks)
-              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+          scriptKind === 'run'
+            ? formatRunActionsForTrust(yamlHooks?.scripts?.run ?? [])
+            : scriptKind === 'setup'
+              ? getSetupTrustContent(yamlHooks)
+              : scriptKind === 'vmRecipe'
+                ? getVmRecipeTrustContent(yamlHooks)
+                : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.

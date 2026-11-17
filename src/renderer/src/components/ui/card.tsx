@@ -10,7 +10,9 @@ const cardVariants = cva(
       size: {
         default: 'gap-6 py-6',
         sm: 'gap-3 py-2.5 shadow-xs',
-        list: 'gap-6 py-1'
+        list: 'gap-6 py-1',
+        // Progress cards in the notification stack (app update, cloud move): content owns its padding.
+        flush: 'gap-0 py-0'
       }
     },
     defaultVariants: { size: 'default' }

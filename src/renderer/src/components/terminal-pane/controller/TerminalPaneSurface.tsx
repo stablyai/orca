@@ -14,6 +14,7 @@ import { isPaneOwnerRecoveryError } from '../errors/terminal-error-display'
 import { TerminalErrorToast } from '../errors/TerminalErrorToast'
 import { openTerminalBesideTab } from '../context-menu/open-terminal-beside-tab'
 import { AgentLaunchPaneNoticePortal } from '../launch-outcome/AgentLaunchPaneNotice'
+import { AgentStartingPortals } from '../launch-outcome/AgentStartingPortals'
 import { TerminalSessionStateSaveFailureDialog } from '../layout/persistence/TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from '../session-fork/TerminalAgentSessionForkDialog'
@@ -22,6 +23,7 @@ import { handleInternalTerminalFileDrop } from '../input/file-drop/terminal-drop
 import { TerminalQuickCommandEditorDialog } from '../quick-commands/TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from '../chat/TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from '../session-restore/spawn-deferral/TerminalPaneSleepingPortals'
+import { AgentPanePortals } from '../../agent-pane/AgentPanePortals'
 import { TerminalPaneCodexRestartPortals } from './TerminalPaneCodexRestartPortals'
 import { TerminalPaneMobileDriverPortals } from '../mobile-driver/TerminalPaneMobileDriverPortals'
 import { TerminalPaneProcessExitPortals } from '../process-exit/TerminalPaneProcessExitPortals'
@@ -209,6 +211,7 @@ export function TerminalPaneSurface({
       activePane
         ? createPortal(
             <TerminalErrorToast
+              worktreeId={worktreeId}
               error={visibleTerminalError.error}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
@@ -230,6 +233,7 @@ export function TerminalPaneSurface({
             `terminal-error-${activePane.id}`
           )
         : null}
+      <AgentStartingPortals controller={controller} />
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
       <DaemonActionDialog api={daemonActions} />
@@ -385,6 +389,7 @@ export function TerminalPaneSurface({
       />
       <TerminalPaneRecoveryPortals controller={controller} />
       <TerminalPaneSleepingPortals controller={controller} />
+      <AgentPanePortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}

@@ -7,7 +7,10 @@ import { getDefaultSettings } from '../../../../../shared/orca-profiles/constant
 import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
+import {
+  buildFreshAccountRestartCommand,
+  buildPaneAccountRestartStartup
+} from './agent-account-restart-startup'
 import type { AgentAccountRestartStartup } from './agent-account-restart-startup'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -16,6 +19,11 @@ import type * as localPreflightContext from '@/runtime/hosts/preflight/local-pre
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
 
 vi.mock('@/lib/agent-session/resume/agent-resume-launch-target', { spy: true })
+
+const cloud = vi.hoisted(() => ({ on: false }))
+vi.mock('@/lib/orca-cloud/orca-cloud-environment-id', () => ({
+  isOrcaCloudEnvironmentId: () => cloud.on
+}))
 
 vi.mock('@/runtime/hosts/preflight/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
@@ -183,5 +191,66 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     } finally {
       useAppStore.setState(original)
     }
+  })
+})
+
+// Restart on an Orca Cloud pane refreshes the shell's session env, and a Claude pane with no
+// session to resume starts a new conversation instead of doing nothing.
+describe('buildPaneAccountRestartStartup on Orca Cloud', () => {
+  const pane = { tabId: TAB_ID, leafId: LEAF_ID, worktreeId: WORKTREE_ID }
+  const REFRESH = 'eval "$(orca-env 2>/dev/null)"; '
+
+  beforeEach(() => {
+    cloud.on = true
+    projectRuntimeContext = undefined
+    useAppStore.setState({
+      settings: getDefaultSettings('/home/dev'),
+      tabsByWorktree: {},
+      worktreesByRepo: {},
+      terminalLayoutsByTabId: {
+        [TAB_ID]: {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-cloud@@term_1' }
+        }
+      }
+    })
+  })
+
+  it('resume: refreshes the session env, then resumes the pane’s own session', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    const startup = buildPaneAccountRestartStartup('claude', pane)
+    expect(startup?.command.startsWith(REFRESH)).toBe(true)
+    expect(startup?.command).toContain(`'--resume' '${SESSION_ID}'`)
+  })
+
+  it('fresh: with no session to resume it starts a new Claude conversation (after the refresh)', () => {
+    seedAgentStatus({ agentType: 'claude' })
+    const startup = buildPaneAccountRestartStartup('claude', pane)
+    expect(startup).toMatchObject({ launchAgent: 'claude', startupCommandDelivery: 'shell-ready' })
+    expect(startup?.command.startsWith(REFRESH)).toBe(true)
+    expect(startup?.command).not.toContain('--resume')
+    expect(startup?.command).toMatch(/claude/)
+  })
+
+  it('the fresh fallback keeps the pane’s recorded model and effort', () => {
+    const command = buildFreshAccountRestartCommand('claude', pane, '--model opus --effort high')
+    expect(command.startsWith(REFRESH)).toBe(true)
+    // Each arg survives (the launch quotes them per shell).
+    expect(command).toMatch(/--model'? '?opus/)
+    expect(command).toMatch(/--effort'? '?high/)
+    expect(command).not.toContain('--resume')
+  })
+
+  it('off Orca Cloud a Claude pane with no session still has no restart, and nothing is prefixed', () => {
+    cloud.on = false
+    seedAgentStatus({ agentType: 'claude' })
+    expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
+    seedAgentStatus({ agentType: 'codex' })
+    expect(buildPaneAccountRestartStartup('codex', pane)?.command.startsWith(REFRESH)).toBe(false)
   })
 })

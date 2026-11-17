@@ -68,6 +68,8 @@ type AddProjectMenuProps = {
   tooltipLabel?: string
   tooltipSide?: 'top' | 'bottom'
   preserveWorkspaceBoardOpen?: boolean
+  /** Extra entries after the built-in actions; `closeMenu` closes this menu first. */
+  extraItems?: (closeMenu: () => void) => React.ReactNode
 }
 
 function AddProjectMenuOpenContent({
@@ -82,7 +84,8 @@ function AddProjectMenuOpenContent({
   side,
   align,
   sideOffset,
-  preserveWorkspaceBoardOpen
+  preserveWorkspaceBoardOpen,
+  extraItems
 }: {
   defaultHostId: ExecutionHostId | null
   onOpenEntryRequest: (request: AddRepoDialogEntryRequest) => void
@@ -96,6 +99,7 @@ function AddProjectMenuOpenContent({
   align: 'start' | 'center' | 'end'
   sideOffset: number
   preserveWorkspaceBoardOpen: boolean
+  extraItems?: (closeMenu: () => void) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [hostSubOpen, setHostSubOpen] = useState(false)
@@ -187,6 +191,7 @@ function AddProjectMenuOpenContent({
           {showShortcut ? <DropdownMenuShortcut>↵</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
       ))}
+      {extraItems?.(onCloseMenu)}
     </DropdownMenuContent>
   )
 }
@@ -208,7 +213,8 @@ export function AddProjectMenu({
   sideOffset = 6,
   tooltipLabel,
   tooltipSide = 'bottom',
-  preserveWorkspaceBoardOpen = false
+  preserveWorkspaceBoardOpen = false,
+  extraItems
 }: AddProjectMenuProps): React.JSX.Element {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = controlledOpen ?? uncontrolledOpen
@@ -261,6 +267,7 @@ export function AddProjectMenu({
             align={align}
             sideOffset={sideOffset}
             preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            extraItems={extraItems}
           />
         ) : null}
       </DropdownMenu>

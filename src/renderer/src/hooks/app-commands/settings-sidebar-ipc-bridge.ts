@@ -5,6 +5,8 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/w
 import { subscribeToUnpairedDeviceAuthNotification } from '../../components/mobile/pairing/unpaired-device-auth-notification'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
+import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { useAppStore } from '../../store/index'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
 
@@ -20,8 +22,19 @@ function getShortcutPlatform(): NodeJS.Platform {
 
 export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
-    window.api.ui.onOpenSettings(() => {
-      useAppStore.getState().openSettingsPage()
+    window.api.ui.onOpenSettings((target) => {
+      const store = useAppStore.getState()
+      if (target) {
+        // A usage alert's click. Billing is managed in the web console, so an owner or admin
+        // lands on its billing page; a member (the console refuses them billing) gets Settings ›
+        // Orca account, which shows the plan and its hours.
+        if (canManageActiveTeam(store.orcaProfileAuthStatus)) {
+          void openCloudConsole('billing')
+          return
+        }
+        store.openSettingsTarget({ pane: target.pane, repoId: null })
+      }
+      store.openSettingsPage()
     })
   )
 

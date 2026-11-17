@@ -1,4 +1,9 @@
 import {
+  cloudChatSignInContent,
+  useCloudChatSignInInside,
+  useCloudChatHost
+} from '../../../agent-sign-in-strip/cloud-chat-sign-in-notice'
+import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
 } from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
@@ -86,6 +91,8 @@ export function NativeChatNoticeRow({
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+  const cloudHost = useCloudChatHost()
+  const signInInside = useCloudChatSignInInside(agentName)
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
@@ -220,6 +227,8 @@ export function NativeChatNoticeRow({
     failure?.account,
     t
   )
+  const insideSignIn = failure?.kind === 'notSignedIn' ? signInInside : null
+  const cloudSignIn = cloudChatSignInContent(cloudHost, failure?.kind, agentName, t, insideSignIn)
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
     failure &&
@@ -301,13 +310,18 @@ export function NativeChatNoticeRow({
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
         <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
+          {cloudSignIn ?? insideSignIn?.text ?? antigravitySignInContent ?? text}
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
-      <NativeChatSetupButton failureKind={block.failure?.kind} />
+      {cloudSignIn ? null : (
+        <NativeChatSetupButton
+          failureKind={block.failure?.kind}
+          label={insideSignIn?.actionLabel}
+        />
+      )}
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

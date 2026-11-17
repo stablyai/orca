@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback } from 'react'
 import type {
   OrcaHooks,
   RepoHookSettings
@@ -25,6 +25,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { RepositorySidebarVisibilitySection } from './RepositorySidebarVisibilitySection'
 import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
+import { useCopyOrcaYamlTemplate } from './hooks/use-copy-orca-yaml-template'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
@@ -35,6 +36,7 @@ import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
+import { RepositoryRunOnSection } from './RepositoryRunOnSection'
 import { RepositoryBrowserProfileSection } from './RepositoryBrowserProfileSection'
 import type { RepositoryPaneRepoUpdate } from './repository-pane-repo-update'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
@@ -135,52 +137,14 @@ export function RepositoryPane({
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
-  const [copiedTemplate, setCopiedTemplate] = useState(false)
-  const copiedTemplateResetTimerRef = useRef<number | null>(null)
-  // Clipboard IPC may outlive navigation; do not start timers after pane detach.
-  const isMountedRef = useRef(false)
+  const { copiedTemplate, handleCopyTemplate, setRepositoryPaneRootRef } = useCopyOrcaYamlTemplate()
   // Project-name search navigates to the project; it must not hide child controls that omit the name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
-
-  const clearCopiedTemplateResetTimer = useCallback((): void => {
-    if (copiedTemplateResetTimerRef.current !== null) {
-      window.clearTimeout(copiedTemplateResetTimerRef.current)
-      copiedTemplateResetTimerRef.current = null
-    }
-  }, [])
-
-  const setRepositoryPaneRootRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      isMountedRef.current = node !== null
-      if (node === null) {
-        clearCopiedTemplateResetTimer()
-      }
-    },
-    [clearCopiedTemplateResetTimer]
-  )
 
   const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateSelectedRepo(repo.id, {
       hookSettings: nextSettings
     })
-  }
-
-  const handleCopyTemplate = async () => {
-    // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
-    await window.api.ui.writeClipboardText(`scripts:
-  setup: |
-    pnpm worktree:setup
-  archive: |
-    echo "Cleaning up before archive"`)
-    if (!isMountedRef.current) {
-      return
-    }
-    clearCopiedTemplateResetTimer()
-    setCopiedTemplate(true)
-    copiedTemplateResetTimerRef.current = window.setTimeout(() => {
-      copiedTemplateResetTimerRef.current = null
-      setCopiedTemplate(false)
-    }, 1500)
   }
 
   const {
@@ -304,6 +268,10 @@ export function RepositoryPane({
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
         />
+
+        {!isFolder ? (
+          <RepositoryRunOnSection repo={repo} forceVisible={forceFullPaneForRepoMatch} />
+        ) : null}
 
         {!isFolder ? (
           <>

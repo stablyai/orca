@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,11 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../orca-profiles/OrcaSignInProgress'
+import {
+  HiddenWithOrcaCloud,
+  OrcaAccountCloudRows,
+  orcaCloudAccountStatusCopy
+} from './OrcaAccountCloudRows'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -21,7 +27,7 @@ function accountStatusCopy(
   if (state === 'reconnect-required') {
     return t(
       'auto.components.settings.orcaAccount.reconnectRequired',
-      'Your session expired. Sign in again to use cloud features.'
+      'Your session expired. Sign in again to use Orca Cloud.'
     )
   }
   if (state === 'unconfigured') {
@@ -33,7 +39,7 @@ function accountStatusCopy(
   if (state === 'local') {
     return t(
       'auto.components.settings.orcaAccount.signedOut',
-      'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
+      'Sign in to use Orca Cloud, Artifacts and Orca Relay.'
     )
   }
   return t('auto.components.settings.orcaAccount.checking', 'Checking account status…')
@@ -105,7 +111,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
               ) : null}
             </div>
             <p className="truncate text-xs text-muted-foreground">
-              {accountStatusCopy(authStatus?.state, authStatus?.cloud?.email, t)}
+              {orcaCloudAccountStatusCopy(authStatus, t) ??
+                accountStatusCopy(authStatus?.state, authStatus?.cloud?.email, t)}
             </p>
           </div>
           {connected ? (
@@ -128,43 +135,54 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
 
-        <div className="space-y-4 border-t border-border/60 pt-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {t('auto.components.settings.orcaAccount.benefitsTitle', 'Included with your account')}
-          </p>
-          <div className="space-y-5">
-            <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+        <OrcaAccountCloudRows connected={connected} />
+
+        <HiddenWithOrcaCloud>
+          <div className="space-y-4 border-t border-border/60 pt-5">
+            <SettingsGroupHeader
+              className="px-0"
+              title={t(
+                'auto.components.settings.orcaAccount.benefitsTitle',
+                'Included with your account'
+              )}
+            />
+            <div className="space-y-5">
+              <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
+                <AccountBenefit
+                  icon={Files}
+                  className="md:pr-6"
+                  title={t(
+                    'auto.components.settings.orcaAccount.artifactsTitle',
+                    'Artifact sharing'
+                  )}
+                  description={t(
+                    'auto.components.settings.orcaAccount.artifactsDescription',
+                    'Publish HTML and Markdown files, then manage every shared link from Orca.'
+                  )}
+                />
+                <AccountBenefit
+                  icon={Smartphone}
+                  className="md:pl-6"
+                  title={t('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
+                  description={t(
+                    'auto.components.settings.orcaAccount.relayDescription',
+                    'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
+                  )}
+                />
+              </div>
+              {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
               <AccountBenefit
-                icon={Files}
-                className="md:pr-6"
-                title={t('auto.components.settings.orcaAccount.artifactsTitle', 'Artifact sharing')}
+                icon={BookOpen}
+                className="border-t border-border/60 pt-5"
+                title={t('auto.components.settings.orcaAccount.skillsTitle', 'Skill sharing')}
                 description={t(
-                  'auto.components.settings.orcaAccount.artifactsDescription',
-                  'Publish HTML and Markdown files, then manage every shared link from Orca.'
-                )}
-              />
-              <AccountBenefit
-                icon={Smartphone}
-                className="md:pl-6"
-                title={t('auto.components.settings.orcaAccount.relayTitle', 'Orca Relay')}
-                description={t(
-                  'auto.components.settings.orcaAccount.relayDescription',
-                  'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
+                  'auto.components.settings.orcaAccount.skillsDescription',
+                  'Share one skill or a whole set behind an unlisted link, and install them on any machine you use.'
                 )}
               />
             </div>
-            {/* Put the third benefit below at full width so it cannot squeeze the existing pair. */}
-            <AccountBenefit
-              icon={BookOpen}
-              className="border-t border-border/60 pt-5"
-              title={t('auto.components.settings.orcaAccount.skillsTitle', 'Skill sharing')}
-              description={t(
-                'auto.components.settings.orcaAccount.skillsDescription',
-                'Share one skill or a whole set behind an unlisted link, and install them on any machine you use.'
-              )}
-            />
           </div>
-        </div>
+        </HiddenWithOrcaCloud>
       </div>
 
       <OrcaProfileSignOutConfirmDialog

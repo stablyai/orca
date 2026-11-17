@@ -1,5 +1,6 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { isCloudRemoteDesktopTabUrl } from '../../../../../shared/hosted-sandbox/cloud-remote-desktop'
 import { translate } from '../../../i18n/i18n'
 import type { Translate } from '../../../i18n/use-translate'
 
@@ -16,6 +17,10 @@ export function formatBrowserTabUrlLabel(url: string, t: Translate = translate):
 }
 
 export function getBrowserTabLabel(tab: BrowserWorkspace, t?: Translate): string {
+  // A remote desktop tab is named for what it is, not for its localhost forward.
+  if (isCloudRemoteDesktopTabUrl(tab.url)) {
+    return (t ?? translate)('components.cloudRemoteDesktop.tabTitle', 'Remote desktop')
+  }
   if (
     !tab.title ||
     tab.title === tab.url ||

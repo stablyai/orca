@@ -52,6 +52,8 @@ function DialogOverlay({
       data-slot="dialog-overlay"
       className={cn(
         'fixed inset-0 z-50 bg-black/55 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        // Follows its content's exitMotion="none" (a hand-off), so only one animation plays.
+        '[&:has(+[data-exit-motion=none])]:data-[state=closed]:animate-none',
         className
       )}
       {...props}
@@ -81,10 +83,11 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
     variant === 'minimize'
       ? t('auto.components.ui.dialog.minimize', 'Minimize')
       : t('auto.components.ui.dialog.f26c4baeda', 'Close')
+  // A 24px hit area around the 16px glyph, centered where the glyph always sat (top/right 16px).
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
-      className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+      className="absolute top-3 right-3 flex size-6 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
     >
       {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
       <span className="sr-only">{label}</span>
@@ -118,6 +121,7 @@ function DialogContent({
   size,
   scrollable = false,
   busy = false,
+  exitMotion = 'default',
   initialFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
@@ -131,6 +135,8 @@ function DialogContent({
     size?: 'default' | 'compact' | UnifiedDialogSize
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
+    /** 'none' when another dialog takes over at once (a hand-off), so only one animation plays. */
+    exitMotion?: 'default' | 'none'
     /** Work is running: Esc, outside presses and `DialogCancel` cannot close the dialog. */
     busy?: boolean
     /** `cancel` starts focus on the `DialogCancel`, for destructive and trust decisions. */
@@ -146,6 +152,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-size={size}
+        data-exit-motion={exitMotion}
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
         className={cn(
           'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
@@ -156,6 +163,7 @@ function DialogContent({
             ),
           dialogContentSurfaceVariants({ surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
+          exitMotion === 'none' && 'data-[state=closed]:animate-none',
           className
         )}
         {...props}
@@ -311,7 +319,8 @@ function DialogTitle({
       data-slot="dialog-title"
       data-size={size}
       className={cn(
-        'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        // outline-none: a title is never a control, but dialogs focus it (tabIndex -1) on open.
+        'text-lg leading-snug font-semibold break-words outline-none data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
         unified && 'text-[15px] data-[size=compact]:text-[15px]',
         className
       )}

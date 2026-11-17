@@ -26,6 +26,7 @@ import { restoreSshConnectionsForStartup } from '../../startup/startup-ssh-conne
 import { collectActiveWorkspaceSshTargetIds } from '../../startup/active-workspace-ssh-targets'
 import { publishTerminalViewAttributesAtAppStart } from '../../components/terminal-pane/appearance/terminal-appearance'
 import { getSystemPrefersDark } from '../../lib/terminal/appearance/terminal-theme'
+import { holdRestoredAsleepCloudSelection } from '../../components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold'
 import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
@@ -130,6 +131,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
+        // The VM records main keeps on disk: an asleep cloud selection must hold before panes mount.
+        const persistedVmRuntimes = (
+          window.api.ephemeralVm?.listRuntimes?.() ?? Promise.resolve([])
+        ).catch(() => [])
         const sessionReadPromise = Promise.all([
           runtimeHostsPromise,
           wslMovedProjectsPromise,
@@ -182,6 +187,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           throw catalogOutcome.reason
         }
         const sessionRead = sessionOutcome.value
+        const vmRuntimes = await persistedVmRuntimes
         await keybindingsPromise
         await timeRendererStartupStep('repo-catalog-final-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
@@ -203,6 +209,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               ...sessionRead,
               ...sessionHydrationOptions
             })
+            holdRestoredAsleepCloudSelection(vmRuntimes)
             actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)

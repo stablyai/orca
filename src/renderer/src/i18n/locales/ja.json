@@ -1247,11 +1247,9 @@
             "2f6c78a039": "プロファイル認証の更新に失敗しました",
             "a37b5e6d37": "Orca からサインアウトしました",
             "83600521e7": "サインアウトに失敗しました",
-            "76deec8f58": "組織の切り替えに失敗しました",
             "7d4bc516ee": "プロファイルの切り替えに失敗しました",
             "f518e89aa5": "プロジェクトはそのプロファイルに既に存在します",
-            "f03ae7f27b": "プロジェクトの転送に失敗しました",
-            "signInTimedOut": "サインインがタイムアウトしました"
+            "f03ae7f27b": "プロジェクトの転送に失敗しました"
           }
         },
         "runtime": {
@@ -2627,10 +2625,7 @@
         "destroyDisabled": "破壊は無効です",
         "destroyConfigured": "設定されたものを破棄する",
         "noDestroyConfigured": "破壊しない",
-        "ephemeralVm": "ワークスペースごとの環境",
-        "chooseRunTarget": "ターゲットを選択",
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
-        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
         "branchName": "ブランチ名",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "接続がタイムアウトしました。バックグラウンドで接続が続いている可能性があります。",
@@ -2639,12 +2634,9 @@
         "addHost": "ホストを追加",
         "addSshHost": "SSH ホストを追加",
         "addSshHostHint": "既存のマシンを SSH 経由で使用します",
-        "addRemoteOrcaServer": "リモート Orca サーバーを追加",
-        "addRemoteOrcaServerHint": "別の Orca ランタイムとペアリングします",
         "hostConnectionFailed": "接続に失敗しました",
         "defaultBranchUpdateFailed": "プロジェクトのデフォルトブランチを更新できませんでした。再試行。",
         "setLocation": "プロジェクトの場所を設定する",
-        "setLocationOnHost": "プロジェクトの場所を {{host}} に設定します",
         "setLocationTooltip": "フォルダーを選択するか、このプロジェクトを {{host}} に複製します。",
         "connect": "接続",
         "reconnect": "再接続",
@@ -3735,12 +3727,8 @@
           "WorktreeCreationPanel": {
             "dabd226118": "閉じる",
             "34dd5ee38b": "再試行",
-            "ed2a664f8b": "ワークツリーを作成できませんでした",
-            "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
-            "767951265d": "ワークツリーの作成中に問題が発生しました。",
-            "cancelProvisioning": "キャンセル",
-            "vmProvisioningLogEmpty": "レシピの出力を待っています…"
+            "cancelProvisioning": "キャンセル"
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "送信するにはワークツリーの作成を再試行してください",
@@ -3756,15 +3744,11 @@
           },
           "VmBuildSheet": {
             "checks": "環境をチェック",
-            "checksFailed": "VM は起動しましたが、環境チェックに失敗しました",
             "create": "ワークスペースを作成",
             "editRecipe": "レシピを編集",
             "fixWithAgent": "Agent で修正",
             "openAnyway": "このまま開く",
-            "openAnywayHint": "「このまま開く」を選ぶと、この VM を残し、現状のままワークスペースを作成します。「閉じる」を選ぶと VM を破棄します。",
-            "provision": "VM をプロビジョニング",
-            "retryChecks": "チェックを再試行",
-            "title": "VM を構築中"
+            "provision": "VM をプロビジョニング"
           }
         }
       },
@@ -6247,6 +6231,10 @@
           "allProjects": "すべてのプロジェクト",
           "selectedProjects_other": "{{count}} 件のプロジェクト"
         },
+        "SidebarAccountMenu": {
+          "account": "アカウント",
+          "signIn": "サインイン"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
           "29c56f30ee": "アップデートをチェックする",
@@ -6884,7 +6872,6 @@
           "modalInstallDescription": "Agent 用に Linear スキルをインストールします。"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "フォルダーワークスペースを作成",
           "create": "ワークスペースを作成"
         },
         "AddRepoHostSelector": {
@@ -13745,8 +13732,6 @@
             "c7e920aa7c": "{{value0}} として公開",
             "e740075063": "削除",
             "b3548e59f4": "編集",
-            "fe2730d050": "{{value0}}をコピー",
-            "b22b128b2a": "ブラウザで開く",
             "75aeea592f": "ブラウザで{{value0}}を開く",
             "de349d4560": "{{value0}} を開く",
             "907eb53ed2": "ポートを転送する",
@@ -13767,10 +13752,6 @@
             "729be0b4e5": "種類",
             "0f1d8cd324": "バインド",
             "1c1c18cefc": "アドレス",
-            "f9528da632": "プロセスの停止",
-            "a223459512": "詳細を表示",
-            "bdac206faf": "詳細をコピー",
-            "792baeb7ed": "アドレスをコピー",
             "d41a8241ec": "ポート",
             "a2a9fc6899": "ローカルポートが検出されませんでした",
             "f59c783b7a": "{{value0}} ではポートスキャンを利用できません: {{value1}}",
@@ -18590,7 +18571,6 @@
           "signout": {
             "confirm": {
               "title": "Orca からログアウトしますか？",
-              "description": "このデバイスで Orca からログアウトします。ローカルのプロジェクトとワークツリーには影響しません。",
               "cancel": "キャンセル",
               "action": "サインアウト"
             }
@@ -21363,7 +21343,6 @@
       "startInTerminal": "ターミナルで {{value0}} を開始します"
     },
     "newWorkspace": {
-      "agentOptional": "Agent [オプション]",
       "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。",
       "setupCheckFailed": "セットアップ構成を確認できませんでした。もう一度お試しください。",
       "directSetup": {

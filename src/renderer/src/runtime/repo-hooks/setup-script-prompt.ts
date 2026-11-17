@@ -1,6 +1,10 @@
+import { formatRunActionsForTrust } from '../../../../shared/orca-yaml-run-actions'
 import { getDefaultRepoHookSettings } from '../../../../shared/orca-profiles/constants'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
-import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
+import type {
+  SetupScriptImportCandidate,
+  UbuntuNote
+} from '../../../../shared/workspace-setup/setup-script-imports'
 import type { RepoHookSettings } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
@@ -58,7 +62,9 @@ export async function inspectSetupScriptPromptState({
         ? { status: 'distro-stopped', repoId: repo.id }
         : { status: 'error', repoId: repo.id }
     }
-    const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
+    // A cloud workspace booted from an environment build has its dependencies installed already.
+    const hasEffectiveSetup =
+      hooksResult.environmentProvisioned === true || hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
       return {
         status: 'ok',
@@ -196,7 +202,11 @@ export function buildImportedHookSettings(
       ...defaults.scripts,
       ...current?.scripts,
       setup: candidate.setup,
-      archive: candidate.archive ?? current?.scripts?.archive ?? defaults.scripts.archive
+      archive: candidate.archive ?? current?.scripts?.archive ?? defaults.scripts.archive,
+      // Imported run actions join this machine's own; orca.yaml actions with the same id yield.
+      ...(candidate.run ? { run: candidate.run } : {}),
+      ...(candidate.runMode ? { runMode: candidate.runMode } : {}),
+      ...(candidate.autoRunAfterSetup ? { autoRunAfterSetup: candidate.autoRunAfterSetup } : {})
     }
   }
 }
@@ -206,6 +216,10 @@ export type DetectedSetupPreviewContent = {
   archive: string | null
   editable: boolean
   skippedFields: readonly string[]
+  /** Imported run actions, as the text the Run button will execute. */
+  runActions: string | null
+  /** Amazon Linux install lines translated to apt-get, and what to check. */
+  ubuntuNote: UbuntuNote | null
 }
 
 // Mirrors what buildImportedHookSettings saves; only package-manager guesses are editable before saving.
@@ -218,7 +232,9 @@ export function getDetectedSetupPreviewContent(
     setup: editable ? packageManagerSetupDraft : candidate.setup,
     archive: candidate.archive ?? null,
     editable,
-    skippedFields: candidate.unsupportedFields ?? []
+    skippedFields: candidate.unsupportedFields ?? [],
+    runActions: candidate.run?.length ? formatRunActionsForTrust(candidate.run) : null,
+    ubuntuNote: candidate.ubuntuNote ?? null
   }
 }
 

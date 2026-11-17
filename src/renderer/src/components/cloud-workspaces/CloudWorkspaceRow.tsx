@@ -1,0 +1,311 @@
+import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
+import React, { useId, useState } from 'react'
+import { GitBranch, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { type Translate, useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import { MemberAvatar } from './CloudMemberAvatars'
+import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
+import {
+  formatSandboxHours,
+  formatRelative,
+  memberName,
+  repoLabel,
+  sandboxHours,
+  type MemberDirectory
+} from './cloud-workspace-format'
+import { cloudWorkspaceTitle } from './open-cloud-workspace'
+import { CloudWorkspaceRowBadges } from './CloudWorkspaceRowBadges'
+import { asleepCountdownShort } from '@/components/orca-cloud/archive-snapshot-copy'
+
+/** The shared Orca Cloud dot vocabulary (shape and tone), same as the sidebar and panel. */
+export function dotState(w: CloudWorkspace): CloudDotState {
+  if (w.archivedAt !== null) {
+    return 'archived'
+  }
+  switch (w.status) {
+    case 'running':
+      return 'running'
+    case 'creating':
+      return 'starting'
+    case 'resuming':
+      return 'waking'
+    case 'suspending':
+    case 'suspended':
+      return 'sleeping'
+    case 'failed':
+      return 'failed'
+    case 'destroying':
+    case 'destroyed':
+      return 'unresponsive'
+  }
+}
+
+/** Glossary lifecycle states only: a sandbox going to sleep already reads as Asleep. */
+export function statusLabel(w: CloudWorkspace, t: Translate): string {
+  if (w.archivedAt !== null) {
+    return t('auto.components.cloudWorkspaces.statusArchived', 'Archived')
+  }
+  switch (w.status) {
+    case 'running':
+      return t('auto.components.cloudWorkspaces.statusRunning', 'Running')
+    case 'creating':
+      return t('auto.components.cloudWorkspaces.statusStarting', 'Starting')
+    case 'resuming':
+      return t('auto.components.cloudWorkspaces.statusWaking', 'Waking')
+    case 'suspending':
+    case 'suspended':
+      return t('auto.components.cloudWorkspaces.statusAsleep', 'Asleep')
+    case 'failed':
+      return t('auto.components.cloudWorkspaces.statusCouldntStart', "Couldn't start")
+    case 'destroying':
+    case 'destroyed':
+      // The picker never lists these (useListedCloudWorkspaces); a stray one is not usable.
+      return t('auto.components.cloudWorkspaces.statusNotResponding', 'Not responding')
+  }
+}
+
+/**
+ * The row's status: the lifecycle label, plus the idle-deletion countdown in an asleep workspace's
+ * last 7 days ("Asleep · deletes in 3 days"), the same words an archived workspace counts down in.
+ */
+export function rowStatusLabel(w: CloudWorkspace, t: Translate, now: number): string {
+  const label = statusLabel(w, t)
+  return w.archivedAt === null && w.status === 'suspended' && typeof w.idleDeleteAt === 'number'
+    ? `${label} · ${asleepCountdownShort(t, w.idleDeleteAt, now)}`
+    : label
+}
+
+export function CloudWorkspaceRow({
+  workspace: w,
+  directory,
+  selfId,
+  canAdmin,
+  members,
+  opening,
+  now,
+  actions
+}: {
+  workspace: CloudWorkspace
+  directory: MemberDirectory
+  selfId: string | null
+  canAdmin: boolean
+  members: { userId: string; name: string }[]
+  opening: boolean
+  now: number
+  actions: RowActions
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const descriptionId = useId()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const archived = w.archivedAt !== null
+  const status = rowStatusLabel(w, t, now)
+  const showStatus = archived || w.status !== 'running'
+  const canManage = w.access === 'owner' || canAdmin
+  const title = cloudWorkspaceTitle(w, t)
+  const ownerName = memberName(directory, w.ownerUserId, selfId, t)
+  const canOpen = w.access !== 'none'
+  // Asleep: Enter / click reads the saved copy; waking is its own explicit action.
+  const readable = isReadableAsleep(w)
+  const primary = readable ? actions.read : actions.open
+  // Hours are what the plan meters; a per-workspace dollar figure would overstate the bill.
+  const hours = formatSandboxHours(w.cost.computeMs, intlLocale)
+  const usage = t('auto.components.cloudWorkspaces.rowSandboxHours', '{{hours}} sandbox hours', {
+    count: sandboxHours(w.cost.computeMs),
+    hours,
+    defaultValue_one: '{{hours}} sandbox hour'
+  })
+  const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
+  const revealOpen = opening || menuOpen
+  const description = t(
+    'auto.components.cloudWorkspaces.rowDescription3',
+    '{{usage}}. Last active {{lastActive}}.',
+    { usage, lastActive }
+  )
+
+  return (
+    <li
+      data-cloud-workspace-row=""
+      className={cn(
+        'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
+        menuOpen && 'bg-accent'
+      )}
+    >
+      <button
+        type="button"
+        disabled={!canOpen}
+        onClick={() => primary(w)}
+        aria-label={
+          w.ownerUserId === selfId
+            ? t(
+                'auto.components.cloudWorkspaces.rowLabelOwnedByYou',
+                '{{title}}, {{status}}, owned by you',
+                {
+                  title,
+                  status
+                }
+              )
+            : t(
+                'auto.components.cloudWorkspaces.rowLabel',
+                '{{value0}}, {{value1}}, owned by {{value2}}',
+                {
+                  value0: title,
+                  value1: status,
+                  value2: ownerName
+                }
+              )
+        }
+        aria-describedby={descriptionId}
+        className="flex min-w-0 flex-1 cursor-default items-center gap-3 rounded-lg py-2 pl-3 text-left outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              role="img"
+              aria-label={status}
+              className={cn('inline-flex shrink-0', archived && 'opacity-60')}
+            >
+              <CloudStatusGlyph state={dotState(w)} size={16} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{status}</TooltipContent>
+        </Tooltip>
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {/* Archived rows dim only the title and dot, so cost, time and actions stay legible. */}
+            <span
+              className={cn(
+                'truncate text-sm font-medium',
+                archived ? 'text-muted-foreground' : 'text-foreground'
+              )}
+            >
+              {title}
+            </span>
+            <CloudWorkspaceRowBadges workspace={w} revealNumber={revealOpen} />
+          </span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
+            <span className="shrink-0">{ownerName}</span>
+            {w.fromRoutine === true && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">
+                  {w.routineName
+                    ? t('auto.components.cloudWorkspaces.routineRunOf', 'Routine · {{name}}', {
+                        name: w.routineName
+                      })
+                    : t('auto.components.cloudWorkspaces.routineRun', 'Routine run')}
+                </span>
+              </>
+            )}
+            {showStatus && (
+              <>
+                <span aria-hidden>·</span>
+                <span
+                  className={cn(
+                    'shrink-0',
+                    !archived && w.status === 'failed' && 'text-destructive',
+                    !archived &&
+                      (w.status === 'destroying' || w.status === 'destroyed') &&
+                      'text-status-warning-text'
+                  )}
+                >
+                  {status}
+                </span>
+              </>
+            )}
+            {w.repo && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">{repoLabel(w.repo.url)}</span>
+                {w.repo.branch && (
+                  <span className="flex min-w-0 items-center gap-0.5 truncate font-mono text-2xs">
+                    <GitBranch className="size-3 shrink-0" aria-hidden />
+                    <span className="truncate">{w.repo.branch}</span>
+                  </span>
+                )}
+              </>
+            )}
+          </span>
+        </span>
+      </button>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="w-28 text-right text-xs tabular-nums text-muted-foreground">
+            {usage}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <div className="font-medium">
+            {t('auto.components.cloudWorkspaces.sandboxHoursTitle', 'Sandbox hours')}
+          </div>
+          <div>
+            {t(
+              'auto.components.cloudWorkspaces.sandboxHoursHint',
+              'Sandbox hours this workspace has used.'
+            )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+      {/* Last activity, with Open fading in over the same slot on hover or keyboard focus. */}
+      <span className="relative flex w-20 shrink-0 items-center justify-end">
+        <span
+          className={cn(
+            'text-xs tabular-nums text-muted-foreground transition-opacity motion-reduce:transition-none',
+            canOpen &&
+              (revealOpen ? 'opacity-0' : 'group-focus-within:opacity-0 group-hover:opacity-0')
+          )}
+        >
+          {lastActive}
+        </span>
+        {canOpen && (
+          <span
+            className={cn(
+              'absolute inset-y-0 right-0 flex items-center transition-opacity motion-reduce:transition-none',
+              revealOpen
+                ? 'opacity-100'
+                : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
+            )}
+          >
+            {/* Mouse affordance only: the row button already opens (one tab stop per action). */}
+            <Button
+              size="xs"
+              variant="outline"
+              tabIndex={-1}
+              aria-hidden
+              disabled={opening}
+              onClick={() => primary(w)}
+            >
+              {opening ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}
+              {opening
+                ? t('auto.components.cloudWorkspaces.opening', 'Opening')
+                : readable
+                  ? t('auto.components.cloudWorkspaces.view', 'View')
+                  : t('auto.components.cloudWorkspaces.open', 'Open')}
+            </Button>
+          </span>
+        )}
+      </span>
+      <CloudWorkspaceRowMenu
+        workspace={w}
+        title={title}
+        canOpen={canOpen}
+        canManage={canManage}
+        members={members}
+        directory={directory}
+        selfId={selfId}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        actions={actions}
+      />
+      <span id={descriptionId} className="sr-only">
+        {description}
+      </span>
+    </li>
+  )
+}

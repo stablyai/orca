@@ -1280,11 +1280,9 @@
             "2f6c78a039": "刷新配置文件身份验证失败",
             "a37b5e6d37": "已从 Orca 退出登录",
             "83600521e7": "退出登录失败",
-            "76deec8f58": "切换组织失败",
             "7d4bc516ee": "切换配置文件失败",
             "f518e89aa5": "该项目已存在于那个配置文件中",
-            "f03ae7f27b": "转移项目失败",
-            "signInTimedOut": "登录超时"
+            "f03ae7f27b": "转移项目失败"
           }
         },
         "runtime": {
@@ -2660,10 +2658,7 @@
         "destroyDisabled": "已禁用销毁",
         "destroyConfigured": "已配置销毁",
         "noDestroyConfigured": "未配置销毁",
-        "ephemeralVm": "工作区专属环境",
-        "chooseRunTarget": "选择目标",
         "noRunTargets": "此项目还没有可用的运行目标",
-        "perWorkspaceEnvHint": "通过环境模板按需创建环境",
         "branchName": "分支名称",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "连接超时，可能仍在后台连接中",
@@ -2672,12 +2667,9 @@
         "addHost": "添加主机",
         "addSshHost": "添加 SSH 主机",
         "addSshHostHint": "通过 SSH 使用现有机器",
-        "addRemoteOrcaServer": "添加远程 Orca 服务器",
-        "addRemoteOrcaServerHint": "配对另一个 Orca 运行时",
         "hostConnectionFailed": "连接失败",
         "defaultBranchUpdateFailed": "无法更新项目的默认分支，请重试",
         "setLocation": "设置项目位置",
-        "setLocationOnHost": "设置项目在 {{host}} 上的位置",
         "setLocationTooltip": "选择文件夹，或将此项目克隆到 {{host}}",
         "connect": "连接",
         "reconnect": "重新连接",
@@ -3768,12 +3760,8 @@
           "WorktreeCreationPanel": {
             "dabd226118": "关闭",
             "34dd5ee38b": "重试",
-            "ed2a664f8b": "无法创建工作树",
-            "a3346fc6ed": "取消工作树创建",
             "532aea14ce": "取消",
-            "767951265d": "创建工作树时出现问题",
-            "cancelProvisioning": "取消",
-            "vmProvisioningLogEmpty": "正在等待环境模板输出…"
+            "cancelProvisioning": "取消"
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "请重试创建工作树后再发送",
@@ -3789,15 +3777,11 @@
           },
           "VmBuildSheet": {
             "checks": "检查环境",
-            "checksFailed": "虚拟机已启动，但环境检查未通过",
             "create": "创建工作区",
             "editRecipe": "编辑环境模板",
             "fixWithAgent": "使用智能体修复",
             "openAnyway": "仍然打开",
-            "openAnywayHint": "“仍然打开”会保留此虚拟机并按原样在其上创建工作区，“关闭”则会销毁该虚拟机",
-            "provision": "预配虚拟机",
-            "retryChecks": "重试检查",
-            "title": "正在构建虚拟机"
+            "provision": "预配虚拟机"
           }
         }
       },
@@ -6276,6 +6260,10 @@
           "allProjects": "所有项目",
           "selectedProjects_other": "{{count}} 个项目"
         },
+        "SidebarAccountMenu": {
+          "account": "账户",
+          "signIn": "登录"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
           "29c56f30ee": "检查更新",
@@ -6913,7 +6901,6 @@
           "modalInstallDescription": "为你的智能体安装 Linear 技能"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "创建文件夹工作区",
           "create": "创建工作区"
         },
         "AddRepoHostSelector": {
@@ -13798,8 +13785,6 @@
             "c7e920aa7c": "公开为 {{value0}}",
             "e740075063": "移除",
             "b3548e59f4": "编辑",
-            "fe2730d050": "复制 {{value0}}",
-            "b22b128b2a": "在浏览器中打开",
             "75aeea592f": "在浏览器中打开 {{value0}}",
             "de349d4560": "打开 {{value0}}",
             "907eb53ed2": "转发端口",
@@ -13820,10 +13805,6 @@
             "729be0b4e5": "种类",
             "0f1d8cd324": "绑定",
             "1c1c18cefc": "地址",
-            "f9528da632": "停止进程",
-            "a223459512": "显示详情",
-            "bdac206faf": "复制详情",
-            "792baeb7ed": "复制地址",
             "d41a8241ec": "端口",
             "a2a9fc6899": "未检测到本地端口",
             "f59c783b7a": "{{value0}} 上无法进行端口扫描：{{value1}}",
@@ -18685,7 +18666,6 @@
           "signout": {
             "confirm": {
               "title": "退出 Orca？",
-              "description": "重新登录前，产物和 Orca Relay 将不可用，本地项目和工作树不会受到影响",
               "cancel": "取消",
               "action": "退出登录"
             }
@@ -21748,7 +21728,6 @@
       "startInTerminal": "在终端中启动 {{value0}}"
     },
     "newWorkspace": {
-      "agentOptional": "代理 [可选]",
       "createDescription": "选择项目和工作区名称，如果想启动代理，请选择一个",
       "directSetup": {
         "run": "Run setup",

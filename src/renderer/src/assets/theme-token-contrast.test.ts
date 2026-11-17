@@ -1,0 +1,57 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { contrastRatio, type Rgba } from '../../../shared/color/rgba-contrast'
+
+const css = readFileSync(new URL('./main.css', import.meta.url), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  ''
+)
+
+/** Bodies of every top-level block whose selector list starts with `selector`. */
+function themeBlocks(selector: ':root' | '.dark'): string[] {
+  return [...css.matchAll(/(?:^|\n)([^{}\n][^{}]*)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => selectors.trim().split(/\s*,\s*/)[0] === selector)
+    .map(([, , body]) => body)
+}
+
+/** Last-wins hex tokens from every top-level block whose selector list starts with `selector`. */
+function themeTokens(selector: ':root' | '.dark'): Map<string, Rgba> {
+  const tokens = new Map<string, Rgba>()
+  for (const body of themeBlocks(selector)) {
+    for (const [, name, hex] of body.matchAll(/(--[\w-]+):\s*#([0-9a-f]{3}|[0-9a-f]{6});/gi)) {
+      const digits = hex.length === 3 ? hex.replace(/./g, '$&$&') : hex
+      const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(digits.slice(i, i + 2), 16))
+      tokens.set(name, [r, g, b, 1])
+    }
+  }
+  return tokens
+}
+
+function tint(color: Rgba, amount: number, surface: Rgba): Rgba {
+  const [r, g, b] = [0, 1, 2].map((i) => color[i] * amount + surface[i] * (1 - amount))
+  return [r, g, b, 1]
+}
+
+const destructiveTextMix = Number(
+  css.match(
+    /--destructive-text: color-mix\(in srgb, var\(--destructive\) (\d+)%, var\(--foreground\)\)/
+  )?.[1]
+)
+
+// The destructive chip paints its text on bg-destructive/10 (and /15 on hover) over the page.
+describe.each([0.1, 0.15])('destructive chip text on a %s tint', (amount) => {
+  it('meets WCAG AA in the light theme', () => {
+    const light = themeTokens(':root')
+    const destructive = light.get('--destructive')!
+    const text = tint(destructive, destructiveTextMix / 100, light.get('--foreground')!)
+    const surface = tint(destructive, amount, light.get('--background')!)
+    expect(contrastRatio(text, surface)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('meets WCAG AA in the dark theme', () => {
+    const dark = themeTokens('.dark')
+    const destructive = dark.get('--destructive')!
+    const surface = tint(destructive, amount, dark.get('--background')!)
+    expect(contrastRatio(destructive, surface)).toBeGreaterThanOrEqual(4.5)
+  })
+})

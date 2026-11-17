@@ -1,6 +1,6 @@
 import React from 'react'
 import { AlertCircle, CheckCircle2, Clock3, Download, Loader2 } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { StatusBarCardToggle } from '../StatusBarCardToggle'
 import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
@@ -99,27 +99,15 @@ export function UpdateStatusSegment({
     }
   })()
 
-  const handleClick = () => {
-    setCollapsed(!collapsed)
-  }
-
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={handleClick}
-          className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={segment.ariaLabel}
-          aria-expanded={!collapsed}
-        >
-          {segment.icon}
-          {!iconOnly && <span className="text-[11px] tabular-nums">{segment.label}</span>}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6}>
-        {segment.tooltip}
-      </TooltipContent>
-    </Tooltip>
+    <StatusBarCardToggle
+      icon={segment.icon}
+      label={segment.label}
+      tooltip={segment.tooltip}
+      ariaLabel={segment.ariaLabel}
+      expanded={!collapsed}
+      iconOnly={iconOnly}
+      onToggle={() => setCollapsed(!collapsed)}
+    />
   )
 }

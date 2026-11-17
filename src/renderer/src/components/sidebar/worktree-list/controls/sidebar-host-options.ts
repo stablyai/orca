@@ -1,4 +1,5 @@
 import { shallow } from 'zustand/shallow'
+import { collapseOrcaCloudHosts } from './sidebar-orca-cloud-host'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome/ui-chrome-types'
@@ -67,6 +68,8 @@ export type SidebarHostOption = {
   wslDistro?: string
   /** Why a listed WSL host cannot run: the experiment is off, or this build lacks its server files. */
   wslUnavailable?: 'turned-off' | 'server-files-missing'
+  /** On the one row standing for every Orca Cloud sandbox: how many run and sleep. */
+  orcaCloud?: { running: number; asleep: number }
 }
 
 export type SidebarHostScopeOption = {
@@ -122,7 +125,7 @@ export function buildSidebarHostOptions(
   const activeRuntimeHostId = args.settings?.activeRuntimeEnvironmentId?.trim()
     ? toRuntimeExecutionHostId(args.settings.activeRuntimeEnvironmentId.trim())
     : null
-  return buildExecutionHostRegistry({
+  const hosts = buildExecutionHostRegistry({
     repos: args.repos,
     settings: args.settings,
     sshTargetLabels: args.sshTargetLabels,
@@ -131,7 +134,7 @@ export function buildSidebarHostOptions(
     runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
     hostLabelOverrides: args.hostLabelOverrides,
     ephemeralVmHosts: args.ephemeralVmHosts
-  }).map((host) => {
+  }).map((host): SidebarHostOption => {
     if (host.kind === 'local') {
       return {
         ...host,
@@ -183,6 +186,7 @@ export function buildSidebarHostOptions(
       presence: host.id === activeRuntimeHostId ? 'active' : 'project'
     }
   })
+  return collapseOrcaCloudHosts(hosts, args.runtimeEnvironments ?? [], t)
 }
 
 export function sidebarHostDisplayLabel(host: SidebarHostOption, t: Translate = translate): string {

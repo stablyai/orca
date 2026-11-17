@@ -5,7 +5,7 @@ import * as Slot from 'radix-ui/slot'
 import { cn } from '@/lib/class-names'
 
 const badgeVariants = cva(
-  'inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3',
+  'inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3',
   {
     variants: {
       variant: {
@@ -22,6 +22,19 @@ const badgeVariants = cva(
         hostContext:
           'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',
         /** A task label inside a dense reference row's metadata line. */
+        // Quiet outline tag beside a row label (e.g. a plan requirement).
+        tag: 'border-border px-1.5 py-0 text-2xs text-muted-foreground',
+        /** Small uppercase success chip marking the live item in a list (e.g. the active build). */
+        statusActive:
+          'h-4 border-status-success-border bg-status-success-background px-1.5 text-[10px] font-semibold tracking-wide text-status-success uppercase',
+        /** Tinted status pills for a check's result inside an error card. */
+        statusFailed:
+          'border-destructive/20 bg-destructive/10 px-1.5 py-0 text-2xs text-destructive-text dark:border-destructive/30',
+        statusWarning:
+          'border-status-warning-border bg-status-warning-background px-1.5 py-0 text-2xs text-status-warning-text',
+        /** Sentence-case success pill beside a row label ("On", "Verified"), next to `tag` pills. */
+        statusSuccess:
+          'border-status-success-border bg-status-success-background px-1.5 py-0 text-2xs text-status-success',
         referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:

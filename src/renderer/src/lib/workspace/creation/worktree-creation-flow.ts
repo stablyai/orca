@@ -13,6 +13,7 @@ import {
   showWorktreeCreationError
 } from '@/lib/workspace/creation/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow-execute'
+import { isOrcaCloudCreateRequest, trackOrcaCloudCreateStep } from '@/lib/orca-cloud-cancel-cleanup'
 import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
@@ -22,6 +23,18 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace/creation/workspace-create-error-format'
 
+/** A cancel's cleanup toast waits for an Orca Cloud create run. */
+function trackOrcaCloudCreate(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  run: Promise<void>
+): Promise<void> {
+  if (!isOrcaCloudCreateRequest(request)) {
+    return run
+  }
+  return trackOrcaCloudCreateStep(creationId, run)
+}
+
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
 }
@@ -29,7 +42,11 @@ type ContinueBackgroundWorktreeCreationOptions = {
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
   const originView = useAppStore.getState().activeView
-  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
+  trackOrcaCloudCreate(
+    creationId,
+    request,
+    executeWorktreeCreation(creationId, request, originView)
+  ).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
@@ -137,7 +154,9 @@ export function continueBackgroundWorktreeCreation(
     status: 'creating',
     startedAt: Date.now(),
     error: undefined,
+    errorCode: undefined,
     provisioningLog: undefined,
+    provisioningLogStamps: undefined,
     checkoutProgress: undefined,
     request
   })
@@ -158,8 +177,20 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   if (!entry) {
     return
   }
+  if (entry.request.githubSource) {
+    // A GitHub-only Orca Cloud create: no worktree create here; the sandbox clones from GitHub and
+    // is paired.
+    void import('@/lib/orca-cloud/start-cloud-workspace-from-github').then(
+      ({ retryGitHubCloudCreate }) => retryGitHubCloudCreate(creationId)
+    )
+    return
+  }
   if (entry.chatInputHandedOff && entry.worktreeId) {
-    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.updatePendingWorktreeCreation(creationId, {
+      status: 'creating',
+      error: undefined,
+      errorCode: undefined
+    })
     store.setActivePendingWorktreeCreation(creationId)
     store.setActiveView('terminal')
     void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
@@ -171,8 +202,13 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
+    errorCode: undefined,
     provisioningLog: undefined,
+    provisioningLogStamps: undefined,
     environmentCheck: undefined,
+    waitingSince: undefined,
+    pausedMs: undefined,
+    resumedAt: undefined,
     checkoutProgress: undefined,
     worktreeId: undefined,
     chatHandedOffAt: undefined

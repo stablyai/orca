@@ -105,12 +105,12 @@ export async function attemptStructuredAgentSessionSend(args: {
   reconcile: (uncertain: boolean) => void
 }): Promise<StructuredAgentSessionSendAttempt | null> {
   const { entry, target } = args
+  let body = entry.body
   // Measured as the host measures it, so a message it would refuse comes back saying why.
-  if (structuredAgentSessionBlocksTooLarge(entry.body.blocks)) {
+  if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
     return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }
   }
   let fence: number | null
-  let body = entry.body
   try {
     if (target.kind === 'environment') {
       await ensureRuntimeEnvironmentCompatible(target.environmentId)

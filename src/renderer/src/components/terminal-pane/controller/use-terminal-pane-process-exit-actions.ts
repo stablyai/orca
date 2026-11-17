@@ -50,7 +50,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
 
   const { buildAccountRestartStartup } = usePaneAccountRestartStartup({ tabId, worktreeId })
 
-  const { handleRestartPane } = usePaneProcessRestart({
+  const { handleRestartPane, releasePaneForRestart } = usePaneProcessRestart({
     clearCodexRestartNotice,
     clearExitedPanePtyLayoutBinding,
     clearRuntimePaneTitle,
@@ -107,6 +107,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     tabId,
     buildAccountRestartStartup,
     handleRestartPane,
+    releasePaneForRestart,
     panePtyLayoutBindings
   })
 

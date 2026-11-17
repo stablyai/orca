@@ -45,6 +45,7 @@ export type UISliceContextual = {
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
     | 'confirm-sleep-twin'
+    | 'confirm-cloud-ssh-include'
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'
@@ -123,6 +124,8 @@ export type UISliceContextual = {
   dismissMobileEmulatorTabIntro: () => void
   mobileEmulatorAgentSetupDismissed: boolean
   dismissMobileEmulatorAgentSetup: () => void
+  cloudAgentSetupDone: boolean
+  markCloudAgentSetupDone: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
   dismissProjectOrderManualDefaultNotice: () => void
   usagePercentageDisplayChangeNoticeDismissed: boolean

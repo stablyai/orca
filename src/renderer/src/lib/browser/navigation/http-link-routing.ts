@@ -15,6 +15,7 @@ import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link
 import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { toast } from 'sonner'
+import { openAfterRemoteOAuthRelay } from './remote-oauth-callback-relay'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
 import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
@@ -284,7 +285,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    void openSystemHttpLink(url)
+    openAfterRemoteOAuthRelay(url, sourceOwner, openSystemHttpLink)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

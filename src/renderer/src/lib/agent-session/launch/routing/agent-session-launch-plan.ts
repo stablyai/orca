@@ -18,6 +18,7 @@ import {
   structuredAgentLaunchSupported
 } from './agent-launch-routing'
 import type { AgentLaunchRoute, AgentLaunchRoutingInput } from './agent-launch-routing'
+import { logStructuredLaunchDowngrade } from './structured-launch-downgrade-log'
 import { beginStructuredAgentLaunchSettlement } from '../continuation/structured-agent-launch-settlement'
 import type {
   StructuredAgentLaunchHandle,
@@ -184,9 +185,16 @@ export function structuredAgentSessionLaunchFeasible(
 
 export function resolveAgentSessionLaunchRoute(
   store: AgentLaunchRouteStore,
-  request: AgentLaunchRouteArgs
+  request: AgentLaunchRouteArgs,
+  /** A launch decided here (not a render-time preview) logs a chat preference it can't honour. */
+  options?: { reportDowngrade?: boolean }
 ): AgentLaunchRoute {
-  return resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request))
+  const input = buildAgentLaunchRouteInput(store, request)
+  const route = resolveAgentLaunchRoute(input)
+  if (options?.reportDowngrade) {
+    logStructuredLaunchDowngrade(input, route)
+  }
+  return route
 }
 
 /** Log chat-to-terminal fallback and re-ask missing host agent lists for future launches. */
@@ -195,15 +203,10 @@ function reportStructuredLaunchDowngrade(
   input: AgentLaunchRoutingInput,
   route: AgentLaunchRoute
 ): void {
-  const downgrade = structuredAgentLaunchDowngrade(input, route)
+  const downgrade = logStructuredLaunchDowngrade(input, route)
   if (!downgrade) {
     return
   }
-  console.warn(
-    `[agent-launch-route] ${input.agent} opens ${route}: ${downgrade} (host ${input.executionHostId}, ` +
-      `host agents ${input.hostStructuredAgents ? 'listed' : 'not learned'}, ` +
-      `host capabilities ${input.hostCapabilities ? 'known' : 'unknown'})`
-  )
   if (downgrade === 'agent-without-structured-session' && !input.hostStructuredAgents) {
     // Bookkeeping: a failed re-ask never touches this launch.
     relearnHostStructuredAgents(

@@ -31,6 +31,7 @@ import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { AgentHostPanelMenuItem } from '../../../agent-host-panel/AgentHostPanelMenuItem'
 
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
@@ -45,6 +46,7 @@ import { HostRemoveDialog } from '../../host-lifecycle/HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-lifecycle/host-rename-remove'
 import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
+import { CloudMcpSyncMenuItem } from './CloudMcpSyncMenuItem'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -299,7 +301,20 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
         )}
+        {row.kind !== 'local' ? (
+          <AgentHostPanelMenuItem
+            hostId={row.hostId}
+            host={{ label: row.label, health: row.health }}
+          />
+        ) : null}
         <DropdownMenuSeparator />
+        {runtimeEnvironmentId && (
+          <CloudMcpSyncMenuItem
+            environmentId={runtimeEnvironmentId}
+            open={open}
+            onSelect={handleManage}
+          />
+        )}
         <DropdownMenuItem onSelect={handleManage}>
           <Settings2 className="size-3.5" />
           {t('auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a', 'Manage host…')}

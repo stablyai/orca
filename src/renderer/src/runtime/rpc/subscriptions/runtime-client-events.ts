@@ -9,6 +9,22 @@ import { admitSshConnectionState } from '../../../../../shared/remote-runtime/ss
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import {
+  SECRETS_REQUEST_SETTLED_EVENT,
+  SECRETS_REQUEST_UPDATED_EVENT,
+  SECRETS_REQUESTED_EVENT
+} from '../../../../../shared/secret-request-contract'
+import {
+  applySecretRequested,
+  applySecretRequestSettled,
+  applySecretRequestUpdated,
+  pruneSecretRequestsOnReady
+} from '@/lib/secret-requests/secret-request-store'
+import {
+  isSecretRequestedEvent,
+  isSecretRequestSettledEvent,
+  isSecretRequestUpdatedEvent
+} from '@/lib/secret-requests/secret-request-event-guards'
 import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 
 export type RuntimeClientEventSubscription = {
@@ -66,6 +82,8 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    // orcad replays pending secret requests just before this; ones it didn't replay are gone.
+    pruneSecretRequestsOnReady(environmentId)
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -81,6 +99,25 @@ function handleRuntimeClientEventResponse(
   }
   if (message.type === 'browserHostRequested') {
     void answerBrowserClientHostRequest(environmentId, message.requestId)
+    return
+  }
+  // Agent secret requests go to their own store; the pane cards read it.
+  if (message.type === SECRETS_REQUESTED_EVENT) {
+    if (isSecretRequestedEvent(message)) {
+      applySecretRequested(environmentId, message)
+    }
+    return
+  }
+  if (message.type === SECRETS_REQUEST_UPDATED_EVENT) {
+    if (isSecretRequestUpdatedEvent(message)) {
+      applySecretRequestUpdated(environmentId, message)
+    }
+    return
+  }
+  if (message.type === SECRETS_REQUEST_SETTLED_EVENT) {
+    if (isSecretRequestSettledEvent(message)) {
+      applySecretRequestSettled(environmentId, message)
+    }
     return
   }
   // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.

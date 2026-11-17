@@ -114,6 +114,7 @@ function PopoverContent({
   sideOffset = 4,
   wheelScroll = false,
   portalContainer,
+  focusRing = false,
   style,
   onWheel,
   onWheelCapture,
@@ -123,6 +124,8 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
+  /** For a popover that takes focus itself (tabIndex -1): show the app focus outline on it. */
+  focusRing?: boolean
   /** `inverted` is the foreground-colored callout used for one-shot pointers, like the sidebar tips. */
   tone?: PopoverTone
 }) {
@@ -179,6 +182,8 @@ function PopoverContent({
                   'overflow-visible rounded-lg bg-foreground p-2.5 text-xs text-background shadow-floating'
                 : 'overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
               wheelScroll && 'popover-wheel-scroll',
+              focusRing &&
+                'focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring',
               className
             )}
             ref={focusScopeRef}

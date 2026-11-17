@@ -8,6 +8,7 @@ import {
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
+import { runReadyPaneAccountRestarts } from './run-ready-pane-account-restarts-cloud'
 
 export function useReadyPaneAccountRestarts({
   consumePendingPaneAccountRestart,
@@ -16,6 +17,7 @@ export function useReadyPaneAccountRestarts({
   tabId,
   buildAccountRestartStartup,
   handleRestartPane,
+  releasePaneForRestart,
   panePtyLayoutBindings
 }: Pick<
   TerminalPaneCloseController,
@@ -25,6 +27,7 @@ export function useReadyPaneAccountRestarts({
     typeof usePaneAccountRestartStartup
   >['buildAccountRestartStartup']
   handleRestartPane: ReturnType<typeof usePaneProcessRestart>['handleRestartPane']
+  releasePaneForRestart: ReturnType<typeof usePaneProcessRestart>['releasePaneForRestart']
   panePtyLayoutBindings: TerminalPaneCloseController['savedLayout']['ptyIdsByLeafId']
 }) {
   // Why primitive ids: another tab's queued restart stays shallow-equal and skips this pane.
@@ -37,22 +40,21 @@ export function useReadyPaneAccountRestarts({
     if (!manager || ready.length === 0) {
       return
     }
-    for (const pane of manager.getPanes()) {
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!ptyId || !ready.includes(ptyId)) {
-        continue
-      }
-      const agent = consumePendingPaneAccountRestart(ptyId)
-      const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
-      if (agent && startup) {
-        // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
-        handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
-      }
-    }
+    runReadyPaneAccountRestarts({
+      panes: manager.getPanes(),
+      ptyIdOf: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId() ?? null,
+      readyRestartPtyIds: ready,
+      tabId,
+      consumePendingPaneAccountRestart,
+      buildAccountRestartStartup,
+      handleRestartPane,
+      releasePaneForRestart
+    })
   }, [
     buildAccountRestartStartup,
     consumePendingPaneAccountRestart,
     handleRestartPane,
+    releasePaneForRestart,
     managerRef,
     paneTransportsRef,
     tabId

@@ -44,6 +44,7 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
+  heldHint?: string | undefined
   /** The agent's suggested next prompt, shown in the placeholder's place; Tab takes it. */
   promptSuggestion?: string | undefined
   autocomplete: ComposerAutocomplete
@@ -111,6 +112,7 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   unavailableHint,
+  heldHint,
   promptSuggestion,
   autocomplete,
   mentionFiles,
@@ -363,6 +365,7 @@ export function NativeChatComposerField({
                           'Describe your goal, define measurable outcomes for best results'
                         )
                       : (unavailableHint ??
+                        heldHint ??
                         suggestion ??
                         nativeChatComposerPlaceholder(hasPty, canSend, afterStop, t))
               }

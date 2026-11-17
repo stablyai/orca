@@ -29,6 +29,11 @@ import {
   WorktreeCardTitleStatus
 } from '../surface/worktree-card-title-status'
 import { cardElement } from './card-template-compiler'
+import {
+  createCardHostParts,
+  NotOnCloudRow,
+  withCloudTitleMarks
+} from './card-identity-parts-cloud'
 
 type Card = WorktreeCardController
 const part = cardElement<Card>
@@ -46,7 +51,7 @@ function CardTitle({
   const { affiliateListMode, worktree } = card
   // Bold and the unread dot are one signal: any unread the card speaks for, its own or a hidden one.
   const rolledUpUnread = useWorktreeCardRolledUpUnread()
-  return (
+  const title = (
     <WorktreeTitleInlineRename
       displayName={card.visibleCardTitle}
       disabled={card.isDeleting || affiliateListMode}
@@ -66,6 +71,7 @@ function CardTitle({
       }
     />
   )
+  return withCloudTitleMarks(title, card)
 }
 
 function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React.ReactNode {
@@ -81,6 +87,7 @@ function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React
       targetRemoved={card.sshTargetRemoved}
       sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
       iconOnly={props.iconOnly === true}
+      actionOnly={props.actionOnly === true}
       onPointerDown={card.stopQuickActionPointerPropagation}
     />
   )
@@ -117,6 +124,7 @@ export const CARD_IDENTITY_PARTS = {
       hostLabel={card.runtimeHostLabel}
     />
   )),
+  ...createCardHostParts(sshControl),
   RenameError: part([], (_props, _children, card) => (
     <WorktreeCardRenameErrorButton
       onPointerDown={card.stopQuickActionPointerPropagation}
@@ -124,9 +132,15 @@ export const CARD_IDENTITY_PARTS = {
     />
   )),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
-    <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
+    <NotOnCloudRow worktree={card.worktree}>
+      <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
+    </NotOnCloudRow>
   )),
-  PrimaryStar: part([], () => <WorktreeCardPrimaryStar />),
+  PrimaryStar: part([], (_props, _children, card) => (
+    <NotOnCloudRow worktree={card.worktree}>
+      <WorktreeCardPrimaryStar />
+    </NotOnCloudRow>
+  )),
   SparseBadge: part(['hasHoverDetails'], (props, _children, card) => (
     <WorktreeCardSparseBadge
       card={card}

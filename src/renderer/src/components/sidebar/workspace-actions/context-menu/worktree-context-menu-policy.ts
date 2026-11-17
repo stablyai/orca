@@ -1,4 +1,3 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
@@ -30,14 +29,6 @@ const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
 export const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 
 // Closed menus reuse empty identities so teardown map churn cannot wake their subscriptions.
-export const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
-export const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
-export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
-export const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
-export const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] =
-  acceptedAgentStatuses()
-export const EMPTY_STRUCTURED_CHAT_SLEPT_AT: AppState['structuredChatSleptAtByPaneKey'] = {}
-export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
 export const EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY: AppState['crossStoreLineageByStoreKey'] = {}

@@ -1,10 +1,17 @@
 import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import {
   indexPendingVmCheckouts,
-  isPendingVmCheckout,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
 } from '../../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
+import {
+  hiddenRowFilter,
+  hiddenVmRepoIds,
+  hiddenWorktreeFilter,
+  hidesNothing
+} from './vm-create-hidden-checkouts-cloud'
+
+export { withOrcaCloudHosts, type HiddenVmCheckouts } from './vm-create-hidden-checkouts-cloud'
 
 type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
 
@@ -131,10 +138,11 @@ export function withoutHiddenVmWorktrees<W extends CheckoutRow>(
   worktrees: W[],
   checkouts: PendingVmCheckoutIndex
 ): W[] {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return worktrees
   }
-  const kept = worktrees.filter((worktree) => !isPendingVmCheckout(checkouts, worktree))
+  const isHidden = hiddenWorktreeFilter(checkouts, worktrees)
+  const kept = worktrees.filter((worktree) => !isHidden(worktree))
   return kept.length === worktrees.length ? worktrees : kept
 }
 
@@ -143,11 +151,11 @@ export function withoutHiddenVmWorktreesByRepo<W extends CheckoutRow>(
   worktreesByRepo: Record<string, W[]>,
   checkouts: PendingVmCheckoutIndex
 ): Record<string, W[]> {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return worktreesByRepo
   }
   let next: Record<string, W[]> | null = null
-  for (const repoId of checkouts.repoIds) {
+  for (const repoId of hiddenVmRepoIds(checkouts, worktreesByRepo)) {
     const list = worktreesByRepo[repoId]
     if (!list) {
       continue
@@ -166,8 +174,9 @@ function withoutHiddenRows<K, V extends CheckoutRow>(
   checkouts: PendingVmCheckoutIndex
 ): ReadonlyMap<K, V> {
   let kept: Map<K, V> | null = null
+  const isHidden = hiddenRowFilter(checkouts, rows)
   for (const [key, row] of rows) {
-    if (isPendingVmCheckout(checkouts, row)) {
+    if (isHidden(key, row)) {
       kept ??= new Map(rows)
       kept.delete(key)
     }
@@ -180,7 +189,7 @@ export function withoutHiddenVmCheckouts(
   domains: SidebarFeedDomains,
   checkouts: PendingVmCheckoutIndex
 ): SidebarFeedDomains {
-  if (checkouts.keys.size === 0) {
+  if (hidesNothing(checkouts)) {
     return domains
   }
   const workspaces = withoutHiddenRows(domains.workspaces, checkouts)

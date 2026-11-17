@@ -8,6 +8,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership
 import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
+import { isOrcaCloudExecutionHostId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -24,9 +25,13 @@ export function showWorktreeCreationReadyToast(
   }
 }
 
+/** Other work that lands a workspace here (a cloud move) words the same toast its own way. */
+type ReadyToastCopy = { title?: string; description?: string; actionLabel?: string }
+
 function createWorktreeCreationReadyToast(
   worktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path' | 'hostId'>,
-  creationHostId?: ExecutionHostId
+  creationHostId?: ExecutionHostId,
+  copy: ReadyToastCopy = {}
 ): void {
   const owner = resolveIndexedWorktreeOwner(
     selectWorktreesByRepo(useAppStore.getState()),
@@ -57,18 +62,26 @@ function createWorktreeCreationReadyToast(
   const name = resolveWorktreeDisplayName(worktree)
   const repo = getIndexedRepoMap(useAppStore.getState().repos).get(worktree.repoId)
   // Why: a folder repo's workspace is not a git worktree, so its title and button say workspace.
-  const isFolder = repo !== undefined && isFolderRepo(repo)
-  const title = isFolder
-    ? translate(
-        'components.workspace.creation.workspaceReadyToast',
-        'Workspace {{name}} is ready',
-        {
-          name
-        }
-      )
-    : translate('components.workspace.creation.worktreeReadyToast', 'Worktree {{name}} is ready', {
-        name
-      })
+  // Orca Cloud: the glossary calls a cloud create a workspace too.
+  const isFolder =
+    (repo !== undefined && isFolderRepo(repo)) || isOrcaCloudExecutionHostId(executionHostId)
+  const title = copy.title
+    ? copy.title
+    : isFolder
+      ? translate(
+          'components.workspace.creation.workspaceReadyToast',
+          'Workspace {{name}} is ready',
+          {
+            name
+          }
+        )
+      : translate(
+          'components.workspace.creation.worktreeReadyToast',
+          'Worktree {{name}} is ready',
+          {
+            name
+          }
+        )
   let retired = false
   const retire = (): void => {
     retired = true
@@ -88,12 +101,14 @@ function createWorktreeCreationReadyToast(
   const toastId = toast.success(title, {
     // Keep the way back until the user opens the workspace or dismisses the toast.
     duration: Infinity,
+    ...(copy.description ? { description: copy.description } : {}),
     onDismiss: retire,
     onAutoClose: retire,
     action: workspaceNavigationToastAction({
       workspaceId: worktree.id,
       executionHostId: executionHostId ?? undefined,
       isFolder,
+      label: copy.actionLabel,
       onNavigate: retire
     })
   })

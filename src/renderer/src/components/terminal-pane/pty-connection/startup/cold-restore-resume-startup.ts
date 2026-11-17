@@ -28,8 +28,19 @@ import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/n
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { resolveColdRestoreInterruptedTurn } from './cold-restore-interrupted-turn'
 
-export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
+export const NOT_REOPENED: HeldPaneReopenOutcome = {
+  reopened: false,
+  agentResumed: false
+}
+
+export {
+  interruptedTurnKey,
+  isInterruptedTurnContinued,
+  markInterruptedTurnContinued,
+  shouldContinueInterruptedTurn
+} from './cold-restore-interrupted-turn'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -110,6 +121,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.executionHostId
       )
     })
+    const interruptedTurn = resolveColdRestoreInterruptedTurn(
+      session,
+      entry,
+      Boolean(sleepingRecord)
+    )
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -118,7 +134,8 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
-      launchCwd: session.worktree?.path
+      launchCwd: session.worktree?.path,
+      continuePrompt: interruptedTurn.continuePrompt
     })
     if (!startupPlan) {
       return null
@@ -152,6 +169,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           : {})
       },
       launchToken: coldRestoreLaunchToken,
+      ...interruptedTurn.startupFields,
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry

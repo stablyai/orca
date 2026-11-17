@@ -1,5 +1,14 @@
-import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
+import React, { useCallback, useRef } from 'react'
+import {
+  Box,
+  ClipboardList,
+  Copy,
+  Ellipsis,
+  ExternalLink,
+  Info,
+  Server,
+  Trash2
+} from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -14,6 +23,7 @@ import {
 } from '@/components/ui/context-menu'
 import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { useTranslate } from '@/i18n/use-translate'
+import { openPortRowMenuBelow } from './local-port-row-more-actions'
 
 const LOCAL_PORT_MENU_CONTENT_CLASS =
   '!rounded-md !border-border/60 !bg-popover !text-popover-foreground !shadow-[0_10px_24px_rgba(0,0,0,0.18)] !backdrop-blur-none'
@@ -25,34 +35,36 @@ export function LocalPortRow({
   port,
   onStop,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  forwardStatus,
+  forwardMenuItems,
+  shareAction,
+  copyAddress
 }: {
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   /** Absent when this client has no route to the port's host. */
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  /** A remote host's port: where it is forwarded on this computer, or how to forward it. */
+  forwardStatus?: React.ReactNode
+  forwardMenuItems?: React.ReactNode
+  /** Orca Cloud: a "Share…" hover button after Open (the same action as the menu's Share…). */
+  shareAction?: React.ReactNode
+  /** Overrides the copied address, e.g. with the forwarded localhost one. */
+  copyAddress?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const menuTriggerRef = useRef<HTMLDivElement>(null)
   const handleCopy = useCallback(() => {
-    void window.api.ui.writeClipboardText(addressForPort(port))
-  }, [port])
+    void window.api.ui.writeClipboardText(copyAddress ?? addressForPort(port))
+  }, [copyAddress, port])
 
   const handleOpenBrowser = useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
       void onOpenInBrowser?.(port, event)
     },
     [onOpenInBrowser, port]
-  )
-
-  const handleCopyButtonClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleCopy()
-      if (event.detail > 0) {
-        event.currentTarget.blur()
-      }
-    },
-    [handleCopy]
   )
 
   const handleOpenBrowserButtonClick = useCallback(
@@ -66,22 +78,16 @@ export function LocalPortRow({
     [handleOpenBrowser]
   )
 
-  const handleStopButtonClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      onStop(port)
-      if (event.detail > 0) {
-        event.currentTarget.blur()
-      }
-    },
-    [onStop, port]
-  )
+  const handleMoreActionsClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    openPortRowMenuBelow(menuTriggerRef.current, event)
+  }, [])
 
   const processLabel =
     port.processName ??
     (port.pid
       ? `PID ${port.pid}`
       : t('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
-  const address = addressForPort(port)
+  const address = copyAddress ?? addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -92,11 +98,14 @@ export function LocalPortRow({
           )
         : t('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
   const openBrowserLabel = t(
-    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
-    'Open in Browser'
+    'auto.components.right.sidebar.PortsPanel.openInBrowser',
+    'Open in browser'
   )
-  const confidenceLabel =
-    port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
+  const moreActionsLabel = t(
+    'auto.components.right.sidebar.PortsPanel.moreActionsForPort',
+    'More actions for port {{port}}',
+    { port: port.port }
+  )
   const canStopProcess =
     port.kind === 'workspace' && Boolean(port.pid) && port.processName !== 'Electron'
 
@@ -105,8 +114,10 @@ export function LocalPortRow({
       <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
         <ContextMenuTrigger asChild>
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            ref={menuTriggerRef}
+            className="flex min-w-0 flex-1 items-start gap-2 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             tabIndex={0}
+            role="group"
             aria-label={t(
               'auto.components.right.sidebar.PortsPanel.5be4f7f727',
               'Port {{value0}} menu',
@@ -121,14 +132,17 @@ export function LocalPortRow({
                 <span className="text-xs font-medium text-foreground">:{port.port}</span>
                 <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
               </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="truncate">{address}</span>
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
+              {/* A remote host's own loopback address is not reachable here; the forward line says where it is. */}
+              {forwardStatus ?? (
+                <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+                  <span className="truncate">{address}</span>
+                </div>
+              )}
+              <div
+                className="flex min-w-0 items-center gap-1.5 text-3xs text-muted-foreground/70"
+                title={port.kind === 'workspace' ? port.owner.path : undefined}
+              >
                 <span className="truncate">{ownerLabel}</span>
-                {confidenceLabel && (
-                  <span className="shrink-0 text-muted-foreground/70">{confidenceLabel}</span>
-                )}
               </div>
             </div>
           </div>
@@ -154,6 +168,7 @@ export function LocalPortRow({
                 </TooltipContent>
               </Tooltip>
             )}
+            {shareAction}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -161,44 +176,17 @@ export function LocalPortRow({
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={handleCopyButtonClick}
-                  aria-label={t(
-                    'auto.components.right.sidebar.PortsPanel.fe2730d050',
-                    'Copy {{value0}}',
-                    { value0: address }
-                  )}
+                  onClick={handleMoreActionsClick}
+                  aria-label={moreActionsLabel}
+                  aria-haspopup="menu"
                 >
-                  <Copy size={13} />
+                  <Ellipsis size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {t('auto.components.right.sidebar.PortsPanel.1004af16ab', 'Copy {{value0}}', {
-                  value0: address
-                })}
+                {moreActionsLabel}
               </TooltipContent>
             </Tooltip>
-            {canStopProcess && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={handleStopButtonClick}
-                    aria-label={t(
-                      'auto.components.right.sidebar.PortsPanel.f9528da632',
-                      'Stop Process'
-                    )}
-                  >
-                    <Trash2 size={13} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
-                </TooltipContent>
-              </Tooltip>
-            )}
           </div>
         </TooltipProvider>
       </div>
@@ -217,23 +205,24 @@ export function LocalPortRow({
         )}
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
+          {t('auto.components.right.sidebar.PortsPanel.copyAddress', 'Copy address')}
         </ContextMenuItem>
+        {forwardMenuItems}
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => {
             void window.api.ui.writeClipboardText(JSON.stringify(port, null, 2))
           }}
         >
-          <Copy size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.bdac206faf', 'Copy Details')}
+          <ClipboardList size={13} />
+          {t('auto.components.right.sidebar.PortsPanel.copyDetails', 'Copy details')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => onShowDetails(port)}
         >
           <Info size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
+          {t('auto.components.right.sidebar.PortsPanel.showDetails', 'Show details')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -243,7 +232,7 @@ export function LocalPortRow({
           onSelect={() => onStop(port)}
         >
           <Trash2 size={13} />
-          {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
+          {t('auto.components.right.sidebar.PortsPanel.stopProcess', 'Stop process')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

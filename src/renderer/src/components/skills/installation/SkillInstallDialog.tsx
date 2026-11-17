@@ -92,7 +92,8 @@ export function SkillInstallDialog({
   )
 
   const resolveLink = useCallback(async (value: string): Promise<void> => {
-    const shareId = parseSkillShareId(value)
+    const configuredOrigins = await window.api.skills.shareLinkOrigins().catch(() => [])
+    const shareId = parseSkillShareId(value, configuredOrigins)
     if (!shareId) {
       setError(
         translate(

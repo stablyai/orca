@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, Monitor, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { MobileEmulatorTabIntroCallout } from '../../emulator-pane/tab-intro/MobileEmulatorTabIntroCallout'
 import { NewTabMenuTipSlot } from '../menu-fit/NewTabMenuTipSlot'
@@ -14,6 +14,8 @@ import {
 } from '../model/use-tab-bar-runtime-model'
 import type { TabBarProps } from '../tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { useRemoteDesktopTabEntry } from '@/lib/cloud-remote-desktop/remote-desktop-tab'
+import { openCloudRemoteDesktop } from '@/lib/cloud-remote-desktop/open-cloud-remote-desktop'
 import { TabBarCreateRow } from './TabBarCreateRow'
 import { NEW_TAB_MENU_LAYOUT_SETTING } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
 import {
@@ -63,6 +65,7 @@ export function TabBarStaticCreateMenu({
     onNewFileTab,
     onOpenFileTab
   } = props
+  const remoteDesktop = useRemoteDesktopTabEntry(props.worktreeId)
   const pluginNewFiles = usePluginNewFiles()
   const simulatorAvailable = !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled
 
@@ -109,6 +112,19 @@ export function TabBarStaticCreateMenu({
             icon: <Globe className={ICON_CLASS} />,
             actionId: 'tab.newBrowser',
             run: onNewBrowserTab
+          }
+        ]
+      : []
+  const remoteDesktopItems: TabBarCreateRowItem[] =
+    !terminalOnly && remoteDesktop.available
+      ? [
+          {
+            id: 'remote-desktop',
+            label: remoteDesktop.isGoTo
+              ? t('components.cloudRemoteDesktop.goToTabMenuItem', 'Go to Remote Desktop')
+              : t('components.cloudRemoteDesktop.openTabMenuItem', 'Open Remote Desktop'),
+            icon: <Monitor className={ICON_CLASS} />,
+            run: () => openCloudRemoteDesktop(props.worktreeId)
           }
         ]
       : []
@@ -189,11 +205,13 @@ export function TabBarStaticCreateMenu({
           ...openMarkdownItems,
           ...terminalItems,
           ...browserItems,
+          ...remoteDesktopItems,
           ...simulatorItems
         ]
       : [
           ...terminalItems,
           ...browserItems,
+          ...remoteDesktopItems,
           ...markdownItems,
           ...openMarkdownItems,
           ...simulatorItems

@@ -20,6 +20,8 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
+import { isAnyUsageProviderFetching } from './status-bar-usage-fetching'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -205,20 +207,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
     usageSettings
   )
-  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
-  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching' ||
-    muse?.status === 'fetching'
+  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later. Never on
+  // Orca Cloud: sandboxes don't publish agent usage, and "No usage on Orca Cloud" reads as hours.
+  const onOrcaCloud = remoteOwner !== null && isOrcaCloudEnvironmentId(remoteOwner.environmentId)
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed && !onOrcaCloud
+  const anyFetching = isAnyUsageProviderFetching(rateLimits)
 
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')

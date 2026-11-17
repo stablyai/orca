@@ -1,3 +1,4 @@
+import { markInterruptedTurnContinued } from './startup/cold-restore-resume-startup'
 import { paneResumeRecord } from './startup/pane-resume-record'
 import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
@@ -19,6 +20,7 @@ import { initializeHiddenOutputRestoreState } from './output-restore/hidden-outp
 
 import { bindReplayDataDrain } from './output/replay-data-drain'
 import { bindStartFreshSpawn } from './spawn/fresh-spawn-start'
+import { installCloudAgentCredentialGate } from './spawn/cloud-agent-credential-spawn-gate'
 
 import { bindFreshSpawnFollowReset } from './output/fresh-spawn-follow-reset'
 import { bindReplacedProcessInputModes } from './output/replaced-process-input-modes'
@@ -33,6 +35,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (!startup || startup.resumeSource?.cancelled) {
       return false
     }
+    markInterruptedTurnContinued(startup.interruptedTurnKey)
     const state = useAppStore.getState()
     if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
       session.pendingStartupCommand = {
@@ -218,6 +221,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   bindFreshSpawnFollowReset(session)
   bindReplacedProcessInputModes(session)
   bindStartFreshSpawn(session)
+  installCloudAgentCredentialGate(session)
   bindReplayDataDrain(session)
   session.replayDataCallback = (
     data: string,

@@ -74,6 +74,7 @@ import {
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
+import { hydrateDismissedNoticeFlags } from './ui-slice-hydration-notice-flags'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
@@ -252,19 +253,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
                   ),
                   s.wslMovedProjects
                 ),
-          setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
-          setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
-          setupGuideBrowserMilestoneLegacyComplete:
-            ui.setupGuideBrowserMilestoneLegacyComplete === true,
-          browserImportHintHidden: ui.browserImportHintHidden === true,
-          mobileEmulatorTabIntroDismissed: ui.mobileEmulatorTabIntroDismissed === true,
-          mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
-          projectOrderManualDefaultNoticeDismissed:
-            ui.projectOrderManualDefaultNoticeDismissed === true,
-          // Why: treat only explicit true as dismissed so a false from migration still surfaces.
-          usagePercentageDisplayChangeNoticeDismissed:
-            ui.usagePercentageDisplayChangeNoticeDismissed === true,
-          statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
+          ...hydrateDismissedNoticeFlags(ui),
           ...hydrateOneShotNoticesSeen(ui),
           ...hydrateWslMovedSection(ui),
           ...hydrateAgentReadState(ui),

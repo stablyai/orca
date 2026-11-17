@@ -15,6 +15,7 @@ import {
   resumeRunFailures,
   resumeRunView
 } from '../native-chat-recovery/runs/native-chat-resume-run-view'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 // Keep offers and in-flight/results visible after dialog snooze; statusBarItems must not hide the remaining resume surface.
 
@@ -156,7 +157,7 @@ export function NativeChatResumeStatusSegment({
           key={environment.id}
           iconOnly={iconOnly}
           store={store}
-          machineName={environment.name}
+          machineName={runtimeEnvironmentDisplayName(environment)}
           offerEnabled
         />
       ))}

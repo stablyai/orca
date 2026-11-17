@@ -20,6 +20,8 @@ export type FreshSpawnOptions = {
 }
 
 export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
+  /** Set when the command carries `continue` for an interrupted turn; marked used on launch. */
+  interruptedTurnKey?: string
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
   connectionId?: string | null

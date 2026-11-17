@@ -11,6 +11,7 @@ import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/priva
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
+import { getPortsPaneSearchEntries } from '@/components/settings/ports/ports-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
@@ -22,6 +23,7 @@ import {
   Cable,
   FlaskConical,
   Lock,
+  Plug,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -49,7 +51,7 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'ssh',
-            title: t('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH hosts'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
               'Use existing machines over SSH for files, terminals, Git, and workspaces.'
@@ -62,7 +64,7 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'servers',
-      title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca Servers'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca servers'),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
         : 'Run Orca on another machine and work on it from here.',
@@ -70,11 +72,26 @@ export function buildRemoteSettingsSections(
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'ports',
+            title: t('auto.hooks.useSettingsNavigationMetadata.portsTitle', 'Ports'),
+            description: t(
+              'auto.hooks.useSettingsNavigationMetadata.portsDescriptionSandboxes',
+              'Forward dev servers in sandboxes and on remote hosts to this computer.'
+            ),
+            icon: Plug,
+            searchEntries: getPortsPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {
             id: 'developer-permissions',
-            title: t('auto.hooks.useSettingsNavigationMetadata.d91ae31fbd', 'macOS Permissions'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.d91ae31fbd', 'macOS permissions'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.65ec7d1968',
               'macOS privacy access for terminal-launched developer tools.'
@@ -87,7 +104,7 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'privacy',
-      title: t('auto.hooks.useSettingsNavigationMetadata.3618579df6', 'Privacy & Telemetry'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.3618579df6', 'Privacy & telemetry'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.8400cfe1c1',
         'Anonymous usage data and telemetry controls.'
@@ -116,7 +133,7 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'dev',
-            title: t('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev tools'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.devDescription',
               'Dev-only tools for exercising UI states.'

@@ -1,3 +1,4 @@
+import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
@@ -54,7 +55,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? s.browserTabsByWorktree : null
+    !showSleepingWorkspaces ? selectAwakeBrowserTabsByWorktree(s) : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(

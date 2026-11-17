@@ -8,11 +8,14 @@ import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 export function WorktreeRowOpenInSubMenu({
   worktree,
   connectionId,
-  disabled
+  disabled,
+  cloudEditors
 }: {
   worktree: Pick<Worktree, 'id' | 'path' | 'hostId' | 'runtimeOwnerEnvironmentId'>
   connectionId: string | null
   disabled?: boolean
+  /** An Orca Cloud workspace's editors open over SSH in place of the local-only entries. */
+  cloudEditors?: React.ReactNode
 }): React.JSX.Element {
   // Resolve owner only while its menu is open, avoiding per-row work on unrelated store updates.
   const owner = useAppStore(useShallow((s) => resolveWorktreeRowOpenInRuntimeOwner(s, worktree)))
@@ -24,6 +27,7 @@ export function WorktreeRowOpenInSubMenu({
       ownerUnresolved={owner.ownerUnresolved}
       workspace={{ workspaceId: worktree.id, hostId: worktree.hostId }}
       disabled={disabled}
+      cloudEditors={cloudEditors}
     />
   )
 }

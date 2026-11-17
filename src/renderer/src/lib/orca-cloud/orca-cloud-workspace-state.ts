@@ -1,0 +1,356 @@
+// Pure presentation logic for Orca Cloud workspace surfaces (sidebar dot, status panel, overlays).
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import type {
+  CloudOomEvent,
+  CloudWakeProgressEvent
+} from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+
+/** What the sidebar dot shows; one vocabulary across dot, hover card and overlays. */
+export type CloudDotState =
+  | 'running'
+  | 'sleeping'
+  | 'waking'
+  /** A new sandbox being created (not a wake). */
+  | 'starting'
+  | 'unresponsive'
+  | 'archived'
+  /** Creating the sandbox failed. */
+  | 'failed'
+  /** Waking an existing sandbox failed; the workspace itself is fine. */
+  | 'wakeFailed'
+  | 'unknown'
+
+/** A wake event older than this without a terminal event is treated as stale (the step timed out). */
+export const WAKE_STALE_MS = 4 * 60_000
+/** A failed wake's error card stays this long unless dismissed or retried. */
+export const WAKE_FAILED_STALE_MS = 10 * 60_000
+
+export function isWakeActive(wake: CloudWakeProgressEvent | undefined, now: number): boolean {
+  return Boolean(
+    wake &&
+    (wake.phase === 'waking' || wake.phase === 'connecting') &&
+    now - wake.at < WAKE_STALE_MS
+  )
+}
+
+export function isWakeFailedFresh(wake: CloudWakeProgressEvent | undefined, now: number): boolean {
+  return Boolean(wake && wake.phase === 'failed' && now - wake.at < WAKE_FAILED_STALE_MS)
+}
+
+/**
+ * Priority: an in-flight wake beats everything (the user just asked for it), then the
+ * control plane's state; the desktop's own sleep record only before the first status read.
+ */
+/**
+ * Main said this wake is ready after the last status read (and, for the local VM record, before
+ * it is re-read): those reads are stale. Nothing may show the workspace asleep from them, on the
+ * way in (pill still "Connecting…") or out (#408); only a newer read, or a failed wake, can.
+ */
+export function isWakeReadyAfterRead(
+  wake: CloudWakeProgressEvent | undefined,
+  status: HostedWorkspaceStatus | null | undefined
+): boolean {
+  return wake?.phase === 'ready' && (!status || status.checkedAt < wake.at)
+}
+
+export function deriveCloudDotState(input: {
+  status: HostedWorkspaceStatus | null
+  wake: CloudWakeProgressEvent | undefined
+  sleeping: boolean
+  now: number
+}): CloudDotState {
+  const { status, wake, sleeping, now } = input
+  if (isWakeActive(wake, now)) {
+    return 'waking'
+  }
+  if (status?.state === 'archived' || status?.archive) {
+    return 'archived'
+  }
+  if (isWakeFailedFresh(wake, now)) {
+    return 'wakeFailed'
+  }
+  if (status?.state === 'failed') {
+    return 'failed'
+  }
+  // Main said this wake is ready after the last status read: that read (still "sleeping" or
+  // "waking" until the re-read lands) is stale, and the VM answers. Without this the row read
+  // "Asleep" for a moment after the workspace went live.
+  if (isWakeReadyAfterRead(wake, status)) {
+    return 'running'
+  }
+  // The control plane is the truth for the VM; the desktop's own sleep record only fills in
+  // before the first status read (a cloud workspace with no open panes is not asleep).
+  if (!status) {
+    return sleeping ? 'sleeping' : 'unknown'
+  }
+  switch (status.state) {
+    case 'ready':
+      return 'running'
+    case 'unresponsive':
+      return 'unresponsive'
+    case 'sleeping':
+    case 'stopping':
+      return 'sleeping'
+    case 'waking':
+      return 'waking'
+    case 'provisioning':
+      return 'starting'
+  }
+}
+
+/** An OOM notice shows for kills the user has not dismissed. */
+export function visibleOom(
+  oom: CloudOomEvent | undefined,
+  dismissedKills: number | undefined
+): CloudOomEvent | null {
+  if (!oom) {
+    return null
+  }
+  return dismissedKills !== undefined && oom.oomKills <= dismissedKills ? null : oom
+}
+
+export function formatBytes(bytes: number): string {
+  const gb = bytes / 1e9
+  const number = (value: number, digits: number) =>
+    new Intl.NumberFormat(getIntlLocale(), {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits
+    }).format(value)
+  if (gb >= 10) {
+    return translate('orcaCloudWorkspace.bytes.gb', '{{value}} GB', { value: number(gb, 0) })
+  }
+  if (gb >= 1) {
+    return translate('orcaCloudWorkspace.bytes.gb', '{{value}} GB', { value: number(gb, 1) })
+  }
+  return translate('orcaCloudWorkspace.bytes.mb', '{{value}} MB', {
+    value: number(Math.max(0, bytes / 1e6), 0)
+  })
+}
+
+/** "45s", "12m", "3h 05m", "2d 4h" (units translated). */
+export function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) {
+    return translate('orcaCloudWorkspace.duration.seconds', '{{s}}s', { s })
+  }
+  const m = Math.floor(s / 60)
+  if (m < 60) {
+    return translate('orcaCloudWorkspace.duration.minutes', '{{m}}m', { m })
+  }
+  const h = Math.floor(m / 60)
+  if (h < 24) {
+    return translate('orcaCloudWorkspace.duration.hoursMinutes', '{{h}}h {{m}}m', {
+      h,
+      m: String(m % 60).padStart(2, '0')
+    })
+  }
+  return translate('orcaCloudWorkspace.duration.daysHours', '{{d}}d {{h}}h', {
+    d: Math.floor(h / 24),
+    h: h % 24
+  })
+}
+
+/** Hours with one decimal under 100 ("0.4", "12.5", "140"). */
+function hoursNumber(ms: number): string {
+  const h = ms / 3_600_000
+  const digits = h >= 100 ? 0 : 1
+  return new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(h)
+}
+
+/** Hours used: "0.4 h", "12.5 h", "140 h". */
+export function formatHours(ms: number): string {
+  return translate('orcaCloudWorkspace.duration.hours', '{{value}} h', { value: hoursNumber(ms) })
+}
+
+export function formatCents(cents: number): string {
+  return new Intl.NumberFormat(getIntlLocale(), { style: 'currency', currency: 'USD' }).format(
+    Math.max(0, cents) / 100
+  )
+}
+
+// Intl formatter caches key on option identity, so this must be a module constant.
+const DATE_MEDIUM: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+/** Past this, a count of days ("5,362 days ago") stops being readable: show the date instead. */
+const RELATIVE_LIMIT_SECONDS = 30 * 86_400
+
+/** "5 minutes ago", "yesterday" in the UI language; "Mar 6, 2012" beyond about a month. */
+export function formatRelative(at: number, now: number): string {
+  const seconds = Math.round((at - now) / 1000)
+  if (Math.abs(seconds) > RELATIVE_LIMIT_SECONDS) {
+    return uiDateTimeFormat(DATE_MEDIUM).format(at)
+  }
+  const rtf = new Intl.RelativeTimeFormat(getIntlLocale(), { numeric: 'auto' })
+  const abs = Math.abs(seconds)
+  if (abs < 60) {
+    return rtf.format(seconds, 'second')
+  }
+  if (abs < 3600) {
+    return rtf.format(Math.round(seconds / 60), 'minute')
+  }
+  if (abs < 86_400) {
+    return rtf.format(Math.round(seconds / 3600), 'hour')
+  }
+  return rtf.format(Math.round(seconds / 86_400), 'day')
+}
+
+/** "Dec 8" in the UI language. */
+export function formatShortDate(at: number): string {
+  return new Intl.DateTimeFormat(getIntlLocale(), { month: 'short', day: 'numeric' }).format(at)
+}
+
+// City names are proper nouns: shown as-is in every language.
+const REGION_CITIES: Record<string, string> = {
+  iad1: 'Washington, D.C.',
+  cle1: 'Cleveland',
+  pdx1: 'Portland',
+  sfo1: 'San Francisco',
+  yul1: 'Montréal',
+  gru1: 'São Paulo',
+  dub1: 'Dublin',
+  lhr1: 'London',
+  cdg1: 'Paris',
+  fra1: 'Frankfurt',
+  arn1: 'Stockholm',
+  cpt1: 'Cape Town',
+  dxb1: 'Dubai',
+  bom1: 'Mumbai',
+  sin1: 'Singapore',
+  hkg1: 'Hong Kong',
+  icn1: 'Seoul',
+  kix1: 'Osaka',
+  hnd1: 'Tokyo',
+  syd1: 'Sydney'
+}
+
+/** "Portland (pdx1)"; the bare code for a region this build doesn't know. */
+export function formatCloudRegion(region: string): string {
+  const city = REGION_CITIES[region]
+  return city ? `${city} (${region})` : region
+}
+
+type DiffStat = { files: number; insertions: number; deletions: number }
+
+/** Parses a `--shortstat` line ("2 files changed, 41 insertions(+), 6 deletions(-)"). */
+export function parseDiffStat(line: string | null | undefined): DiffStat | null {
+  if (!line) {
+    return null
+  }
+  const files = /(\d+) files? changed/.exec(line)
+  if (!files) {
+    return null
+  }
+  const insertions = /(\d+) insertions?\(\+\)/.exec(line)
+  const deletions = /(\d+) deletions?\(-\)/.exec(line)
+  return {
+    files: Number(files[1]),
+    insertions: insertions ? Number(insertions[1]) : 0,
+    deletions: deletions ? Number(deletions[1]) : 0
+  }
+}
+
+export type ChangeKind =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'untracked'
+  | 'unknown'
+
+/** Porcelain letters ("M", "??") or the offline cache's words ("modified") to one kind. */
+export function changeKind(status: string): ChangeKind {
+  const value = status.trim()
+  switch (value) {
+    case 'M':
+    case 'modified':
+      return 'modified'
+    case 'A':
+    case 'added':
+      return 'added'
+    case 'D':
+    case 'deleted':
+      return 'deleted'
+    case 'R':
+    case 'renamed':
+      return 'renamed'
+    case 'C':
+    case 'copied':
+      return 'copied'
+    case '??':
+    case 'U':
+    case 'untracked':
+      return 'untracked'
+    default:
+      return /^[MADRC]/.test(value) ? changeKind(value[0]!) : 'unknown'
+  }
+}
+
+export const CHANGE_LETTER: Record<ChangeKind, string> = {
+  modified: 'M',
+  added: 'A',
+  deleted: 'D',
+  renamed: 'R',
+  copied: 'C',
+  untracked: 'U',
+  unknown: '?'
+}
+
+/** "14.6 sandbox hours" (one product noun, per the glossary). */
+export function formatSandboxHours(ms: number): string {
+  return translate('orcaCloudWorkspace.sandboxHoursValue', '{{value}} sandbox hours', {
+    value: hoursNumber(ms)
+  })
+}
+
+export function percentOf(used: number, total: number): number {
+  return total > 0 ? Math.min(100, Math.max(0, Math.round((used / total) * 100))) : 0
+}
+
+/** Elapsed whole seconds for the waking overlay's counter. */
+export function wakeElapsedSeconds(startedAt: number, now: number): number {
+  return Math.max(0, Math.floor((now - startedAt) / 1000))
+}
+
+export type FileTreeNode = {
+  name: string
+  path: string
+  children: FileTreeNode[]
+}
+
+/** Builds a sorted directory tree (directories first) from a flat path list. */
+export function buildFileTree(files: readonly string[]): FileTreeNode[] {
+  const root: FileTreeNode = { name: '', path: '', children: [] }
+  const index = new Map<string, FileTreeNode>([['', root]])
+  for (const file of files) {
+    const parts = file.split('/').filter(Boolean)
+    let parent = root
+    let path = ''
+    for (const part of parts) {
+      path = path ? `${path}/${part}` : part
+      let node = index.get(path)
+      if (!node) {
+        node = { name: part, path, children: [] }
+        index.set(path, node)
+        parent.children.push(node)
+      }
+      parent = node
+    }
+  }
+  const sort = (nodes: FileTreeNode[]): FileTreeNode[] => {
+    nodes.sort((a, b) => {
+      const aDir = a.children.length > 0
+      const bDir = b.children.length > 0
+      return aDir === bDir ? a.name.localeCompare(b.name) : aDir ? -1 : 1
+    })
+    for (const node of nodes) {
+      sort(node.children)
+    }
+    return nodes
+  }
+  return sort(root.children)
+}

@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { Folder, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { WorkspaceHostGlyph } from '@/components/orca-cloud/WorkspaceHostGlyph'
+import { Folder, GitBranch, GitCommitHorizontal } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -53,6 +55,7 @@ export function NativeChatComposerWorkspace({
     head
   } = useAppStore(useShallow(selector))
 
+  const isCloud = useIsCloudWorkspace(rowWorktreeId)
   const identity = getWorktreeGitIdentityDisplay({ branch, head })
   const label =
     identity?.kind === 'branch'
@@ -125,8 +128,14 @@ export function NativeChatComposerWorkspace({
               : 'hidden min-w-0 max-w-40 shrink items-center gap-1 @sm:flex'
           }
         >
-          <Server className="size-3 shrink-0" aria-hidden />
-          {hostId === 'local' ? (
+          <WorkspaceHostGlyph
+            worktreeId={rowWorktreeId ?? ''}
+            hostId={hostId}
+            badgeRingClassName="bg-chat-canvas"
+          />
+          {isCloud ? (
+            <span className={FOOTER_TEXT}>{t('orcaCloudWorkspace.productName', 'Orca Cloud')}</span>
+          ) : hostId === 'local' ? (
             <LocalMachineName name={machine ?? ''} />
           ) : (
             <span className={FOOTER_TEXT} title={machine}>

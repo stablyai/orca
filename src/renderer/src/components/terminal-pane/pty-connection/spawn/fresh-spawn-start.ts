@@ -21,6 +21,7 @@ import type {
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { findTerminalTabForPane } from '../terminal-tab-id'
+import { installAgentSignInSpawnGate } from './agent-sign-in-spawn-gate'
 
 export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
   if (!session.transport.getPtyId()) {
@@ -319,4 +320,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   }
   session.startFreshSpawn = (...args: Parameters<typeof startFreshSpawn>) =>
     runPaneResumeAttempt(session, () => startFreshSpawn(...args))
+  // Outside the resume attempt: a launch held for sign-in owns no retained conversation until it runs.
+  installAgentSignInSpawnGate(session)
 }

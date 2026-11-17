@@ -21,7 +21,7 @@ import { useGrabMode } from '../annotate/grab/useGrabMode'
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
-import { BrowserPageChromeHeader } from './browser-page-chrome-header'
+import { BrowserPageChromeHeaderOrCloudDesktop } from './browser-page-chrome-header-cloud'
 import { BrowserPageContextMenu } from './context-menu/browser-page-context-menu'
 import { BrowserPageViewportOverlays } from './browser-page-viewport-overlays'
 import { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
@@ -328,7 +328,8 @@ export function BrowserPagePane({
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
       />
-      <BrowserPageChromeHeader
+      <BrowserPageChromeHeaderOrCloudDesktop
+        viewportContainer={pageViewportContainer}
         chromeHeaderRef={chromeHeaderRef}
         browserTab={browserTab}
         workspaceId={workspaceId}

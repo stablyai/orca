@@ -81,6 +81,41 @@ export function usePaneProcessRestart({
   | 'updateTabTitle'
   | 'worktreeId'
 >) {
+  /**
+   * Let go of the pane's current PTY without connecting a new one: its transport is destroyed, so its
+   * own recovery can no longer reattach (or wake the host leaf) on its own. Returns the PTY id local
+   * main should replace, if any.
+   */
+  const releasePaneForRestart = useCallback(
+    (paneId: number): string | null => {
+      const transport = paneTransportsRef.current.get(paneId)
+      const panePtyBinding = panePtyBindingsRef.current.get(paneId)
+      const existingPtyId = transport?.getPtyId()
+      if (existingPtyId) {
+        suppressPtyExit(existingPtyId)
+        clearCodexRestartNotice(existingPtyId)
+        clearTabPtyId(tabId, existingPtyId)
+      }
+      panePtyBinding?.dispose()
+      panePtyBindingsRef.current.delete(paneId)
+      if (transport || panePtyBinding) {
+        syncPanePtyLayoutBinding(paneId, null)
+      }
+      const replacesPtyId = releasePaneTransportForRestart(transport)
+      paneTransportsRef.current.delete(paneId)
+      return replacesPtyId
+    },
+    [
+      clearCodexRestartNotice,
+      clearTabPtyId,
+      panePtyBindingsRef,
+      paneTransportsRef,
+      suppressPtyExit,
+      syncPanePtyLayoutBinding,
+      tabId
+    ]
+  )
+
   const handleRestartPane = useCallback(
     (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
       const manager = managerRef.current
@@ -94,19 +129,7 @@ export function usePaneProcessRestart({
         () => true
       )
       try {
-        const transport = paneTransportsRef.current.get(paneId)
-        const panePtyBinding = panePtyBindingsRef.current.get(paneId)
-        const existingPtyId = transport?.getPtyId()
-        if (existingPtyId) {
-          suppressPtyExit(existingPtyId)
-          clearCodexRestartNotice(existingPtyId)
-          clearTabPtyId(tabId, existingPtyId)
-        }
-        panePtyBinding?.dispose()
-        panePtyBindingsRef.current.delete(paneId)
-        syncPanePtyLayoutBinding(paneId, null)
-        const replacesPtyId = releasePaneTransportForRestart(transport)
-        paneTransportsRef.current.delete(paneId)
+        const replacesPtyId = releasePaneForRestart(paneId)
         setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
         setTerminalError(null)
         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
@@ -161,7 +184,7 @@ export function usePaneProcessRestart({
       }
     },
     [
-      clearCodexRestartNotice,
+      releasePaneForRestart,
       clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
@@ -188,7 +211,6 @@ export function usePaneProcessRestart({
       setRuntimePaneTitle,
       setTerminalError,
       showRestoredSessionBanner,
-      suppressPtyExit,
       syncPanePtyLayoutBinding,
       tabId,
       updateTabPtyId,
@@ -197,5 +219,5 @@ export function usePaneProcessRestart({
       setTerminalErrorsByPaneId
     ]
   )
-  return { handleRestartPane }
+  return { handleRestartPane, releasePaneForRestart }
 }

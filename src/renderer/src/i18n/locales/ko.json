@@ -904,11 +904,9 @@
             "2f6c78a039": "프로필 인증을 새로 고치지 못했습니다",
             "a37b5e6d37": "Orca에서 로그아웃했습니다",
             "83600521e7": "로그아웃하지 못했습니다",
-            "76deec8f58": "조직을 전환하지 못했습니다",
             "7d4bc516ee": "프로필을 전환하지 못했습니다",
             "f518e89aa5": "프로젝트가 해당 프로필에 이미 있습니다",
-            "f03ae7f27b": "프로젝트를 전송하지 못했습니다",
-            "signInTimedOut": "로그인 시간이 초과되었습니다"
+            "f03ae7f27b": "프로젝트를 전송하지 못했습니다"
           }
         },
         "runtime": {
@@ -2120,10 +2118,7 @@
         "destroyDisabled": "삭제 비활성화됨",
         "destroyConfigured": "삭제 명령 설정됨",
         "noDestroyConfigured": "삭제 명령 없음",
-        "ephemeralVm": "워크스페이스별 환경",
-        "chooseRunTarget": "대상 선택",
         "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
-        "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
         "branchName": "브랜치 이름",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "연결 시간이 초과되었습니다. 백그라운드에서 여전히 연결 중일 수 있습니다.",
@@ -2132,12 +2127,9 @@
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
         "addSshHostHint": "SSH로 기존 컴퓨터 사용",
-        "addRemoteOrcaServer": "원격 Orca 서버 추가",
-        "addRemoteOrcaServerHint": "다른 Orca 런타임 페어링",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
         "setLocation": "프로젝트 위치 설정",
-        "setLocationOnHost": "{{host}}에 프로젝트 위치 설정",
         "setLocationTooltip": "폴더를 선택하거나 이 프로젝트를 {{host}}에 복제하세요.",
         "connect": "연결",
         "reconnect": "다시 연결",
@@ -3225,12 +3217,8 @@
           "WorktreeCreationPanel": {
             "dabd226118": "닫기",
             "34dd5ee38b": "다시 시도",
-            "ed2a664f8b": "작업 트리를 만들 수 없습니다.",
-            "a3346fc6ed": "작업 트리 생성 취소",
             "532aea14ce": "취소",
-            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
-            "cancelProvisioning": "취소",
-            "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…"
+            "cancelProvisioning": "취소"
           }
         }
       },
@@ -5659,6 +5647,10 @@
           "allProjects": "모든 프로젝트",
           "selectedProjects_other": "프로젝트 {{count}}개"
         },
+        "SidebarAccountMenu": {
+          "account": "계정",
+          "signIn": "로그인"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca 재시작",
           "29c56f30ee": "업데이트 확인",
@@ -6283,7 +6275,6 @@
           "modalInstallDescription": "에이전트용 Linear 스킬을 설치합니다."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "폴더 워크스페이스 만들기",
           "create": "워크스페이스 만들기"
         },
         "AddRepoHostSelector": {
@@ -12965,8 +12956,6 @@
             "c7e920aa7c": "{{value0}}(으)로 공개",
             "e740075063": "제거",
             "b3548e59f4": "편집",
-            "fe2730d050": "{{value0}} 복사",
-            "b22b128b2a": "브라우저에서 열기",
             "75aeea592f": "브라우저에서 {{value0}} 열기",
             "de349d4560": "{{value0}} 열기",
             "907eb53ed2": "포트 전달",
@@ -12987,10 +12976,6 @@
             "729be0b4e5": "종류",
             "0f1d8cd324": "바인딩",
             "1c1c18cefc": "주소",
-            "f9528da632": "프로세스 중지",
-            "a223459512": "세부정보 표시",
-            "bdac206faf": "세부정보 복사",
-            "792baeb7ed": "주소 복사",
             "d41a8241ec": "포트",
             "a2a9fc6899": "로컬 포트가 감지되지 않았습니다.",
             "f59c783b7a": "{{value0}}에서 포트 스캔을 사용할 수 없습니다: {{value1}}",
@@ -17685,7 +17670,6 @@
           "signout": {
             "confirm": {
               "title": "Orca에서 로그아웃할까요?",
-              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
@@ -20113,7 +20097,6 @@
       "startInTerminal": "터미널에서 {{value0}} 시작"
     },
     "newWorkspace": {
-      "agentOptional": "에이전트 [선택 사항]",
       "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
       "directSetup": {
         "run": "Run setup",

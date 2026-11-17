@@ -1416,11 +1416,9 @@
             "2f6c78a039": "Profil-Authentifizierung konnte nicht aktualisiert werden",
             "a37b5e6d37": "Von Orca abgemeldet",
             "83600521e7": "Abmelden fehlgeschlagen",
-            "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
             "f518e89aa5": "Projekt existiert bereits in diesem Profil",
-            "f03ae7f27b": "Projekt konnte nicht übertragen werden",
-            "signInTimedOut": "Zeitüberschreitung bei der Anmeldung"
+            "f03ae7f27b": "Projekt konnte nicht übertragen werden"
           }
         },
         "runtime": {
@@ -2646,23 +2644,17 @@
         "destroyDisabled": "destroy deaktiviert",
         "destroyConfigured": "destroy konfiguriert",
         "noDestroyConfigured": "kein destroy",
-        "ephemeralVm": "Umgebung pro Arbeitsbereich",
-        "chooseRunTarget": "Ziel auswählen",
         "noRunTargets": "Für dieses Projekt sind keine Ausführungsziele bereit.",
-        "perWorkspaceEnvHint": "Bei Bedarf eine Umgebung anhand eines Rezepts bereitstellen",
         "branchName": "Branch-Name",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Zeitüberschreitung beim Verbindungsaufbau. Die Verbindung wird möglicherweise noch im Hintergrund hergestellt.",
         "connectingHost": "Verbindung wird hergestellt…",
         "connectHost": "Verbinden",
         "setLocation": "Projektpfad festlegen",
-        "setLocationOnHost": "Projektpfad auf {{host}} festlegen",
         "setLocationTooltip": "Einen Ordner auswählen oder dieses Projekt auf {{host}} klonen.",
         "addHost": "Host hinzufügen",
         "addSshHost": "SSH-Host hinzufügen",
         "addSshHostHint": "Einen vorhandenen Rechner über SSH verwenden",
-        "addRemoteOrcaServer": "Entfernten Orca-Server hinzufügen",
-        "addRemoteOrcaServerHint": "Eine weitere Orca-Laufzeitumgebung koppeln",
         "hostConnectionFailed": "Verbindung fehlgeschlagen",
         "connect": "Verbinden",
         "reconnect": "Erneut verbinden",
@@ -3815,12 +3807,8 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Schließen",
             "34dd5ee38b": "Erneut versuchen",
-            "ed2a664f8b": "Worktree konnte nicht erstellt werden",
-            "a3346fc6ed": "Worktree-Erstellung abbrechen",
             "532aea14ce": "Abbrechen",
-            "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
-            "cancelProvisioning": "Abbrechen",
-            "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
+            "cancelProvisioning": "Abbrechen"
           }
         }
       },
@@ -6362,6 +6350,10 @@
           "selectedProjects_one": "{{count}} Projekt",
           "selectedProjects_other": "{{count}} Projekte"
         },
+        "SidebarAccountMenu": {
+          "account": "Konto",
+          "signIn": "Anmelden"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca neu starten",
           "29c56f30ee": "Nach Updates suchen",
@@ -6997,7 +6989,6 @@
           "modalInstallDescription": "Den Linear-Skill für Agenten installieren."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Ordner-Arbeitsbereich erstellen",
           "create": "Arbeitsbereich erstellen"
         },
         "WorkspaceKanbanDrawer": {
@@ -13640,8 +13631,6 @@
             "c7e920aa7c": "Als {{value0}} angekündigt",
             "e740075063": "Entfernen",
             "b3548e59f4": "Bearbeiten",
-            "fe2730d050": "{{value0}} kopieren",
-            "b22b128b2a": "Im Browser öffnen",
             "75aeea592f": "{{value0}} im Browser öffnen",
             "de349d4560": "Öffnet {{value0}}",
             "907eb53ed2": "Port weiterleiten",
@@ -13662,10 +13651,6 @@
             "729be0b4e5": "Art",
             "0f1d8cd324": "Bindung",
             "1c1c18cefc": "Adresse",
-            "f9528da632": "Prozess beenden",
-            "a223459512": "Details anzeigen",
-            "bdac206faf": "Details kopieren",
-            "792baeb7ed": "Adresse kopieren",
             "d41a8241ec": "Port",
             "a2a9fc6899": "Keine lokalen Ports erkannt",
             "f59c783b7a": "Port-Scan auf {{value0}} nicht verfügbar: {{value1}}",
@@ -18429,7 +18414,6 @@
           "signout": {
             "confirm": {
               "title": "Von Orca abmelden?",
-              "description": "Artefakte und Orca Relay sind bis zur erneuten Anmeldung nicht verfügbar. Lokale Projekte und Worktrees sind davon nicht betroffen.",
               "cancel": "Abbrechen",
               "action": "Abmelden"
             }
@@ -20838,7 +20822,6 @@
       "startInTerminal": "{{value0}} in einem Terminal starten"
     },
     "newWorkspace": {
-      "agentOptional": "Agent [optional]",
       "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
       "directSetup": {
         "run": "Run setup",

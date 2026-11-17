@@ -7,16 +7,21 @@ export function workspaceNavigationToastAction({
   workspaceId,
   executionHostId,
   isFolder = true,
+  label: labelOverride,
   onNavigate
 }: {
   workspaceId: string
   executionHostId?: ExecutionHostId
   isFolder?: boolean
+  /** Its own words for the same action (a cloud move's "Open here"). */
+  label?: string
   onNavigate?: () => void
 }) {
-  const label = isFolder
-    ? translate('components.workspace.creation.goToWorkspace', 'Go to workspace')
-    : translate('components.workspace.creation.goToWorktree', 'Go to worktree')
+  const label = labelOverride
+    ? labelOverride
+    : isFolder
+      ? translate('components.workspace.creation.goToWorkspace', 'Go to workspace')
+      : translate('components.workspace.creation.goToWorktree', 'Go to worktree')
   return {
     label: (
       <span className="inline-flex items-center gap-1.5">

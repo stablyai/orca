@@ -24,6 +24,7 @@ export function AgentPickerAgentTabs({
   entries,
   pane,
   blankTerminal,
+  statusLabels,
   defaultAgent,
   onSetDefault,
   onSelect
@@ -32,11 +33,14 @@ export function AgentPickerAgentTabs({
   /** Null while the Blank Terminal tile is the selected tab. */
   pane: Agent | null
   blankTerminal?: AgentPickerChoice
+  /** A muted status per agent, such as Orca Cloud's "Not set up"; none means ready. */
+  statusLabels?: ReadonlyMap<Agent, string>
   defaultAgent?: Agent | 'blank' | null
   onSetDefault?: (agent: Agent) => void
   onSelect: (agent: Agent) => void
 }) {
   const t = useTranslate()
+  const paneStatus = pane ? statusLabels?.get(pane) : undefined
   const rail = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const node = rail.current
@@ -57,7 +61,7 @@ export function AgentPickerAgentTabs({
     node.addEventListener('wheel', onWheel, { passive: false })
     return () => node.removeEventListener('wheel', onWheel)
   }, [])
-  return (
+  const railNode = (
     // Why: once one tab's label shows, the next tab's shows without a second wait.
     <TooltipProvider skipDelayDuration={300}>
       <div
@@ -110,6 +114,7 @@ export function AgentPickerAgentTabs({
         ) : null}
         {entries.map((entry) => {
           const missing = entry.surfaces.length === 0
+          const status = statusLabels?.get(entry.agent)
           return (
             <AgentDefaultContextMenu
               key={entry.agent}
@@ -117,18 +122,38 @@ export function AgentPickerAgentTabs({
               onSetDefault={onSetDefault && !missing ? () => onSetDefault(entry.agent) : undefined}
             >
               <AgentPickerRailTab
-                label={entry.label}
+                label={status ? `${entry.label} · ${status}` : entry.label}
                 selected={entry.agent === pane}
                 missing={missing}
                 onClick={() => onSelect(entry.agent)}
               >
-                <AgentVariantIcon agent={entry.agent} size={16} />
+                <span className="relative">
+                  <AgentVariantIcon agent={entry.agent} size={16} />
+                  {status ? (
+                    <span className="absolute -top-0.5 -right-1 size-1.5 rounded-full bg-muted-foreground" />
+                  ) : null}
+                </span>
               </AgentPickerRailTab>
             </AgentDefaultContextMenu>
           )
         })}
       </div>
     </TooltipProvider>
+  )
+  // Beside the rail, never in it: the status must not make upstream's rail scroll.
+  return paneStatus ? (
+    <div className="flex shrink-0 items-stretch">
+      <div className="min-w-0 flex-1">{railNode}</div>
+      {/* The tab's label already says it; this keeps the shown agent's status in view. */}
+      <span
+        aria-hidden
+        className="flex shrink-0 items-center border-b border-border pr-2.5 pl-2 text-xs text-muted-foreground"
+      >
+        {paneStatus}
+      </span>
+    </div>
+  ) : (
+    railNode
   )
 }
 

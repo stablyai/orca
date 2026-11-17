@@ -13,6 +13,8 @@ export type ComposerCardSourceProps = Pick<
   | 'ephemeralVmRecipes'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
+  | 'orcaCloudAvailability'
+  | 'orcaCloudDropped'
   | 'name'
   | 'branchNameOverride'
   | 'parentWorktreeId'

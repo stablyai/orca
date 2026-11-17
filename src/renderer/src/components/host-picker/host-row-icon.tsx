@@ -6,6 +6,8 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
+export { HostGlyph, vmStateToDot, type HostGlyphKind } from '../host-glyph-cloud'
+
 /** The local machine isn't a server — a monitor glyph reads as "this computer". */
 export function HostRowIcon({
   hostId,

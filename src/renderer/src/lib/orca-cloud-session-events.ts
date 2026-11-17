@@ -1,0 +1,171 @@
+// Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
+import { installPairedCloudWorkspaceRegistry } from './orca-cloud/paired-cloud-workspace-registry'
+import { syncRunActionsWithWake } from '@/lib/orca-cloud/cloud-run-action-relaunch'
+import {
+  armRunActionRelaunch,
+  disarmRunActionRelaunch,
+  relaunchInterruptedRunActions
+} from '@/lib/run-actions/run-action-controller'
+import { offerPendingCloudTransfers } from '@/lib/orca-cloud-transfer-reapply'
+import {
+  armInterruptedTurnsForHostRestart,
+  continueInterruptedTurns,
+  disarmInterruptedTurns
+} from '@/lib/agent-session/resume/interrupted-turn-continue'
+import { createElement } from 'react'
+import { toast } from 'sonner'
+import { noteCloudRolloverState } from '@/lib/orca-cloud/orca-cloud-rollover-state'
+import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
+import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
+import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
+import {
+  getCloudWorkspaceSnapshot,
+  installOrcaCloudWorkspaceStore,
+  refreshCloudWorkspaceStatus
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { installCloudActivityRefresh } from '@/lib/orca-cloud/cloud-guard-kill-refresh'
+import { installCloudPredictiveWake } from '@/lib/orca-cloud/install-cloud-predictive-wake'
+import { installCloudSetupSession } from '@/lib/orca-cloud/install-cloud-setup-session'
+import { notePredictiveWakeIdleSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
+import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'
+import {
+  dismissOrcaCloudRestartWarning,
+  noteOrcaCloudRolloverState,
+  showOrcaCloudRestartWarningToast
+} from '@/lib/orca-cloud-session-toasts'
+
+function openWorkspace(workspaceId: string): void {
+  if (findWorktreeById(useAppStore.getState(), workspaceId)) {
+    void activateWorktreeFromSidebar(workspaceId)
+    return
+  }
+  toast.error(
+    translate('auto.lib.orcaCloudSession.workspaceGone', 'That workspace is no longer in Orca.')
+  )
+}
+
+/** The sidebar's name for the workspace; main only knows the name it was created with. */
+function displayName(
+  workspaceId: string | null,
+  fallback: string | null | undefined
+): string | null {
+  const worktree = workspaceId ? findWorktreeById(useAppStore.getState(), workspaceId) : undefined
+  return worktree?.displayName || fallback || null
+}
+
+function restartNow(workspaceId: string): Promise<HostedSessionRestartResult> {
+  return window.api.ephemeralVm.restartCloudSession({ workspaceId })
+}
+
+export function installOrcaCloudSessionEvents(): () => void {
+  // Moves left part-applied before a restart: offer "Apply changes again" once the window is up.
+  void offerPendingCloudTransfers().catch(() => 0)
+  const api = window.api?.ephemeralVm
+  if (!api?.onCloudSessionWarning || !api.onCloudIdleSleepRequested) {
+    return () => {}
+  }
+  const disposeWarning = api.onCloudSessionWarning((event) =>
+    showOrcaCloudRestartWarningToast(
+      { ...event, workspaceName: displayName(event.workspaceId, event.workspaceName) },
+      { restartNow, open: openWorkspace }
+    )
+  )
+  const disposeState =
+    api.onCloudSessionState?.(({ workspaceId, state }) => {
+      if (workspaceId) {
+        noteOrcaCloudRolloverState(workspaceId, displayName(workspaceId, null), state)
+        noteCloudRolloverState(workspaceId, state)
+        // A rollover restarts the host under any working agent: carry its turn on afterwards.
+        if (state === 'restarting') {
+          armInterruptedTurnsForHostRestart(workspaceId)
+          armRunActionRelaunch(workspaceId)
+        } else if (state === 'running') {
+          void continueInterruptedTurns(workspaceId)
+          // The rollover replaced the host, so the dev servers it ran are gone: start them again.
+          void relaunchInterruptedRunActions(workspaceId)
+        } else {
+          disarmInterruptedTurns(workspaceId)
+          disarmRunActionRelaunch(workspaceId)
+        }
+      }
+    }) ?? (() => {})
+  const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId, idleMs }) => {
+    const worktree = workspaceId ? findWorktreeById(useAppStore.getState(), workspaceId) : null
+    if (!workspaceId || !worktree) {
+      return
+    }
+    void runSleepWorktree(workspaceId).then((results) => {
+      if (results.some((result) => result.workspaceId === workspaceId && result.completed)) {
+        notePredictiveWakeIdleSlept(workspaceId)
+        dismissOrcaCloudRestartWarning(workspaceId)
+        showIdleSleepNotice(workspaceId, worktree.displayName, idleMs ?? null)
+      }
+    })
+  })
+  // Woken VMs have fresh shells: run actions (dev servers) that were up start again.
+  const disposeRunActionWake =
+    window.api?.orcaCloudWorkspace?.onWakeProgress?.(syncRunActionsWithWake) ?? (() => {})
+  const disposeStore = installOrcaCloudWorkspaceStore()
+  // MEMGUARD: someone came back (focus) or is typing: re-read the active cloud workspace so a guard
+  // kill's banner shows now (throttled to one read per 15 s).
+  const disposeActivity = installCloudActivityRefresh({
+    activeWorkspaceId: () => useAppStore.getState().activeWorktreeId,
+    isRunningCloud: (id) => getCloudWorkspaceSnapshot().status[id]?.status?.state === 'ready',
+    refresh: (id) => void refreshCloudWorkspaceStatus(id)
+  })
+  const disposePaired = installPairedCloudWorkspaceRegistry()
+  const disposePredictive = installCloudPredictiveWake()
+  const disposeSetup = installCloudSetupSession()
+  return () => {
+    disposeSetup()
+    disposeWarning()
+    disposeState()
+    disposeIdle()
+    disposeStore()
+    disposeActivity()
+    disposePaired()
+    disposeRunActionWake()
+    disposePredictive()
+  }
+}
+
+/** "<name> slept after N minutes idle · Wake" (N from the control plane, via the event): the quiet receipt for an automatic sleep. */
+export function showIdleSleepNotice(
+  workspaceId: string,
+  name: string,
+  idleMs: number | null
+): void {
+  const minutes = idleMs ? Math.max(1, Math.round(idleMs / 60_000)) : null
+  toast(
+    minutes
+      ? translate(
+          'orcaCloudWorkspace.idleSleptMinutes',
+          '{{name}} slept after {{count}} minutes idle',
+          {
+            name,
+            count: minutes,
+            defaultValue_one: '{{name}} slept after {{count}} minute idle'
+          }
+        )
+      : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', {
+          name
+        }),
+    {
+      id: `orca-cloud-idle-sleep:${workspaceId}`,
+      // The same hollow "asleep" dot the sidebar shows for this workspace.
+      icon: createElement(CloudStateDot, { state: 'sleeping', size: 'md' }),
+      duration: 8_000,
+      description: translate(
+        'orcaCloudWorkspace.idleSleptDetail',
+        'Your files and chats are saved. Open it to wake it.'
+      ),
+      action: {
+        label: translate('orcaCloudWorkspace.wake', 'Wake'),
+        onClick: () => void activateWorktreeFromSidebar(workspaceId)
+      }
+    }
+  )
+}

@@ -16,6 +16,8 @@ import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 import type { NeedsSetupProjectHostOption } from '../../../lib/workspace/creation/project-host-setup-options'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import { projectSectionCloud } from './project-section-cloud'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -36,6 +38,9 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
+  | 'orcaCloudAvailability'
+  | 'orcaCloudDropped'
+  | 'cloudStart'
 > & {
   disabled?: boolean
   projectDescriptionId: string
@@ -54,6 +59,8 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   sshStatusLabel: string
   connectButtonLabel: string
   selectedProjectName: string
+  /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
+  orcaCloudAccess?: OrcaCloudRunTargetAccess
 }
 
 export function NewWorkspaceComposerProjectSection({
@@ -84,15 +91,32 @@ export function NewWorkspaceComposerProjectSection({
   handleConnectRunTargetHost,
   handleSetLocation,
   ephemeralVmRecipeError,
+  orcaCloudAvailability = 'unavailable',
+  orcaCloudDropped = null,
   selectedRepoRequiresConnection,
   selectedRepoConnectionId,
   selectedRepoConnectInProgress,
   onConnectSelectedRepo,
   sshStatusLabel,
   connectButtonLabel,
-  selectedProjectName
+  selectedProjectName,
+  orcaCloudAccess,
+  cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const cloud = projectSectionCloud({
+    selectedEphemeralVmRecipeId,
+    cloudStart,
+    projectError,
+    projectDescriptionId,
+    onProjectChange,
+    onAddProject,
+    handleProjectHostSetupChange,
+    onEphemeralVmRecipeChange,
+    orcaCloudAvailability,
+    orcaCloudDropped,
+    orcaCloudAccess
+  })
   const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
   const defaultAddProjectHostId = useMemo(
     () =>
@@ -140,6 +164,7 @@ export function NewWorkspaceComposerProjectSection({
                   defaultHostId={defaultAddProjectHostId}
                   onOpenEntryRequest={onAddProjectEntryRequest}
                   onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
+                  extraItems={cloud.addProjectExtraItems}
                 >
                   <Button
                     type="button"
@@ -189,14 +214,17 @@ export function NewWorkspaceComposerProjectSection({
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
               }
-              triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+              triggerClassName="h-9 w-full border-input text-sm focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring"
               invalid={Boolean(projectError)}
               describedBy={projectDescriptionId}
+              {...cloud.comboboxProps}
             />
             {projectError ? (
               <p id={projectDescriptionId} className="text-[11px] text-destructive">
                 {projectError}
               </p>
+            ) : cloud.projectLine ? (
+              cloud.projectLine
             ) : projectOptions.length === 0 ? (
               <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
                 {emptyProjectMessage ??
@@ -225,12 +253,15 @@ export function NewWorkspaceComposerProjectSection({
               onAddRemoteServer={handleAddRemoteServer}
               onConnectHost={handleConnectRunTargetHost}
               onSetLocation={handleSetLocation}
+              {...cloud.runTargetProps}
             />
             {ephemeralVmRecipeError ? (
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
-            ) : null}
+            ) : (
+              cloud.runTargetLine
+            )}
           </div>
         ) : null}
       </div>

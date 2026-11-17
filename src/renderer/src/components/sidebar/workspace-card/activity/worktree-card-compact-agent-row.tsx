@@ -32,6 +32,11 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
+import {
+  CloudAgentRowSignInDot,
+  CloudAgentRowSignInTarget
+} from '@/components/orca-cloud/CloudAgentRowSignInTarget'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -145,10 +150,16 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // Child agentType contains its name, not a provider; nesting conveys identity without a misleading letter icon.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const dotState = dotStateOverride ?? getAgentDotState(agent)
+  const reportedDotState = dotStateOverride ?? getAgentDotState(agent)
+  // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
+  const cloudStatus = useCloudAgentRowStatus(agent, reportedDotState, sendTargetStatus)
+  const dotState = cloudStatus?.dotState ?? reportedDotState
   const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
-  const primary = getCompactAgentPrimary(agent, conversationName)
-  const forkNamed = forked && conversationName !== null
+  const primary = cloudStatus?.label ?? getCompactAgentPrimary(agent, conversationName)
+  // The fork mark belongs to the conversation name, never to an Orca Cloud status label.
+  const forkNamed = forked && conversationName !== null && !cloudStatus?.label
+  // Send-target mode owns row clicks, so only outside it is the status a link to Settings.
+  const signIn = cloudStatus?.tooltip ? cloudStatus : null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -165,7 +176,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const held = heldMessageRef.current
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
-  const secondary = getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
+  // A sign-in row names its agent by catalog name, never a stale reply or a title like "Claude Code".
+  const secondary =
+    cloudStatus?.agentName ?? getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
   const shownText = (text: string): string =>
     forkNamed && text === primary ? forkMarkedNameText(t, text) : text
@@ -239,14 +252,18 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : (
         <>
           {/* Show the actionable disabled reason over every hit area. */}
-          <AgentStateDot
-            state={dotState}
-            size="sm"
-            title={sendTargetDisabledReason ? null : undefined}
-            tooltipSide="right"
-            progress={presentation.progress}
-            unread={isUnvisited}
-          />
+          {signIn ? (
+            <CloudAgentRowSignInDot status={signIn} size="sm" />
+          ) : (
+            <AgentStateDot
+              state={dotState}
+              size="sm"
+              title={sendTargetDisabledReason ? null : undefined}
+              tooltipSide="right"
+              progress={presentation.progress}
+              unread={isUnvisited}
+            />
+          )}
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
               <AgentTypeIcon agentType={agent.agentType} size={13} />
@@ -256,7 +273,16 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             className="min-w-0 flex-1 truncate"
             title={sendTargetDisabledReason ? undefined : rowTitle}
           >
-            <span className={leadClassName}>{shownNode(leadingText)}</span>
+            {signIn ? (
+              <CloudAgentRowSignInTarget
+                tooltip={signIn.tooltip}
+                className={cn('inline hover:underline', leadClassName)}
+              >
+                {shownNode(leadingText)}
+              </CloudAgentRowSignInTarget>
+            ) : (
+              <span className={leadClassName}>{shownNode(leadingText)}</span>
+            )}
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}

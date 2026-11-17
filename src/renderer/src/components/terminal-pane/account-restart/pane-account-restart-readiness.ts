@@ -14,6 +14,20 @@ export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string):
   return ready
 }
 
+/**
+ * Whether `ptyId`'s queued restart can still run (nothing consumed it yet). A Claude restart no longer
+ * waits for the turn to end, so a Restart clicked on the Orca Cloud strip needs no override here.
+ */
+export function isAccountRestartReady(
+  state: AppState,
+  _tabId: string,
+  _leafId: string,
+  ptyId: string
+): boolean {
+  const queued = state.pendingPaneAccountRestarts[ptyId]
+  return queued === 'codex' || queued === 'claude'
+}
+
 const paneBoundListeners = new Map<string, Set<() => void>>()
 
 /** A queued restart can arrive before its pane's transport attaches; the attach must wake the tab's executor. */

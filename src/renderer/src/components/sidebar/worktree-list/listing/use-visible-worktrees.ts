@@ -1,6 +1,7 @@
+import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
@@ -25,11 +26,8 @@ import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import {
-  readHiddenVmCheckouts,
-  subscribeHiddenVmCheckouts,
-  withoutHiddenVmWorktrees
-} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { withoutHiddenVmWorktrees } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
+import { useSidebarHiddenCheckouts } from '@/lib/orca-cloud/use-sidebar-hidden-checkouts'
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
@@ -98,7 +96,9 @@ export function useVisibleSidebarWorktrees(args: {
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    !showSleepingWorkspaces
+      ? getVisibleWorktreeBrowserActivityTabs(selectAwakeBrowserTabsByWorktree(s))
+      : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
     getStructuredChatWorktreeIds(
@@ -125,7 +125,7 @@ export function useVisibleSidebarWorktrees(args: {
     worktreeIdsWithStructuredChat
   })
 
-  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
+  const hiddenVmCheckouts = useSidebarHiddenCheckouts()
   const recomputedVisibleWorktrees = useMemo(() => {
     const visible = computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,

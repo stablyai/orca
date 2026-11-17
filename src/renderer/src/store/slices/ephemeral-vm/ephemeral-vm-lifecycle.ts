@@ -7,9 +7,16 @@ import {
   type ExecutionHostVmState
 } from '../../../../../shared/execution-host/execution-host-health'
 import type { EphemeralVmFailure } from '../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import {
+  projectCloudAccountsByEnvironment,
+  projectCloudEphemeralVmRuntimeFields,
+  withCloudAccountsUpdate,
+  type CloudEphemeralVmLifecycleFields,
+  type CloudEphemeralVmRuntimeFields
+} from './ephemeral-vm-lifecycle-cloud'
 
 /** The lifecycle facts the UI reads; recipe results (pairing codes, keys) never enter the store. */
-export type EphemeralVmWorkspaceRuntime = Pick<
+type EphemeralVmWorkspaceRuntimeBase = Pick<
   EphemeralVmRuntimeRecord,
   'id' | 'status' | 'runtimeEnvironmentId'
 > & {
@@ -19,8 +26,10 @@ export type EphemeralVmWorkspaceRuntime = Pick<
   /** False when the recipe snapshot has no suspend step, so Suspend VM would do nothing. */
   canSuspend: boolean
 }
+export type EphemeralVmWorkspaceRuntime = EphemeralVmWorkspaceRuntimeBase &
+  CloudEphemeralVmRuntimeFields
 
-export type EphemeralVmLifecycleSlice = {
+export type EphemeralVmLifecycleSlice = CloudEphemeralVmLifecycleFields & {
   /** Live (not cleaned up) VM runtimes by the workspace they back. */
   ephemeralVmRuntimesByWorkspaceId: Record<string, EphemeralVmWorkspaceRuntime>
   /** Workspaces whose VM resume is in flight; the record only flips when it finishes. */
@@ -72,6 +81,7 @@ export function projectEphemeralVmWorkspaceRuntimes(
       id: record.id,
       workspaceId: record.workspaceId,
       status: record.status,
+      ...projectCloudEphemeralVmRuntimeFields(record),
       ...(record.runtimeEnvironmentId ? { runtimeEnvironmentId: record.runtimeEnvironmentId } : {}),
       ...(failure ? { failure } : {}),
       // Records without a snapshot resolve the recipe from the repo at suspend time.
@@ -99,6 +109,9 @@ function sameRuntimes(
       left.status === right.status &&
       left.runtimeEnvironmentId === right.runtimeEnvironmentId &&
       left.canSuspend === right.canSuspend &&
+      left.updatedAt === right.updatedAt &&
+      left.projectId === right.projectId &&
+      left.environmentBuildId === right.environmentBuildId &&
       left.failure?.error === right.failure?.error &&
       left.failure?.errorCode === right.failure?.errorCode &&
       JSON.stringify(left.failure?.errorParams) === JSON.stringify(right.failure?.errorParams)
@@ -116,6 +129,7 @@ export const createEphemeralVmLifecycleSlice: StateCreator<
   EphemeralVmLifecycleSlice
 > = (set) => ({
   ephemeralVmRuntimesByWorkspaceId: {},
+  cloudAccountIdByEnvironmentId: {},
   wakingEphemeralVmWorkspaceIds: {},
   refreshEphemeralVmRuntimes: () => {
     const listRuntimes = window.api?.ephemeralVm?.listRuntimes
@@ -124,16 +138,22 @@ export const createEphemeralVmLifecycleSlice: StateCreator<
     }
     const sequence = ++refreshSequence
     const refresh = (async (): Promise<void> => {
-      const next = projectEphemeralVmWorkspaceRuntimes(await listRuntimes())
+      const records = await listRuntimes()
+      const next = projectEphemeralVmWorkspaceRuntimes(records)
+      const accounts = projectCloudAccountsByEnvironment(records, RETIRED_STATUSES)
       // Out-of-order replies must not roll a newer lifecycle status back; a superseded caller
       // settles with the newer read, so it never acts on a store that has not caught up.
       if (sequence !== refreshSequence) {
         return latestRefresh
       }
       set((state) =>
-        sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
-          ? state
-          : { ephemeralVmRuntimesByWorkspaceId: next }
+        withCloudAccountsUpdate(
+          state,
+          accounts,
+          sameRuntimes(state.ephemeralVmRuntimesByWorkspaceId, next)
+            ? state
+            : { ephemeralVmRuntimesByWorkspaceId: next }
+        )
       )
     })()
     latestRefresh = refresh

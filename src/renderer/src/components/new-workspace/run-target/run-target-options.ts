@@ -8,21 +8,45 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { boundHostList } from '@/components/host-picker/bounded-host-list'
+import {
+  getOrcaCloudDetail,
+  isOrcaCloudRecipe,
+  matchOrcaCloudRow,
+  RUN_TARGET_ORCA_CLOUD_KEY,
+  withOrcaCloudRow,
+  withoutOrcaCloudRecipes,
+  type OrcaCloudRunTargetRow
+} from './run-target-options-cloud'
+
+export {
+  getOrcaCloudDetail,
+  isOrcaCloudRecipe,
+  isOrcaCloudSelection,
+  ORCA_CLOUD_LABEL,
+  RUN_TARGET_ORCA_CLOUD_KEY
+} from './run-target-options-cloud'
 
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 export const RUN_TARGET_ADD_HOST_KEY = 'add-host'
 export const RUN_TARGET_RECIPES_KEY = 'per-workspace-env'
 
-/** A row in the run-target list. Hosts commit; the last two open a submenu. */
+/** Submenu item keys, used for keyboard arming and `aria-activedescendant`. */
+export const RUN_TARGET_ADD_SSH_HOST_ITEM = 'add-ssh-host'
+export const RUN_TARGET_ADD_REMOTE_SERVER_ITEM = 'add-remote-server'
+
+export type RunTargetSubmenu = 'recipes' | 'add-host'
+
+/** A row in the run-target list. Hosts and Orca Cloud commit; recipes and Add host open a submenu. */
 export type RunTargetRowModel =
   | { key: string; kind: 'ready'; option: ReadyProjectHostSetupOption }
   | { key: string; kind: 'needs-setup'; option: NeedsSetupProjectHostOption }
+  | OrcaCloudRunTargetRow
   | { key: typeof RUN_TARGET_RECIPES_KEY; kind: 'recipes' }
   | { key: typeof RUN_TARGET_ADD_HOST_KEY; kind: 'add-host' }
 
 export function getEphemeralVmLabel(t: Translate = translate): string {
-  return t('auto.components.NewWorkspaceComposerCard.ephemeralVm', 'Per-Workspace Environment')
+  return t('auto.components.NewWorkspaceComposerCard.customEnvironments', 'Custom environments')
 }
 
 export function getRecipeCommandDisplay(command: string): string {
@@ -45,7 +69,47 @@ export function getRecipeDestroyLabel(
 }
 
 export function getRecipeDetail(recipe: EphemeralVmRecipeOption, t?: Translate): string {
+  if (isOrcaCloudRecipe(recipe)) {
+    return getOrcaCloudDetail(t)
+  }
+  // Built-in providers run in-process; their lifecycle strings are labels, not commands to show.
+  if (recipe.provider && recipe.description) {
+    return recipe.description
+  }
   return `${getRecipeCommandDisplay(recipe.create)} · ${getRecipeDestroyLabel(recipe, t)}`
+}
+
+export function getRunTargetHostRowKey(option: ReadyProjectHostSetupOption): string {
+  return `host:${getProjectHostSetupSelectionKey(option)}`
+}
+
+/** What the closed field shows for the committed selection. */
+export function getRunTargetFieldText(
+  selectedRecipe: EphemeralVmRecipeOption | null,
+  selectedHost: ReadyProjectHostSetupOption | null,
+  t?: Translate
+): { label: string; detail: string; recipeKind: 'orca-cloud' | 'recipe' | null } {
+  if (!selectedRecipe) {
+    return { label: selectedHost?.label ?? '', detail: selectedHost?.path ?? '', recipeKind: null }
+  }
+  return {
+    label: selectedRecipe.provider
+      ? selectedRecipe.name
+      : `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`,
+    detail: getRecipeDetail(selectedRecipe, t),
+    recipeKind: isOrcaCloudRecipe(selectedRecipe) ? 'orca-cloud' : 'recipe'
+  }
+}
+
+/** The row that holds the committed selection, armed when the picker opens. */
+export function getRunTargetCurrentRowKey(
+  selectedRecipe: EphemeralVmRecipeOption | null,
+  selectedHost: ReadyProjectHostSetupOption | null
+): string | null {
+  if (selectedRecipe) {
+    return isOrcaCloudRecipe(selectedRecipe) ? RUN_TARGET_ORCA_CLOUD_KEY : RUN_TARGET_RECIPES_KEY
+  }
+  return selectedHost ? getRunTargetHostRowKey(selectedHost) : null
 }
 
 function matches(haystack: string, query: string): boolean {
@@ -84,7 +148,7 @@ function buildHostRows(
   )
   const rows: RunTargetRowModel[] = [
     ...ready.map((option) => ({
-      key: `host:${getProjectHostSetupSelectionKey(option)}`,
+      key: getRunTargetHostRowKey(option),
       kind: 'ready' as const,
       option
     })),
@@ -122,18 +186,52 @@ function buildSubmenuRows(hasRecipes: boolean, hasAddHost: boolean): RunTargetRo
   return rows
 }
 
+/** Keys of a submenu's rows in display order, for keyboard arming. */
+export function getRunTargetSubmenuItemKeys(
+  submenu: RunTargetSubmenu,
+  {
+    matchedRecipes,
+    hasAddSshHost,
+    hasAddRemoteServer
+  }: {
+    matchedRecipes: readonly EphemeralVmRecipeOption[]
+    hasAddSshHost: boolean
+    hasAddRemoteServer: boolean
+  }
+): string[] {
+  if (submenu === 'recipes') {
+    return matchedRecipes.map((recipe) => getRecipeSubmenuItemKey(recipe.id))
+  }
+  return [
+    ...(hasAddSshHost ? [RUN_TARGET_ADD_SSH_HOST_ITEM] : []),
+    ...(hasAddRemoteServer ? [RUN_TARGET_ADD_REMOTE_SERVER_ITEM] : [])
+  ]
+}
+
+/** Stable per row and submenu item, so `aria-activedescendant` changes whenever the arm moves. */
+export function getRunTargetOptionId(listId: string, key: string): string {
+  return `${listId}-opt-${encodeURIComponent(key)}`
+}
+
+export function getRecipeSubmenuItemKey(recipeId: string): string {
+  return `recipe:${recipeId}`
+}
+
 /** Filter host/recipe rows but always keep Add host reachable; other submenus require matching contents. */
 export function buildRunTargetRows(
   {
     hostOptions,
     recipes,
     query,
-    hasAddHost
+    hasAddHost,
+    orcaCloudOffered = false
   }: {
     hostOptions: readonly ProjectHostSetupOption[]
     recipes: readonly EphemeralVmRecipeOption[]
     query: string
     hasAddHost: boolean
+    /** Show the Orca Cloud row (sign-in or upsell) even when the account has no Orca Cloud recipe. */
+    orcaCloudOffered?: boolean
   },
   t?: Translate
 ): {
@@ -143,11 +241,25 @@ export function buildRunTargetRows(
   hiddenHostCount: number
 } {
   const trimmed = query.trim().toLowerCase()
-  const matchedRecipes = matchRecipes(recipes, trimmed, t)
+  const orcaCloud = matchOrcaCloudRow(recipes, orcaCloudOffered, trimmed, t)
+  const matchedRecipes = matchRecipes(withoutOrcaCloudRecipes(recipes), trimmed, t)
   const hostRows = buildHostRows(hostOptions, trimmed)
   const rows: RunTargetRowModel[] = [
-    ...hostRows.rows,
+    ...withOrcaCloudRow(hostRows.rows, orcaCloud),
     ...buildSubmenuRows(matchedRecipes.length > 0, hasAddHost)
   ]
   return { rows, matchedRecipes, hiddenHostCount: hostRows.hiddenHostCount }
+}
+
+/** Add-host actions open dialogs, so the picker closes before they run. */
+export function closingFirst(
+  close: () => void,
+  action: (() => void) | undefined
+): (() => void) | undefined {
+  return action
+    ? () => {
+        close()
+        action()
+      }
+    : undefined
 }

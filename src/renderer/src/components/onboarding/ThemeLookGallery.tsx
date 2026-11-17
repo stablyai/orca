@@ -72,6 +72,7 @@ export function ThemeSlotControl({
   )
   return (
     <SettingsSegmentedControl
+      activation="manual"
       ariaLabel={t('components.onboarding.theme.looks.slotLabel', 'Look to edit')}
       value={value}
       onChange={onChange}

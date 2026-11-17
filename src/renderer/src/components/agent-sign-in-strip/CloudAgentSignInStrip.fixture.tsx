@@ -1,0 +1,377 @@
+import React from 'react'
+import { defineFixture } from '../../component-fixtures/component-fixture'
+import { translate } from '@/i18n/i18n'
+import type { AgentSignInGateView } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
+import type { CloudAgentStripReason } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
+import {
+  CloudAgentSignInStrip,
+  CloudStripLayer,
+  cloudStripWidth,
+  type CloudStripActions
+} from './CloudAgentSignInStrip'
+import { cloudAgentStripModel } from './cloud-agent-strip-model'
+import {
+  cloudAgentAwaitingStartStripModel,
+  cloudAgentSetupStripModel
+} from './cloud-agent-setup-strip-model'
+import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
+import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
+import type { CloudAgentRestartAttempt } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
+import type { CloudRunningStrip } from '@/lib/orca-cloud/cloud-running-agent-signout'
+
+const noop = (): void => {}
+const ACTIONS: CloudStripActions = {
+  primary: noop,
+  submitCode: noop,
+  pasteCode: noop,
+  useCode: noop,
+  useApiKey: noop,
+  cancel: noop
+}
+const PROMPT = 'Fix the flaky auth test and open a PR'
+
+function Pane({
+  reason = 'accountExpired',
+  view = null,
+  agent = 'claude',
+  width = 900,
+  running,
+  restart,
+  setUp
+}: {
+  reason?: CloudAgentStripReason
+  view?: AgentSignInGateView | null
+  agent?: HostAgentSignInAgent
+  width?: number
+  /** The strip over a running agent instead of a held launch. */
+  running?: CloudRunningStrip
+  /** A Restart in flight, or one that failed. */
+  restart?: CloudAgentRestartAttempt
+  /** A launch held because the agent isn't set up for Orca Cloud yet. */
+  setUp?: { setup: OrcaCloudAgentSetup; ready?: boolean }
+}): React.JSX.Element {
+  const model = setUp
+    ? cloudAgentSetupStripModel({
+        agent,
+        setup: setUp.setup,
+        ready: setUp.ready ?? false,
+        t: translate
+      })
+    : restart
+      ? cloudRestartAttemptModel(restart, translate)
+      : running
+        ? cloudRunningStripModel(running, translate)
+        : cloudAgentStripModel({
+            agent,
+            reason,
+            view,
+            hostLabel: translate('agentSignInStrip.sandbox', 'the sandbox'),
+            t: translate
+          })
+  return (
+    <div className="bg-background p-4">
+      {/* Stands in for a terminal pane: its title row (split, close) stays above the strip. */}
+      <div
+        data-strip-pane
+        className="pane relative h-[220px] overflow-hidden rounded-md border border-border bg-background"
+        style={{ width }}
+      >
+        <div className="pane-title-overlay-layer">
+          <div className="pane-title-bar" data-chromeless>
+            <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+              <button type="button" className="pane-title-split-trigger" aria-label="Split pane">
+                ⊟
+              </button>
+              <button type="button" className="pane-title-close" aria-label="Close pane">
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+        <CloudStripLayer>
+          <CloudAgentSignInStrip
+            model={model}
+            prompt={running ? null : PROMPT}
+            width={cloudStripWidth(width)}
+            actions={ACTIONS}
+          />
+        </CloudStripLayer>
+        {/* The terminal: it starts below the strip (reserved, never covered) and keeps its rows. */}
+        <div className="xterm-container overflow-hidden font-mono text-xs leading-4 text-muted-foreground">
+          {running ? (
+            <>
+              <div>⏺ Reading src/auth/session.ts…</div>
+              <div>⏺ API Error: 401 · Not logged in · Run /login</div>
+            </>
+          ) : null}
+          <div data-terminal-last-row>~/acme/web $</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const fixture = (props: React.ComponentProps<typeof Pane>) =>
+  defineFixture({ width: (props.width ?? 900) + 40, render: () => <Pane {...props} /> })
+
+/** Account-level recovery in its strip form, with Renew. */
+export const needExpired = fixture({ reason: 'accountExpired' })
+export const needExpiredCodex = fixture({ reason: 'accountExpired', agent: 'codex' })
+export const killSwitch = fixture({ reason: 'paused', view: { step: 'need' } })
+export const notOffered = fixture({ reason: 'notOffered', view: { step: 'need' } })
+export const waiting = fixture({
+  reason: 'paused',
+  view: { step: 'waiting', url: 'https://claude.ai/oauth' }
+})
+export const code = fixture({
+  reason: 'paused',
+  agent: 'codex',
+  view: { step: 'device', url: 'https://auth.openai.com/codex/device', userCode: 'K7QX-M2PL' }
+})
+/** The code step's ⋯ menu offers other ways only; the × beside it cancels. */
+export const codeMenu = defineFixture({
+  width: 940,
+  render: () => (
+    <div className="pb-24">
+      <Pane
+        reason="paused"
+        agent="codex"
+        view={{
+          step: 'device',
+          url: 'https://auth.openai.com/codex/device',
+          userCode: 'K7QX-M2PL'
+        }}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="Other ways"]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+export const codePaste = fixture({
+  reason: 'paused',
+  view: { step: 'paste', url: 'https://claude.ai/oauth', submitting: false, refusal: null }
+})
+export const wrongAccount = fixture({
+  reason: 'paused',
+  view: { step: 'signed', email: 'nw@personal.dev', expectedEmail: 'nw@example.com' }
+})
+export const error = fixture({
+  reason: 'paused',
+  view: { step: 'error', kind: 'timeout', message: '' }
+})
+export const errorOffline = fixture({
+  reason: 'paused',
+  view: { step: 'error', kind: 'offline', message: '' }
+})
+export const portBusy = fixture({
+  reason: 'paused',
+  view: { step: 'error', kind: 'port_busy', message: '', port: 54545 }
+})
+export const done = fixture({
+  reason: 'paused',
+  view: { step: 'signed', email: 'nw@example.com' }
+})
+export const needNarrow = fixture({ reason: 'paused', view: { step: 'need' }, width: 640 })
+export const needTiny = fixture({ reason: 'paused', view: { step: 'need' }, width: 520 })
+export const waitingNarrow = fixture({
+  reason: 'paused',
+  view: { step: 'waiting', url: 'https://claude.ai/oauth' },
+  width: 640
+})
+export const needExpiredNarrow = fixture({ reason: 'accountExpired', width: 520 })
+/** Below 360 px: title and detail wrap beside Renew; nothing truncates. */
+export const needExpiredCompact = fixture({ reason: 'accountExpired', width: 320 })
+
+/** State 1: Claude was running when its Orca-account sign-in expired. */
+export const runningExpired = fixture({ running: { phase: 'expired', agent: 'claude' } })
+export const runningExpiredCompact = fixture({
+  running: { phase: 'expired', agent: 'claude' },
+  width: 320
+})
+/** State 2: renewed; this pane's agent still needs a restart (resumes its conversation). */
+export const runningRenewed = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: true }
+})
+/** State 2 when the session can't be resumed. */
+export const runningRenewedFresh = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: false }
+})
+export const runningRenewedNarrow = fixture({
+  running: { phase: 'renewed', agent: 'claude', resumable: true },
+  width: 520
+})
+/** After Restart: the strip stays, spinner, button disabled, until the agent reports. */
+export const runningRestarting = fixture({
+  restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
+})
+/** Nothing relaunched in time. */
+export const runningRestartFailed = fixture({
+  restart: {
+    phase: 'failed',
+    agent: 'claude',
+    resumable: true,
+    ptyId: 'p',
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  }
+})
+export const runningRestartingNarrow = fixture({
+  restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null },
+  width: 320
+})
+export const runningRestartFailedNarrow = fixture({
+  restart: {
+    phase: 'failed',
+    agent: 'claude',
+    resumable: true,
+    ptyId: 'p',
+    launchedAt: null,
+    failure: 'hostUnresponsive'
+  },
+  width: 320
+})
+
+/** The launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
+export const notSetUp = fixture({ setUp: { setup: { phase: 'idle' } } })
+export const notSetUpCompact = fixture({ setUp: { setup: { phase: 'idle' } }, width: 320 })
+/** The quiet second choice on "Set up once": the agent signs in inside this workspace instead. */
+export const notSetUpSignInInside = defineFixture({
+  width: 940,
+  render: () => (
+    <div className="pb-24">
+      <Pane setUp={{ setup: { phase: 'idle' } }} agent="codex" />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="More choices"]')
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+})
+/** A half-width split: the held strip wraps its detail rather than cutting it off. */
+export const notSetUpNarrow = fixture({ setUp: { setup: { phase: 'idle' } }, width: 440 })
+export const notSetUpBrowser = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true } }
+})
+export const notSetUpCodexDevice = fixture({
+  agent: 'codex',
+  setUp: {
+    setup: {
+      phase: 'device',
+      startedAt: 0,
+      userCode: 'K7QF-2XRM',
+      verificationUrl: 'https://auth.openai.com/codex/device',
+      expiresAt: 0
+    }
+  }
+})
+export const notSetUpPaste = fixture({ setUp: { setup: { phase: 'paste', reason: 'chosen' } } })
+/** The paste step at 900 px window width (a ~520 px pane): text on row 1, field and button on row 2. */
+export const notSetUpPasteTiny = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen' } },
+  width: 520
+})
+/** The setup-token fallback in a half-width split: stacks like the paste-code step. */
+export const notSetUpPasteNarrow = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'no_cli' } },
+  width: 440
+})
+/** A pasted token was refused. */
+export const notSetUpPasteRejected = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen', token: 'rejected' } }
+})
+export const notSetUpPasteRejectedNarrow = fixture({
+  setUp: { setup: { phase: 'paste', reason: 'chosen', token: 'rejected' } },
+  width: 440
+})
+export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
+/** Set up finished: Start {{agent}} releases the held launch. */
+export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
+/** Claude's sign-in page shows a code; [Paste code] [Finish setup] [Open again]. */
+export const notSetUpBrowserCode = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 800
+})
+export const notSetUpBrowserCodeNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 420
+})
+export const notSetUpBrowserCodeRejectedNarrow = fixture({
+  setUp: {
+    setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true, code: 'rejected' }
+  },
+  width: 420
+})
+/** The moment after a refusal, before the fresh link: field and "Open again" stay, disabled. */
+export const notSetUpBrowserCodeGapNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: false, code: 'rejected' } },
+  width: 420
+})
+
+/** Restored after a restart; the account covers Claude; the first prompt waits. */
+export const awaitingStartCovered = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="covered" queuedPrompt />
+})
+/** Restored after a restart, but Orca couldn't read the sign-in. */
+export const awaitingStartUnread = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="unread" queuedPrompt={false} />
+})
+/** A restored expired hold, renewed: no auto-start, Start waits. */
+export const awaitingStartRenewed = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="renewed" queuedPrompt />
+})
+export const awaitingStartUnreadNarrow = defineFixture({
+  width: 460,
+  render: () => <AwaitingPane awaiting="unread" queuedPrompt={false} width={420} />
+})
+
+function AwaitingPane({
+  awaiting,
+  queuedPrompt,
+  width = 900
+}: {
+  awaiting: 'covered' | 'unread' | 'renewed'
+  queuedPrompt: boolean
+  width?: number
+}): React.JSX.Element {
+  return (
+    <div className="bg-background p-4">
+      <div
+        className="pane relative h-[160px] overflow-hidden rounded-md border border-border bg-background"
+        style={{ width }}
+      >
+        <CloudStripLayer>
+          <CloudAgentSignInStrip
+            model={cloudAgentAwaitingStartStripModel({
+              agent: 'claude',
+              awaiting,
+              queuedPrompt,
+              t: translate
+            })}
+            prompt={queuedPrompt ? PROMPT : null}
+            width={cloudStripWidth(width)}
+            actions={ACTIONS}
+          />
+        </CloudStripLayer>
+        <div className="xterm-container overflow-hidden font-mono text-xs leading-4 text-muted-foreground">
+          <div data-terminal-last-row>~/acme/web $</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Device code sign-in is off for this ChatGPT account (a fixable setting: amber, not red). */
+export const notSetUpDeviceAuthOff = fixture({
+  agent: 'codex',
+  setUp: { setup: { phase: 'failed', error: 'device_auth_disabled' } }
+})

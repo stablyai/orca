@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { shouldShowComposerBaseRefPicker } from '../branch-selection/base-ref-picker-visibility'
 import { ComposerBaseRefPicker } from '../branch-selection/ComposerBaseRefPicker'
 import { ComposerBranchChoice } from '../branch-selection/ComposerBranchChoice'
+import { isOrcaCloudSelection } from '../run-target/run-target-options'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
 type NewWorkspaceComposerNameSectionProps = Pick<
@@ -38,6 +39,8 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'smartNameMode'
   | 'forkPushWarning'
   | 'canReuseSelectedBranch'
+  | 'ephemeralVmRecipes'
+  | 'selectedEphemeralVmRecipeId'
   | 'reuseSelectedBranch'
   | 'reuseEligibleBranch'
   | 'branchNameOverride'
@@ -87,6 +90,8 @@ export function NewWorkspaceComposerNameSection({
   onBranchNameOverrideChange,
   onReuseSelectedBranchChange,
   onOpenSelectedBranchWorkspace,
+  ephemeralVmRecipes,
+  selectedEphemeralVmRecipeId,
   baseBranch,
   onBaseBranchChange,
   startFromResetHint
@@ -177,6 +182,7 @@ export function NewWorkspaceComposerNameSection({
               onBranchNameOverrideChange={onBranchNameOverrideChange}
               onOpenSelectedBranchWorkspace={onOpenSelectedBranchWorkspace}
               disabled={!canReuseSelectedBranch}
+              cloud={isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId })}
             />
           </div>
         </div>

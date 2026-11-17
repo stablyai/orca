@@ -41,24 +41,32 @@ import { createWebPluginsApi } from './preload-api/host-capabilities/web-plugins
 import { createRateLimitsApi } from './preload-api/agents/web-rate-limits-api'
 import { createReposApi } from './preload-api/workspaces/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
-import { createWebJiraApi } from './preload-api/jira/web-jira-api'
 import { callRuntimeResult } from './runtime/client/web-runtime-calls'
-import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
+import { createPtyApi, createSshApi } from './preload-api/host-capabilities/web-terminal-api'
 import { createRuntimeEnvironmentsApi } from './preload-api/runtime/web-runtime-environments-api'
-import { webRuntimeState } from './runtime/client/web-runtime-session'
-import { createWebSettingsApi } from './preload-api/preferences/web-settings-api'
 import { createShellApi } from './preload-api/browser/web-shell-api'
+import { createUpdaterApi } from './preload-api/app/web-updater-api'
+import { createWebCloudWorkspacesApi } from './preload-api/web-cloud-workspaces-api'
+import { createWebJiraApi } from './preload-api/jira/web-jira-api'
+import { createWebLinkPreviewApi } from './preload-api/browser/web-link-preview-api'
+import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
+import { createWebSettingsApi } from './preload-api/preferences/web-settings-api'
 import { createWebSpeechApi } from './preload-api/agents/web-speech-api'
 import { createWebStarNagApi } from './preload-api/app/web-star-nag-api'
 import { createWebTelemetryApi } from './preload-api/diagnostics/web-telemetry-api'
-import { createPtyApi, createSshApi } from './preload-api/host-capabilities/web-terminal-api'
 import { createWebUiApi } from './preload-api/preferences/web-ui-api'
-import { createUpdaterApi } from './preload-api/app/web-updater-api'
 import { createWebWorkspacePortsApi } from './preload-api/host-capabilities/web-workspace-ports-api'
-import { createWebLinkPreviewApi } from './preload-api/browser/web-link-preview-api'
 import { createWebWorkspaceSessionApi } from './preload-api/workspaces/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/workspaces/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
+import { webRuntimeState } from './runtime/client/web-runtime-session'
+
+const notCloud = {
+  ok: false,
+  code: 'not_cloud',
+  // The renderer words failures from `code`; web clients never show share UI.
+  message: ''
+} as const
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -78,6 +86,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     ...createWebPlatformApi(),
     ...createWebWorkspacePortsApi(),
     linkPreview: createWebLinkPreviewApi(),
+    cloudWorkspaces: createWebCloudWorkspacesApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
     ...createWebSettingsApi(),
@@ -104,6 +113,13 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),
     hooks: createHooksApi(),
+    // Desktop-only: share links ride the desktop's Orca Cloud session.
+    cloudShares: {
+      list: () => Promise.resolve(notCloud),
+      create: () => Promise.resolve(notCloud),
+      revoke: () => Promise.resolve(notCloud),
+      open: () => Promise.resolve(notCloud)
+    },
     stats: {
       getSummary: async () =>
         callRuntimeResult<StatsSummary>('stats.summary').catch(() => ({

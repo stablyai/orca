@@ -65,11 +65,19 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()
       }),
+      accountMfa: async () => ({ status: 'unconfigured' }),
+      teamMfaPolicy: async () => ({ status: 'unconfigured' }),
       orgMembersList: async () => ({ status: 'unconfigured' }),
-      orgMemberInvite: async () => ({ status: 'unconfigured' }),
-      orgInviteRevoke: async () => ({ status: 'unconfigured' }),
-      orgMemberChangeRole: async () => ({ status: 'unconfigured' }),
-      orgMemberRemove: async () => ({ status: 'unconfigured' })
+      openCloudConsole: async () => ({ status: 'unconfigured' }),
+      onBillingReturn: () => () => {},
+      onBillingRefreshRequested: () => () => {},
+      onCloudSetupReturn: () => () => {},
+      billingStatus: async () => ({ status: 'unconfigured' }),
+      billingPlans: async () => ({ status: 'unconfigured' }),
+      cloudSetupStart: async () => ({ status: 'unconfigured' }),
+      cloudSetupGet: async () => ({ status: 'unconfigured' }),
+      cloudSetupLink: async () => ({ status: 'unconfigured' }),
+      billingTeamPlans: async () => ({ status: 'unconfigured' })
     }
   }
 }

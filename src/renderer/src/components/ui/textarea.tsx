@@ -9,6 +9,10 @@ const textareaVariants = cva('', {
     variant: {
       default: '',
       code: 'font-mono',
+      // Body-size text at every width (the default steps up to text-base below md).
+      compact: 'text-sm md:text-sm',
+      // Borderless field inside a composer card that draws its own frame and focus.
+      bare: 'resize-none border-0 bg-transparent p-1 text-sm shadow-none md:text-sm focus-visible:ring-0 dark:bg-transparent',
       cell: 'h-full min-h-0 resize-none rounded-none border-0 px-2 py-0 font-mono text-xs shadow-none md:text-xs focus-visible:ring-1 focus-visible:ring-inset',
       composite:
         'resize-none rounded-none border-0 p-0 font-mono text-xs leading-5 shadow-none md:text-xs focus-visible:ring-0 dark:bg-transparent'
@@ -28,7 +32,7 @@ const Textarea = React.forwardRef<
       // Textareas scroll without overflow classes, bypassing scrollbar lint; opt into the dark scrollbar explicitly.
       className={cn(
         'scrollbar-sleek min-h-16 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'focus-visible:border-focus-ring focus-visible:ring-1 focus-visible:ring-focus-ring',
         'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
         textareaVariants({ variant }),
         className

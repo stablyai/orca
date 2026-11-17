@@ -20,6 +20,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-la
 import { holdInPlaceResumeUntilSettled } from '../startup/in-place-resume-hold'
 import { mainStartsPane, startMainPaneOnFirstView } from '../spawn/main-starts-pane'
 import { attachResumeCheck } from '../spawn/main-pane-resume-banner'
+import { markReattachInterruptedTurnContinued } from './reattach-interrupted-turn-continue'
 
 import {
   awaitAgentStatusStartupSnapshot,
@@ -134,6 +135,7 @@ function connectDeferredSessionReattach(
   )
   session.beginReattachLiveDataDeferral(outputCallbacks.generation)
   session.transportConnectInFlightSince = Date.now()
+  markReattachInterruptedTurnContinued(coldRestoreStartup)
   const reattachPromise = session.transport.connect({
     url: '',
     cols: session.cols,

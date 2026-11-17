@@ -1,3 +1,5 @@
+import { UbuntuSetupNote } from '../UbuntuSetupNote'
+import type { UbuntuNote } from '../../../../../shared/workspace-setup/setup-script-imports'
 import React from 'react'
 import { Download, LoaderCircle } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -21,7 +23,11 @@ export type SetupScriptReviewDialogProps = {
   repoDisplayName: string
   setup: string
   archive: string | null
+  /** Imported run actions; saved with setup and started from the Run button. */
+  runActions?: string | null
   skippedFields: readonly string[]
+  /** Amazon Linux install lines translated to apt-get, and what to check. */
+  ubuntuNote?: UbuntuNote | null
   provenance: string | null
   isSaving: boolean
   onSave: () => void
@@ -59,7 +65,9 @@ export function SetupScriptReviewDialog({
   repoDisplayName,
   setup,
   archive,
+  runActions,
   skippedFields,
+  ubuntuNote = null,
   provenance,
   isSaving,
   onSave
@@ -111,7 +119,17 @@ export function SetupScriptReviewDialog({
               script={archive}
             />
           ) : null}
+          {runActions ? (
+            <SetupScriptCodeBlock
+              heading={t(
+                'auto.components.sidebar.SetupScriptReviewDialog.runActions',
+                'Run actions'
+              )}
+              script={runActions}
+            />
+          ) : null}
 
+          {ubuntuNote ? <UbuntuSetupNote note={ubuntuNote} /> : null}
           {skippedFields.length > 0 ? <SkippedFieldsList fields={skippedFields} /> : null}
         </div>
 
@@ -126,7 +144,7 @@ export function SetupScriptReviewDialog({
               <Download className="size-3.5" />
             )}
             <span className={cn(isSaving && 'text-muted-foreground')}>
-              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
+              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save')}
             </span>
           </Button>
         </DialogFooter>

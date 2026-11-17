@@ -7,6 +7,16 @@ import { ConfirmationDialogProvider } from './components/dismiss/confirmation/co
 import { BrowserWebAuthnAccountDialog } from './components/browser-pane/page-prompts/browser-webauthn-account-dialog'
 import { BrowserExtensionInstallDialog } from './components/browser-pane/page-prompts/browser-extension-install-dialog'
 import { BrowserPagePrompts } from './components/browser-pane/page-prompts/browser-page-prompts'
+import { PlansDialogHost } from './components/billing/plans/PlansDialogHost'
+import { CloudMoveToComputerDialogMount } from './components/orca-cloud/CloudMoveToComputerDialogMount'
+import { CloudPrimaryDeleteDialogMount } from './components/orca-cloud/CloudPrimaryDeleteDialog'
+import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudSecretsMissingNotice'
+import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-in-sheet/OrcaCloudSignInSheet'
+import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
+import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
+import { LocalCommandApprovalDialogHost } from './components/local-commands/LocalCommandApprovalDialog'
+import { CloudWorkspacePickerDialog } from './components/cloud-workspaces/CloudWorkspacePicker'
+import { OwnerChangeNotices } from './components/cloud-workspaces/OwnerChangeNotices'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-actions/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
@@ -117,6 +127,16 @@ function App(): React.JSX.Element {
             />
             <BrowserWebAuthnAccountDialog />
             <BrowserExtensionInstallDialog />
+            <PlansDialogHost />
+            <CloudMoveToComputerDialogMount />
+            <CloudPrimaryDeleteDialogMount />
+            <CloudSecretsAskDialogHost />
+            <AgentHostPanel />
+            <OrcaCloudSignInSheet />
+            <SecretRequestUnseenNotifier />
+            <LocalCommandApprovalDialogHost />
+            <CloudWorkspacePickerDialog />
+            <OwnerChangeNotices />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(

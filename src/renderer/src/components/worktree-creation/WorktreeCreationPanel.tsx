@@ -9,8 +9,9 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
-import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
+import { formatElapsedTime } from './worktree-creation-clock'
 import { VmBuildSheet } from './VmBuildSheet'
+import { useVmBuildPanelCloud } from './use-vm-build-panel-cloud'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
@@ -23,8 +24,7 @@ export default function WorktreeCreationPanel({
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const progressLabelId = React.useId()
-  // Depend on primitive status so stderr’s fresh entry objects cannot continuously reset the interval.
-  const now = useWorktreeCreationClock(entry?.status === 'creating')
+  const vm = useVmBuildPanelCloud(creationId, entry)
   if (!entry) {
     return null
   }
@@ -32,9 +32,9 @@ export default function WorktreeCreationPanel({
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   const isError = entry.status === 'error'
   // Failed VM creations retain provisioning-vm phase so error and progress share the centered layout.
-  const isVmCreation = entry.phase === 'provisioning-vm'
+  const isVmCreation = vm.isVmBuild
   const title = entry.request.displayName || entry.request.name
-  const elapsedLabel = formatElapsedTime(now - entry.startedAt)
+  const elapsedLabel = formatElapsedTime(vm.elapsedMs)
   const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (
@@ -43,8 +43,9 @@ export default function WorktreeCreationPanel({
         title={title}
         isError={isError}
         reserveCollapsedSidebarHeaderSpace={reserveCollapsedSidebarHeaderSpace}
-        onCancel={dismiss}
+        onCancel={vm.leave}
       />
+      {vm.deleteConfirm}
 
       <div className="min-h-0 flex-1 p-3">
         {isVmCreation ? (
@@ -52,19 +53,21 @@ export default function WorktreeCreationPanel({
           <VmBuildSheet
             creationId={creationId}
             entry={entry}
+            now={vm.now}
             elapsedLabel={elapsedLabel}
             error={
               isError
                 ? (entry.error ??
                   t(
-                    'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                    'Something went wrong while creating the worktree.'
+                    'auto.components.worktree.creation.WorktreeCreationPanel.somethingWentWrong',
+                    'Something went wrong while creating the workspace.'
                   ))
                 : null
             }
             onCancel={dismiss}
             onRetry={() => retryBackgroundWorktreeCreation(creationId)}
-            onDismiss={dismiss}
+            onDismiss={vm.leave}
+            onReturnToComposer={vm.returnToComposer}
             onEditRecipe={() => {
               const state = useAppStore.getState()
               state.openSettingsTarget({
@@ -79,15 +82,15 @@ export default function WorktreeCreationPanel({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <span className="font-medium text-destructive">
               {t(
-                'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
-                'Couldn’t create worktree'
+                'auto.components.worktree.creation.VmBuildFailureCard.createFailedTitle',
+                'Couldn’t create workspace'
               )}
             </span>
             <span className="text-muted-foreground">
               {entry.error ??
                 t(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                  'Something went wrong while creating the worktree.'
+                  'auto.components.worktree.creation.WorktreeCreationPanel.somethingWentWrong',
+                  'Something went wrong while creating the workspace.'
                 )}
             </span>
             <button

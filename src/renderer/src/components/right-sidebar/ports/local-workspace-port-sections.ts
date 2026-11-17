@@ -3,13 +3,15 @@ import type { WorkspacePort } from '../../../../../shared/workspace/ports/worksp
 export function getLocalWorkspacePortSections(
   scan: { ports: WorkspacePort[] } | null | undefined,
   activeRepoId: string | null | undefined,
-  activeWorktreeId: string | null | undefined
+  activeWorktreeId: string | null | undefined,
+  /** Orca Cloud: the sandbox's own services (marked host-managed by the host) are not the user's ports. */
+  hideHostServices = false
 ): {
   activePorts: WorkspacePort[]
   otherWorkspacePorts: WorkspacePort[]
   externalPorts: WorkspacePort[]
 } {
-  const ports = scan?.ports ?? []
+  const ports = (scan?.ports ?? []).filter((port) => !hideHostServices || port.hostManaged !== true)
   return {
     activePorts: ports.filter(
       (port) =>
@@ -45,6 +47,31 @@ export function shouldShowLocalWorkspacePortSections(
     sections.activePorts.length > 0 ||
     sections.otherWorkspacePorts.length > 0 ||
     sections.externalPorts.length > 0
+  )
+}
+
+/**
+ * The panel says "no ports" once: centered when it would show no group at all, otherwise inline
+ * under Active Workspace (e.g. above Orca Cloud's Shared links, or beside remote-only forwards).
+ */
+export function shouldShowCenteredPortsEmpty(
+  scan: { unavailableReason?: string } | null | undefined,
+  sections: {
+    activePorts: unknown[]
+    otherWorkspacePorts: unknown[]
+    externalPorts: unknown[]
+    remoteOnlyForwards: unknown[]
+    hasFooter: boolean
+  }
+): boolean {
+  return (
+    Boolean(scan) &&
+    !scan?.unavailableReason &&
+    sections.activePorts.length === 0 &&
+    sections.otherWorkspacePorts.length === 0 &&
+    sections.externalPorts.length === 0 &&
+    sections.remoteOnlyForwards.length === 0 &&
+    !sections.hasFooter
   )
 }
 

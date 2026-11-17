@@ -16,6 +16,11 @@ const UpdateCard = lazy(() =>
     default: module.UpdateCard
   }))
 )
+const CloudMoveProgressCard = lazy(() =>
+  import('../../components/orca-cloud/CloudMoveProgressCard').then((module) => ({
+    default: module.CloudMoveProgressCard
+  }))
+)
 const UnexpectedSignoutCard = lazy(() =>
   import('../../components/unexpected-signout/UnexpectedSignoutCard').then((module) => ({
     default: module.UnexpectedSignoutCard
@@ -50,6 +55,11 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <Suspense fallback={null}>
+        <OverlayBoundary boundaryId="overlay.cloud-move-card" resetKey={activeView}>
+          <CloudMoveProgressCard />
+        </OverlayBoundary>
+      </Suspense>
       <Suspense fallback={null}>
         <OverlayBoundary boundaryId="overlay.unexpected-signout" resetKey={activeView}>
           <UnexpectedSignoutCard />

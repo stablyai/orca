@@ -211,15 +211,23 @@ function DropdownMenuRadioItem({
 function DropdownMenuLabel({
   className,
   inset,
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
   inset?: boolean
+  /** 'hint': a sentence of help text at the top of a menu rather than a section heading. */
+  variant?: 'default' | 'hint'
 }) {
   return (
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn(MENU_LABEL_CLASS, className)}
+      className={cn(
+        MENU_LABEL_CLASS,
+        // Why: tailwind-merge lets the hint variant override the label's size and weight.
+        variant === 'hint' && 'text-xs font-normal',
+        className
+      )}
       {...props}
     />
   )

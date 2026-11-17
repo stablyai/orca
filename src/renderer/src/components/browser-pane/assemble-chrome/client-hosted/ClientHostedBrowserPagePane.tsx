@@ -384,13 +384,13 @@ export function ClientHostedBrowserPagePane(props: Props) {
             guestGeneration={pageHostGeneration}
           />
           <BrowserLinkStatusBubble browserPageId={browserTab.id} />
-          {initialization.showFailureOverlay ? (
-            <ClientHostedBrowserLoadFailure
-              browserTab={browserTab}
-              isActive={isActive}
-              onRetry={() => reload.runReloadTrigger('reload')}
-            />
-          ) : null}
+          <ClientHostedBrowserLoadFailure
+            shown={initialization.showFailureOverlay}
+            browserTab={browserTab}
+            isActive={isActive}
+            onRetry={() => reload.runReloadTrigger('reload')}
+            runtimeEnvironmentId={runtimeEnvironmentId}
+          />
           {initialization.unavailable ? (
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}

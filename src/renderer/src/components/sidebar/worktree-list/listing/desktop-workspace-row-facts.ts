@@ -30,6 +30,7 @@ export type DesktopWorkspaceRowFactInputs = {
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
+  asleepBrowserWorktreeIds?: Record<string, number>
   worktreeIdsWithLiveAgent: ReadonlySet<string>
   worktreeIdsWithStructuredChat?: ReadonlySet<string>
   /** Rows in a PTY-rebind grace window; read as unverifiable, never as asleep (#15996). */
@@ -63,7 +64,7 @@ export function buildDesktopWorkspaceRowFactReader(
         worktree.id,
         inputs.tabsByWorktree,
         inputs.ptyIdsByTabId,
-        inputs.browserTabsByWorktree,
+        inputs.asleepBrowserWorktreeIds?.[worktree.id] ? null : inputs.browserTabsByWorktree,
         inputs.worktreeIdsWithLiveAgent,
         inputs.worktreeIdsWithStructuredChat
       )

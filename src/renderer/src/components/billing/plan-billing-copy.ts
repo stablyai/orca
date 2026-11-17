@@ -1,0 +1,100 @@
+// User-facing copy for billing states, kept apart from the components that render it.
+import type { Translate } from '@/i18n/use-translate'
+import type { OrcaBillingDenyReason } from '../../../../shared/orca-billing'
+
+export function denyReasonCopy(
+  reason: OrcaBillingDenyReason,
+  t: Translate,
+  canManage = true
+): string {
+  switch (reason) {
+    case 'no_subscription':
+      return t('auto.components.billing.reasonNoPlan2', 'Orca Cloud needs a Team plan.')
+    case 'subscription_inactive':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonInactive',
+            'Your plan is not active. Choose a plan to start sandboxes.'
+          )
+        : t(
+            'auto.components.billing.reasonInactiveMember',
+            'Your team’s plan is not active. Ask an owner or admin to choose a plan.'
+          )
+    case 'payment_grace_expired':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonGraceExpired3',
+            'Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.'
+          )
+        : t(
+            'auto.components.billing.reasonGraceExpiredMember2',
+            'Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.'
+          )
+    case 'payment_past_due':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonPastDue',
+            'Your last payment failed. Update your payment method to start new sandboxes.'
+          )
+        : t(
+            'auto.components.billing.reasonPastDueMember',
+            'Your team’s last payment failed. Ask an owner or admin to update the payment method.'
+          )
+    case 'included_hours_exhausted':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonExhausted4',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Turn on overage to start sandboxes again.'
+          )
+        : t(
+            'auto.components.billing.reasonExhaustedMember3',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to add hours.'
+          )
+    case 'overage_cap_reached':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonCapAdmin3',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Raise the monthly spend cap to start sandboxes again.'
+          )
+        : t(
+            'auto.components.billing.reasonCapMember4',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.'
+          )
+    case 'trial_used_up':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonTrialUsedUp2',
+            'Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan to keep using Orca Cloud.'
+          )
+        : t(
+            'auto.components.billing.reasonTrialUsedUpMember2',
+            'Your team’s trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to choose a plan.'
+          )
+    case 'trial_unavailable':
+      return canManage
+        ? t(
+            'auto.components.billing.reasonTrialUnavailable',
+            'This account or team already used its trial. Choose a plan to use Orca Cloud.'
+          )
+        : t(
+            'auto.components.billing.reasonTrialUnavailableMember',
+            'This account or team already used its trial. Ask an owner or admin to choose a plan.'
+          )
+  }
+}
+
+export function statusLabel(status: string, t: Translate): string {
+  switch (status) {
+    case 'active':
+      return t('auto.components.billing.statusActive', 'Active')
+    case 'trialing':
+    case 'trial':
+      return t('auto.components.billing.statusTrial', 'Trial')
+    case 'past_due':
+      return t('auto.components.billing.paymentFailed', 'Payment failed')
+    case 'canceled':
+      return t('auto.components.billing.statusCanceled', 'Canceled')
+    default:
+      return t('auto.components.billing.statusInactive', 'Inactive')
+  }
+}

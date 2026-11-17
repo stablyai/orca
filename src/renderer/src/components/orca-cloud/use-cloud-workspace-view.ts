@@ -1,0 +1,122 @@
+import { useEffect } from 'react'
+import { useNow } from '@/lib/window-activity/use-now'
+import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
+import {
+  deriveCloudDotState,
+  isWakeReadyAfterRead,
+  visibleOom,
+  type CloudDotState
+} from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import {
+  refreshCloudWorkspaceStatus,
+  refreshCloudWorkspaceStatusIfStale,
+  useCloudWorkspace,
+  type CloudPendingAction,
+  type CloudStatusEntry
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { isCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import {
+  useOptimisticArchive,
+  type OptimisticArchive
+} from '@/lib/orca-cloud/optimistic-cloud-archive'
+import type {
+  CloudOomEvent,
+  CloudWakeProgressEvent
+} from '../../../../shared/hosted-sandbox/cloud-workspace-api'
+
+type CloudWorkspaceView = {
+  isCloud: boolean
+  state: CloudDotState
+  entry: CloudStatusEntry | undefined
+  wake: CloudWakeProgressEvent | undefined
+  oom: CloudOomEvent | null
+  pending: CloudPendingAction | undefined
+  /** ARCHIVE-NOW: Archive was pressed and is still running; it shows as archived meanwhile. */
+  optimisticArchive: OptimisticArchive | undefined
+}
+
+/**
+ * Everything a cloud surface needs for one workspace; non-cloud workspaces read only `isCloud`.
+ * `pairedRows`: surfaces that only show status (the sidebar mark, state word and glyph) count a
+ * PAIRED row as cloud too; flows that act through this desktop's own records keep owned-only.
+ */
+export function useCloudWorkspaceView(
+  workspaceId: string,
+  { pairedRows = false }: { pairedRows?: boolean } = {}
+): CloudWorkspaceView {
+  const isCloud = useCloudWorkspace((s) =>
+    pairedRows ? isCloudStatusRow(s, workspaceId) : s.ids.has(workspaceId)
+  )
+  const entry = useCloudWorkspace((s) => s.status[workspaceId])
+  const wake = useCloudWorkspace((s) => s.wake[workspaceId])
+  const oomEvent = useCloudWorkspace((s) => s.oom[workspaceId])
+  const oomDismissed = useCloudWorkspace((s) => s.oomDismissed[workspaceId])
+  const pending = useCloudWorkspace((s) => s.pending[workspaceId])
+  const optimisticArchive = useOptimisticArchive(workspaceId)
+  const sleeping = useIsSleepingWorktree(workspaceId)
+  // The local VM record flips the moment this computer puts it to sleep; the last status read can
+  // still say "ready" for a while, which dropped "Asleep ·" from the row.
+  const vmSuspended = useAppStore(
+    (state) => state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.status === 'suspended'
+  )
+  // Sleep and wake run through the desktop; re-read when the local record flips. Remounts of
+  // virtualized sidebar rows reuse a read from the last 30 s.
+  useEffect(() => {
+    if (isCloud) {
+      void refreshCloudWorkspaceStatusIfStale(workspaceId)
+    }
+  }, [isCloud, sleeping, workspaceId])
+  useEffect(() => {
+    if (isCloud && vmSuspended) {
+      void refreshCloudWorkspaceStatus(workspaceId)
+    }
+  }, [isCloud, vmSuspended, workspaceId])
+  // Only an unsettled wake needs a clock (it can go stale without an event); settled wakes are
+  // removed from the store, so idle workspaces run no timer.
+  const ticking = isCloud && wake !== undefined
+  const now = useNow(5_000, ticking)
+  const derived = isCloud
+    ? deriveCloudDotState({
+        status: entry?.status ?? null,
+        wake,
+        sleeping,
+        now: Math.max(now, wake?.at ?? 0)
+      })
+    : 'unknown'
+  return {
+    isCloud,
+    // A ready wake newer than the reads beats a VM record that hasn't caught up yet.
+    state:
+      isCloud && optimisticArchive
+        ? 'archived'
+        : derived === 'running' && vmSuspended && !isWakeReadyAfterRead(wake, entry?.status)
+          ? 'sleeping'
+          : derived,
+    entry,
+    wake,
+    oom: visibleOom(oomEvent, oomDismissed),
+    pending,
+    optimisticArchive
+  }
+}
+
+/** Refreshes status on a visibility-aware interval while `enabled` (an open panel polls every 5 s). */
+export function useCloudStatusPolling(
+  workspaceId: string,
+  intervalMs: number,
+  enabled: boolean
+): void {
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    void refreshCloudWorkspaceStatus(workspaceId)
+    return installWindowVisibilityInterval({
+      run: () => void refreshCloudWorkspaceStatus(workspaceId),
+      intervalMs,
+      slowWhileUnfocused: true
+    })
+  }, [workspaceId, intervalMs, enabled])
+}

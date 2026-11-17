@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { cloudVmMenuLabels, useCloudVmLifecycle } from './workspace-vm-lifecycle-cloud'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
@@ -97,13 +98,33 @@ export function WorkspaceVmLifecycleMenuItems({
     })
   )
   const t = useTranslate()
+  const { cloud, archived, paired, wake } = useCloudVmLifecycle(worktreeId)
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
+  if (archived) {
+    return null
+  }
+  if (!action && paired.action) {
+    // A paired cloud workspace has no VM record here; its item follows the sidebar's row.
+    return (
+      <VmLifecycleMenuItem
+        action={paired.action}
+        cloud
+        retry={paired.retry}
+        disabled={disabled}
+        t={t}
+        onResume={wake}
+        onSuspend={onSleep}
+      />
+    )
+  }
   if (!action) {
-    return <>{sleepItems}</>
+    // This desktop's own cloud workspace mid-transition has no lifecycle item.
+    return cloud ? null : <>{sleepItems}</>
   }
   const vmItem = (
     <VmLifecycleMenuItem
       action={action}
+      cloud={cloud}
       retry={status === 'resume_failed'}
       disabled={disabled}
       t={t}
@@ -122,7 +143,8 @@ export function WorkspaceVmLifecycleMenuItems({
   )
   // Sleep and Suspend VM are one action on a running VM. A VM still asleep or waking keeps Sleep
   // only while it has restored panels to close; otherwise Sleep would sit there disabled.
-  return replacesSleep && (action === 'suspend' || !hasSleepableActivity) ? (
+  // The Orca Cloud row has exactly one lifecycle item, Sleep or Wake.
+  return cloud || (replacesSleep && (action === 'suspend' || !hasSleepableActivity)) ? (
     vmItem
   ) : (
     <>
@@ -134,6 +156,7 @@ export function WorkspaceVmLifecycleMenuItems({
 
 function VmLifecycleMenuItem({
   action,
+  cloud,
   retry,
   disabled,
   t,
@@ -141,17 +164,19 @@ function VmLifecycleMenuItem({
   onSuspend
 }: {
   action: NonNullable<WorkspaceVmLifecycleAction>
+  cloud: boolean
   retry: boolean
   disabled: boolean
   t: Translate
   onResume: () => void
   onSuspend: () => void
 }): React.JSX.Element {
+  const cloudLabels = cloudVmMenuLabels(cloud, retry, t)
   if (action === 'waking') {
     return (
       <DropdownMenuItem disabled>
         <Loader2 className="size-3.5 animate-spin" />
-        {t('workspace.vm.menu.waking', 'Waking VM…')}
+        {cloudLabels?.waking ?? t('workspace.vm.menu.waking', 'Waking VM…')}
       </DropdownMenuItem>
     )
   }
@@ -159,9 +184,10 @@ function VmLifecycleMenuItem({
     return (
       <DropdownMenuItem disabled={disabled} onSelect={onResume}>
         <Play className="size-3.5" />
-        {retry
-          ? t('workspace.vm.menu.retryResume', 'Retry Resume VM')
-          : t('workspace.vm.menu.resume', 'Resume VM')}
+        {cloudLabels?.resume ??
+          (retry
+            ? t('workspace.vm.menu.retryResume', 'Retry Resume VM')
+            : t('workspace.vm.menu.resume', 'Resume VM'))}
       </DropdownMenuItem>
     )
   }
@@ -170,14 +196,15 @@ function VmLifecycleMenuItem({
       <TooltipTrigger asChild>
         <DropdownMenuItem disabled={disabled} onSelect={onSuspend}>
           <Moon className="size-3.5" />
-          {t('workspace.vm.menu.suspend', 'Suspend VM')}
+          {cloudLabels?.suspend ?? t('workspace.vm.menu.suspend', 'Suspend VM')}
         </DropdownMenuItem>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="max-w-[220px]">
-        {t(
-          'workspace.vm.menu.suspendDescription',
-          "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
-        )}
+        {cloudLabels?.suspendDescription ??
+          t(
+            'workspace.vm.menu.suspendDescription',
+            "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+          )}
       </TooltipContent>
     </Tooltip>
   )

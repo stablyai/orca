@@ -72,6 +72,18 @@ export function selectWorktreeCreationSurfaceShown(
   })
 }
 
+/** A VM build sheet is on screen; side panels have no workspace to show until it finishes. */
+export function selectVmBuildSurfaceShown(
+  state: Pick<AppState, 'activeView' | 'activePendingCreationId' | 'pendingWorktreeCreations'>
+): boolean {
+  const id = state.activePendingCreationId
+  return (
+    id !== null &&
+    selectWorktreeCreationSurfaceShown(state) &&
+    Boolean(state.pendingWorktreeCreations[id]?.request.ephemeralVmRecipe)
+  )
+}
+
 // Why: the created row is listed before completion, so a user may already have opened it.
 export function isCreatedWorkspaceInView(
   state: Parameters<typeof isWorktreeCreationSelected>[0] & { activeWorktreeId: string | null },

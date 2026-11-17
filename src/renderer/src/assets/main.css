@@ -9,6 +9,7 @@
 @import './terminal.css';
 @import './mobile-page.css';
 @import './text-shimmer.css';
+@import './cloud-toasts.css';
 @import '../../../shared/styles/scrollbar-sleek.css';
 
 @font-face {
@@ -92,9 +93,12 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-focus-ring: var(--focus-ring);
+  --color-skeleton: var(--skeleton);
   --color-editor-surface: var(--editor-surface);
   --color-floating-surface: var(--floating-surface);
   --color-dialog-surface: var(--dialog-surface);
@@ -154,6 +158,17 @@
   --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  /* Strips, banners and notices by severity (fill, 1px border, icon, body text). */
+  --color-banner-warning-fill: var(--banner-warning-fill);
+  --color-banner-warning-border: var(--banner-warning-border);
+  --color-banner-warning-icon: var(--banner-warning-icon);
+  --color-banner-error-fill: var(--banner-error-fill);
+  --color-banner-error-border: var(--banner-error-border);
+  --color-banner-error-icon: var(--banner-error-icon);
+  --color-banner-info-fill: var(--banner-info-fill);
+  --color-banner-info-border: var(--banner-info-border);
+  --color-banner-info-icon: var(--banner-info-icon);
+  --color-banner-body: var(--banner-body);
   --color-callout-note: var(--callout-note);
   --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
@@ -262,6 +277,11 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  /* Keyboard focus indicator, derived from the theme so plugin themes keep >=3:1 against
+     background, card, muted and accent (WCAG 2.2 focus appearance). */
+  --focus-ring: color-mix(in oklab, var(--foreground) 55%, var(--background));
+  /* Loading placeholders: visible on white cards (bg-muted alone is ~1.05:1) without reading as content. */
+  --skeleton: color-mix(in oklab, var(--foreground) 9%, transparent);
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   /* Use one question hue across surfaces, distinct from working-yellow. */
@@ -390,6 +410,8 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --focus-ring: color-mix(in oklab, var(--foreground) 65%, var(--background));
+  --skeleton: color-mix(in oklab, var(--foreground) 10%, transparent);
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
@@ -461,6 +483,8 @@
   color-scheme: light;
   --destructive: #e40014;
   --destructive-foreground: #fff;
+  /* Why: raw red on its own 10% tint is ~4.1:1; small red text on a tint needs the darker mix. */
+  --destructive-text: color-mix(in srgb, var(--destructive) 85%, var(--foreground));
   --status-success: #147638;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -473,6 +497,18 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Banners must stand out on white panes. Border >=3:1 on the surface; icon >=3:1
+     and text >=4.5:1 on the fill (measured on #fff and #fafafa). */
+  --banner-warning-fill: color-mix(in srgb, #f59e0b 14%, var(--background));
+  --banner-warning-border: #b45309;
+  --banner-warning-icon: #b45309;
+  --banner-error-fill: color-mix(in srgb, var(--destructive) 8%, var(--background));
+  --banner-error-border: #c20012;
+  --banner-error-icon: #c20012;
+  --banner-info-fill: color-mix(in srgb, var(--foreground) 7.5%, var(--background));
+  --banner-info-border: color-mix(in srgb, var(--foreground) 47%, var(--background));
+  --banner-info-icon: color-mix(in srgb, var(--foreground) 65%, var(--background));
+  --banner-body: color-mix(in srgb, var(--foreground) 70%, var(--background));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
   --callout-important: #8250df;
@@ -499,6 +535,7 @@
   --destructive: #ff6568;
   /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
   --destructive-foreground: #450a0a;
+  --destructive-text: var(--destructive);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -509,6 +546,17 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* Dark keeps its fills and icons; borders raised to >=3:1 on #0a0a0a (error, info failed). */
+  --banner-warning-fill: color-mix(in srgb, var(--status-warning) 10%, var(--card));
+  --banner-warning-border: color-mix(in srgb, var(--status-warning) 45%, var(--card));
+  --banner-warning-icon: var(--status-warning);
+  --banner-error-fill: color-mix(in srgb, var(--destructive) 10%, var(--card));
+  --banner-error-border: color-mix(in srgb, var(--destructive) 62%, var(--card));
+  --banner-error-icon: var(--destructive);
+  --banner-info-fill: var(--card);
+  --banner-info-border: color-mix(in srgb, var(--foreground) 36%, var(--card));
+  --banner-info-icon: var(--muted-foreground);
+  --banner-body: var(--muted-foreground);
   --callout-note: #4493f8;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
@@ -547,6 +595,8 @@
   --border: var(--orca-security-border);
   --input: var(--orca-security-input);
   --ring: var(--orca-security-ring);
+  /* Custom properties resolve where declared, so the trust chrome re-derives from its own colors. */
+  --focus-ring: color-mix(in oklab, var(--foreground) 60%, var(--background));
   /* A plugin theme copies its --popover into these, so trust dialogs would paint on it. */
   --floating-surface: var(--orca-security-floating-surface);
   --dialog-surface: var(--orca-security-dialog-surface);
@@ -655,6 +705,15 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   min-width: 0;
   flex: 1 1 calc(100% - 30px);
   gap: 6px;
+}
+
+/* Hovering the stack must never move the toast under the pointer. Sonner sizes an expanded toast to
+   the height it measured when the toast was issued; a toast whose content grew since then shrank
+   from the top on hover, sank out from under the pointer, collapsed and popped back up (a loop).
+   The front toast keeps its natural height in both states, as it already has when collapsed. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-mounted='true'][data-expanded='true'][data-front='true'][data-removed='false'] {
+  height: auto;
 }
 
 /* Clip folded toast overflow to prevent hover/re-expansion loops; hidden would create a focus-scrollable container. */
@@ -854,7 +913,23 @@ body[data-modal-overlay-open]
   *,
   *::before,
   *::after {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-focus-ring;
+  }
+
+  /* Why: a safety net for components without their own motion-reduce variant. Layered !important
+     beats unlayered rules, so this wins. Spinners, pulses and [data-motion-essential] loaders keep
+     running because a frozen loader reads as a hang. */
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.animate-spin, .animate-pulse, [data-motion-essential], [data-motion-essential] *),
+    *:not([data-motion-essential], [data-motion-essential] *)::before,
+    *:not([data-motion-essential], [data-motion-essential] *)::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: -0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   body {
@@ -4182,4 +4257,10 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   .browser-agent-cursor-layer[data-agent-active]::before {
     animation: none;
   }
+}
+
+/* Why: controls draw focus as an offset outline; call sites that opted into an inset ring sit
+   against clipping edges, so their outline moves inside the control instead of being cut off. */
+.focus-visible\:ring-inset.focus-visible\:ring-inset:focus-visible {
+  outline-offset: -2px;
 }

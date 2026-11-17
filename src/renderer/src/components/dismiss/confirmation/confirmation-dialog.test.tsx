@@ -136,6 +136,53 @@ describe('ConfirmationDialogProvider', () => {
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
+  it('starts an option at its default and hands its state over only on confirm', async () => {
+    const onConfirmed = vi.fn()
+    const { onSettled } = renderDialog({
+      title: 'Rewind to here?',
+      confirmLabel: 'Rewind',
+      option: {
+        label: 'Also restore 3 changed files',
+        detail: 'Later changes are discarded.',
+        uncheckedDetail: 'Files on disk stay as they are.',
+        defaultChecked: true,
+        onConfirmed
+      },
+      initialFocus: 'cancel'
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const box = await screen.findByRole('checkbox', { name: 'Also restore 3 changed files' })
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+    )
+    expect(box.getAttribute('aria-checked')).toBe('true')
+    expect(box.getAttribute('aria-describedby')).toBe('confirmation-dialog-option-detail')
+    expect(screen.getByText('Later changes are discarded.')).toBeTruthy()
+    await userEvent.click(box)
+    expect(screen.getByText('Files on disk stay as they are.')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Rewind' }))
+
+    expect(onConfirmed).toHaveBeenCalledWith(false)
+    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
+  })
+
+  it('shows three listed items, then the rest on request', async () => {
+    renderDialog({
+      title: 'Rewind to here?',
+      confirmLabel: 'Rewind',
+      itemList: { label: 'Changed files', items: ['a', 'b', 'c', 'd', 'e'], total: 7 }
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
+    const list = await screen.findByRole('list', { name: 'Changed files' })
+    expect(list.querySelectorAll('li')).toHaveLength(3)
+    await userEvent.click(screen.getByRole('button', { name: 'Show 4 more' }))
+    expect(list.querySelectorAll('li')).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Show fewer' }).getAttribute('aria-expanded')).toBe(
+      'true'
+    )
+  })
+
   it('never saves the preference when the user backs out', async () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({

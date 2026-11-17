@@ -8,17 +8,12 @@ export function useWorktreeCreationClock(running: boolean): number {
     if (!running) {
       return
     }
+    // A resumed clock reads the time at once rather than a tick later.
+    setNow(Date.now())
     return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
   }, [running])
   return now
 }
 
-export function formatElapsedTime(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes === 0) {
-    return `${seconds}s`
-  }
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
-}
+// Localized ("1m 5s", "1h 0m 5s") elapsed time; lives in a fork-owned module with the VM build clock.
+export { formatElapsedTime } from './worktree-creation-clock-cloud'

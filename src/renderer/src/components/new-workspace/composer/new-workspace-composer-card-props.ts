@@ -1,3 +1,5 @@
+import type { OrcaCloudDropReason } from '@/hooks/composer-state/workspace-target/useEphemeralVmRecipeOptions'
+import type { CloudStartView } from '../run-on/use-cloud-start-composer'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -16,7 +18,10 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-items/wor
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { SetupAgentStartupPolicy } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type {
+  OrcaCloudAvailability,
+  SetupAgentStartupPolicy
+} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
@@ -43,6 +48,8 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  /** One muted line under the agent picker (Orca Cloud: why another agent is selected). */
+  agentNotice?: string
   agentPickerDraft?: AgentPickerDraft
   agentSetupDisabled?: boolean
   onQuickAgentChange: (
@@ -68,11 +75,17 @@ export type NewWorkspaceComposerCardProps = {
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
   ephemeralVmRecipeError?: string | null
+  /** Orca Cloud for the selected project, from main; drives the picker's sign-in/upsell row. */
+  orcaCloudAvailability?: OrcaCloudAvailability
+  /** A picked Orca Cloud didn't carry over to this project; Run on says why. */
+  orcaCloudDropped?: OrcaCloudDropReason | null
   repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
+  /** "Start in Orca Cloud": Run on's segments, the setup panel and the fallback (absent without Orca Cloud). */
+  cloudStart?: CloudStartView | null
   projectLabel?: string
   projectPlaceholder?: string
   emptyProjectMessage?: string

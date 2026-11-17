@@ -26,6 +26,7 @@ import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/Stal
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
 import { WorktreeCardsIntroNotice } from './workspace-card/template/WorktreeCardsIntroNotice'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
+import { TeamMfaSidebarBanner } from '@/components/team-mfa/TeamMfaAppBanner'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -38,6 +39,9 @@ const RemoveFolderDialog = lazyWithRetry(
 )
 const SleepTwinWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/sleep/SleepTwinWorkspaceDialog')
+)
+const CloudSshIncludeDialog = lazyWithRetry(
+  () => import('./workspace-actions/cloud-ssh/CloudSshIncludeDialog')
 )
 const WorktreeVisibilityDialog = lazyWithRetry(
   () => import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
@@ -183,6 +187,7 @@ function Sidebar({
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
           ref={sidebarRef}
+          data-left-sidebar=""
           className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
           style={leftSidebarStyle}
           {...dropHandlers}
@@ -198,6 +203,7 @@ function Sidebar({
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
+              <TeamMfaSidebarBanner />
               <React.Suspense
                 fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
               >
@@ -295,6 +301,7 @@ function Sidebar({
         {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
         {activeModal === 'confirm-sleep-twin' ? <SleepTwinWorkspaceDialog /> : null}
+        {activeModal === 'confirm-cloud-ssh-include' ? <CloudSshIncludeDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}

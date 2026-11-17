@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
-import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 'lucide-react'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { WorkspaceHostGlyph } from '@/components/orca-cloud/WorkspaceHostGlyph'
+import { Copy, FolderGit2, GitBranch, LocateFixed } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
@@ -35,6 +37,7 @@ import {
 } from '../threads/activity-thread-presentation'
 import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import { runtimeEnvironmentDisplayName } from '../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export function ActivityThreadHoverCardSummary({
   thread,
@@ -49,6 +52,7 @@ export function ActivityThreadHoverCardSummary({
 }): React.JSX.Element {
   const t = useTranslate()
   const { worktree, repo } = thread
+  const isCloud = useIsCloudWorkspace(worktree.id)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
@@ -62,7 +66,7 @@ export function ActivityThreadHoverCardSummary({
     if (parsedHost?.kind === 'runtime') {
       const environment = runtimeEnvironments.find((entry) => entry.id === parsedHost.environmentId)
       if (environment?.name) {
-        return environment.name
+        return runtimeEnvironmentDisplayName(environment)
       }
     }
     if (parsedHost?.kind === 'ssh') {
@@ -214,14 +218,14 @@ export function ActivityThreadHoverCardSummary({
           ) : null}
 
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-            {parsedHost?.kind === 'runtime' ? (
-              <Cloud className="size-3 shrink-0" />
-            ) : parsedHost?.kind === 'ssh' ? (
-              <Server className="size-3 shrink-0" />
-            ) : (
-              <Laptop className="size-3 shrink-0" />
-            )}
-            <span className="truncate font-medium">{hostDisplayLabel}</span>
+            <WorkspaceHostGlyph
+              worktreeId={worktree.id}
+              hostId={executionHostId}
+              badgeRingClassName="bg-popover"
+            />
+            <span className="truncate font-medium">
+              {isCloud ? t('orcaCloudWorkspace.productName', 'Orca Cloud') : hostDisplayLabel}
+            </span>
           </div>
 
           {worktree.path ? (

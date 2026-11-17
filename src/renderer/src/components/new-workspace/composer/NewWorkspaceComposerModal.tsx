@@ -9,9 +9,8 @@ import type {
   AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from '../setup/DirectWorkItemSetupDialog'
-import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
@@ -27,13 +26,8 @@ import AgentSettingsDialog, {
 } from '@/components/agent/AgentSettingsDialog'
 import { useComposerHostedAddProject } from '../project-selection/use-composer-hosted-add-project'
 import { useComposerState } from '@/hooks/useComposerState'
-import {
-  composerLaunchWorkspace,
-  quickWorkspacePickerInputs,
-  pickQuickWorkspaceAgent,
-  resolveQuickWorkspaceAgentSelection
-} from '@/lib/workspace/creation/quick-workspace-agent-selection'
-import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { quickWorkspacePickerInputs } from '@/lib/workspace/creation/quick-workspace-agent-selection'
+import { useComposerQuickAgent } from '../use-composer-quick-agent'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -44,6 +38,16 @@ import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-r
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useComposerCloudStart } from '../run-on/use-composer-cloud-start'
+import {
+  activeWorkspaceHostId,
+  withActiveWorkspaceRunOn
+} from '../run-on/active-workspace-run-on'
+import {
+  ORCA_CLOUD_PICKER_HOST,
+  orcaCloudAgentSelection
+} from '@/lib/orca-cloud/orca-cloud-agent-picker'
+import { HiddenComposer, useCloudAutoStartReveal } from '../composer-cloud-auto-start'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -55,20 +59,25 @@ const HostedAddRepoDialog = lazyWithRetry(
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
-  const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
+  const openedWith = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
+  // Read once per open: switching workspaces behind the dialog must not move its Run on.
+  const modalData = useMemo(
+    () => (visible ? withActiveWorkspaceRunOn(openedWith ?? {}, activeWorkspaceHostId()) : null),
+    [visible, openedWith]
+  )
 
-  if (!visible) {
+  if (!modalData) {
     return null
   }
 
-  if (modalData?.directSetup) {
+  if (modalData.directSetup) {
     return (
       <DirectWorkItemSetupDialog key={modalData.directSetup.id} request={modalData.directSetup} />
     )
   }
 
-  return <ComposerModalBody modalData={modalData ?? {}} onClose={closeModal} />
+  return <ComposerModalBody modalData={modalData} onClose={closeModal} />
 }
 
 function ComposerModalBody({
@@ -85,6 +94,18 @@ function ComposerModalBody({
     onClose()
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+  const visibleModalData = useCloudAutoStartReveal(modalData)
+  const body = (
+    <QuickTabBody
+      modalData={visibleModalData ?? modalData}
+      onClose={onClose}
+      isSubmissionCancelled={isSubmissionCancelled}
+      active
+    />
+  )
+  if (!visibleModalData) {
+    return <HiddenComposer>{body}</HiddenComposer>
+  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
@@ -103,12 +124,7 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
-          modalData={modalData}
-          onClose={onClose}
-          isSubmissionCancelled={isSubmissionCancelled}
-          active
-        />
+        {body}
       </DialogContent>
     </Dialog>
   )
@@ -127,6 +143,13 @@ function QuickTabBody({
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
+  const recordCreatedRef = useRef<(() => void) | null>(null)
+  // Stable, like onClose was: composer state keys effects on it. Only a start that happened
+  // becomes the project's remembered Run on target.
+  const onCreated = useCallback(() => {
+    recordCreatedRef.current?.()
+    onClose()
+  }, [onClose])
   const {
     cardProps,
     composerRef,
@@ -152,7 +175,7 @@ function QuickTabBody({
     initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
-    onCreated: onClose,
+    onCreated,
     isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
     enableIssueAutomation: modalData.enableIssueAutomation === true
@@ -164,38 +187,8 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     modalData.recovery?.agent
   )
-  // The picker rows' workspace when known, so the offered list and the rows read one host.
-  const launchWorkspace =
-    cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
-  const offeredAgentIds = useAgentsOfferedForLaunch(launchWorkspace, cardProps.detectedAgentIds)
-  const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
-  const choicePending = (agent: TuiAgent): boolean =>
-    agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
-  // Pending discovery preserves the existing catalog fallback; current facts settle the default.
-  const preferredQuickAgent = pickQuickWorkspaceAgent(
-    settings?.defaultTuiAgent,
-    cardProps.detectedAgentIds,
-    settings?.disabledTuiAgents,
-    offeredAgentIds,
-    choicePending
-  )
-  // An explicit pick stays valid where it opens as a chat without its CLI.
-  const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
-    quickAgentOverride,
-    preferredQuickAgent,
-    detectedAgentIds: cardProps.detectedAgentIds,
-    offeredAgentIds,
-    selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
-    disabledTuiAgents: settings?.disabledTuiAgents
-  })
-  if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
-    // Repair invalid picks before children render an unavailable option.
-    setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
-  }
-  const quickAgent = resolvedQuickAgentSelection.quickAgent
-  const chipAgentIds =
-    offeredAgentIds &&
-    new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
+  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice, statusLabels } =
+    useComposerQuickAgent(cardProps, settings, quickAgentOverride, setQuickAgentOverride)
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<
     Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
@@ -206,12 +199,17 @@ function QuickTabBody({
     cardProps.agentRows?.detectionTarget,
     { wakeOnOpen: true }
   )
+  // A setup picked for Orca Cloud stays with Orca Cloud: switching Run on drops it, like any host.
+  const pickerContextKey = orcaCloud ? ORCA_CLOUD_PICKER_HOST : observation.contextKey
   const pickerDraft =
-    quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
+    quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === pickerContextKey
       ? quickAgentPick.draft
       : undefined
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
-  const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
+  const launchSelection = orcaCloud
+    ? orcaCloudAgentSelection(quickAgent, quickAgentSurface, settings)
+    : observation.selectionFor(quickAgent, quickAgentSurface)
+  const agentMenuModel = orcaCloudModel ?? (cardProps.agentRows ? observation.model : null)
   const createDisabled = formDisabled || !launchSelection.ready
 
   const handleQuickAgentChange = useCallback(
@@ -222,9 +220,9 @@ function QuickTabBody({
       entry?: AgentPickerEntry
     ) => {
       setQuickAgentOverride(agent)
-      setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
+      setQuickAgentPick({ agent, surface, draft, entry, contextKey: pickerContextKey })
     },
-    [observation.contextKey]
+    [pickerContextKey]
   )
 
   const handleCreate = useCallback(async (): Promise<void> => {
@@ -234,7 +232,7 @@ function QuickTabBody({
     await submitQuick(quickAgent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
-      launchChoice: launchSelection.choice,
+      ...(quickAgent === null ? {} : { launchChoice: launchSelection.choice }),
       onLegacyPreparationFailure: (error) => {
         if (isSubmissionCancelled()) {
           return
@@ -283,6 +281,19 @@ function QuickTabBody({
     modalData,
     cardProps
   ])
+  const { cloudStart, primaryCreateDisabled, onPrimary } = useComposerCloudStart({
+    active,
+    modalData,
+    cardProps,
+    quickAgent,
+    launchChoice: launchSelection.choice,
+    pickerDraft,
+    handleCreate,
+    createDisabled,
+    quickAgentPick,
+    recordCreatedRef,
+    onClose
+  })
   const {
     addProjectOpen,
     addProjectMounted,
@@ -300,11 +311,10 @@ function QuickTabBody({
     (option) => option.id === cardProps.selectedProjectId
   )
   const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+  // Run on never changes the button, and it matches the title for every target.
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel(t)
-    : cardProps.selectedRepoIsGit
-      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+    : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || nestedDialogCount > 0
@@ -325,26 +335,25 @@ function QuickTabBody({
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
+      if (
+        primaryCreateDisabled ||
+        composerRef.current?.hasAttribute('data-sparse-preset-editing')
+      ) {
         return
       }
       event.preventDefault()
-      void handleCreate()
+      onPrimary()
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
+  }, [active, composerRef, primaryCreateDisabled, onPrimary, nestedDialogOpen])
 
   return (
     <>
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">
-          {isFolderWorkspaceTarget
-            ? t(
-                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
-                'Create Folder Workspace'
-              )
-            : primaryActionLabel}
+          {/* One title for every project type and target; only the button names the result. */}
+          {t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')}
         </DialogTitle>
         <DialogDescription className="sr-only">
           {t(
@@ -364,22 +373,27 @@ function QuickTabBody({
         quickAgent={quickAgent}
         agentPickerDraft={pickerDraft}
         agentSetupDisabled={
-          observation.model.state !== 'settled' ||
-          observation.model.pickerContext?.executionHostId !== 'local'
+          // Orca Cloud sets up from the built-in catalog; its VM does not exist yet.
+          !orcaCloud &&
+          (observation.model.state !== 'settled' ||
+            observation.model.pickerContext?.executionHostId !== 'local')
         }
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
-        createDisabled={createDisabled}
+        createDisabled={primaryCreateDisabled}
+        cloudStart={cloudStart.view}
+        agentNotice={agentNotice}
         agentSurfaceRows={
-          cardProps.agentRows
+          agentMenuModel
             ? {
-                model: observation.model,
+                model: agentMenuModel,
                 selection: launchSelection,
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,
-                onPick: handleQuickAgentChange
+                onPick: handleQuickAgentChange,
+                statusLabels
               }
             : undefined
         }
@@ -388,7 +402,7 @@ function QuickTabBody({
           agentSettingsInvoker.current = invoker
           setAgentSettingsOpen(true)
         }}
-        onCreate={() => void handleCreate()}
+        onCreate={onPrimary}
         onAddProjectOverride={handleOpenAddProject}
         onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
         onNestedDialogOpenChange={handleNestedDialogOpenChange}

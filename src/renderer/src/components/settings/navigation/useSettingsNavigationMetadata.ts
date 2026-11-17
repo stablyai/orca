@@ -9,6 +9,7 @@ import {
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
+import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
@@ -16,6 +17,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { isActiveTeamAdmin } from '@/lib/orca-cloud/active-team-role'
 import { useAppStore } from '@/store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import {
@@ -26,6 +28,12 @@ import {
   buildCapabilitySettingsSections,
   buildSetupSettingsSections
 } from './settings-navigation-capability-sections'
+import {
+  buildOrcaCloudSettingsSections,
+  gatherOrcaCloudSettingsGroup,
+  hasOrcaBillingAccount,
+  labelAccountBilling
+} from '../../../hooks/settings-navigation-orca-cloud-sections'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
@@ -54,6 +62,8 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled = !isWebClient,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    isOrcaCloudApiAvailable = false,
+    isOrcaTeamAdmin = false,
     repos,
     projectGroups,
     projectGrouping
@@ -69,6 +79,8 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    isOrcaCloudApiAvailable?: boolean
+    isOrcaTeamAdmin?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     projectGrouping?: ProjectGroupingModel
@@ -104,19 +116,25 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    isOrcaCloudApiAvailable,
+    isOrcaTeamAdmin,
     repos,
     projectGroups,
     projectGrouping
   }
 
   // Match SETTINGS_NAV_GROUPS order so Settings and Cmd+J keep siblings together.
-  return [
-    ...buildCapabilitySettingsSections(options, t),
-    ...buildSetupSettingsSections(options, t),
-    ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
-    ...buildInterfaceSettingsSections(options, t),
-    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
-  ]
+  return gatherOrcaCloudSettingsGroup(
+    [
+      ...buildCapabilitySettingsSections(options, t),
+      ...buildSetupSettingsSections(options, t),
+      ...buildOrcaCloudSettingsSections(options, t),
+      ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries, t),
+      ...buildInterfaceSettingsSections(options, t),
+      ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById, t)
+    ],
+    options
+  )
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
@@ -142,6 +160,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const isOrcaCloudApiAvailable = useOrcaCloudApiAvailable()
+  const isOrcaTeamAdmin = useAppStore((state) => isActiveTeamAdmin(state.orcaProfileAuthStatus))
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -170,7 +190,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     hostPlatform: windowsTerminalCapabilities.hostPlatform
   })
 
-  return useMemo(
+  const sections = useMemo(
     () =>
       buildSettingsNavigationMetadata(
         {
@@ -185,6 +205,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           mobileEmulatorCreationEnabled,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          isOrcaCloudApiAvailable,
+          isOrcaTeamAdmin,
           repos,
           projectGroups,
           projectGrouping: {
@@ -206,6 +228,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      isOrcaCloudApiAvailable,
+      isOrcaTeamAdmin,
       repos,
       projectGroups,
       projectHostSetupProjection,
@@ -213,4 +237,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       t
     ]
   )
+  // Orca Cloud: "Account & billing" only when there is billing to show.
+  const hasOrcaBilling = useAppStore(hasOrcaBillingAccount)
+  return useMemo(() => labelAccountBilling(sections, hasOrcaBilling), [sections, hasOrcaBilling])
 }

@@ -1,5 +1,6 @@
-import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
+import { useNativeChatHookTurn } from './session/status/use-native-chat-hook-turn'
 import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import { useCloudChatHoldHint } from '../agent-sign-in-strip/use-cloud-chat-hold-hint'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
 import { cn } from '@/lib/class-names'
@@ -101,16 +102,12 @@ export function NativeChatResolvedView({
   const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
-  // Preview the in-progress hook reply before its completed transcript turn arrives.
-  const hookPreview = useAgentStatus(paneKey)?.lastAssistantMessage
-  // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
-  const hookPreviewIsToolOutput = useAgentStatus(paneKey)?.lastAssistantMessageIsToolOutput === true
-  // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
-  const workingEpoch = useAgentStatus(paneKey)?.stateStartedAt ?? null
-  const turnEpoch = useAgentStatus(paneKey)?.turnStartedAt ?? null
+  const { hookPreview, hookPreviewIsToolOutput, workingEpoch, turnEpoch } =
+    useNativeChatHookTurn(paneKey)
   const sendWorkingEpoch =
     (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
+  const cloudHoldHint = useCloudChatHoldHint(paneKey, terminalTabId)
   // Share verified composer delivery with prompt answers and ESC-based Stop.
   const send = useNativeChatInteractiveSend(paneKey, targetPtyId, agent)
   const { messageListRef, revealLatest } = useNativeChatRevealLatest()
@@ -395,9 +392,11 @@ export function NativeChatResolvedView({
           inputOwnedByCard={shownPromptCard !== null}
           terminalTabId={terminalTabId}
           paneKey={paneKey}
-          targetPtyId={targetPtyId}
+          // A held cloud launch has no agent to send to: no target, and the hint points at its strip.
+          targetPtyId={cloudHoldHint ? null : targetPtyId}
           agent={agent}
           canSend={canSend}
+          unavailableHint={cloudHoldHint}
           isWorking={isWorking}
           onStop={stopAgent}
           onOptimisticSend={onOptimisticSend}

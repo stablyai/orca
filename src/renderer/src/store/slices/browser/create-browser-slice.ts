@@ -23,6 +23,7 @@ import { createBrowserHistoryActions } from './history/browser-history-actions'
 
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
+  asleepBrowserWorktreeIds: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},
   browserAudiblePageIds: {},

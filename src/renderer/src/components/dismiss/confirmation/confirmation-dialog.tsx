@@ -21,6 +21,10 @@ import {
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import {
+  ConfirmationDialogItemList,
+  ConfirmationDialogOption
+} from '@/components/confirmation-dialog-option'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -40,6 +44,8 @@ export function ConfirmationDialogProvider({
   const firstInputRef = useRef<HTMLInputElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  // null until the user touches the option, so each prompt starts from its own default.
+  const [optionChecked, setOptionChecked] = useState<boolean | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
@@ -102,6 +108,7 @@ export function ConfirmationDialogProvider({
         () => {
           if (activeRequestRef.current?.id === request.id) {
             setDontAskAgain(false)
+            setOptionChecked(null)
             setFieldValues({})
           }
           resolve(false)
@@ -125,6 +132,10 @@ export function ConfirmationDialogProvider({
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
+      const option = request.options.option
+      if (confirmed && option) {
+        option.onConfirmed(optionChecked ?? option.defaultChecked)
+      }
       const fields = request.options.fields
       if (confirmed && fields) {
         const defaults = Object.fromEntries(
@@ -134,6 +145,7 @@ export function ConfirmationDialogProvider({
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
+      setOptionChecked(null)
       setFieldValues({})
       request.resolve(confirmed)
       setQueue((currentQueue) => {
@@ -143,7 +155,7 @@ export function ConfirmationDialogProvider({
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },
-    [dontAskAgain, fieldValues]
+    [dontAskAgain, fieldValues, optionChecked]
   )
 
   return (
@@ -180,6 +192,20 @@ export function ConfirmationDialogProvider({
               </DialogDescription>
             ) : null}
           </DialogHeader>
+          {options?.option ? (
+            <ConfirmationDialogOption
+              option={options.option}
+              checked={optionChecked ?? options.option.defaultChecked}
+              onCheckedChange={setOptionChecked}
+            />
+          ) : null}
+          {options?.itemList ? (
+            <ConfirmationDialogItemList
+              key={activeRequest?.id}
+              indented={Boolean(options.option)}
+              list={options.itemList}
+            />
+          ) : null}
           {options?.fields ? (
             <div className="space-y-3">
               {options.fields.inputs.map((field, index) => (

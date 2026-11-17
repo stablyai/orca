@@ -67,12 +67,10 @@ import { useNativeChatStructuredComposerTransport } from '@/components/native-ch
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
-import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
-import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { useStructuredChatFailureNotices } from '@/components/native-chat/session/structured/delivery/use-structured-chat-failure-notices'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
-import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import {
@@ -132,22 +130,12 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
-  const needsFailureFacts =
-    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
-    controller.submissions.some(
-      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-    )
-  const startFailures = useStructuredAgentSessionStartFailureFacts(
-    controller.journalItems,
-    needsFailureFacts || props.agent === 'claude'
+  const { startFailures, deliveryNotices } = useStructuredChatFailureNotices(
+    props.agent,
+    agentLabel,
+    controller,
+    submits
   )
-  const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    pending: controller.pending,
-    submissions: controller.submissions,
-    journalItems: controller.journalItems,
-    startFailures,
-    agentName: agentLabel
-  })
   // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
   const readFailure =
     controller.status === 'error' && !(hostOutage && !controller.readRefusal)
@@ -221,7 +209,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     setOptionPickerRequest,
     onError: reportComposerError,
     reveal: submits,
-    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason
+    sendBlockedReason: hostSendGate.sendBlockedReason ?? install.sendBlockedReason,
+    ...(hostHeld || !install.heldHint ? {} : { heldHint: install.heldHint })
   })
   const continuation = useNativeChatInterruptedContinuation({
     ...controller,

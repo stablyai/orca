@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { subscribeFileExplorerRefreshRequests } from '../watching/file-explorer-refresh-requests'
 
 const REFRESH_SPINNER_DELAY_MS = 200
 
@@ -50,6 +51,9 @@ export function useFileExplorerManualRefresh(refreshTree: () => Promise<unknown>
       setIsRefreshing(false)
     })
   }, [clearSpinnerTimer, refreshTree])
+
+  // A toast outside the tree (e.g. a download whose file was gone) can ask for the same refresh.
+  useEffect(() => subscribeFileExplorerRefreshRequests(handleRefresh), [handleRefresh])
 
   return { isRefreshing, showRefreshSpinner, handleRefresh }
 }

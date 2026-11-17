@@ -1520,11 +1520,9 @@
             "2f6c78a039": "Profil kimlik doğrulaması yenilenemedi",
             "a37b5e6d37": "Orca oturumu kapatıldı",
             "83600521e7": "Çıkış yapılamadı",
-            "76deec8f58": "Organizasyon değiştirilemedi",
             "7d4bc516ee": "Profil değiştirilemedi",
             "f518e89aa5": "Proje bu profilde zaten mevcut",
-            "f03ae7f27b": "Proje aktarılamadı",
-            "signInTimedOut": "Oturum açma zaman aşımına uğradı"
+            "f03ae7f27b": "Proje aktarılamadı"
           }
         },
         "runtime": {
@@ -2743,23 +2741,17 @@
         "destroyDisabled": "yok etme devre dışı",
         "destroyConfigured": "yok etme yapılandırıldı",
         "noDestroyConfigured": "yok etme yok",
-        "ephemeralVm": "Çalışma Alanı Başına Ortam",
-        "chooseRunTarget": "Hedef seçin",
         "noRunTargets": "Bu proje için hazır çalıştırma hedefi yok.",
-        "perWorkspaceEnvHint": "Bir tarifle isteğe bağlı bir ortam sağlayın",
         "branchName": "Branch adı",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Bağlantı zaman aşımına uğradı. Arka planda hâlâ bağlanıyor olabilir.",
         "connectingHost": "Bağlanıyor…",
         "connectHost": "Bağlan",
         "setLocation": "Proje konumunu ayarla",
-        "setLocationOnHost": "{{host}} üzerinde proje konumunu ayarla",
         "setLocationTooltip": "Bir klasör seçin veya bu projeyi {{host}} üzerine clone'layın.",
         "addHost": "Sunucu ekle",
         "addSshHost": "SSH sunucusu ekle",
         "addSshHostHint": "SSH üzerinden mevcut bir makineyi kullanın",
-        "addRemoteOrcaServer": "Uzak Orca Sunucusu Ekle",
-        "addRemoteOrcaServerHint": "Başka bir Orca çalışma zamanını eşleştirin",
         "hostConnectionFailed": "Bağlantı başarısız oldu",
         "connect": "Bağlan",
         "reconnect": "Yeniden bağlan",
@@ -3912,12 +3904,8 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Kapat",
             "34dd5ee38b": "Yeniden dene",
-            "ed2a664f8b": "Worktree oluşturulamadı",
-            "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
-            "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "cancelProvisioning": "İptal",
-            "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
+            "cancelProvisioning": "İptal"
           }
         }
       },
@@ -6467,6 +6455,10 @@
           "selectedProjects_one": "{{count}} proje",
           "selectedProjects_other": "{{count}} proje"
         },
+        "SidebarAccountMenu": {
+          "account": "Hesap",
+          "signIn": "Oturum aç"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca'yı Yeniden Başlat",
           "29c56f30ee": "Güncellemeleri Kontrol Et",
@@ -7102,7 +7094,6 @@
           "modalInstallDescription": "Ajanlarınız için Linear becerisini yükleyin."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Klasör Çalışma Alanı Oluştur",
           "create": "Çalışma alanı oluştur"
         },
         "WorkspaceKanbanDrawer": {
@@ -13787,8 +13778,6 @@
             "c7e920aa7c": "{{value0}} olarak duyuruldu",
             "e740075063": "Kaldır",
             "b3548e59f4": "Düzenle",
-            "fe2730d050": "{{value0}} Kopyala",
-            "b22b128b2a": "Tarayıcıda Aç",
             "75aeea592f": "{{value0}} öğesini Tarayıcıda Aç",
             "de349d4560": "{{value0}} açar",
             "907eb53ed2": "Bir Port Yönlendir",
@@ -13809,10 +13798,6 @@
             "729be0b4e5": "Tür",
             "0f1d8cd324": "Bağlama",
             "1c1c18cefc": "Adres",
-            "f9528da632": "İşlemi Durdur",
-            "a223459512": "Ayrıntıları Göster",
-            "bdac206faf": "Ayrıntıları Kopyala",
-            "792baeb7ed": "Adresi Kopyala",
             "d41a8241ec": "Port",
             "a2a9fc6899": "Yerel port algılanmadı",
             "f59c783b7a": "{{value0}} üzerinde port taraması kullanılamıyor: {{value1}}",
@@ -18576,7 +18561,6 @@
           "signout": {
             "confirm": {
               "title": "Orca'dan çıkış yapılsın mı?",
-              "description": "Yeniden oturum açana kadar Artifact'ler ve Orca Relay kullanılamayacak. Yerel projeleriniz ve worktree'leriniz etkilenmeyecek.",
               "cancel": "İptal",
               "action": "Çıkış yap"
             }
@@ -20983,7 +20967,6 @@
       "startInTerminal": "{{value0}} ajanını bir terminalde başlat"
     },
     "newWorkspace": {
-      "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
       "directSetup": {
         "run": "Run setup",

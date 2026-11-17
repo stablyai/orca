@@ -25,6 +25,10 @@ export type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
+  /** Orca Cloud: a GitHub repository with no clone here, picked again (Back to draft). */
+  initialCloudGitHubRepo?: string
+  /** Open the Project picker at its GitHub repositories (a refused clone's Choose another). */
+  openCloudRepoPicker?: boolean
   initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
@@ -38,4 +42,8 @@ export type ComposerModalData = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   contextualTourSource?: string
   setupGuideTourRequestId?: string
+  /** Orca Cloud setup finished on its page: submit without showing the dialog (falls back to it). */
+  cloudAutoStart?: boolean
+  /** The Create press's intent the auto-start may use, once (one press, one server create). */
+  cloudCreateIntent?: string
 }

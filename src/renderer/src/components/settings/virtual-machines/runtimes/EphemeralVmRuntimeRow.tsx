@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
+import { EphemeralVmRuntimeRowCloudFrame } from './EphemeralVmRuntimeRowCloudMcpLink'
 
 type EphemeralVmRuntimeRowProps = {
   runtime: EphemeralVmRuntimeRecord
@@ -19,7 +20,15 @@ type EphemeralVmRuntimeRowProps = {
   onForget: () => void
 }
 
-export function EphemeralVmRuntimeRow({
+export function EphemeralVmRuntimeRow(props: EphemeralVmRuntimeRowProps): React.JSX.Element {
+  return (
+    <EphemeralVmRuntimeRowCloudFrame runtime={props.runtime}>
+      <EphemeralVmRuntimeRowContent {...props} />
+    </EphemeralVmRuntimeRowCloudFrame>
+  )
+}
+
+function EphemeralVmRuntimeRowContent({
   runtime,
   statusLabel,
   cleanupFailed,

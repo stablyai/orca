@@ -1,4 +1,6 @@
 import { AccountsPane } from '../accounts/AccountsPane'
+import { AgentAccountsSettingsSection } from '../accounts/AgentAccountsSettingsSection'
+import type { AgentAccountsPart } from '../accounts/AgentAccountsSubsection'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
@@ -13,6 +15,8 @@ import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/ws
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
+
+export { renderAgentApiKeysSettingsSection } from './settings-agent-api-keys-section-renderer'
 
 export function renderAgentsSettingsSection(
   context: SettingsRenderContext,
@@ -51,7 +55,9 @@ export function renderAgentsSettingsSection(
 
 export function renderAccountsSettingsSection(
   context: SettingsRenderContext,
-  t: Translate = translate
+  t: Translate = translate,
+  additionalParts: readonly AgentAccountsPart[] = [],
+  lead: React.ReactNode = null
 ): React.JSX.Element {
   const { model, navigation, terminal, view } = context
   const wslHostDistro = wslHostDistroForTarget(
@@ -59,9 +65,13 @@ export function renderAccountsSettingsSection(
     model.runtimeEnvironments
   )
   return (
-    <SettingsSection
+    <AgentAccountsSettingsSection
+      context={context}
+      t={t}
+      additionalParts={additionalParts}
+      lead={lead}
       id="accounts"
-      title={t('auto.components.settings.Settings.4198aae333', 'AI provider accounts')}
+      title={t('auto.components.settings.Settings.4198aae333', 'Agent accounts')}
       description={t(
         'auto.components.settings.Settings.21f09426ea',
         'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
@@ -102,7 +112,7 @@ export function renderAccountsSettingsSection(
           accountOwnerPlatform={terminal.windowsTerminalCapabilities.hostPlatform}
         />
       )}
-    </SettingsSection>
+    </AgentAccountsSettingsSection>
   )
 }
 
