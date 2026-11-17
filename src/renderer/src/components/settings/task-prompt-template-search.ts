@@ -1,11 +1,13 @@
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from './search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from './search/settings-search-keywords'
 import type { SettingsSearchEntry } from './search/settings-search'
 
-export function getTaskPromptTemplateSearchEntry(): SettingsSearchEntry {
+export function getTaskPromptTemplateSearchEntry(t: Translate = translate): SettingsSearchEntry {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   return {
-    title: translate('components.TaskPromptTemplateSetting.title', 'Task start prompt'),
-    description: translate(
+    title: t('components.TaskPromptTemplateSetting.title', 'Task start prompt'),
+    description: t(
       'components.TaskPromptTemplateSetting.description',
       'Customize the draft for a new workspace linked to a task. Use {{url}} for its URL. You review and send the draft yourself.',
       { url: '{{url}}' }

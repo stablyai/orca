@@ -210,7 +210,7 @@ function getRepositorySearchParts(
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     browserProfile: getRepositoryBrowserProfileSearchEntry(t),
-    taskPrompt: getTaskPromptTemplateSearchEntry(),
+    taskPrompt: getTaskPromptTemplateSearchEntry(t),
     jira,
     displayName,
     icon,

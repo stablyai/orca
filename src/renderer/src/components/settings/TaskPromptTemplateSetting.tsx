@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +20,7 @@ export function TaskPromptTemplateSetting({
   globalTemplate?: string
   forceVisible?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
   const [pendingDraft, setPendingDraft] = useState<string | null>(null)
@@ -51,7 +52,7 @@ export function TaskPromptTemplateSetting({
     setSaveStatus('idle')
     draft.onChange(next)
   }
-  const entry = getTaskPromptTemplateSearchEntry()
+  const entry = getTaskPromptTemplateSearchEntry(t)
   const inheritedTemplate = globalTemplate?.trim() ? globalTemplate : '{{url}}'
 
   return (
@@ -82,11 +83,11 @@ export function TaskPromptTemplateSetting({
       <div className="flex items-start justify-between gap-3">
         <p id={`${id}-scope`} className="text-xs text-muted-foreground">
           {scope === 'project'
-            ? translate(
+            ? t(
                 'components.TaskPromptTemplateSetting.projectHint',
                 'Overrides the global prompt for this project. Leave blank to use Settings → Task Sources.'
               )
-            : translate(
+            : t(
                 'components.TaskPromptTemplateSetting.globalHint',
                 'Applies to all task sources. Projects can override this prompt. Leave blank to keep the default draft.'
               )}
@@ -103,20 +104,20 @@ export function TaskPromptTemplateSetting({
           }}
         >
           {scope === 'project'
-            ? translate('components.TaskPromptTemplateSetting.inherit', 'Use global prompt')
-            : translate('components.TaskPromptTemplateSetting.reset', 'Reset to default')}
+            ? t('components.TaskPromptTemplateSetting.inherit', 'Use global prompt')
+            : t('components.TaskPromptTemplateSetting.reset', 'Reset to default')}
         </Button>
       </div>
       {saveStatus === 'error' ? (
         <p role="alert" className="text-xs text-destructive">
-          {translate(
+          {t(
             'components.TaskPromptTemplateSetting.saveError',
             'Could not save the prompt. Edit it or leave the field again to retry.'
           )}
         </p>
       ) : saveStatus === 'saved' ? (
         <p role="status" className="text-xs text-muted-foreground">
-          {translate('components.TaskPromptTemplateSetting.saved', 'Saved')}
+          {t('components.TaskPromptTemplateSetting.saved', 'Saved')}
         </p>
       ) : null}
     </SearchableSetting>
