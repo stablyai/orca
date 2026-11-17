@@ -145,7 +145,7 @@ export function buildNativeChatTranscript(
   )
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
-    nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+    nativeChatTurnFoldRow(message, turnKeys[index], receipts.get(message.id))
   )
   // Liveness follows the turn frontier, not a call’s stale running flag.
   const trailingRunIndex = messages.findLastIndex((message) =>
