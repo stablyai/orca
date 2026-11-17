@@ -4,10 +4,13 @@ import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/set
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { CHAT_LAUNCH_DEFAULT_SECTION_ID } from '../settings/chat/chat-launch-search'
+import { showKeptSurfaceNotice } from '../settings/agents/surfaces/kept-surface-notice'
 import {
   trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction
 } from './feature-tip-telemetry'
+
+const KEPT_SURFACE_NOTICE_ID = 'feature-tip-kept-surface'
 
 export async function setAgentDefaultSurfaceFromFeatureTip(
   surface: AgentDefaultSurface,
@@ -28,7 +31,15 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
-    if (surface === 'chat' && confirmWithToast) {
+    // Agents set for themselves still open on the other surface; name them over the generic confirmation.
+    const namedKept =
+      !!settings &&
+      showKeptSurfaceNotice({
+        id: KEPT_SURFACE_NOTICE_ID,
+        surface,
+        writer: { fallbackSettings: settings, updateSettings: updateSettingsOrThrow }
+      })
+    if (surface === 'chat' && confirmWithToast && !namedKept) {
       toast.success(
         translate(
           'featureTips.chatUiHere.switched',
