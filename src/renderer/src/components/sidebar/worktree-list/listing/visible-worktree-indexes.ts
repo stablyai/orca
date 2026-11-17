@@ -57,16 +57,18 @@ function overlayLineageIndex(
   previous: LineageIndex,
   replaced: readonly ReplacedWorktreeRow[]
 ): LineageIndex | null {
+  // The indexed row may be an older revision than `before` (a kept title write), so compare against it.
+  const moved = replaced.flatMap(({ before, after }) => {
+    const identity = getWorktreeHostIdentity(before)
+    const indexed = previous.index.get(identity)
+    return indexed && !sameWorktreeStructure(after, indexed) ? [{ identity, after }] : []
+  })
   // Title-only writes keep the index object so lineage caches keyed on it still hit; display reads current rows.
-  if (replaced.every(({ before, after }) => sameWorktreeStructure(after, before))) {
+  if (moved.length === 0) {
     return previous
   }
   const overlay = new Map(previous.overlay)
-  for (const { before, after } of replaced) {
-    const identity = getWorktreeHostIdentity(before)
-    if (previous.index.get(identity) !== before) {
-      continue
-    }
+  for (const { identity, after } of moved) {
     if (previous.base.get(identity) === after) {
       overlay.delete(identity)
     } else {

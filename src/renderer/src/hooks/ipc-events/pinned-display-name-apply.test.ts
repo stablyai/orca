@@ -20,6 +20,7 @@ import {
   useWorktreeMap
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getSidebarLineageParentsByIdentity
@@ -341,5 +342,70 @@ describe('applyLocalPinnedDisplayName', () => {
     expect(getIndexedWorktreeMap(older).get(rows[0].id)?.displayName).toBe(TITLE)
     expect(getIndexedWorktreeMap(newer).get(rows[0].id)?.displayName).toBe('Second title')
     expect(getIndexedAllWorktrees(newer)[0].displayName).toBe('Second title')
+  })
+
+  it('applies a structural write that follows a kept title write to the lineage index', () => {
+    const rows = Array.from({ length: 5 }, (_, index) => row(13, index, false, () => {}))
+    const identity = getWorktreeHostIdentity(rows[0])
+    useAppStore.setState({ worktreesByRepo: { 'repo-13': rows }, detectedWorktreesByRepo: {} })
+    const c0 = getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+
+    const titled = { ...rows[0], displayName: 'T' }
+    useAppStore.setState({ worktreesByRepo: { 'repo-13': [titled, ...rows.slice(1)] } })
+    expect(getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)).toBe(c0)
+
+    const moved = { ...titled, path: '/moved', instanceId: 'instance-new' }
+    useAppStore.setState({ worktreesByRepo: { 'repo-13': [moved, ...rows.slice(1)] } })
+    const c2 = getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+    expect(c2.get(identity)).toMatchObject({ path: '/moved', instanceId: 'instance-new' })
+    expect(c0.get(identity)).toMatchObject({ path: '/work/w0', instanceId: 'instance-13-0' })
+
+    // A child recorded on the new instance nests under it.
+    const lineageById: Record<string, WorktreeLineage> = {
+      [rows[1].id]: {
+        worktreeId: rows[1].id,
+        worktreeInstanceId: 'instance-13-1',
+        parentWorktreeId: rows[0].id,
+        parentWorktreeInstanceId: 'instance-new',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
+    expect(
+      getSidebarLineageParentsByIdentity(lineageById, c2).get(getWorktreeHostIdentity(rows[1]))
+        ?.path
+    ).toBe('/moved')
+  })
+
+  it('keeps a forced-visible row hidden once it is retired after a title pin', () => {
+    const rows = Array.from({ length: 5 }, (_, index) => row(14, index, false, () => {}))
+    useAppStore.setState({
+      repos: [repo('repo-14')],
+      worktreesByRepo: { 'repo-14': rows },
+      detectedWorktreesByRepo: {},
+      worktreeLineageById: {}
+    })
+    getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+    applyLocalPinnedDisplayName({ worktreeId: rows[2].id, displayName: TITLE })
+    const options = {
+      ...buildVisibleWorktreeOptionsFromState(
+        useAppStore.getState(),
+        new Map([['repo-14', repo('repo-14')]])
+      ),
+      showSleepingWorkspaces: false,
+      forcedVisibleWorktreeIds: [rows[2].id]
+    }
+    const pinned = useAppStore.getState().worktreesByRepo
+    const shown = computeVisibleWorktrees(pinned, [], options)
+    expect(shown.map(({ id, displayName }) => [id, displayName])).toEqual([[rows[2].id, TITLE]])
+
+    const retired: Worktree = { ...pinned['repo-14'][2], removing: true, removalRecorded: true }
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-14': [...rows.slice(0, 2), retired, ...rows.slice(3)] }
+    })
+    const afterRetire = useAppStore.getState().worktreesByRepo
+    expect(getLineageAncestorIndex(afterRetire)).toBe(getLineageAncestorIndex(pinned))
+    expect(computeVisibleWorktrees(afterRetire, [], options)).toEqual([])
   })
 })

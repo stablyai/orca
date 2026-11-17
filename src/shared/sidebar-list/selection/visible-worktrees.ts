@@ -61,12 +61,14 @@ export function selectVisibleSidebarWorktrees({
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
     for (const worktreeId of forcedVisibleWorktreeIds) {
-      const worktree = includedIds.has(worktreeId)
+      const indexed = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
+      // The ancestor index may hold an older revision; retirement is read from the current row.
+      const worktree = indexed && currentRowOf(indexed)
       if (worktree && !isWorktreeRetiredByRemoval(worktree)) {
         includedIds.add(worktreeId)
-        all.push(currentRowOf(worktree))
+        all.push(worktree)
       }
     }
   }
