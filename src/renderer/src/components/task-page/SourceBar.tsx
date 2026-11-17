@@ -14,6 +14,7 @@ import {
   SelectItem
 } from '@/components/ui/select'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
 export function TaskPageSourceBar({
   model
 }: {
@@ -30,6 +31,7 @@ export function TaskPageSourceBar({
     linearWorkspaces,
     selectedLinearWorkspaceId,
     jiraSites,
+    selectedJiraSite,
     selectedJiraSiteId,
     visibleSourceOptions,
     taskSource,
@@ -203,7 +205,10 @@ export function TaskPageSourceBar({
                 })
               }}
             >
-              <SelectTrigger className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+              <SelectTrigger
+                className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm"
+                title={selectedJiraSite ? getJiraSiteLabel(selectedJiraSite) : undefined}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -212,7 +217,7 @@ export function TaskPageSourceBar({
                 </SelectItem>
                 {jiraSites.map((site) => (
                   <SelectItem key={site.id} value={site.id}>
-                    {site.displayName}
+                    {getJiraSiteLabel(site)}
                   </SelectItem>
                 ))}
               </SelectContent>
