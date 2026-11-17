@@ -55,6 +55,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Usage scans synchronously walk histories/SQLite; keep them off the main loop.
   'usage-scan-worker-entry': resolve('src/main/usage/scan-worker/usage-scan-worker-entry.ts'),
+  'codex-history-disk-usage-worker-entry': resolve(
+    'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts'
+  ),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
   ),

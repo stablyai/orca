@@ -19,7 +19,9 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useHostBooleanSetting } from '../host-scope/use-host-boolean-setting'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
+import { useCodexHistoryDiskUsage } from './use-codex-history-disk-usage'
 
 /** The host that owns the workspaces deletes their chat history, so the switch reads and writes that host. */
 export function WorkspaceCleanupChatHistorySetting({
@@ -55,6 +57,7 @@ export function WorkspaceCleanupChatHistorySetting({
       { host: hostLabel }
     )
   })
+  const diskUsage = useCodexHistoryDiskUsage(hostScope.target)
   const [confirming, setConfirming] = useState(false)
   const save = (next: boolean): void => {
     void update(next).then(onChanged)
@@ -79,13 +82,32 @@ export function WorkspaceCleanupChatHistorySetting({
             </span>
           }
           description={
-            setting.state === 'unsupported'
-              ? t(
-                  'components.settings.workspaceCleanup.chatHistory.unsupported',
-                  'Update Orca on {{host}} to use this setting there.',
-                  { host: hostLabel }
-                )
-              : search.description
+            setting.state === 'unsupported' ? (
+              t(
+                'components.settings.workspaceCleanup.chatHistory.unsupported',
+                'Update Orca on {{host}} to use this setting there.',
+                { host: hostLabel }
+              )
+            ) : (
+              <>
+                {search.description}
+                {diskUsage && diskUsage.rollouts > 0 ? (
+                  <span className="block">
+                    {diskUsage.complete
+                      ? t(
+                          'components.settings.workspaceCleanup.chatHistory.codexDiskUsage',
+                          'Codex chats on {{host}} use {{size}}.',
+                          { host: hostLabel, size: formatBytes(diskUsage.bytes) }
+                        )
+                      : t(
+                          'components.settings.workspaceCleanup.chatHistory.codexDiskUsageAtLeast',
+                          'Codex chats on {{host}} use at least {{size}}.',
+                          { host: hostLabel, size: formatBytes(diskUsage.bytes) }
+                        )}
+                  </span>
+                ) : null}
+              </>
+            )
           }
           checked={enabled}
           disabled={setting.state !== 'ready'}

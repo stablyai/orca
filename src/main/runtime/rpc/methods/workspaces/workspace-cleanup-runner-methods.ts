@@ -5,6 +5,7 @@ import {
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-runner-params'
 import { requireWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { reportClientUnsavedEditors } from '../../../../workspaces/cleanup/workspace-cleanup-client-unsaved-editors'
+import { getCodexHistoryDiskUsage } from '../../../../codex/history/disk-usage/codex-history-disk-usage'
 import { defineMethod } from '../../core'
 
 /** The cleanup runner of the host that owns the repos; clients merge hosts themselves. */
@@ -27,6 +28,13 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => requireWorkspaceCleanupRunner(runtime).report()
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.codexHistoryDiskUsage',
+    permission: 'workspace',
+    params: null,
+    handler: (_params, { runtime }) =>
+      getCodexHistoryDiskUsage(runtime.requireStore().getSettings())
   }),
   defineMethod({
     name: 'workspaceCleanup.reportUnsavedEditors',
