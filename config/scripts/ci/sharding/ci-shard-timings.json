@@ -4701,7 +4701,6 @@
       "tests/e2e/terminal-tab-switch-visual-restore.spec.ts": 90300,
       "tests/e2e/terminal-tui-wheel-drain.spec.ts": 528000,
       "tests/e2e/terminal-tui-wheel-reports.spec.ts": 34400,
-      "tests/e2e/terminal-typing-latency.spec.ts": 15200,
       "tests/e2e/terminal-wedged-write-pipeline-recovery.spec.ts": 71900,
       "tests/e2e/update-install-renderer-checkpoint-recovery.spec.ts": 14900,
       "tests/e2e/windows-terminal-env-icons.spec.ts": 15400,
