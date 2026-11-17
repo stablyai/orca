@@ -18,7 +18,7 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
-import { salvageDroppedDaemonStreamQueries } from '../../../daemon/transport/stream/daemon-stream-query-salvage'
+import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -228,19 +228,37 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     outputSequence: number,
     rawChunk: boolean
   ): { covered: string; uncovered: string | null } {
-    const seedSeq = state.providerSeedSeq
-    if (seedSeq === undefined) {
+    const seed = state.providerSeed
+    if (seed === undefined) {
       return { covered: '', uncovered: data }
     }
-    if (outputSequence <= seedSeq) {
+    if (outputSequence <= seed.seq) {
       return { covered: data, uncovered: null }
     }
-    state.providerSeedSeq = undefined
     // Why: the daemon merges emissions, so a chunk can straddle the snapshot; only an untransformed one maps to raw seq.
-    const coveredChars = seedSeq - (outputSequence - data.length)
+    const coveredChars = seed.seq - (outputSequence - data.length)
     return rawChunk && coveredChars > 0
       ? { covered: data.slice(0, coveredChars), uncovered: data.slice(coveredChars) }
       : { covered: '', uncovered: data }
+  }
+
+  /** The seed already painted covered bytes, but the program still waits on their queries, as with daemon-dropped ones. */
+  private async answerSeedCoveredQueries(
+    state: RuntimeHeadlessTerminal,
+    covered: string,
+    forwardQueryReplies: boolean
+  ): Promise<void> {
+    const seed = state.providerSeed
+    if (!seed || covered === '') {
+      return
+    }
+    const extracted = extractHiddenStartupRendererQueryData(covered, seed.queryCarry)
+    seed.queryCarry = extracted.pending
+    const queries =
+      extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
+    if (forwardQueryReplies && queries) {
+      await state.emulator.write(queries, { forwardQueryReplies: true })
+    }
   }
 
   protected trackHeadlessTerminalData(
@@ -259,13 +277,14 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         outputSequence,
         rawChunk
       )
-      // Why: the seed already painted these bytes, but the program still waits on their queries, as with daemon-dropped ones.
-      const coveredQueries = forwardQueryReplies ? salvageDroppedDaemonStreamQueries(covered) : ''
-      if (coveredQueries && state.emulator.partialEscapeTailAnsi === '') {
-        await state.emulator.write(coveredQueries, { forwardQueryReplies: true })
-      }
+      await this.answerSeedCoveredQueries(state, covered, forwardQueryReplies)
       if (data === null) {
         return
+      }
+      const seedEscapeTail = state.providerSeed?.escapeTail
+      state.providerSeed = undefined
+      if (seedEscapeTail) {
+        await state.emulator.write(seedEscapeTail)
       }
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)

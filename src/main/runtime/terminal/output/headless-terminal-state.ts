@@ -129,9 +129,16 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
 
   /** A dropped span leaves only a suffix: reseed from the provider instead of letting the next byte start a torn model. */
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
+    const gapEndSeq = this.getPtyOutputSequence(ptyId)
+    const pending = this.headlessTerminals.get(ptyId)
+    if (pending?.gapReseedEndSeq !== undefined) {
+      // One capture per PTY: a later gap only raises the frontier the in-flight snapshot must reach.
+      pending.gapReseedEndSeq = gapEndSeq
+      return
+    }
     this.reseedHeadlessTerminalFromProvider(ptyId, {
       retryLateSeed: true,
-      gapEndSeq: this.getPtyOutputSequence(ptyId),
+      gapEndSeq,
       staleRetries: GAP_RESEED_STALE_RETRIES
     })
   }
@@ -140,26 +147,33 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     ptyId: string,
     opts: { retryLateSeed: boolean; gapEndSeq?: number; staleRetries?: number }
   ): void {
-    const { retryLateSeed, gapEndSeq } = opts
+    const { retryLateSeed } = opts
+    const afterGap = opts.gapEndSeq !== undefined
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
     this.headlessTerminals.set(ptyId, state)
-    if (gapEndSeq !== undefined) {
-      // Why: a hidden pane's renderer missed the dropped bytes too, so its seed must not replace this one.
-      this.headlessHydrationState.set(ptyId, 'done')
+    if (afterGap) {
+      state.gapReseedEndSeq = opts.gapEndSeq
+      // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; delivery treats the screen as restoring.
+      this.headlessHydrationState.set(ptyId, 'pending')
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     let seedTimedOut = false
     let seeded = false
     let staleSeed = false
+    let latestGapEndSeq = opts.gapEndSeq
     state.writeChain = state.writeChain
       .then(async () => {
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        const { snapshot, late } = await this.awaitProviderTerminalBuffer(ptyId)
+        // Screen only after a gap: a storm repeats this, and history readers go to the provider instead.
+        const { snapshot, late } = await this.awaitProviderTerminalBuffer(
+          ptyId,
+          afterGap ? { scrollbackRows: 0 } : {}
+        )
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
@@ -180,12 +194,16 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
               this.providerSnapshotPreferredPtys.delete(ptyId)
             } else {
               // Live bytes moved this model on, so the late image is stale; capture once more.
-              this.reseedHeadlessTerminalFromProvider(ptyId, { ...opts, retryLateSeed: false })
+              this.reseedHeadlessTerminalFromProvider(ptyId, {
+                ...opts,
+                retryLateSeed: false,
+                gapEndSeq: latestGapEndSeq
+              })
             }
           })
           return
         }
-        if (gapEndSeq !== undefined && snapshot.seq < gapEndSeq) {
+        if (state.gapReseedEndSeq !== undefined && snapshot.seq < state.gapReseedEndSeq) {
           // A capture that began before the gap still holds the dropped span's hole.
           staleSeed = true
           return
@@ -212,12 +230,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         state.ownership.seedOwner(snapshot.terminalOwner, {
           alternateScreen: state.emulator.isAlternateScreen
         })
-        if (snapshot.pendingEscapeTailAnsi) {
-          await state.emulator.write(snapshot.pendingEscapeTailAnsi)
-        }
         state.outputSequence = snapshot.seq
         // Why: live bytes queued behind this seed while it was captured are already in it; writing them again doubles frames.
-        state.providerSeedSeq = snapshot.seq
+        state.providerSeed = {
+          seq: snapshot.seq,
+          escapeTail: snapshot.pendingEscapeTailAnsi ?? '',
+          queryCarry: ''
+        }
+        state.historyFromProvider = afterGap
         seeded = true
       })
       .catch(() => {
@@ -227,6 +247,11 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
+        if (afterGap) {
+          latestGapEndSeq = state.gapReseedEndSeq ?? latestGapEndSeq
+          state.gapReseedEndSeq = undefined
+          this.headlessHydrationState.set(ptyId, 'done')
+        }
         if (staleSeed) {
           // Bounded so a sustained gap storm cannot loop captures; the next gap re-arms it.
           const staleRetries = opts.staleRetries ?? 0
@@ -235,6 +260,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
               if (this.headlessTerminals.get(ptyId) === state) {
                 this.reseedHeadlessTerminalFromProvider(ptyId, {
                   ...opts,
+                  gapEndSeq: latestGapEndSeq,
                   staleRetries: staleRetries - 1
                 })
               }

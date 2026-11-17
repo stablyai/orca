@@ -218,8 +218,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       unattributed && (draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
+    // Why any input, not only unattributed: a screen still restoring cannot rule out a draft typed into it.
     const holding =
-      (draft || (unattributed && restoring)) &&
+      (draft || restoring) &&
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
     return holding ? (draft ? 'draft' : 'restoring') : null

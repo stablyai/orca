@@ -34,6 +34,13 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     if (restoredSnapshot) {
       return restoredSnapshot
     }
+    if (this.headlessTerminals.get(ptyId)?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0) {
+      // A model reseeded screen-only after dropped output lacks the history the provider kept.
+      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+      if (providerSnapshot) {
+        return providerSnapshot
+      }
+    }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot

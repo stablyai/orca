@@ -87,7 +87,7 @@ it.each([false, true])(
 )
 
 it('reseeds the model from the provider after a dropped span instead of trusting the suffix', async () => {
-  let landSnapshot: (value: PtyProviderBufferSnapshot) => void = () => {}
+  const capture: { land?: (value: PtyProviderBufferSnapshot) => void } = {}
   const runtime = createRuntime()
   runtime.setPtyController({
     write: () => true,
@@ -96,7 +96,7 @@ it('reseeds the model from the provider after a dropped span instead of trusting
     getSize: () => grid,
     serializeProviderBuffer: () =>
       new Promise<PtyProviderBufferSnapshot>((resolve) => {
-        landSnapshot = resolve
+        capture.land = resolve
       })
   })
   try {
@@ -104,7 +104,9 @@ it('reseeds the model from the provider after a dropped span instead of trusting
     runtime.notePtyDataGap('pty-gap', 9)
     // Seq 16 -> 20: the daemon captured "ta" of this chunk before it arrived here.
     runtime.onPtyData('pty-gap', 'tail', 2)
-    landSnapshot({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert(capture.land)
+    capture.land({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
     await new Promise((resolve) => setImmediate(resolve))
     const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')
     expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
