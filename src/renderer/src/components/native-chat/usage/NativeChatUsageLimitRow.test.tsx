@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
+import { useAppStore } from '@/store/index'
 import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
 import {
   NativeChatOrcaStopContext,
@@ -196,6 +197,17 @@ describe('usage-limit row over time', () => {
       'aria-disabled',
       'true'
     )
+  })
+
+  it('offers the auto-continue setting while waiting even with no published state', () => {
+    const openSettingsPage = vi.fn()
+    useAppStore.setState({ openSettingsPage, openSettingsTarget: vi.fn() })
+    const view = render(row({ resetsAt: start + HOUR, auto: null }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue settings' }))
+    expect(openSettingsPage).toHaveBeenCalledTimes(1)
+    // Nothing to schedule against without a reset time.
+    view.rerender(row({ resetsAt: undefined, auto: null }))
+    expect(screen.queryByRole('button', { name: 'Auto-continue settings' })).toBeNull()
   })
 
   it('keeps a preparing Hand off focusable but inert', () => {

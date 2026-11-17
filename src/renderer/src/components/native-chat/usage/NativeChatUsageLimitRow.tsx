@@ -44,6 +44,8 @@ const STACK = {
   }
 } as const
 
+const AUTO_CONTINUE_OFF: NativeChatUsageLimitAutoContinueState = { kind: 'off' }
+
 type ScheduledAutoContinue = Extract<NativeChatUsageLimitAutoContinueState, { kind: 'scheduled' }>
 
 async function copyUsageLimitError(
@@ -236,7 +238,7 @@ export function NativeChatUsageLimitRow({
           }
         ]
       : []),
-    ...(auto
+    ...(auto || phase === 'waiting' || phase === 'ready'
       ? [
           {
             key: 'settings',
@@ -306,8 +308,10 @@ export function NativeChatUsageLimitRow({
                       )}
                     </UsageLimitToolButton>
                   ) : null}
-                  {phase === 'waiting' && auto ? (
-                    <AutoContinueTool auto={auto} autoTime={autoTime} />
+                  {phase === 'waiting' ? (
+                    // No published state (host still loading, without the feature, remote "off",
+                    // or a cut it can't schedule) still offers the setting, as "off" does.
+                    <AutoContinueTool auto={auto ?? AUTO_CONTINUE_OFF} autoTime={autoTime} />
                   ) : null}
                 </>
               ) : (
