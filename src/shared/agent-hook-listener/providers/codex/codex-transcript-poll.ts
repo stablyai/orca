@@ -29,45 +29,25 @@ export type CodexTranscriptPollReads = {
   identities: Awaited<ReturnType<typeof readPendingCodexSubagentIdentities>>
 }
 
-// Why: a stalled open holds a libuv thread; cap poll reads across panes so other async file work keeps moving.
-const MAX_CONCURRENT_POLL_READS = 2
-let pollReadsInFlight = 0
-const pollReadQueue: (() => void)[] = []
-
-async function withPollReadSlot<T>(run: () => Promise<T>): Promise<T> {
-  if (pollReadsInFlight >= MAX_CONCURRENT_POLL_READS) {
-    await new Promise<void>((resolve) => pollReadQueue.push(resolve))
-  }
-  pollReadsInFlight += 1
-  try {
-    return await run()
-  } finally {
-    pollReadsInFlight -= 1
-    pollReadQueue.shift()?.()
-  }
-}
-
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
-export function readCodexTranscriptPoll(
+export async function readCodexTranscriptPoll(
   state: HookListenerState,
   paneKey: string
 ): Promise<CodexTranscriptPollReads> {
-  return withPollReadSlot(async () => {
-    const roster = getOrCreateCodexSubagentRoster(state, paneKey)
-    const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
-    const transcriptReads = transcript?.parent.filePath
-      ? await readCodexSubagentTranscript(
-          transcript,
-          () => state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
-        )
-      : undefined
-    return {
-      roster,
-      transcript,
-      transcriptReads,
-      identities: await readPendingCodexSubagentIdentities(roster)
-    }
-  })
+  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const transcriptReads = transcript?.parent.filePath
+    ? await readCodexSubagentTranscript(
+        transcript,
+        () => state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+      )
+    : undefined
+  return {
+    roster,
+    transcript,
+    transcriptReads,
+    identities: await readPendingCodexSubagentIdentities(roster)
+  }
 }
 
 /** Apply polled rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. Callers apply only while `original` is still the pane's row. */

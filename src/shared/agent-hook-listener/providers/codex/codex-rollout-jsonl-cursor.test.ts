@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import {
   applyJsonlCursorBytes,
-  readJsonlCursor,
   readJsonlCursorBytes,
   type JsonlCursor
 } from './codex-rollout-jsonl-cursor'
@@ -61,11 +60,13 @@ describe('readJsonlCursorBytes', () => {
     return { path, cursor: { filePath: path, offset: 0, carry: '' } }
   }
 
-  it('refuses bytes read before another reader advanced the cursor', async () => {
-    const { cursor } = rollout('{"a":1}\n')
-    const bytes = await readJsonlCursorBytes(cursor)
-    expect(readJsonlCursor(cursor)).toEqual([{ a: 1 }])
-    expect(applyJsonlCursorBytes(cursor, bytes)).toBe('stale')
-    expect(cursor.offset).toBe(8)
+  it('applies only the unread part of bytes another reader overtook', async () => {
+    const { path, cursor } = rollout('{"a":1}\n')
+    const early = await readJsonlCursorBytes(cursor)
+    appendFileSync(path, '{"a":2}\n')
+    const late = await readJsonlCursorBytes(cursor)
+    expect(applyJsonlCursorBytes(cursor, early)).toEqual([{ a: 1 }])
+    expect(applyJsonlCursorBytes(cursor, late)).toEqual([{ a: 2 }])
+    expect(applyJsonlCursorBytes(cursor, early)).toBe('stale')
   })
 })

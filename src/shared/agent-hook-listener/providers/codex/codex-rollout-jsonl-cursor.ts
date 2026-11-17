@@ -14,6 +14,30 @@ const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 
+// Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
+const MAX_CONCURRENT_ROLLOUT_READS = 3
+let rolloutReadsInFlight = 0
+const rolloutReadQueue: (() => void)[] = []
+
+async function withRolloutReadSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
+    rolloutReadsInFlight += 1
+  } else {
+    // A freed slot passes straight to the oldest waiter, so the count never overshoots.
+    await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
+  }
+  try {
+    return await run()
+  } finally {
+    const next = rolloutReadQueue.shift()
+    if (next) {
+      next()
+    } else {
+      rolloutReadsInFlight -= 1
+    }
+  }
+}
+
 export type JsonlCursor = {
   filePath?: string
   offset: number
@@ -72,17 +96,18 @@ export async function prefetchRolloutHead(
   }
 }
 
+function prefetchedReadIndex(reads: PrefetchedRolloutReads, cursor: JsonlCursor): number {
+  return reads.cursors.findIndex(
+    (entry) =>
+      entry.filePath === cursor.filePath &&
+      ((entry.offset === cursor.offset && entry.carry === cursor.carry) ||
+        (entry.read !== undefined && alignJsonlCursorBytes(cursor, entry.read) !== undefined))
+  )
+}
+
 /** Inside a prefetch scope, a read nobody prefetched is deferred to the async poll instead of blocking. */
 export function rolloutCursorReadDeferred(cursor: JsonlCursor): boolean {
-  return (
-    prefetched !== undefined &&
-    !prefetched.cursors.some(
-      (entry) =>
-        entry.filePath === cursor.filePath &&
-        entry.offset === cursor.offset &&
-        entry.carry === cursor.carry
-    )
-  )
+  return prefetched !== undefined && prefetchedReadIndex(prefetched, cursor) === -1
 }
 
 export function rolloutHeadReadDeferred(filePath: string): boolean {
@@ -104,7 +129,11 @@ export function rolloutFileSize(filePath: string): number | null {
   }
 }
 
-export async function rolloutFileSizeAsync(filePath: string): Promise<number | null> {
+export function rolloutFileSizeAsync(filePath: string): Promise<number | null> {
+  return withRolloutReadSlot(() => rolloutFileSizeAsyncUnslotted(filePath))
+}
+
+async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number | null> {
   try {
     return (await stat(filePath)).size
   } catch {
@@ -162,7 +191,11 @@ export function readJsonlFirstRecord(filePath: string): JsonlFirstRecord {
 }
 
 /** Off-thread twin of readJsonlFirstRecord for main-process polls. */
-export async function readJsonlFirstRecordAsync(filePath: string): Promise<JsonlFirstRecord> {
+export function readJsonlFirstRecordAsync(filePath: string): Promise<JsonlFirstRecord> {
+  return withRolloutReadSlot(() => readJsonlFirstRecordAsyncUnslotted(filePath))
+}
+
+async function readJsonlFirstRecordAsyncUnslotted(filePath: string): Promise<JsonlFirstRecord> {
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
@@ -209,13 +242,7 @@ function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undef
   if (!cursor.filePath) {
     return undefined
   }
-  const index =
-    prefetched?.cursors.findIndex(
-      (entry) =>
-        entry.filePath === cursor.filePath &&
-        entry.offset === cursor.offset &&
-        entry.carry === cursor.carry
-    ) ?? -1
+  const index = prefetched ? prefetchedReadIndex(prefetched, cursor) : -1
   if (prefetched && index >= 0) {
     return prefetched.cursors.splice(index, 1)[0].read
   }
@@ -247,7 +274,11 @@ function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undef
 }
 
 /** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished. */
-export async function readJsonlCursorBytes(
+export function readJsonlCursorBytes(cursor: JsonlCursor): Promise<JsonlCursorBytes | undefined> {
+  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor))
+}
+
+async function readJsonlCursorBytesUnslotted(
   cursor: JsonlCursor
 ): Promise<JsonlCursorBytes | undefined> {
   if (!cursor.filePath) {
@@ -282,20 +313,48 @@ export async function readJsonlCursorBytes(
   }
 }
 
-/** Advances the cursor past read bytes; 'stale' when another reader moved it since they were read. */
-export function applyJsonlCursorBytes(
+/** The part of `read` the cursor has not consumed; undefined when the read cannot serve the cursor's position. */
+function alignJsonlCursorBytes(
   cursor: JsonlCursor,
-  read: JsonlCursorBytes | undefined,
-  lineFilter?: (line: string) => boolean
-): JsonRecord[] | undefined | 'stale' {
-  if (!read) {
+  read: JsonlCursorBytes
+): JsonlCursorBytes | undefined {
+  if (cursor.filePath !== read.filePath) {
     return undefined
   }
+  if (cursor.offset === read.offset && cursor.carry === read.carry) {
+    return read
+  }
+  // Another reader consumed a prefix of these bytes since they were read; the rest is still new.
+  const end = read.start + read.bytes.length
   if (
-    cursor.filePath !== read.filePath ||
-    cursor.offset !== read.offset ||
-    cursor.carry !== read.carry
+    read.failed ||
+    read.from !== read.offset ||
+    cursor.offset < Math.max(read.start, read.offset) ||
+    cursor.offset > end
   ) {
+    return undefined
+  }
+  return {
+    filePath: read.filePath,
+    offset: cursor.offset,
+    carry: cursor.carry,
+    from: cursor.offset,
+    start: cursor.offset,
+    bytes: read.bytes.subarray(cursor.offset - read.start)
+  }
+}
+
+/** Advances the cursor past read bytes; 'stale' when another reader moved it where these bytes cannot serve. */
+export function applyJsonlCursorBytes(
+  cursor: JsonlCursor,
+  bytesRead: JsonlCursorBytes | undefined,
+  lineFilter?: (line: string) => boolean
+): JsonRecord[] | undefined | 'stale' {
+  if (!bytesRead) {
+    return undefined
+  }
+  const read = alignJsonlCursorBytes(cursor, bytesRead)
+  if (!read) {
     return 'stale'
   }
   const carry = read.from === read.offset ? read.carry : ''
@@ -352,7 +411,11 @@ function boundTranscriptDirectory(entries: string[]): string[] {
     : entries
 }
 
-export async function readTranscriptDirectoryAsync(directory: string): Promise<string[]> {
+export function readTranscriptDirectoryAsync(directory: string): Promise<string[]> {
+  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory))
+}
+
+async function readTranscriptDirectoryAsyncUnslotted(directory: string): Promise<string[]> {
   try {
     return boundTranscriptDirectory(await readdir(directory))
   } catch {

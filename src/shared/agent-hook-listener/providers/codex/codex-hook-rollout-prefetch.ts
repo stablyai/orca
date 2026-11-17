@@ -1,4 +1,5 @@
 import { readFirstString } from '../../interactive-tool'
+import { parseAgentHookJson } from '../../request-body'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 import {
@@ -14,16 +15,22 @@ import {
   prefetchCodexSubagentTranscript
 } from './codex-subagent-transcript'
 
+// Mirrors parseHookEnvelope's reading so the prefetch keys match what normalization reads.
 function hookPayload(body: unknown): Record<string, unknown> | undefined {
   const raw = record(body)?.payload
   if (typeof raw !== 'string') {
     return record(raw)
   }
   try {
-    return record(JSON.parse(raw))
+    return record(parseAgentHookJson(raw))
   } catch {
     return undefined
   }
+}
+
+function hookPaneKey(body: unknown): string | undefined {
+  const paneKey = record(body)?.paneKey
+  return typeof paneKey === 'string' && paneKey.trim() ? paneKey.trim() : undefined
 }
 
 async function prefetchParent(
@@ -51,12 +58,18 @@ export async function prefetchCodexHookRolloutReads(
   body: unknown
 ): Promise<PrefetchedRolloutReads> {
   const reads = createPrefetchedRolloutReads()
-  const paneKey = record(body)?.paneKey
+  const paneKey = hookPaneKey(body)
   const payload = hookPayload(body)
-  if (typeof paneKey !== 'string' || !payload) {
+  if (!paneKey || !payload) {
     return reads
   }
-  const eventName = readFirstString(payload, ['hook_event_name', 'hookEventName'])
+  const eventName =
+    readFirstString(record(body) ?? {}, [
+      'hook_event_name',
+      'hookEventName',
+      'hook_type',
+      'hookType'
+    ]) ?? readFirstString(payload, ['hook_event_name', 'hookEventName'])
   const agentId = readString(payload, 'agent_id')
   const transcriptPath = readFirstString(payload, ['transcript_path', 'transcriptPath'])
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
@@ -103,8 +116,7 @@ export class CodexHookRolloutPrefetcher {
     state: HookListenerState,
     body: unknown
   ): Promise<{ reads: PrefetchedRolloutReads; release: () => void }> {
-    const paneKey = record(body)?.paneKey
-    const key = typeof paneKey === 'string' ? paneKey : ''
+    const key = hookPaneKey(body) ?? ''
     const previous = this.tails.get(key)
     let release!: () => void
     const turn = new Promise<void>((resolve) => {
