@@ -4,6 +4,7 @@ import {
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
 import type { HostPressureLevel } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
+import { hostedProviderOwners } from '../server/hosted-provider-owners'
 import {
   countDescendantsByRoot,
   createProcessGrowthState,
@@ -40,6 +41,8 @@ type DaemonProcessGrowthMonitorOptions = {
   onTrip: (trips: readonly ProcessGrowthTrip[]) => void
   readRows?: () => Promise<ProcessRow[] | null>
   rootPid?: number
+  /** Subtrees started here for another owner; their growth is not this host's terminal work. */
+  excludedRoots?: () => ReadonlySet<number>
   limits?: ProcessGrowthLimits
   now?: () => number
 }
@@ -88,14 +91,28 @@ export class DaemonProcessGrowthMonitor {
       return
     }
     const rootPid = this.options.rootPid ?? process.pid
+    const live = new Set(rows?.map((row) => row.pid))
+    const excluded = [...(this.options.excludedRoots?.() ?? hostedProviderOwners)].filter((pid) =>
+      live.has(pid)
+    )
     const counts = rows
-      ? countDescendantsByRoot(rows, [rootPid, ...sessions.map((session) => session.pid ?? 0)])
+      ? countDescendantsByRoot(rows, [
+          rootPid,
+          ...excluded,
+          ...sessions.map((session) => session.pid ?? 0)
+        ])
+      : null
+    const hostDescendants = counts
+      ? excluded.reduce(
+          (count, pid) => count - 1 - (counts.get(pid) ?? 0),
+          counts.get(rootPid) ?? 0
+        )
       : null
     const verdict = evaluateProcessGrowth(
       this.state,
       {
         atMs: this.now(),
-        hostDescendants: counts?.get(rootPid) ?? null,
+        hostDescendants,
         scopes: new Map(
           counts
             ? sessions.map((session) => [session.sessionId, counts.get(session.pid ?? 0) ?? 0])

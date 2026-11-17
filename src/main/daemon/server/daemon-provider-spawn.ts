@@ -1,6 +1,7 @@
 import { connect, type Socket } from 'node:net'
 import { basename, isAbsolute } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
+import { hostedProviderOwners } from './hosted-provider-owners'
 import {
   HOSTED_PROVIDER_PIPE_FDS,
   type HostedProviderSpawn
@@ -100,6 +101,8 @@ export async function spawnHostedProvider(
     if (pid === undefined) {
       throw new Error('Provider owner could not start')
     }
+    hostedProviderOwners.add(pid)
+    child.once('exit', () => hostedProviderOwners.delete(pid))
     return { pid }
   } finally {
     // Close only this host's descriptors (never end/shutdown); the app is then the pipes' only owner.

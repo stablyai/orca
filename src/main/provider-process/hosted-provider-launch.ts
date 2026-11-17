@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { HostedProviderSpawn } from '../daemon/protocol/daemon-provider-process-protocol'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import type { DeferredProviderOwner } from './deferred-provider-owner'
@@ -45,6 +46,21 @@ async function probeHostedCwd(
   }
 }
 
+let lastHostImage: {
+  identity: DaemonEndpointIdentity
+  image: ReturnType<typeof inspectMacProcessCodeIdentity>
+} | null = null
+
+/** One code-signature read per host process, not per launch. */
+function hostCodeIdentity(
+  identity: DaemonEndpointIdentity
+): ReturnType<typeof inspectMacProcessCodeIdentity> {
+  if (!lastHostImage || !sameDaemonIdentity(lastHostImage.identity, identity)) {
+    lastHostImage = { identity, image: inspectMacProcessCodeIdentity(identity.pid) }
+  }
+  return lastHostImage.image
+}
+
 export async function inspectHostedIdentity(
   client: DaemonClient,
   cwd: string,
@@ -55,7 +71,11 @@ export async function inspectHostedIdentity(
   if (!identity?.providerSpawn) {
     return null
   }
-  const image = await inspectMacProcessCodeIdentity(identity.pid)
+  const image = await hostCodeIdentity(identity)
+  if (image.identity !== 'resolved' && image.identity !== 'parked') {
+    // A failed read may be transient; the next launch reads again.
+    lastHostImage = null
+  }
   if (
     isCanceled() ||
     !image.executablePath ||
@@ -87,7 +107,8 @@ const START_TIMEOUT_MS = 10_000
 
 async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | null> {
   try {
-    const client = await route.getClient()
+    // A host still starting must not hold a chat past its bootstrap deadline; launch here instead.
+    const client = await withTimeout(route.getClient(), 1_000, null)
     if (!client) {
       return null
     }

@@ -6,6 +6,8 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
+  // The Node host closes only its own copy of a shared socket; Bun's destroy shuts it down.
+  'src/main/provider-process/hosted-provider-launch.integration.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
