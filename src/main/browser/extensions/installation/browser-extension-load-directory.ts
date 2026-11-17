@@ -249,8 +249,6 @@ async function prepare(
 
 const pending = new Map<string, Promise<PreparedBrowserExtensionDirectory>>()
 const preparedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
-/** Bumped when a folder's contents are replaced, so a preparation already running isn't kept. */
-const folderGenerations = new Map<string, number>()
 
 /**
  * A folder is prepared once per run (an Orca update, which brings a new shim, is a new run), so a
@@ -268,14 +266,14 @@ export async function prepareBrowserExtensionDirectory(
   if (prepared && !options.refresh && !running) {
     return prepared
   }
-  const generation = folderGenerations.get(key) ?? 0
   if (!running) {
     running = prepare(extension)
     pending.set(key, running)
   }
   try {
     const result = await running
-    if ((folderGenerations.get(key) ?? 0) === generation) {
+    // Forgotten meanwhile (its folder was replaced): this result describes the old contents.
+    if (pending.get(key) === running) {
       preparedThisRun.set(key, result)
     }
     return result
@@ -291,5 +289,4 @@ export function forgetPreparedBrowserExtensionDirectory(path: string): void {
   const key = resolve(path)
   preparedThisRun.delete(key)
   pending.delete(key)
-  folderGenerations.set(key, (folderGenerations.get(key) ?? 0) + 1)
 }

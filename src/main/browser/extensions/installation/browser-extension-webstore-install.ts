@@ -173,6 +173,7 @@ export async function commitStagedWebStoreExtension(
     if (replaced) {
       store.save(replaced)
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
+      forgetPreparedBrowserExtensionDirectory(target)
       await rm(target, { recursive: true, force: true })
     } else if (!previous) {
       await unloadBrowserExtensionEverywhere(extensionId)
