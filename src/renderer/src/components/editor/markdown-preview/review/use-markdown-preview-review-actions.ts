@@ -222,11 +222,12 @@ export function useMarkdownPreviewReviewActions({
       // Why narrowest: a table row nests inside its table, and the row is the note's target.
       let target: HTMLElement | null = null
       let targetSpan = Infinity
+      const noteStartLine = comment.startLine ?? comment.lineNumber
       for (const block of blocks) {
         const startLine = Number(block.dataset.sourceLine)
         const endLine = Number(block.dataset.sourceEndLine)
         if (
-          startLine <= comment.lineNumber &&
+          startLine <= noteStartLine &&
           comment.lineNumber <= endLine &&
           endLine - startLine < targetSpan
         ) {
