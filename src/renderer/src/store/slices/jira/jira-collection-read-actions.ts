@@ -70,7 +70,14 @@ export function createJiraCollectionReadActions(
       const scope = getJiraReadScope(get().settings, options?.sourceContext)
       const siteId =
         options && 'siteId' in options ? options.siteId : getSelectedJiraSiteId(get().jiraStatus)
-      const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
+      const suggestions = options?.suggestions
+      const suggestionScope = suggestions
+        ? `::suggestions::${JSON.stringify([suggestions.query, suggestions.currentJql])}`
+        : ''
+      const cacheKey = scopedJiraCacheKey(
+        scope,
+        `${siteId ?? 'default'}::${jql}::${limit}${suggestionScope}`
+      )
       const cached = get().jiraSearchCache[cacheKey]
       if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
@@ -88,7 +95,14 @@ export function createJiraCollectionReadActions(
         return inflight.promise
       }
       let entry: InflightJiraReadRequest<JiraIssue[]>
-      const promise = jiraSearchIssues(scope.settings, jql, limit, siteId, options?.signal)
+      const promise = jiraSearchIssues(
+        scope.settings,
+        jql,
+        limit,
+        siteId,
+        options?.signal,
+        suggestions
+      )
         .then((issues) => {
           if (options?.signal?.aborted) {
             throw createJiraAbortError('search')
