@@ -120,6 +120,34 @@ async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent)
   )
 }
 
+/** A capability read that never answers (a shared probe can hang) must not hold the start. */
+const HOST_CREATE_CAPABILITY_WAIT_MS = 10_000
+
+async function readHostCreateCapabilities(intent: StructuredAgentSessionLaunchIntent) {
+  const supported = await supportsStructuredAgentSessionCreateMessage(intent.target)
+  const takesExplicitOptions =
+    supported &&
+    intent.explicitLaunchOptions !== undefined &&
+    (await supportsStructuredAgentSessionCreateOptionsMode(intent.target))
+  const sendSelectionSupport = await structuredAgentSessionHostSupports(
+    intent.target,
+    AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+  )
+  const sendSkillsSupport = await structuredAgentSessionHostSupports(
+    intent.target,
+    AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
+  )
+  return { supported, takesExplicitOptions, sendSelectionSupport, sendSkillsSupport }
+}
+
+function answeredWithin<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const unanswered = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('No answer.')), ms)
+  })
+  return Promise.race([work, unanswered]).finally(() => clearTimeout(timer))
+}
+
 // Use each paired attempt’s actual seed; local creates read local settings instead.
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 
@@ -165,21 +193,16 @@ export async function launchStructuredAgentSession(
     let supported = false
     let takesExplicitOptions = false
     try {
-      supported = await supportsStructuredAgentSessionCreateMessage(intent.target)
-      takesExplicitOptions =
-        supported &&
-        intent.explicitLaunchOptions !== undefined &&
-        (await supportsStructuredAgentSessionCreateOptionsMode(intent.target))
-      intent.sendSelectionSupport = await structuredAgentSessionHostSupports(
-        intent.target,
-        AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
+      const read = await answeredWithin(
+        readHostCreateCapabilities(intent),
+        HOST_CREATE_CAPABILITY_WAIT_MS
       )
-      intent.sendSkillsSupport = await structuredAgentSessionHostSupports(
-        intent.target,
-        AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-      )
+      supported = read.supported
+      takesExplicitOptions = read.takesExplicitOptions
+      intent.sendSelectionSupport = read.sendSelectionSupport
+      intent.sendSkillsSupport = read.sendSkillsSupport
     } catch {
-      // Unknown capability stays on the compatible create path.
+      // Unknown or unanswered capability stays on the compatible create path.
     }
     if (!intent.createPrepared) {
       intent.createMessageSupport = supported

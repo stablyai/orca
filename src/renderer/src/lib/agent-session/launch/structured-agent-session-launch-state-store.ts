@@ -83,6 +83,12 @@ export function setStructuredLaunchState(state: StructuredLaunchState): void {
   persistStructuredLaunchState(state)
 }
 
+/** Persist and announce one launch's change without rewriting every other launch's record. */
+export function publishStructuredLaunchStateChange(state: StructuredLaunchState): void {
+  persistStructuredLaunchState(state)
+  publishStructuredLaunchChange(state.intent.sessionId)
+}
+
 export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
   if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
     return false

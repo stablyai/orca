@@ -79,11 +79,9 @@ export type StructuredAgentLaunchResult = {
   releaseCallerAfterUnknownOutcome: () => boolean
 }
 
-function resetStructuredLaunchCallers(
-  state: StructuredLaunchState,
-  retainedOpening: boolean
-): void {
-  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
+function resetStructuredLaunchCallers(state: StructuredLaunchState, keepsRequest: boolean): void {
+  // An unconfirmed chat stays its action's, so a later re-delivery still joins it.
+  const requestId = keepsRequest ? state.callers.attempt.requestId : undefined
   state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
@@ -100,7 +98,7 @@ function restartStructuredLaunchState(
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening, fresh)
     state.intent.surfaceAddress = surfaceAddress
   }
-  resetStructuredLaunchCallers(state, retainedOpening)
+  resetStructuredLaunchCallers(state, wasVisibilityUnknown)
   delete state.failure
   delete state.errorText
   delete state.operationEnded

@@ -8,6 +8,7 @@ import type { StructuredAgentLaunchReceipt } from './structured-agent-session-la
 import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import {
   notifyStructuredLaunchListeners,
+  publishStructuredLaunchStateChange,
   type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
 
@@ -49,12 +50,17 @@ export function trackStructuredLaunchConfirmationDeadline(
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
   const deadline = setTimeout(() => {
-    if (state.promise !== promise || state.cancelled || state.callers.outcome !== 'pending') {
+    if (state.promise !== promise || state.cancelled) {
       return
     }
+    // Named whichever deadline passed first: the start itself still has not answered.
     const awaiting = state.intent.awaiting ?? 'the host'
     state.errorText = `No answer within ${STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS / 1000} s from ${awaiting}.`
     console.warn('[structured-agent-launch] start did not answer', { awaiting })
+    if (state.callers.outcome !== 'pending') {
+      publishStructuredLaunchStateChange(state)
+      return
+    }
     // Settled as an unconfirmed opening message would be, whichever deadline passes first.
     if (state.intent.params.firstMessage) {
       state.operationEnded = true
@@ -62,7 +68,7 @@ export function trackStructuredLaunchConfirmationDeadline(
     }
     state.visibilityUnknown = true
     state.callers.outcome = 'unknown'
-    notifyStructuredLaunchListeners(state.intent.sessionId)
+    publishStructuredLaunchStateChange(state)
   }, STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
   const clear = (): void => clearTimeout(deadline)
   void promise.then(clear, clear)
