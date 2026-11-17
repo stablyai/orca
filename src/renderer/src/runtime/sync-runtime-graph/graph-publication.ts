@@ -36,6 +36,10 @@ import {
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
+import {
+  appliedOrchestrationRevision,
+  applyOrchestrationReply
+} from './orchestration-graph-revision'
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot,
@@ -68,6 +72,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
     : undefined
   const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
+  const orchestrationBase = appliedOrchestrationRevision(state)
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -83,7 +88,8 @@ export async function syncRuntimeGraph(): Promise<void> {
       : {}),
     ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {}),
     // Only what this window applied: main then answers "unchanged" instead of resending rows.
-    ...(senderBase ? { agentSenderBase: senderBase } : {})
+    ...(senderBase ? { agentSenderBase: senderBase } : {}),
+    ...(orchestrationBase !== undefined ? { agentOrchestrationBase: orchestrationBase } : {})
   }
 
   for (const [registrationKey, registeredTab] of mountedTerminalTabEntries()) {
@@ -232,7 +238,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (!result?.agentSenderRevision) {
       currentState?.setAgentSenderPublication?.('local', result?.agentSenderAssociations)
     }
-    currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+    applyOrchestrationReply(currentState, state, orchestrationBase, result)
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {
         applyNativeChatLaunchDraftResolved(currentState, {

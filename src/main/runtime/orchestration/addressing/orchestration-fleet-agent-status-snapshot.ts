@@ -15,7 +15,7 @@ import {
   mintAgentStatusFleetEvidence,
   type AgentStatusRuntimeEnrichment,
   type ObservedAgentStatusPaneIdentity
-} from '../../../ipc/agent-status-ipc-boundary'
+} from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 
 /** Hook rows plus registry identity lookups and the identity observed when each row arrived. */
 export type FleetAgentStatusSnapshotSource = AgentStatusRuntimeEnrichment & {

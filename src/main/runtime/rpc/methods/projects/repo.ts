@@ -24,6 +24,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -103,6 +104,13 @@ export const REPO_METHODS = [
         await context.runtime.createRepo(params.parentPath, params.name, params.kind),
         context
       )
+  }),
+  // Older hosts answer method_not_found; clients then fall back to <host home>/orca/projects.
+  defineMethod({
+    name: 'repo.defaultCreateParent',
+    permission: 'workspace',
+    params: null,
+    handler: (_params, { runtime }) => ({ parentPath: runtime.getDefaultCreateProjectParent() })
   }),
   defineMethod({
     name: 'repo.gitAvailable',
@@ -225,8 +233,9 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.hooks',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    params: RepoHooksRead,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoHooks(params.repo, { createSource: params.createSource })
   }),
   defineMethod({
     name: 'repo.hooksCheck',

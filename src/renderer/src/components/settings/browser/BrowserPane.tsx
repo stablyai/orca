@@ -42,12 +42,12 @@ import {
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../../runtime/hosts/display/execution-host-label'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type BrowserPaneProps = {
   settings: GlobalSettings

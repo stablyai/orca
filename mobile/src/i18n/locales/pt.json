@@ -196,7 +196,6 @@
     },
     "stream": {
       "updateApp": "Atualize o aplicativo Orca para transmitir as guias do navegador aqui.",
-      "updateDesktop": "Atualize o Orca para desktop para transmitir as guias do navegador no celular.",
       "checking": "Verificando o suporte de streaming do navegador de desktop.",
       "pageUnavailable": "A página do navegador ainda não está disponível.",
       "timedOut": "A transmissão do navegador expirou."
@@ -417,6 +416,7 @@
       "otherDevice": "em outro dispositivo"
     },
     "sessionOptionCopy": {
+      "none": "Nenhum",
       "availableAfterSessionStarts": "Disponível após a sessão começar.",
       "chooseInAgentPicker": "Escolha no seletor de agente…",
       "effort": "Esforço",
@@ -730,6 +730,10 @@
       "mark": "Fork ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Fork: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Citar",
+      "hint": "Adiciona o texto selecionado à mensagem como citação"
     }
   },
   "common": {
@@ -1123,7 +1127,6 @@
       "clearSearch": "Limpar busca"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "description": "O orca.yaml deste repositório é executado antes de o espaço de trabalho iniciar. Só o execute se você confiar neste repositório.",
       "dontRun": "Não executar",
       "newScriptLabel": "Novo script de configuração",
@@ -2868,7 +2871,6 @@
     },
     "sheets": {
       "browser": "Navegador",
-      "browserUpdateRequired": "Atualize o desktop para transmitir o navegador ao celular",
       "chat": "Chat",
       "copyAllAndLeave": "Copiar Tudo e Sair",
       "copyDraftsFailed": "Não foi possível copiar os rascunhos",
@@ -2964,7 +2966,6 @@
       "browserCommandFailed": "Falha no comando do navegador",
       "browserCreateFailed": "Falha ao criar o navegador",
       "browserUnavailable": "A página do navegador ainda não está disponível.",
-      "browserUpdateRequired": "É preciso atualizar o desktop para transmitir o navegador ao celular",
       "invalidUrl": "Digite uma URL válida",
       "noteCreateFailed": "Falha ao criar nota em Markdown",
       "untitledNoteCreateFailed": "Não foi possível criar nota em Markdown sem título"
@@ -3118,6 +3119,7 @@
       "conversationCleared": "Esta conversa foi limpa.",
       "goalsUnsupported": "Este agente não aceita objetivos.",
       "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+      "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
       "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
       "historyUnusable": "Não foi possível carregar este chat.",
       "hostReconciling": "O Orca ainda está verificando este chat após reiniciar.",
@@ -4521,28 +4523,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "creating": "Criando…",
       "directoriesLabel": "Diretórios",
       "directories_many": "{{count}} diretórios",
       "directories_one": "{{count}} diretório",
       "directories_other": "{{count}} diretórios",
-      "dontRun": "Não executar",
       "editSparsePreset": "Editar predefinição de checkout esparso",
       "nameLabel": "Nome",
       "namePlaceholder": "Interface do renderizador",
-      "newSetupScript": "Novo script de configuração",
       "newSparsePreset": "Nova predefinição de checkout esparso",
-      "runHooks": "Executar hooks",
       "runSetupAndCreate": "Executar configuração e criar",
-      "runSetupTitle": "Executar a configuração de {{name}}?",
-      "setupChangedTitle": "O script de configuração de {{name}} mudou",
-      "setupScript": "Script de configuração",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
       "setupTitle": "Executar script de configuração?",
       "skipSetupAndCreate": "Pular configuração e criar",
-      "trustFailed": "Falha ao marcar o script de configuração como confiável.",
-      "trustSubtitle": "O orca.yaml deste repositório é executado no seu computador antes de iniciar o espaço de trabalho. Execute-o apenas se você confiar neste repositório."
+      "trustFailed": "Falha ao marcar o script de configuração como confiável."
     },
     "worktreeCreateRetry": {
       "createFailed": "Falha ao criar espaço de trabalho"

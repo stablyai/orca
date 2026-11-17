@@ -410,15 +410,12 @@ jobs:
             printf '%s\n' "$TEST_FILES_JSON" | node "$E2E_SELECTION_SCRIPT" > "$RUNNER_TEMP/general-e2e-specs"
           else
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
-            jq -r '.[] | select(
-              . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
-              . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
-              . != "tests/e2e/orcad-serve-mode-switch.spec.ts" and
-              . != "tests/e2e/workspace-layout-oracle-headless.spec.ts" and
-              . != "tests/e2e/windows-missing-appdata-startup.spec.ts" and
-              . != "tests/e2e/file-explorer-copy-file-windows.spec.ts" and
-              (startswith("tests/e2e/ssh-orcad-") | not)
-            )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
+            jq -r --argjson dedicated '["tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts","tests/e2e/terminal-ibus-hangul-native.spec.ts","tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts","tests/e2e/orcad-serve-mode-switch.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts","tests/e2e/windows-missing-appdata-startup.spec.ts","tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts","tests/e2e/file-explorer-copy-file-windows.spec.ts","tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts"]' --argjson managed '["tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts"]' '
+              .[] | select(. as $spec |
+                (($dedicated | index($spec)) == null) and
+                (($managed | index($spec)) == null) and
+                (startswith("tests/e2e/ssh-orcad-") | not)
+              )' <<<"$TEST_FILES_JSON" > "$RUNNER_TEMP/general-e2e-specs"
           fi
           mapfile -t TEST_FILES < "$RUNNER_TEMP/general-e2e-specs"
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
@@ -426,9 +423,6 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
-          if printf '%s\n' "${TEST_FILES[@]}" | grep -Fxq 'tests/e2e/browser-image-link-focus.spec.ts'; then
-            E2E_ENV+=(ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_BROWSER_NATIVE_XVFB=1)
-          fi
           E2E_PROJECT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
             test -f out/main/ORCA_LAYOUT_OWNER_MAIN
@@ -494,15 +488,6 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      - name: Upload parked split visual proof
-        if: always() && contains(inputs.test_files, 'tests/e2e/terminal-parked-cli-split.spec.ts')
-        uses: actions/upload-artifact@v7
-        with:
-          name: parked-split-proof-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
-          path: test-results/**/parked-cli-split-*.png
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Upload Playwright traces
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
@@ -514,7 +499,7 @@ jobs:
 
   ssh-browser-network-route:
     name: ssh browser network route
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts')
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
@@ -530,15 +515,14 @@ jobs:
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
-        run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts
+        run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts
 
   orcad-serve-mode-switch:
     name: orca serve Electron/orcad mode switch (D7)
     needs: [build]
     if: >-
       inputs.test_files == '' ||
-      contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
-      contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
+      contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts')
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     env:
@@ -583,53 +567,21 @@ jobs:
             node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets "$slot"
           fi
       - name: Switch serve hosts on one profile
-        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
+        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts')
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
       # Only this job builds out/orcad, so the spec's orcad case runs here; the e2e shards run its Electron case.
       - name: Phone Markdown on headless orcad serve
         if: >-
           !cancelled() &&
-          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/headless-serve-mobile-markdown.spec.ts'))
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/mobile-mirror/headless-serve-mobile-markdown.spec.ts'))
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
-      # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
-      - name: Layout oracle on headless serve (orcad and Electron)
-        if: >-
-          !cancelled() &&
-          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts'))
-        env:
-          SKIP_BUILD: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-          LAYOUT_OWNER: ${{ inputs.layout_owner }}
-        run: |
-          REPORT_ARGS=()
-          if [ -n "$LAYOUT_OWNER" ]; then
-            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
-            mkdir -p layout-divergence
-            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/headless-oracle.jsonl"
-            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/headless-oracle-results.json"
-            REPORT_ARGS=('--reporter=list,json')
-          fi
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1 "${REPORT_ARGS[@]}"
-      - name: Summarize layout save divergence
-        if: always() && inputs.layout_owner == 'main'
-        continue-on-error: true
-        run: *summarize_layout_divergence
-      - name: Upload layout save divergence report
-        if: always() && inputs.layout_owner == 'main'
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: layout-divergence-headless${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
-          path: layout-divergence/
-          retention-days: 14
-          if-no-files-found: warn
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/remote/mobile-mirror/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -643,7 +595,7 @@ jobs:
   orcad-ssh-docker:
     name: ssh on managed orcad (Docker ${{ matrix.shard }})
     needs: [build]
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts') || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts')
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     strategy:
@@ -684,7 +636,6 @@ jobs:
             node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-x64-glibc
           fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
-      # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
       - name: Run managed SSH specs on a Docker host
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
@@ -706,7 +657,7 @@ jobs:
           // Older checkout refs retain their full-suite behavior.
           const specs = selection.selectManagedSshE2eSpecs
             ? selection.selectManagedSshE2eSpecs(process.env.TEST_FILES_JSON)
-            : ['tests/e2e/ssh-orcad-']
+            : ["tests/e2e/ssh-orcad-","tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts","tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts"]
           for (const spec of specs) {
             console.log(spec.endsWith('.spec.ts') ? spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' : spec)
           }
@@ -748,7 +699,7 @@ jobs:
   # missing-AppData startup check and the explorer file-copy check, which need the same Windows e2e build.
   orcad-serve-mode-switch-windows:
     name: orca serve on Windows (D7 mode switch, missing AppData)
-    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts') || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts') || contains(inputs.test_files, 'tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts') || contains(inputs.test_files, 'tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts')
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -783,26 +734,26 @@ jobs:
           node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets win32-x64
       # A profile-less Windows session has no roaming AppData; Electron 43 used to crash natively there.
       - name: Start serve with no AppData folder
-        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/windows-missing-appdata-startup.spec.ts')
+        if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts')
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/windows-missing-appdata-startup.spec.ts --project=electron-headless --workers=1
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts --project=electron-headless --workers=1
       # Explorer pastes only a real CF_HDROP, which needs the Windows clipboard and shell.
       - name: Copy a file from the explorer
-        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/file-explorer-copy-file-windows.spec.ts')) }}
+        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts')) }}
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/file-explorer-copy-file-windows.spec.ts --project=electron-headless --workers=1
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts --project=electron-headless --workers=1
       - name: Switch serve hosts on one profile
-        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')) }}
+        if: ${{ !cancelled() && (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts')) }}
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_E2E_PRESERVE_PROFILE_LOGS_DIR: ${{ github.workspace }}\test-results\profile-logs
-        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

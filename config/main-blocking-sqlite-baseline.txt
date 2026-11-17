@@ -18,6 +18,11 @@
 9 src/main/ai-vault-search/storage/session-search-write-buffer.ts
 19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
+1 src/main/ai-vault/scanners/hermes/hermes-state-db-activity.ts
+16 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
+4 src/main/ai-vault/scanners/hermes/hermes-state-db-messages.ts
+6 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
+2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
 4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
@@ -38,7 +43,7 @@
 3 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 13 src/main/native-chat/agent-session-journal/database/journal-database.ts
 7 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 20 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -95,6 +100,7 @@
 2 src/main/native-chat/agent-session-journal/journal-domain-text-snapshot.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-timeline-reads.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-turn-scope.ts
+20 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 10 src/main/native-chat/agent-session-journal/journal-fork-capture.ts
 30 src/main/native-chat/agent-session-journal/journal-fork-preparation.ts
 20 src/main/native-chat/agent-session-journal/journal-fork-presentation.ts
@@ -102,6 +108,7 @@
 10 src/main/native-chat/agent-session-journal/journal-fork-stage-page.ts
 12 src/main/native-chat/agent-session-journal/journal-fork-stages.ts
 4 src/main/native-chat/agent-session-journal/journal-fork-workspace.ts
+2 src/main/native-chat/agent-session-journal/journal-items-by-kind-page.ts
 2 src/main/native-chat/agent-session-journal/journal-open-queue-withdrawal.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
 6 src/main/native-chat/agent-session-journal/journal-sql-automatic-submission-command.ts
@@ -113,7 +120,7 @@
 2 src/main/native-chat/agent-session-journal/journal-sql-edit-lease-command.ts
 12 src/main/native-chat/agent-session-journal/journal-sql-event-tail.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-history-items.ts
-24 src/main/native-chat/agent-session-journal/journal-sql-item-reads.ts
+22 src/main/native-chat/agent-session-journal/journal-sql-item-reads.ts
 10 src/main/native-chat/agent-session-journal/journal-sql-lifecycle-reads.ts
 5 src/main/native-chat/agent-session-journal/journal-sql-message-commit.ts
 12 src/main/native-chat/agent-session-journal/journal-sql-message-effects.ts
@@ -122,6 +129,8 @@
 10 src/main/native-chat/agent-session-journal/journal-sql-rewind-command.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-send-admission.ts
 7 src/main/native-chat/agent-session-journal/journal-sql-steps.ts
+10 src/main/native-chat/agent-session-journal/journal-stored-output-compaction.ts
+4 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
 4 src/main/native-chat/agent-session-journal/journal-writer-effects.ts
 4 src/main/native-chat/agent-session-journal/journal-writer-operation-expiry.ts
 12 src/main/native-chat/agent-session-journal/journal-writer-store-mutation.ts

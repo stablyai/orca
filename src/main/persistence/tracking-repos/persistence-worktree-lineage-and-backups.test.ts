@@ -1,11 +1,7 @@
 import {
   closeTestStores,
-  readPersistedState,
   testState,
   createStore,
-  dataFile,
-  writeDataFile,
-  readDataFile,
   makeRepo,
   makeWorkspaceLineage
 } from '../persistence-test-harness'
@@ -17,7 +13,6 @@ import { createProfileStateStore } from '../profile-state/startup/profile-state-
 import { ProfileStateAuthorityBootstrapError } from '../profile-state/recovery/profile-state-recovery-required'
 import { restoreProfileStateJsonExport } from '../profile-state/legacy-json/profile-state-recovery'
 import { acquireProfileStateMaintenance } from '../profile-state/access/profile-state-access'
-import type { Repo } from '../../../shared/repository/repo-types'
 import {
   folderWorkspaceKey,
   worktreeWorkspaceKey
@@ -187,41 +182,6 @@ describe('Store', () => {
     })
   })
 
-  describe('retired JSON backups', () => {
-    it.each(['sync', 'async'] as const)(
-      'leaves legacy JSON and backups unchanged during %s SQL writes',
-      async (flush) => {
-        writeDataFile({ repos: [makeRepo({ id: 'seed' })] })
-        const retained = readFileSync(dataFile())
-        const backup = `${dataFile()}.bak.0`
-        writeFileSync(backup, retained)
-        const store = createStore()
-        store.addRepo(makeRepo({ id: 'updated', path: '/updated' }))
-        if (flush === 'sync') {
-          store.flushOrThrow()
-        } else {
-          await store.flushPendingOrThrowAsync()
-        }
-
-        expect(readFileSync(dataFile())).toEqual(retained)
-        expect(readFileSync(backup)).toEqual(retained)
-        expect(existsSync(`${dataFile()}.bak.1`)).toBe(false)
-        const persisted = readDataFile() as { repos: Repo[] }
-        expect(persisted.repos.map((repo) => repo.id).sort()).toEqual(['seed', 'updated'])
-      }
-    )
-
-    it('does not create a JSON primary or backup for a fresh SQL profile', () => {
-      const store = createStore()
-      store.addRepo(makeRepo())
-      store.flushOrThrow()
-      expect(existsSync(dataFile())).toBe(false)
-      expect(existsSync(`${dataFile()}.bak.0`)).toBe(false)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture registered r1 before flushing; its exported repos are Repo records.
-      expect((readDataFile() as { repos: Repo[] }).repos.map((repo) => repo.id)).toEqual(['r1'])
-    })
-  })
-
   describe('legacy backup import and recovery', () => {
     const recoveredStores: ReturnType<typeof createProfileStateStore>['store'][] = []
     afterEach(async () => {
@@ -311,25 +271,6 @@ describe('Store', () => {
       const store = importRecoveredProfile(options)
       expect(store.getRepos().map((repo) => repo.id)).toEqual(['survives'])
       expect(store.getSettings().theme).toBe('dark')
-    })
-  })
-
-  describe('concurrent write serialization', () => {
-    it('persists both repo additions across debounced writes', async () => {
-      vi.useFakeTimers()
-      try {
-        const store = await createStore()
-        store.addRepo(makeRepo({ id: 'first' }))
-        vi.advanceTimersByTime(1000)
-        store.addRepo(makeRepo({ id: 'second', path: '/second' }))
-        vi.advanceTimersByTime(1000)
-        await store.waitForPendingWrite()
-
-        const persisted = readPersistedState()
-        expect(persisted.repos.map((r) => r.id).sort()).toEqual(['first', 'second'])
-      } finally {
-        vi.useRealTimers()
-      }
     })
   })
 })

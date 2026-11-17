@@ -395,6 +395,7 @@
       "otherDevice": "başka bir cihaz"
     },
     "sessionOptionCopy": {
+      "none": "Yok",
       "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
       "chooseInAgentPicker": "Ajan seçicisinden seç…",
       "effort": "Çaba",
@@ -669,6 +670,10 @@
       "mark": "Çatal ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Çatal: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Alıntıla",
+      "hint": "Seçili metni mesaja alıntı olarak ekler"
     }
   },
   "common": {
@@ -1006,7 +1011,6 @@
       "clearSearch": "Aramayı temizle"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "description": "Bu repository'deki orca.yaml, çalışma alanı başlamadan önce çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın.",
       "dontRun": "Çalıştırma",
       "newScriptLabel": "Yeni kurulum betiği",
@@ -2427,7 +2431,6 @@
     },
     "sheets": {
       "browser": "Tarayıcı",
-      "browserUpdateRequired": "Mobil tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "chat": "Sohbet",
       "copyAllAndLeave": "Tümünü Kopyala ve Ayrıl",
       "copyDraftsFailed": "Taslaklar kopyalanamadı",
@@ -2523,7 +2526,6 @@
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
       "browserCreateFailed": "Tarayıcı oluşturulamadı",
       "browserUnavailable": "Tarayıcı sayfası henüz kullanılamıyor.",
-      "browserUpdateRequired": "Mobilde tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "invalidUrl": "Geçerli bir URL girin",
       "noteCreateFailed": "Markdown notu oluşturulamadı",
       "untitledNoteCreateFailed": "Başlıksız Markdown notu oluşturulamadı"
@@ -2676,6 +2678,7 @@
       "conversationCleared": "Bu konuşma temizlendi.",
       "goalsUnsupported": "Bu ajan hedefleri desteklemiyor.",
       "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+      "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
       "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
       "historyUnusable": "Bu sohbet yüklenemiyor.",
       "hostReconciling": "Orca yeniden başlatma sonrasında bu sohbeti hâlâ kontrol ediyor.",
@@ -3906,27 +3909,19 @@
       "reconnecting": "Yeniden bağlanılıyor"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "creating": "Oluşturuluyor…",
       "directoriesLabel": "Dizinler",
       "directories_one": "{{count}} dizin",
       "directories_other": "{{count}} dizin",
-      "dontRun": "Çalıştırma",
       "editSparsePreset": "Sparse Ön Ayarını Düzenle",
       "nameLabel": "Ad",
       "namePlaceholder": "İşleyici Arayüzü",
-      "newSetupScript": "Yeni kurulum betiği",
       "newSparsePreset": "Yeni Sparse Ön Ayarı",
-      "runHooks": "Hook'ları çalıştır",
       "runSetupAndCreate": "Kurulumu çalıştır ve oluştur",
-      "runSetupTitle": "{{name}} içindeki kurulum çalıştırılsın mı?",
-      "setupChangedTitle": "{{name}} için kurulum betiği değişti",
-      "setupScript": "Kurulum betiği",
       "setupSubtitle": "Bu çalışma alanını oluşturmadan önce {{name}} için bir kurulum seçeneği belirlemeniz gerekiyor.",
       "setupTitle": "Kurulum Betiği Çalıştırılsın mı?",
       "skipSetupAndCreate": "Kurulumu atla ve oluştur",
-      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi.",
-      "trustSubtitle": "Bu repository'nin orca.yaml dosyası, çalışma alanı başlamadan önce makinenizde çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın."
+      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi."
     },
     "worktreeCreateRetry": {
       "createFailed": "Çalışma alanı oluşturulamadı"

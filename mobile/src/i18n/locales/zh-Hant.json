@@ -395,6 +395,7 @@
       "otherDevice": "其他裝置"
     },
     "sessionOptionCopy": {
+      "none": "無",
       "availableAfterSessionStarts": "工作階段開始後可用。",
       "chooseInAgentPicker": "在代理程式選擇器中選擇…",
       "effort": "推理強度",
@@ -665,6 +666,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "將所選文字作為引用加入訊息"
     }
   },
   "common": {
@@ -1002,7 +1007,6 @@
       "clearSearch": "清除搜尋"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "description": "此存放庫的 orca.yaml 會在工作區啟動前執行。請僅在信任此存放庫時執行。",
       "dontRun": "不執行",
       "newScriptLabel": "新的設定指令碼",
@@ -2423,7 +2427,6 @@
     },
     "sheets": {
       "browser": "瀏覽器",
-      "browserUpdateRequired": "需更新桌面版，才能將瀏覽器畫面串流至手機",
       "chat": "聊天",
       "copyAllAndLeave": "全部複製並離開",
       "copyDraftsFailed": "無法複製草稿",
@@ -2519,7 +2522,6 @@
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
       "browserUnavailable": "瀏覽器頁面尚未就緒。",
-      "browserUpdateRequired": "需更新桌面版才能使用行動版瀏覽器串流",
       "invalidUrl": "請輸入有效的網址",
       "noteCreateFailed": "建立 Markdown 筆記失敗",
       "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記"
@@ -2672,6 +2674,7 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",
       "hostReconciling": "Orca 重啟後仍在檢查此聊天。",
@@ -3902,27 +3905,19 @@
       "reconnecting": "重新連線中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "creating": "建立中…",
       "directoriesLabel": "目錄",
       "directories_one": "{{count}} 個目錄",
       "directories_other": "{{count}} 個目錄",
-      "dontRun": "不執行",
       "editSparsePreset": "編輯稀疏預設",
       "nameLabel": "名稱",
       "namePlaceholder": "算繪器介面",
-      "newSetupScript": "新的設定指令碼",
       "newSparsePreset": "新增稀疏預設",
-      "runHooks": "執行鉤子",
       "runSetupAndCreate": "執行設定並建立",
-      "runSetupTitle": "要執行 {{name}} 的設定指令碼嗎？",
-      "setupChangedTitle": "{{name}} 的設定指令碼已變更",
-      "setupScript": "設定指令碼",
       "setupSubtitle": "建立此工作區前，請先選擇是否為 {{name}} 執行設定。",
       "setupTitle": "要執行設定指令碼嗎？",
       "skipSetupAndCreate": "略過設定並建立",
-      "trustFailed": "無法將設定指令碼設為信任。",
-      "trustSubtitle": "此存放庫的 orca.yaml 會在工作區啟動前於您的電腦上執行。請僅在信任此存放庫時執行。"
+      "trustFailed": "無法將設定指令碼設為信任。"
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"

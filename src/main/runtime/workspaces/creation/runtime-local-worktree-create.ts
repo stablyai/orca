@@ -15,7 +15,10 @@ import {
 } from '../../../git/refs/resolution/repo-default-base-ref'
 
 import { resolveLocalGitUsername } from '../../../git/repositories/git-username'
-import { computeWorkspaceRoot, getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import {
+  computeWorkspaceRoot,
+  getWorktreePathSettings
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import { resolveWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type {

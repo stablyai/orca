@@ -395,6 +395,7 @@
       "otherDevice": "別のデバイス"
     },
     "sessionOptionCopy": {
+      "none": "なし",
       "availableAfterSessionStarts": "セッション開始後に利用できます。",
       "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
       "effort": "推論レベル",
@@ -665,6 +666,10 @@
       "mark": "分岐 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分岐: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "選択したテキストを引用としてメッセージに追加します"
     }
   },
   "common": {
@@ -1002,7 +1007,6 @@
       "clearSearch": "検索をクリア"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "description": "このリポジトリの orca.yaml は、ワークスペースの起動前に実行されます。このリポジトリを信頼できる場合にのみ実行してください。",
       "dontRun": "実行しない",
       "newScriptLabel": "新しいセットアップスクリプト",
@@ -2423,7 +2427,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "chat": "チャット",
       "copyAllAndLeave": "すべてコピーして戻る",
       "copyDraftsFailed": "下書きをコピーできませんでした。",
@@ -2519,7 +2522,6 @@
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
       "browserCreateFailed": "ブラウザの作成に失敗しました。",
       "browserUnavailable": "ブラウザのページはまだ利用できません。",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "invalidUrl": "有効な URL を入力してください。",
       "noteCreateFailed": "Markdown ノートの作成に失敗しました。",
       "untitledNoteCreateFailed": "無題の Markdown ノートを作成できませんでした。"
@@ -2672,6 +2674,7 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
       "hostReconciling": "Orca は再起動後、このチャットをまだ確認しています。",
@@ -3902,27 +3905,19 @@
       "reconnecting": "再接続中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "creating": "作成中…",
       "directoriesLabel": "ディレクトリ",
       "directories_one": "{{count}} 個のディレクトリ",
       "directories_other": "{{count}} 個のディレクトリ",
-      "dontRun": "実行しない",
       "editSparsePreset": "スパースプリセットを編集",
       "nameLabel": "名前",
       "namePlaceholder": "レンダラー UI",
-      "newSetupScript": "新しいセットアップスクリプト",
       "newSparsePreset": "新しいスパースプリセット",
-      "runHooks": "フックを実行する",
       "runSetupAndCreate": "セットアップを実行して作成",
-      "runSetupTitle": "{{name}} のセットアップを実行しますか?",
-      "setupChangedTitle": "{{name}} のセットアップスクリプトが変更されました",
-      "setupScript": "セットアップスクリプト",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
       "setupTitle": "セットアップスクリプトを実行しますか?",
       "skipSetupAndCreate": "セットアップをスキップして作成",
-      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。",
-      "trustSubtitle": "このリポジトリの orca.yaml は、ワークスペースの起動前にコンピュータ上で実行されます。このリポジトリを信頼できる場合のみ実行してください。"
+      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。"
     },
     "worktreeCreateRetry": {
       "createFailed": "ワークスペースの作成に失敗しました"

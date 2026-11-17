@@ -395,6 +395,7 @@
       "otherDevice": "einem anderen Gerät"
     },
     "sessionOptionCopy": {
+      "none": "Keine",
       "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
       "chooseInAgentPicker": "In der Agentenauswahl auswählen…",
       "effort": "Denkaufwand",
@@ -669,6 +670,10 @@
       "mark": "Zweig ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Zweig: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Zitieren",
+      "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
     }
   },
   "common": {
@@ -1006,7 +1011,6 @@
       "clearSearch": "Suche leeren"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "description": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs ausgeführt. Nur ausführen, wenn das Repository vertrauenswürdig ist.",
       "dontRun": "Nicht ausführen",
       "newScriptLabel": "Neues Einrichtungsskript",
@@ -2427,7 +2431,6 @@
     },
     "sheets": {
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop-Update für mobiles Browser-Streaming erforderlich",
       "chat": "Chat",
       "copyAllAndLeave": "Alles kopieren und verlassen",
       "copyDraftsFailed": "Entwürfe konnten nicht kopiert werden",
@@ -2523,7 +2526,6 @@
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
       "browserCreateFailed": "Browser konnte nicht erstellt werden",
       "browserUnavailable": "Browserseite ist noch nicht verfügbar.",
-      "browserUpdateRequired": "Desktop-Update für Browser-Streaming auf Mobilgeräten erforderlich",
       "invalidUrl": "Gültige URL eingeben",
       "noteCreateFailed": "Markdown-Notiz konnte nicht erstellt werden",
       "untitledNoteCreateFailed": "Markdown-Notiz ohne Titel konnte nicht erstellt werden"
@@ -2676,6 +2678,7 @@
       "conversationCleared": "Diese Unterhaltung wurde geleert.",
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+      "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
       "hostReconciling": "Orca prüft diesen Chat nach dem Neustart noch.",
@@ -3906,27 +3909,19 @@
       "reconnecting": "Wird erneut verbunden"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "creating": "Wird erstellt…",
       "directoriesLabel": "Verzeichnisse",
       "directories_one": "{{count}} Verzeichnis",
       "directories_other": "{{count}} Verzeichnisse",
-      "dontRun": "Nicht ausführen",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
       "namePlaceholder": "Renderer-Oberfläche",
-      "newSetupScript": "Neues Einrichtungsskript",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
-      "runHooks": "Hooks ausführen",
       "runSetupAndCreate": "Einrichten und erstellen",
-      "runSetupTitle": "Einrichtung von {{name}} ausführen?",
-      "setupChangedTitle": "Einrichtungsskript von {{name}} geändert",
-      "setupScript": "Einrichtungsskript",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
       "setupTitle": "Einrichtungsskript ausführen?",
       "skipSetupAndCreate": "Ohne Einrichtung erstellen",
-      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden.",
-      "trustSubtitle": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs auf deinem Rechner ausgeführt. Nur ausführen, wenn du diesem Repository vertraust."
+      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden."
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."

@@ -293,6 +293,32 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status).toBe('blocked')
   })
 
+  // #38639: a relayed WSL server answers worktree.ps and status.get from inside the distro.
+  it('resumes a relayed WSL server session only when that server listed it', () => {
+    const serverRoute = {
+      activeWorktreeId: 'route-wt',
+      worktrees: [worktree({ worktreeId: 'route-wt', path: '/home/ada/repo' })],
+      repos,
+      hostPlatform: 'linux' as const
+    }
+    const asServerListsIt = resolve({
+      ...serverRoute,
+      session: session({
+        cwd: '/home/ada/repo',
+        filePath: '/home/ada/.claude/projects/app/s.jsonl'
+      })
+    })
+    // The Windows desktop's scan names the same transcript through its WSL share.
+    const asDesktopListsIt = resolve({
+      ...serverRoute,
+      session: session({ cwd: '/home/ada/repo', filePath: WSL_TRANSCRIPT })
+    })
+    expect(asServerListsIt.status === 'ready' ? asServerListsIt.workspacePath : null).toBe(
+      '/home/ada/repo'
+    )
+    expect(asDesktopListsIt.status).toBe('blocked')
+  })
+
   it('resolves a folder workspace pinned to an SSH host by its own executionHostId', () => {
     const target = resolve({
       session: session({ executionHostId: 'ssh:pinned', cwd: '/home/ada/pinned/src' }),

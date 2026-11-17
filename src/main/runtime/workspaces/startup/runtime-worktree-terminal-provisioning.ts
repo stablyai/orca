@@ -53,6 +53,8 @@ export type WorktreeTerminalProvisioningArgs = {
   worktreePath: string
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
+  /** Approved commands for tabs the create already opened: start them as new tabs, not deduped by the layout. */
+  defaultTabsBesideExisting?: true
   primaryTerminalHandle?: string | null
   hasStartupTerminal: boolean
   setupOnly?: boolean
@@ -71,17 +73,18 @@ export async function createWorktreeDefaultTabTerminals(
   worktreeId: string,
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
   surfacing: TerminalSurfacing = {},
-  startupHandle?: string
-): Promise<string[]> {
+  startupHandle?: string,
+  besideExisting?: true
+): Promise<DefaultTabTerminals> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
-    return []
+    return { handles: [], failed: false }
   }
   const [first, ...rest] = defaultTabs.tabs
   // Startup occupies the first default tab: inherit its title/color without also running its template command.
   if (startupHandle && first) {
     await dressAsDefaultTab(host, worktreeId, startupHandle, first)
   }
-  if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs) {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs && !besideExisting) {
     return startDefaultTabsInLayout(
       host,
       host.applyDefaultTabs,
@@ -90,6 +93,7 @@ export async function createWorktreeDefaultTabTerminals(
     )
   }
   const handles: string[] = []
+  let failed = false
   for (const template of startupHandle ? rest : defaultTabs.tabs) {
     try {
       const command = template.command?.trim()
@@ -101,11 +105,15 @@ export async function createWorktreeDefaultTabTerminals(
       handles.push(terminal.handle)
       await dressAsDefaultTab(host, worktreeId, terminal.handle, template)
     } catch (error) {
+      failed = true
       console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
     }
   }
-  return handles
+  return { handles, failed }
 }
+
+/** `failed`: a tab didn't start, which an approved-setup run reports instead of claiming success. */
+type DefaultTabTerminals = { handles: string[]; failed: boolean }
 
 async function startDefaultTabsInLayout(
   host: WorktreeTerminalProvisioningHost,
@@ -122,7 +130,7 @@ async function startDefaultTabsInLayout(
     surfacing: TerminalSurfacing
   },
   templates: NonNullable<CreateWorktreeResult['defaultTabs']>['tabs']
-): Promise<string[]> {
+): Promise<DefaultTabTerminals> {
   const panes = templates.map((template) => ({
     template,
     tab: {
@@ -138,11 +146,12 @@ async function startDefaultTabsInLayout(
   )
   if (!createdTabs) {
     console.warn(`[worktree-create] Main refused the default tabs for ${worktreeId}`)
-    return []
+    return { handles: [], failed: true }
   }
   // Start only newly created defaults; existing workspaces receive none again.
   const created = new Set(createdTabs.map(({ tabId }) => tabId))
   const handles: string[] = []
+  let failed = false
   for (const { template, tab } of panes.filter(({ tab }) => created.has(tab.tabId))) {
     const command = template.command?.trim()
     try {
@@ -155,10 +164,11 @@ async function startDefaultTabsInLayout(
       })
       handles.push(terminal.handle)
     } catch (error) {
+      failed = true
       console.warn(`[worktree-create] Failed to start a default tab for ${worktreeId}:`, error)
     }
   }
-  return handles
+  return { handles, failed }
 }
 
 // Appearance failures must not cost the tab, the other field or workspace creation.
@@ -187,9 +197,9 @@ async function dressAsDefaultTab(
 export async function provisionWorktreeTerminals(
   host: WorktreeTerminalProvisioningHost,
   args: WorktreeTerminalProvisioningArgs
-): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; failed?: true }> {
   if (!host.canSpawn()) {
-    return { setupSpawned: false, setupTerminalHandle: null }
+    return { setupSpawned: false, setupTerminalHandle: null, failed: true }
   }
   const surfacing: TerminalSurfacing = {
     ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
@@ -198,17 +208,20 @@ export async function provisionWorktreeTerminals(
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
   let shellSkippedForSetup = false
+  let failed = false
   try {
     const setupOnly = args.setup !== undefined && args.setupOnly === true
-    const defaultHandles = await createWorktreeDefaultTabTerminals(
+    const defaultTabTerminals = await createWorktreeDefaultTabTerminals(
       host,
       args.worktreeSelector,
       args.worktreeId,
       setupOnly ? undefined : args.defaultTabs,
       surfacing,
-      args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined
+      args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined,
+      args.defaultTabsBesideExisting
     )
-    const primaryHandle = args.primaryTerminalHandle ?? defaultHandles[0] ?? null
+    failed = defaultTabTerminals.failed
+    const primaryHandle = args.primaryTerminalHandle ?? defaultTabTerminals.handles[0] ?? null
     if (!args.hasStartupTerminal && !primaryHandle && setupOnly) {
       shellSkippedForSetup = true
     }
@@ -259,6 +272,7 @@ export async function provisionWorktreeTerminals(
       }
     }
   } catch (error) {
+    failed = true
     const message = error instanceof Error ? error.message : String(error)
     console.warn(
       `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`
@@ -283,5 +297,5 @@ export async function provisionWorktreeTerminals(
         })
     }
   }
-  return { setupSpawned, setupTerminalHandle }
+  return { setupSpawned, setupTerminalHandle, ...(failed ? { failed: true as const } : {}) }
 }
