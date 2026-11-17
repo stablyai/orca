@@ -5,6 +5,7 @@ import type {
   TerminalPaneRevealTarget
 } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PtyPaneOf } from '../surface/pty-pane-query'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
@@ -201,10 +202,11 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
       ptyIds.add(ptyId)
       byTab.set(tabId, ptyIds)
     }
-    // One captured lookup: per-PTY `paneOfPty` would scan every main leaf for each PTY.
-    const paneOf = this.captureTerminalPaneReader()
+    // One lookup captured on first use: per-PTY `paneOfPty` would scan every main leaf for each PTY.
+    let paneOf: PtyPaneOf | undefined
     for (const pty of this.ptysById.values()) {
       if (pty.connected && pty.worktreeId === worktreeId) {
+        paneOf ??= this.captureTerminalPaneReader()
         add(paneOf(pty).tabId, pty.ptyId)
       }
     }
