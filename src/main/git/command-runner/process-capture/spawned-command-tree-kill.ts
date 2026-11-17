@@ -1,19 +1,20 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
-  isAbandonedWorkerChildError,
+  runOnceWorkerReportsPid,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
-const WORKER_PID_WAIT_MS = 5_000
 
 export function killSpawnedCommandTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {
   const pid = child.pid
   if (!pid && process.platform === 'win32' && child instanceof WorkerThreadChildProcess) {
-    return killOnceWorkerReportsPid(child)
+    return runOnceWorkerReportsPid(child, () => killSpawnedCommandTree(child).then(() => true)).then(
+      () => {}
+    )
   }
   if (!pid || process.platform !== 'win32') {
     child.kill()
@@ -72,47 +73,5 @@ export function killSpawnedCommandTree(
       finish(true)
     }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
-  })
-}
-
-/** The worker created the process but its PID is still in flight; a root-only kill would leave hooks and filters running. */
-function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void> {
-  if (child.closed) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    let settled = false
-    const settle = (): void => {
-      if (!settled) {
-        settled = true
-        clearTimeout(timer)
-        resolve()
-      }
-    }
-    const detach = (): void => {
-      child.off('spawn', onSpawn)
-      child.off('close', onClose)
-      child.off('error', onError)
-    }
-    // A late PID still gets the tree kill, even after the caller stopped waiting for it.
-    const onSpawn = (): void => {
-      detach()
-      clearTimeout(timer)
-      void killSpawnedCommandTree(child).then(settle)
-    }
-    const onClose = (): void => {
-      detach()
-      settle()
-    }
-    const onError = (error: Error): void => {
-      if (isAbandonedWorkerChildError(error)) {
-        onClose()
-      }
-    }
-    // Stop waiting without a root kill: one queued behind the spawn could end the root before taskkill walks its tree.
-    const timer = setTimeout(settle, WORKER_PID_WAIT_MS)
-    child.on('spawn', onSpawn)
-    child.on('close', onClose)
-    child.on('error', onError)
   })
 }

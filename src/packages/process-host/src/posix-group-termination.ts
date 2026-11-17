@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
+import type { ProcessChild } from './process-spec'
 import {
   signalProcessTree,
   forceTerminateProcessTree,
@@ -10,7 +10,7 @@ export const PROCESS_EXIT_GRACE_MS = 2_000
 
 /** Only for children launched in an owned native POSIX group. Normal close preserves hook daemons. */
 export function createPosixGroupTermination(
-  child: ChildProcess,
+  child: ProcessChild,
   onTerminated: () => void
 ): { stop: () => Promise<boolean>; close: () => void } {
   let stopping = false

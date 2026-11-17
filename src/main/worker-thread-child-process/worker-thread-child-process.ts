@@ -23,6 +23,7 @@ export const IDLE_TEARDOWN_MS = 2 * 60_000
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
 // Node reports a negative errno as the exit code of a child that never started.
 const SPAWN_FAILED_EXIT_CODE = -1
+const WORKER_PID_WAIT_MS = 5_000
 
 /** False when the child is no longer reachable through a live worker. */
 type SendRequest = (request: WorkerThreadChildRequest) => boolean
@@ -57,12 +58,15 @@ class WorkerThreadChildStdin extends EventEmitter {
     super()
   }
 
-  write(data: string): boolean {
+  write(data: string | Uint8Array): boolean {
     this.send({ type: 'stdin-write', id: this.id, data })
     return true
   }
 
-  end(): void {
+  end(data?: string | Uint8Array): void {
+    if (data !== undefined) {
+      this.write(data)
+    }
     this.send({ type: 'stdin-end', id: this.id })
   }
 }
@@ -72,6 +76,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
   closed = false
+  abandoned = false
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -121,6 +126,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
         }
         return
       case 'error':
+        if (isAbandonedWorkerChildError(event.error)) {
+          this.abandoned = true
+        }
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
@@ -146,6 +154,56 @@ export class WorkerThreadChildProcess extends EventEmitter {
       this.emit('error', toError(payload))
     }
   }
+}
+
+/** Keep a late spawn subscribed: killing the root before a tree walk would orphan descendants. */
+export function runOnceWorkerReportsPid(
+  child: WorkerThreadChildProcess,
+  action: () => Promise<boolean>
+): Promise<boolean> {
+  if (child.abandoned) {
+    return Promise.resolve(false)
+  }
+  if (child.pid) {
+    return action()
+  }
+  if (child.closed) {
+    return Promise.resolve(false)
+  }
+  return new Promise((resolve) => {
+    const settle = (result: boolean): void => {
+      clearTimeout(timer)
+      resolve(result)
+    }
+    const detach = (): void => {
+      child.off('spawn', onSpawn)
+      child.off('close', onClose)
+      child.off('error', onError)
+    }
+    const onSpawn = (): void => {
+      detach()
+      clearTimeout(timer)
+      try {
+        void action().then(settle, () => settle(false))
+      } catch {
+        settle(false)
+      }
+    }
+    const onClose = (): void => {
+      detach()
+      settle(false)
+    }
+    const onError = (error: Error): void => {
+      if (isAbandonedWorkerChildError(error)) {
+        onClose()
+      }
+    }
+    const timer = setTimeout(() => settle(false), WORKER_PID_WAIT_MS)
+    timer.unref?.()
+    child.on('spawn', onSpawn)
+    child.on('close', onClose)
+    child.on('error', onError)
+  })
 }
 
 export class WorkerThreadChildProcessHost {
