@@ -149,15 +149,25 @@ describe('release draft source and uploader contract', () => {
     }
   )
 
-  it('heals existing-draft metadata and preserves the draft identity', async () => {
+  it('heals existing-draft metadata and always resends tag_name so the PATCH cannot untag it', async () => {
     const f = fixture({ existing: true })
     await f.run()
     expect(f.writes).toEqual([
       {
         method: 'PATCH',
         route: '/releases/259',
-        body: { body: 'new notes', target_commitish: 'main' }
+        body: { tag_name: tag, body: 'new notes', target_commitish: 'main' }
       }
+    ])
+  })
+
+  it('resends tag_name when rolling back a body patched onto a just-published release', async () => {
+    const published = { ...draft, draft: false, body: 'new notes' }
+    const f = fixture({ existing: true, writeResult: published, afterPatch: published })
+    await expect(f.run()).rejects.toThrow('restored its published body')
+    expect(f.writes.map((write) => write.body)).toEqual([
+      { tag_name: tag, body: 'new notes', target_commitish: 'main' },
+      { tag_name: tag, body: 'original notes' }
     ])
   })
 

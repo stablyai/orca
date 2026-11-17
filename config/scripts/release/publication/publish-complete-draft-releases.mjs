@@ -121,7 +121,9 @@ export async function publishCompleteDraftReleases({
       token,
       {
         method: 'PATCH',
+        // tag_name on every PATCH: one without it reset the v1.4.259 draft to an untagged-… release.
         body: JSON.stringify({
+          tag_name: tag,
           draft: false,
           prerelease: isRcTag(tag)
         })
