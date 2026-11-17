@@ -20,6 +20,24 @@ type LoadedBlame = { blame: ReadyBlame; headLines: string[]; target: GitBlameTar
 // monaco.editor.CursorChangeReason.Explicit: arrow keys, clicks, go-to; typing is NotSet.
 const CURSOR_CHANGE_EXPLICIT = 3
 
+// Same-file splits and a focus right after activation ask for the same blame at once: share one call.
+const inFlightBlame = new Map<string, Promise<GitBlameResult>>()
+
+function loadBlameOnce(
+  target: GitBlameTarget,
+  knownHeadOid: string | undefined
+): Promise<GitBlameResult> {
+  const key = JSON.stringify([target.git, target.relativePath, knownHeadOid ?? null])
+  let pending = inFlightBlame.get(key)
+  if (!pending) {
+    pending = getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).finally(() => {
+      inFlightBlame.delete(key)
+    })
+    inFlightBlame.set(key, pending)
+  }
+  return pending
+}
+
 function commitIndexForHeadLine(ranges: number[], headLine: number): number {
   const line = headLine + 1
   let low = 0
@@ -169,8 +187,11 @@ export function useMonacoGitBlame(params: {
       // Invalidate any pending reply first, including when no target resolves below.
       loads.generation += 1
       const generation = loads.generation
-      // Only the active pane runs git: hidden worktrees and other splits stay mounted.
-      if (!isActivePane()) {
+      // Only the focused or active-file pane runs git: hidden worktrees and other splits stay mounted.
+      if (
+        !ed.hasTextFocus() &&
+        !(useAppStore.getState().activeFileId === fileId && isActivePane())
+      ) {
         if (reason === 'headMoved') {
           loadedRef.current = null
           mapping = null
@@ -204,7 +225,7 @@ export function useMonacoGitBlame(params: {
         known.target.relativePath === target.relativePath
       // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
       const knownHeadOid = sameFile ? known.blame.headOid : undefined
-      void getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).then((result) => {
+      void loadBlameOnce(target, knownHeadOid).then((result) => {
         if (disposed || generation !== loads.generation) {
           return
         }
@@ -256,9 +277,13 @@ export function useMonacoGitBlame(params: {
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
-      if (loadOwed && state.activeFileId === fileId && previous.activeFileId !== fileId) {
-        load('status')
-        return
+      if (state.activeFileId === fileId && previous.activeFileId !== fileId) {
+        if (loadOwed) {
+          load('status')
+          return
+        }
+        // Back to an already-loaded split: show its blame without waiting for a cursor move.
+        update()
       }
       const before = headKey ? previous.gitStatusHeadByWorktree[headKey] : undefined
       const after = headKey ? state.gitStatusHeadByWorktree[headKey] : undefined
