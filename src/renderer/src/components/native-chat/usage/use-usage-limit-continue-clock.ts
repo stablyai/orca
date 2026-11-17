@@ -33,7 +33,9 @@ export function useUsageLimitContinueClock(at: number | undefined): boolean {
   const snapshot = useSyncExternalStore(subscribe, () => {
     const now = new Date()
     const passed = at !== undefined && now.getTime() >= at
-    return `${passed ? 'ready' : 'waiting'}|${now.toDateString()}|${now.getTimezoneOffset()}`
+    // The zone's name, not just today's offset: two zones can agree now and differ at the reset.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return `${passed ? 'ready' : 'waiting'}|${now.toDateString()}|${zone}`
   })
   return snapshot.startsWith('ready|')
 }
