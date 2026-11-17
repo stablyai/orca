@@ -18,24 +18,15 @@ import type {
 } from './journal-sql-reader-protocol'
 
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
-import { JournalReaderAdmission, type JournalReaderTicket } from './journal-sql-reader-admission'
 import {
+  JournalReaderAdmission,
+  journalReaderOperationAdmitted,
+  type JournalReaderTicket
+} from './journal-sql-reader-admission'
+import type {
   JournalReaderReplyCredit,
-  type JournalReaderReplyCreditGrant
+  JournalReaderReplyCreditClaim
 } from './journal-sql-reader-reply-credit'
-
-/** Releases free reader state others wait on, and the record set opens every chat. */
-function admitted(operation: JournalSqlReaderOperation): boolean {
-  switch (operation.kind) {
-    case 'fork-release':
-    case 'conversion-release':
-      return false
-    case 'database':
-      return operation.operation.kind !== 'records'
-    default:
-      return true
-  }
-}
 
 export class JournalSqlForkReader {
   private closing?: Promise<void>
@@ -108,8 +99,7 @@ export class ReaderSlot {
   private readonly ready = Promise.withResolvers<void>()
   private readonly exited = Promise.withResolvers<void>()
   private closing?: Promise<void>
-  private readonly grant: JournalReaderReplyCreditGrant | undefined
-  private retired = false
+  private readonly credit: JournalReaderReplyCreditClaim | undefined
 
   admissionStats() {
     return this.admission.stats()
@@ -124,19 +114,17 @@ export class ReaderSlot {
     originalFilename: string,
     workerPath: string,
     private readonly admission = new JournalReaderAdmission(Infinity),
-    private readonly replyCredit?: JournalReaderReplyCredit
+    replyCredit?: JournalReaderReplyCredit
   ) {
-    this.grant = replyCredit?.claim()
+    this.credit = replyCredit?.claim()
     try {
       this.worker = spawnWorkerThread(workerPath, {
         name: 'orca-journal-sql-reader',
-        workerData: { filename, originalFilename, replyCredit: this.grant },
+        workerData: { filename, originalFilename, replyCredit: this.credit?.grant },
         execArgv: []
       })
     } catch (error) {
-      if (this.grant) {
-        replyCredit?.retire(this.grant.index)
-      }
+      this.credit?.retire()
       throw error
     }
     const startup = setTimeout(() => {
@@ -171,7 +159,7 @@ export class ReaderSlot {
       } else if (pending) {
         pending.resolve(reply)
       } else if (reply.bytes !== undefined) {
-        this.releaseCredit(reply.bytes)
+        this.credit?.release(reply.bytes)
       }
     })
     this.worker.on('error', (error) => this.fail(error))
@@ -179,10 +167,7 @@ export class ReaderSlot {
       if (!this.closing) {
         this.fail(new Error(`journal SQL reader exited (${code})`))
       }
-      if (this.grant && !this.retired) {
-        this.retired = true
-        this.replyCredit?.retire(this.grant.index)
-      }
+      this.credit?.retire()
       this.exited.resolve()
     })
     // Startup can fail before a caller awaits readiness.
@@ -249,7 +234,7 @@ export class ReaderSlot {
       return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
     }
     this.worker.ref()
-    const admits = admitted(operation)
+    const admits = journalReaderOperationAdmitted(operation)
     // A request rejected by slot failure or close leaves the admission queue at once.
     const settled = new AbortController()
     const admissionSignal = signal ? AbortSignal.any([signal, settled.signal]) : settled.signal
@@ -264,7 +249,7 @@ export class ReaderSlot {
           queueMicrotask(() => {
             ticket?.consumed()
             if (reply.bytes !== undefined) {
-              this.releaseCredit(reply.bytes)
+              this.credit?.release(reply.bytes)
             }
           })
         },
@@ -301,12 +286,6 @@ export class ReaderSlot {
         })
     })
     return { id, result }
-  }
-
-  private releaseCredit(bytes: number): void {
-    if (this.grant && !this.retired) {
-      this.replyCredit?.release(this.grant.index, bytes)
-    }
   }
 
   close(): Promise<void> {

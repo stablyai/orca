@@ -1,3 +1,5 @@
+import type { JournalSqlReaderOperation } from './journal-sql-reader-protocol'
+
 /**
  * Four reader workers bound concurrency, not outstanding requests: every request posted at once
  * becomes a reply main must hold. Each reader admits this many reads at a time in FIFO, so the
@@ -127,5 +129,18 @@ export class JournalReaderAdmission {
       this.waiting.delete(waiter)
       waiter.admit(this.ticket())
     }
+  }
+}
+
+/** Releases free reader state others wait on, and the record set opens every chat. */
+export function journalReaderOperationAdmitted(operation: JournalSqlReaderOperation): boolean {
+  switch (operation.kind) {
+    case 'fork-release':
+    case 'conversion-release':
+      return false
+    case 'database':
+      return operation.operation.kind !== 'records'
+    default:
+      return true
   }
 }

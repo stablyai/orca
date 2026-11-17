@@ -64,7 +64,9 @@ async function chatWithLargeItems(): Promise<{ filename: string; itemIds: string
   const itemIds = probe
     .prepare(`SELECT item_id FROM journal_items WHERE session_id='session' AND hidden=0`)
     .all()
-    .map((row) => String((row as { item_id: unknown }).item_id))
+    .map((row) =>
+      typeof row === 'object' && row !== null && 'item_id' in row ? String(row.item_id) : ''
+    )
   probe.close()
   return { filename, itemIds }
 }

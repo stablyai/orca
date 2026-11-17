@@ -16,8 +16,14 @@ import {
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { measureJournalReaderReply } from './journal-sql-reader-reply-limit'
 import {
+  forceJournalReaderReplyCredit,
+  JOURNAL_READER_REPLY_CREDIT_WAIT_MS,
+  JOURNAL_READER_REPLY_CREDIT_WAIT_SLICE_MS,
+  JOURNAL_READER_REPLY_RECENT_RELEASE_MS,
+  JOURNAL_READER_REPLY_STALL_WAIT_MS,
+  journalReaderReplyCreditReleases,
   returnJournalReaderReplyCredit,
-  takeJournalReaderReplyCredit,
+  tryTakeJournalReaderReplyCredit,
   type JournalReaderReplyCreditGrant
 } from './journal-sql-reader-reply-credit'
 
@@ -51,6 +57,43 @@ function reply(message: JournalSqlReaderReply): void {
     // Main will never see this reply, so it can never return the credit.
     returnJournalReaderReplyCredit(replyCredit, bytes)
     throw error
+  }
+}
+
+/** Blocks this reader, never main, until its reply fits; false when it gave up waiting. */
+function takeJournalReaderReplyCredit(
+  grant: JournalReaderReplyCreditGrant,
+  bytes: number
+): boolean {
+  const releases = journalReaderReplyCreditReleases(grant)
+  const started = Date.now()
+  let lastRelease = Atomics.load(releases.counters, releases.index)
+  let lastReleaseAt = -Infinity
+  while (true) {
+    const released = Atomics.load(releases.counters, releases.index)
+    if (tryTakeJournalReaderReplyCredit(grant, bytes)) {
+      return true
+    }
+    const at = Date.now()
+    if (released !== lastRelease) {
+      lastRelease = released
+      lastReleaseAt = at
+    }
+    const waited = at - started
+    if (
+      (at - lastReleaseAt < JOURNAL_READER_REPLY_RECENT_RELEASE_MS &&
+        waited >= JOURNAL_READER_REPLY_CREDIT_WAIT_MS) ||
+      waited >= JOURNAL_READER_REPLY_STALL_WAIT_MS
+    ) {
+      forceJournalReaderReplyCredit(grant, bytes)
+      return false
+    }
+    Atomics.wait(
+      releases.counters,
+      releases.index,
+      released,
+      JOURNAL_READER_REPLY_CREDIT_WAIT_SLICE_MS
+    )
   }
 }
 

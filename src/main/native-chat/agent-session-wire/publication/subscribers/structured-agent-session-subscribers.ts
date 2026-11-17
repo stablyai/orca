@@ -17,24 +17,23 @@ import {
   subscriberCommandsChanged
 } from './agent-session-subscriber-frame-fields'
 import {
-  deliverToSubscriber,
   publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import {
-  publishSubscriberLiveText,
-  republishSubscriberBackgroundTasks
-} from './agent-session-live-publications'
+import { publishSubscriberLiveText } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import {
   SubscriberDeliveryLane,
-  type SubscriberCatchUp,
   type SubscriberDeliveryRetention
 } from './agent-session-subscriber-delivery-lane'
+import {
+  subscriberLaneRetention,
+  subscriberLaneRunners
+} from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
@@ -60,17 +59,7 @@ export class AgentSessionSubscribers {
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
   retention(measured: Map<object, number>): SubscriberDeliveryRetention[] {
-    const now = this.now()
-    const lanes: SubscriberDeliveryRetention[] = []
-    for (const session of this.bySession.values()) {
-      for (const subscriber of session.values()) {
-        const lane = this.lanes.get(subscriber)
-        if (lane && !lane.idle) {
-          lanes.push(lane.retention(now, measured))
-        }
-      }
-    }
-    return lanes
+    return subscriberLaneRetention(this.bySession, this.lanes, this.now(), measured)
   }
 
   subscriberCountForTests(sessionId: string): number {
@@ -164,10 +153,8 @@ export class AgentSessionSubscribers {
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
-    for (const subscriber of targets) {
-      if (this.isActive(subscriber)) {
-        this.lane(subscriber).liveText({ journal, fence, items, hostNow })
-      }
+    for (const subscriber of targets.filter(this.isActive)) {
+      this.lane(subscriber).liveText({ journal, fence, items, hostNow })
     }
   }
 
@@ -315,67 +302,18 @@ export class AgentSessionSubscribers {
   }
 
   private lane(subscriber: Subscriber): SubscriberDeliveryLane {
-    let lane = this.lanes.get(subscriber)
-    if (!lane) {
-      const { sessionId } = subscriber
-      lane = new SubscriberDeliveryLane({
-        catchUp: ({ journal, port, hostNow, activity }) =>
-          deliverToSubscriber(port, {
-            subscriber,
-            journal,
-            hostNow,
-            emitCheckpoint: false,
-            activity
-          }),
-        backgroundTasks: (fence) =>
-          republishSubscriberBackgroundTasks(
-            this.deliveryPort(),
-            [subscriber],
-            sessionId,
-            fence,
-            this.now()
-          ),
-        liveText: ({ journal, fence, items, hostNow }) =>
-          publishSubscriberLiveText(this.deliveryPort(), {
-            sessionId,
-            journal,
-            fence,
-            items,
-            subscribers: [subscriber],
-            hostNow
-          }),
-        mergeCatchUp: (pending, next) => this.mergeCatchUp(pending, next),
-        runnable: () => this.isActive(subscriber),
-        failed: (error) => {
-          if (!(error instanceof SubscriberFrameSuperseded)) {
-            this.fail(subscriber, error)
-          }
-        },
-        now: this.now
-      })
-      this.lanes.set(subscriber, lane)
-    }
+    const lane =
+      this.lanes.get(subscriber) ??
+      new SubscriberDeliveryLane(subscriberLaneRunners(subscriber, this.laneOwner))
+    this.lanes.set(subscriber, lane)
     return lane
   }
 
-  /** The newer fan-out's reads are fresher; a text-only commit never hides an owed queue read. */
-  private mergeCatchUp(
-    pending: SubscriberCatchUp,
-    next: SubscriberCatchUp
-  ): SubscriberCatchUp | undefined {
-    if (pending.journal !== next.journal) {
-      return undefined
-    }
-    const queueChanged = pending.queueChanged || next.queueChanged
-    const activity = next.activity !== undefined ? next.activity : pending.activity
-    return {
-      journal: next.journal,
-      port: queueChanged === next.queueChanged ? next.port : next.queuePort(),
-      queuePort: next.queuePort,
-      queueChanged,
-      hostNow: next.hostNow,
-      ...(activity !== undefined ? { activity } : {})
-    }
+  private readonly laneOwner = {
+    deliveryPort: () => this.deliveryPort(),
+    now: () => this.now(),
+    isActive: (subscriber: Subscriber) => this.isActive(subscriber),
+    fail: (subscriber: Subscriber, error: unknown) => this.fail(subscriber, error)
   }
 
   /**
