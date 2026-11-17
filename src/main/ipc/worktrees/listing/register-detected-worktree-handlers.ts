@@ -27,6 +27,7 @@ import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restor
 import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 import { setWslStoppedWorktreeRescanNotifier } from './wsl-stopped-worktree-listing'
 import { scanWorktreesStartingWslDistro } from './wsl-distro-starting-scan'
+import { settleLocalDetectedListingWithin } from './settle-local-detected-listing'
 
 export const DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS = 30_000
 
@@ -113,12 +114,19 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
       }
       const connectionId = getRepoDialableSshTargetId(repo)
       const authority = connectionId ? { ...getSshProviderAuthority(connectionId) } : undefined
-      const result = await listDetectedWorktreesForCapturedRepo(
-        store,
-        repo,
+      const result = await settleLocalDetectedListingWithin(
+        listDetectedWorktreesForCapturedRepo(
+          store,
+          repo,
+          () =>
+            isCapturedRepoCurrent(store, repo) &&
+            (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
+        ),
+        DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS,
         () =>
-          isCapturedRepoCurrent(store, repo) &&
-          (!connectionId || (authority !== undefined && isCurrentSshProviderAuthority(authority)))
+          console.warn(
+            `[worktrees] local listDetected for ${repo.id} did not settle in ${DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS} ms; continuing with the metadata fallback (#43572)`
+          )
       )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         dropWorkspacesTheListingInvalidates(store, result)
