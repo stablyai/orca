@@ -35,6 +35,9 @@ export const AI_VAULT_AGENTS = [
 // RPC clamps scopePaths to this bound because paths only widen discovery; matching producer-side caps are optional.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 
+// Remote list scans parse whole transcript trees; both RPC edges must outlast a cold cache.
+export const AI_VAULT_LIST_TIMEOUT_MS = 150_000
+
 // IPC drops Error.name; recognize cancelled scans by this shared message literal.
 export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
 

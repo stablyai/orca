@@ -67,7 +67,7 @@ export function traexNotificationNotice(
         }
       : traexFailureNotice(params)
   }
-  if (method === 'model/verificationWarning') {
+  if (method === 'model/verification') {
     const verifications = Array.isArray(params.verifications)
       ? params.verifications.filter((entry): entry is string => typeof entry === 'string')
       : []

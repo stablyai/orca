@@ -1,7 +1,31 @@
 import { randomUUID } from 'node:crypto'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { TraexAppServerConnection } from './traex-app-server-connection'
+import type { TraexSession } from './traex-session'
 
 const NAME_TIMEOUT_MS = 20_000
+
+/** Prefer the live thread's own naming so the CLI and Orca agree on one title. */
+export function traexGenerateConversationName(
+  sessions: ReadonlyMap<string, TraexSession>,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['generateConversationName']>>[0]
+): Promise<string | null> {
+  return sessions.get(input.record.sessionId)?.extras.generateName() ?? Promise.resolve(null)
+}
+
+export async function renameTraexSession(
+  sessions: ReadonlyMap<string, TraexSession>,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['renameProviderSession']>>[0],
+  renameAtRest: StructuredAgentSessionAdapter['renameProviderSession']
+): Promise<void> {
+  const session = sessions.get(input.record.sessionId)
+  await (session?.threadId === input.providerSessionId && !session.connection.closed
+    ? session.connection.request('thread/name/set', {
+        threadId: input.providerSessionId,
+        name: input.name
+      })
+    : renameAtRest?.(input))
+}
 
 /** Ask the CLI to name its own thread, then persist the name for TUI clients. */
 export class TraexThreadNaming {

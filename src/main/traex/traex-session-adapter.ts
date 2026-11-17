@@ -21,12 +21,13 @@ import { TraexSession } from './traex-session'
 import type { TraexSessionAdapterDeps } from './traex-session-contract'
 export type { TraexSessionAdapterDeps } from './traex-session-contract'
 import { dispatchTraexMessage } from './traex-message-dispatch'
-import { TraexRequestError, traexRecord, traexText } from './traex-protocol'
+import { TraexRequestError } from './traex-protocol'
 import { prepareTraexRewind, recoverTraexRewind, rewindTraexSession } from './traex-rewind'
 import { changeTraexThreadGoal } from './traex-thread-goal'
 import { cancelTraexTurn } from './traex-turn-cancel'
 import { stopTraexBackgroundTasks } from './traex-background-task-stops'
 import { captureTraexMessageSteeringInputs } from './traex-session-options'
+import { renameTraexSession, traexGenerateConversationName } from './traex-thread-naming'
 
 export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, TraexSession>()
@@ -38,6 +39,8 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   readonly readConversationHistory: TraexSessionAdapterDeps['readConversationHistory']
   readonly atRestCommands: TraexSessionAdapterDeps['atRestCommands']
   readonly generateText: TraexSessionAdapterDeps['generateText']
+  generateConversationName: NonNullable<StructuredAgentSessionAdapter['generateConversationName']> =
+    (input) => traexGenerateConversationName(this.sessions, input)
   stopProviderNaming = (): void => this.deps.stopNaming?.()
 
   constructor(private readonly deps: TraexSessionAdapterDeps) {
@@ -191,16 +194,7 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
 
   recap: NonNullable<StructuredAgentSessionAdapter['recap']> = async (input) => {
     const session = this.session(input.sessionId, input.fence)
-    session.timeline!.beginCommand(input.command)
-    try {
-      const result = traexRecord(
-        await session.connection.request('thread/recap', { threadId: session.threadId })
-      )
-      session.extras.awaitRecap(input.command, traexText(result.turnId) ?? null)
-    } catch (error) {
-      session.extras.failRecap(input.command, error)
-      throw error
-    }
+    await session.extras.recap(input.command)
     return { state: 'accepted', providerIdentity: null }
   }
 
@@ -222,13 +216,9 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
     return { state: 'accepted', providerIdentity: null }
   }
 
-  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> =
-    async ({ record, providerSessionId, name }) => {
-      const session = this.sessions.get(record.sessionId)
-      await (session?.threadId === providerSessionId && !session.connection.closed
-        ? session.connection.request('thread/name/set', { threadId: providerSessionId, name })
-        : this.deps.renameAtRest?.({ record, providerSessionId, name }))
-    }
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) => renameTraexSession(this.sessions, input, this.deps.renameAtRest)
 
   heldSends = (id: string): ReadonlySet<string> | undefined => {
     const session = this.sessions.get(id)

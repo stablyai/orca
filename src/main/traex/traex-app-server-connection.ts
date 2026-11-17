@@ -128,7 +128,11 @@ export class TraexAppServerConnection {
   request(
     method: string,
     params: Record<string, unknown> = {},
-    options: { timeoutMs?: number | null; onReply?: (value: unknown) => void } = {}
+    options: {
+      timeoutMs?: number | null
+      onRequestId?: (id: number) => void
+      onReply?: (value: unknown) => void
+    } = {}
   ): Promise<unknown> {
     if (this.closed) {
       return Promise.reject(this.failure ?? new Error('TRAE CLI connection is closed'))
@@ -153,6 +157,7 @@ export class TraexAppServerConnection {
             }, timeoutMs)
       this.pending.set(id, { method, resolve, reject, timer, onReply: options.onReply })
       try {
+        options.onRequestId?.(id)
         this.write({ id, method, params })
       } catch (error) {
         this.pending.delete(id)

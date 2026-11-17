@@ -175,7 +175,7 @@ export class TraexSession {
     selectTraexSessionOption(this, key, value, signal)
 
   notification(method: string, value: unknown): void {
-    if (this.ended) {
+    if (this.ended || this.extras.observeSandboxSetup(method, value)) {
       return
     }
     if (this.opening) {

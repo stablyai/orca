@@ -1,8 +1,10 @@
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { traexRecord } from './traex-protocol'
 
-export function reportedTraexPermissionMode(value: unknown): string | null {
+export function reportedTraexPermissionMode(value: unknown): AgentChatPermissionChoice | null {
   const result = traexRecord(value)
-  const sandbox = traexRecord(result.sandbox).type
+  // Thread open reports `sandbox`; settings updates report `sandboxPolicy`.
+  const sandbox = traexRecord(result.sandbox).type ?? traexRecord(result.sandboxPolicy).type
   const approval = result.approvalPolicy
   const reviewer = result.approvalsReviewer
   if (sandbox === 'readOnly' && approval === 'on-request' && reviewer === 'user') {

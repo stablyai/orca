@@ -68,22 +68,44 @@ export class TraexSessionExtras {
       this.observeRateLimits(traexRecord(params.rateLimits))
       return true
     }
-    if (method === 'windowsSandbox/setupCompleted') {
-      this.windowsSandbox.completed(
-        traexRecord(params).requestId,
-        params.success === true,
-        traexText(params.error) ?? null
-      )
-      return true
-    }
     return false
   }
 
-  awaitRecap(command: StructuredAgentSessionCommandRun, providerTurnId: string | null): void {
-    this.pendingRecap = { command, providerTurnId }
+  observeSandboxSetup(method: string, value: unknown): boolean {
+    if (method !== 'windowsSandbox/setupCompleted') {
+      return false
+    }
+    const params = traexRecord(value)
+    this.windowsSandbox.completed(
+      params.requestId,
+      params.success === true,
+      traexText(params.error) ?? null
+    )
+    return true
   }
 
-  failRecap(command: StructuredAgentSessionCommandRun, error: unknown): void {
+  async recap(command: StructuredAgentSessionCommandRun): Promise<void> {
+    this.session.timeline!.beginCommand(command)
+    try {
+      await this.connection.request(
+        'thread/recap',
+        { threadId: this.session.threadId },
+        {
+          onReply: (value) => {
+            this.pendingRecap = {
+              command,
+              providerTurnId: traexText(traexRecord(value).turnId) ?? null
+            }
+          }
+        }
+      )
+    } catch (error) {
+      this.failRecap(command, error)
+      throw error
+    }
+  }
+
+  private failRecap(command: StructuredAgentSessionCommandRun, error: unknown): void {
     this.pendingRecap = null
     this.finishRecapTurn(
       command,
@@ -132,11 +154,10 @@ export class TraexSessionExtras {
       type: 'item.close',
       item: `recap:${command.turnId}`,
       body,
-      join: { thread, turn: command.turnId }
+      join: { thread }
     })
     this.session.timeline?.apply({
       type: 'turn.end',
-      turn: command.turnId,
       at: Date.now(),
       state: 'completed',
       outcome: ok ? 'success' : 'failure'
@@ -148,10 +169,11 @@ export class TraexSessionExtras {
     if (typeof weekly.usedPercent !== 'number' || weekly.usedPercent < 100) {
       return
     }
-    const resetsAt = typeof weekly.resetsAt === 'number' ? new Date(weekly.resetsAt * 1000) : null
+    const resetAt = typeof weekly.resetsAt === 'number' ? weekly.resetsAt : undefined
+    const resetsAt = resetAt === undefined ? null : new Date(resetAt * 1000)
     this.session.timeline?.apply({
       type: 'item.close',
-      item: `rate-limit:${weekly.resetsAt ?? Date.now()}`,
+      item: `rate-limit:${resetAt ?? Date.now()}`,
       body: {
         kind: 'status',
         text:

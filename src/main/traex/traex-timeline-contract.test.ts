@@ -60,6 +60,19 @@ function notify(method: string, params: Record<string, unknown>): void {
   timeline.flush()
 }
 
+it('renders model verification events as warnings instead of unhandled frames', async () => {
+  notify('model/verification', { verifications: ['trustedAccessForCyber'] })
+  await written()
+  const warnings = (await readTestJournalItems(journal)).filter((row) => row.body.kind === 'status')
+  expect(
+    warnings.map((row) => ({
+      kind: row.body.kind,
+      tone: row.body.kind === 'status' ? row.body.tone : undefined,
+      frame: row.body.kind === 'status' ? row.body.providerFrame : undefined
+    }))
+  ).toEqual([{ kind: 'status', tone: 'warning', frame: undefined }])
+})
+
 it('keeps persistent command output live after its initiating turn finishes', async () => {
   notify('item/started', {
     item: {

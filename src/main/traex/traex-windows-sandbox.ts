@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { TraexAppServerConnection } from './traex-app-server-connection'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -9,7 +8,7 @@ const SETUP_TIMEOUT_MS = 60_000
 /** Windows commands run inside the CLI's sandbox only after the host sets it up. */
 export class TraexWindowsSandbox {
   private pending: {
-    requestId: string
+    requestId: number
     resolve: (ready: boolean) => void
     timer: ReturnType<typeof setTimeout>
   } | null = null
@@ -29,25 +28,31 @@ export class TraexWindowsSandbox {
     ) {
       return
     }
-    const requestId = randomUUID()
-    const ready = new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => this.settle(requestId, false), SETUP_TIMEOUT_MS)
-      timer.unref()
-      this.pending = { requestId, resolve, timer }
-    })
+    let requestId: number | null = null
+    const ready = Promise.withResolvers<boolean>()
     try {
       const started = traexRecord(
-        await this.connection.request('windowsSandbox/setupStart', {
-          mode: 'unelevated',
-          cwd
-        })
+        await this.connection.request(
+          'windowsSandbox/setupStart',
+          { mode: 'unelevated', cwd },
+          {
+            onRequestId: (id) => {
+              requestId = id
+              const timer = setTimeout(() => this.settle(id, false), SETUP_TIMEOUT_MS)
+              timer.unref()
+              this.pending = { requestId: id, resolve: ready.resolve, timer }
+            }
+          }
+        )
       ).started
-      if (started !== true) {
+      if (started !== true && requestId !== null) {
         this.settle(requestId, false)
       }
-      await ready
+      await ready.promise
     } catch (error) {
-      this.settle(requestId, false)
+      if (requestId !== null) {
+        this.settle(requestId, false)
+      }
       this.logger?.warn('TRAE CLI Windows sandbox setup failed', {
         scope: 'traex-sandbox',
         sessionId: this.sessionId,
@@ -58,7 +63,7 @@ export class TraexWindowsSandbox {
 
   completed(requestId: unknown, success: boolean, error: string | null): void {
     const pending = this.pending
-    if (!pending || String(requestId) !== pending.requestId) {
+    if (!pending || requestId !== pending.requestId) {
       return
     }
     this.settle(pending.requestId, success)
@@ -77,7 +82,7 @@ export class TraexWindowsSandbox {
     }
   }
 
-  private settle(requestId: string, ready: boolean): void {
+  private settle(requestId: number, ready: boolean): void {
     const pending = this.pending
     if (!pending || pending.requestId !== requestId) {
       return

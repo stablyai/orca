@@ -79,6 +79,14 @@ export class TraexPromptRegistry {
       }
     } else if (request.method === 'mode/changeRequested') {
       if (params.targetMode !== 'plan' && params.targetMode !== 'default') {
+        // Answer unsupported targets so the CLI does not wait on a mode change chat cannot render.
+        void this.connection
+          .request('mode/change/respond', {
+            threadId: this.threadId,
+            requestId: request.id,
+            decision: 'cancelled'
+          })
+          .catch(() => {})
         return
       }
       body = {
@@ -216,9 +224,12 @@ export class TraexPromptRegistry {
         ...(requested.fileSystem != null ? { fileSystem: requested.fileSystem } : {})
       }
       prompt.respond = async (reply) => {
-        const denied = reply.decision === 'decline'
+        const accepted =
+          reply.decision === 'accept' ||
+          reply.decision === 'acceptStrict' ||
+          reply.decision === 'acceptForSession'
         this.connection.respond(request.id, {
-          permissions: denied ? {} : granted,
+          permissions: accepted ? granted : {},
           scope: reply.decision === 'acceptForSession' ? 'session' : 'turn',
           ...(reply.decision === 'acceptStrict' ? { strictAutoReview: true } : {})
         })

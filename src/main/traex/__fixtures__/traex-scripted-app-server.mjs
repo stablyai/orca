@@ -121,7 +121,17 @@ createInterface({ input: process.stdin })
         })
         return
       }
-      if (text === 'approval-and-question') {
+      if (text === 'permissions') {
+        send({
+          id: 'permissions',
+          method: 'item/permissions/requestApproval',
+          params: {
+            threadId,
+            turnId,
+            permissions: { network: { enabled: true }, fileSystem: { write: ['/workspace'] } }
+          }
+        })
+      } else if (text === 'approval-and-question') {
         send({
           id: 'approval',
           method: 'item/commandExecution/requestApproval',
@@ -343,6 +353,8 @@ createInterface({ input: process.stdin })
         modelQuotaLowPriority: false,
         message: null
       })
+    } else if (id === 'permissions') {
+      complete(JSON.stringify(request.result))
     } else if (id === 'approval') {
       if (request.result.decision !== 'accept') {
         complete('denied')
@@ -447,6 +459,29 @@ createInterface({ input: process.stdin })
         threadId: params.threadId,
         turn: { id: params.turnId ?? turnId, status: 'interrupted', items: [] }
       })
+    } else if (method === 'thread/recap') {
+      const recapTurn = `recap-${++serial}`
+      const outcome =
+        serial === 1
+          ? {
+              method: 'recap/generated',
+              params: { threadId, turnId: recapTurn, text: 'Saved recap' }
+            }
+          : {
+              method: 'recap/failed',
+              params: { threadId, turnId: recapTurn, reason: 'generationFailed' }
+            }
+      process.stdout.write(
+        `${JSON.stringify({ id, result: { turnId: recapTurn } })}\n${JSON.stringify(outcome)}\n`
+      )
+    } else if (method === 'windowsSandbox/setupStart') {
+      const success = params.cwd !== 'sandbox-failure'
+      process.stdout.write(
+        `${JSON.stringify({ id, result: { started: true } })}\n${JSON.stringify({
+          method: 'windowsSandbox/setupCompleted',
+          params: { requestId: id, success, error: success ? null : 'Setup refused' }
+        })}\n`
+      )
     } else if (method === 'thread/compact/start') {
       turnId = `compact-${++serial}`
       if (params.userGuidance === 'queue-compaction') {
