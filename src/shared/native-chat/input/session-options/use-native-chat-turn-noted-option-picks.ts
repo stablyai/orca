@@ -8,6 +8,20 @@ import {
   type NativeChatTurnOptionPicks
 } from './native-chat-turn-option-picks'
 
+function withRestoredPick(
+  picks: NativeChatTurnOptionPicks,
+  id: string,
+  restored: ReturnType<NativeChatTurnOptionPicks['get']>
+): NativeChatTurnOptionPicks {
+  const next = new Map(picks)
+  if (restored) {
+    next.set(id, restored)
+  } else {
+    next.delete(id)
+  }
+  return next
+}
+
 /** Takes the caller's React: the phone bundle cannot resolve `react` from shared code. */
 export function createNativeChatTurnNotedOptionPicksHook({
   useCallback,
@@ -38,19 +52,29 @@ export function createNativeChatTurnNotedOptionPicksHook({
     const notingSetOption = useCallback(
       (id: string, value: SessionOptionValue): Promise<T> => {
         const descriptor = snapshot.find((row) => row.id === id)
-        if (isWorking && takesNativeChatTurnOptionPick(descriptor)) {
-          setNoted((current) => ({
-            scope,
-            picks: withNativeChatTurnOptionPick(
-              current.scope === scope ? current.picks : NO_NATIVE_CHAT_TURN_OPTION_PICKS,
-              descriptor,
-              value
-            )
-          }))
+        if (!isWorking || !takesNativeChatTurnOptionPick(descriptor)) {
+          return setOption(id, value)
         }
-        return setOption(id, value)
+        const before = picks.get(id)
+        setNoted((current) => ({
+          scope,
+          picks: withNativeChatTurnOptionPick(
+            current.scope === scope ? current.picks : NO_NATIVE_CHAT_TURN_OPTION_PICKS,
+            descriptor,
+            value
+          )
+        }))
+        return setOption(id, value).catch((error: unknown) => {
+          // A rejected write leaves the old selection in force; put its caption back unless a later pick replaced it.
+          setNoted((current) =>
+            current.scope === scope && (current.picks.get(id)?.value ?? before?.before) === value
+              ? { scope, picks: withRestoredPick(current.picks, id, before) }
+              : current
+          )
+          throw error
+        })
       },
-      [isWorking, scope, setOption, snapshot]
+      [isWorking, picks, scope, setOption, snapshot]
     )
     const marked = useMemo(
       () => markNativeChatTurnOptionPicks(snapshot, picks, 'noted'),
