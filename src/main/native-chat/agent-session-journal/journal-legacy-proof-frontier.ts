@@ -10,10 +10,12 @@ export type LegacyProofFrontier = {
   page?: LegacyProofPage
   session: number
   pending: boolean
+  /** Some chat's person edits differ here from the original; see JournalLegacyProof. */
+  diverged: boolean
 }
 
 export function createLegacyProofFrontier(): LegacyProofFrontier {
-  return { cursor: { table: 0, after: null }, session: 0, pending: false }
+  return { cursor: { table: 0, after: null }, session: 0, pending: false, diverged: false }
 }
 
 export async function completeJournalLegacyProof(
@@ -46,6 +48,14 @@ export async function completeJournalLegacyProof(
     while (frontier.session < page.sessions.length) {
       await admit()
       const source = page.sessions[frontier.session]!
+      if (source.claims.length > 0) {
+        await writer.maintain({ kind: 'legacy-claims-absorb', claims: source.claims })
+      }
+      // A chat deleted here, or one that never held anything, is not converted back.
+      if (!source.convert) {
+        frontier.session++
+        continue
+      }
       if (!frontier.pending) {
         frontier.pending = true
         try {
@@ -91,6 +101,7 @@ export async function completeJournalLegacyProof(
       if (state.state !== 'ready') {
         throw new Error('legacy proof awaits committed conversion')
       }
+      frontier.diverged ||= source.diverged
       frontier.session++
       frontier.pending = false
     }

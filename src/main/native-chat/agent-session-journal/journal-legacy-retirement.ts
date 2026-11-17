@@ -1,3 +1,4 @@
+import { lstat } from 'node:fs/promises'
 import {
   JournalLegacyIneligibleError,
   JournalLegacyRetentionError
@@ -21,7 +22,8 @@ import {
 import type { LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
-  sameJournalLegacySource
+  sameJournalLegacySource,
+  type JournalLegacySourceReceipt
 } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
@@ -34,6 +36,7 @@ import { JournalLegacyProof, type LegacyProofObservation } from './journal-legac
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
+type CopiedSource = Extract<JournalLegacySourceReceipt, { disposition: 'copied-source' }>
 
 /**
  * Absent means a release before this record copied the profile, which is always earlier; a copy
@@ -70,14 +73,43 @@ function absorbedWal(
   }
 }
 
+/**
+ * Only settles a chat whose name, options or permission mode differ on both sides; the content
+ * proof covers everything else. The copy record, with ctime (a write can put mtime back, never
+ * ctime), says so exactly. A store copied before that record existed falls back to file times, and
+ * an unknown creation time (0, or libuv's ctime stand-in without statx) answers no.
+ */
+async function unwrittenSinceCopy(
+  domain: string,
+  copiedSource: string | null,
+  current: CopiedSource
+): Promise<boolean> {
+  if (copiedSource !== null) {
+    return sameJournalLegacySource(copiedSource, current)
+  }
+  const store = await lstat(domain, { bigint: true })
+  const created = store.birthtimeNs
+  if (created === 0n || created === store.ctimeNs) {
+    return false
+  }
+  const walWritten =
+    current.wal.kind === 'nonempty' && current.wal.mtimeNs !== undefined
+      ? BigInt(current.wal.mtimeNs)
+      : 0n
+  return BigInt(current.main.mtimeNs) <= created && walWritten <= created
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
- * Deletes the original journal once this store provably holds all of it: on a later Orca version
- * than the one that copied the profile, when no older Orca wrote the original since that copy,
- * and after every chat in it converted here. Every failed check keeps the file and retries later.
+ * Deletes the original journal once this store provably holds all of it, read from content: on a
+ * later Orca version than the one that copied the profile, after the older-Orca reconcile absorbed
+ * the original as it is now, with every chat held here (converted, or deleted here), the same
+ * queued text, and no person's edit that only the original has. Tabs an older Orca opened or
+ * closed are not adopted by design, so they aren't held either. Every failed check keeps the file
+ * and retries later.
  */
 export class JournalLegacyRetirement {
   private readonly filename: string
@@ -252,13 +284,7 @@ export class JournalLegacyRetirement {
     ) {
       return null
     }
-    // A store copied before the copy record existed can't show the original was never written
-    // after its copy: file times can't prove it, so its original is kept.
     const domain = journalDomainDatabasePath(this.directory)
-    // Every identity field counts, ctime included: a write can put mtime back, never ctime.
-    if (saved.copiedSource === null || !sameJournalLegacySource(saved.copiedSource, current)) {
-      return null
-    }
     if (await legacyFilePresent(`${this.filename}-journal`)) {
       throw new JournalLegacyRetentionError('legacy rollback journal retained')
     }
@@ -266,6 +292,7 @@ export class JournalLegacyRetirement {
       proof: JSON.stringify(current),
       // The store file alone: its WAL is recreated on every open, which no refusal should outlive.
       store: await legacyDestinationMain(domain),
+      unwrittenSinceCopy: await unwrittenSinceCopy(domain, saved.copiedSource, current),
       walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
     }
   }

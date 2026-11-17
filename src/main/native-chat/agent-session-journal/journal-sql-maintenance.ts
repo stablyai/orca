@@ -1,4 +1,5 @@
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
+import type { LegacyClaim } from './journal-legacy-content-proof'
 import {
   JOURNAL_LEGACY_RETIREMENT,
   type JournalLegacyRetirementState
@@ -48,6 +49,7 @@ export type JournalPagedMaintenanceKind =
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
+  | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
   | {
       kind: 'legacy-retirement-save'
       value: string
@@ -104,6 +106,15 @@ export function applyJournalSqlMaintenance(
         copiedSource: value(JOURNAL_LEGACY_COPIED_SOURCE),
         retirement: value(JOURNAL_LEGACY_RETIREMENT)
       }
+    }
+    case 'legacy-claims-absorb': {
+      // Keeps the uploads an original claimed for chats this store keeps before it retires.
+      const insert = db.prepare(`INSERT INTO agent_session_attachment_claims(upload_id,session_id,
+        claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      for (const claim of operation.claims) {
+        insert.run(claim.uploadId, claim.sessionId, claim.claimedAt)
+      }
+      return true
     }
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(

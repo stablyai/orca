@@ -5,6 +5,7 @@ import {
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
+import { legacySessionHold, type LegacySessionHold } from './journal-legacy-content-proof'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -38,7 +39,7 @@ export type LegacySourceSession = {
   workspaceId: string
   epoch: string
   empty: boolean
-}
+} & LegacySessionHold
 export type LegacyProofPage = {
   next: LegacyProofCursor | null
   sessions: LegacySourceSession[]
@@ -65,10 +66,14 @@ export function readJournalLegacyProofPage(
       }
     }
   }
-  return readJournalLegacySource(() => readSourcePage(db, cursor))
+  return readJournalLegacySource(() => readSourcePage(db, cursor, destination))
 }
 
-function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): LegacyProofPage {
+function readSourcePage(
+  db: Database.Database,
+  cursor: LegacyProofCursor,
+  destination: Database.Database
+): LegacyProofPage {
   const tables = new Set(
     db
       .prepare("SELECT name FROM sqlite_schema WHERE type='table'")
@@ -285,18 +290,18 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
     const hasQueue =
       tables.has('queued_messages') &&
       !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
-    if (!hasRows && hasQueue) {
-      throw new JournalLegacyRetentionError(
-        'legacy queued-only history still requires its source',
-        'source-queued-only-v1'
-      )
-    }
     const empty =
       !hasRows &&
       !hasQueue &&
       (!tables.has('journal_outcome_epochs') ||
         !db.prepare('SELECT 1 FROM journal_outcome_epochs WHERE session_id=? LIMIT 1').get(id))
-    return { sessionId: id, workspaceId: String(row.workspace_id), epoch: String(row.epoch), empty }
+    return {
+      sessionId: id,
+      workspaceId: String(row.workspace_id),
+      epoch: String(row.epoch),
+      empty,
+      ...legacySessionHold(db, destination, id, empty, hasQueue)
+    }
   })
   return {
     next: rows.length
