@@ -137,6 +137,12 @@ it('saves only appended text, reads it whole, and folds at the size bound, a rew
   writeTurn('completed')
   expect(tailRows(db)).toBe(1)
   expect(folded(db)).not.toBe(text)
+  expect(
+    db
+      .prepare(`SELECT json_extract(payload_json,'$.body.blocks[0].text') AS text FROM journal_items
+        WHERE item_id='orca:turn-reply'`)
+      .get()!.text
+  ).toBe(replyText)
   expect(readText(db).detail).toEqual([{ type: 'text', text }])
   db.close()
 })

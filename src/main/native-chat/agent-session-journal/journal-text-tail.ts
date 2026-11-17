@@ -219,9 +219,13 @@ function foldJournalTextTails(
 export function foldJournalTurnTextTails(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  item: AgentJournalRenderItem
+  item: AgentJournalRenderItem,
+  previous: AgentJournalRenderItem | undefined
 ): void {
-  if ((readAgentJournalTurn(item.body)?.state ?? 'running') !== 'running') {
+  // Only when the turn ends: later rewrites of a finished turn row must not fold again.
+  const ended = (body: AgentJournalRenderItem['body'] | undefined) =>
+    (readAgentJournalTurn(body)?.state ?? 'running') !== 'running'
+  if (ended(item.body) && !(previous && ended(previous.body))) {
     foldJournalTextTails(db, { ...target, turnItemId: item.itemId })
   }
 }

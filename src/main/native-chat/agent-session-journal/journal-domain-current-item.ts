@@ -172,7 +172,7 @@ export function writeJournalDomainCurrentItem(
     observeJournalDomainInputItem(db, target, item, input.inputObservation)
   }
   refreshJournalDomainAcceptedHandover(db, target, next.itemId)
-  foldJournalTurnTextTails(db, target, next)
+  foldJournalTurnTextTails(db, target, next, input.previous?.item)
   const oldReport =
     previousReport?.queue_failure_report_turn_item_id == null
       ? null
