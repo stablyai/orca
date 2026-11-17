@@ -1,35 +1,84 @@
 import { describe, expect, it } from 'vitest'
-import { createEventLoopStallSummary, type EventLoopStallWindow } from './event-loop-delay-probe'
+import {
+  createEventLoopStallSummary,
+  type EventLoopStallSummaryOptions,
+  type EventLoopStallWindow
+} from './event-loop-delay-probe'
 
-function ticks(summary: ReturnType<typeof createEventLoopStallSummary>, times: number[]): void {
-  for (const time of times) {
-    summary.tick(time)
+const MINUTE: EventLoopStallSummaryOptions = {
+  tickMs: 500,
+  windowMs: 60_000,
+  reportableMaxGapMs: 100
+}
+
+function onTimeUntil(
+  summary: ReturnType<typeof createEventLoopStallSummary>,
+  from: number,
+  to: number,
+  cpuMs = 0
+): void {
+  for (let time = from; time <= to; time += 500) {
+    summary.tick(time, cpuMs)
   }
 }
 
 describe('createEventLoopStallSummary', () => {
-  it('reports a window with the longest gap and every stall in it', () => {
+  it('reports the worst gap, its CPU, and every stall it saw in the window', () => {
     const windows: EventLoopStallWindow[] = []
-    const summary = createEventLoopStallSummary(0, (window) => windows.push(window))
-    // On-time ticks, a 5s block, a 300ms block, then on time until the minute ends.
-    ticks(summary, [500, 1_000, 6_500, 7_300, 7_800])
-    for (let time = 8_300; time <= 60_300; time += 500) {
-      summary.tick(time)
-    }
-    expect(windows).toEqual([{ windowMs: 60_300, maxGapMs: 5_000, stalls: 2, stalledMs: 5_300 }])
+    const summary = createEventLoopStallSummary(0, MINUTE, (window) => windows.push(window))
+    summary.tick(500, 0)
+    summary.tick(1_000, 10)
+    // A 5 s block that burned 4.9 s of CPU, then a 300 ms one.
+    summary.tick(6_500, 4_910)
+    summary.tick(7_300, 5_000)
+    onTimeUntil(summary, 7_800, 60_300, 5_000)
+    expect(windows).toEqual([
+      {
+        windowMs: 60_300,
+        maxGapMs: 5_000,
+        maxGapCpuMs: 4_900,
+        stallsSeen: 2,
+        stalledMsSeen: 5_300,
+        cpuMs: 5_000
+      }
+    ])
   })
 
-  it('writes nothing for a quiet window and never counts system sleep', () => {
+  it('never counts system sleep, whether or not the sleep events arrive', () => {
     const windows: EventLoopStallWindow[] = []
-    const summary = createEventLoopStallSummary(0, (window) => windows.push(window))
-    ticks(summary, [500, 1_000])
+    const summary = createEventLoopStallSummary(0, MINUTE, (window) => windows.push(window))
+    summary.tick(500)
     summary.pause()
-    // Timers stop while asleep; the first tick after it is late by the sleep, not by a stall.
     summary.tick(40_000)
     summary.resume(40_010)
-    for (let time = 40_510; time <= 61_000; time += 500) {
-      summary.tick(time)
-    }
+    // No suspend event: the clock ran on through a 2 h sleep.
+    summary.tick(7_240_010)
+    onTimeUntil(summary, 7_240_510, 7_300_010)
     expect(windows).toEqual([])
+  })
+
+  it('holds a stalled window until it can be recorded, then reports all of it', () => {
+    const windows: EventLoopStallWindow[] = []
+    let sinkReady = false
+    const summary = createEventLoopStallSummary(
+      0,
+      { ...MINUTE, canReport: () => sinkReady },
+      (window) => windows.push(window)
+    )
+    summary.tick(2_000)
+    onTimeUntil(summary, 2_500, 70_000)
+    expect(windows).toEqual([])
+    sinkReady = true
+    summary.tick(70_500)
+    expect(windows).toEqual([
+      {
+        windowMs: 70_500,
+        maxGapMs: 1_500,
+        maxGapCpuMs: 0,
+        stallsSeen: 1,
+        stalledMsSeen: 1_500,
+        cpuMs: 0
+      }
+    ])
   })
 })
