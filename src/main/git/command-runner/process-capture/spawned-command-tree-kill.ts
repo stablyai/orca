@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
+  canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
+  spawnProcessOnWorkerThread,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
@@ -96,15 +98,21 @@ function startTreeKill(
 /** True when taskkill reported every tree ended within its wait. */
 function runTaskkill(pids: number[]): Promise<boolean> {
   return new Promise((resolve) => {
-    let killer: ChildProcess
+    const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
+    let killer: ChildProcess | WorkerThreadChildProcess
     try {
-      killer = spawn('taskkill', [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      if (!killer || typeof killer.unref !== 'function') {
-        resolve(false)
-        return
+      if (canSpawnOnWorkerThread()) {
+        // Process creation blocks its thread on Windows; keep cleanup off main like the Git it ends.
+        killer = spawnProcessOnWorkerThread({ program: 'taskkill', args })
+        killer.stdin.end()
+      } else {
+        const native = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true })
+        if (!native || typeof native.unref !== 'function') {
+          resolve(false)
+          return
+        }
+        native.unref()
+        killer = native
       }
     } catch {
       resolve(false)
@@ -129,7 +137,6 @@ function runTaskkill(pids: number[]): Promise<boolean> {
       killer.kill()
       finish(false)
     }, WINDOWS_TREE_KILL_WAIT_MS)
-    killer.unref()
   })
 }
 

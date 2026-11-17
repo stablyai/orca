@@ -2,6 +2,7 @@ import { ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
 import type * as NodeChildProcess from 'node:child_process'
+import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock, admitMock } = vi.hoisted(() => ({
@@ -13,6 +14,14 @@ vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeChildProcess>()),
   spawn: spawnMock
 }))
+// These cases drive main's native taskkill fake; the worker-hosted route has its own capture test.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('../../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
   admitSelfInitiatedTreeKill: admitMock
 }))

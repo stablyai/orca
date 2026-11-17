@@ -136,6 +136,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
         child.stdin?.end()
       } else {
         child.kill(request.signal)
+        if (child.exitCode !== null || child.signalCode !== null) {
+          // Like execFile's kill: a descendant still holding an exited root's pipes must not keep close away.
+          child.stdout?.destroy()
+          child.stderr?.destroy()
+        }
       }
     } catch {
       // Races with exit; the exit/close events still reach the stand-in.

@@ -7,7 +7,11 @@ const worker = vi.hoisted(() => ({
   available: true,
   spawn: vi.fn()
 }))
-const treeKills = vi.hoisted(() => ({ args: [] as string[][], killers: [] as EventEmitter[] }))
+const treeKills = vi.hoisted(() => ({
+  args: [] as string[][],
+  killers: [] as EventEmitter[],
+  via: [] as ('main' | 'worker')[]
+}))
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeChildProcess>()
   const { EventEmitter } = await import('node:events')
@@ -20,6 +24,7 @@ vi.mock('node:child_process', async (importOriginal) => {
       const killer = Object.assign(new EventEmitter(), { unref: () => {}, kill: () => true })
       treeKills.args.push(args)
       treeKills.killers.push(killer)
+      treeKills.via.push('main')
       return killer
     }
   }
@@ -32,7 +37,18 @@ vi.mock('../../../worker-thread-child-process/worker-thread-child-process', asyn
   return {
     ...actual,
     canSpawnOnWorkerThread: () => worker.available,
-    spawnProcessOnWorkerThread: worker.spawn
+    spawnProcessOnWorkerThread: (
+      spec: Parameters<typeof WorkerChildModule.spawnProcessOnWorkerThread>[0]
+    ) => {
+      if (spec.program !== 'taskkill') {
+        return worker.spawn(spec)
+      }
+      const killer = new actual.WorkerThreadChildProcess(99, () => true)
+      treeKills.args.push([...(spec.args ?? [])])
+      treeKills.killers.push(killer)
+      treeKills.via.push('worker')
+      return killer
+    }
   }
 })
 
@@ -62,6 +78,7 @@ beforeEach(() => {
   worker.spawn.mockReset()
   treeKills.args = []
   treeKills.killers = []
+  treeKills.via = []
 })
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -146,6 +163,7 @@ describe('Windows process creation off the calling loop', () => {
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
     await vi.waitFor(() => expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']]))
+    expect(treeKills.via).toEqual(['worker'])
     treeKills.killers[0]!.emit('close', 0)
     await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
     child.receive({ type: 'close', id: 1, code: 1, signal: null })
