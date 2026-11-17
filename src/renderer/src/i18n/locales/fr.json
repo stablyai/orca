@@ -19444,6 +19444,7 @@
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
         "optionUpdateFailed": "Impossible de mettre à jour l'option",
         "optionValue": {
+          "none": "Aucun",
           "fast": "Rapide",
           "minimal": "Minimal",
           "low": "Basse",
@@ -20197,18 +20198,13 @@
         "effortApplyFailed": "Impossible d’appliquer l’effort {{value}}."
       },
       "usageLimitActions": {
-        "continueNow": "Continuer maintenant",
-        "leadIn": "Continuez cette conversation sans attendre :",
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
         "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
-        "openSetting": "Reprendre automatiquement à la réinitialisation des limites",
-        "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
-        "scheduled": "Orca reprendra ce chat à {{time}}.",
-        "cancel": "Ne pas reprendre"
+        "scheduled": "Orca reprendra ce chat à {{time}}."
       },
       "settings": "Paramètres du chat",
       "textAttachmentPreview": {
@@ -20769,7 +20765,11 @@
         "turnDiffsTitle": "Différences des tours",
         "turnDiffsCopy": "Affiche sous la réponse les fichiers modifiés à chaque tour, avec les nombres de lignes.",
         "turnDiffsSearchChangedFiles": "fichiers modifiés",
-        "turnDiffsSearchEdits": "modifications"
+        "turnDiffsSearchEdits": "modifications",
+        "promptSuggestionsTitle": "Prompts suggérés",
+        "promptSuggestionsCopy": "Après une réponse de Claude, sa suggestion pour votre prochain message s’affiche dans la zone de message vide. Appuyez sur Tab pour l’utiliser. Chaque suggestion est une requête supplémentaire qui compte dans votre utilisation de Claude.",
+        "promptSuggestionsSearchNext": "prochain prompt",
+        "promptSuggestionsSearchGhost": "texte fantôme"
       },
       "voice": {
         "dictationLanguage": {

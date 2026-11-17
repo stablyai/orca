@@ -19158,6 +19158,7 @@
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
         "optionUpdateFailed": "No se pudo actualizar la opción",
         "optionValue": {
+          "none": "Ninguno",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",
@@ -19924,18 +19925,13 @@
         "effortApplyFailed": "No se pudo aplicar el esfuerzo {{value}}."
       },
       "usageLimitActions": {
-        "continueNow": "Continuar ahora",
-        "leadIn": "Continúa este chat sin esperar:",
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
         "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
-        "openSetting": "Continuar automáticamente cuando se restablezcan los límites",
-        "cancelled": "Orca no continuará este chat automáticamente.",
-        "scheduled": "Orca continuará este chat a las {{time}}.",
-        "cancel": "No continuar"
+        "scheduled": "Orca continuará este chat a las {{time}}."
       },
       "settings": "Configuración del chat",
       "textAttachmentPreview": {
@@ -20390,7 +20386,11 @@
         "turnDiffsTitle": "Diferencias de turnos",
         "turnDiffsCopy": "Muestra debajo de la respuesta los archivos modificados en cada turno, con el número de líneas.",
         "turnDiffsSearchChangedFiles": "archivos modificados",
-        "turnDiffsSearchEdits": "ediciones"
+        "turnDiffsSearchEdits": "ediciones",
+        "promptSuggestionsTitle": "Prompts sugeridos",
+        "promptSuggestionsCopy": "Cuando Claude responde, su sugerencia para tu próximo mensaje aparece en el cuadro de mensaje vacío. Pulsa Tab para usarla. Cada sugerencia es una solicitud adicional que cuenta para tu uso de Claude.",
+        "promptSuggestionsSearchNext": "siguiente prompt",
+        "promptSuggestionsSearchGhost": "texto fantasma"
       },
       "TerminalInteraction": {
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
