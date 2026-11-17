@@ -1,3 +1,4 @@
+import { POSIX_COMMAND_IDENTITY_BLOCK } from '../../pty/shell-startup/posix-command-identity'
 import { BASH_CWD_REPORT_BLOCK } from '../../pty/shell-startup/shell-cwd-report'
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../../pty/shell-startup/bash-prompt-command-composition'
@@ -54,13 +55,14 @@ ${getPosixOmpShellWrapper()}
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
 ${BASH_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
+${POSIX_COMMAND_IDENTITY_BLOCK}
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
   __orca_in_prompt_command=1
   __orca_osc133_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
-    printf "\\033]133;D;%s\\007" "$exit_code"
+    __orca_emit_command_finished "$exit_code"
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"

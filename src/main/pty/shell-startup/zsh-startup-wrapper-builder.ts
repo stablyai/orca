@@ -1,3 +1,4 @@
+import { POSIX_COMMAND_IDENTITY_BLOCK } from './posix-command-identity'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
@@ -55,11 +56,12 @@ const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && 
 const CODEX_HOME_RESTORE = `# Restore the runtime CODEX_HOME after user rc files.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
 
-const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
+const ZSH_OSC133_FUNCTION_BLOCK = `${POSIX_COMMAND_IDENTITY_BLOCK}
+__orca_osc133_precmd() {
   local exit_code=$?
   __orca_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
-    builtin printf "\\033]133;D;%s\\007" "$exit_code"
+    __orca_emit_command_finished "$exit_code"
     builtin unset __orca_in_command
   fi
   builtin printf "\\033]133;A\\007"

@@ -57,9 +57,9 @@ export type Osc133CommandFinishedScanner = {
 }
 
 export function createOsc133CommandFinishedScanner(
-  onCommandFinished: (bestEffortExitCode: number | null) => void,
+  onCommandFinished: (bestEffortExitCode: number | null, commandId?: string) => void,
   /** OSC 133;C marks command start; endInChunk points just past the sequence, where command output begins. */
-  onCommandStarted?: (endInChunk: number) => void
+  onCommandStarted?: (endInChunk: number, commandId?: string) => void
 ): Osc133CommandFinishedScanner {
   let carry = ''
   // OSC 133 markers seen back to back since the last other output, e.g. 'BC'.
@@ -71,7 +71,16 @@ export function createOsc133CommandFinishedScanner(
   }
 
   const handleOsc133 = (payload: string, endInChunk: number): void => {
-    const [sequence, exitCode] = payload.split(';')
+    const fields = payload.split(';')
+    const [sequence, exitCode] = fields
+    const identity = fields[sequence === 'C' ? 1 : 2]
+    const commandId =
+      (sequence === 'C' || (sequence === 'D' && /^\d+$/.test(exitCode ?? ''))) &&
+      fields.length === (sequence === 'C' ? 2 : 3) &&
+      identity?.startsWith('orca_command=') &&
+      /^orca_command=[a-f0-9]{32}$/.test(identity)
+        ? identity.slice(13)
+        : undefined
     // Why: read as the command's exit, that `D` retired a live agent's status.
     const closesAppZone = closesAppOsc133Zone(adjacentMarkers, payload)
     adjacentMarkers = (adjacentMarkers + sequence.slice(0, 1)).slice(-2)
@@ -79,12 +88,20 @@ export function createOsc133CommandFinishedScanner(
       return
     }
     if (sequence === 'C') {
-      onCommandStarted?.(endInChunk)
+      if (commandId) {
+        onCommandStarted?.(endInChunk, commandId)
+      } else {
+        onCommandStarted?.(endInChunk)
+      }
       return
     }
     if (sequence === 'D') {
       lastFinishEnd = endInChunk
-      onCommandFinished(parseBestEffortExitCode(exitCode))
+      if (commandId) {
+        onCommandFinished(parseBestEffortExitCode(exitCode), commandId)
+      } else {
+        onCommandFinished(parseBestEffortExitCode(exitCode))
+      }
     }
   }
 
@@ -110,6 +127,13 @@ export function createOsc133CommandFinishedScanner(
 
       const payloadStart = start + OSC_133_PREFIX.length
       const terminator = findOscTerminator(combined, payloadStart)
+      const interrupted = combined.indexOf('\x1b', payloadStart)
+      if (interrupted !== -1 && (!terminator || interrupted < terminator.index)) {
+        combined = combined.slice(interrupted)
+        combinedStartInChunk += interrupted
+        noteOutput()
+        continue
+      }
       if (!terminator) {
         carry = combined.slice(start)
         if (carry.length > MAX_OSC_CARRY_LENGTH) {

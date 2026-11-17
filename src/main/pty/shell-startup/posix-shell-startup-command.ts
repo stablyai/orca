@@ -33,6 +33,7 @@ export function getBashStartupCommandPromptBlock(): string {
     builtin printf '%s\n' "$__orca_command"
     eval "$__orca_command"
     __orca_status=$?
+    [[ -z "\${__orca_command_id:-}" ]] || __orca_emit_command_finished "$__orca_status"
     unset -f __orca_run_startup_command
     return "$__orca_status"
   }

@@ -35,6 +35,18 @@ ${getPowerShellAgentWrappers()}
         HasPSReadLine = $null -ne (Get-Module -Name PSReadLine)
         Esc = [char]27
         Bel = [char]7
+        OwnerPid = $PID
+        OwnerRunspace = [runspace]::DefaultRunspace.InstanceId
+        CommandId = $null
+    }
+
+    function Global:__OrcaBindCommand([string]$commandId) {
+        Set-StrictMode -Off
+        if ($NestedPromptLevel -ne 0 -or $PID -ne $Global:__OrcaOsc133State.OwnerPid -or
+            [runspace]::DefaultRunspace.InstanceId -ne $Global:__OrcaOsc133State.OwnerRunspace) { return }
+        $Global:__OrcaOsc133State.CommandId = $commandId
+        $Global:__OrcaOsc133State.HasSeenPrompt = $true
+        [Console]::Write("$([char]27)]133;C;orca_command=$commandId$([char]7)")
     }
 
     function Global:prompt {
@@ -57,7 +69,15 @@ ${getPowerShellAgentWrappers()}
         # Emit D from prompt, not readline state. Some profile setups bypass
         # PSConsoleHostReadLine; the consumer only needs completion.
         if ($Global:__OrcaOsc133State.HasSeenPrompt) {
-            $result += "$($Global:__OrcaOsc133State.Esc)]133;D;$fakeExitCode$($Global:__OrcaOsc133State.Bel)"
+            $identity = ""
+            if ($NestedPromptLevel -eq 0 -and $PID -eq $Global:__OrcaOsc133State.OwnerPid -and
+                [runspace]::DefaultRunspace.InstanceId -eq $Global:__OrcaOsc133State.OwnerRunspace) {
+                if ($Global:__OrcaOsc133State.CommandId) {
+                    $identity = ";orca_command=$($Global:__OrcaOsc133State.CommandId)"
+                    $Global:__OrcaOsc133State.CommandId = $null
+                }
+            }
+            $result += "$($Global:__OrcaOsc133State.Esc)]133;D;$fakeExitCode$identity$($Global:__OrcaOsc133State.Bel)"
         }
         $Global:__OrcaOsc133State.HasSeenPrompt = $true
 
