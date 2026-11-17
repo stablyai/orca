@@ -168,15 +168,19 @@ export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null)
 }
 
 // Grok frames read `[⚠ Action required - ]<spinner> - <activity> - [<session> - ]grok`; Windows uses `!` and spins | / - \.
-// Both delimiters exclude Claude/Codex task mentions; spinner + grok keeps our collapsed label idempotent.
+// Both delimiters exclude Claude/Codex task mentions; our collapsed labels match too so they stay idempotent and keep identity.
 const GROK_FRAME_RE =
   /^(?<actionRequired>[!\u26a0] Action required\s+-\s+)?(?:[\u2800-\u28FF]+|[|/\\-])\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
 const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+const GROK_COLLAPSED_PERMISSION_TITLE_RE = /^grok - action required\s*$/i
 
 export function grokFrameTitleStatus(title: string): 'working' | 'permission' | null {
   const frame = GROK_FRAME_RE.exec(title)
   if (frame) {
     return frame.groups?.actionRequired ? 'permission' : 'working'
+  }
+  if (GROK_COLLAPSED_PERMISSION_TITLE_RE.test(title)) {
+    return 'permission'
   }
   return GROK_COLLAPSED_WORKING_TITLE_RE.test(title) ? 'working' : null
 }

@@ -179,6 +179,9 @@ function collectAnchoredNames(
     if (synthetic) {
       anchored.add(synthetic)
     }
+    if (grokFrameTitleStatus(segment)) {
+      anchored.add('grok')
+    }
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
     }

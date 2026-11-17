@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { collectAgentTitleEvidence } from './agent-title-evidence'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
 
 // Grok 1.0.88 frames: macOS bytes captured from a PTY; Windows swaps the spinner for | / - \ and ⚠ for ! (#43581 video).
@@ -18,11 +19,11 @@ const CAPTURED_TURN = [
 ] as const
 
 const EXPECTED = [
-  ['⠋ Grok', 'working'],
-  ['⠋ Grok', 'working'],
-  ['⠋ Grok', 'working'],
-  ['Grok - action required', 'permission'],
-  ['Run rm old.txt and sleep command - grok', 'idle']
+  ['⠋ Grok', 'working', 'grok'],
+  ['⠋ Grok', 'working', 'grok'],
+  ['⠋ Grok', 'working', 'grok'],
+  ['Grok - action required', 'permission', 'grok'],
+  ['Run rm old.txt and sleep command - grok', 'idle', 'grok']
 ]
 
 describe('Grok title frames (#43581)', () => {
@@ -30,11 +31,15 @@ describe('Grok title frames (#43581)', () => {
     ['macOS', 0],
     ['Windows', 1]
   ] as const)(
-    'collapses %s spinner and action-required frames to one label per state',
+    'collapses %s spinner and action-required frames to one Grok label per state',
     (_, column) => {
       const read = CAPTURED_TURN.map((frames) => {
         const normalized = normalizeTerminalTitle(frames[column])
-        return [normalized, detectAgentStatusFromTitle(frames[column])]
+        return [
+          normalized,
+          detectAgentStatusFromTitle(frames[column]),
+          collectAgentTitleEvidence(normalized).agent
+        ]
       })
       expect(read).toEqual(EXPECTED)
     }
