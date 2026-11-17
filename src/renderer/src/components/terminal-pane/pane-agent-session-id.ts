@@ -14,7 +14,7 @@ export function resolvePaneAgentSessionId(
   paneKey: string,
   policy: 'live' | 'retained' = 'live'
 ): string | null {
-  // The common pattern keeps ended-session identity copyable without claiming that its interface is live.
+  // An ended session's identity stays copyable without claiming that its interface is live.
   if (policy === 'live' && state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return null
   }
