@@ -147,7 +147,9 @@
         "restartGaveUp_other": "嘗試 {{count}} 次後仍無法重新啟動 {{distro}} 中的 Orca 伺服器",
         "serviceUnconfirmed": "WSL 服務未確認此發行版是否正在執行。",
         "peerCheckFailed": "Orca 無法向 WSL 主機詢問此電腦上的另一個 Orca 是否仍在使用該主機：{{detail}}",
-        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}"
+        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}",
+        "installLockWait_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後接手。",
+        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。"
       }
     },
     "agentSummary": {
@@ -202,6 +204,7 @@
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
       "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "savedUnderAnotherPath": "此資料夾已作為專案 {{path}} 存在，暫時無法移到 {{distro}} 主機。請移除該專案，然後重新新增此資料夾以移動它。",
       "existingTitle": "新增到 {{distro}} 主機（建議）",
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"
@@ -11790,7 +11793,7 @@
             "terminalRun": "在您的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用你已儲存的登入資訊和 SSH 金鑰、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
           "uiWarning": "在 Orca 中執行發佈者的程式碼來繪製其檢視畫面。Orca 會顯示它能存取什麼，並在啟用前徵求您的同意。"
         },
         "PluginConsentProvenance": {

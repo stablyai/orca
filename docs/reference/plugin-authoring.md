@@ -202,7 +202,9 @@ A worker does not inherit Orca's full environment: tokens, shell-rc variables an
 (`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, locale and temp-dir
 variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
-Orca started in.
+Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
+This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
+worker runs as you and can read your files, saved logins and SSH keys like any other program.
 
 ### Panels, workers and data
 

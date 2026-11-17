@@ -11311,7 +11311,7 @@
             "terminalRun": "터미널에서 명령 실행 (SSH 포함)"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요.",
-          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 네트워크를 사용하고, 다른 프로그램을 실행하고, 터미널과 에이전트를 포함해 Orca를 제어할 수 있습니다.",
+          "fullAccessWarning": "전체 액세스: 일반 프로그램처럼 실행되며 파일을 읽고, 저장된 로그인 정보와 SSH 키를 사용하고, 네트워크를 사용하고, 다른 프로그램을 실행하고, 터미널과 에이전트를 포함해 Orca를 제어할 수 있습니다.",
           "uiWarning": "게시자의 코드를 Orca 내에서 실행하여 뷰를 그립니다. Orca는 접근할 수 있는 항목을 보여 주고 활성화 전에 확인합니다."
         },
         "PluginConsentProvenance": {
@@ -20739,7 +20739,9 @@
         "restartGaveUp_other": "{{count}}회 시도 후에도 {{distro}}의 Orca 서버를 다시 시작하지 못했습니다",
         "serviceUnconfirmed": "WSL 서비스가 배포판의 실행 여부를 확인해 주지 않았습니다.",
         "peerCheckFailed": "Orca가 WSL 호스트에 이 컴퓨터의 다른 Orca가 아직 사용 중인지 확인을 요청하지 못했습니다: {{detail}}",
-        "removalUnrecorded": "Orca가 이번 제거 후에도 계속 실행 중인 항목을 기록하지 못했습니다: {{detail}}"
+        "removalUnrecorded": "Orca가 이번 제거 후에도 계속 실행 중인 항목을 기록하지 못했습니다: {{detail}}",
+        "installLockWait_other": "이 배포판에서 다른 Orca 설치가 끝나기를 기다리는 중입니다. 끝나지 않으면 약 {{count}}분 후 Orca가 이어받습니다.",
+        "installLockWaitGivesUp_other": "이 배포판에서 다른 Orca 설치가 끝나기를 기다리는 중입니다. 끝나지 않으면 약 {{count}}분 후 Orca가 대기를 멈춥니다."
       }
     },
     "agentSummary": {
@@ -20794,6 +20796,7 @@
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
       "accept": "호스트로 실행",
       "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요.",
+      "savedUnderAnotherPath": "이 폴더는 이미 {{path}}(으)로 프로젝트에 있으며, 아직 {{distro}} 호스트로 옮길 수 없습니다. 해당 프로젝트를 제거한 다음 폴더를 다시 추가하면 옮길 수 있습니다.",
       "existingTitle": "{{distro}} 호스트에 추가(권장)",
       "existingWhy": "{{distro}}이(가) 이미 호스트로 실행 중이므로 Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
       "existingAccept": "호스트에 추가"

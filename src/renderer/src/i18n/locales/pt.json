@@ -533,7 +533,13 @@
         "restartGaveUp_many": "Não foi possível reiniciar o servidor Orca em {{distro}} após {{count}} tentativas",
         "serviceUnconfirmed": "O serviço WSL não confirmou se a distribuição está em execução.",
         "peerCheckFailed": "O Orca não conseguiu consultar o host WSL para saber se outro Orca neste computador ainda o usa: {{detail}}",
-        "removalUnrecorded": "O Orca não conseguiu registrar o que continuou em execução após esta remoção: {{detail}}"
+        "removalUnrecorded": "O Orca não conseguiu registrar o que continuou em execução após esta remoção: {{detail}}",
+        "installLockWait_one": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minuto.",
+        "installLockWait_many": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minutos.",
+        "installLockWait_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minutos.",
+        "installLockWaitGivesUp_one": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minuto.",
+        "installLockWaitGivesUp_many": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
+        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos."
       }
     },
     "agentSummary": {
@@ -637,6 +643,7 @@
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "accept": "Executar como host",
       "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral.",
+      "savedUnderAnotherPath": "Esta pasta já é um projeto aqui como {{path}}, que ainda não pode ser movido para o host {{distro}}. Remova esse projeto e adicione a pasta novamente para movê-la.",
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"
@@ -6795,7 +6802,7 @@
             "agentLaunch": "Inicie agentes em seus espaços de trabalho, incluindo SSH"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
-          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
+          "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar seus logins salvos e chaves SSH, usar a rede, executar outros programas e controlar o Orca, incluindo seus terminais e agentes.",
           "uiWarning": "Executa o código do editor dentro do Orca para desenhar a visualização. O Orca mostra a que ele pode acessar e pergunta antes de ativá-lo."
         },
         "SparsePresetSettingsSection": {

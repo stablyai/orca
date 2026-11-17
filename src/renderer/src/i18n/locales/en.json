@@ -171,7 +171,11 @@
         "restartGaveUp_other": "Could not restart the Orca server in {{distro}} after {{count}} attempts",
         "serviceUnconfirmed": "The WSL service did not confirm whether the distro runs.",
         "peerCheckFailed": "Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}",
-        "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}"
+        "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}",
+        "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
+        "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
+        "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
+        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes."
       }
     },
     "agentSummary": {
@@ -252,6 +256,7 @@
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
       "accept": "Run as host",
       "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar.",
+      "savedUnderAnotherPath": "This folder is already a project here as {{path}}, which can't move to the {{distro}} host yet. Remove that project, then add the folder again to move it.",
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
@@ -4846,6 +4851,9 @@
             "copyLinkFailed": "Failed to copy link",
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
+            "download": "Download…",
+            "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
+            "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
             "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
@@ -12905,7 +12913,7 @@
             "agentLaunch": "Start agents in your workspaces, including SSH"
           },
           "decisionFailed": "Could not save the permission decision. Try again.",
-          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.",
+          "fullAccessWarning": "Full access: runs as a normal program and can read your files, use your saved logins and SSH keys, use the network, run other programs and control Orca, including your terminals and agents.",
           "uiWarning": "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
         },
         "PluginConsentProvenance": {
@@ -16644,7 +16652,8 @@
           "FloatingTerminalIconContextMenu": {
             "8e7d775287": "Hide Floating Workspace",
             "763f5fa2c1": "Move to Floating Button",
-            "0ee79e0674": "Move to Status Bar"
+            "0ee79e0674": "Move to Status Bar",
+            "a2fbd81c1b": "Reset position/size"
           },
           "FloatingTerminalOrchestrationDialog": {
             "f726054620": "Enables agents to hand off context and coordinate work through Orca.",
@@ -22826,9 +22835,9 @@
           "updateFailed": "Couldn't update the setting on {{host}}.",
           "unsupported": "Update Orca on {{host}} to use this setting there.",
           "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Claude Code chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Claude Code chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         }
       },
       "repository": {

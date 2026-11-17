@@ -148,7 +148,11 @@
         "restartGaveUp_other": "{{count}} denemeden sonra {{distro}} içindeki Orca sunucusu yeniden başlatılamadı",
         "serviceUnconfirmed": "WSL hizmeti dağıtımın çalışıp çalışmadığını doğrulamadı.",
         "peerCheckFailed": "Orca tarafından WSL ana makinesine bu bilgisayardaki başka bir Orca'nın onu hâlâ kullanıp kullanmadığı sorulamadı: {{detail}}",
-        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}"
+        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}",
+        "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
       }
     },
     "agentSummary": {
@@ -226,6 +230,7 @@
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
       "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "savedUnderAnotherPath": "Bu klasör burada zaten {{path}} olarak bir proje ve henüz {{distro}} ana bilgisayarına taşınamıyor. Taşımak için o projeyi kaldırın, ardından klasörü yeniden ekleyin.",
       "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
@@ -12082,7 +12087,7 @@
             "terminalRun": "SSH dahil terminalinizde komut çalıştır"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, kayıtlı oturum bilgilerinizi ve SSH anahtarlarınızı kullanabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayıncının kodunu Orca içinde çalıştırır. Orca nelerin erişebileceğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {

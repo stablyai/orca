@@ -16,7 +16,6 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { mobileWorktreeForkAction } from './native-chat/history/mobile-native-chat-worktree-fork-action'
-import { getMobileNativeChatToggleActions } from './native-chat/conversation/mobile-native-chat-toggle-action'
 
 type Props = {
   controller: MobileSessionController
@@ -112,15 +111,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] = [
-    ...getMobileNativeChatToggleActions({
-      tab: controller.activeSessionTab,
-      isTabChatView: controller.nativeChatController.isTabChatView,
-      nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
-      onClose: () => setShowHeaderMoreActions(false),
-      onToggle: controller.toggleTabChatView
-    }),
-    ...(canSplitTerminals || terminalSplitActive
+  const view: ActionSheetAction[] =
+    canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -130,8 +122,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : [])
-  ]
+      : []
   const tabs: ActionSheetAction[] = [
     ...(worktreeFork ? [worktreeFork] : []),
     ...(subagentFork ? [subagentFork] : []),

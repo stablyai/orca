@@ -148,7 +148,11 @@
         "restartGaveUp_other": "Der Orca-Server in {{distro}} konnte nach {{count}} Versuchen nicht neu gestartet werden",
         "serviceUnconfirmed": "Der WSL-Dienst hat nicht bestätigt, ob die Distribution läuft.",
         "peerCheckFailed": "Orca konnte den WSL-Host nicht fragen, ob eine andere Orca-Instanz auf diesem Computer ihn noch nutzt: {{detail}}",
-        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}"
+        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}",
+        "installLockWait_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minute.",
+        "installLockWait_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minuten.",
+        "installLockWaitGivesUp_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minute auf zu warten.",
+        "installLockWaitGivesUp_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minuten auf zu warten."
       }
     },
     "agentSummary": {
@@ -226,6 +230,7 @@
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
       "accept": "Als Host ausführen",
       "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste.",
+      "savedUnderAnotherPath": "Dieser Ordner ist hier bereits als Projekt {{path}} vorhanden, das noch nicht auf den Host {{distro}} verschoben werden kann. Entferne dieses Projekt und füge den Ordner dann erneut hinzu, um ihn zu verschieben.",
       "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"
@@ -11968,7 +11973,7 @@
             "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
-          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
+          "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, deine gespeicherten Anmeldedaten und SSH-Schlüssel verwenden, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
           "uiWarning": "Führt den Code des Herausgebers in Orca aus, um dessen Ansicht zu rendern. Orca zeigt, worauf er zugreifen kann, und fragt vor dem Aktivieren nach."
         },
         "PluginConsentProvenance": {

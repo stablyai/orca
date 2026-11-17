@@ -11997,7 +11997,7 @@
             "agentLaunch": "SSH を含む、ワークスペースで Agent を起動"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
-          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
+          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、保存済みのログイン情報や SSH キーの使用、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
           "uiWarning": "発行元のコードを Orca 内で実行してビューを描画します。Orca はアクセスできる対象を表示し、有効化の前に確認します。"
         },
         "PluginConsentProvenance": {
@@ -22117,7 +22117,9 @@
         "restartGaveUp_other": "{{count}} 回試行しましたが、{{distro}} 内の Orca サーバーを再起動できませんでした",
         "serviceUnconfirmed": "WSL サービスからディストリビューションが実行中かどうかの確認が得られませんでした。",
         "peerCheckFailed": "Orca は WSL ホストに、このコンピューター上の別の Orca がまだ使用しているかを問い合わせられませんでした: {{detail}}",
-        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}"
+        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}",
+        "installLockWait_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca が引き継ぎます。",
+        "installLockWaitGivesUp_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca は待機をやめます。"
       }
     },
     "agentSummary": {
@@ -22175,6 +22177,7 @@
       "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "accept": "ホストとして実行",
       "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。",
+      "savedUnderAnotherPath": "このフォルダーは {{path}} としてすでにプロジェクトになっており、まだ {{distro}} ホストに移動できません。そのプロジェクトを削除してから、フォルダーをもう一度追加すると移動できます。",
       "existingTitle": "{{distro}} ホストに追加（推奨）",
       "existingWhy": "{{distro}} はすでにホストとして実行中のため、Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "existingAccept": "ホストに追加"

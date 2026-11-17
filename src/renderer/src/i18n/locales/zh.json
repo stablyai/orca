@@ -12053,7 +12053,7 @@
             "agentLaunch": "在你的工作区中启动智能体（包括 SSH）"
           },
           "decisionFailed": "无法保存权限决定，请重试",
-          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
+          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用你已保存的登录信息和 SSH 密钥、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
           "uiWarning": "在 Orca 中运行发布者的代码来绘制其视图。Orca 会显示它能访问什么，并在启用前征求你的同意"
         },
         "PluginConsentProvenance": {
@@ -22513,7 +22513,9 @@
         "restartGaveUp_other": "尝试 {{count}} 次后仍无法重启 {{distro}} 中的 Orca 服务器",
         "serviceUnconfirmed": "WSL 服务未确认该发行版是否正在运行",
         "peerCheckFailed": "Orca 无法向 WSL 主机询问此电脑上的另一个 Orca 是否仍在使用该主机：{{detail}}",
-        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}"
+        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}",
+        "installLockWait_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后接管。",
+        "installLockWaitGivesUp_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后停止等待。"
       }
     },
     "agentSummary": {
@@ -22571,6 +22573,7 @@
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
       "accept": "作为主机运行",
       "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。",
+      "savedUnderAnotherPath": "此文件夹已作为项目 {{path}} 存在，暂时无法移到 {{distro}} 主机。请移除该项目，然后重新添加此文件夹以移动它。",
       "existingTitle": "添加到 {{distro}} 主机（推荐）",
       "existingWhy": "{{distro}} 已作为主机运行，因此 Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
       "existingAccept": "添加到主机"
