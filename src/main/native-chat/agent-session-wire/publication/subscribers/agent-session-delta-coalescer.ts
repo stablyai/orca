@@ -84,6 +84,8 @@ export function createAgentSessionDeltaCoalescer(
   >()
   let totalRetainedBytes = 0
   const evictable = new Set<string>()
+  const batched = new Set<string>()
+  let cancelBatch: (() => void) | null = null
 
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
@@ -92,6 +94,7 @@ export function createAgentSessionDeltaCoalescer(
     }
     stream.cancelTimer?.()
     stream.cancelTimer = null
+    batched.delete(key)
     if (deps.shouldEmit?.(key, stream.textLength) === false) {
       stream.dirty = false
       return true
@@ -113,6 +116,18 @@ export function createAgentSessionDeltaCoalescer(
   const scheduleFlush = (key: string, minimumMs = windowMs): void => {
     const stream = streams.get(key)
     if (!stream?.dirty || stream.cancelTimer) {
+      return
+    }
+    if (!deps.dueIn) {
+      batched.add(key)
+      cancelBatch ??= schedule(() => {
+        cancelBatch = null
+        const pending = [...batched]
+        batched.clear()
+        for (const id of pending) {
+          flushKey(id)
+        }
+      }, windowMs)
       return
     }
     stream.cancelTimer = schedule(
@@ -217,6 +232,7 @@ export function createAgentSessionDeltaCoalescer(
       const stream = streams.get(key)
       if (stream) {
         stream.cancelTimer?.()
+        batched.delete(key)
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
         evictable.delete(key)
@@ -226,6 +242,9 @@ export function createAgentSessionDeltaCoalescer(
       for (const stream of streams.values()) {
         stream.cancelTimer?.()
       }
+      cancelBatch?.()
+      cancelBatch = null
+      batched.clear()
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
@@ -260,6 +279,7 @@ export function createAgentSessionDeltaCoalescer(
       if (stream) {
         stream.cancelTimer?.()
         stream.cancelTimer = null
+        batched.delete(key)
         stream.dirty = false
       }
     }

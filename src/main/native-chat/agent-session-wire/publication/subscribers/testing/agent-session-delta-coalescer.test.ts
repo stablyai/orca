@@ -107,3 +107,42 @@ it.each([16, 160])(
     expect(vi.getTimerCount()).toBe(0)
   }
 )
+
+it.each([16, 160])('keeps %i timeline streams in shared publication windows', async (count) => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  let queued = false
+  let visits = 0
+  const keys: string[] = []
+  const coalescer = createAgentSessionDeltaCoalescer({
+    emit: () => {
+      if (queued) {
+        return
+      }
+      queued = true
+      void Promise.resolve().then(() => {
+        queued = false
+        for (const key of keys) {
+          if (coalescer.snapshot(key)) {
+            visits++
+          }
+        }
+      })
+    }
+  })
+  for (let i = 0; i < count; i++) {
+    const key = String(i)
+    keys.push(key)
+    coalescer.append(key, 'prefix')
+  }
+  coalescer.flushAll()
+  await Promise.resolve()
+  visits = 0
+  for (const key of keys) {
+    coalescer.append(key, ' tail')
+    await vi.advanceTimersByTimeAsync(1)
+  }
+  await vi.advanceTimersByTimeAsync(60)
+  expect(visits).toBeLessThanOrEqual(count * Math.ceil(count / 60))
+  expect(keys.every((key) => coalescer.snapshot(key)?.text === 'prefix tail')).toBe(true)
+  coalescer.dispose()
+})
