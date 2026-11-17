@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,7 +24,12 @@ const { chooseSavedResumeFreshLaunch, admitColdRestoreReattach, savedResumeResul
 const LIVE_PANE = 'live-tab:11111111-1111-4111-8111-111111111111'
 const RESTORED_PANE = 'restored-tab:22222222-2222-4222-8222-222222222222'
 const servers: InstanceType<typeof AgentHookServer>[] = []
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_800_000_000_000)
+})
 afterEach(() => {
+  vi.useRealTimers()
   for (const server of servers.splice(0)) {
     server.stop()
   }
@@ -169,7 +174,12 @@ describe('automatic saved provider-session resume admission', () => {
     expect((await f.attempt()).spawnOptions.command).toBeUndefined()
     f.server.reconcileEndedProcessForPaneKeys([LIVE_PANE], {
       preserveResumeIdentity: true,
-      processExitConfirmed: true
+      processExitConfirmed: true,
+      expectedStatus: {
+        paneKey: LIVE_PANE,
+        receivedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000
+      }
     })
     f.probe.read = async () => {
       throw new Error('owner unreachable')
@@ -191,6 +201,48 @@ describe('automatic saved provider-session resume admission', () => {
       ...proof
     })
     expect((await f.attempt()).admission?.verdict).toBe('admitted')
+  })
+
+  it('refuses automatic resume when confirmed exit names an older row in the same pane', async () => {
+    const f = fixture()
+    vi.setSystemTime(1_800_000_001_000)
+    f.server.recordLaunchResumeIdentity({
+      paneKey: LIVE_PANE,
+      worktreeId: 'folder-workspace',
+      agentType: 'claude',
+      providerSession: { key: 'session_id', id: 'conversation-new' },
+      launchedAt: 1_800_000_001_000
+    })
+    f.server.reconcileEndedProcessForPaneKeys([LIVE_PANE], {
+      preserveResumeIdentity: true,
+      processExitConfirmed: true,
+      expectedStatus: {
+        paneKey: LIVE_PANE,
+        receivedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000
+      }
+    })
+    const resumed = await f.attempt({
+      resumeProviderSession: { key: 'session_id', id: 'conversation-new' },
+      command: 'claude --resume conversation-new'
+    })
+    expect(savedResumeResult(resumed.admission)).toMatchObject({
+      agentResumeUnavailable: true,
+      agentResumeRefused: 'unverifiable'
+    })
+    expect(resumed.spawnOptions.command).toBeUndefined()
+  })
+
+  it('keeps ownership unverifiable without a liveness probe even when hasPty returns false', async () => {
+    const f = fixture()
+    delete f.controller.probePtyLiveness
+    f.controller.hasPty = () => false
+    const resumed = await f.attempt()
+    expect(savedResumeResult(resumed.admission)).toMatchObject({
+      agentResumeUnavailable: true,
+      agentResumeRefused: 'unverifiable'
+    })
+    expect(resumed.spawnOptions.command).toBeUndefined()
   })
 
   it('keeps a Codex conversation reserved on an unknown probe until absence is confirmed', async () => {
@@ -287,7 +339,12 @@ describe('automatic saved provider-session resume admission', () => {
     })
     f.server.reconcileEndedProcessForPaneKeys([LIVE_PANE], {
       preserveResumeIdentity: true,
-      processExitConfirmed: true
+      processExitConfirmed: true,
+      expectedStatus: {
+        paneKey: LIVE_PANE,
+        receivedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000
+      }
     })
     expect((await restore())?.verdict).toBe('admitted')
   })

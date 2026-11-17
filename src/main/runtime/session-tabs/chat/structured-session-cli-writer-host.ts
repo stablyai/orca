@@ -54,9 +54,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
     }
     if (!exited) {
       try {
-        const live = this.ptyController?.probePtyLiveness
-          ? await this.ptyController.probePtyLiveness(ptyId)
-          : this.ptyController?.hasPty?.(ptyId)
+        const live = await this.ptyController?.probePtyLiveness?.(ptyId)
         exited = live === false
       } catch {
         // A failed owner probe is unknown, not an exit.

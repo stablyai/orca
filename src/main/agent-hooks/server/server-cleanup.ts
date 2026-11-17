@@ -16,11 +16,13 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
+import { matchesAgentStatusCacheIdentity } from './server-status-identity'
 import { recordAgentExit } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
   processExitConfirmed?: boolean
+  expectedStatus?: AgentStatusCacheIdentity
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
 }
@@ -76,12 +78,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         | EnrichedAgentHookEventPayload
         | undefined
       const canonical = existing ?? this.getTmuxSelectedStatus(resolvedPaneKey)
-      // The turn clock pins identity; renderer updatedAt is at least receivedAt, so protect only newer rows.
-      if (
-        !canonical ||
-        canonical.stateStartedAt !== identity.stateStartedAt ||
-        canonical.receivedAt > identity.receivedAt
-      ) {
+      if (!matchesAgentStatusCacheIdentity(canonical, { ...identity, paneKey: resolvedPaneKey })) {
         continue
       }
       const deleted = this.deleteStatusEntry(resolvedPaneKey, { preserveAuthority: true })
@@ -140,20 +137,23 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
-      const retained = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
-        : null
-      if (retained && (options?.endedPresence || options?.processExitConfirmed === true)) {
-        const presence = options?.endedPresence ?? retained.agentPresence
-        retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
-      }
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+      const retained = options?.preserveResumeIdentity
+        ? this.toRetainedProviderSessionRow(previous)
+        : null
+      const processExitConfirmed =
+        options?.processExitConfirmed === true &&
+        (!options.expectedStatus ||
+          matchesAgentStatusCacheIdentity(retained, {
+            ...options.expectedStatus,
+            paneKey: this.resolvePaneKeyAlias(options.expectedStatus.paneKey)
+          }))
+      if (retained && (options?.endedPresence || processExitConfirmed)) {
+        const presence = options?.endedPresence ?? retained.agentPresence
+        retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
+      }
       clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(

@@ -68,16 +68,18 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
 
   ipcMain.on(
     'agentStatus:reconcileEndedProcess',
-    (_event, paneKey: unknown, processExitConfirmed: unknown) => {
+    (_event, paneKey: unknown, processExitConfirmed: unknown, identity: unknown) => {
       if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
         return
       }
+      const expectedStatus = isValidAgentStatusCacheIdentity(identity) ? identity : undefined
       try {
         // Confirmed process exit must clear latches with the row (STA-4612).
         agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
           // The shell still owns the PTY, so keep its usable resume identity.
           preserveResumeIdentity: true,
-          processExitConfirmed: processExitConfirmed === true
+          processExitConfirmed: processExitConfirmed === true && expectedStatus !== undefined,
+          expectedStatus
         })
         clearMigrationUnsupportedPtysForPaneKey(paneKey)
       } catch (err) {

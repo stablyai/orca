@@ -1,6 +1,6 @@
+import type { AgentStatusCacheIdentity } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store/index'
 import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
@@ -24,6 +24,7 @@ import {
   type PaneLaunchAgentPaneSlice
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { reconcileEndedProcessIfPaneQuiet } from './confirmed-process-exit-row-retire'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
@@ -67,26 +68,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     clearStaleAgentTabTitleOnConfirmedShell(session)
   session.deferredCommandFinishedStatusDrop = null
   session.deferredConfirmedShellReconcile = null
-  /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
-  session.reconcileEndedProcessIfPaneQuiet = (
-    armedAcceptedStatusSeq: number | undefined,
-    processExitConfirmed?: boolean
-  ): void => {
-    const current = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
-    if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
-      return
-    }
-    // Why: main's clear echoes back and would drop the result the deferred drop just kept.
-    if (current && isRetainedProgramResult(current)) {
-      return
-    }
-    // Reconcile main-only hook latches retained by live-pane drops; renderer rows/config already belong to the deferred drop, and main echoes its clear.
-    if (processExitConfirmed === true) {
-      window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey, true)
-    } else {
-      window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
-    }
-  }
+  session.reconcileEndedProcessIfPaneQuiet = reconcileEndedProcessIfPaneQuiet.bind(null, session)
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
   session.settleDeferredCommandFinishedStatusDrop = (
@@ -243,9 +225,20 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     if (shouldDeferStatusDrop) {
       // Retain identity through local shell confirmation, anchoring accepted-status ordinal once across the whole retry ladder.
       const armedAcceptedStatusSeq = entry?.acceptedStatusSeq
+      const identity: AgentStatusCacheIdentity | undefined = entry
+        ? {
+            paneKey: session.cacheKey,
+            receivedAt: entry.updatedAt,
+            stateStartedAt: entry.stateStartedAt
+          }
+        : undefined
       session.deferredCommandFinishedStatusDrop = dropStatus
       session.deferredConfirmedShellReconcile = (processExitConfirmed?: boolean) =>
-        session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq, processExitConfirmed)
+        session.reconcileEndedProcessIfPaneQuiet(
+          armedAcceptedStatusSeq,
+          processExitConfirmed,
+          identity
+        )
       return
     }
     session.deferredCommandFinishedStatusDrop = null

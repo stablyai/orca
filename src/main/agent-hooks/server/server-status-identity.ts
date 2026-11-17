@@ -10,7 +10,10 @@ import {
   pickHostTurnEnd,
   type AgentType
 } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type {
+  AgentStatusCacheIdentity,
+  AgentStatusIpcPayload
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
@@ -92,4 +95,17 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
+}
+
+export function matchesAgentStatusCacheIdentity(
+  canonical: AgentStatusCacheIdentity | null | undefined,
+  identity: AgentStatusCacheIdentity
+): boolean {
+  // The turn clock pins identity; renderer updatedAt is at least receivedAt, so protect only newer rows.
+  return Boolean(
+    canonical &&
+    canonical.paneKey === identity.paneKey &&
+    canonical.stateStartedAt === identity.stateStartedAt &&
+    canonical.receivedAt <= identity.receivedAt
+  )
 }
