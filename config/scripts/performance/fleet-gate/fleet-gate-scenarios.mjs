@@ -231,7 +231,13 @@ async function switchWorkspaces({ page, windowMs }) {
       const id = card.getAttribute('data-worktree-id')
       const rect = card.getBoundingClientRect()
       if (id && id !== active && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight) {
-        if (!ids.includes(id) && card.querySelector('[data-worktree-card-surface]')) {
+        const surface = card.querySelector('[data-worktree-card-surface]')
+        const box = surface?.getBoundingClientRect()
+        // Skip cards a tip or notice covers: the click must land on the card itself.
+        const hit = box
+          ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+          : null
+        if (!ids.includes(id) && hit && surface.contains(hit)) {
           ids.push(id)
         }
       }
