@@ -8,6 +8,7 @@ import type { StructuredAgentLaunchReceipt } from './structured-agent-session-la
 import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import {
   notifyStructuredLaunchListeners,
+  publishStructuredLaunchChange,
   publishStructuredLaunchStateChange,
   type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
@@ -58,7 +59,8 @@ export function trackStructuredLaunchConfirmationDeadline(
     state.errorText = `No answer within ${STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS / 1000} s from ${awaiting}.`
     console.warn('[structured-agent-launch] start did not answer', { awaiting })
     if (state.callers.outcome !== 'pending') {
-      publishStructuredLaunchStateChange(state)
+      // Only the unpersisted cause changed; the outcome's own transition already saved the record.
+      publishStructuredLaunchChange(state.intent.sessionId)
       return
     }
     // Settled as an unconfirmed opening message would be, whichever deadline passes first.
