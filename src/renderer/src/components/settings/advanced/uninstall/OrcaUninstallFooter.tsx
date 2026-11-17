@@ -166,20 +166,22 @@ export function OrcaUninstallFooter({
     )
   }
   const running = phase === 'running'
-  let hint = t('settings.uninstall.keeps', 'Projects, worktrees and Orca settings stay.')
+  const hintSentences = [
+    t('settings.uninstall.keeps', 'Projects, worktrees and Orca settings stay.')
+  ]
   if (plan?.terminalDaemon) {
-    hint = `${hint} ${t('settings.uninstall.closesTerminals', 'Open terminals will close.')}`
+    hintSentences.push(t('settings.uninstall.closesTerminals', 'Open terminals will close.'))
   }
   if (plan?.otherOrcaBuildName) {
-    hint = joinSentences([
-      hint,
+    hintSentences.push(
       t(
         'settings.uninstall.keepsShared',
         '{{name}} is also installed, so hooks it shares stay too.',
         { name: plan.otherOrcaBuildName }
       )
-    ])
+    )
   }
+  const hint = joinSentences(hintSentences)
   return (
     <div className="flex items-center justify-between gap-3 pt-3 pb-3.5">
       <p className={`${HINT_CLASS} min-w-0 flex-1`}>
