@@ -53,6 +53,7 @@ export async function spawnAndPublishSession(
   let lowerReported = false
   let physical: ReturnType<typeof observeReturnedTerminalProcess>
   let subprocess: SubprocessHandle
+  const staging: { current?: StartupCommandStaging } = {}
   try {
     subprocess = await deps.spawnSubprocess({
       onCreationDisposition: (disposition) => {
@@ -77,6 +78,8 @@ export async function spawnAndPublishSession(
       assertCreateAllowed: deps.assertCreateAllowed,
       ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
     })
+    // Claim the wrapper's staged script now so every later failure path still unlinks it.
+    staging.current = subprocess.shellWrapperStartupStaging
     // External implementations returning a handle have transferred an actual resource.
     physical = observeReturnedTerminalProcess(subprocess, opts.sessionId, deps.spawnGate)
     if (!lowerReported) {
@@ -97,7 +100,6 @@ export async function spawnAndPublishSession(
     throw error
   }
 
-  const staging: { current?: StartupCommandStaging } = {}
   // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
@@ -187,8 +189,6 @@ export async function spawnAndPublishSession(
   // The wrapper runs the command at its first prompt (or first precmd without zle), so nothing is typed
   // ahead of the user and early keystrokes queue for the agent.
   const startupCommandByWrapper = Boolean(opts.command && subprocess.shellWrapperStartupStaging)
-  // Exit before the wrapper sources a staged script still unlinks it.
-  staging.current = subprocess.shellWrapperStartupStaging
   const startupCommandWritten =
     Boolean(opts.command) &&
     !subprocess.startupCommandDeliveredInShellArgs &&
