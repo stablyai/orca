@@ -2,6 +2,7 @@ import ts from 'typescript-api'
 import { propertyName, unwrap } from '../module-requests/static-module-specifiers.mjs'
 
 // pragma() and transaction() run SQL too: a durability pragma or BEGIN/COMMIT blocks like any statement.
+const TRANSACTION_MODES = new Set(['immediate', 'deferred', 'exclusive'])
 const METHODS = new Set([
   'prepare',
   'run',
@@ -194,6 +195,13 @@ export function collectSqliteCallSites(file, contents) {
         return constructor(target)
       }
       if (callableConstructors.has(key(target)) || transactionCalls.has(key(target))) {
+        return true
+      }
+      if (
+        (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
+        TRANSACTION_MODES.has(propertyName(target)) &&
+        transactionCalls.has(key(target.expression))
+      ) {
         return true
       }
       return (

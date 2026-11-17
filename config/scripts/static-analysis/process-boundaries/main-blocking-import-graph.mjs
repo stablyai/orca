@@ -126,36 +126,39 @@ function createRequireTargets(file, contents, sources) {
 
 /** Electron main, CLI, orcad and preload entries: guarded even when a worker happens to import one. */
 export function eventLoopEntryFiles(root) {
+  // A fixture repo without Electron main has no entry lists; the real repo must yield both, or roots vanish silently.
+  const realRepo = listTrackedFiles(root, ['src/main/index.ts']).length > 0
   const read = (file) => {
     try {
       return readFileSync(path.join(root, file), 'utf8')
     } catch {
-      return null
+      return ''
     }
   }
   const builtSource = read('config/build-plugins/main-build-entry-points.ts')
-  const built = [...(builtSource ?? '').matchAll(/resolve\(\s*'([^']+)'\s*\)/g)].map(
-    (match) => match[1]
+  const built = [...builtSource.matchAll(/resolve\(\s*(['"])([^'"]+)\1\s*\)/g)].map(
+    (match) => match[2]
   )
-  // A refactor of the entry list must not silently drop guarded roots.
-  if (builtSource !== null && !built.includes('src/main/index.ts')) {
-    throw new Error(
-      'main-blocking-import-graph: cannot read the Electron main entry from config/build-plugins/main-build-entry-points.ts; update eventLoopEntryFiles'
-    )
-  }
   const cli = [
-    ...(read('config/build-plugins/cli-main-entry-names.ts') ?? '').matchAll(/^\s*'([^']+)',?$/gm)
-  ].map((match) => `src/main/${match[1]}.ts`)
+    ...read('config/build-plugins/cli-main-entry-names.ts').matchAll(/^\s*(['"])([^'"]+)\1,?$/gm)
+  ].map((match) => `src/main/${match[2]}.ts`)
   const preload = listTrackedFiles(root, ['src/preload']).filter(
     (file) => file.split('/').length === 3 && isMainBlockingSource(file)
   )
   const entries = [...built, ...cli, 'src/main/index.ts', 'src/main/orcad/main.ts', ...preload]
-  if (builtSource !== null) {
+  if (realRepo) {
     const tracked = new Set(listTrackedFiles(root, entries))
     const missing = entries.filter((file) => !tracked.has(file))
-    if (missing.length > 0) {
+    // Every non-template resolve() in the entry list must be a literal we read, or a root went missing.
+    const resolveCalls = (builtSource.match(/resolve\(\s*(?!`)/g) ?? []).length
+    if (
+      !built.includes('src/main/index.ts') ||
+      built.length !== resolveCalls ||
+      cli.length === 0 ||
+      missing.length > 0
+    ) {
       throw new Error(
-        `main-blocking-import-graph: event-loop entries not found (${missing.join(', ')}); update eventLoopEntryFiles`
+        `main-blocking-import-graph: cannot read the event-loop entries from config/build-plugins (main ${built.length}, CLI ${cli.length}, missing: ${missing.join(', ') || 'none'}); update eventLoopEntryFiles`
       )
     }
   }

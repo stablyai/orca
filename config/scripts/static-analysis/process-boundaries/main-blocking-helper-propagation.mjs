@@ -21,58 +21,15 @@ function isFunctionLike(node) {
   return !!node && (ts.isArrowFunction(node) || ts.isFunctionExpression(node))
 }
 
-function declaredNames(name, into) {
-  if (ts.isIdentifier(name)) {
-    into.add(name.text)
-  } else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
-    for (const element of name.elements) {
-      if (ts.isBindingElement(element)) {
-        declaredNames(element.name, into)
-      }
-    }
-  }
-}
-
-/** A parameter of an enclosing function with the same name is a different binding than the helper. */
-function parameterShadowed(identifier) {
-  for (let node = identifier.parent; node && !ts.isSourceFile(node); node = node.parent) {
-    if (ts.isFunctionLike(node)) {
-      const names = new Set()
-      for (const parameter of node.parameters ?? []) {
-        declaredNames(parameter.name, names)
-      }
-      if (names.has(identifier.text)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-function identifierAt(source, position) {
-  let node = source
-  for (;;) {
-    const child = node
-      .getChildren(source)
-      .find((candidate) => candidate.getStart(source) <= position && position < candidate.getEnd())
-    if (!child) {
-      return null
-    }
-    if (ts.isIdentifier(child)) {
-      return child.getStart(source) === position ? child : null
-    }
-    node = child
-  }
-}
-
-/** Runtime references inside a function body; local aliases still count, parameters named like a helper don't. */
+/** Runtime references inside a function body: type positions and property names are not calls. Names match
+ *  file-wide, like the direct collectors: a local or parameter reusing a helper's name is counted (never missed). */
 function scanBody(node) {
   const references = new Set()
   const visit = (child) => {
     if (ts.isTypeNode(child) && !ts.isExpressionWithTypeArguments(child)) {
       return
     }
-    if (ts.isIdentifier(child) && isValueReference(child) && !parameterShadowed(child)) {
+    if (ts.isIdentifier(child) && isValueReference(child)) {
       references.add(child.text)
     }
     ts.forEachChild(child, visit)
@@ -147,7 +104,7 @@ function scanDeclarations(file, contents) {
       reexports.push({ target, names })
     }
   }
-  return { source, functions, exportNames, reexports }
+  return { functions, exportNames, reexports }
 }
 
 /**
@@ -246,18 +203,11 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
     const uses = new Map()
     let grew = false
     for (const [file, contents] of sources) {
-      const { sites } = collector.collectUses(file, contents)
-      const { source } = scan(file)
-      // The collector is file-wide; a call through a same-named parameter is not the helper.
-      const kept = sites.filter(({ position }) => {
-        const identifier = identifierAt(source, position)
-        return !identifier || !parameterShadowed(identifier)
-      })
-      if (kept.length === 0) {
+      const { count, sites } = collector.collectUses(file, contents)
+      if (count === 0) {
         continue
       }
-      const count = kept.length
-      const reached = kept.map(({ name, position, module }) => ({
+      const reached = sites.map(({ name, position, module }) => ({
         position,
         name,
         reaches: reachesByModule.get(module)?.get(name) ?? name

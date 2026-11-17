@@ -62,6 +62,7 @@ export async function main(root = process.cwd(), arg = undefined) {
       fix: [
         `Each listed helper makes a synchronous fs, child_process or SQLite call, or calls one that does. ${OFF_MAIN_ADVICE}`,
         'If a helper itself just became blocking, fix it there: every file that calls it is charged.',
+        "Names match file-wide: a local or parameter that reuses an imported helper's name is counted; rename it.",
         `A one-shot startup or shutdown call may raise the file's row in ${BASELINE_PATH} with reviewer sign-off and a trailing "# why" note.`
       ]
     },
