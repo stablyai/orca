@@ -13,6 +13,7 @@ import { findLinkedWorktreeGitDirectory } from '../../../../shared/git/worktrees
 import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { getGitCurrentBranchName } from '../../../../shared/git/refs/git-current-branch'
 import {
   getErrorCode,
   gitExecOptions,
@@ -255,15 +256,10 @@ export async function removeFailedFinalization(
 ): Promise<boolean> {
   let branchAttached = false
   if (moved) {
-    try {
-      const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
-        gitCleanupOptions(cleanupPath, options)
-      )
-      branchAttached = stdout.trim() === branch
-    } catch {
-      // Detached or no longer readable.
-    }
+    branchAttached =
+      (await getGitCurrentBranchName((args) =>
+        gitExecFileAsync(args, gitCleanupOptions(cleanupPath, options))
+      )) === branch
   }
   const removed = await performDiscardPreparedWorktree(
     repoPath,
