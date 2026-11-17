@@ -141,14 +141,14 @@ export function createStartupRecovery(
   reconcileLeases: (sessionId?: string) => Promise<AgentSessionWireRefusal | null>,
   runtime: { resolveRecovery: (sessionId: string) => Promise<unknown> }
 ): {
-  reconcileRestartLeases: () => Promise<void>
+  reconcileRestartLeases: (sessionId?: string) => Promise<void>
   recover: (ids: readonly string[]) => Promise<void>
 } {
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
   return {
-    reconcileRestartLeases: async () => {
-      await reconcile()
+    reconcileRestartLeases: async (sessionId) => {
+      await reconcile(sessionId)
     },
     recover: async (ids) => {
       if (!ids.length || !(await reconcile())) {

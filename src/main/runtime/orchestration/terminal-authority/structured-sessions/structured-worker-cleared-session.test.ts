@@ -195,10 +195,10 @@ function installHost(): void {
       probeOwner: async () => restartProbe,
       logger: { warn: () => {} }
     },
-    // Restart reconciliation as the real host runs it: probe each unreconciled lease and adjudicate.
-    reconcileRestartLeases: async () => {
+    // Restart reconciliation as the real host runs it: probe the targeted unreconciled leases and adjudicate.
+    reconcileRestartLeases: async (sessionId?: string) => {
       for (const [id, record] of records) {
-        if (!record.lease.unreconciled) {
+        if (!record.lease.unreconciled || (sessionId !== undefined && id !== sessionId)) {
           continue
         }
         records.set(
@@ -636,17 +636,17 @@ describe('a running session that cannot be verified is refused, never declared e
 
 describe('an abandoned structured worker whose start reservation stranded (#43039)', () => {
   /** What a crash or abandonment between reservation and owner commit leaves behind. */
-  function installStrandedReservation(): void {
-    const record = located({
+  function strandedReservation(sessionId: string, spawnToken: string): AgentSessionRecord {
+    return located({
       ...agentSessionRecordFixture(
         agentSessionLeaseFixture({
-          sessionId: MINTED,
+          sessionId,
           runtimeFence: 2,
           handoffStage: 'new-owner-proving',
-          handoffOperationId: 'op-start-1',
+          handoffOperationId: `op-start-${sessionId}`,
           provenHandleLinkId: null,
           ownerProcess: null,
-          reservedSpawnToken: 'spawn-stranded',
+          reservedSpawnToken: spawnToken,
           claimStatus: 'reserved',
           unreconciled: true,
           deathEvidence: null
@@ -654,7 +654,32 @@ describe('an abandoned structured worker whose start reservation stranded (#4303
       ),
       providerHandleChain: []
     })
-    installSessions([record], [])
+  }
+
+  /** A lease properly released before a restart loads unreconciled: no reservation to preserve. */
+  function releasedUnreconciled(sessionId: string): AgentSessionRecord {
+    return located({
+      ...agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId,
+          claimStatus: 'released',
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          unreconciled: true,
+          deathEvidence: {
+            kind: 'exit-observed',
+            detail: 'user-close',
+            observedAt: 2,
+            ownerFence: 7
+          }
+        })
+      ),
+      providerHandleChain: []
+    })
+  }
+
+  function installStrandedReservation(): void {
+    installSessions([strandedReservation(MINTED, 'spawn-stranded')], [])
   }
 
   async function abandonStrandedWorker(): Promise<{ receipt: unknown; dispatchId: string }> {
@@ -725,31 +750,21 @@ describe('an abandoned structured worker whose start reservation stranded (#4303
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
   })
 
+  it('reconciles only the released session, leaving another stranded reservation for its own release', async () => {
+    // Releasing B must not adjudicate A's lease: an unscoped sweep evicts A's unproven reservation.
+    installSessions([releasedUnreconciled(MINTED), strandedReservation(SECOND, 'spawn-other')], [])
+    restartProbe = { outcome: 'indeterminate', reason: 'host could not enumerate spawn tokens' }
+    const { receipt } = await abandonStrandedWorker()
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(records.get(SECOND)?.lease).toMatchObject({
+      claimStatus: 'reserved',
+      reservedSpawnToken: 'spawn-other',
+      unreconciled: true
+    })
+  })
+
   it('settles released for an already-released lease that restart reconciliation alone unstrands', async () => {
-    // A lease properly released before a restart loads unreconciled: no reservation to preserve.
-    installSessions(
-      [
-        located({
-          ...agentSessionRecordFixture(
-            agentSessionLeaseFixture({
-              sessionId: MINTED,
-              claimStatus: 'released',
-              ownerProcess: null,
-              reservedSpawnToken: null,
-              unreconciled: true,
-              deathEvidence: {
-                kind: 'exit-observed',
-                detail: 'user-close',
-                observedAt: 2,
-                ownerFence: 7
-              }
-            })
-          ),
-          providerHandleChain: []
-        })
-      ],
-      []
-    )
+    installSessions([releasedUnreconciled(MINTED)], [])
     const { receipt, dispatchId } = await abandonStrandedWorker()
     expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')

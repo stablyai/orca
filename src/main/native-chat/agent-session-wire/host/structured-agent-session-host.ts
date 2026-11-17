@@ -55,7 +55,7 @@ export class StructuredAgentSessionHost {
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly startup: ReturnType<typeof createStartupRecovery>
-  readonly reconcileRestartLeases = () => this.startup.reconcileRestartLeases()
+  readonly reconcileRestartLeases = (id?: string) => this.startup.reconcileRestartLeases(id)
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: EventRecovery
