@@ -46,14 +46,21 @@ export async function toGitShortRefSelectors(
   })
 }
 
-/** A plain pattern also matches every ref below it; refs can't hold glob characters, so a bracketed last one is exact. */
+/**
+ * A plain pattern also matches every ref below it; refs can't hold glob characters, so any bracketed character makes
+ * the pattern an exact glob. Git's classes match one byte and `[!` negates, so bracket the last single-byte character.
+ */
 function exactRefPattern(refName: string): string | null {
-  const last = refName.at(-1)
-  // `[!]` would start a negated class.
-  if (!last || last === '!' || QUOTE_CHARACTER.test(refName)) {
+  if (QUOTE_CHARACTER.test(refName)) {
     return null
   }
-  return `${refName.slice(0, -1)}[${last}]`
+  for (let index = refName.length - 1; index >= 0; index--) {
+    const char = refName[index]
+    if (char.charCodeAt(0) < 0x80 && char !== '!' && char !== '/') {
+      return `${refName.slice(0, index)}[${char}]${refName.slice(index + 1)}`
+    }
+  }
+  return null
 }
 
 function chunkByLength(patterns: string[]): string[][] {
