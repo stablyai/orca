@@ -510,11 +510,9 @@ describe('automatic cleanup announcements', () => {
       reportRunning = true
       reportRuns = [finishedRun('run-2', now), ...reportRuns]
       await rereadReport(() => regions().some(Boolean))
-      const both = regions().filter(Boolean)
-      expect(both).toHaveLength(1)
-      // The visible line shows only the run under way; the announcement leads with the result.
-      expect(both[0]).not.toBe(statusLine())
-      expect(both[0]!.endsWith(statusLine())).toBe(true)
+      expect(regions().filter(Boolean)).toEqual([
+        'Last run just now removed nothing. Removing what your rules match…'
+      ])
       const announced = regions()
 
       // The run finishing without a new result, and later time-only refreshes, say nothing.
