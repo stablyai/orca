@@ -210,7 +210,8 @@ export async function activateBackendRuntime(
     await import('../orcad/host-runtime/orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
+    getSettings: () => profileStore.getSettings(),
+    scopeStore: profileStore
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
   featureReadiness.open('sessionSearch')

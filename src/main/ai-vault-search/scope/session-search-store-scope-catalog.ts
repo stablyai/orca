@@ -1,5 +1,6 @@
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
@@ -7,7 +8,10 @@ import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
-import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
+import type {
+  SessionSearchScopeCatalog,
+  SessionSearchScopeCatalogSource
+} from './session-search-scope-catalog'
 
 export type SessionSearchScopeStore = {
   getRepos(): readonly (SessionSearchScopeCatalog['repos'][number] & {
@@ -24,7 +28,7 @@ export type SessionSearchScopeStore = {
 }
 
 // The store includes other hosts’ paths; expose only the answering host’s registrations.
-export function sessionSearchScopeCatalogFromStore(
+function sessionSearchScopeCatalogFromStore(
   store: SessionSearchScopeStore,
   executionHostId: ExecutionHostId
 ): SessionSearchScopeCatalog {
@@ -38,4 +42,11 @@ export function sessionSearchScopeCatalogFromStore(
     worktreeMeta: readAllWorktreeMetaForHost(store, executionHostId),
     settings: { workspaceDir: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces }
   }
+}
+
+// Desktop and orcad read per search so added repos and renamed workspaces are in scope at once.
+export function localSessionSearchScopeCatalogSource(
+  store: SessionSearchScopeStore
+): SessionSearchScopeCatalogSource {
+  return () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
 }
