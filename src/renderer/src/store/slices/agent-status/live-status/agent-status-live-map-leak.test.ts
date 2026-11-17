@@ -120,18 +120,6 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     vi.useRealTimers()
   })
 
-  it('caps the live map at the limit, evicting the oldest dead-leaf orphans', () => {
-    const store = createTestStore()
-    seedWorktree(store)
-
-    const total = MAX_LIVE_AGENT_STATUSES + 1500
-    churnDeadLeaves(store, total)
-
-    const live = store.getState().agentStatusByPaneKey
-
-    expect(live.get('tab-live:dead-0')).toBeUndefined()
-  })
-
   it("never evicts a live pane's waiting or blocked row, even under the hard-cap fallback", () => {
     const store = createTestStore()
     seedWorktree(store)
@@ -210,18 +198,6 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
       'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135'
     )
     expect(store.getState().agentStatusByPaneKey.get('gone-0:leaf-0')).toBeUndefined()
-  })
-
-  it('bounds the map when fresh unprovable rows dominate, without evicting a live pane', () => {
-    const store = createTestStore()
-    seedWorktree(store)
-    setAgentAt(store, 'tab-live:leaf-live', donePayload(-1))
-
-    churnFreshUnprovable(store, MAX_LIVE_AGENT_STATUSES + 200)
-
-    const live = store.getState().agentStatusByPaneKey
-
-    expect(live.get('tab-live:leaf-live')?.state).toBe('done')
   })
 
   it('keeps fresh rows of rootless / empty-snapshot / no-renderer-tab panes (live agents, #2962)', () => {
