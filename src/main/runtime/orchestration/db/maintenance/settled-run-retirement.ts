@@ -112,12 +112,13 @@ function isRunPartySeenInMemory(party: string, liveness: RunPartyLiveness): bool
     : liveness.isWaitingForMail(party.slice('handle:'.length))
 }
 
-// A write to the Run leaves a newer updated_at, a newer row, a newer Task settlement or reopened work;
-// the full check costs ~9 probes per Dispatch. Reopened work and a Task result corrected in place count
-// because the pages would delete them before the final check.
+// A write to the Run leaves a newer updated_at, a newer row, a newer in-place stamp or reopened work;
+// the full check costs ~9 probes per Dispatch. Reopened work, a Task result corrected in place and a
+// Delivery acknowledged in place count because the pages would delete them before the final check.
 const RUN_TOUCH_MARK = `SELECT
     (SELECT updated_at FROM runs WHERE id = ?1) AS updated,
     (SELECT max(julianday(completed_at)) FROM tasks WHERE run_id = ?1) AS settled,
+    (SELECT max(julianday(acknowledged_at)) FROM deliveries WHERE run_id = ?1) AS acknowledged,
     (SELECT max(sequence) FROM messages WHERE run_id = ?1) AS message,
     (SELECT max(rowid) FROM tasks WHERE run_id = ?1) AS task,
     (SELECT max(rowid) FROM dispatch_contexts WHERE run_id = ?1) AS dispatch,
@@ -157,7 +158,8 @@ function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
  * the Run when a coordinator it bound, a reader of its unread mail or its worker terminal is live,
  * read first and again before the Run row (panes and blocked readers, read in memory, on every page),
  * or once the Run is touched: fully checked first and before the Run row, and on every page by a newer
- * `updated_at`, Task settlement or row. A step interrupted by a quit or crash leaves only fewer settled rows.
+ * `updated_at`, Task settlement, Delivery acknowledgment or row. A step interrupted by a quit or
+ * crash leaves only fewer settled rows.
  */
 export function* retireSettledRun(
   orchestrationDb: OrchestrationDb,
