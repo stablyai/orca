@@ -16,10 +16,46 @@ const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
 const rolloutReadQueue: (() => void)[] = []
 
+// Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
+const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
+let heldRolloutBytes = 0
+
+/** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
+export class RolloutReadBatch {
+  private held = 0
+  private released = false
+
+  constructor(private readonly isWanted: () => boolean = () => true) {}
+
+  wanted(): boolean {
+    return !this.released && this.isWanted()
+  }
+
+  /** At least one read always fits, so a large rollout is never starved. */
+  reserve(bytes: number): boolean {
+    if (
+      this.released ||
+      (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES)
+    ) {
+      return false
+    }
+    heldRolloutBytes += bytes
+    this.held += bytes
+    return true
+  }
+
+  /** Call once the batch is applied or dropped. */
+  release(): void {
+    heldRolloutBytes -= this.held
+    this.held = 0
+    this.released = true
+  }
+}
+
 /** `wanted` is rechecked once a slot is granted, so work its caller abandoned while queued never touches the disk. */
 async function withRolloutReadSlot<T>(
   run: () => Promise<T>,
-  wanted: () => boolean,
+  batch: RolloutReadBatch,
   unwanted: T
 ): Promise<T> {
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
@@ -29,7 +65,7 @@ async function withRolloutReadSlot<T>(
     await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
   }
   try {
-    return wanted() ? await run() : unwanted
+    return batch.wanted() ? await run() : unwanted
   } finally {
     const next = rolloutReadQueue.shift()
     if (next) {
@@ -40,13 +76,11 @@ async function withRolloutReadSlot<T>(
   }
 }
 
-const always = (): boolean => true
-
 export function rolloutFileSizeAsync(
   filePath: string,
-  wanted: () => boolean = always
+  batch: RolloutReadBatch
 ): Promise<number | null> {
-  return withRolloutReadSlot(() => rolloutFileSizeAsyncUnslotted(filePath), wanted, null)
+  return withRolloutReadSlot(() => rolloutFileSizeAsyncUnslotted(filePath), batch, null)
 }
 
 async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number | null> {
@@ -60,16 +94,23 @@ async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number |
 /** Off-thread twin of readJsonlFirstRecord for main-process polls. */
 export function readJsonlFirstRecordAsync(
   filePath: string,
-  wanted: () => boolean = always
+  batch: RolloutReadBatch
 ): Promise<JsonlFirstRecord> {
   return withRolloutReadSlot(
-    () => readJsonlFirstRecordAsyncUnslotted(filePath),
-    wanted,
+    () => readJsonlFirstRecordAsyncUnslotted(filePath, batch),
+    batch,
     'unreadable'
   )
 }
 
-async function readJsonlFirstRecordAsyncUnslotted(filePath: string): Promise<JsonlFirstRecord> {
+async function readJsonlFirstRecordAsyncUnslotted(
+  filePath: string,
+  batch: RolloutReadBatch
+): Promise<JsonlFirstRecord> {
+  // Over the held-bytes budget reads as a transient failure; the identity retry comes back later.
+  if (!batch.reserve(TRANSCRIPT_LINE_MAX_BYTES)) {
+    return 'unreadable'
+  }
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
@@ -86,17 +127,18 @@ async function readJsonlFirstRecordAsyncUnslotted(filePath: string): Promise<Jso
   }
 }
 
-/** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished. */
+/** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished, 'deferred' when the batch should retry next time. */
 export function readJsonlCursorBytes(
   cursor: JsonlCursor,
-  wanted: () => boolean = always
-): Promise<JsonlCursorBytes | undefined> {
-  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor), wanted, undefined)
+  batch: RolloutReadBatch
+): Promise<JsonlCursorBytes | undefined | 'deferred'> {
+  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor, batch), batch, 'deferred')
 }
 
 async function readJsonlCursorBytesUnslotted(
-  cursor: JsonlCursor
-): Promise<JsonlCursorBytes | undefined> {
+  cursor: JsonlCursor,
+  batch: RolloutReadBatch
+): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   if (!cursor.filePath) {
     return undefined
   }
@@ -115,6 +157,9 @@ async function readJsonlCursorBytesUnslotted(
   if (plan.length === 0) {
     return plan
   }
+  if (!batch.reserve(plan.length)) {
+    return 'deferred'
+  }
   let handle: FileHandle | undefined
   try {
     // Why: open per read, never held, so a replaced rollout is always read at its current path.
@@ -131,9 +176,9 @@ async function readJsonlCursorBytesUnslotted(
 
 export function readTranscriptDirectoryAsync(
   directory: string,
-  wanted: () => boolean = always
+  batch: RolloutReadBatch
 ): Promise<string[]> {
-  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory), wanted, [])
+  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory), batch, [])
 }
 
 async function readTranscriptDirectoryAsyncUnslotted(directory: string): Promise<string[]> {

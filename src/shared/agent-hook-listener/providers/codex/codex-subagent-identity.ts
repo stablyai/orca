@@ -1,5 +1,5 @@
 import { extname, isAbsolute } from 'node:path'
-import { readJsonlFirstRecordAsync } from './codex-rollout-async-reads'
+import { readJsonlFirstRecordAsync, type RolloutReadBatch } from './codex-rollout-async-reads'
 import { readJsonlFirstRecord } from './codex-rollout-jsonl-cursor'
 import { type JsonRecord, record } from './codex-rollout-jsonl-format'
 import { codexSubagentPathLabel } from './codex-agent-path'
@@ -47,9 +47,9 @@ export function readCodexSubagentIdentity(
 export async function readCodexSubagentIdentityAsync(
   transcriptPath: string,
   agentId: string,
-  wanted: () => boolean
+  batch: RolloutReadBatch
 ): Promise<CodexSubagentIdentity> {
   return readsIdentity(transcriptPath)
-    ? identityFromHead(await readJsonlFirstRecordAsync(transcriptPath, wanted), agentId)
+    ? identityFromHead(await readJsonlFirstRecordAsync(transcriptPath, batch), agentId)
     : undefined
 }

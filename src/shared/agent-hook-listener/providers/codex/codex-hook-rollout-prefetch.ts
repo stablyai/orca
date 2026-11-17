@@ -150,6 +150,13 @@ export class CodexHookRolloutPrefetcher {
     this.tails.set(key, turn)
     // Every turn's prefetch is time-bounded and its release follows synchronously, so the wait for `previous` is bounded too.
     await previous
-    return { reads: await prefetchCodexHookRolloutReadsWithin(state, body), release }
+    const reads = await prefetchCodexHookRolloutReadsWithin(state, body)
+    return {
+      reads,
+      release: () => {
+        reads.batch.release()
+        release()
+      }
+    }
   }
 }

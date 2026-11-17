@@ -62,6 +62,7 @@ describe('Codex transcript poll', () => {
     syncFs.recording = true
     const reads = await readCodexTranscriptPoll(state, PANE_KEY)
     const next = pollCodexTranscriptStatus(state, original, body, 'production', reads)
+    reads.batch.release()
     syncFs.recording = false
     if (next && next !== original) {
       seedLegacyAgentStatusForTests(state, next)
@@ -138,6 +139,7 @@ describe('Codex transcript poll', () => {
     syncFs.recording = true
     const reads = await prefetchCodexHookRolloutReads(state, { paneKey: PANE_KEY, payload: hook })
     const status = withPrefetchedRolloutReads(reads, () => normalizeAndAccept(state, 'codex', hook))
+    reads.batch.release()
     syncFs.recording = false
     expect(status?.payload.subagents).toMatchObject([{ id: CHILD_ID, state: 'working' }])
     expect(syncFs.calls).toEqual([])

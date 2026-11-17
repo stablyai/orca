@@ -1,4 +1,8 @@
-import { readJsonlCursorBytes, readTranscriptDirectoryAsync } from './codex-rollout-async-reads'
+import {
+  readJsonlCursorBytes,
+  readTranscriptDirectoryAsync,
+  type RolloutReadBatch
+} from './codex-rollout-async-reads'
 import {
   applyJsonlCursorBytes,
   type JsonlCursor,
@@ -18,34 +22,35 @@ import {
 /** New rollout bytes read off the main thread; nothing in the transcript state moves until they are applied. */
 export type CodexSubagentTranscriptReads = {
   parent: JsonlCursor
-  parentBytes: JsonlCursorBytes | undefined
+  /** 'deferred' when the read budget was full; the whole batch then waits for the next poll. */
+  parentBytes: JsonlCursorBytes | undefined | 'deferred'
   childBytes: Map<TrackedTranscriptSubagent, JsonlCursorBytes | undefined>
 }
 
 /** Visits the parent cursor, then each child's after resolving its rollout path asynchronously, one at a time. */
 async function visitCodexTranscriptCursors(
   state: CodexSubagentTranscriptState,
-  visit: (cursor: JsonlCursor, child?: TrackedTranscriptSubagent) => Promise<void>,
-  current: () => boolean
+  visit: (cursor: JsonlCursor, child?: TrackedTranscriptSubagent) => Promise<boolean>,
+  batch: RolloutReadBatch
 ): Promise<void> {
   const parent = state.parent
   const parentPath = parent.filePath
-  const wanted = (): boolean => state.parent === parent && current()
-  await visit(parent)
-  if (!parentPath) {
+  const wanted = (): boolean => state.parent === parent && batch.wanted()
+  // A visit returns false to stop the batch (budget full); the rest waits for the next poll.
+  if (!(await visit(parent)) || !parentPath) {
     return
   }
   const entriesByDirectory = new Map<string, string[]>()
   // oxlint-disable-next-line unicorn/no-useless-spread -- the loop awaits; hooks may add or remove children meanwhile.
   for (const [id, tracked] of [...state.subagents]) {
     // A replaced session or pane makes the rest of this batch unappliable; stop opening its rollouts.
-    if (state.parent !== parent || !current() || state.subagents.get(id) !== tracked) {
+    if (!wanted() || state.subagents.get(id) !== tracked) {
       return
     }
     if (!tracked.filePath) {
       for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
         if (!entriesByDirectory.has(directory)) {
-          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory, wanted))
+          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory, batch))
         }
       }
       if (!wanted()) {
@@ -55,13 +60,15 @@ async function visitCodexTranscriptCursors(
         entriesByDirectory.get(directory)
       )
     }
-    await visit(tracked, tracked)
+    if (!(await visit(tracked, tracked))) {
+      return
+    }
   }
 }
 
 export async function readCodexSubagentTranscript(
   state: CodexSubagentTranscriptState,
-  current: () => boolean
+  batch: RolloutReadBatch
 ): Promise<CodexSubagentTranscriptReads> {
   const reads: CodexSubagentTranscriptReads = {
     parent: state.parent,
@@ -71,14 +78,15 @@ export async function readCodexSubagentTranscript(
   await visitCodexTranscriptCursors(
     state,
     async (cursor, child) => {
-      const bytes = await readJsonlCursorBytes(cursor, current)
-      if (child) {
-        reads.childBytes.set(child, bytes)
-      } else {
+      const bytes = await readJsonlCursorBytes(cursor, batch)
+      if (!child) {
         reads.parentBytes = bytes
+      } else if (bytes !== 'deferred') {
+        reads.childBytes.set(child, bytes)
       }
+      return bytes !== 'deferred'
     },
-    current
+    batch
   )
   return reads
 }
@@ -89,8 +97,11 @@ export function prefetchCodexSubagentTranscript(
 ): Promise<void> {
   return visitCodexTranscriptCursors(
     state,
-    (cursor) => prefetchJsonlCursor(reads, cursor),
-    () => !reads.closed
+    async (cursor) => {
+      await prefetchJsonlCursor(reads, cursor)
+      return true
+    },
+    reads.batch
   )
 }
 
@@ -100,7 +111,7 @@ export function applyCodexSubagentTranscriptReads(
   roster: CodexSubagentRoster,
   reads: CodexSubagentTranscriptReads
 ): boolean {
-  if (state.parent !== reads.parent) {
+  if (state.parent !== reads.parent || reads.parentBytes === 'deferred') {
     return false
   }
   const parentRecords = applyJsonlCursorBytes(

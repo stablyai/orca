@@ -1,6 +1,7 @@
 import {
   readJsonlCursorBytes,
   readJsonlFirstRecordAsync,
+  RolloutReadBatch,
   rolloutFileSizeAsync
 } from './codex-rollout-async-reads'
 import {
@@ -16,6 +17,8 @@ export type PrefetchedRolloutReads = {
   closed?: true
   /** Set when a parent or reviewer read was deferred in this scope, so reviewer evidence may be stale. */
   deferred?: true
+  /** Holds the prefetched buffers' share of the read budget; release it once the hook is applied. */
+  batch: RolloutReadBatch
   cursors: { filePath: string; offset: number; carry: string; read: JsonlCursorBytes | undefined }[]
   firstRecords: Map<string, JsonlFirstRecord>
   sizes: Map<string, number | null>
@@ -24,7 +27,13 @@ export type PrefetchedRolloutReads = {
 let prefetched: PrefetchedRolloutReads | undefined
 
 export function createPrefetchedRolloutReads(): PrefetchedRolloutReads {
-  return { cursors: [], firstRecords: new Map(), sizes: new Map() }
+  const reads: PrefetchedRolloutReads = {
+    batch: new RolloutReadBatch(() => !reads.closed),
+    cursors: [],
+    firstRecords: new Map(),
+    sizes: new Map()
+  }
+  return reads
 }
 
 export function withPrefetchedRolloutReads<T>(
@@ -66,10 +75,9 @@ export async function prefetchJsonlCursor(
 ): Promise<void> {
   const { filePath, offset, carry } = cursor
   if (filePath && !reads.closed) {
-    const read = await prefetchOnce(filePath, () =>
-      readJsonlCursorBytes(cursor, () => !reads.closed)
-    )
-    if (read !== SKIPPED) {
+    const read = await prefetchOnce(filePath, () => readJsonlCursorBytes(cursor, reads.batch))
+    // A read over the byte budget stays unprefetched, so normalization defers it to the poll.
+    if (read !== SKIPPED && read !== 'deferred') {
       reads.cursors.push({ filePath, offset, carry, read })
     }
   }
@@ -84,16 +92,14 @@ export async function prefetchRolloutHead(
   if (reads.closed) {
     return
   }
-  const size = await prefetchOnce(filePath, () =>
-    rolloutFileSizeAsync(filePath, () => !reads.closed)
-  )
+  const size = await prefetchOnce(filePath, () => rolloutFileSizeAsync(filePath, reads.batch))
   if (size === SKIPPED) {
     return
   }
   reads.sizes.set(filePath, size)
   if (wantsHead(size) && !reads.closed) {
     const head = await prefetchOnce(filePath, () =>
-      readJsonlFirstRecordAsync(filePath, () => !reads.closed)
+      readJsonlFirstRecordAsync(filePath, reads.batch)
     )
     if (head !== SKIPPED) {
       reads.firstRecords.set(filePath, head)

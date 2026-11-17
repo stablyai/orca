@@ -249,14 +249,18 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
     const apply = (reads?: PrefetchedRolloutReads) => {
-      if (
-        !this.statusHooksEnabled ||
-        this.token !== token ||
-        this.statusHookGeneration !== statusHookGeneration
-      ) {
-        throw new Error('Status hook spool replay interrupted')
+      try {
+        if (
+          !this.statusHooksEnabled ||
+          this.token !== token ||
+          this.statusHookGeneration !== statusHookGeneration
+        ) {
+          throw new Error('Status hook spool replay interrupted')
+        }
+        withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
+      } finally {
+        reads?.batch.release()
       }
-      withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
     const pending = this.checkHookOwner(record.source, body, answerBy)

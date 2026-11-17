@@ -187,8 +187,12 @@ export class AgentHookResultRetryScheduler {
         : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
           ? current
           : undefined
-      if (owner) {
-        this.applyTranscriptPoll(paneKey, owner, reads)
+      try {
+        if (owner) {
+          this.applyTranscriptPoll(paneKey, owner, reads)
+        }
+      } finally {
+        reads.batch.release()
       }
     })
   }

@@ -3,7 +3,7 @@ import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { readJsonlCursorBytes } from './codex-rollout-async-reads'
+import { readJsonlCursorBytes, RolloutReadBatch } from './codex-rollout-async-reads'
 import { applyJsonlCursorBytes, type JsonlCursor } from './codex-rollout-jsonl-format'
 
 const directories: string[] = []
@@ -59,9 +59,14 @@ describe('readJsonlCursorBytes', () => {
 
   it('applies only the unread part of bytes another reader overtook', async () => {
     const { path, cursor } = rollout('{"a":1}\n')
-    const early = await readJsonlCursorBytes(cursor)
+    const batch = new RolloutReadBatch()
+    const early = await readJsonlCursorBytes(cursor, batch)
     appendFileSync(path, '{"a":2}\n')
-    const late = await readJsonlCursorBytes(cursor)
+    const late = await readJsonlCursorBytes(cursor, batch)
+    batch.release()
+    if (early === 'deferred' || late === 'deferred') {
+      throw new Error('a lone batch always fits the read budget')
+    }
     expect(applyJsonlCursorBytes(cursor, early)).toEqual([{ a: 1 }])
     expect(applyJsonlCursorBytes(cursor, late)).toEqual([{ a: 2 }])
     // Bytes the cursor has fully consumed yield nothing, never a replay.

@@ -1,5 +1,5 @@
 import { usableAgentChildLabel } from '../../../agent-status/presentation/agent-child-row-name'
-import { rolloutFileSizeAsync } from './codex-rollout-async-reads'
+import { rolloutFileSizeAsync, type RolloutReadBatch } from './codex-rollout-async-reads'
 import {
   readCodexSubagentIdentityAsync,
   type CodexSubagentIdentity
@@ -36,12 +36,12 @@ export type CodexSubagentIdentityRead = {
 /** Reads a few unnamed children's own rollouts per poll, taking turns, off the main thread; a relay restart can leave no parent transcript to drive this. */
 export async function readPendingCodexSubagentIdentities(
   roster: CodexSubagentRoster,
-  current: () => boolean
+  batch: RolloutReadBatch
 ): Promise<CodexSubagentIdentityRead[]> {
   const reads: CodexSubagentIdentityRead[] = []
   // Sequential reads keep one file operation per pane in flight.
   for (const [id, pending] of pendingIdentityTurn(roster)) {
-    if (!current()) {
+    if (!batch.wanted()) {
       break
     }
     // A task path the parent rollout supplied meanwhile outranks the child's own header.
@@ -54,15 +54,15 @@ export async function readPendingCodexSubagentIdentities(
     if (!child || !transcriptPath) {
       continue
     }
-    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath, current)}`
-    if (!current()) {
+    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath, batch)}`
+    if (!batch.wanted()) {
       break
     }
     if (child.identityMissKey === missKey) {
       continue
     }
-    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim(), current)
-    if (!current()) {
+    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim(), batch)
+    if (!batch.wanted()) {
       break
     }
     reads.push({ id, child, transcriptPath, missKey, identity })

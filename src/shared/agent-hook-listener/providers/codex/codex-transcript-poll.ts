@@ -1,3 +1,4 @@
+import { RolloutReadBatch } from './codex-rollout-async-reads'
 import { record } from './codex-rollout-jsonl-format'
 import {
   createPrefetchedRolloutReads,
@@ -25,6 +26,8 @@ import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
 
 export type CodexTranscriptPollReads = {
+  /** Holds the read buffers' share of the budget; callers release it once the reads are applied or dropped. */
+  batch: RolloutReadBatch
   roster?: CodexSubagentRoster
   transcript?: CodexSubagentTranscriptState
   transcriptReads?: CodexSubagentTranscriptReads
@@ -39,17 +42,20 @@ export async function readCodexTranscriptPoll(
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
   // A replaced or cleared pane makes the rest of these reads unappliable; stop opening rollouts for it.
-  const current = (): boolean =>
-    state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
-    state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+  const batch = new RolloutReadBatch(
+    () =>
+      state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
+      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+  )
   const transcriptReads = transcript?.parent.filePath
-    ? await readCodexSubagentTranscript(transcript, current)
+    ? await readCodexSubagentTranscript(transcript, batch)
     : undefined
   return {
+    batch,
     roster,
     transcript,
     transcriptReads,
-    identities: roster ? await readPendingCodexSubagentIdentities(roster, current) : []
+    identities: roster ? await readPendingCodexSubagentIdentities(roster, batch) : []
   }
 }
 
