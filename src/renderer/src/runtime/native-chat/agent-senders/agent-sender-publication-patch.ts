@@ -8,11 +8,35 @@ export type AgentSenderPublications = Record<string, Record<string, AgentSenderP
 type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>
 const EMPTY: AgentSenderPublications = Object.freeze({})
 
+/** The newest revision accepted for a stored publication whose content it did not change. */
+const deliveredRevisions = new WeakMap<AgentSenderPublication, AgentSenderRevision>()
+
+/** The newest revision delivered for this stored publication: what the window has applied. */
+export function deliveredAgentSenderRevision(
+  publication: AgentSenderPublication
+): AgentSenderRevision {
+  return deliveredRevisions.get(publication) ?? publication.revision
+}
+
+/** Field by field, as the index reads them; the revision stamp never counts. */
+function sameContent(a: AgentSenderPublication, b: AgentSenderPublication): boolean {
+  return (
+    a.peerFingerprint === b.peerFingerprint &&
+    a.associations.length === b.associations.length &&
+    a.attachments.length === b.attachments.length &&
+    JSON.stringify(a.principals) === JSON.stringify(b.principals) &&
+    JSON.stringify(a.associations) === JSON.stringify(b.associations) &&
+    JSON.stringify(a.attachments) === JSON.stringify(b.attachments)
+  )
+}
+
 /** A host publishes once any frame carries the field; a frame without it changes only its own
  *  scope when it removes that worktree, so capability never follows which scopes have rows.
  *  Deliveries are applied by revision alone: the whole-host publication is the baseline, a scope
  *  newer than both it and that scope's own last delivery overrides that worktree, and nothing
- *  older or equal changes anything, whichever transport, frame or key order delivered it. */
+ *  older or equal changes anything, whichever transport, frame or key order delivered it.
+ *  A newer delivery with the stored content advances only the delivered revision, so derived
+ *  sender data keeps its identity. */
 export function agentSenderPublicationPatch(
   state: State,
   host: string,
@@ -41,19 +65,36 @@ export function agentSenderPublicationPatch(
     return set(next)
   }
   const { revision } = publication
+  const delivered = (stored: AgentSenderPublication | undefined) =>
+    stored && deliveredAgentSenderRevision(stored)
   const newerOrEqual = (stored: AgentSenderRevision | undefined) =>
     stored?.epoch === revision.epoch && stored.revision >= revision.revision
-  if (newerOrEqual(scopes?.['*']?.revision)) {
+  if (newerOrEqual(delivered(scopes?.['*']))) {
+    return {}
+  }
+  const unchanged = (stored: AgentSenderPublication) => {
+    deliveredRevisions.set(stored, revision)
     return {}
   }
   if (scope === '*') {
-    const newer = Object.entries(scopes ?? {}).filter(
-      ([id, value]) =>
-        id !== '*' &&
-        value.revision.epoch === revision.epoch &&
-        value.revision.revision > revision.revision
-    )
+    const later = (value: AgentSenderPublication) => {
+      const stored = deliveredAgentSenderRevision(value)
+      return stored.epoch === revision.epoch && stored.revision > revision.revision
+    }
+    const entries = Object.entries(scopes ?? {}).filter(([id]) => id !== '*')
+    const newer = entries.filter(([, value]) => later(value))
+    const whole = scopes?.['*']
+    // Every scope stays, and the baseline reads the same: nothing derived from it moves.
+    if (whole && newer.length === entries.length && sameContent(whole, publication)) {
+      return unchanged(whole)
+    }
     return set({ ...Object.fromEntries(newer), '*': publication })
   }
-  return newerOrEqual(scopes?.[scope]?.revision) ? {} : set({ ...scopes, [scope]: publication })
+  const stored = scopes?.[scope]
+  if (newerOrEqual(delivered(stored))) {
+    return {}
+  }
+  return stored && sameContent(stored, publication)
+    ? unchanged(stored)
+    : set({ ...scopes, [scope]: publication })
 }
