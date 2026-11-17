@@ -2819,6 +2819,7 @@
       "conversationCleared": "Этот разговор очищен.",
       "goalsUnsupported": "Этот агент не поддерживает цели.",
       "historyUnavailable": "Сейчас Orca не удалось открыть историю чата.",
+      "savedInOtherFolder": "Этот разговор сохранён в другой папке.",
       "historyUnreadable": "Orca не удалось прочитать сохранённую историю чата.",
       "historyUnusable": "Не удалось загрузить этот чат.",
       "hostReconciling": "После перезапуска Orca ещё проверяет состояние этого чата.",

@@ -2679,6 +2679,7 @@
       "conversationCleared": "Diese Unterhaltung wurde geleert.",
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+      "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
       "hostReconciling": "Orca prüft diesen Chat nach dem Neustart noch.",

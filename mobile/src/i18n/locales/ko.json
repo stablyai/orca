@@ -2675,6 +2675,7 @@
       "conversationCleared": "이 대화는 지워졌습니다.",
       "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
       "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+      "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
       "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
       "historyUnusable": "이 채팅을 불러올 수 없습니다.",
       "hostReconciling": "Orca가 다시 시작된 후 이 채팅을 아직 확인하고 있습니다.",
