@@ -76,7 +76,7 @@ afterEach(() => {
   useAppStore.setState(initialState, true)
 })
 
-describe('useAddRepoWslHostOffer on a drive mapped to a distro share', () => {
+describe('useAddRepoWslHostOffer', () => {
   it('offers the distro as a host for a mapped-drive folder', async () => {
     setOfferState()
     const { result } = renderOffer()
@@ -86,6 +86,63 @@ describe('useAddRepoWslHostOffer on a drive mapped to a distro share', () => {
     })
     expect(held).toBe(true)
     expect(resolveMappedDrivePath).toHaveBeenCalledWith('W:\\home\\u\\repo')
+  })
+
+  it.each([
+    ['on', true],
+    ['unset', undefined]
+  ])('offers an unhosted distro while the setting is %s', async (_label, experimentalWslHosts) => {
+    setOfferState({ settings: { ...getDefaultSettings('/home/test'), experimentalWslHosts } })
+    const { result } = renderOffer()
+    let held = false
+    await act(async () => {
+      held = await result.current.offer(
+        '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+        'local_folder_picker'
+      )
+    })
+    expect(held).toBe(true)
+    const notice = result.current.notice(async () => undefined)
+    expect(isValidElement<{ offer: { distro: string } }>(notice)).toBe(true)
+    if (isValidElement<{ offer: { distro: string } }>(notice)) {
+      expect(notice.props.offer.distro).toBe('Ubuntu')
+    }
+  })
+
+  it('offers no new host for a distro already added as one', async () => {
+    setOfferState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalWslHosts: true },
+      runtimeEnvironments: [UBUNTU_HOST]
+    })
+    const { result } = renderOffer()
+    await act(async () => {
+      await result.current.offer('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo', 'local_folder_picker')
+    })
+    const notice = result.current.notice(async () => undefined)
+    expect(isValidElement<{ offer?: unknown; onAddOnHost?: unknown }>(notice)).toBe(true)
+    if (isValidElement<{ offer?: unknown; onAddOnHost?: unknown }>(notice)) {
+      expect(notice.props.offer).toBeUndefined()
+      expect(notice.props.onAddOnHost).toBeTypeOf('function')
+    }
+  })
+
+  it('keeps a dismissed offer dismissed with the setting on', async () => {
+    setOfferState({
+      settings: {
+        ...getDefaultSettings('/home/test'),
+        experimentalWslHosts: true,
+        wslHostOfferDismissed: true
+      }
+    })
+    const { result } = renderOffer()
+    let held = true
+    await act(async () => {
+      held = await result.current.offer(
+        '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+        'local_folder_picker'
+      )
+    })
+    expect(held).toBe(false)
   })
 
   it('offers the saved host of the mapped distro with its Linux path', async () => {

@@ -16,7 +16,6 @@ import { isWslHostsSettingOn } from '../../../../shared/remote-runtime/wsl-hosts
 export type WslHostOfferGate = {
   /** WSL hosts can take new work here: Windows (or its e2e fake), gate open, server files shipped. */
   gateOpen: boolean
-  settingOn: boolean
   dismissed: boolean
 }
 
@@ -25,8 +24,9 @@ export function wslHostOfferDistro(path: string): string | null {
   return parseWslUncPath(path)?.distro ?? null
 }
 
+// Ignores the setting: with it on by default, an unhosted distro would otherwise land on the legacy bridge.
 export function shouldOfferWslHost(gate: WslHostOfferGate): boolean {
-  return gate.gateOpen && !gate.settingOn && !gate.dismissed
+  return gate.gateOpen && !gate.dismissed
 }
 
 export function readWslHostOfferGate(
@@ -37,7 +37,6 @@ export function readWslHostOfferGate(
   return {
     gateOpen:
       wslHostsAvailable() && state.wslHostsAcceptNewWork && state.wslHostServerFiles !== 'missing',
-    settingOn: isWslHostsSettingOn(state.settings),
     dismissed: state.settings?.wslHostOfferDismissed === true
   }
 }
