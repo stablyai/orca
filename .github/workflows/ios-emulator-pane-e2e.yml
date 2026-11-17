@@ -1,0 +1,100 @@
+name: iOS emulator pane E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '.github/workflows/ios-emulator-pane-e2e.yml'
+      - 'tests/e2e/ios-emulator-workspace-isolation.spec.ts'
+      - 'tests/e2e/helpers/orca-app.ts'
+      - 'src/main/emulator/**'
+      - 'src/main/runtime/emulator/**'
+      - 'src/renderer/src/components/emulator-pane/**'
+      - 'src/renderer/src/lib/simulator/**'
+      - 'src/cli/emulator/**'
+      - 'src/shared/emulator/**'
+      - 'electron.vite.config.ts'
+      - 'config/build-plugins/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-emulator-pane-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pane-isolation:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      ORCA_IOS_PANE_E2E: '1'
+      ORCA_IOS_OWNED_DEVICES_FILE: ${{ runner.temp }}/orca-ios-pane-owned.txt
+      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/orca-ios-pane-report.json
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Record host and simulator runtimes
+        run: |
+          git rev-parse HEAD HEAD^{tree}
+          node --version
+          xcodebuild -version
+          xcrun simctl list runtimes -j
+      - name: Exercise real simulator panes
+        run: >-
+          pnpm exec playwright test tests/e2e/ios-emulator-workspace-isolation.spec.ts
+          --config tests/playwright.config.ts --project electron-headless --workers=1
+          --reporter=list,json
+      - name: Require the scenario to pass without skips
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          import { verifyPlaywrightParticipation } from './config/scripts/runtime-verification/participation/verify-playwright-participation.mjs'
+          const report = JSON.parse(readFileSync(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME, 'utf8'))
+          verifyPlaywrightParticipation(report, {
+            titles: ['separate workspace panes keep their selected iOS simulator'],
+            label: 'iOS simulator pane',
+            repetitions: 1
+          })
+          NODE
+      - name: Remove only test-owned simulators
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs'
+          import { execFileSync } from 'node:child_process'
+          const file = process.env.ORCA_IOS_OWNED_DEVICES_FILE
+          if (!file || !existsSync(file)) process.exit(0)
+          const owned = readFileSync(file, 'utf8').split(/\s+/).filter(Boolean)
+          if (owned.some((id) => !/^[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{12}$/i.test(id))) {
+            throw new Error('Invalid simulator identity in cleanup manifest')
+          }
+          const devices = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }))
+          const existing = new Map(Object.values(devices.devices).flat().map((item) => [item.udid, item]))
+          for (const id of owned) {
+            const device = existing.get(id)
+            if (!device) continue
+            if (device.state !== 'Shutdown') execFileSync('xcrun', ['simctl', 'shutdown', id])
+            execFileSync('xcrun', ['simctl', 'delete', id])
+          }
+          const remaining = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8' }))
+          if (Object.values(remaining.devices).flat().some((item) => owned.includes(item.udid))) {
+            throw new Error('A test-owned simulator remains after cleanup')
+          }
+          NODE
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-emulator-pane-evidence
+          path: |
+            test-results/
+            ${{ runner.temp }}/orca-ios-pane-report.json
+            ${{ runner.temp }}/orca-ios-pane-owned.txt
+          if-no-files-found: warn
