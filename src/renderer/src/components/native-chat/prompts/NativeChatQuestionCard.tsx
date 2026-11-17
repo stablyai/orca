@@ -237,7 +237,8 @@ export function NativeChatQuestionCard({
       role="group"
       aria-label={q.question}
       tabIndex={-1}
-      className="shrink-0 bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      // Capped against the chat pane (not the window) so the words that led to the question stay in view.
+      className="flex max-h-[max(10rem,min(32rem,50%))] min-h-0 shrink-0 flex-col bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
@@ -254,9 +255,9 @@ export function NativeChatQuestionCard({
         }
       }}
     >
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
+      <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
         {total > 1 ? (
-          <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
+          <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1 scrollbar-sleek">
             {prompt.questions.map((qq, i) => (
               <button
                 key={i}
@@ -286,12 +287,12 @@ export function NativeChatQuestionCard({
         ) : null}
 
         {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
-        <div className="overflow-hidden rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm">
-          <div className="flex items-start gap-2 px-3.5 py-2.5">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm">
+          <div className="flex shrink-0 items-start gap-2 px-3.5 py-2.5">
             <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
               content={q.question}
-              className="min-w-0 flex-1 break-words text-sm font-medium text-foreground [&_p]:my-0 [&_p+p]:mt-2"
+              className="scrollbar-sleek max-h-[8lh] min-w-0 flex-1 overflow-y-auto break-words text-sm font-medium text-foreground [&_p]:my-0 [&_p+p]:mt-2"
             />
             {collapse ? (
               <NativeChatPromptCollapseToggle
@@ -312,7 +313,7 @@ export function NativeChatQuestionCard({
           </div>
 
           {/* Option rings are inset, so the scroll clip cannot cut them. */}
-          <div className="flex max-h-[50vh] flex-col gap-1.5 overflow-y-auto px-3.5 pb-3 scrollbar-sleek">
+          <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto px-3.5 pb-3 scrollbar-sleek">
             {q.options.map((opt, i) => (
               <NativeChatQuestionOption
                 key={`${i}:${opt.label}`}
@@ -330,7 +331,7 @@ export function NativeChatQuestionCard({
           </div>
           <div
             className={cn(
-              'flex gap-2.5 px-3.5 pb-3.5',
+              'flex shrink-0 gap-2.5 px-3.5 pb-3.5',
               freeTextInput?.multiline ? 'items-end' : 'items-center'
             )}
           >
@@ -430,7 +431,7 @@ export function NativeChatQuestionCard({
         </div>
 
         {total > 1 ? (
-          <p className="mt-2 text-right text-xs text-muted-foreground">
+          <p className="mt-2 shrink-0 text-right text-xs text-muted-foreground">
             {index + 1}/{total}
           </p>
         ) : null}
