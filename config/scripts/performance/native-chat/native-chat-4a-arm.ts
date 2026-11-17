@@ -1,6 +1,6 @@
 // One 4a arm: a built checkout, its own envelope/fingerprint builders, and background launches it alone stops by recorded PID.
 // Its AppStore import also declares the window.__store and window.api globals these page.evaluate callbacks use.
-import type { AppStore } from '../../../../tests/e2e/helpers/runtime-types'
+import type { AppStore } from '../../../../tests/e2e/desktop/renderer-probes/runtime-types'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { chmodSync, constants, cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -15,12 +15,12 @@ import {
 import {
   createElectronHomeIsolation,
   assertElectronResolvedIsolatedHome
-} from '../../../../tests/e2e/helpers/electron-home-isolation'
-import { getOrcaElectronLaunchArgs } from '../../../../tests/e2e/helpers/electron-launch-args'
-import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
-import { closeElectronAppForE2E } from '../../../../tests/e2e/helpers/electron-process-shutdown'
-import { getE2ECompletedOnboardingProfile } from '../../../../tests/e2e/helpers/e2e-completed-onboarding-profile'
-import { buildFakeAgentCommandOverride } from '../../../../tests/e2e/helpers/fake-agent-command-override'
+} from '../../../../tests/e2e/desktop/electron-fixtures/electron-home-isolation'
+import { getOrcaElectronLaunchArgs } from '../../../../tests/e2e/desktop/electron-fixtures/electron-launch-args'
+import { retryTransientMainEvaluate } from '../../../../tests/e2e/desktop/electron-fixtures/electron-main-evaluate-retry'
+import { closeElectronAppForE2E } from '../../../../tests/e2e/desktop/electron-fixtures/electron-process-shutdown'
+import { getE2ECompletedOnboardingProfile } from '../../../../tests/e2e/desktop/electron-fixtures/e2e-completed-onboarding-profile'
+import { buildFakeAgentCommandOverride } from '../../../../tests/e2e/agents/session-fixtures/fake-agent-command-override'
 import {
   verifyArmProvenance,
   type ArmProvenance,

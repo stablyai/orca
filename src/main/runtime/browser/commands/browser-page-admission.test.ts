@@ -46,7 +46,7 @@ it('does not execute an admitted page command before restored load, and propagat
   const guest = Object.assign(new EventEmitter(), {
     id: 10,
     isDestroyed: () => false,
-    isLoading: () => true
+    isLoadingMainFrame: () => true
   }) as unknown as Electron.WebContents
   native.guest = guest
   const tabs = new Map<string, number>()
@@ -116,6 +116,7 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       getType: () => 'webview',
       isDestroyed: () => destroyed,
       isLoading: () => loading,
+      isLoadingMainFrame: () => loading,
       isDevToolsOpened: () => false,
       debugger: { isAttached: () => false },
       getURL: () => 'https://example.test/',

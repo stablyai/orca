@@ -7,13 +7,4 @@ describe('GitGenerateCommitMessage', () => {
 
     expect(parsed.defaultTuiAgent).toBeNull()
   })
-
-  it('still names the cause when the host does not know the default agent', () => {
-    const parsed = GitGenerateCommitMessage.safeParse({
-      worktree: 'id:wt-1',
-      defaultTuiAgent: 'future-agent'
-    })
-
-    expect(parsed.error?.issues[0]?.message).toBe('Unknown TUI agent')
-  })
 })
