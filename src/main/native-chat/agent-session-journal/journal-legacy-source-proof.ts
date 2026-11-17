@@ -166,13 +166,19 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
       const keys = table === 'journal_rows' ? 'session_id,epoch' : 'generation'
       // The first page starts from the smallest key, whatever it is; later ones seek past the last.
       const first = db.prepare(`SELECT ${keys} FROM ${table} ORDER BY ${keys} LIMIT 1`)
+      // A key range over (session_id,epoch) would step through every seq of the previous key, so
+      // the next epoch of the same chat and the next chat are each one seek.
       const next = db.prepare(
         table === 'journal_rows'
-          ? 'SELECT session_id,epoch FROM journal_rows WHERE (session_id,epoch)>(?,?) ORDER BY session_id,epoch LIMIT 1'
+          ? 'SELECT session_id,epoch FROM journal_rows WHERE session_id=? AND epoch>? ORDER BY epoch LIMIT 1'
           : 'SELECT generation FROM journal_outcomes WHERE generation>? ORDER BY generation LIMIT 1'
+      )
+      const nextChat = db.prepare(
+        'SELECT session_id,epoch FROM journal_rows WHERE session_id>? ORDER BY session_id,epoch LIMIT 1'
       )
       first.setReadBigInts(true)
       next.setReadBigInts(true)
+      nextChat.setReadBigInts(true)
       rows = []
       let after: SqliteRow[string][] | null =
         cursor.after === null
@@ -181,7 +187,11 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
             ? [cursor.after, cursor.epoch!]
             : [BigInt(cursor.after)]
       while (rows.length < 128) {
-        const row = after === null ? first.get() : next.get(...after)
+        const row =
+          after === null
+            ? first.get()
+            : (next.get(...after) ??
+              (table === 'journal_rows' ? nextChat.get(after[0]!) : undefined))
         if (!row) {
           break
         }

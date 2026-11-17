@@ -125,8 +125,7 @@ export class JournalLegacyRetirement {
     } catch (error) {
       // Unsupported storage or file identity doesn't change while this process runs.
       this.done ||= error instanceof JournalLegacyIneligibleError
-      this.retryAt = performance.now() + this.retryDelay
-      this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
+      this.later()
       const reason = error instanceof Error ? error.message : String(error)
       if (this.diagnosed !== reason) {
         this.diagnosed = reason
@@ -168,44 +167,47 @@ export class JournalLegacyRetirement {
     await this.eligibility.check(this.filename, this.stopped.signal)
     this.proof.observe(observation)
     await this.proof.run(observation)
-    this.retryDelay = 60_000
+    // Every early return below waits out the backoff: no helper or full-sync commit each minute.
     if (!(await this.matches(observation))) {
-      return
-    }
-    // One full-sync commit makes every converted row durable before the original goes.
-    const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
-    if (destination.main !== observation.store) {
-      return
-    }
-    const retiring: LegacySourceRetiring = {
-      version: 2,
-      phase: 'retiring',
-      proof: observation.proof,
-      store: observation.store
-    }
-    if (
-      (await this.writer.maintain({
-        kind: 'legacy-retirement-save',
-        value: JSON.stringify(retiring),
-        durable: true,
-        destination
-      })) !== true
-    ) {
-      throw new Error('legacy retirement commit was not acknowledged')
+      return this.later()
     }
     const recycled = await this.readers.recycleSourceReaders()
     if (!recycled) {
-      return
+      return this.later()
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
     let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
     try {
+      // One full-sync commit makes every converted row durable before the original goes.
+      const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
+      if (destination.main !== observation.store) {
+        return this.later()
+      }
+      const retiring: LegacySourceRetiring = {
+        version: 2,
+        phase: 'retiring',
+        proof: observation.proof,
+        store: observation.store
+      }
+      if (
+        (await this.writer.maintain({
+          kind: 'legacy-retirement-save',
+          value: JSON.stringify(retiring),
+          durable: true,
+          destination
+        })) !== true
+      ) {
+        throw new Error('legacy retirement commit was not acknowledged')
+      }
       lease = await this.lock(this.filename, signal)
       // Checked again while held: from here no SQLite connection can open or write the original.
       if (!lease.held() || !this.ownsProfile() || !(await this.matches(observation))) {
-        return
+        return this.later()
       }
       this.done = await lease.retire(observation.walBytes)
+      if (!this.done) {
+        this.later()
+      }
     } finally {
       try {
         await lease?.close()
@@ -214,6 +216,11 @@ export class JournalLegacyRetirement {
         this.readers.releaseSourceReaders(recycled)
       }
     }
+  }
+
+  private later(): void {
+    this.retryAt = performance.now() + this.retryDelay
+    this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
   }
 
   private async savedState(): Promise<RetirementState> {
