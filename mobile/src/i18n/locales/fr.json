@@ -2497,7 +2497,6 @@
     },
     "sheets": {
       "browser": "Navigateur",
-      "browserUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour diffuser le navigateur sur mobile",
       "chat": "Chat",
       "copyAllAndLeave": "Tout copier et quitter",
       "copyDraftsFailed": "Impossible de copier les brouillons",
@@ -2593,7 +2592,6 @@
       "browserCommandFailed": "Échec de la commande du navigateur",
       "browserCreateFailed": "Échec de la création du navigateur",
       "browserUnavailable": "La page du navigateur n'est pas encore disponible.",
-      "browserUpdateRequired": "Mise à jour d'Orca sur l'ordinateur requise pour diffuser le navigateur sur mobile",
       "invalidUrl": "Saisissez une URL valide",
       "noteCreateFailed": "Échec de la création de la note Markdown",
       "untitledNoteCreateFailed": "Impossible de créer une note Markdown sans titre"

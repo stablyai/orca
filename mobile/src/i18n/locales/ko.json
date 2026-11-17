@@ -2423,7 +2423,6 @@
     },
     "sheets": {
       "browser": "브라우저",
-      "browserUpdateRequired": "모바일 브라우저 스트리밍을 사용하려면 데스크톱 업데이트가 필요합니다.",
       "chat": "채팅",
       "copyAllAndLeave": "모두 복사 후 나가기",
       "copyDraftsFailed": "초안을 복사하지 못했습니다.",
@@ -2519,7 +2518,6 @@
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",
       "browserCreateFailed": "브라우저를 만들지 못했습니다.",
       "browserUnavailable": "아직 브라우저 페이지를 사용할 수 없습니다.",
-      "browserUpdateRequired": "모바일 브라우저 스트리밍을 사용하려면 데스크톱 업데이트가 필요합니다.",
       "invalidUrl": "올바른 URL을 입력하세요.",
       "noteCreateFailed": "Markdown 노트를 만들지 못했습니다.",
       "untitledNoteCreateFailed": "제목 없는 Markdown 노트를 만들 수 없습니다."

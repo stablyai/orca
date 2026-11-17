@@ -196,7 +196,6 @@
     },
     "stream": {
       "updateApp": "Atualize o aplicativo Orca para transmitir as guias do navegador aqui.",
-      "updateDesktop": "Atualize o Orca para desktop para transmitir as guias do navegador no celular.",
       "checking": "Verificando o suporte de streaming do navegador de desktop.",
       "pageUnavailable": "A página do navegador ainda não está disponível.",
       "timedOut": "A transmissão do navegador expirou."
@@ -2868,7 +2867,6 @@
     },
     "sheets": {
       "browser": "Navegador",
-      "browserUpdateRequired": "Atualize o desktop para transmitir o navegador ao celular",
       "chat": "Chat",
       "copyAllAndLeave": "Copiar Tudo e Sair",
       "copyDraftsFailed": "Não foi possível copiar os rascunhos",
@@ -2964,7 +2962,6 @@
       "browserCommandFailed": "Falha no comando do navegador",
       "browserCreateFailed": "Falha ao criar o navegador",
       "browserUnavailable": "A página do navegador ainda não está disponível.",
-      "browserUpdateRequired": "É preciso atualizar o desktop para transmitir o navegador ao celular",
       "invalidUrl": "Digite uma URL válida",
       "noteCreateFailed": "Falha ao criar nota em Markdown",
       "untitledNoteCreateFailed": "Não foi possível criar nota em Markdown sem título"

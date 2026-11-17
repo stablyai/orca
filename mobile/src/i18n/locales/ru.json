@@ -2567,7 +2567,6 @@
     },
     "sheets": {
       "browser": "Браузер",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "chat": "Чат",
       "copyAllAndLeave": "Скопировать всё и выйти",
       "copyDraftsFailed": "Не удалось скопировать черновики",
@@ -2663,7 +2662,6 @@
       "browserCommandFailed": "Не удалось выполнить команду браузера",
       "browserCreateFailed": "Не удалось создать вкладку браузера",
       "browserUnavailable": "Страница браузера пока недоступна.",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "invalidUrl": "Введите корректный URL",
       "noteCreateFailed": "Не удалось создать заметку Markdown",
       "untitledNoteCreateFailed": "Не удалось создать заметку Markdown без названия"

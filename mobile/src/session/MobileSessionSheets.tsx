@@ -134,8 +134,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           if (browserScreencastSupported !== true) {
             showToast(
               t(
-                'session.sheets.browserUpdateRequired',
-                'Desktop update required for mobile browser streaming'
+                'session.sheets.browserStreamingUnavailable',
+                "This host can't stream browser tabs"
               ),
               1600
             )
