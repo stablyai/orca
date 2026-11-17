@@ -74,7 +74,7 @@ export function buildLineageRowProjection(
       right: 0,
       contentIndent: 0,
       before: 0,
-      after: 6,
+      after: 3,
       closing: 0
     }
     if (isWorkspace) {
@@ -122,7 +122,7 @@ export function buildLineageRowProjection(
           LINEAGE_CHILDREN_INLINE_OFFSET
         frame.right = ancestor.right + 7
         frame.contentIndent = 0
-        frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
+        frame.before = parent === index - 1 ? (newCardStyle ? 4 : 8) : 2
       }
       const identity =
         row.type === 'item'
@@ -148,7 +148,7 @@ export function buildLineageRowProjection(
       frames[frame.end].closing += 7
     }
     const next = frames[index + 1]
-    frame.after = next?.root === frame.root ? 0 : 6
+    frame.after = next?.root === frame.root ? 0 : 3
   })
   return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
 }

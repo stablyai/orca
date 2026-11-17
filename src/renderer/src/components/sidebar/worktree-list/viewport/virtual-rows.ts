@@ -7,7 +7,7 @@ export const GROUP_HEADER_ROW_HEIGHT = 28
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
 export const HOST_HEADER_ROW_HEIGHT = 36
 export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 0
-const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
+const SECONDARY_GROUP_HEADER_TOP_MARGIN = 2
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
@@ -33,7 +33,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'host-header') {
     return (
       HOST_HEADER_ROW_HEIGHT +
-      6 +
+      3 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -46,7 +46,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'header') {
     return (
       GROUP_HEADER_ROW_HEIGHT +
-      6 +
+      3 +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -57,10 +57,10 @@ export function estimateRenderRowSize(
     )
   }
   if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
-    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT + 6
+    return IMPORTED_WORKTREES_LINE_ROW_HEIGHT + 3
   }
   if (row?.type === 'pending-creation') {
-    return PENDING_CREATION_ROW_HEIGHT + 6
+    return PENDING_CREATION_ROW_HEIGHT + 3
   }
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT
