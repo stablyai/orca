@@ -1,4 +1,7 @@
-import { persistGithubCache } from '../github-cache/github-cache-persistence'
+import {
+  persistGithubCache,
+  suspendGithubCachePersistence
+} from '../github-cache/github-cache-persistence'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
@@ -106,6 +109,8 @@ export class WriteFlushBarrierOperations {
         await flushCurrentStateAsync(this, { final: true })
       })
       .finally(async () => {
+        // A rejected drain skips the final save, which would otherwise close the cache handle.
+        suspendGithubCachePersistence(runtime)
         if (runtime.profileStateAuthority?.asynchronous) {
           runtime.writesFrozen = true
           await runtime.profileStateAuthority.close()
