@@ -145,7 +145,9 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     ssh: createSshApi(),
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
-      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => []),
+      // A web client picks no local Windows folders.
+      resolveMappedDrivePath: () => Promise.resolve(null)
     },
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {

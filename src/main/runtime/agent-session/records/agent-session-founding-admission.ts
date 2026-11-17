@@ -13,7 +13,7 @@ import {
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from '../ownership/agent-session-reservation-admission'
-import { assertReservedTabUnheld, setAgentSessionTabVisibility } from '../agent-session-tab-table'
+import { assertReservedTabUnheld, setAgentSessionTabVisibility } from './agent-session-tab-table'
 import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,

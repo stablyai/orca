@@ -126,7 +126,7 @@ export function SshEgressIndicator({
     runtimeEnvironments
   )
   if (!routeEligibility) {
-    return <Globe className="size-4 shrink-0 text-muted-foreground" />
+    return <Globe className="size-3.5 shrink-0 text-muted-foreground" />
   }
   const { targetId, eligible: routed } = routeEligibility
   const hostLabel = environment
@@ -136,7 +136,7 @@ export function SshEgressIndicator({
       targetId)
   return (
     <EgressIndicatorButton
-      icon={routed ? <Server className="size-4" /> : <Monitor className="size-4" />}
+      icon={routed ? <Server className="size-3.5" /> : <Monitor className="size-3.5" />}
       egress={routed ? 'ssh' : 'local'}
       description={
         routed
@@ -178,7 +178,7 @@ export function RemoteRuntimeEgressIndicator({
   const clientHosted = presentation === 'client-hosted'
   return (
     <EgressIndicatorButton
-      icon={<Server className="size-4" />}
+      icon={<Server className="size-3.5" />}
       egress="remote"
       description={
         clientHosted

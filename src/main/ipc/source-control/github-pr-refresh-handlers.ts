@@ -33,7 +33,7 @@ import {
   readGitHubRepoUnlessWslStopped,
   validateAutomaticPRRefreshCandidate
 } from './github-repo-routing'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 const visibilityCleanupRegistered = new Set<number>()
 

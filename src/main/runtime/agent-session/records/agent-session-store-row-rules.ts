@@ -12,7 +12,7 @@ import {
 import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/leases/agent-session-legacy-handoff-lease'
 import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
-import type { PersistedAgentSessionTab } from '../agent-session-tab-table'
+import type { PersistedAgentSessionTab } from './agent-session-tab-table'
 
 export function isReadableAgentSessionStoreRecord(
   sessionId: string,

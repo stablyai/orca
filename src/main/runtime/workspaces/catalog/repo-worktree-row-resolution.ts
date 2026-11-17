@@ -28,7 +28,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'

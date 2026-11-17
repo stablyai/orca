@@ -178,6 +178,33 @@ describe('WslOrcadConnectionManager', () => {
     await expect(pending).rejects.toBeInstanceOf(WslOrcadConnectionSupersededError)
     expect(manager.get('Ubuntu')).toBeNull()
   })
+
+  it('says a first connect waits on another install, but leaves a live host’s status alone', async () => {
+    const { manager, onChange } = setup({
+      deployAndLaunch: async (_distro, options) => {
+        options?.onInstallLockWait?.({ takeoverInMs: 60_000, givesUpInMs: 120_000 })
+        options?.onInstallLockWait?.(null)
+        return ready(first.port)
+      }
+    })
+    await manager.ensure('Ubuntu')
+    const connecting = onChange.mock.calls
+      .map((call) => call[2])
+      .filter((status) => status.state === 'connecting')
+    expect(connecting).toEqual([
+      { state: 'connecting' },
+      { state: 'connecting', installLockWait: { takeoverInMs: 60_000, givesUpInMs: 120_000 } },
+      // Taking the lock clears the wait before the connect turns ready.
+      { state: 'connecting' }
+    ])
+    onChange.mockClear()
+    await manager.ensure('Ubuntu', { intent: 'update' })
+    expect(onChange).not.toHaveBeenCalledWith(
+      'Ubuntu',
+      expect.anything(),
+      expect.objectContaining({ installLockWait: expect.anything() })
+    )
+  })
 })
 
 describe('a WSL host that refuses the enrolled pairing', () => {
