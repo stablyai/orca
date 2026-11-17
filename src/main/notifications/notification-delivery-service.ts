@@ -6,7 +6,7 @@ import type {
   NotificationSettings
 } from '../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { buildNotificationOptions } from '../ipc/notification-options'
+import { buildNotificationOptions } from '../ipc/notifications/notification-options'
 import { translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../../shared/notifications/notification-burst-cooldown'
 import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'

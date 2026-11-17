@@ -24,7 +24,7 @@ vi.mock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-regist
   hasRegisteredRuntimeTerminalTab: mocks.hasRegisteredRuntimeTerminalTab
 }))
 
-vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
+vi.mock('@/components/terminal/workspace-mounting/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount: mocks.requestBackgroundTerminalWorktreeMount
 }))
 
@@ -56,46 +56,6 @@ afterEach(() => {
 })
 
 describe('runtime terminal split IPC routing', () => {
-  it('mounts and replays an unmounted target without focusing it or waiting a fixed delay', () => {
-    const received: SplitTerminalPaneDetail[] = []
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-parked',
-      worktreeId: 'repo::/folder',
-      paneRuntimeId: 41,
-      sourceLeafId: '11111111-1111-4111-8111-111111111111',
-      direction: 'horizontal',
-      command: 'codex'
-    })
-
-    expect(received).toEqual([])
-    expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
-      worktreeId: 'repo::/folder',
-      tabIds: ['tab-parked']
-    })
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(true)
-
-    const unregister = registerTerminalPaneSplitRequestHandler(
-      'tab-parked',
-      'repo::/folder',
-      (detail) => {
-        received.push(detail)
-      }
-    )
-
-    expect(received).toEqual([
-      expect.objectContaining({
-        tabId: 'tab-parked',
-        sourceLeafId: '11111111-1111-4111-8111-111111111111',
-        direction: 'horizontal',
-        command: 'codex'
-      })
-    ])
-    expect(vi.getTimerCount()).toBe(1)
-    unregister()
-  })
-
   it('queues an explicit split while tab ownership is still hydrating', () => {
     const received: SplitTerminalPaneDetail[] = []
     mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)

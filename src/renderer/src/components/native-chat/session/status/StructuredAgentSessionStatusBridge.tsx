@@ -6,7 +6,7 @@ import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-chat-companion-writes'
+import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -17,7 +17,7 @@ import {
   getStructuredAgentSessionTabsInWorkspace,
   type StructuredTab
 } from './structured-agent-session-tabs'
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import {
   createTabOwnerCache,
   ownerInputChanged,

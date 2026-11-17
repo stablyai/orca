@@ -42,6 +42,7 @@ export function useCreateRowScroller() {
 
   return {
     scrollerRef,
+    scroller,
     overflow,
     attachScroller: (node: HTMLDivElement | null): void => {
       scrollerRef.current = node

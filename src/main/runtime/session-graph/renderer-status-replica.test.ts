@@ -58,6 +58,42 @@ describe('renderer status / graph join', () => {
     expect(replica.get('control:leaf')?.row?.prompt).toBe('untouched')
   })
 
+  it('reports a workspace only when the status it shows changes', () => {
+    const replica = new RendererStatusReplica()
+    replica.beginEpoch('renderer')
+    reconcile(replica, members('A'))
+    const changed = (batch: Parameters<RendererStatusReplica['apply']>[0]) => [
+      ...replica.apply(batch).worktrees
+    ]
+    expect(changed({ type: 'snapshot', epoch: 'renderer', seq: 1, rows: [] })).toEqual([
+      'workspace'
+    ])
+    expect(
+      changed({ type: 'changes', epoch: 'renderer', seq: 2, rows: [record('A', 'first')] })
+    ).toEqual(['workspace'])
+    expect(
+      changed({ type: 'changes', epoch: 'renderer', seq: 3, rows: [record('A', 'first')] })
+    ).toEqual([])
+    expect(
+      changed({ type: 'snapshot', epoch: 'renderer', seq: 4, rows: [record('A', 'first')] })
+    ).toEqual([])
+    expect(
+      changed({ type: 'changes', epoch: 'renderer', seq: 5, rows: [record('B', 'future')] })
+    ).toEqual([])
+    expect(
+      changed({ type: 'changes', epoch: 'renderer', seq: 6, rows: [record('A', 'second')] })
+    ).toEqual(['workspace'])
+    expect(
+      changed({
+        type: 'changes',
+        epoch: 'renderer',
+        seq: 7,
+        rows: [{ ...record('A', 'second'), row: null }]
+      })
+    ).toEqual(['workspace'])
+    expect(changed({ type: 'snapshot', epoch: 'renderer', seq: 8, rows: [] })).toEqual([])
+  })
+
   it('preserves unbound and remounted rows and re-shapes title changes without another status write', () => {
     const replica = new RendererStatusReplica()
     replica.beginEpoch('renderer')

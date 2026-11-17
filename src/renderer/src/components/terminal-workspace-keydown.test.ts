@@ -51,7 +51,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
-    await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
+    await import('@/store/slices/agent-status/structured-sessions/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 
@@ -90,7 +90,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
-vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+vi.mock('./terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))

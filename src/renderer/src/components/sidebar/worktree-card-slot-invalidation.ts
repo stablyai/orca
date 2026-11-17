@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {

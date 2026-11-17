@@ -20,7 +20,7 @@ import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-me
 import {
   isUnderWindowsDriveMount,
   readGuestWindowsDriveMounts
-} from '../../ipc/wsl-guest-windows-drive-path'
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
 export type LocalCliPresenceByAgent = Partial<

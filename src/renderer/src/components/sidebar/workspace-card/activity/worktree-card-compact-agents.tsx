@@ -1,4 +1,4 @@
-import type { AgentGroupSummary } from '@/store/slices/agent-status/agent-row-display-index'
+import type { AgentGroupSummary } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'

@@ -190,7 +190,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
         join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'),
         `#!/bin/sh\n: > ${quotePosixShell(marker)}\n`
       )
-      const { ORCA_PANE_KEY: _paneKey, ...outsideEnv } = process.env
+      const { ORCA_PANE_KEY: _paneKey, ORCA_AGENT_PANE: _paneAlias, ...outsideEnv } = process.env
       const result = await invoke(command, '{"tool_name":"run_command"}', outsideEnv)
       expect(result.code).toBe(0)
       expect(result.stdout).toBe(expectedStdout)

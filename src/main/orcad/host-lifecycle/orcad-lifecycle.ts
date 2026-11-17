@@ -136,7 +136,7 @@ export async function startOrcadAgentSessionRecordStoreOpen(
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../../runtime/agent-session/structured-agent-session-runtime')
+    await import('../../runtime/agent-session/installation/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 

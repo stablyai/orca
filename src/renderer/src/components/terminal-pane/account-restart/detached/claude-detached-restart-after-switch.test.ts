@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -495,6 +495,28 @@ function addSecondPane(): void {
     }
   }))
 }
+
+it('says a hook-named session was not moved when another pane holds it by its restart-all restart', async () => {
+  seedRestartAllPaneOnFirstAccount()
+  await switchAccount('acct-a', 'acct-b')
+  expect(pending()).toEqual({ [OLD_PTY]: 'claude' })
+  addSecondPane()
+  const secondKey = makePaneKey('tab-2', SECOND_LEAF)
+  useAppStore.setState((current) => ({
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      ...current.agentStatusByPaneKey,
+      [
+        secondKey,
+        { ...current.agentStatusByPaneKey.get(PANE_KEY)!, paneKey: secondKey, tabId: 'tab-2' }
+      ]
+    ])
+  }))
+
+  await withExecutor(settle)
+
+  expect(spawn).not.toHaveBeenCalled()
+  expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
+})
 
 it('moves a Claude pane with no status entry and asks it once to continue, as after a cold start', () =>
   withExecutor(async () => {

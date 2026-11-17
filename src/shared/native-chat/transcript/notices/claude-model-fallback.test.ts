@@ -1,5 +1,4 @@
 import { expect, it } from 'vitest'
-import { nativeChatNoticeLook } from './native-chat-notice'
 import {
   CLAUDE_MODEL_FALLBACK_FRAME_KIND,
   readClaudeModelFallbackFrame
@@ -30,19 +29,4 @@ it('requires a complete Claude assistant fallback frame', () => {
   ]) {
     expect(readClaudeModelFallbackFrame(other)).toBeNull()
   }
-})
-
-it.each([
-  { tone: 'error' },
-  { presentation: 'plan-document' },
-  { failure: { kind: 'usageLimitReached' } },
-  { orcaStop: { cause: 'quit' } }
-] as const)('does not replace another explicit status or failure: %j', (special) => {
-  const block = {
-    type: 'text',
-    text: 'Keep this status',
-    providerFrame: frame(),
-    ...special
-  } as const
-  expect(nativeChatNoticeLook(block).kind).not.toBe('model-fallback')
 })

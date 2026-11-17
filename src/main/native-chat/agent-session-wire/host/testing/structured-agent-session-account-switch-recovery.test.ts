@@ -85,13 +85,11 @@ it.each([
       f.rig.adapter.dispatch.mockImplementation(async (input) =>
         textOf(input) === MOVED_MESSAGE ? answer : accept(input)
       )
-      void selectB(f, 'restart-all')
-      await vi.waitFor(async () =>
-        expect((await rows(f)).filter((row) => row.kind === 'status')).toContainEqual({
-          kind: 'status',
-          ...note
-        })
-      )
+      await selectB(f, 'restart-all')
+      expect((await rows(f)).filter((row) => row.kind === 'status')).toContainEqual({
+        kind: 'status',
+        ...note
+      })
     } finally {
       await f.dispose()
     }
@@ -234,11 +232,7 @@ it('an account-switch continuation leaves a restart-held queued send held', asyn
     f.rig.host.publishChildWorkEvidence(PARENT, reportedChildWork([devServer], f.rig.clock.now))
     await f.turn(mail, 'completed')
     await selectB(f, 'restart-all')
-    expect(dispatchedTexts(f)).toEqual([
-      'refactor the parser',
-      expect.stringMatching(/^You have 1 orchestration message\./),
-      MOVED_MESSAGE
-    ])
+    expect(dispatchedTexts(f)).toEqual(['refactor the parser', 'coordinator mail', MOVED_MESSAGE])
     expect((await structuredQueuePauses(journal(f)!)).map((pause) => pause.reason)).toEqual([
       'restarted'
     ])

@@ -968,6 +968,31 @@ body[data-modal-overlay-open]
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
 }
 
+/* A horizontal rail's 2px thumb in a 4px hit area, clear until hovered, so an overflowing rail reads as scrollable.
+   Why webkit-only: standard scrollbar-width/color would override the 4px size in Chromium. */
+.hover-scrollbar-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
+}
+
 [data-slot='popover-content'] {
   max-height: var(--radix-popover-content-available-height);
 }
@@ -1240,6 +1265,46 @@ html.native-shell .app-layout {
   transform: translateY(-50%);
 }
 
+/* Wide (in-flow) seams paint the editor surface so panes don't read as floating cards, in every window mode. */
+.tab-group-split-resize-handle.is-wide,
+:root:is([data-window-material], [data-theme-background]) .tab-group-split-resize-handle.is-wide {
+  background-color: var(--editor-surface);
+}
+
+/* Beside attached tab strips the gap continues the strip (fill, then its 1px bottom border), so no
+   off-color sliver sits between two tab bars. 32px matches the strip height in TabGroupPanel. */
+.tab-group-split-resize-handle.is-wide.has-tab-band {
+  /* The border layer sits over the strip fill, as the strip's own translucent border does. */
+  background-image:
+    linear-gradient(to bottom, transparent 31px, var(--border) 31px 32px, transparent 32px),
+    linear-gradient(to bottom, var(--tab-bar, var(--card)) 0 32px, transparent 32px);
+}
+
+/* Fractional pane edges can leave a 1px row unpainted next to the gap; fill it beneath the panes. */
+.tab-group-split-resize-handle.is-wide::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--editor-surface);
+}
+
+/* Wide (in-flow) seams extend the line into a perpendicular parent gap; the parent owns that hit area. */
+.tab-group-split-resize-handle.is-wide::after {
+  pointer-events: none;
+}
+
+.tab-group-split-resize-handle.is-wide.is-vertical::after {
+  top: calc(-1 * var(--divider-extension, 0px));
+  bottom: calc(-1 * var(--divider-extension, 0px));
+}
+
+.tab-group-split-resize-handle.is-wide.is-horizontal::after {
+  left: calc(-1 * var(--divider-extension, 0px));
+  right: calc(-1 * var(--divider-extension, 0px));
+}
+
 .tab-group-split-resize-handle:hover::after,
 .tab-group-split-resize-handle.is-dragging::after {
   background: var(--split-divider-hover);
@@ -1371,6 +1436,11 @@ html.native-shell .app-layout {
 
 [data-terminal-focus-release-surface='true'] {
   -webkit-app-region: drag;
+}
+
+/* Hidden workspaces stay laid out at opacity 0; Chromium skips only visibility:hidden app-regions, so their strips would steal visible tab clicks. */
+[inert] [data-terminal-focus-release-surface='true'] {
+  visibility: hidden;
 }
 
 /* Temporarily disable Electron drag regions while xterm owns focus so chrome clicks can release terminal zoom. */
@@ -1641,15 +1711,17 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
-/* Why: the split-pane landing card is a flat surface, so its highlight is a plain fill on
-   --popover with no ring; these out-rank the palette rules above in both themes. */
-.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+/* Why: the split-pane landing card and the agent picker's pane are flat surfaces, so their highlight
+   is a plain fill on --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+[data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
   --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
   background: var(--jump-palette-selection-surface);
   box-shadow: none;
 }
 
-.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+.dark [data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
   --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
   background: var(--jump-palette-selection-surface);
   box-shadow: none;
@@ -1899,7 +1971,9 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -7px;
-  left: 0.8125rem;
+  /* Why: centred on the phone icon, measured by use-intro-arrow. */
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 7px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 7px 7px;
   /* Why: use foreground + border to create a subtle shadow that adapts to theme */
@@ -1911,7 +1985,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -6px;
-  left: 0.8125rem;
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 6px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 6px 6px;
   border-color: transparent transparent var(--muted) transparent;
@@ -2269,13 +2344,20 @@ html.native-shell .app-layout {
 
 /* Search and deep-link target: a tint out to the enclosing card's edges that fades.
    An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
-   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+   The bleed vars are measured per target, since nested and sub-row targets sit further in.
+   A row with no card around it grows a rounded halo instead, so the tint clears its text. */
 .settings-target-highlight {
   --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
   box-shadow:
     inset 0 0 0 100vmax var(--settings-target-tint),
     calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+    0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
+}
+
+.settings-target-highlight[data-settings-target-loose] {
+  --settings-target-halo: 10px;
+  border-radius: var(--radius-md);
 }
 
 [data-settings-scroll-list] .settings-target-highlight {
@@ -2294,13 +2376,15 @@ html.native-shell .app-layout {
     box-shadow:
       inset 0 0 0 100vmax var(--settings-target-tint),
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+      0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
   }
   100% {
     box-shadow:
       inset 0 0 0 100vmax transparent,
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
-      var(--settings-target-bleed-right, 0px) 0 0 transparent;
+      var(--settings-target-bleed-right, 0px) 0 0 transparent,
+      0 0 0 var(--settings-target-halo, 0px) transparent;
   }
 }
 
@@ -2924,6 +3008,14 @@ html.native-shell .app-layout {
 
 .monaco-editor .orca-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+/* Inline git blame after the cursor line; injected text, so selection and copy ignore it. */
+.monaco-editor .orca-git-blame-inline {
+  color: var(--muted-foreground);
+  font-style: normal;
+  opacity: 0.75;
+  margin-left: 3em;
 }
 
 .monaco-editor .orca-conflict-marker-label {
