@@ -193,19 +193,18 @@ it('tells a mirroring desktop which of its phones this host pushes, for alerts i
   const ask = (agentTaskComplete: boolean, clientKind: 'runtime' | 'mobile' = 'runtime') =>
     pushCoverage(
       {
-        tokenDigests: [digest!, 'phone-paired-only-with-the-mirror'],
+        tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'],
         source: 'agent-task-complete',
         agentState: 'done'
       },
       {
         clientKind,
         runtime: {
-          requireStore: () =>
-            ({
-              getSettings: () => ({
-                notifications: { ...getDefaultNotificationSettings(), agentTaskComplete }
-              })
-            }) as never,
+          requireStore: () => ({
+            getSettings: () => ({
+              notifications: { ...getDefaultNotificationSettings(), agentTaskComplete }
+            })
+          }),
           coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller),
           pushesOwnPhoneAlert: () => true
         }

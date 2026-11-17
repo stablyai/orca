@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import { createNotificationStreamFilter } from './notification-stream-policy'
 import { defineStreamingMethod, defineMethod, type RpcContext } from '../../core'
 import { isNotificationSourceEnabled } from '../../../../../shared/notifications/notification-source-gate'
+import type { NotificationSettings } from '../../../../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   NotificationGetMissedSinceParams,
@@ -35,10 +36,9 @@ export function reportDesktopPresence(
 }
 
 type PushCoverageContext = Pick<RpcContext, 'clientKind'> & {
-  runtime: Pick<
-    OrcaRuntimeService,
-    'requireStore' | 'coveredMobilePushTokenDigests' | 'pushesOwnPhoneAlert'
-  >
+  runtime: Pick<OrcaRuntimeService, 'coveredMobilePushTokenDigests' | 'pushesOwnPhoneAlert'> & {
+    requireStore(): { getSettings(): { notifications?: NotificationSettings } }
+  }
 }
 
 /** A mirroring desktop skips the phones this host pushes itself; a phone of its own still gets the alert. */
@@ -47,14 +47,12 @@ export function pushCoverage(
   { runtime, clientKind }: PushCoverageContext
 ): { coveredTokenDigests: string[] } {
   // This host's own settings can keep the alert off its phones, and then the mirror must push it.
+  const settings = runtime.requireStore().getSettings().notifications
   if (
     clientKind !== 'runtime' ||
+    !settings ||
     !runtime.pushesOwnPhoneAlert(params) ||
-    !isNotificationSourceEnabled(
-      runtime.requireStore().getSettings().notifications,
-      params.source,
-      params.agentState
-    )
+    !isNotificationSourceEnabled(settings, params.source, params.agentState)
   ) {
     return { coveredTokenDigests: [] }
   }
