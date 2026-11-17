@@ -20,6 +20,9 @@ import {
   useWorktreeMap
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -407,5 +410,92 @@ describe('applyLocalPinnedDisplayName', () => {
     const afterRetire = useAppStore.getState().worktreesByRepo
     expect(getLineageAncestorIndex(afterRetire)).toBe(getLineageAncestorIndex(pinned))
     expect(computeVisibleWorktrees(afterRetire, [], options)).toEqual([])
+  })
+
+  it('keeps the topology through a title-only overlay compaction', () => {
+    const rows = Array.from({ length: 750 }, (_, index) => row(15, index, false, () => {}))
+    useAppStore.setState({ worktreesByRepo: { 'repo-15': rows }, detectedWorktreesByRepo: {} })
+    const warmTopology = getIndexedWorktreeTopology(useAppStore.getState().worktreesByRepo)
+    const terminal = renderHook(() => useTerminalWorkspaceFoundation())
+    const projections = vi.mocked(projectWorkspaceSurfaces)
+    projections.mockClear()
+
+    // 65 distinct rows pass the 64-row overlay, so the title catalog compacts once.
+    for (let index = 0; index < 65; index++) {
+      applyLocalPinnedDisplayName({ worktreeId: rows[index].id, displayName: `Title ${index}` })
+      getIndexedWorktreeMap(useAppStore.getState().worktreesByRepo)
+    }
+    const latest = useAppStore.getState().worktreesByRepo
+    expect(getIndexedWorktreeTopology(latest)).toBe(warmTopology)
+    expect(getIndexedWorktreeMap(latest).get(rows[64].id)?.displayName).toBe('Title 64')
+    terminal.rerender()
+    expect(projections).toHaveBeenCalledTimes(0)
+    terminal.unmount()
+  })
+
+  it.each([750, 7500])('a title pin re-reads no row for folder parents among %i rows', (size) => {
+    let lineageReads = 0
+    const rows = Array.from({ length: size }, (_, index) => {
+      const worktree = row(size + 1, index, false, () => {})
+      // Row 0 is renamed; count only the other rows' folder-lineage reads.
+      Object.defineProperty(worktree, 'workspaceLineage', {
+        get: () => {
+          if (index !== 0) {
+            lineageReads++
+          }
+          return undefined
+        }
+      })
+      return worktree
+    })
+    const repoId = `repo-${size + 1}`
+    const folder: FolderWorkspace = {
+      id: 'folder-1',
+      projectGroupId: 'group-1',
+      name: 'Folder',
+      folderPath: '/folder',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    }
+    useAppStore.setState({
+      repos: [repo(repoId)],
+      worktreesByRepo: { [repoId]: rows },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folder],
+      workspaceLineageByChildKey: {},
+      crossStoreLineageByStoreKey: {},
+      worktreeLineageById: {}
+    })
+    expect(selectSidebarLineageParentIdentities(useAppStore.getState())).toBeUndefined()
+    lineageReads = 0
+
+    applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: TITLE })
+    expect(selectSidebarLineageParentIdentities(useAppStore.getState())).toBeUndefined()
+    expect(lineageReads).toBe(0)
+
+    // A row that now carries a folder parent must not keep the cached undefined.
+    const withFolderParent = {
+      ...rows[5],
+      workspaceLineage: {
+        parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+        parentInstanceId: null,
+        childInstanceId: `instance-${size + 1}-5`
+      }
+    }
+    const pinnedRows = useAppStore.getState().worktreesByRepo[repoId]
+    useAppStore.setState({
+      worktreesByRepo: {
+        [repoId]: [...pinnedRows.slice(0, 5), withFolderParent, ...pinnedRows.slice(6)]
+      }
+    })
+    const parents = selectSidebarLineageParentIdentities(useAppStore.getState())
+    expect(parents?.has(getWorktreeHostIdentity(withFolderParent))).toBe(true)
   })
 })

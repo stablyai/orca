@@ -6,6 +6,7 @@ import {
 import type { AppState } from '../../../types'
 import {
   replacedWorktreeRows,
+  sameWorktreeLineageInputs,
   sameWorktreeStructure,
   type ReplacedWorktreeRow
 } from './worktree-catalog-membership'
@@ -18,6 +19,9 @@ type WorktreeBase = {
   /** Slot of each row in allWorktrees, so a replaced row is found without a scan. */
   positions: Map<Worktree, number>
 }
+
+/** Compared by identity only; a new object means lineage resolution may have changed. */
+export type WorktreeLineageKey = { readonly kind: 'worktree-lineage-key' }
 
 type WorktreeOverlay = {
   /** Replaced rows by slot in base.allWorktrees, and each replacement's slot. */
@@ -37,6 +41,8 @@ type WorktreeSnapshot = WorktreeOverlay & {
   topology: ReadonlyMap<string, Worktree>
   /** Built on first read only, so a title write with no reader copies nothing. */
   allWorktrees: Worktree[] | null
+  /** Same object while no replacement could change lineage resolution; selectors key caches on it. */
+  lineageKey: WorktreeLineageKey
 }
 
 const EMPTY_OVERLAY: WorktreeOverlay = {
@@ -66,8 +72,9 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   const previousSnapshot = previousRows && worktreeSnapshotCache.get(previousRows)
   const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const snapshot =
-    (previousSnapshot && replaced && overlayWorktreeSnapshot(previousSnapshot, replaced)) ||
-    viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, null)
+    previousSnapshot && replaced
+      ? overlayWorktreeSnapshot(previousSnapshot, replaced, worktreesByRepo)
+      : viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, null)
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
   lastIndexedRows = new WeakRef(worktreesByRepo)
   return snapshot
@@ -77,13 +84,15 @@ function overlayOf<K, V>(base: Map<K, V>, overlay: ReadonlyMap<K, V>): Map<K, V>
   return overlay.size === 0 ? base : new ReadOnlyOverlayMap(base, overlay)
 }
 
-/** `topology` is the previous view's when no path moved, or null to derive it from the overlay. */
+/** `topology` and `lineageKey` are the previous view's when nothing structural moved, or null for new ones. */
 function viewOf(
   base: WorktreeBase,
   overlay: WorktreeOverlay,
-  topology: ReadonlyMap<string, Worktree> | null
+  topology: ReadonlyMap<string, Worktree> | null,
+  lineageKey: WorktreeLineageKey | null = null
 ): WorktreeSnapshot {
   return {
+    lineageKey: lineageKey ?? { kind: 'worktree-lineage-key' },
     ...overlay,
     base,
     worktreeMap: overlayOf(base.worktreeMap, overlay.firstById),
@@ -92,11 +101,12 @@ function viewOf(
   }
 }
 
-/** A new view for a catalog that only replaced rows; the previous view and its base stay untouched. Null asks for a rebuild. */
+/** A new view for a catalog that only replaced rows; the previous view and its base stay untouched. */
 function overlayWorktreeSnapshot(
   previous: WorktreeSnapshot,
-  replaced: readonly ReplacedWorktreeRow[]
-): WorktreeSnapshot | null {
+  replaced: readonly ReplacedWorktreeRow[],
+  worktreesByRepo: AppState['worktreesByRepo']
+): WorktreeSnapshot {
   if (replaced.length === 0) {
     return previous
   }
@@ -140,13 +150,14 @@ function overlayWorktreeSnapshot(
       )
     }
   }
+  const topology = structureMoved ? null : previous.topology
+  const lineageKey = replaced.every(({ before, after }) => sameWorktreeLineageInputs(after, before))
+    ? previous.lineageKey
+    : null
+  // Compaction rebuilds the title catalog; with no structure moved, surfaces keep the same topology.
   return rows.size > MAX_OVERLAY_ROWS
-    ? null
-    : viewOf(
-        base,
-        { rows, slots, firstById, byId, structureById },
-        structureMoved ? null : previous.topology
-      )
+    ? viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, topology, lineageKey)
+    : viewOf(base, { rows, slots, firstById, byId, structureById }, topology, lineageKey)
 }
 
 function rowsOf(snapshot: WorktreeSnapshot): Worktree[] {
@@ -191,6 +202,13 @@ function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Wo
 
 export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
   return rowsOf(getWorktreeSnapshot(worktreesByRepo))
+}
+
+/** A key that changes only when a write could change lineage resolution (not on title writes). */
+export function getWorktreeLineageKey(
+  worktreesByRepo: AppState['worktreesByRepo']
+): WorktreeLineageKey {
+  return getWorktreeSnapshot(worktreesByRepo).lineageKey
 }
 
 /** Structural id map for paths, lineage, and cycles; a title write keeps its identity, so its rows may carry an older title. */

@@ -16,7 +16,7 @@ import {
   pickFolderLineageRecord,
   readInlineFolderLineage
 } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
-import { getIndexedAllWorktrees } from '../listing/worktree-catalog-index'
+import { getIndexedAllWorktrees, getWorktreeLineageKey } from '../listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -66,7 +66,8 @@ let cached: {
 /** Every resolution input, compared by identity to skip recomputation. */
 function resolutionInputs(state: CrossStoreLineageInputs): readonly unknown[] {
   return [
-    selectWorktreesByRepo(state),
+    // Title writes replace the catalog record but keep this key; parents resolve to identities only.
+    getWorktreeLineageKey(selectWorktreesByRepo(state)),
     state.worktreeLineageById,
     state.crossStoreLineageByStoreKey,
     state.ownLineageInstallationId,
@@ -133,7 +134,7 @@ function resolveSidebarParents(
   const identityKey = view ? storeIdentityKey(view) : ''
   // Status probes churn the status map; only store identities change resolution.
   const inputs = [
-    selectWorktreesByRepo(state),
+    getWorktreeLineageKey(selectWorktreesByRepo(state)),
     state.worktreeLineageById,
     state.crossStoreLineageByStoreKey,
     state.workspaceLineageByChildKey,
@@ -180,7 +181,12 @@ let lastFolderChildrenCall: {
 export function selectCrossStoreFolderChildrenById(
   state: FolderChildrenInputs
 ): ReadonlyMap<string, readonly Worktree[]> {
-  const inputs = [...resolutionInputs(state), selectFolderWorkspaces(state)]
+  // The result holds child rows, so a title write must recompute it.
+  const inputs = [
+    ...resolutionInputs(state),
+    selectWorktreesByRepo(state),
+    selectFolderWorkspaces(state)
+  ]
   const previous = lastFolderChildrenCall
   if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
     return previous.result

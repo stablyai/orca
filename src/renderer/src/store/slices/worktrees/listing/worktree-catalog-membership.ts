@@ -18,6 +18,21 @@ export function sameWorktreeStructure(row: Worktree, before: Worktree): boolean 
   )
 }
 
+/** The row's own folder parent as its host sent it; unchecked wire data, compared by identity only. */
+function inlineWorkspaceLineageOf(
+  row: Pick<Worktree, 'instanceId'> & { workspaceLineage?: unknown }
+): unknown {
+  return row.workspaceLineage
+}
+
+/** True when a replacement cannot change folder-parent resolution: same structure and same inline folder edge. */
+export function sameWorktreeLineageInputs(row: Worktree, before: Worktree): boolean {
+  return (
+    sameWorktreeStructure(row, before) &&
+    inlineWorkspaceLineageOf(row) === inlineWorkspaceLineageOf(before)
+  )
+}
+
 /** Rows a write replaced in place without moving any id, host, or archive state; null when membership changed. Unchanged rows are compared by identity only. */
 export function replacedWorktreeRows(
   next: AppState['worktreesByRepo'],
