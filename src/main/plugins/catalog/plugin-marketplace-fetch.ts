@@ -83,29 +83,57 @@ async function readMarketplaceAtCommit(
     maxBuffer: MARKETPLACE_INDEX_MAX_BYTES
   })
   const index = parsePluginMarketplaceIndex(filename, bytes.stdout)
-  const batched = await extractBatchedMarketplaceImages(index, repository, commit, catalogUrl)
+  const loaded: CatalogLoadState = {
+    files: new Map(),
+    listed: new Map(),
+    digests: new WeakMap()
+  }
+  const batched = await extractBatchedMarketplaceImages(
+    index,
+    repository,
+    commit,
+    catalogUrl,
+    loaded
+  )
   if (batched) {
     return batched
   }
+  const { files, listed, digests } = loaded
+  // Past the retained cap, read the rest one at a time, handing out each loaded file once so only what extraction keeps stays alive.
   const readBlob: CatalogBlobReader = async (path, maxBytes) => {
-    const files = new Map<string, CatalogFile>()
-    await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), files, new Map())
-    return files.get(path)?.bytes ?? null
+    const file = files.get(path)
+    files.delete(path)
+    if (file === null || (file && file.size > maxBytes)) {
+      return null
+    }
+    if (file?.bytes) {
+      return file.bytes
+    }
+    const single = new Map<string, CatalogFile>()
+    await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), single, listed)
+    return single.get(path)?.bytes ?? null
   }
-  return extractCatalogImages(index, readBlob, (entry, read) =>
-    fillMonorepoReleaseImages(entry, catalogUrl, read)
+  return extractCatalogImages(
+    index,
+    readBlob,
+    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests),
+    digests
   )
+}
+
+type CatalogLoadState = {
+  files: Map<string, CatalogFile>
+  listed: Map<string, ListedBlob>
+  digests: WeakMap<Uint8Array, string>
 }
 
 async function extractBatchedMarketplaceImages(
   index: PluginMarketplace,
   repository: string,
   commit: string,
-  catalogUrl: string
+  catalogUrl: string,
+  { files, listed, digests }: CatalogLoadState
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] } | null> {
-  const files = new Map<string, CatalogFile>()
-  const listed = new Map<string, ListedBlob>()
-  const digests = new WeakMap<Uint8Array, string>()
   // Rerun extraction until every file it asks for is loaded, so each round's misses share a few Git calls.
   for (;;) {
     const missing = new Map<string, number>()
