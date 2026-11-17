@@ -5,6 +5,10 @@ import { MarkdownPreviewSurface } from './MarkdownPreviewSurface'
 import type { MarkdownPreviewProps } from '../render-tree/markdown-preview-types'
 import { useMarkdownPreviewAnnotationRenderers } from '../review/use-markdown-preview-annotation-renderers'
 import { useMarkdownPreviewComponents } from '../render-tree/use-markdown-preview-components'
+import {
+  MarkdownPreviewRenderersContext,
+  useMarkdownPreviewStableComponents
+} from '../render-tree/markdown-preview-stable-components'
 import { useMarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewReviewActions } from '../review/use-markdown-preview-review-actions'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
@@ -80,7 +84,7 @@ export default function MarkdownPreview({
     content: displayedContent,
     markdownAnnotationsEnabled
   })
-  const components = useMarkdownPreviewComponents({
+  const renderers = useMarkdownPreviewComponents({
     foundation,
     viewport,
     reviewActions,
@@ -88,13 +92,14 @@ export default function MarkdownPreview({
     filePath,
     onOpenDocument
   })
+  const components = useMarkdownPreviewStableComponents(renderers)
 
   // The open file's own workspace and path, so folder workspaces get the action too.
   const chatWorktreeId = sourceWorktreeId
   const chatRelativePath = sourceRelativePath
 
   return (
-    <>
+    <MarkdownPreviewRenderersContext value={renderers}>
       <MarkdownPreviewSurface
         largePreview={largePreview}
         documentState={documentState}
@@ -128,6 +133,6 @@ export default function MarkdownPreview({
           })
         }
       />
-    </>
+    </MarkdownPreviewRenderersContext>
   )
 }
