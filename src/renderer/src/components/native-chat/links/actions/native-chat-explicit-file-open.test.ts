@@ -63,7 +63,7 @@ describe.each(['none', 'actions', 'open'] as const)(
       plannedBrowserOpenMock.mockResolvedValue({ status: 'opened', result: {} })
     }
 
-    it('opens a page the workspace can show in the Orca Browser, asking for a fresh reused page', async () => {
+    it('opens a page the workspace can show in the Orca Browser', async () => {
       seed()
       canShowBrowserMock.mockReturnValue(true)
       clickCard(pageHref)

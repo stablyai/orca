@@ -45,9 +45,7 @@ export function NativeChatFileCard({
       {row ? (
         <>
           {/* The directory gives way first, then the name; meta and glyph always stay whole. */}
-          <span className="max-w-[45%] min-w-0 truncate font-mono text-chat-foreground">
-            {name}
-          </span>
+          <span className="min-w-0 truncate font-mono text-chat-foreground">{name}</span>
           <span className="min-w-0 flex-1 truncate text-right font-mono">{detail}</span>
           <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">{meta}</span>
         </>
@@ -65,7 +63,7 @@ export function NativeChatFileCard({
   const className = cn(
     'flex min-w-0 items-center text-left text-xs text-chat-foreground-faint',
     row
-      ? 'h-6 flex-1 gap-2 rounded-md px-1.5'
+      ? 'h-6 flex-1 gap-2 rounded-md pl-1.5 pr-2'
       : 'max-w-72 gap-2.5 rounded-lg border border-chat-code-border px-2.5 py-2'
   )
   if (!action) {

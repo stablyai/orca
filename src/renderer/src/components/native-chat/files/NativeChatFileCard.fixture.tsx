@@ -23,8 +23,13 @@ function edit(id: string, path: string, patch: string): NativeChatMessage {
 }
 
 const messages = [
-  edit('a', 'src/site/index.html', '@@ -1,2 +1,4 @@\n-a\n+b\n+c\n+d'),
-  edit('b', 'docs/notes.md', '@@ -1 +1,5 @@\n+1\n+2\n+3\n+4\n+5'),
+  // Absolute, as Claude and ACP agents send them; rows show them relative to the chat's directory.
+  edit('a', '/repo/src/site/index.html', '@@ -1,2 +1,4 @@\n-a\n+b\n+c\n+d'),
+  edit(
+    'b',
+    '/repo/docs/guides/release/release-checklist-for-desktop.md',
+    '@@ -1 +1,5 @@\n+1\n+2\n+3\n+4\n+5'
+  ),
   edit('c', 'src/app.ts', '@@ -1 +1 @@\n-old\n+new'),
   edit(
     'd',
@@ -39,6 +44,7 @@ const turn = nativeChatTurnDiffs(
 
 const opener: NativeChatFileOpener = {
   worktreeId: 'wt-site',
+  worktreePath: '/repo',
   resolvePath: (href) => `/repo/${decodeURIComponent(href.split(':').pop() ?? '')}`,
   destinationFor: () => 'editor',
   open: () => {}

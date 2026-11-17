@@ -9,6 +9,7 @@ import { useNativeChatChangedFileOpen } from './use-native-chat-changed-file-ope
 
 const opener: NativeChatFileOpener = {
   worktreeId: 'wt-1',
+  worktreePath: '/repo',
   resolvePath: (href) => `/repo/${decodeURIComponent(href.slice(href.indexOf(':') + 1))}`,
   destinationFor: () => 'editor',
   open: () => {}

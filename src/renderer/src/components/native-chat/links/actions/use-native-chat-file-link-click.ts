@@ -24,6 +24,8 @@ import {
 /** An explicit open button's actions on chat file hrefs; undefined where the chat cannot open files. */
 export type NativeChatFileOpener = {
   worktreeId: string
+  /** The chat's working directory, which file names are shown relative to. */
+  worktreePath: string
   /** The href's absolute path in this chat's workspace, or null when it does not resolve. */
   resolvePath: (href: string) => string | null
   /** Where an explicit open of the href goes right now: a page the Orca Browser can show, else the editor. */
@@ -49,6 +51,7 @@ export function createNativeChatExplicitFileOpener(
 ): NativeChatFileOpener {
   return {
     worktreeId: context.worktreeId,
+    worktreePath: context.worktreePath,
     resolvePath: (href) => resolveNativeChatFileLink(href, context)?.absolutePath ?? null,
     destinationFor: (href) => {
       const target = resolveNativeChatFileLink(href, context)

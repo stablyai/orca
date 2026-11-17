@@ -38,7 +38,7 @@ export function DiffSectionHeader({
   return (
     <div
       {...combinedDiffHeaderAttributes}
-      className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
+      className="@container sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
       onClick={onToggle}
     >
       <span className="flex min-w-0 flex-1 items-center text-muted-foreground">
@@ -73,7 +73,7 @@ export function DiffSectionHeader({
           <span className="path-display-prefix">{displayPath.prefix}</span>
           <span className="path-display-file">{displayPath.fileName}</span>
         </span>
-        <span className="flex shrink-0 items-center">
+        <span className="diff-section-header-counts flex shrink-0 items-center">
           {dirty && <span className="font-medium ml-1">M</span>}
           {(added > 0 || removed > 0) && (
             <span className="tabular-nums ml-2">
@@ -84,7 +84,7 @@ export function DiffSectionHeader({
           )}
         </span>
       </span>
-      <div className="flex items-center gap-1 shrink-0 ml-2">
+      <div className="diff-section-header-actions flex items-center gap-1 shrink-0 ml-2">
         {trailingContent}
         {preview != null && (
           <button
@@ -115,9 +115,9 @@ export function DiffSectionHeader({
           <ExternalLink className="size-3.5" />
         </button>
         {collapsed ? (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronRight className="diff-section-header-chevron size-3.5 shrink-0 text-muted-foreground" />
         ) : (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className="diff-section-header-chevron size-3.5 shrink-0 text-muted-foreground" />
         )}
       </div>
     </div>

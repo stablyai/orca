@@ -6,6 +6,8 @@ import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/di
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatFileCard, nativeChatFileType } from '../../files/NativeChatFileCard'
 import { useNativeChatChangedFileOpen } from '../../files/use-native-chat-changed-file-open'
+import { useNativeChatFileOpen } from '../../links/actions/native-chat-link-click-context'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import {
   NativeChatCardHideButton,
@@ -44,6 +46,9 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
   const openAction = useNativeChatChangedFileOpen(file.path)
+  const worktreePath = useNativeChatFileOpen()?.worktreePath ?? null
+  // Agents often name files absolutely; the chat's own directory is noise in a narrow row.
+  const shownPath = getRelativePathInsideRoot(file.path, worktreePath) ?? file.path
   return (
     <div>
       <div className="flex min-w-0 items-center gap-0.5">
@@ -63,7 +68,7 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
           variant="row"
           path={file.path}
           name={name}
-          detail={file.path.slice(0, -name.length)}
+          detail={shownPath.slice(0, -name.length)}
           meta={
             <>
               <DiffLineCounts added={file.added} removed={file.removed} />
