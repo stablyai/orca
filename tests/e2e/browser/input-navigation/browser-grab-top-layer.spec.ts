@@ -66,11 +66,11 @@ test.describe('browser grab over top-layer content', () => {
       throw new Error('Failed to create the probe browser page')
     }
     pageId = created
-    await expect
-      .poll(() => evalInPage(orcaPage, pageId, 'document.readyState + window.__presses'), {
-        timeout: 20_000
-      })
-      .toBe('complete0')
+    await expect(async () => {
+      expect(await evalInPage(orcaPage, pageId, 'document.readyState + window.__presses')).toBe(
+        'complete0'
+      )
+    }).toPass({ timeout: 20_000 })
   })
 
   test.afterEach(async () => {

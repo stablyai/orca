@@ -2,6 +2,7 @@
 
 import { createServer, type Server } from 'node:http'
 import type { Page } from '@stablyai/playwright-test'
+import { focusTerminalAndWatchHost, readHost } from './browser-host-focus-probe'
 import '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import {
@@ -123,43 +124,6 @@ export async function evalInPage(page: Page, pageId: string, expression: string)
   return readProperty(await rpc(page, 'browser.eval', { page: pageId, expression }), 'result')
 }
 
-/** Focuses the terminal and records every host keydown and focus move from here on. */
-async function focusTerminalAndWatchHost(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
-    if (!textarea) {
-      throw new Error('No terminal input to focus')
-    }
-    textarea.focus()
-    // Why: kept on the document so the read side needs no untyped window property.
-    const log: string[] = []
-    const record = (entry: string): void => {
-      log.push(entry)
-      document.documentElement.dataset.agentFocusProbeLog = JSON.stringify(log)
-    }
-    document.documentElement.dataset.agentFocusProbeLog = '[]'
-    window.addEventListener('keydown', (event) => record(`key:${event.key}`), true)
-    window.addEventListener('focusin', (event) => {
-      const target = event.target
-      record(`focus:${target instanceof Element ? target.tagName : 'window'}`)
-    })
-  })
-}
-
-export async function readHost(page: Page): Promise<{ log: string[]; terminalFocused: boolean }> {
-  return page.evaluate(() => ({
-    log: ((): string[] => {
-      const parsed: unknown = JSON.parse(
-        document.documentElement.dataset.agentFocusProbeLog ?? '[]'
-      )
-      return Array.isArray(parsed)
-        ? parsed.filter((entry): entry is string => typeof entry === 'string')
-        : []
-    })(),
-    terminalFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true
-  }))
-}
-
 /** Opens the probe in a browser tab, then puts the terminal back in front of it. */
 export async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
   await waitForActiveWorktree(page)
@@ -180,7 +144,9 @@ export async function openBackgroundProbeTab(page: Page, url: string): Promise<s
   }
   // Wait for script readiness too; the title can exist before input logging starts.
   const readiness = `document.readyState === 'complete' && innerWidth > 0 && 'clicks' + window.__clicks`
-  await expect.poll(() => evalInPage(page, pageId, readiness), { timeout: 20_000 }).toBe('clicks0')
+  await expect(async () => {
+    expect(await evalInPage(page, pageId, readiness)).toBe('clicks0')
+  }).toPass({ timeout: 20_000 })
   await ensureTerminalVisible(page)
   await expect.poll(() => evalInPage(page, pageId, readiness)).toBe('clicks0')
   return pageId

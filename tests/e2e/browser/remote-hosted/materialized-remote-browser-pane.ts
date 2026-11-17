@@ -40,15 +40,15 @@ export async function focusMaterializedRemoteBrowserPane(
 ): Promise<MaterializedRemoteBrowserPane> {
   const located = await waitForMaterializedRemoteBrowserPane(page, target)
   await page.evaluate(
-    ({ tabId, worktreeId }) => {
+    ({ pageId, worktreeId }) => {
       const state = window.__store?.getState()
       if (!state) {
         throw new Error('client store unavailable')
       }
       state.setActiveWorktree(worktreeId)
-      state.focusBrowserTabInWorktree(worktreeId, tabId, { surfacePane: true })
+      state.focusBrowserTabInWorktree(worktreeId, pageId, { surfacePane: true })
     },
-    { tabId: located.tabId, worktreeId: target.worktreeId }
+    { pageId: located.pageId, worktreeId: target.worktreeId }
   )
   return located
 }
