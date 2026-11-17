@@ -10,6 +10,7 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { createHash } from 'node:crypto'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
@@ -57,7 +58,9 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       operationTimestamp === null ||
       operationTimestamp > now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
     ) {
-      throw new Error('agent_session_operation_invalid')
+      throw agentSessionRefusalError('agent_session_operation_invalid', {
+        reason: 'operationIdInvalid'
+      })
     }
     const callerKey = caller.clientId?.trim() || `trusted-local:${caller.clientKind ?? 'runtime'}`
     const operationKey = `${callerKey}\0${request.clientOperationId}`

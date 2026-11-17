@@ -50,6 +50,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
     'This needs a newer Orca on the computer running this chat. Update Orca there, then try again.',
   notAvailable: "This isn't available in this chat.",
   cannotRunHere: "Orca can't run this agent in a chat here.",
+  clockAheadOfServer: "This computer's clock is ahead of the Orca server's clock.",
+  turnOnAutomaticTime: 'Turn on automatic time, then try again.',
   unreachable: "Orca couldn't reach the agent.",
   recordFailed: "Orca couldn't save this to the chat's history.",
   attachmentExpired: 'This attachment expired.',

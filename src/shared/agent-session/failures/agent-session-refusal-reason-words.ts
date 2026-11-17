@@ -68,7 +68,8 @@ const TERMINAL_CLAIM = causeWords('terminalAgentHoldsChat', 'actFirst', 'quitTer
 const REASON_WORDS = {
   agent_session_operation_invalid: {
     requestMalformed: codeWords('hostFinding'),
-    operationIdInvalid: codeWords('hostFinding'),
+    // A well-formed id refused as future-dated means the host clock trails this client's by the skew allowance.
+    operationIdInvalid: causeWords('clockAheadOfServer', 'actFirst', 'turnOnAutomaticTime'),
     messageIdReused: codeWords('hostFinding'),
     // Settled under that id, so the control's retry goes out under a new one.
     operationRefusedEarlier: codeWords('retry'),

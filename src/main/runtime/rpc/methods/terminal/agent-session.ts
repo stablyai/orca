@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { defineMethod, type RpcContext } from '../../core'
 import {
   CreateAgentSessionParams,
@@ -35,8 +36,10 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
-    // Reject future ids that could appear new after tombstone collection.
-    throw new Error('agent_session_operation_invalid')
+    // Reject future ids that could appear new after tombstone collection; the reason lets clients name clock skew.
+    throw agentSessionRefusalError('agent_session_operation_invalid', {
+      reason: 'operationIdInvalid'
+    })
   }
 }
 

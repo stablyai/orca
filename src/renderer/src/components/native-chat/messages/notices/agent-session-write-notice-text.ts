@@ -83,6 +83,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.notAvailable', COPY.notAvailable),
   cannotRunHere: () =>
     translate('components.native-chat.writeNotice.cannotRunHere', COPY.cannotRunHere),
+  clockAheadOfServer: () =>
+    translate('components.native-chat.writeNotice.clockAheadOfServer', COPY.clockAheadOfServer),
   unreachable: () => translate('components.native-chat.writeNotice.unreachable', COPY.unreachable),
   recordFailed: () =>
     translate('components.native-chat.writeNotice.recordFailed', COPY.recordFailed),
@@ -181,7 +183,9 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.chatNotFound', COPY.chatNotFound),
   startNewChat: () =>
     translate('components.native-chat.writeNotice.startNewChat', COPY.startNewChat),
-  tryAgain: () => translate('components.native-chat.writeNotice.tryAgain', COPY.tryAgain)
+  tryAgain: () => translate('components.native-chat.writeNotice.tryAgain', COPY.tryAgain),
+  turnOnAutomaticTime: () =>
+    translate('components.native-chat.writeNotice.turnOnAutomaticTime', COPY.turnOnAutomaticTime)
 }
 
 export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNoticePart[]): string {

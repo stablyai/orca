@@ -13,6 +13,7 @@ import {
 } from './agent-launch/agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './agent-launch/remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
+import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { recordWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
@@ -285,8 +286,11 @@ export async function createWebRuntimeSessionTerminalResult(
       restoreActiveWorkspaceSelection(workspaceSelectionRollback)
     }
     // Accepted creation must not report failure and invite duplicate agent retries with new operation IDs.
+    const refusal = readAgentSessionErrorRefusal(error)
     return {
-      outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
+      outcome: hostCreated
+        ? { status: 'created' }
+        : { status: 'failed', message, ...(refusal ? { refusal } : {}) },
       ...(createdTabId ? { hostTabId: createdTabId } : {}),
       ...(hostCreated ? {} : { hostFailed: true as const })
     }

@@ -11,10 +11,11 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runti
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
-  | { status: 'failed'; message: string }
+  | { status: 'failed'; message: string; refusal?: AgentSessionRefusalReference }
 
 export type CreateWebRuntimeSessionTerminalArgs = {
   worktreeId: string
