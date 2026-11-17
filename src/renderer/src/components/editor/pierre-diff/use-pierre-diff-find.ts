@@ -91,12 +91,16 @@ export function usePierreDiffFind({
     reveal: intent
   })
   const canReplace = isEditable && side === 'additions'
+  // The first result or edit after a user intent consumes it, so edits never select.
   useEffect(() => {
-    if (canReplace && active && selectedIntent.current !== intent) {
-      selectedIntent.current = intent
+    if (!result || selectedIntent.current === intent) {
+      return
+    }
+    selectedIntent.current = intent
+    if (canReplace && active) {
       editorRef.current?.setSelections([{ ...active.range, direction: 'forward' }])
     }
-  }, [canReplace, active, editorRef, intent])
+  }, [result, canReplace, active, editorRef, intent])
   const close = useCallback(() => {
     setOpen(false)
     if (isEditable && side === 'additions') {
@@ -239,6 +243,7 @@ export function usePierreDiffFind({
     handleContainerKeyDown,
     onPostRender,
     onEditChange: () => {
+      selectedIntent.current = intent
       if (open) {
         setRevision((value) => value + 1)
       }

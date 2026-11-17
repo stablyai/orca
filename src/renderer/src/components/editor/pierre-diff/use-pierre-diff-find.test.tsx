@@ -194,3 +194,26 @@ it('preserves the user caret and active match when typing or changing replacemen
   expect(editor.setSelections.mock.lastCall?.[0]).toEqual([caret])
   expect(result.current.searchBar?.status).toBe('2/2')
 })
+
+it('does not select a match that an edit creates after the query found none', () => {
+  results.mockReturnValue({ matches: [], truncated: false })
+  const { result, editor, find } = setup(true)
+  find()
+  act(() =>
+    result.current.searchBar?.onQuery({
+      text: 'foo',
+      regex: false,
+      wholeWord: false,
+      matchCase: false
+    })
+  )
+  expect(result.current.searchBar?.status).toBe('No results')
+  editor.getText.mockReturnValue('foo')
+  results.mockReturnValue({
+    matches: [{ range: { start: { line: 200, character: 0 }, end: { line: 200, character: 3 } } }],
+    truncated: false
+  })
+  act(() => result.current.onEditChange())
+  expect(result.current.searchBar?.status).toBe('1/1')
+  expect(editor.setSelections).not.toHaveBeenCalled()
+})

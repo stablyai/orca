@@ -79,9 +79,9 @@ export function usePierreDiffSearchView({
     })
   }, [matches, active, fileDiff, side])
   useLayoutEffect(() => {
-    if (active && lastReveal.current !== reveal) {
+    if (matches && lastReveal.current !== reveal) {
       lastReveal.current = reveal
-      pending.current = true
+      pending.current = Boolean(active)
     }
     schedule()
     const token = owner.current
@@ -93,7 +93,7 @@ export function usePierreDiffSearchView({
       nativeRange.current = null
       paintPierreSearchHighlights(token)
     }
-  }, [schedule, active, reveal])
+  }, [schedule, matches, active, reveal])
   const onPostRender = useCallback(
     (host: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
       if (phase === 'unmount') {
