@@ -356,6 +356,11 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .run('tab-reopened', 'reopened', 1)
   continueChat('remote', tip + 1, 'ssh-host')
   insertJournalRow(original, 'cleared', turn('older-cleared-turn', tip + 1))
+  original
+    .prepare(`UPDATE agent_session_records SET record_json=json_set(record_json,
+      '$.providerHandleChain',json('[]'),'$.location',json_object('executionHostId','local'))
+      WHERE session_id='cleared'`)
+    .run()
   olderOrcaChat(original, 'started-closed', [rows[0], turn('started-closed-turn', 2)])
   withConversation.run('started-closed', 'local')
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id='started-closed'").run()
