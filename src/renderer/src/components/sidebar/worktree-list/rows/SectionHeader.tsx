@@ -183,8 +183,10 @@ export function renderWorktreeSectionHeaderRow(
       className={cn(
         'left-0 right-0',
         args.sectionBanded && !isActiveStickyHeader && 'worktree-section-band',
+        // Why: fill the estimated slot (top margin + trailing gap) so the band paints edge to edge.
+        'pb-[3px]',
         // Why: drop the inter-group spacer once the header pins so it sits flush at top (see getActiveStickyHeaderIndexForScroll).
-        args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
+        args.hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-0.5',
         isActiveStickyHeader
           ? cn(
               'sticky z-20 bg-worktree-sidebar',
