@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => {
     dnrBefore: vi.fn<() => Electron.CallbackResponse | Promise<Electron.CallbackResponse> | null>(
       () => null
     ),
-    proxyReadiness: vi.fn<() => boolean | Promise<boolean>>(() => true)
+    proxyReadiness: vi.fn<() => boolean | Promise<boolean>>(() => true),
+    nativeProxyReadiness: vi.fn<() => boolean | Promise<boolean>>(() => true)
   }
 })
 // Why loosely typed: the real hooks only touch `extensions` events, which the fake provides.
@@ -40,6 +41,9 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 }))
 vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { setUnownedDownloadOwnerResolver: vi.fn() }
+}))
+vi.mock('../../../network/proxy-settings', () => ({
+  getProxySessionApplicationReadiness: mocks.nativeProxyReadiness
 }))
 vi.mock('../api/cookies', () => ({ observeBrowserExtensionCookieChanges: vi.fn() }))
 vi.mock('../proxy/browser-extension-proxy-session', () => ({
@@ -103,6 +107,7 @@ installBrowserExtensionSessionServices()
 beforeEach(() => {
   mocks.dnrBefore.mockReset().mockReturnValue(null)
   mocks.proxyReadiness.mockReset().mockReturnValue(true)
+  mocks.nativeProxyReadiness.mockReset().mockReturnValue(true)
 })
 afterAll(() => setBrowserSessionRequestDecider(null))
 
@@ -159,8 +164,50 @@ describe('proxy readiness while deciding a request', () => {
     await expect(requestDecision()).resolves.toEqual({ cancel: true })
   })
 
+  it('cancels a delayed DNR redirect when the native proxy update fails', async () => {
+    const decision = Promise.withResolvers<Electron.CallbackResponse>()
+    mocks.dnrBefore.mockReturnValue(decision.promise)
+    const response = requestDecision()
+    mocks.nativeProxyReadiness.mockReturnValue(false)
+    decision.resolve({ redirectURL: 'https://redirect.test/' })
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
+  it.each([true, false])(
+    'respects a pending native proxy update settling to %s',
+    async (allowed) => {
+      const decision = Promise.withResolvers<Electron.CallbackResponse>()
+      const nativeReady = Promise.withResolvers<boolean>()
+      mocks.dnrBefore.mockReturnValue(decision.promise)
+      const response = requestDecision()
+      mocks.nativeProxyReadiness.mockReturnValueOnce(nativeReady.promise)
+      decision.resolve({ redirectURL: 'https://redirect.test/' })
+      nativeReady.resolve(allowed)
+      await expect(response).resolves.toEqual(
+        allowed ? { redirectURL: 'https://redirect.test/' } : { cancel: true }
+      )
+    }
+  )
+
+  it('observes an extension proxy failure while the final native update is pending', async () => {
+    const entered = Promise.withResolvers<void>()
+    const nativeReady = Promise.withResolvers<boolean>()
+    mocks.dnrBefore.mockImplementation(() => {
+      mocks.nativeProxyReadiness.mockImplementationOnce(() => {
+        entered.resolve()
+        return nativeReady.promise
+      })
+      return { redirectURL: 'https://redirect.test/' }
+    })
+    const response = requestDecision()
+    await entered.promise
+    mocks.proxyReadiness.mockReturnValue(false)
+    nativeReady.resolve(true)
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
   it('preserves the DNR response when readiness remains available', async () => {
-    mocks.proxyReadiness.mockReturnValue(Promise.resolve(true))
+    mocks.proxyReadiness.mockReturnValueOnce(Promise.resolve(true))
     mocks.dnrBefore.mockReturnValue({ redirectURL: 'https://redirect.test/' })
     await expect(requestDecision()).resolves.toEqual({ redirectURL: 'https://redirect.test/' })
   })

@@ -1,3 +1,4 @@
+import { getProxySessionApplicationReadiness } from '../../../network/proxy-settings'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
@@ -41,12 +42,17 @@ const CONTENT_SCRIPT_RESTORE_TIMEOUT_MS = 2_500
 type RequestDecision = ReturnType<BrowserSessionRequestDecider['beforeRequest']>
 
 function whenProxyReady(session: Electron.Session, action: () => RequestDecision): RequestDecision {
-  const ready = browserExtensionProxyRequestReadiness(session)
-  if (typeof ready === 'boolean') {
-    return ready ? action() : { cancel: true }
+  const nativeReady = getProxySessionApplicationReadiness(session)
+  const extensionReady = browserExtensionProxyRequestReadiness(session)
+  if (nativeReady === false || extensionReady === false) {
+    return { cancel: true }
   }
-  return ready.then(
-    (allowed) => (allowed ? (action() ?? {}) : { cancel: true }),
+  if (nativeReady === true && extensionReady === true) {
+    return action()
+  }
+  return Promise.all([nativeReady, extensionReady]).then(
+    (allowed) =>
+      allowed.every(Boolean) ? (whenProxyReady(session, action) ?? {}) : { cancel: true },
     () => ({ cancel: true })
   )
 }
