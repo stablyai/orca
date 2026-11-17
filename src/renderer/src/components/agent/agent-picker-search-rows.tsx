@@ -23,9 +23,10 @@ export type AgentLaunchSetupSearch = {
   entries: readonly AgentPickerEntry[]
   /** The agent and model the form holds now, checked among the results. */
   current?: { agent: AgentPickerEntry['agent']; model?: string }
-  onPick: (setup: AgentPickerSetup) => void
+  /** `close` when Enter picked it rather than a click. */
+  onPick: (setup: AgentPickerSetup, close: boolean) => void
   /** An agent named by the search, picked as it is. */
-  onPickAgent: (entry: AgentPickerEntry) => void
+  onPickAgent: (entry: AgentPickerEntry, close: boolean) => void
   /** Rows under the card, which a search also lists. */
   choices?: readonly AgentPickerChoice[]
 }
