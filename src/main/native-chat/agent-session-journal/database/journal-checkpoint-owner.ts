@@ -29,7 +29,8 @@ export class JournalCheckpointOwner {
   private nextRequest = 0
   private generation = 0
   private checkAgain = false
-  private log = 0
+  /** WAL frames since the last reset; the writer reports it beside each commit. */
+  log = 0
   private checkpointed = 0
   private frames: ReturnType<Database.Database['prepare']> | undefined
   private unknown = true

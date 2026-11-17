@@ -19,6 +19,7 @@ import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protoc
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+import { journalSqlTimedGate, journalSqlTimingOp } from './journal-sql-writer-timing'
 
 installWorkerSendLedger('orca-journal-sql-writer')
 
@@ -43,6 +44,8 @@ let fault: unknown
 let closing = false
 let scheduled = false
 const queue: JournalSqlRequest[] = []
+const receivedAt = new Map<number, number>()
+const gate = { ms: 0 }
 
 async function open(): Promise<void> {
   try {
@@ -61,7 +64,7 @@ async function open(): Promise<void> {
     if (!readOnly) {
       checkpoint = new JournalCheckpointOwner(db, workerData.filename)
     }
-    batch = new JournalSqlBatch(db, checkpoint)
+    batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))
     reply({ type: 'ready', readOnly })
   } catch (error) {
     fault = error
@@ -92,6 +95,7 @@ port.on('message', (request: JournalSqlRequest) => {
     checkpointClosing = checkpoint?.close()
     void checkpointClosing?.catch(() => undefined)
   }
+  receivedAt.set(request.id, performance.now())
   queue.push(request)
   if (!scheduled) {
     scheduled = true
@@ -110,8 +114,11 @@ type WriteRequest = {
   command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
+type TimedResponse = CommitResponse | Extract<JournalSqlResponse, { type: 'failed' }>
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
+  const depth = queue.length
+  const startedAt = performance.now()
   const pending = takeJournalSqlReadyBatch(queue)
   const writes = pending.filter(
     (request): request is WriteRequest => request.command.type !== 'close'
@@ -120,7 +127,7 @@ async function drain(): Promise<void> {
   const database = db
   if (writes.length > 0 && database && batch && commands) {
     const executor = commands
-    let responses: JournalSqlResponse[] = []
+    let responses: TimedResponse[] = []
     try {
       if (fault) {
         throw fault
@@ -190,10 +197,28 @@ async function drain(): Promise<void> {
         error: journalSqlFailure(error)
       }))
     }
+    const runMs = performance.now() - startedAt - gate.ms
+    const walFrames = checkpoint?.log ?? 0
     // A transfer failure after COMMIT must surface as a lost acknowledgement, never a rollback.
-    for (const response of responses) {
-      reply(response)
+    for (const [index, response] of responses.entries()) {
+      const request = writes[index]!
+      reply({
+        ...response,
+        timing: {
+          op: journalSqlTimingOp(request.command),
+          depth,
+          waitMs: startedAt - (receivedAt.get(request.id) ?? startedAt),
+          gateMs: gate.ms,
+          runMs,
+          batch: writes.length,
+          walFrames
+        }
+      })
     }
+    gate.ms = 0
+  }
+  for (const request of pending) {
+    receivedAt.delete(request.id)
   }
   if (close) {
     try {

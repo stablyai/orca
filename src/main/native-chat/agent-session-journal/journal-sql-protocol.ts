@@ -14,19 +14,33 @@ export type JournalSqlRequest = {
     | { type: 'close' }
 }
 
+/** Where one request's time went inside the writer; `op` is a closed operation-kind word. */
+export type JournalSqlTiming = {
+  op: string
+  /** Requests queued behind this one's drain, including it. */
+  depth: number
+  waitMs: number
+  gateMs: number
+  runMs: number
+  batch: number
+  walFrames: number
+}
+
 export type JournalSqlResponse =
   | { type: 'ready'; readOnly: boolean }
-  | { type: 'committed'; id: number; commit: JournalWriterCommit }
+  | { type: 'committed'; id: number; commit: JournalWriterCommit; timing?: JournalSqlTiming }
   | {
       type: 'effects'
       id: number
       results: JournalWriterEffectResult[]
+      timing?: JournalSqlTiming
     }
   | { type: 'done'; id: number }
   | {
       type: 'maintenance'
       id: number
       result: JournalSqlMaintenanceResult
+      timing?: JournalSqlTiming
     }
   | {
       type: 'failed'
@@ -34,4 +48,5 @@ export type JournalSqlResponse =
       fatal?: boolean
       outcome: 'not-dispatched' | 'rolled-back' | 'indeterminate'
       error: JournalSqlFailure
+      timing?: JournalSqlTiming
     }
