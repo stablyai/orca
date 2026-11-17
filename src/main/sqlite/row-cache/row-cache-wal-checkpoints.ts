@@ -3,88 +3,106 @@ import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-ho
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
 
 const IDLE_TEARDOWN_MS = 60_000
-// A file that keeps failing goes back to checkpointing in its own commits rather than growing.
+// A worker that never answers hands checkpoints back rather than letting WALs grow.
+const RESPONSE_DEADLINE_MS = 30_000
+// A file whose checkpoints keep failing or stopping short goes back to checkpointing itself.
 const MAX_CONSECUTIVE_FAILURES = 3
 
-type CheckpointResult = { path: string; ok: boolean }
+type CheckpointResult = { id: number; ok: boolean }
 
-// Evaluated source: a passive checkpoint waits on no writer, and a removed cache is never recreated.
-const checkpointWorkerSource = `
+/**
+ * Evaluated source. `mode=rw` never creates a removed cache; a PASSIVE checkpoint never waits on
+ * the writer, and counts as done only when it folded every frame. The handle lives for one
+ * checkpoint, so a closed cache's file is free again within milliseconds.
+ */
+export const rowCacheCheckpointWorkerSource = `
 const { parentPort } = require('node:worker_threads');
-const { existsSync } = require('node:fs');
+const { pathToFileURL } = require('node:url');
 const { DatabaseSync } = require('node:sqlite');
-parentPort.on('message', ({ path }) => {
-  let ok = true;
-  if (existsSync(path)) {
-    let db;
-    try {
-      db = new DatabaseSync(path);
-      db.exec('PRAGMA busy_timeout = 1000');
-      db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
-    } catch {
-      ok = false;
-    } finally {
-      try { db?.close(); } catch {}
-    }
+parentPort.on('message', ({ id, path }) => {
+  let ok = false;
+  let db;
+  try {
+    const url = pathToFileURL(path);
+    url.searchParams.set('mode', 'rw');
+    db = new DatabaseSync(url);
+    db.exec('PRAGMA busy_timeout = 1000');
+    const state = db.prepare('PRAGMA wal_checkpoint(PASSIVE)').get();
+    ok = state.busy === 0 && state.log === state.checkpointed;
+  } catch {
+    ok = false;
+  } finally {
+    try { db?.close(); } catch {}
   }
-  parentPort.postMessage({ path, ok });
+  parentPort.postMessage({ id, ok });
 });
 `
 
-function defaultFactory(): ReturnType<WorkerThreadFactory> {
-  return spawnWorkerThread(checkpointWorkerSource, { name: 'orca-row-cache-checkpoint', eval: true })
+export function spawnRowCacheCheckpointWorker(): ReturnType<WorkerThreadFactory> {
+  return spawnWorkerThread(rowCacheCheckpointWorkerSource, {
+    name: 'orca-row-cache-checkpoint',
+    eval: true
+  })
 }
 
+type Registration = { path: string; restore: () => void; failures: number }
+
 /**
- * Row caches commit on main; an auto-checkpointing commit fsyncs the database file and blocked
- * main for 346 ms on a busy disk. While this worker runs, those connections never auto-checkpoint
- * and the worker folds each cache's WAL after its commits. Any worker failure hands checkpoints
- * back to the connections at once.
+ * Row caches commit on main, and a commit that crosses the WAL auto-checkpoint threshold also
+ * checkpoints and fsyncs inside the commit; under disk load one agent-status save held main for
+ * 346 ms. While this worker is healthy, registered connections never auto-checkpoint and the
+ * worker checkpoints after their commits. Any worker failure hands checkpoints back at once.
  */
 export class RowCacheWalCheckpoints {
-  private readonly host: LazyWorkerThreadHost<CheckpointResult>
-  private readonly restores = new Map<string, () => void>()
-  private readonly inFlight = new Set<string>()
-  private readonly again = new Set<string>()
-  private readonly failures = new Map<string, number>()
+  private readonly host: LazyWorkerThreadHost<CheckpointResult> | null
+  private readonly registrations = new Map<number, Registration>()
+  private readonly inFlight = new Map<number, ReturnType<typeof setTimeout>>()
+  private readonly again = new Set<number>()
+  private nextId = 1
   private failed = false
 
-  constructor(factory: WorkerThreadFactory = defaultFactory) {
-    this.host = new LazyWorkerThreadHost<CheckpointResult>({
-      factory,
-      idleTeardownMs: IDLE_TEARDOWN_MS,
-      onMessage: (result) => this.settle(result),
-      onError: () => this.fail(),
-      onExit: () => this.fail(),
-      isIdle: () => this.inFlight.size === 0,
-      onUnavailable: (error) =>
-        console.warn(
-          `[row-cache] checkpoint worker unavailable; commits checkpoint on main. ${error instanceof Error ? error.message : String(error)}`
-        )
-    })
+  /** A null factory turns the service off: connections keep checkpointing themselves. */
+  constructor(factory: WorkerThreadFactory | null) {
+    this.host = factory
+      ? new LazyWorkerThreadHost<CheckpointResult>({
+          factory,
+          idleTeardownMs: IDLE_TEARDOWN_MS,
+          onMessage: (result) => this.settle(result),
+          onError: () => this.fail(),
+          onExit: () => this.fail(),
+          isIdle: () => this.inFlight.size === 0,
+          onUnavailable: (error) =>
+            console.warn(
+              `[row-cache] checkpoint worker unavailable; commits checkpoint on main. ${error instanceof Error ? error.message : String(error)}`
+            )
+        })
+      : null
   }
 
-  /** True when the connection should stop auto-checkpointing; `restore` turns it back on. */
-  attach(path: string, restore: () => void): boolean {
-    if (this.failed) {
-      return false
+  /** A registration id when the connection should stop auto-checkpointing; `restore` turns it back on. */
+  attach(path: string, restore: () => void): number | null {
+    if (!this.host || this.failed) {
+      return null
     }
-    this.restores.set(path, restore)
-    return true
+    const id = this.nextId++
+    this.registrations.set(id, { path, restore, failures: 0 })
+    return id
   }
 
-  detach(path: string): void {
-    this.restores.delete(path)
-    this.again.delete(path)
+  /** Drops queued work; a checkpoint already running finishes on its own short-lived handle. */
+  detach(id: number): void {
+    this.registrations.delete(id)
+    this.again.delete(id)
   }
 
-  /** After a commit; one checkpoint per file at a time, and a commit during it queues one more. */
-  request(path: string): void {
-    if (this.failed || !this.restores.has(path)) {
+  /** After a commit; one checkpoint per connection at a time, and a commit during it queues one more. */
+  request(id: number): void {
+    const registration = this.registrations.get(id)
+    if (!registration || !this.host || this.failed) {
       return
     }
-    if (this.inFlight.has(path)) {
-      this.again.add(path)
+    if (this.inFlight.has(id)) {
+      this.again.add(id)
       return
     }
     const worker = this.host.ensure()
@@ -93,31 +111,31 @@ export class RowCacheWalCheckpoints {
       return
     }
     this.host.clearIdleTimer()
-    this.inFlight.add(path)
+    const deadline = setTimeout(() => this.fail(), RESPONSE_DEADLINE_MS)
+    deadline.unref?.()
+    this.inFlight.set(id, deadline)
     try {
-      worker.postMessage({ path })
+      worker.postMessage({ id, path: registration.path })
     } catch {
       this.fail()
     }
   }
 
-  private settle({ path, ok }: CheckpointResult): void {
-    this.inFlight.delete(path)
-    const failures = ok ? 0 : (this.failures.get(path) ?? 0) + 1
-    if (failures >= MAX_CONSECUTIVE_FAILURES) {
-      this.failures.delete(path)
-      this.restores.get(path)?.()
-      this.detach(path)
-    } else if (failures > 0) {
-      this.failures.set(path, failures)
-    } else {
-      this.failures.delete(path)
-    }
-    if (this.again.delete(path)) {
-      this.request(path)
+  private settle({ id, ok }: CheckpointResult): void {
+    clearTimeout(this.inFlight.get(id))
+    this.inFlight.delete(id)
+    const registration = this.registrations.get(id)
+    if (registration) {
+      registration.failures = ok ? 0 : registration.failures + 1
+      if (registration.failures >= MAX_CONSECUTIVE_FAILURES) {
+        this.detach(id)
+        registration.restore()
+      } else if (this.again.delete(id)) {
+        this.request(id)
+      }
     }
     if (this.inFlight.size === 0) {
-      this.host.scheduleIdleTeardown()
+      this.host?.scheduleIdleTeardown()
     }
   }
 
@@ -126,15 +144,21 @@ export class RowCacheWalCheckpoints {
       return
     }
     this.failed = true
-    this.host.destroy()
-    const restores = [...this.restores.values()]
-    this.restores.clear()
+    this.host?.destroy()
+    for (const deadline of this.inFlight.values()) {
+      clearTimeout(deadline)
+    }
     this.inFlight.clear()
     this.again.clear()
-    for (const restore of restores) {
-      restore()
+    const registrations = [...this.registrations.values()]
+    this.registrations.clear()
+    for (const registration of registrations) {
+      registration.restore()
     }
   }
 }
 
-export const rowCacheWalCheckpoints = new RowCacheWalCheckpoints()
+// Unit tests remove their temporary databases at once; they inject a worker when they test this.
+export const rowCacheWalCheckpoints = new RowCacheWalCheckpoints(
+  process.env.VITEST ? null : spawnRowCacheCheckpointWorker
+)

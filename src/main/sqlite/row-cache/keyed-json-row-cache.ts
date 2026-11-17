@@ -66,6 +66,7 @@ export class KeyedJsonRowCache {
   private closed = false
   private readonly busyTimeoutMs: number
   private readonly walCheckpoints: NonNullable<KeyedJsonRowCacheOptions['walCheckpoints']>
+  private walRegistration: number | null = null
 
   constructor(
     readonly path: string,
@@ -203,7 +204,9 @@ export class KeyedJsonRowCache {
       // Sample under the write lock; publish the planned baseline only after COMMIT.
       const version = db.pragma('data_version', { simple: true })
       db.exec('COMMIT')
-      this.walCheckpoints.request(this.path)
+      if (this.walRegistration !== null) {
+        this.walCheckpoints.request(this.walRegistration)
+      }
       if (plan.next) {
         this.stored = plan.next
       } else {
@@ -320,7 +323,8 @@ export class KeyedJsonRowCache {
         // A failing handle is rebuilt or closed by its next operation.
       }
     }
-    if (this.walCheckpoints.attach(this.path, restore)) {
+    this.walRegistration = this.walCheckpoints.attach(this.path, restore)
+    if (this.walRegistration !== null) {
       db.pragma('wal_autocheckpoint = 0')
     }
     // A fresh connection cannot vouch for a baseline read through an earlier one.
@@ -331,7 +335,10 @@ export class KeyedJsonRowCache {
   }
 
   private closeDatabase(): void {
-    this.walCheckpoints.detach(this.path)
+    if (this.walRegistration !== null) {
+      this.walCheckpoints.detach(this.walRegistration)
+      this.walRegistration = null
+    }
     try {
       this.db?.close()
     } catch {
