@@ -12,7 +12,8 @@ import type { HistoryReader } from '../history/agent-session-history-page-bounds
 export function withSubscriberLiveText(
   items: AgentJournalRenderItem[],
   readLive: () => readonly AgentJournalRenderItem[],
-  form: HistoryReader['form']
+  form: HistoryReader['form'],
+  applied?: (live: AgentJournalRenderItem) => void
 ): AgentJournalRenderItem[] {
   const live = items.length > 0 ? readLive() : []
   if (live.length === 0) {
@@ -26,9 +27,26 @@ export function withSubscriberLiveText(
       return item
     }
     changed = true
-    return form({ ...item, body: shown.body }).item
+    applied?.(shown)
+    // The live row shares this revision's placement, and its object keeps one cached wire form.
+    return form(shown).item
   })
   return changed ? next : items
+}
+
+/** A phone page is already sized to its frame and never re-split, so its live rows follow as a batch. */
+export function pageWithSubscriberLiveText(
+  port: SubscriberDeliveryPort,
+  subscriber: Subscriber,
+  items: AgentJournalRenderItem[],
+  reader: HistoryReader
+): AgentJournalRenderItem[] {
+  const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+  const sent = new Map<string, AgentJournalRenderItem>()
+  subscriber.liveSent = sent
+  return subscriber.boundedFrames
+    ? items
+    : withSubscriberLiveText(items, live, reader.form, (item) => sent.set(item.itemId, item))
 }
 
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
@@ -55,6 +73,12 @@ export async function publishSubscriberLiveText(
     ) {
       continue
     }
+    // Unchanged rows keep their object, so a row this subscriber already has is not resent.
+    const sent = subscriber.liveSent
+    const fresh = items.filter((item) => sent?.get(item.itemId) !== item)
+    if (fresh.length === 0) {
+      continue
+    }
     // Live rows get the same per-row bounds a durable read gives this subscriber.
     const { form } = subscriberHistoryReader(subscriber)
     await port.emit(
@@ -64,10 +88,11 @@ export async function publishSubscriberLiveText(
         sessionId,
         fence,
         hostNow,
-        batch: { ...emptyAgentSessionBatch(cursor), items: items.map((item) => form(item).item) }
+        batch: { ...emptyAgentSessionBatch(cursor), items: fresh.map((item) => form(item).item) }
       },
       { journal, queuePublication: { value: subscriber.queuePublication } }
     )
+    subscriber.liveSent = new Map(items.map((item) => [item.itemId, item]))
   }
 }
 

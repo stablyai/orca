@@ -117,7 +117,6 @@ export function createCodexStructuredItemStreams(
 
   const persist = (key: string, text: string, force: boolean): boolean => {
     if (!force && !shouldPersist(key, text.length)) {
-      live.publish()
       return true
     }
     const state = states.get(key)
@@ -135,7 +134,14 @@ export function createCodexStructuredItemStreams(
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
-    shouldEmit: (key, textLength) => isText(key) || shouldPersist(key, textLength),
+    // Below the gate only a live publication is due, which reads text only for a viewer.
+    shouldEmit: (key, textLength) => {
+      const save = shouldPersist(key, textLength)
+      if (!save && isText(key)) {
+        live.publish()
+      }
+      return save
+    },
     emit: (key, text) => persist(key, text, false),
     idle: {
       ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
@@ -148,11 +154,11 @@ export function createCodexStructuredItemStreams(
     }
   })
 
-  const live = new StructuredAgentSessionLiveTextRows(deps.sink, (key) => {
-    const state = states.get(key)
-    const text = state && isText(key) ? coalescer.snapshot(key)?.text : undefined
-    return state && text !== undefined ? codexRunningStreamBody(state.item, text) : null
-  })
+  const live = new StructuredAgentSessionLiveTextRows(
+    deps.sink,
+    (key) => (isText(key) ? coalescer.snapshot(key)?.text : undefined),
+    (key, text) => codexRunningStreamBody(states.get(key)?.item, text)
+  )
 
   const ensureState = (
     threadId: string,

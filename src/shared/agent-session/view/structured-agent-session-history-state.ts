@@ -13,6 +13,10 @@ import {
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import {
+  noteStreamedTextRevision,
+  onlyStreamedTextChanged
+} from './structured-agent-session-streamed-text-rows'
 import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
 import { agentSessionHasOlderTranscript } from '../conversation-context/agent-session-context-clear'
 
@@ -99,6 +103,7 @@ function replaceItemsInPlace(
   incoming: readonly AgentJournalRenderItem[]
 ): AgentJournalRenderItem[] | null {
   let next: AgentJournalRenderItem[] | null = null
+  let textOnly = true
   for (const item of incoming) {
     const index = rowIndexAt(current, item)
     const prior = current[index]
@@ -106,9 +111,13 @@ function replaceItemsInPlace(
       return null
     }
     if (item.revision >= prior.revision) {
+      textOnly &&= onlyStreamedTextChanged(prior, item)
       next ??= current.slice()
       next[index] = item
     }
+  }
+  if (next && textOnly) {
+    noteStreamedTextRevision(next, current)
   }
   return next ?? current
 }

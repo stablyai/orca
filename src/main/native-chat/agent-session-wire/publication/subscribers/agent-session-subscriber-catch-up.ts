@@ -33,7 +33,10 @@ import {
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { withSubscriberLiveText } from './agent-session-live-publications'
+import {
+  pageWithSubscriberLiveText,
+  withSubscriberLiveText
+} from './agent-session-live-publications'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
@@ -138,7 +141,7 @@ async function deliver(
     if (!result.ok) {
       const page = {
         ...result.page,
-        items: withSubscriberLiveText(result.page.items, live, reader.form),
+        items: pageWithSubscriberLiveText(port, subscriber, result.page.items, reader),
         fence: subscriber.fence
       }
       await delivery.emit(subscriber, {
@@ -291,14 +294,8 @@ async function publishSnapshotFrame(
   }
   const delivery = capturedPort(port, journal, frame)
   const durable = withPublishedWork(frame.value, frame.work)
-  const page = {
-    ...durable,
-    items: withSubscriberLiveText(
-      durable.items,
-      () => port.hooks.readLiveText?.(subscriber.sessionId) ?? [],
-      reader.form
-    )
-  }
+  const items = pageWithSubscriberLiveText(port, subscriber, durable.items, reader)
+  const page = { ...durable, items }
   await delivery.emit(subscriber, {
     type: 'snapshot',
     sessionId: subscriber.sessionId,

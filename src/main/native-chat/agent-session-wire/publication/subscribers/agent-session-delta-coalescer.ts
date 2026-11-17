@@ -26,7 +26,7 @@ export type AgentSessionDeltaCoalescerDeps = {
   shouldEmit?: (key: string, textLength: number) => boolean
   /** Runs once a stream has received no text for `ms`; false retries after another quiet period. */
   /** Runs once a stream has had no text for `ms`; each later quiet save of that stream needs twice
-   *  the quiet, up to 16x, so a sparse stream cannot rewrite its whole text per delta. */
+   *  the quiet, so however sparse its deltas a stream gets only logarithmically many. */
   idle?: { ms: number; run: (key: string, text: string) => void }
   windowMs?: number
   maxRetainedBytes?: number
@@ -138,7 +138,7 @@ export function createAgentSessionDeltaCoalescer(
         armIdle(key, stream, stream.quietMs - quiet)
         return
       }
-      stream.quietMs = Math.min(stream.quietMs * 2, idle.ms * 16)
+      stream.quietMs *= 2
       idle.run(key, joined(stream))
     }, ms)
   }

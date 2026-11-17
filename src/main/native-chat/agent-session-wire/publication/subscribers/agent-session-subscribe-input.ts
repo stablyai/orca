@@ -49,6 +49,8 @@ export type Subscriber = {
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
   historyView?: string
+  /** Live rows last sent, by row; a page that replaces the view clears it. */
+  liveSent?: Map<string, AgentJournalRenderItem>
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
 

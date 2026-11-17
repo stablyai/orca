@@ -12,6 +12,7 @@ import { structuredSessionBackgroundTasksView } from '../../../../../../shared/a
 import { structuredSessionForegroundCommands } from '../../../../../../shared/agent-session/view/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from '../../conversation/turns/use-structured-agent-turn-timing'
 import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []
 const NO_SUBMISSIONS: StructuredAgentSessionState['submissions'] = []
@@ -33,12 +34,14 @@ export function useStructuredAgentSessionTransportState(
   const fence = enabled ? state.fence : null
   const latestTurn = enabled ? state.latestTurn : undefined
   const actionablePromptIds = enabled ? state.actionablePromptIds : undefined
+  // These projections never read reply text, so a streaming reply keeps their memos.
+  const rows = rowsBesideStreamedText(journalItems)
   const current = useMemo(
-    () => agentSessionCurrentContextRows(journalItems, submissions),
-    [journalItems, submissions]
+    () => agentSessionCurrentContextRows(rows, submissions),
+    [rows, submissions]
   )
   // A long turn’s record may be off-page; prefer the host’s whole-journal answer.
-  const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
+  const turnId = runningStructuredAgentSessionTurnId({ items: rows, latestTurn })
   // Prefer current-provider host evidence; older hosts use the same projection as session lists so chat and sidebar agree.
   const hostWorking = enabled ? state.working : undefined
   const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
@@ -49,8 +52,8 @@ export function useStructuredAgentSessionTransportState(
     isWorking
   )
   const turnActivity = useMemo(
-    () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
-    [enabled, journalItems, state.activity, turnId]
+    () => selectStructuredAgentTurnActivity(rows, turnId, enabled ? state.activity : null),
+    [enabled, rows, state.activity, turnId]
   )
   const turnTiming = useStructuredAgentTurnTiming(
     {
@@ -66,9 +69,9 @@ export function useStructuredAgentSessionTransportState(
     return structuredSessionBackgroundTasksView(
       roster,
       turnId,
-      structuredSessionForegroundCommands(roster, { items: journalItems, latestTurn })
+      structuredSessionForegroundCommands(roster, { items: rows, latestTurn })
     )
-  }, [enabled, journalItems, latestTurn, state.backgroundTasks, turnId])
+  }, [enabled, rows, latestTurn, state.backgroundTasks, turnId])
   const hostWork = useMemo<StructuredAgentSessionHostWork>(
     () => ({
       ...(actionablePromptIds ? { actionablePromptIds } : {}),

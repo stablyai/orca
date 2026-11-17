@@ -135,15 +135,15 @@ export class AgentSessionSubscribers {
     read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
     targets = this.subscribers(sessionId)
   ): void => {
-    const items = targets.length === 0 ? [] : typeof read === 'function' ? read() : read
     const hostNow = this.now()
     for (const subscriber of targets) {
+      // Read at emission, so text never trails a durable frame queued ahead of it.
       this.enqueue(subscriber, () =>
         publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,
           fence,
-          items,
+          items: typeof read === 'function' ? read() : read,
           subscribers: [subscriber],
           hostNow
         })

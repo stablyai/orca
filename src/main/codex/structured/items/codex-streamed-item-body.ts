@@ -3,7 +3,10 @@ import { codexStreamingJournalItem } from './codex-structured-item-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
 /** The row body a stream shows and saves while its item is still running. */
-export function codexRunningStreamBody(item: CodexThreadItem, text: string) {
+export function codexRunningStreamBody(item: CodexThreadItem | undefined, text: string) {
+  if (!item) {
+    return null
+  }
   const translated = codexStreamingJournalItem(item, text)
   return translated.body && withJournalReasoningLifecycle(translated.body, { state: 'running' })
 }
