@@ -33,6 +33,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
     ) {
       return false
     }
+    const ptyId = pty.ptyId
     const incarnationId = pty.incarnationId
     const generation = this.getPtyLifecycleGeneration(pty.ptyId)
     const observed = this.readObservedAgentStatusPaneIdentityFn?.(row.paneKey)
@@ -43,22 +44,33 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
       return false
     }
     const observation = this.readHookCliWriterObservationFn?.(row)
+    let exited = false
     try {
-      if (observation && (await observation.presence()) === 'exited' && observation.current()) {
-        return false
-      }
+      exited = Boolean(
+        observation && (await observation.presence()) === 'exited' && observation.current()
+      )
     } catch {
       // Missing process evidence cannot release a conversation a PTY may still own.
     }
-    try {
-      const live = this.ptyController?.probePtyLiveness
-        ? await this.ptyController.probePtyLiveness(pty.ptyId)
-        : this.ptyController?.hasPty?.(pty.ptyId)
-      if (live === false) {
-        return false
+    if (!exited) {
+      try {
+        const live = this.ptyController?.probePtyLiveness
+          ? await this.ptyController.probePtyLiveness(ptyId)
+          : this.ptyController?.hasPty?.(ptyId)
+        exited = live === false
+      } catch {
+        // A failed owner probe is unknown, not an exit.
       }
-    } catch {
-      // A failed owner probe is unknown, not an exit.
+    }
+    const currentPty = this.getPtyRecordForPaneKey(row.paneKey)
+    if (!currentPty || currentPty.ptyId === restoringPtyId) {
+      return false
+    }
+    if (currentPty.ptyId !== ptyId || currentPty.incarnationId !== incarnationId) {
+      return true
+    }
+    if (exited) {
+      return false
     }
     // A delayed probe must not assign an old conversation to a replacement process or row.
     return (

@@ -271,7 +271,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
     expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])
-    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey, true)
     expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
   })
 
@@ -315,7 +315,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
 
     expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[left.paneKey]])
     expect(vi.mocked(window.api.agentStatus.reconcileEndedProcess).mock.calls).toEqual([
-      [left.paneKey]
+      [left.paneKey, true]
     ])
     expect(mockStoreState.agentStatusByPaneKey.get(right.paneKey)!).toBeDefined()
   })

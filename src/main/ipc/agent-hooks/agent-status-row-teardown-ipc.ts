@@ -66,21 +66,25 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
   })
 
-  ipcMain.on('agentStatus:reconcileEndedProcess', (_event, paneKey: unknown) => {
-    if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
-      return
+  ipcMain.on(
+    'agentStatus:reconcileEndedProcess',
+    (_event, paneKey: unknown, processExitConfirmed: unknown) => {
+      if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
+        return
+      }
+      try {
+        // Confirmed process exit must clear latches with the row (STA-4612).
+        agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
+          // The shell still owns the PTY, so keep its usable resume identity.
+          preserveResumeIdentity: true,
+          processExitConfirmed: processExitConfirmed === true
+        })
+        clearMigrationUnsupportedPtysForPaneKey(paneKey)
+      } catch (err) {
+        console.warn('[agent-hooks] reconcileEndedProcessForPaneKeys failed:', err)
+      }
     }
-    try {
-      // Confirmed process exit must clear latches with the row (STA-4612).
-      agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
-        // The shell still owns the PTY, so keep its usable resume identity.
-        preserveResumeIdentity: true
-      })
-      clearMigrationUnsupportedPtysForPaneKey(paneKey)
-    } catch (err) {
-      console.warn('[agent-hooks] reconcileEndedProcessForPaneKeys failed:', err)
-    }
-  })
+  )
 
   ipcMain.on('agentStatus:dropByTabPrefix', (_event, tabId: unknown) => {
     if (!isValidAgentStatusDropTabId(tabId)) {

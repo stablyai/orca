@@ -68,7 +68,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.deferredCommandFinishedStatusDrop = null
   session.deferredConfirmedShellReconcile = null
   /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
-  session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
+  session.reconcileEndedProcessIfPaneQuiet = (
+    armedAcceptedStatusSeq: number | undefined,
+    processExitConfirmed?: boolean
+  ): void => {
     const current = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
@@ -78,7 +81,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       return
     }
     // Reconcile main-only hook latches retained by live-pane drops; renderer rows/config already belong to the deferred drop, and main echoes its clear.
-    window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
+    if (processExitConfirmed === true) {
+      window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey, true)
+    } else {
+      window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
+    }
   }
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
@@ -106,7 +113,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         dropStatus()
         // Why: only a process-table-confirmed exit proves the agent's main-side latches are dead.
         if (options.processExitConfirmed) {
-          reconcile?.()
+          reconcile?.(true)
         }
       }
     }
@@ -237,8 +244,8 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // Retain identity through local shell confirmation, anchoring accepted-status ordinal once across the whole retry ladder.
       const armedAcceptedStatusSeq = entry?.acceptedStatusSeq
       session.deferredCommandFinishedStatusDrop = dropStatus
-      session.deferredConfirmedShellReconcile = () =>
-        session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
+      session.deferredConfirmedShellReconcile = (processExitConfirmed?: boolean) =>
+        session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq, processExitConfirmed)
       return
     }
     session.deferredCommandFinishedStatusDrop = null

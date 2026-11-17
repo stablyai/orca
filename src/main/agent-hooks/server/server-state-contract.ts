@@ -179,7 +179,11 @@ export abstract class AgentHookServerStateContract {
 
   abstract reconcileEndedProcessForPaneKeys(
     paneKeys: Iterable<string>,
-    options?: { preserveResumeIdentity?: boolean; endedPresence?: AgentProcessPresence }
+    options?: {
+      preserveResumeIdentity?: boolean
+      endedPresence?: AgentProcessPresence
+      processExitConfirmed?: boolean
+    }
   ): number
 
   protected abstract clearPaneState(

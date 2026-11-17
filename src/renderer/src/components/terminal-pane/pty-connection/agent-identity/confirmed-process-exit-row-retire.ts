@@ -25,8 +25,8 @@ export function retireLiveAgentRowOnConfirmedProcessExit(
   const armedAcceptedStatusSeq = entry.acceptedStatusSeq
   session.deferredCommandFinishedStatusDrop = () =>
     session.dropCommandFinishedStatusIfSameTurn(entry)
-  session.deferredConfirmedShellReconcile = () =>
-    session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
+  session.deferredConfirmedShellReconcile = (processExitConfirmed?: boolean) =>
+    session.reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq, processExitConfirmed)
   // Why: a pane whose owner process the host can verify keeps the host's decision.
   session.settleDeferredCommandFinishedStatusDrop({ processExitConfirmed: true })
 }

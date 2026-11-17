@@ -90,13 +90,41 @@ export async function admitColdRestoreReattach(
       ? [{ agent: saved.agent, providerSession: saved.providerSession }]
       : [])
   ]
-  const [first] = resumes
-  return first
-    ? judgeSavedResume(runtime, first, pane.connectionId ?? null, wslDistro, {
+  const distinct = resumes.filter(
+    (candidate, index) =>
+      !resumes
+        .slice(0, index)
+        .some(
+          (previous) =>
+            previous.agent === candidate.agent &&
+            agentProviderSessionsEqual(
+              candidate.agent,
+              previous.providerSession,
+              candidate.providerSession
+            )
+        )
+  )
+  let firstAdmission: ResumeSpawnAdmission | null = null
+  for (const [index, candidate] of distinct.entries()) {
+    const admission = await judgeSavedResume(
+      runtime,
+      candidate,
+      pane.connectionId ?? null,
+      wslDistro,
+      {
         restoringPtyId: result.id,
         spawnIntent: pane.spawnIntent
-      })
-    : null
+      }
+    )
+    const refusal = resumeSpawnRefusal(admission)
+    if (refusal) {
+      return index === 0 ? refusal : { ...refusal, verdict: 'unverifiable' }
+    }
+    if (index === 0) {
+      firstAdmission = admission
+    }
+  }
+  return firstAdmission
 }
 
 /** A refused resume becomes the pane's plain shell: nothing of the agent launch is left to run,

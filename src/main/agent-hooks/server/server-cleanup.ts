@@ -20,6 +20,7 @@ import { recordAgentExit } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
+  processExitConfirmed?: boolean
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
 }
@@ -146,7 +147,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
               | undefined
           )
         : null
-      if (retained) {
+      if (retained && (options?.endedPresence || options?.processExitConfirmed === true)) {
         const presence = options?.endedPresence ?? retained.agentPresence
         retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
       }

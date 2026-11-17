@@ -60,7 +60,7 @@ export async function retireRestoredStatusesWithDeadTerminals(
   // Preserve conversations that outlived their terminals for resume.
   return deps.server.reconcileEndedProcessForPaneKeys(
     ended.map(({ row }) => row.paneKey),
-    { preserveResumeIdentity: true }
+    { preserveResumeIdentity: true, processExitConfirmed: true }
   )
 }
 

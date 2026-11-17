@@ -76,8 +76,8 @@ export const agentStatusApi = {
   publishListVerdicts: (publication: AgentListPublication | null): void => {
     ipcRenderer.send('agentStatus:listVerdicts', publication)
   },
-  reconcileEndedProcess: (paneKey: string): void => {
-    ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
+  reconcileEndedProcess: (paneKey: string, processExitConfirmed?: boolean): void => {
+    ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey, processExitConfirmed)
   },
   dropByTabPrefix: (tabId: string): void => {
     ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
