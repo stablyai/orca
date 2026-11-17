@@ -20,6 +20,8 @@ import type {
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
+// Queue wait a worker-hosted launch may spend before its own deadline starts.
+const HOSTED_LAUNCH_ALLOWANCE_MS = 30_000
 
 let bufferedProcessSpawner: BufferedProcessSpawner | null = null
 
@@ -94,6 +96,7 @@ export function runProcess(
       }
       settled = true
       clearTimeout(timer)
+      clearTimeout(launchTimer)
       clearTimeout(graceTimer)
       clearTimeout(barrierDeadlineTimer)
       spec.signal?.removeEventListener('abort', onAbort)
@@ -297,9 +300,22 @@ export function runProcess(
       }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
       timer.unref?.()
     }
-    if (hosted) {
+    let launchTimer: ReturnType<typeof setTimeout> | undefined
+    if (hosted && spec.timeoutMs !== null) {
       // A hosted launch waits behind others on the worker; like a native spawn, the deadline starts once the process exists.
-      child.once('spawn', startTimeout)
+      child.once('spawn', () => {
+        clearTimeout(launchTimer)
+        startTimeout()
+      })
+      // A launch the worker never completes still ends, after the run's own budget plus a queue allowance.
+      launchTimer = setTimeout(
+        () => {
+          timedOut = true
+          stopAndSettle()
+        },
+        (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS) + HOSTED_LAUNCH_ALLOWANCE_MS
+      )
+      launchTimer.unref?.()
     } else {
       startTimeout()
     }
