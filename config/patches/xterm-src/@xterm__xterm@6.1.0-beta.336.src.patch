@@ -79,6 +79,25 @@ index 873f7a55ecc2dd5f276ef09df79a652b7f41b990..193ab03c1d39c8ae535e972f816ecbab
      // Only support emoji IMEs when screen reader mode is disabled as the event must bubble up to
      // support reading out character input which can doubling up input characters
      // Based on these event traces: https://github.com/xtermjs/xterm.js/issues/3679
+diff --git a/src/browser/RenderDebouncer.ts b/src/browser/RenderDebouncer.ts
+index eeadbe01862f79c735cbfd1df8029e92ce2d2d24..a6cad86eb85b8363add2f8079bca8dc384ea0f4b 100644
+--- a/src/browser/RenderDebouncer.ts
++++ b/src/browser/RenderDebouncer.ts
+@@ -74,9 +74,12 @@ export class RenderDebouncer implements IRenderDebouncerWithCallback {
+   }
+ 
+   private _runRefreshCallbacks(): void {
+-    for (const callback of this._refreshCallbacks) {
++    // Callbacks queued while these run wait for the next frame, so a callback that re-queues
++    // itself can't keep this frame running forever
++    const callbacks = this._refreshCallbacks;
++    this._refreshCallbacks = [];
++    for (const callback of callbacks) {
+       callback(0);
+     }
+-    this._refreshCallbacks = [];
+   }
+ }
 diff --git a/src/browser/Types.ts b/src/browser/Types.ts
 index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc07dc6b07f 100644
 --- a/src/browser/Types.ts
