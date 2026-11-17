@@ -36,7 +36,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
         {
           isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
           isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
-          isWaitingForMail: (handle) => this.messageWaiters.has(handle)
+          waitedMailboxes: () => this.messageWaiters.map.keys()
         }
       )
       this.orchestrationDbMaintenance.start()

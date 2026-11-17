@@ -125,8 +125,12 @@ export class OrchestrationDbMaintenance {
             }
           })
           if (step === undefined) {
-            // Stopped mid-Run: closing the steps ends the Run's write watch.
-            steps.return(false)
+            try {
+              // Stopped mid-Run: closing the steps ends the Run's write watch.
+              steps.return(false)
+            } catch {
+              // A database closed since took its watch with it.
+            }
             return false
           }
           done = step

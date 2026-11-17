@@ -61,8 +61,8 @@ const RUN_DELETES = [
 export type RunPartyLiveness = {
   isLiveHandle(handle: string): boolean
   isLivePane(paneKey: string): boolean
-  /** In memory, unlike `isLiveHandle`, so every page can ask it. */
-  isWaitingForMail(handle: string): boolean
+  /** Mailboxes a reader is blocked on, in memory, so every page can ask; there are few at a time. */
+  waitedMailboxes(): Iterable<string>
 }
 
 // A re-minted terminal keeps its pane, so every pane the Run's coordinators used counts too.
@@ -109,13 +109,6 @@ function isLiveRunParty(party: string, liveness: RunPartyLiveness): boolean {
   return party.startsWith('pane:')
     ? liveness.isLivePane(party.slice('pane:'.length))
     : liveness.isLiveHandle(party.slice('handle:'.length))
-}
-
-// A pane's liveness is a lookup, as is a blocked reader's; a handle's full liveness reads the database.
-function isRunPartySeenInMemory(party: string, liveness: RunPartyLiveness): boolean {
-  return party.startsWith('pane:')
-    ? liveness.isLivePane(party.slice('pane:'.length))
-    : liveness.isWaitingForMail(party.slice('handle:'.length))
 }
 
 function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
@@ -175,9 +168,12 @@ function* retireWatchedRun(
   const checkedParties = [...parties]
   const anyPartyLive = (): boolean =>
     checkedParties.some((party) => isLiveRunParty(party, liveness))
-  // A re-minted terminal keeps its pane; a reader that started mid-way, such as a pane-less wait, blocks.
+  // A handle's liveness reads the database; a pane's is a lookup, and a re-minted terminal keeps its
+  // pane. A reader that started mid-way, such as a pane-less wait, is found among the few waiting.
+  const panes = checkedParties.filter((party) => party.startsWith('pane:'))
   const anyPartySeenLive = (): boolean =>
-    checkedParties.some((party) => isRunPartySeenInMemory(party, liveness))
+    panes.some((party) => isLiveRunParty(party, liveness)) ||
+    [...liveness.waitedMailboxes()].some((handle) => parties.has(`handle:${handle}`))
   if (anyPartyLive()) {
     return false
   }

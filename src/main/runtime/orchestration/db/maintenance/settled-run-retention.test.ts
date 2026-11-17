@@ -16,7 +16,7 @@ const PANE_LEAF = '11111111-1111-4111-8111-111111111111'
 const nobodyIsLive: RunPartyLiveness = {
   isLiveHandle: () => false,
   isLivePane: () => false,
-  isWaitingForMail: () => false
+  waitedMailboxes: () => []
 }
 const liveHandle = (live: string): RunPartyLiveness => ({
   ...nobodyIsLive,
@@ -292,7 +292,7 @@ describe('settled Run retention', () => {
     let waiting = false
     const steps = retireSettledRun(db!, run.id, {
       ...nobodyIsLive,
-      isWaitingForMail: (handle) => waiting && handle === `run:${run.id}`
+      waitedMailboxes: () => (waiting ? [`run:${run.id}`] : [])
     })
     let step = steps.next()
     while (!step.done && count('messages WHERE run_id = ?', run.id) === 201) {

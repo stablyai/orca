@@ -76,7 +76,12 @@ function install(db: OrchestrationDb): void {
   }
   db.db.exec(`CREATE TEMP TABLE IF NOT EXISTS ${table}_tracked(key TEXT PRIMARY KEY) WITHOUT ROWID;
     CREATE TEMP TABLE IF NOT EXISTS ${table}_dirty(key TEXT PRIMARY KEY) WITHOUT ROWID;
-    ${projectionMutationTriggers(table, WATCHED_TABLES)}`)
+    ${projectionMutationTriggers(
+      table,
+      WATCHED_TABLES,
+      '',
+      `EXISTS (SELECT 1 FROM temp.${table}_tracked)`
+    )}`)
   installed.add(db)
 }
 
