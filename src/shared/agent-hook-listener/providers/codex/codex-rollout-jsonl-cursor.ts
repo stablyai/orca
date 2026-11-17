@@ -74,6 +74,22 @@ export function withPrefetchedRolloutReads<T>(
   }
 }
 
+const SKIPPED = Symbol('skipped')
+const prefetchPathsInFlight = new Set<string>()
+
+/** One prefetch read per path at a time: a stalled open must not collect a queued read from every later hook. */
+async function prefetchOnce<T>(filePath: string, read: () => Promise<T>): Promise<T | typeof SKIPPED> {
+  if (prefetchPathsInFlight.has(filePath)) {
+    return SKIPPED
+  }
+  prefetchPathsInFlight.add(filePath)
+  try {
+    return await read()
+  } finally {
+    prefetchPathsInFlight.delete(filePath)
+  }
+}
+
 /** Prefetches a cursor's next read; a sync read at the same position consumes it once. */
 export async function prefetchJsonlCursor(
   reads: PrefetchedRolloutReads,
@@ -81,7 +97,10 @@ export async function prefetchJsonlCursor(
 ): Promise<void> {
   const { filePath, offset, carry } = cursor
   if (filePath && !reads.closed) {
-    reads.cursors.push({ filePath, offset, carry, read: await readJsonlCursorBytes(cursor) })
+    const read = await prefetchOnce(filePath, () => readJsonlCursorBytes(cursor))
+    if (read !== SKIPPED) {
+      reads.cursors.push({ filePath, offset, carry, read })
+    }
   }
 }
 
@@ -94,10 +113,16 @@ export async function prefetchRolloutHead(
   if (reads.closed) {
     return
   }
-  const size = await rolloutFileSizeAsync(filePath)
+  const size = await prefetchOnce(filePath, () => rolloutFileSizeAsync(filePath))
+  if (size === SKIPPED) {
+    return
+  }
   reads.sizes.set(filePath, size)
   if (wantsHead(size) && !reads.closed) {
-    reads.firstRecords.set(filePath, await readJsonlFirstRecordAsync(filePath))
+    const head = await prefetchOnce(filePath, () => readJsonlFirstRecordAsync(filePath))
+    if (head !== SKIPPED) {
+      reads.firstRecords.set(filePath, head)
+    }
   }
 }
 
