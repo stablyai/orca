@@ -1,4 +1,4 @@
-import type Database from '../../../../sqlite/sync-database'
+import type { OrchestrationDb } from '../orchestration-db'
 
 const PRIOR_OWNER_TRIGGERS = [
   'trg_worker_terminal_prior_owners_insert',
@@ -50,14 +50,14 @@ INSERT OR IGNORE INTO worker_terminal_resource_prior_owners (dispatch_id, resour
 `
 
 /** Builds the index once; reruns only if a table rebuild dropped its triggers, since rows may then be stale. */
-export function installWorkerTerminalPriorOwnerIndex(db: Database.Database): void {
+export function installWorkerTerminalPriorOwnerIndex({ db }: Pick<OrchestrationDb, 'db'>): void {
   const installed = db
     .prepare(
       `SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'trigger'
         AND name IN (${PRIOR_OWNER_TRIGGERS.map(() => '?').join(', ')})`
     )
-    .get(...PRIOR_OWNER_TRIGGERS) as { count: number }
-  if (installed.count === PRIOR_OWNER_TRIGGERS.length) {
+    .get(...PRIOR_OWNER_TRIGGERS)
+  if (Number(installed?.count) === PRIOR_OWNER_TRIGGERS.length) {
     return
   }
   db.exec('BEGIN IMMEDIATE')

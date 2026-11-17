@@ -142,9 +142,13 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerTerminalResourceRow | undefined {
-  return this.db
-    .prepare(`SELECT * FROM worker_terminal_resources WHERE id = ${formerlyOwnedResourceIdSql('?')}`)
-    .get(dispatchId) as WorkerTerminalResourceRow | undefined
+  const row = this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources WHERE id = ${formerlyOwnedResourceIdSql('?')}`
+    )
+    .get(dispatchId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return row as WorkerTerminalResourceRow | undefined
 }
 
 /** Records bounded recovery bookkeeping without changing ownership or release intent. */

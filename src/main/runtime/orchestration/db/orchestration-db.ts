@@ -54,7 +54,7 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     refreshOutstandingDeliveryTrigger(this.db)
-    installWorkerTerminalPriorOwnerIndex(this.db)
+    installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
       ['federation_relay_items', ['answer_sender_report']]

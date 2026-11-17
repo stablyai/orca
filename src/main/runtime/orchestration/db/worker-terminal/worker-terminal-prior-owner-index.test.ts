@@ -18,7 +18,13 @@ function openFileDb() {
 }
 
 // Raw SQL, as an older build that knows nothing of the index writes it.
-function writeResource(db: OrchestrationDb, id: string, owner: string, priors: string[], at: string) {
+function writeResource(
+  db: OrchestrationDb,
+  id: string,
+  owner: string,
+  priors: string[],
+  at: string
+) {
   db.db
     .prepare(
       `INSERT INTO worker_terminal_resources
