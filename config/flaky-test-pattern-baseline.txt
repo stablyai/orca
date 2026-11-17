@@ -328,7 +328,6 @@
 2 test-no-wall-clock:src/main/agent-hooks/installation/scripts/managed-hook-timeout.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server/testing/http/server-endpoint-file-lifecycle.test.ts
 3 test-no-wall-clock:src/main/agent-hooks/server/testing/replay/spool.test.ts
-3 test-no-wall-clock:src/main/agent-hooks/server/testing/structured-ingress/server-ingest-structured-status.test.ts
 2 test-no-wall-clock:src/main/ai-vault/scanners/cursor/session-scanner-cursor-chat-meta.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process.test.ts
