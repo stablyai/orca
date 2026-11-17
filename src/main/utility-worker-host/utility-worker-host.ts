@@ -10,8 +10,11 @@ import type {
   UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
 
-/** A host that cannot start in time loses its workers to in-process threads for the session. */
+/** A host that cannot start in time loses its workers to in-process threads. */
 const HOST_READY_TIMEOUT_MS = 4_000
+// A slow start retries later, not never: in-process readers are back in main's V8 cage.
+const RETRY_FIRST_MS = 1_000
+const RETRY_MAX_MS = 60_000
 const HOST_IDLE_EXIT_MS = 30_000
 
 /** Electron stops utility processes as it quits; those exits are not failures. */
@@ -41,7 +44,10 @@ function stopChild(host: Host): void {
  */
 export class UtilityWorkerHost {
   private host?: Host
-  private unavailable = false
+  /** A reader that cannot load in the host never will; a slow or dead start may recover. */
+  private neverHost = false
+  private retryAt = 0
+  private retryMs = 0
   private nextId = 0
 
   constructor(
@@ -55,14 +61,14 @@ export class UtilityWorkerHost {
   }
 
   spawn(spawn: UtilityWorkerSpawn): HostedWorkerThread {
-    if (this.unavailable) {
+    if (this.neverHost || Date.now() < this.retryAt) {
       return this.spawnInProcess(spawn)
     }
     let host: Host
     try {
       host = this.liveHost()
     } catch {
-      this.unavailable = true
+      this.backOff()
       return this.spawnInProcess(spawn)
     }
     const id = ++this.nextId
@@ -119,6 +125,7 @@ export class UtilityWorkerHost {
     if (event.type === 'ready') {
       clearTimeout(host.readyTimer)
       host.ready = true
+      this.retryMs = 0
       for (const request of host.queued.splice(0)) {
         host.child.postMessage(request)
       }
@@ -138,6 +145,11 @@ export class UtilityWorkerHost {
       this.scheduleIdleExit(host)
     }
     worker.receive(event)
+  }
+
+  private backOff(): void {
+    this.retryMs = Math.min(Math.max(this.retryMs * 2, RETRY_FIRST_MS), RETRY_MAX_MS)
+    this.retryAt = Date.now() + this.retryMs
   }
 
   private scheduleIdleExit(host: Host): void {
@@ -161,11 +173,16 @@ export class UtilityWorkerHost {
     if (host.retired) {
       return
     }
-    this.unavailable = true
+    if (reason === 'worker-start-failed') {
+      this.neverHost = true
+    } else {
+      this.backOff()
+    }
     recordDurableCrashBreadcrumb('utility_worker_host_unavailable', {
       serviceName: this.serviceName,
       reason,
-      workers: host.workers.size
+      workers: host.workers.size,
+      retryMs: this.neverHost ? null : this.retryMs
     })
     const workers = [...host.workers.values()]
     this.retire(host)

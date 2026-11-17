@@ -162,6 +162,36 @@ describe('UtilityWorkerHost', () => {
     await echo.terminate()
   })
 
+  it('retries the host after a failed start once its cooldown passes', async () => {
+    fork.mockImplementation(silentUtilityProcess)
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const host = newHost()
+    const first = host.spawn({
+      filename: echoEntry,
+      name: 'orca-journal-sql-reader',
+      workerData: { tag: 'e' }
+    })
+    expect(await nextMessage(first)).toEqual({ hello: 'e' })
+    const during = host.spawn({
+      filename: echoEntry,
+      name: 'orca-journal-sql-reader',
+      workerData: { tag: 'f' }
+    })
+    expect(await nextMessage(during)).toEqual({ hello: 'f' })
+    expect(fork).toHaveBeenCalledTimes(1)
+    now.mockReturnValue(1_000_000 + 1_001)
+    fork.mockImplementation(threadUtilityProcess)
+    const after = host.spawn({
+      filename: echoEntry,
+      name: 'orca-journal-sql-reader',
+      workerData: { tag: 'g' }
+    })
+    expect(await nextMessage(after)).toEqual({ hello: 'g' })
+    expect(fork).toHaveBeenCalledTimes(2)
+    now.mockRestore()
+    await Promise.all([first.terminate(), during.terminate(), after.terminate()])
+  })
+
   it('fails its workers when a running host dies', async () => {
     const children: ReturnType<typeof threadUtilityProcess>[] = []
     fork.mockImplementation(() => {
