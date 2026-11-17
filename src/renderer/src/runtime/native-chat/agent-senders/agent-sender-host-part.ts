@@ -1,5 +1,6 @@
 import type { AgentSenderPublication } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { LocatedAgentSender } from './agent-sender-index'
+import { OverlayMap, type OverlayMapDraft } from './agent-sender-overlay-map'
 
 type Located = LocatedAgentSender | null
 type Row = LocatedAgentSender
@@ -10,16 +11,16 @@ export type LocatedRows = {
 }
 /** One host's rows on this window's panes (null where they disagree), with reverse pane maps. */
 export type HostPart = {
-  identities: ReadonlyMap<string, Located>
+  identities: OverlayMap<string, Located>
   /** Home principals named by any of the host's publications, with how many name each. */
   principals: ReadonlyMap<string, number>
   /** The rows it runs for each home principal that attached them. */
-  attachments: ReadonlyMap<string, ReadonlyMap<string, Located>>
-  panes: ReadonlyMap<string, readonly string[]>
-  attachedPanes: ReadonlyMap<string, readonly (readonly [principal: string, identity: string])[]>
+  attachments: ReadonlyMap<string, OverlayMap<string, Located>>
+  panes: OverlayMap<string, readonly string[]>
+  attachedPanes: OverlayMap<string, readonly (readonly [principal: string, identity: string])[]>
   /** Every kept row behind each merged answer, so one scope can leave without a rebuild. */
-  claimRows: ReadonlyMap<string, readonly Row[]>
-  attachmentRows: ReadonlyMap<string, ReadonlyMap<string, readonly Row[]>>
+  claimRows: OverlayMap<string, readonly Row[]>
+  attachmentRows: ReadonlyMap<string, OverlayMap<string, readonly Row[]>>
 }
 
 const wholeHostRowsByWorktree = new WeakMap<LocatedRows, Map<string, LocatedRows>>()
@@ -48,28 +49,60 @@ export function merge(
 const fold = (rows: readonly Row[]): Located | undefined =>
   rows.reduce<Located | undefined>((value, row) => merge(value, row), undefined)
 
-/** Lists by key, copied on a draft's first write to each key and then written in place. */
+/** Lists by key: a list is copied on the draft's first write to it, and removals are applied
+ *  once per list when the draft finishes, so removing many values from one list stays linear. */
 class DraftLists<K, T> {
-  readonly map: Map<K, readonly T[]>
+  private readonly map: OverlayMapDraft<K, readonly T[]>
   private readonly owned = new Map<K, T[]>()
-  constructor(base: ReadonlyMap<K, readonly T[]> | undefined) {
-    this.map = new Map(base)
+  private readonly removals = new Map<K, Map<unknown, number>>()
+
+  constructor(
+    base: OverlayMap<K, readonly T[]>,
+    private readonly identify: (value: T) => unknown = (value) => value
+  ) {
+    this.map = base.edit()
+  }
+
+  get(id: K): readonly T[] | undefined {
+    return this.map.get(id)
   }
 
   add(id: K, value: T): void {
     this.own(id).push(value)
   }
 
-  remove(id: K, same: (value: T) => boolean): void {
-    const list = this.own(id)
-    const at = list.findIndex(same)
-    if (at !== -1) {
-      list.splice(at, 1)
+  remove(id: K, value: T): void {
+    this.own(id)
+    const counts = this.removals.get(id) ?? new Map<unknown, number>()
+    const key = this.identify(value)
+    this.removals.set(id, counts.set(key, (counts.get(key) ?? 0) + 1))
+  }
+
+  /** Applies the pending removals; call before reading lists that had any. */
+  settle(): void {
+    for (const [id, counts] of this.removals) {
+      const list = this.own(id).filter((value) => {
+        const key = this.identify(value)
+        const count = counts.get(key) ?? 0
+        if (count > 0) {
+          counts.set(key, count - 1)
+          return false
+        }
+        return true
+      })
+      this.owned.set(id, list)
+      if (list.length === 0) {
+        this.map.delete(id)
+      } else {
+        this.map.set(id, list)
+      }
     }
-    if (list.length === 0) {
-      this.map.delete(id)
-      this.owned.delete(id)
-    }
+    this.removals.clear()
+  }
+
+  finish(): OverlayMap<K, readonly T[]> {
+    this.settle()
+    return this.map.finish()
   }
 
   private own(id: K): T[] {
@@ -83,12 +116,15 @@ class DraftLists<K, T> {
   }
 }
 
-/** A copy of a host part that adds and removes kept rows and principals, copying only the maps
- *  and lists it touches, then re-merges only the identities whose rows moved. */
+const attachedPaneKey = ([principal, identity]: readonly [string, string]) =>
+  JSON.stringify([principal, identity])
+
+/** A copy of a host part that adds and removes kept rows and principals, sharing every map and
+ *  list it does not touch, then re-merges only the identities whose rows moved. */
 export class HostPartDraft {
   private readonly claimRows: DraftLists<string, Row>
-  private readonly attachmentRows: Map<string, ReadonlyMap<string, readonly Row[]>>
-  private readonly ownedAttachmentRows = new Map<string, DraftLists<string, Row>>()
+  private readonly attachmentRows: Map<string, OverlayMap<string, readonly Row[]>>
+  private readonly attachmentBuckets = new Map<string, DraftLists<string, Row>>()
   private readonly principals: Map<string, number>
   private readonly panes: DraftLists<string, string>
   private readonly attachedPanes: DraftLists<string, readonly [string, string]>
@@ -99,11 +135,11 @@ export class HostPartDraft {
     private readonly base: HostPart | undefined,
     private readonly onRow: () => void
   ) {
-    this.claimRows = new DraftLists(base?.claimRows)
+    this.claimRows = new DraftLists(base?.claimRows ?? OverlayMap.empty())
     this.attachmentRows = new Map(base?.attachmentRows)
     this.principals = new Map(base?.principals)
-    this.panes = new DraftLists(base?.panes)
-    this.attachedPanes = new DraftLists(base?.attachedPanes)
+    this.panes = new DraftLists(base?.panes ?? OverlayMap.empty())
+    this.attachedPanes = new DraftLists(base?.attachedPanes ?? OverlayMap.empty(), attachedPaneKey)
   }
 
   rows(rows: LocatedRows, sign: 1 | -1, kept: (row: Row) => boolean = () => true): void {
@@ -115,8 +151,8 @@ export class HostPartDraft {
           this.claimRows.add(row.identity, row)
           this.panes.add(paneId(row), row.identity)
         } else {
-          this.claimRows.remove(row.identity, (value) => value === row)
-          this.panes.remove(paneId(row), (value) => value === row.identity)
+          this.claimRows.remove(row.identity, row)
+          this.panes.remove(paneId(row), row.identity)
         }
       }
     }
@@ -130,11 +166,8 @@ export class HostPartDraft {
           bucket.add(row.identity, row)
           this.attachedPanes.add(paneId(row), [principal, row.identity])
         } else {
-          bucket.remove(row.identity, (value) => value === row)
-          this.attachedPanes.remove(
-            paneId(row),
-            ([p, identity]) => p === principal && identity === row.identity
-          )
+          bucket.remove(row.identity, row)
+          this.attachedPanes.remove(paneId(row), [principal, row.identity])
         }
       }
     }
@@ -153,9 +186,10 @@ export class HostPartDraft {
   }
 
   finish(): HostPart {
-    const identities = new Map(this.base?.identities)
+    this.claimRows.settle()
+    const identities = (this.base?.identities ?? OverlayMap.empty<string, Located>()).edit()
     for (const identity of this.touchedClaims) {
-      const value = fold(this.claimRows.map.get(identity) ?? [])
+      const value = fold(this.claimRows.get(identity) ?? [])
       if (value === undefined) {
         identities.delete(identity)
       } else {
@@ -164,42 +198,36 @@ export class HostPartDraft {
     }
     const attachments = new Map(this.base?.attachments)
     for (const [principal, touched] of this.touchedAttachments) {
-      const rows = this.attachmentRows.get(principal)
-      const bucket = new Map(attachments.get(principal))
+      const rows = this.attachmentBuckets.get(principal)!
+      rows.settle()
+      const bucket = (attachments.get(principal) ?? OverlayMap.empty<string, Located>()).edit()
       for (const identity of touched) {
-        const value = fold(rows?.get(identity) ?? [])
+        const value = fold(rows.get(identity) ?? [])
         if (value === undefined) {
           bucket.delete(identity)
         } else {
           bucket.set(identity, value)
         }
       }
-      if (bucket.size === 0) {
-        attachments.delete(principal)
-      } else {
-        attachments.set(principal, bucket)
-      }
-      if (rows?.size === 0) {
-        this.attachmentRows.delete(principal)
-      }
+      attachments.set(principal, bucket.finish())
+      this.attachmentRows.set(principal, rows.finish())
     }
     return {
-      identities,
+      identities: identities.finish(),
       principals: this.principals,
       attachments,
-      panes: this.panes.map,
-      attachedPanes: this.attachedPanes.map,
-      claimRows: this.claimRows.map,
+      panes: this.panes.finish(),
+      attachedPanes: this.attachedPanes.finish(),
+      claimRows: this.claimRows.finish(),
       attachmentRows: this.attachmentRows
     }
   }
 
   private attachmentBucket(principal: string): DraftLists<string, Row> {
-    let bucket = this.ownedAttachmentRows.get(principal)
+    let bucket = this.attachmentBuckets.get(principal)
     if (!bucket) {
-      bucket = new DraftLists(this.attachmentRows.get(principal))
-      this.ownedAttachmentRows.set(principal, bucket)
-      this.attachmentRows.set(principal, bucket.map)
+      bucket = new DraftLists(this.attachmentRows.get(principal) ?? OverlayMap.empty())
+      this.attachmentBuckets.set(principal, bucket)
     }
     return bucket
   }
