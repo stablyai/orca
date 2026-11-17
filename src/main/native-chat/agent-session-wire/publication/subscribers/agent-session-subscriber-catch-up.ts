@@ -33,10 +33,7 @@ import {
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  pageWithSubscriberLiveText,
-  withSubscriberLiveText
-} from './agent-session-live-publications'
+import * as liveText from './agent-session-subscriber-live-text'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
@@ -137,11 +134,10 @@ async function deliver(
       return frame
     }
     const result = withPublishedWorkResult(frame.value, work)
-    const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
     if (!result.ok) {
       const page = {
         ...result.page,
-        items: pageWithSubscriberLiveText(port, subscriber, result.page.items, reader),
+        items: liveText.pageWithSubscriberLiveText(port, subscriber, result.page.items, reader),
         fence: subscriber.fence
       }
       await delivery.emit(subscriber, {
@@ -158,6 +154,7 @@ async function deliver(
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.workView = undefined
       await refreshPublishedWork(delivery, subscriber, journal, work, shared)
+      await liveText.followPageWithLiveText(port, subscriber, journal, shared.hostNow)
       return frame
     }
     const page = result.page
@@ -177,7 +174,7 @@ async function deliver(
         sessionId: subscriber.sessionId,
         batch: {
           cursor: page.window.nextCursor,
-          items: withSubscriberLiveText(page.items, live, reader.form),
+          items: liveText.batchWithSubscriberLiveText(port, subscriber, page.items, reader),
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
@@ -294,7 +291,7 @@ async function publishSnapshotFrame(
   }
   const delivery = capturedPort(port, journal, frame)
   const durable = withPublishedWork(frame.value, frame.work)
-  const items = pageWithSubscriberLiveText(port, subscriber, durable.items, reader)
+  const items = liveText.pageWithSubscriberLiveText(port, subscriber, durable.items, reader)
   const page = { ...durable, items }
   await delivery.emit(subscriber, {
     type: 'snapshot',
@@ -313,5 +310,6 @@ async function publishSnapshotFrame(
   // The replacement dropped client restatements; owe them until every follow-up lands.
   subscriber.workView = undefined
   await refreshPublishedWork(delivery, subscriber, journal, frame.work, shared)
+  await liveText.followPageWithLiveText(port, subscriber, journal, shared.hostNow)
   return frame
 }

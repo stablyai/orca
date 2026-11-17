@@ -11,6 +11,7 @@ import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
+import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
 export type AgentSessionSubscribeInput = {
   commandsOnRequest?: boolean
@@ -50,7 +51,9 @@ export type Subscriber = {
   workView?: string
   historyView?: string
   /** Live rows last sent, by row; a page that replaces the view clears it. */
-  liveSent?: Map<string, AgentJournalRenderItem>
+  liveSent?: Map<string, SubscriberLiveRow>
+  /** Host facts the client holds, which a live row-carrying frame must restate. */
+  hostWork?: SubscriberHostWork
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
 

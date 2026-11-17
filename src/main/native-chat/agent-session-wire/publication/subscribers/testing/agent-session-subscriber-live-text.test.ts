@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { withSubscriberLiveText } from '../agent-session-live-publications'
+import { withSubscriberLiveText } from '../agent-session-subscriber-live-text'
 
 const row = (itemId: string, revision: number, text: string): AgentJournalRenderItem => ({
   itemId,

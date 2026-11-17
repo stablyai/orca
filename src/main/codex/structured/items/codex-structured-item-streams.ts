@@ -145,9 +145,10 @@ export function createCodexStructuredItemStreams(
     emit: (key, text) => persist(key, text, false),
     idle: {
       ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
+      applies: isText,
       // A refused save stays pending for the next barrier; quiet never retries on its own.
       run: (key, text) => {
-        if (isText(key) && checkpointLengths.get(key) !== text.length) {
+        if (checkpointLengths.get(key) !== text.length) {
           persist(key, text, true)
         }
       }

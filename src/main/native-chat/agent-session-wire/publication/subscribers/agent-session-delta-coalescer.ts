@@ -24,10 +24,13 @@ export type AgentSessionDeltaCoalescerDeps = {
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
-  /** Runs once a stream has received no text for `ms`; false retries after another quiet period. */
-  /** Runs once a stream has had no text for `ms`; each later quiet save of that stream needs twice
-   *  the quiet, so however sparse its deltas a stream gets only logarithmically many. */
-  idle?: { ms: number; run: (key: string, text: string) => void }
+  /** Runs once a stream `applies` to has had no text for `ms`; each later quiet save of that stream
+   *  needs twice the quiet, so however sparse its deltas a stream gets only logarithmically many. */
+  idle?: {
+    ms: number
+    applies?: (key: string) => boolean
+    run: (key: string, text: string) => void
+  }
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -225,7 +228,7 @@ export function createAgentSessionDeltaCoalescer(
       }
       streams.set(key, stream)
       stream.appendedAt = performance.now()
-      if (!stream.cancelIdle) {
+      if (!stream.cancelIdle && deps.idle?.applies?.(key) !== false) {
         armIdle(key, stream, stream.quietMs)
       }
       // Share one timer across streams to bound wakeups per window.

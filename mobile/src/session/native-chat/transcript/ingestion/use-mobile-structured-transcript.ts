@@ -12,6 +12,7 @@ import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/nativ
 import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const mobileStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem
@@ -45,10 +46,9 @@ export function useMobileStructuredTranscript(
   // A rewind's new epoch restarts sequences, so the press's rows are not in it.
   const clearSentTail =
     clearSent?.sessionKey === sessionKey && clearSent.epoch === state.epoch ? clearSent.tail : null
-  const latestClear = useMemo(
-    () => latestAgentSessionContextClearSequence(state.items),
-    [state.items]
-  )
+  // A streaming reply never moves the /clear floor, so its text revisions keep this memo.
+  const clearRows = rowsBesideStreamedText(state.items)
+  const latestClear = useMemo(() => latestAgentSessionContextClearSequence(clearRows), [clearRows])
   const clearing = agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail)
   // Retire a press that hides nothing (its divider landed, or its rows left), so a later trim cannot re-arm it.
   if (clearSent?.sessionKey === sessionKey && !clearing) {

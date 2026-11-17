@@ -22,10 +22,11 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { republishSubscriberBackgroundTasks } from './agent-session-live-publications'
 import {
   publishSubscriberLiveText,
-  republishSubscriberBackgroundTasks
-} from './agent-session-live-publications'
+  rememberSubscriberHostWork
+} from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
@@ -277,6 +278,7 @@ export class AgentSessionSubscribers {
         ...options,
         isActive: () => this.isActive(subscriber)
       })
+      rememberSubscriberHostWork(subscriber, event)
       if (options?.historyView !== undefined && this.isActive(subscriber)) {
         subscriber.historyView = options.historyView
       }
