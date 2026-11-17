@@ -87,6 +87,12 @@ export function MobileSessionAccessoryKeys({
     () => getTerminalKeyRowItems(visibleBuiltInIds, padAvailable),
     [padAvailable, visibleBuiltInIds]
   )
+  // A held Shift, Ctrl or Alt with no key on the row would turn every typed letter into a combo.
+  useEffect(() => {
+    dockKeys.releaseModifiers(
+      (['shift', 'ctrl', 'alt'] as const).filter((id) => !visibleBuiltInIds.includes(id))
+    )
+  }, [visibleBuiltInIds, dockKeys.modifiers])
   const keyStyle = ({ pressed }: { pressed: boolean }) => [
     styles.key,
     pressed && styles.keyPressed,

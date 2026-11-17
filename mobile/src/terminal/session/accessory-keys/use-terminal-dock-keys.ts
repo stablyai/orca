@@ -49,6 +49,19 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
     return modifiers
   }
 
+  /** Lets go of the given modifiers, held or locked. */
+  const releaseModifiers = (released: readonly TerminalShortcutModifier[]): void => {
+    if (released.some((modifier) => modifiers[modifier] !== 'off')) {
+      setModifiers((current) => {
+        const next = { ...current }
+        for (const modifier of released) {
+          next[modifier] = 'off'
+        }
+        return next
+      })
+    }
+  }
+
   /** A row key with the held modifiers, or null when none is held or the key takes no modifier. */
   const chordInput = (key: string): TerminalLiveAccessoryInput | null =>
     hasStickyModifier(modifiers) ? terminalDockKeyInput(key, modifiers) : null
@@ -79,7 +92,15 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
     return true
   }
 
-  return { modifiers, tapModifier, takeModifiers, chordInput, sendKey, interceptTypedCharacter }
+  return {
+    modifiers,
+    tapModifier,
+    takeModifiers,
+    releaseModifiers,
+    chordInput,
+    sendKey,
+    interceptTypedCharacter
+  }
 }
 
 function terminalDockKeyInput(
