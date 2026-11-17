@@ -9,6 +9,7 @@ type ActionPart = string | Monaco.languages.IExpandedMonarchLanguageAction
 // and plugin themes resolve it through their `keyword.control` rule.
 const CONTROL_TOKEN = 'keyword.flow'
 const MEMBER_STATE = 'orcaControlKeywordMember'
+const LIST_ATTRIBUTE = 'orcaControlKeywordWords'
 
 export type ControlKeywordSpec = {
   /** Space-separated words VS Code's grammar for the language scopes `keyword.control`. */
@@ -79,35 +80,43 @@ function wordSetKey(words: readonly string[]): string {
 type Rewrite = {
   language: MonarchLanguage
   isControl: (word: string) => boolean
-  /** Control words no word set of the grammar lists, as a case key, or null when there are none. */
-  unlistedKey: string | null
+  /** Control words no word set of the grammar lists, still waiting for a word case to take them. */
+  unlisted: string[]
+  /** A case key for a word list the language did not have, registered as a language attribute. */
+  listKey: (words: string[]) => string
 }
 
-/** `part` with its word cases split so control words get the control token; `part` itself when
- *  it tests no control word. */
+/** `part` with each word case that tests control words handing them the control token; `part`
+ *  itself when it tests no control word. */
 function rewriteCases(part: ActionPart, rewrite: Rewrite): ActionPart {
   const cases: Record<string, MonarchAction> = {}
   let changed = false
-  let isKeywordRule = false
   for (const [key, value] of caseEntries(part)) {
     const words = caseKeyWords(key, rewrite.language)
     const control = words?.filter(rewrite.isControl) ?? []
     const flow = control.length > 0 && !Array.isArray(value) ? controlPart(value, true) : null
-    isKeywordRule ||= flow !== null
-    // Why before the plain-word case: control words the grammar never listed still need a case.
-    if (key === '@default' && isKeywordRule && rewrite.unlistedKey) {
-      cases[rewrite.unlistedKey] = CONTROL_TOKEN
-    }
-    if (flow && control.length === words?.length) {
-      cases[key] = flow
-    } else {
-      if (flow) {
-        // Why before the original key: Monarch takes the first matching case, so order is precedence.
-        cases[wordSetKey(control)] = flow
-      }
+    if (!words || !flow) {
       cases[key] = mapParts(value, (inner) => rewriteCases(inner, rewrite))
+      changed ||= cases[key] !== value
+      continue
     }
-    changed ||= flow !== null || cases[key] !== value
+    // Why the first control case also takes unlisted words: a case of their own would cost every
+    // other word one more test.
+    const unlisted = rewrite.unlisted.splice(0)
+    const caseKey = unlisted.length > 0 ? rewrite.listKey([...words, ...unlisted]) : key
+    // Why nested under the word's own case: a word in no list (most identifiers) takes exactly the
+    // case tests it took before, so the rewrite costs tokenizing nothing.
+    cases[caseKey] =
+      control.length === words.length && unlisted.length === 0
+        ? flow
+        : {
+            cases: {
+              [wordSetKey(control)]: flow,
+              ...(unlisted.length > 0 ? { [wordSetKey(unlisted)]: CONTROL_TOKEN } : {}),
+              '@default': value
+            }
+          }
+    changed = true
   }
   return changed && typeof part !== 'string' ? { ...part, cases } : part
 }
@@ -124,39 +133,66 @@ function memberAction(part: ActionPart, plainWord: string): ActionPart {
   return { cases: Object.fromEntries(cases) }
 }
 
-/** Ahead of a rule that tokenizes words, a rule that reads a word right after a lone `.` as a
- *  member; none when the rule has no plain-word case to give members. */
-function memberRules(
-  source: string,
-  part: ActionPart,
+/** The capture groups of a Monarch regex source, with `@attr` references expanded as Monarch does. */
+function groupCount(source: string, language: MonarchLanguage): number {
+  const expanded = source.replace(/@(\w+)/g, (ref, attr: string) => {
+    const value: unknown = language[attr]
+    return value instanceof RegExp
+      ? `(?:${value.source})`
+      : typeof value === 'string'
+        ? `(?:${value})`
+        : ref
+  })
+  return (new RegExp(`${expanded}|`).exec('')?.length ?? 1) - 1
+}
+
+type WordRule = { source: string; original: ActionPart; rewritten: ActionPart }
+
+/** `rule` also reading a run of dots right before a word, and sending the word after a lone `.` to
+ *  a member state; null when the rule has no plain-word case to give members. */
+function withMemberAfterDot(
+  rule: WordRule,
   dotToken: string,
+  language: MonarchLanguage,
   memberStates: MonarchLanguage['tokenizer']
-): MonarchRule[] {
-  const plainWord = caseEntries(part).find(([key]) => key === '@default')?.[1]
-  if (typeof plainWord !== 'string') {
-    return []
+): { source: string; action: ActionPart } | null {
+  const { source, original, rewritten } = rule
+  const plainWord = caseEntries(original).find(([key]) => key === '@default')?.[1]
+  if (typeof plainWord !== 'string' || typeof rewritten === 'string') {
+    return null
   }
-  // Why a state per rule: each rule names members with its own identifier pattern.
+  // Why a state per rule: each rule names members with its own word pattern.
   const memberState = `${MEMBER_STATE}${Object.keys(memberStates).length}`
-  memberStates[memberState] = [[new RegExp(source), memberAction(part, plainWord)]]
-  return [
-    [
-      new RegExp(`\\.+(?=${source})`),
-      {
-        cases: {
-          // Why only a lone dot: after `...` (a spread) or `..` (a range) the word is no member.
-          '$0==.': { token: dotToken, next: `@${memberState}` },
-          '@default': dotToken
-        }
-      }
-    ]
-  ]
+  memberStates[memberState] = [[new RegExp(source), memberAction(original, plainWord)]]
+  // Why one rule rather than a dot rule ahead of it: every token tried there would pay one more
+  // regex. The dots are the last group so the word is tried first, as before, and the cases' own
+  // `$n` keep their numbers; a word then pays one empty-group test.
+  const dots = `$${groupCount(source, language) + 1}`
+  const dotCase = {
+    cases: {
+      // Why only a lone dot: after `...` (a spread) or `..` (a range) the word is no member.
+      [`${dots}==.`]: { token: dotToken, next: `@${memberState}` },
+      '@default': dotToken
+    }
+  }
+  const cases = caseEntries(rewritten).flatMap(([key, value]): [string, MonarchAction][] =>
+    key === '@default'
+      ? [
+          [dots, dotCase],
+          [key, value]
+        ]
+      : [[key, value]]
+  )
+  return {
+    source: `(?:${source})|(\\.+)(?=(?:${source}))`,
+    action: { ...rewritten, cases: Object.fromEntries(cases) }
+  }
 }
 
 type RuleParts = {
   source: string
   action: MonarchAction
-  withAction: (action: MonarchAction) => MonarchRule
+  rebuild: (source: string, action: MonarchAction) => MonarchRule
 }
 
 /** A rule's regex source and action in either Monarch rule form; null for includes. */
@@ -172,17 +208,24 @@ function ruleParts(rule: MonarchRule): RuleParts | null {
     return {
       source,
       action,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same shape as `rule`, with only its action replaced.
-      withAction: (next) => [regex, next, ...rest] as MonarchRule
+      rebuild: (nextSource, next) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same shape as `rule`, with only its regex and action replaced.
+        [nextSource === source ? regex : nextSource, next, ...rest] as MonarchRule
     }
   }
   if (!('regex' in rule) || rule.action === undefined || rule.regex === undefined) {
     return null
   }
+  const { regex } = rule
+  const source = regex instanceof RegExp ? regex.source : regex
   return {
-    source: rule.regex instanceof RegExp ? rule.regex.source : rule.regex,
+    source,
     action: rule.action,
-    withAction: (next) => ({ ...rule, action: next })
+    rebuild: (nextSource, next) => ({
+      ...rule,
+      regex: nextSource === source ? regex : nextSource,
+      action: next
+    })
   }
 }
 
@@ -215,32 +258,41 @@ export function withControlKeywords(
   const controlSet = new Set(control.map(normalize))
   const listed = listedWords(language, normalize)
   const unlisted = control.filter((word) => !listed.has(normalize(word)))
-  const rewrite: Rewrite = {
-    language,
-    isControl: (word) => controlSet.has(normalize(word)),
-    unlistedKey: unlisted.length > 0 ? wordSetKey(unlisted) : null
+  const lists: Record<string, string[]> = {}
+  const listKey = (words: string[]): string => {
+    const name = `${LIST_ATTRIBUTE}${Object.keys(lists).length}`
+    lists[name] = words
+    return `@${name}`
   }
+  const isControl = (word: string): boolean => controlSet.has(normalize(word))
   const tokenizer: MonarchLanguage['tokenizer'] = {}
   const memberStates: MonarchLanguage['tokenizer'] = {}
   for (const [state, rules] of Object.entries(language.tokenizer)) {
-    tokenizer[state] = rules.flatMap((rule): MonarchRule[] => {
+    tokenizer[state] = rules.map((rule) => {
       const parts = ruleParts(rule)
       if (!parts) {
-        return [rule]
+        return rule
       }
       const { source, action } = parts
+      // Why a copy of `unlisted` per rule: every word rule needs a case for them.
+      const rewrite: Rewrite = { language, isControl, unlisted: [...unlisted], listKey }
       const rewritten = spec.controlRules?.test(source)
         ? mapParts(action, (part) => controlPart(part, false) ?? part)
         : mapParts(action, (part) => rewriteCases(part, rewrite))
       if (rewritten === action) {
-        return [rule]
+        return rule
       }
-      const members =
-        spec.memberAfterDot !== undefined && !Array.isArray(action)
-          ? memberRules(source, action, spec.memberAfterDot, memberStates)
-          : []
-      return [...members, parts.withAction(rewritten)]
+      const member =
+        spec.memberAfterDot !== undefined && !Array.isArray(action) && !Array.isArray(rewritten)
+          ? withMemberAfterDot(
+              { source, original: action, rewritten },
+              spec.memberAfterDot,
+              language,
+              memberStates
+            )
+          : null
+      return member ? parts.rebuild(member.source, member.action) : parts.rebuild(source, rewritten)
     })
   }
-  return { ...language, tokenizer: { ...tokenizer, ...memberStates } }
+  return { ...language, ...lists, tokenizer: { ...tokenizer, ...memberStates } }
 }
