@@ -77,6 +77,34 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
+  it("keeps Codex's own model-tip count in the managed home instead of resetting it", () => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(
+      getSystemConfigPath(),
+      ['model = "gpt"', '', '[tui.model_availability_nux]', '"gpt" = 1', ''].join('\n'),
+      'utf-8'
+    )
+    const homes = { runtimeHomePath: accountHome, systemHomePath: getSystemCodexHomePath() }
+    syncSystemConfigIntoManagedCodexHome(homes)
+    const runtimePath = join(accountHome, 'config.toml')
+    expect(readFileSync(runtimePath, 'utf-8')).toContain('"gpt" = 1')
+
+    // Codex bumps the count in the home it runs in.
+    writeFileSync(
+      runtimePath,
+      readFileSync(runtimePath, 'utf-8').replace('"gpt" = 1', '"gpt" = 2'),
+      'utf-8'
+    )
+    syncSystemConfigIntoManagedCodexHome(homes)
+    const once = readFileSync(runtimePath, 'utf-8')
+    syncSystemConfigIntoManagedCodexHome(homes)
+
+    expect(once.match(/\[tui\.model_availability_nux\]/g)).toHaveLength(1)
+    expect(once).toContain('"gpt" = 2')
+    expect(readFileSync(runtimePath, 'utf-8')).toBe(once)
+  })
+
   it("keeps a shared account home's sqlite_home and never copies it into ~/.codex/config.toml", () => {
     const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
     mkdirSync(accountHome, { recursive: true })

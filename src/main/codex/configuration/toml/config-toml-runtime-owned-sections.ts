@@ -32,7 +32,7 @@ export type SharedHookTrustCarry = {
 
 export function stripRuntimeOwnedTomlSections(
   config: string,
-  runtimeProjectHeaders = new Set<string>(),
+  runtimeOwnedHeaders = new Set<string>(),
   sharedHookTrust?: SharedHookTrustCarry
 ): string {
   const lines = config.split('\n')
@@ -50,12 +50,14 @@ export function stripRuntimeOwnedTomlSections(
           (sharedHookTrust !== undefined &&
             claimSharedHookTrustSection(section, sharedHookTrust, carriedHookTrustKeys))
       )
-      .filter(
-        (section) =>
-          !isRuntimeProjectTomlSection(section) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section)) ||
-          getProjectTrustLevel(section.block) === 'untrusted'
-      )
+      .filter((section) => {
+        const project = isRuntimeProjectTomlSection(section)
+        return (
+          (!project && !isCodexTuiBookkeepingTomlSection(section)) ||
+          !runtimeOwnedHeaders.has(getTomlSectionHeaderKey(section)) ||
+          (project && getProjectTrustLevel(section.block) === 'untrusted')
+        )
+      })
       .map((section) => section.block)
   ])
 }
@@ -99,7 +101,16 @@ export function getTomlSections(config: string): TomlSection[] {
 }
 
 export function isRuntimePreservedTomlSection(section: TomlSection): boolean {
-  return isRuntimeHookTrustTomlSection(section) || isRuntimeProjectTomlSection(section)
+  return (
+    isRuntimeHookTrustTomlSection(section) ||
+    isRuntimeProjectTomlSection(section) ||
+    isCodexTuiBookkeepingTomlSection(section)
+  )
+}
+
+// Codex counts its model tip per session here; replacing it each launch restarts the count.
+export function isCodexTuiBookkeepingTomlSection(section: TomlSection): boolean {
+  return sectionLeafKey(section, ['tui']) === 'model_availability_nux'
 }
 
 export function isRuntimeHookTrustTomlSection(section: TomlSection): boolean {
@@ -181,6 +192,9 @@ export function getMcpServerTomlSectionName(section: TomlSection): string | null
 }
 
 export function getTomlSectionHeaderKey(section: TomlSection): string {
+  if (isCodexTuiBookkeepingTomlSection(section)) {
+    return 'tui:model_availability_nux'
+  }
   const projectPath = sectionLeafKey(section, ['projects'])
   return projectPath === null
     ? section.header.trim()

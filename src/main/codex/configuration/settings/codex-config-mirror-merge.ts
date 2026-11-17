@@ -7,6 +7,7 @@ import {
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
   getTomlSections,
+  isCodexTuiBookkeepingTomlSection,
   isRuntimePreservedTomlSection,
   isRuntimeProjectTomlSection,
   joinTomlBlocks,
@@ -22,9 +23,12 @@ export function mergeSystemCodexConfigIntoRuntime(
   mirroredMcpServerRoot = false
 ): string {
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
-  const runtimeProjectHeaders = new Set(
+  const runtimeOwnedHeaders = new Set(
     runtimeSections
-      .filter((section) => isRuntimeProjectTomlSection(section))
+      .filter(
+        (section) =>
+          isRuntimeProjectTomlSection(section) || isCodexTuiBookkeepingTomlSection(section)
+      )
       .map((section) => getTomlSectionHeaderKey(section))
   )
   const systemProjectSections = deduplicateProjectTomlSections(
@@ -44,7 +48,7 @@ export function mergeSystemCodexConfigIntoRuntime(
   const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
   // Mirror ordinary settings while retaining runtime trust, subject to explicit system project revocations.
   return joinTomlBlocks([
-    stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders, {
+    stripRuntimeOwnedTomlSections(systemConfig, runtimeOwnedHeaders, {
       systemHomeDir: systemConfigDir,
       runtimeHookTrustKeys: getHookTrustTomlSectionKeys(runtimeSections)
     }),
