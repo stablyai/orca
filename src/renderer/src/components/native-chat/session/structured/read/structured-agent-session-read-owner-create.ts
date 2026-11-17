@@ -9,6 +9,7 @@ import {
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -141,6 +142,7 @@ export function createReadOwner(
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {

@@ -30,7 +30,7 @@ export function claudePluginUiRecovery(
       if (
         session &&
         sessions.get(sessionId) === session &&
-        (session.translator?.openTurnInLiveProviderCycle === true ||
+        (session.translator?.turnCycle.openedInLiveProviderCycle === true ||
           session.dispatchWaiters.some((waiter) => waiter.clientMessageId !== null))
       ) {
         // A plugin-held tool may never acknowledge interrupt; the exit owner closes the child.

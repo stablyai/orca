@@ -123,7 +123,9 @@ export class StructuredAgentSessionClientDelivery {
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       readWorkFrame: (sessionId, journal, rows) =>
-        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows)
+        this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
+      onPromptSuggestionInterest: (sessionId, wanted) =>
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     })
   }
 

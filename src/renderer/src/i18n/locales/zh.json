@@ -20507,18 +20507,13 @@
         "effortApplyFailed": "无法应用推理强度 {{value}}"
       },
       "usageLimitActions": {
-        "continueNow": "立即继续",
-        "leadIn": "无需等待，继续此聊天：",
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "无法取消自动继续。请重试。",
-        "openSetting": "额度重置后自动继续",
-        "cancelled": "Orca 不会自动继续此聊天。",
-        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
-        "cancel": "不要继续"
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。"
       },
       "settings": "聊天设置",
       "textAttachmentPreview": {
@@ -21279,7 +21274,11 @@
         "ciResultLinesTitle": "CI 结果提示",
         "ciResultLinesCopy": "当智能体创建或推送过的拉取请求上的 CI 运行完成时，在聊天中显示一行提示",
         "ciResultLinesSearchChecks": "检查",
-        "ciResultLinesSearchPr": "PR"
+        "ciResultLinesSearchPr": "PR",
+        "promptSuggestionsTitle": "建议的提示词",
+        "promptSuggestionsCopy": "Claude 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入你的 Claude 用量。",
+        "promptSuggestionsSearchNext": "下一条提示词",
+        "promptSuggestionsSearchGhost": "幽灵文本"
       },
       "voice": {
         "dictationLanguage": {

@@ -23,7 +23,7 @@ import {
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { publishSubscriberLiveText } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { rememberSessionActivity } from './structured-agent-session-activity-retention'
+import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 import {
@@ -35,6 +35,7 @@ import {
   subscriberLaneRunners
 } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
+import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -52,6 +53,12 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
+    subscribers: (sessionId) => this.subscribers(sessionId),
+    send: (subscriber, event) => this.enqueue(subscriber, () => this.emit(subscriber, event())),
+    now: () => this.now(),
+    onInterestChanged: (id, wanted) => this.hooks.onPromptSuggestionInterest?.(id, wanted)
+  })
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {
     trackSubscriberRetention(this)
@@ -109,6 +116,7 @@ export class AgentSessionSubscribers {
         hostNow
       })
     })
+    this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
   }
@@ -132,13 +140,7 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    if (activity !== undefined) {
-      if (activity) {
-        rememberSessionActivity(this.activityBySession, sessionId, activity)
-      } else {
-        this.activityBySession.delete(sessionId)
-      }
-    }
+    rememberLatestPerSession(this.activityBySession, sessionId, activity)
     this.deliverFrames(sessionId, journal, activity)
     if (activity === undefined) {
       this.hooks.onJournalPublished?.(sessionId, journal)
@@ -336,5 +338,6 @@ export class AgentSessionSubscribers {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
     }
+    this.promptSuggestions.reconcile(subscriber.sessionId)
   }
 }

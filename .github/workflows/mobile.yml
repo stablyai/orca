@@ -122,7 +122,6 @@ on:
       - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
       - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
       - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
-      - 'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs'
       - 'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
