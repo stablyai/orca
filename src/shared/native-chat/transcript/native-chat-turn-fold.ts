@@ -1,5 +1,5 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
-// Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
+// Keep assistant prose in transcript order; only technical activity and recovered errors fold.
+// The last outcome in each hook segment keeps failed turns visibly ending on their error.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
 import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../agent-session/journal/agent-session-hook-outcome'
@@ -99,7 +99,7 @@ function deriveTurnFoldRow(
 }
 
 export type NativeChatTurnFold = {
-  /** Rows a folded turn must not draw, by index. */
+  /** Technical rows a folded turn must not draw, by index. */
   foldedRows: ReadonlySet<number>
   /** Offer disclosure only for turns that actually hide rows. */
   foldableTurnKeys: ReadonlySet<string>
@@ -153,10 +153,11 @@ export function nativeChatTurnFold({
   const foldableTurnKeys = new Set<string>()
   for (const [index, row] of rows.entries()) {
     const { turnKey } = row
-    // User anchors, durable task/roster reports and turn explanations remain outside the fold.
+    // Speech, user anchors, durable task reports and turn explanations remain outside the fold.
     if (
       turnKey === undefined ||
       row.role === 'user' ||
+      (row.role === 'assistant' && row.rendersProse) ||
       !row.draws ||
       row.outlivesTurn ||
       row.explainsTurn ||

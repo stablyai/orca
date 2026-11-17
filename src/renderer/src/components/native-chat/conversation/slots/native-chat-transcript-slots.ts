@@ -68,7 +68,7 @@ export type NativeChatMessageSlot = {
   status: NativeChatTurnStatus | undefined
   /** Provider-opened turns have no prompt; draw their bar at the turn position. */
   statusAbove?: boolean
-  /** Fold prose/tools behind turn status while retaining work that outlives the turn. */
+  /** Fold technical activity behind turn status while retaining assistant prose and durable work. */
   folded: boolean
   /** False when only turn chrome draws: empty/folded rows or reasoning owned by the live line. */
   drawsMessage: boolean

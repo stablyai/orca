@@ -100,7 +100,12 @@ describe('nativeChatTurnFold', () => {
   // A stored-only provider event draws nothing: a disclosure over it would open onto nothing.
 
   it('keeps a spawn roster or background task out of the fold', () => {
-    const rows = [row({ role: 'user' }), row(), row({ outlivesTurn: true }), row()]
+    const rows = [
+      row({ role: 'user' }),
+      row({ rendersProse: false }),
+      row({ outlivesTurn: true }),
+      row()
+    ]
     const { foldedRows } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
@@ -110,7 +115,7 @@ describe('nativeChatTurnFold', () => {
     expect(foldedRows.has(1)).toBe(true)
   })
 
-  it('folds each settled turn to its own answer and leaves a running turn alone', () => {
+  it('keeps all prose in settled and running turns without offering an empty disclosure', () => {
     const rows = [
       row({ turnKey: 'turn-1', role: 'user' }),
       row({ turnKey: 'turn-1' }),
@@ -119,22 +124,23 @@ describe('nativeChatTurnFold', () => {
       row({ turnKey: 'turn-2' }),
       row({ turnKey: 'turn-2' })
     ]
-    const { foldedRows } = nativeChatTurnFold({
+    const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
       rows,
       settledTurnKeys: new Set(['turn-1']),
       expandedTurnKeys: NONE
     })
-    expect([...foldedRows]).toEqual([1])
+    expect([...foldedRows]).toEqual([])
+    expect([...foldableTurnKeys]).toEqual([])
   })
 
-  it('ends a failed turn on its error, folding the work and prose before it', () => {
+  it('ends a failed turn on its error while retaining prose before it', () => {
     const rows = [row({ role: 'user' }), row(), row({ rendersProse: false }), FAILURE]
     const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
       expandedTurnKeys: NONE
     })
-    expect([...foldedRows].sort()).toEqual([1, 2])
+    expect([...foldedRows].sort()).toEqual([2])
     expect([...foldableTurnKeys]).toEqual(['turn-1'])
   })
 
@@ -148,7 +154,7 @@ describe('nativeChatTurnFold', () => {
     expect([...foldedRows].sort()).toEqual([1, 2])
   })
 
-  it('never folds a compaction report, and keeps the last prose as the answer', () => {
+  it('never folds a compaction report or earlier prose, keeping the last answer selection', () => {
     const rows = [
       row({ role: 'user' }),
       row(),
@@ -161,7 +167,46 @@ describe('nativeChatTurnFold', () => {
       settledTurnKeys: SETTLED,
       expandedTurnKeys: NONE
     })
-    expect([...foldedRows]).toEqual([1])
+    expect([...foldedRows]).toEqual([])
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual([3])
+  })
+})
+
+describe('technical activity disclosure', () => {
+  it('folds reasoning and tools, retaining speech and hook-segment failures', () => {
+    const rows = [
+      row({ role: 'user' }),
+      row(),
+      row({ role: 'reasoning' }),
+      row({ rendersProse: false }),
+      FAILURE,
+      row({ role: 'system', sendsBack: true, explainsTurn: true }),
+      row(),
+      row({ rendersProse: false }),
+      FAILURE,
+      row()
+    ]
+    const collapsed = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
+    expect([...collapsed.foldedRows]).toEqual([2, 3, 7, 8])
+    expect([...collapsed.foldableTurnKeys]).toEqual(['turn-1'])
+    const expanded = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: SETTLED
+    })
+    expect([...expanded.foldedRows]).toEqual([])
+    expect([...expanded.foldableTurnKeys]).toEqual(['turn-1'])
+  })
+
+  it('folds no-prose activity wholly behind its status and ignores invisible rows', () => {
+    const rows = [
+      row({ role: 'user' }),
+      row({ role: 'reasoning' }),
+      row({ rendersProse: false }),
+      row({ draws: false, rendersProse: false })
+    ]
+    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
+    expect([...result.foldedRows]).toEqual([1, 2])
+    expect([...result.foldableTurnKeys]).toEqual(['turn-1'])
   })
 })

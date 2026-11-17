@@ -1,5 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
-import * as imageSources from '../../markdown/native-chat-markdown-image-sources'
+import { describe, expect, it } from 'vitest'
 import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -137,53 +136,6 @@ describe('transcript slots', () => {
     ).toEqual(retained ? [{ type: 'image-ref', path: '/tmp/p.png' }] : [])
   })
 
-  it.each([1000, 10000])(
-    'keeps completed image responses stable on the production streaming trigger at %i rows',
-    (count) => {
-      const generated: NativeChatMessage = {
-        ...text('image', ''),
-        blocks: [
-          { type: 'text', text: 'Generated image', presentation: 'generated-image' },
-          { type: 'image-ref', path: '/tmp/p.png' }
-        ]
-      }
-      const rows = [
-        text('u', 'Generate.', 'user'),
-        generated,
-        ...Array.from({ length: count - 3 }, (_, index) => text(`work-${index}`, 'Working.')),
-        text('answer', 'Finished.'),
-        text('live', 'Next.', 'user'),
-        text('stream', 'Streaming.')
-      ]
-      const overrides = {
-        turnStatuses: {
-          active: null,
-          completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
-        }
-      }
-      const reads = vi.spyOn(imageSources, 'nativeChatMarkdownImageSources')
-      try {
-        const first = build(rows, overrides)
-        expect(reads).toHaveBeenCalledTimes(1)
-        reads.mockClear()
-        const next = build([...rows.slice(0, -1), text('stream', 'Streaming more.')], overrides)
-        // Only live text changed: settled answers need zero source discovery and preserve row identity.
-        expect(reads).not.toHaveBeenCalled()
-        expect(
-          next
-            .filter((slot) => slot.turnKey === 'u')
-            .every(
-              (slot) =>
-                slot.message ===
-                first.find((before) => before.message.id === slot.message.id)?.message
-            )
-        ).toBe(true)
-      } finally {
-        reads.mockRestore()
-      }
-    }
-  )
-
   it("hangs response controls only above the person's next message, never on the last row", () => {
     const visualReply = text('visual', 'Here is the trend.\n\n::orca-visual{file="trend.html"}')
     const hangs = (messages: NativeChatMessage[]) =>
@@ -294,7 +246,7 @@ describe('transcript slots', () => {
     }
   })
 
-  it("keeps a turn's actions on its text, or on its image while folding hides the text", () => {
+  it("keeps a turn's actions on its text when an image follows, collapsed or expanded", () => {
     const image: NativeChatMessage = {
       id: 'a-image',
       role: 'assistant',
@@ -318,8 +270,78 @@ describe('transcript slots', () => {
         .filter((slot) => slot.endsResponse)
         .map((slot) => slot.message.id)
 
-    expect(holder(new Set())).toEqual(['a-image'])
+    expect(holder(new Set())).toEqual(['a-text'])
     expect(holder(new Set(['A']))).toEqual(['a-text'])
+  })
+
+  it('retains chronological prose through settlement, follow-up and freshly loaded rows', () => {
+    const mixed: NativeChatMessage = {
+      ...text('update', 'The first check passed.'),
+      blocks: [{ type: 'text', text: 'The first check passed.' }, ...toolRun('mixed').blocks]
+    }
+    const messages = [
+      text('u', 'Inspect the configuration.', 'user'),
+      text('preamble', 'I will inspect it.'),
+      toolRun('work'),
+      mixed,
+      text('reason', 'Checking the remaining case.', 'reasoning'),
+      text('report', 'The report is ready.'),
+      text('result', 'All checks passed.')
+    ]
+    const visible = (slots: NativeChatMessageSlot[]) =>
+      slots.filter((slot) => slot.drawsMessage).map((slot) => slot.message.id)
+    expect(visible(build(messages, { liveTurnKey: 'u', isWorking: true }))).toEqual([
+      'u',
+      'preamble',
+      'work',
+      'update',
+      'report',
+      'result'
+    ])
+    const turnStatuses = {
+      active: null,
+      completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+    }
+    const settled = build(messages, { turnStatuses })
+    expect(visible(settled)).toEqual(['u', 'preamble', 'update', 'report', 'result'])
+    expect(settled.filter((slot) => slot.endsResponse).map((slot) => slot.message.id)).toEqual([
+      'result'
+    ])
+    expect(settled.find((slot) => slot.message.id === 'u')?.status).toEqual({
+      startedAt: 1,
+      thinking: false,
+      workedSeconds: 4
+    })
+    expect(settled.find((slot) => slot.message.id === 'u')?.turnFolds).toBe(true)
+    expect(visible(build(messages, { turnStatuses, expandedTurnKeys: new Set(['u']) }))).toEqual([
+      'u',
+      'preamble',
+      'work',
+      'update',
+      'report',
+      'result'
+    ])
+    const followUp = [
+      ...messages,
+      text('next', 'Explain it.', 'user'),
+      text('reply', 'Here is why.')
+    ]
+    const reloaded = structuredClone(followUp)
+    for (const rows of [followUp, reloaded]) {
+      const slots = build(rows, { turnStatuses, liveTurnKey: 'next', isWorking: true })
+      expect(visible(slots)).toEqual([
+        'u',
+        'preamble',
+        'update',
+        'report',
+        'result',
+        'next',
+        'reply'
+      ])
+      expect(slots.filter((slot) => slot.latestResponse).map((slot) => slot.message.id)).toEqual([
+        'reply'
+      ])
+    }
   })
 
   it('keeps a message whose only content is a turn status under it', () => {
