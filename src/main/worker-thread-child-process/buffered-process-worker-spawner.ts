@@ -3,9 +3,9 @@ import {
   canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
   isWorkerChildStdinWriteError,
-  runOnceWorkerReportsPid,
   spawnProcessOnWorkerThread
 } from './worker-thread-child-process'
+import { runOnceWorkerReportsPid } from './worker-child-pid-wait'
 
 export function spawnBufferedProcessOnWorker(spec: ProcessSpec): BufferedProcessSpawn | undefined {
   const stdio = spec.stdio
