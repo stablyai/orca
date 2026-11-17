@@ -254,25 +254,25 @@ export function NativeChatUsageLimitRow({
   return (
     <div className="@container rounded-md border border-border bg-muted/20 text-sm">
       <div
-        className={cn('flex min-h-10 items-center gap-x-2 gap-y-1 py-1.5 pl-2.5 pr-1.5', stack.row)}
+        className={cn('flex min-h-10 items-start gap-x-2 gap-y-1 py-1.5 pl-2.5 pr-1.5', stack.row)}
       >
-        <div className={cn('flex min-w-0 flex-1 items-center gap-2', stack.lead)}>
+        <div className={cn('flex min-w-0 flex-1 items-start gap-2 pt-1', stack.lead)}>
           {phase === 'ready' ? (
             <Check
               aria-hidden="true"
-              className="size-4 shrink-0 text-status-success @max-[260px]:hidden"
+              className="mt-px size-4 shrink-0 text-status-success @max-[260px]:hidden"
             />
           ) : (
             <Gauge
               aria-hidden="true"
-              className="size-4 shrink-0 text-chat-warning @max-[260px]:hidden"
+              className="mt-px size-4 shrink-0 text-chat-warning @max-[260px]:hidden"
             />
           )}
           <div
             aria-hidden="true"
             className="min-w-0 flex-1 leading-tight @min-[400px]:flex @min-[400px]:items-baseline @min-[400px]:gap-1.5"
           >
-            <span className="block truncate font-semibold text-chat-foreground @min-[400px]:shrink-0">
+            <span className="line-clamp-2 font-semibold text-chat-foreground [overflow-wrap:normal] @min-[400px]:shrink-0">
               {words.title}
             </span>
             {words.subline ? (
