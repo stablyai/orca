@@ -119,7 +119,7 @@ vi.mock('@/runtime/linear/runtime-linear-issue-client', async (original) => ({
   linearCreateIssue: reads.create
 }))
 
-vi.mock('@/hooks/useIssueMetadata', async (original) => ({
+vi.mock('@/lib/work-items/linear/useIssueMetadata', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   useTeamLabels: () => ({ data: [{ id: 'bug', name: 'Bug' }], loading: false }),
   useTeamMembers: () => ({ data: [], loading: false }),

@@ -1,6 +1,6 @@
 import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'

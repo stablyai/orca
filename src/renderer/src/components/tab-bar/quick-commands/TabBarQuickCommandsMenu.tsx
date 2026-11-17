@@ -18,7 +18,7 @@ import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTabBarQuickCommandsShortcut } from './tab-bar-quick-commands-shortcut'
 import { TabBarQuickCommandAddActions } from './TabBarQuickCommandAddActions'
 import { TabBarQuickCommandHostLoadStatus } from './TabBarQuickCommandHostLoadStatus'
@@ -27,7 +27,7 @@ import { useTabBarQuickCommandSearchInput } from './use-tab-bar-quick-command-se
 import type {
   HostedTerminalQuickCommand,
   TerminalQuickCommandHost
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 type TabBarQuickCommandsMenuProps = {
   isFocused: boolean
   repoCommands: readonly HostedTerminalQuickCommand[]

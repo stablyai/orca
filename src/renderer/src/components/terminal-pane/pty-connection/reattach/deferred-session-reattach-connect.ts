@@ -24,7 +24,7 @@ import { attachResumeCheck } from '../spawn/main-pane-resume-banner'
 import {
   awaitAgentStatusStartupSnapshot,
   isAgentStatusStartupSnapshotReady
-} from '@/hooks/ipc-events/agent-status-startup-snapshot'
+} from '@/hooks/ipc-events/agent-status/agent-status-startup-snapshot'
 
 const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
 const PANE_OWNER_CHANGED_ERROR = 'terminal_pane_owner_changed'

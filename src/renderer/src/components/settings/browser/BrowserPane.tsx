@@ -47,7 +47,7 @@ import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/brow
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type BrowserPaneProps = {
   settings: GlobalSettings

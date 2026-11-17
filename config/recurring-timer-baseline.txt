@@ -82,7 +82,7 @@
 1 src/renderer/src/components/terminal-pane/pty-transport/delivery/terminal-delivery-watchdog.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/RemoteRuntimeRecoveryCard.tsx
 1 src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.ts
-1 src/renderer/src/hooks/use-now.ts
+1 src/renderer/src/lib/window-activity/use-now.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
 1 src/renderer/src/diagnostics/crash-reporting/crash-diagnostics.ts
 1 src/renderer/src/lib/window-activity/window-visibility-interval.ts
