@@ -13,9 +13,11 @@ export function applyUnmountedPaneCacheTimer(
     }
     return
   }
+  // Why: a parked pane's title watcher may already have started this turn's countdown.
   if (
     payload.state === 'done' &&
     payload.agentType === 'claude' &&
+    state.cacheTimerByKey[paneKey] == null &&
     (state.settings === null || state.settings.promptCacheTimerEnabled)
   ) {
     state.setCacheTimerStartedAt(paneKey, Date.now())
