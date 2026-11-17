@@ -113,22 +113,27 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
       [groups]
     )
-    const structuredTabs = useMemo(
-      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
-      [unifiedTabs]
-    )
+    const { structuredTabs, structuredTabIds } = useMemo(() => {
+      const tabs = unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab))
+      return { structuredTabs: tabs, structuredTabIds: new Set(tabs.map((tab) => tab.id)) }
+    }, [unifiedTabs])
     // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
     const [shownTabIds, setShownTabIds] = useState(NO_SHOWN_TAB_IDS)
-    const newlyShownTabIds = groups.flatMap((group) =>
-      group.activeTabId && !shownTabIds.has(group.activeTabId) ? [group.activeTabId] : []
-    )
-    if (newlyShownTabIds.length > 0) {
-      setShownTabIds(new Set([...shownTabIds, ...newlyShownTabIds]))
-    }
     const mountedTabs = useMemo(
       () => structuredTabs.filter((tab) => shownTabIds.has(tab.id)),
       [structuredTabs, shownTabIds]
     )
+    const newlyShownTabIds = groups.flatMap((group) =>
+      group.activeTabId &&
+      structuredTabIds.has(group.activeTabId) &&
+      !shownTabIds.has(group.activeTabId)
+        ? [group.activeTabId]
+        : []
+    )
+    if (newlyShownTabIds.length > 0) {
+      // Rebuild from live mounted chats so closed tabs' ids don't accumulate.
+      setShownTabIds(new Set([...mountedTabs.map((tab) => tab.id), ...newlyShownTabIds]))
+    }
 
     return (
       <>

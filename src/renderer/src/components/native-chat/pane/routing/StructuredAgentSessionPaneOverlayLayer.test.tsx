@@ -76,6 +76,25 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2'])
     expect(mocks.mounts).toEqual(['chat-1', 'chat-2'])
   })
+
+  it('forgets a closed chat, so a reopened tab with its id waits until it is shown', () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) },
+      groupsByWorktree: { [WORKTREE_ID]: [group('chat-2')] },
+      activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID }
+    })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+    act(() =>
+      mocks.store?.setState({
+        unifiedTabsByWorktree: { [WORKTREE_ID]: ['chat-1', 'chat-3'].map(chatTab) },
+        groupsByWorktree: { [WORKTREE_ID]: [group('chat-3')] }
+      })
+    )
+    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) } }))
+    expect(mountedChats(view.container)).toEqual(['chat-3'])
+  })
 })
 
 function mountedChats(container: HTMLElement): string[] {
