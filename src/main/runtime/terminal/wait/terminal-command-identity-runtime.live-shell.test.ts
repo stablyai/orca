@@ -68,7 +68,7 @@ it.skipIf(process.platform === 'win32')('carries a generated command through run
     expect(cancelled).toBe(true)
     expect(active).toBe(0)
     runtime.onPtyData('pty-1', 'successor still produces output', 2)
-    expect(independent).toHaveBeenLastCalledWith('successor still produces output')
+    expect(independent.mock.lastCall?.[0]).toBe('successor still produces output')
     stopIndependent()
   } finally {
     clearTimeout(timer)
