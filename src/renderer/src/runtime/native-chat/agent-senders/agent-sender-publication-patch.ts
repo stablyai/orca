@@ -8,8 +8,13 @@ export type AgentSenderPublications = Record<string, Record<string, AgentSenderP
 type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>
 const EMPTY: AgentSenderPublications = Object.freeze({})
 
-/** The newest revision accepted for a stored publication whose content it did not change. */
+/** The newest revision accepted for a stored publication whose content it did not change. Each
+ *  stored scope is its own object (see `stored`), so this is per host and scope even when a
+ *  host hands one object to several scopes. */
 const deliveredRevisions = new WeakMap<AgentSenderPublication, AgentSenderRevision>()
+const stored = (publication: AgentSenderPublication): AgentSenderPublication => ({
+  ...publication
+})
 
 /** The newest revision delivered for this stored publication: what the window has applied. */
 export function deliveredAgentSenderRevision(
@@ -65,21 +70,21 @@ export function agentSenderPublicationPatch(
     return set(next)
   }
   const { revision } = publication
-  const delivered = (stored: AgentSenderPublication | undefined) =>
-    stored && deliveredAgentSenderRevision(stored)
-  const newerOrEqual = (stored: AgentSenderRevision | undefined) =>
-    stored?.epoch === revision.epoch && stored.revision >= revision.revision
+  const delivered = (current: AgentSenderPublication | undefined) =>
+    current && deliveredAgentSenderRevision(current)
+  const newerOrEqual = (current: AgentSenderRevision | undefined) =>
+    current?.epoch === revision.epoch && current.revision >= revision.revision
   if (newerOrEqual(delivered(scopes?.['*']))) {
     return {}
   }
-  const unchanged = (stored: AgentSenderPublication) => {
-    deliveredRevisions.set(stored, revision)
+  const unchanged = (current: AgentSenderPublication) => {
+    deliveredRevisions.set(current, revision)
     return {}
   }
   if (scope === '*') {
     const later = (value: AgentSenderPublication) => {
-      const stored = deliveredAgentSenderRevision(value)
-      return stored.epoch === revision.epoch && stored.revision > revision.revision
+      const applied = deliveredAgentSenderRevision(value)
+      return applied.epoch === revision.epoch && applied.revision > revision.revision
     }
     const entries = Object.entries(scopes ?? {}).filter(([id]) => id !== '*')
     const newer = entries.filter(([, value]) => later(value))
@@ -88,13 +93,13 @@ export function agentSenderPublicationPatch(
     if (whole && newer.length === entries.length && sameContent(whole, publication)) {
       return unchanged(whole)
     }
-    return set({ ...Object.fromEntries(newer), '*': publication })
+    return set({ ...Object.fromEntries(newer), '*': stored(publication) })
   }
-  const stored = scopes?.[scope]
-  if (newerOrEqual(delivered(stored))) {
+  const current = scopes?.[scope]
+  if (newerOrEqual(delivered(current))) {
     return {}
   }
-  return stored && sameContent(stored, publication)
-    ? unchanged(stored)
-    : set({ ...scopes, [scope]: publication })
+  return current && sameContent(current, publication)
+    ? unchanged(current)
+    : set({ ...scopes, [scope]: stored(publication) })
 }
