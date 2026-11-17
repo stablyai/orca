@@ -1044,7 +1044,6 @@
       "clearSearch": "Borrar búsqueda"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "description": "El archivo orca.yaml de este repositorio se ejecuta antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio.",
       "dontRun": "No ejecutar",
       "newScriptLabel": "Nuevo script de configuración",
@@ -4002,28 +4001,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "creating": "Creando…",
       "directoriesLabel": "Directorios",
       "directories_many": "{{count}} directorios",
       "directories_one": "{{count}} directorio",
       "directories_other": "{{count}} directorios",
-      "dontRun": "No ejecutar",
       "editSparsePreset": "Editar preajuste de checkout disperso",
       "nameLabel": "Nombre",
       "namePlaceholder": "Interfaz del renderizador",
-      "newSetupScript": "Nuevo script de configuración",
       "newSparsePreset": "Nuevo preajuste de checkout disperso",
-      "runHooks": "Ejecutar hooks",
       "runSetupAndCreate": "Ejecutar configuración y crear",
-      "runSetupTitle": "¿Ejecutar la configuración de {{name}}?",
-      "setupChangedTitle": "El script de configuración de {{name}} ha cambiado",
-      "setupScript": "Script de configuración",
       "setupSubtitle": "{{name}} requiere que decidas si ejecutar la configuración antes de crear este espacio de trabajo.",
       "setupTitle": "¿Ejecutar script de configuración?",
       "skipSetupAndCreate": "Omitir configuración y crear",
-      "trustFailed": "No se pudo marcar el script de configuración como de confianza.",
-      "trustSubtitle": "El archivo orca.yaml de este repositorio se ejecuta en tu equipo antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio."
+      "trustFailed": "No se pudo marcar el script de configuración como de confianza."
     },
     "worktreeCreateRetry": {
       "createFailed": "No se pudo crear el espacio de trabajo"

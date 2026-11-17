@@ -1002,7 +1002,6 @@
       "clearSearch": "清除搜尋"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "description": "此存放庫的 orca.yaml 會在工作區啟動前執行。請僅在信任此存放庫時執行。",
       "dontRun": "不執行",
       "newScriptLabel": "新的設定指令碼",
@@ -3902,27 +3901,19 @@
       "reconnecting": "重新連線中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "creating": "建立中…",
       "directoriesLabel": "目錄",
       "directories_one": "{{count}} 個目錄",
       "directories_other": "{{count}} 個目錄",
-      "dontRun": "不執行",
       "editSparsePreset": "編輯稀疏預設",
       "nameLabel": "名稱",
       "namePlaceholder": "算繪器介面",
-      "newSetupScript": "新的設定指令碼",
       "newSparsePreset": "新增稀疏預設",
-      "runHooks": "執行鉤子",
       "runSetupAndCreate": "執行設定並建立",
-      "runSetupTitle": "要執行 {{name}} 的設定指令碼嗎？",
-      "setupChangedTitle": "{{name}} 的設定指令碼已變更",
-      "setupScript": "設定指令碼",
       "setupSubtitle": "建立此工作區前，請先選擇是否為 {{name}} 執行設定。",
       "setupTitle": "要執行設定指令碼嗎？",
       "skipSetupAndCreate": "略過設定並建立",
-      "trustFailed": "無法將設定指令碼設為信任。",
-      "trustSubtitle": "此存放庫的 orca.yaml 會在工作區啟動前於您的電腦上執行。請僅在信任此存放庫時執行。"
+      "trustFailed": "無法將設定指令碼設為信任。"
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"

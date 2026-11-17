@@ -5,7 +5,7 @@ import {
 import { resolveGuestNativeAgentCommand } from '../../codex-cli/command'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
 import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
-import { guestNativeSpawnEnv } from '../../ipc/wsl-guest-windows-drive-path'
+import { guestNativeSpawnEnv } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess

@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { showSingleFlightOpenDialog } from '../single-flight-open-dialog'
+import { showSingleFlightOpenDialog } from '../dialogs/single-flight-open-dialog'
 
 export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle('repos:pickFolder', async () => {

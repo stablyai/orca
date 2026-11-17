@@ -21,6 +21,7 @@ const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
 export type UseOpenTabSearchOptions = {
   enabled: boolean
+  excludedTabId?: string | null
   query: string
   worktreeId: string
   /** Keyboard-selected result's `id`; keep it inside the display cap while it still matches. */
@@ -37,6 +38,7 @@ export type OpenTabSearchSnapshot = {
 
 export function useOpenTabSearch({
   enabled,
+  excludedTabId,
   query,
   worktreeId,
   retainedResultId
@@ -66,8 +68,11 @@ export function useOpenTabSearch({
     enabled
   )
   const entries = useMemo(
-    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState, chatNames) : null),
-    [agentState, chatNames, state]
+    () =>
+      state && agentState
+        ? buildOpenTabSearchEntries(state, agentState, chatNames, excludedTabId)
+        : null,
+    [agentState, chatNames, excludedTabId, state]
   )
   const deferredQuery = useDeferredValue(query)
   const evaluationSnapshot = useMemo(

@@ -5722,7 +5722,9 @@
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
             "notChecked": "Not checked",
-            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}",
+            "resetsIn": "Resets in {{duration}}",
+            "resetsNow": "Resets now"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -16060,9 +16062,9 @@
             "databaseCount_other": "{{value0}} databases",
             "scanning": "Scanning {{value0}}",
             "checking": "Checking {{value0}}",
-            "scanned": "Scanned {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} of {{total}} history candidate checked",
-            "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked"
+            "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked",
+            "historyRefreshed": "History refreshed"
           },
           "run": {
             "source": {
@@ -23630,14 +23632,12 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "No matching sessions in the indexed history. Try another query or scope.",
       "loadMore": "Load more matches",
       "indexedHistory": "Indexed history",
       "hostsSkipped": "Not searched: {{value0}}",
       "sortRelevance": "Most relevant",
       "sortNewest": "Newest",
       "sortResultsAriaLabel": "Sort results: {{value0}}",
-      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
       "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
@@ -23667,7 +23667,9 @@
         "unreachable": "unreachable",
         "scopeNotFound": "scope not found there",
         "agentNotSupported": "agent not supported"
-      }
+      },
+      "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.",
+      "noMatchesToShow": "No matching sessions to show."
     }
   },
   "sessionHistory": {
