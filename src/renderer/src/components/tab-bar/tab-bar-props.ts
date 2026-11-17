@@ -31,6 +31,7 @@ export type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
+  onNewNamedFileTab?: () => void
   onOpenFileTab?: () => void
   /** Which + menu this is; the floating panel leads with Markdown and keeps its own layout. */
   newTabMenuSurface?: NewTabMenuSurface

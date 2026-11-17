@@ -94,6 +94,7 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewFileInActiveWorkspace: (groupId: string) => Promise<void>
   acquireEditorFileOperationProvenance: (
     file: OpenFile,
     selected?: OpenFile['operationProvenance']

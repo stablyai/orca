@@ -7,13 +7,14 @@ import {
   captureEditorFileOperationProvenance
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
-import {
-  createUntitledMarkdownFile,
-  type UntitledMarkdownFileInfo
-} from '@/lib/editor/file-operations/create-untitled-markdown'
+import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
+import { requestNewFile } from '@/lib/editor/file-operations/new-file-request'
+import { dirname, getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { createRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
-import { findGroupForTab } from '../../tabs/tab-group-state'
+import { findGroupAndWorktree, findGroupForTab } from '../../tabs/tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 
@@ -29,16 +30,19 @@ export type UntitledFileCreationContext = {
   assertOperationCurrent: () => void
 }
 
-/** Creates an untitled file at the active workspace's root on its own host (local, SSH or a
- *  runtime) and opens it; null from `create` means the user cancelled. */
+/** Creates on the group's workspace host and opens the result; null means cancelled. */
 export async function createUntitledFileInActiveWorkspace(
   get: EditorGet,
   groupId: string | undefined,
-  create: (context: UntitledFileCreationContext) => Promise<UntitledMarkdownFileInfo | null>,
+  create: (
+    context: UntitledFileCreationContext
+  ) => Promise<Parameters<EditorSlice['openFile']>[0] | null>,
   failureMessage: string
 ): Promise<boolean> {
   const state = get()
-  const worktreeId = state.activeWorktreeId
+  const worktreeId =
+    (groupId ? findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId : null) ??
+    state.activeWorktreeId
   const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
   if (!worktreeId || !worktree) {
     return false
@@ -141,8 +145,54 @@ async function openSeededUntitledFile(
 export function createPluginNewFileActions(
   _set: EditorSet,
   get: EditorGet
-): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openBlankFileInActiveWorkspace'> {
+): Pick<
+  EditorSlice,
+  | 'openNewPluginFileInActiveWorkspace'
+  | 'openBlankFileInActiveWorkspace'
+  | 'openNewFileInActiveWorkspace'
+> {
   return {
+    openNewFileInActiveWorkspace: async (groupId) => {
+      await createUntitledFileInActiveWorkspace(
+        get,
+        groupId,
+        async (context) => {
+          const state = get()
+          const activeFile = state.openFiles.find(
+            (file) =>
+              file.id === state.activeFileIdByWorktree[context.worktreeId] &&
+              file.worktreeId === context.worktreeId
+          )
+          const activeDirectory = activeFile ? dirname(activeFile.filePath) : null
+          const relativePath = await requestNewFile({
+            worktreePath: context.worktreePath,
+            initialDirectory:
+              activeDirectory &&
+              getRelativePathInsideRoot(activeDirectory, context.worktreePath) !== null
+                ? activeDirectory
+                : context.worktreePath,
+            disableBrowse: context.target.kind !== 'local' || Boolean(context.connectionId),
+            create: async (path) => {
+              context.assertOperationCurrent()
+              await createRuntimePath(context, joinPath(context.worktreePath, path), 'file')
+            }
+          })
+          if (relativePath === null) {
+            return null
+          }
+          context.assertOperationCurrent()
+          return {
+            filePath: joinPath(context.worktreePath, relativePath),
+            relativePath,
+            worktreeId: context.worktreeId,
+            language: detectLanguage(relativePath),
+            operationProvenance: context.operationProvenance,
+            mode: 'edit'
+          }
+        },
+        translate('auto.store.newFile.failed', "Couldn't create the file.")
+      )
+    },
     openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
       if (!readTemplate) {

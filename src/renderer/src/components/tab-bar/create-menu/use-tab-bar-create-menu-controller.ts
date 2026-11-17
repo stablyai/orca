@@ -40,6 +40,7 @@ export function useTabBarCreateMenuController({
   onNewBrowserTab,
   onNewSimulatorTab,
   onNewFileTab,
+  onNewNamedFileTab,
   onOpenFileTab
 }: {
   worktreeId: string
@@ -63,6 +64,7 @@ export function useTabBarCreateMenuController({
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
   onNewFileTab?: () => void
+  onNewNamedFileTab?: () => void
   onOpenFileTab?: () => void
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
@@ -161,6 +163,7 @@ export function useTabBarCreateMenuController({
         windowsShellEntries,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
+        hasNewFile: !terminalOnly && Boolean(onNewNamedFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator:
           !terminalOnly &&
@@ -174,6 +177,7 @@ export function useTabBarCreateMenuController({
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       onNewFileTab,
+      onNewNamedFileTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
@@ -205,6 +209,9 @@ export function useTabBarCreateMenuController({
         break
       case 'new-markdown':
         onNewFileTab?.()
+        break
+      case 'new-file':
+        onNewNamedFileTab?.()
         break
       case 'open-markdown':
         onOpenFileTab?.()
