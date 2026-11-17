@@ -55,6 +55,7 @@ import {
 import { createPtyIpcSession, type PtyIpcSessionOptions, type PtyRendererDelivery } from './session'
 import { wirePtyIpcSession } from './delivery/wire-session'
 import { configureLocalPtyProvider } from './provider/local-configure'
+import { setProviderProxySettingsSource } from '../../provider-process/provider-process-launch'
 import { bindProviderListeners } from './provider/bind-listeners'
 import { installPtySerializeBufferIpc } from './ipc/serialize-buffer'
 import { installPtyResizeVisibilityIpc } from './ipc/resize-visibility'
@@ -86,6 +87,9 @@ export function registerPtyHandlers(
       ensureLinuxTerminalOrcaCliShimDir({ userDataPath: appEnvironment.getPath('userData') })
     }
   }
+  // Provider sessions launch through settings-less plumbing; the proxy the PTY env assembly
+  // applies must reach them too, or native-chat agents egress unproxied (#43386).
+  setProviderProxySettingsSource(getSettings ?? null)
   const ipcMain = getPtyIpc()
   // Reset the outgoing session before neutralizing its bridge, or producer pauses lose their release path.
   resetRendererDeliveryAccountingForLifecycleReset()
