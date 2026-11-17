@@ -31,9 +31,9 @@ argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 sca
 `ORCA` stands for the executable you used to run `skills get`; type it in its
 place and use it for every command.
 
-Write multiline text with your file tool; use `--body-file`, `--spec-file`, `git commit -F`, or `gh ... --body-file`.
-Never use heredocs or here-strings: heredocs can hang when pipe memory is low.
-If send, reply or worker-start fails, follow the CLI's printed recovery commands exactly; never resend with a new ID.
+Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file.
+Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
+If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
 
 ```text
 ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
