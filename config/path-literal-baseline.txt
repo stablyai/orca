@@ -25,3 +25,10 @@ tests/e2e/cross-version-wire/release-module-locations.ts src/main/runtime/rpc/me
 tests/e2e/cross-version-wire/release-module-locations.ts src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
 # The rollback negative control restores this source from its fixed affected archive.
 config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs src/shared/ephemeral-vm-runtime-store.ts
+# Release-branch only: workflows synced from main at the v1.4.260 cut name files this tree doesn't have yet.
+.github/actions/prepare-native-runtime/action.yml src/shared/archives/zip-extractor-command.ts
+.github/workflows/ci-cache-warmup-platforms.yml src/shared/archives/zip-extractor-command.ts
+.github/workflows/ci-cache-warmup.yml src/shared/archives/zip-extractor-command.ts
+.github/workflows/computer-e2e.yml src/shared/computer/computer-use-
+.github/workflows/computer-macos-native.yml src/shared/computer/computer-use-
+.github/workflows/pr.yml src/shared/workspace-setup/orca-yaml-hook-types.ts
