@@ -80,6 +80,8 @@ export type MobileWebShellScreenProps = {
   runtime?: MobileWebShellRuntime
 }
 
+type ShellChainVerb = Exclude<BridgeNativeVerb, 'native.browser.local' | 'native.browser.view'>
+
 // Key the native view by session id so reducer-requested remounts rebuild the WebView and reinstall every fence; the view has no independent reload.
 export function MobileWebShellScreen({
   hostId,
@@ -156,10 +158,7 @@ export function MobileWebShellScreen({
   const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
-  const serveShellVerb = (
-    verb: Exclude<BridgeNativeVerb, 'native.browser.local' | 'native.browser.view'>,
-    params: unknown
-  ): Promise<unknown> =>
+  const serveShellVerb = (verb: ShellChainVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
