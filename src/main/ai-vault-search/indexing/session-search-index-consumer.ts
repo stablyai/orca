@@ -43,7 +43,8 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   kimi: false, // agents/main/wire.jsonl supplies messages.
   muse: true,
   jcode: true,
-  kiro: false // A .jsonl sidecar supplies messages.
+  kiro: false, // A .jsonl sidecar supplies messages.
+  dsh: false // Compressed frames cannot resume from a plain byte offset.
 } satisfies Record<AiVaultAgent, boolean>
 
 /** Proven index gaps need whole reads; declined transfers leave committed coverage unchanged. */

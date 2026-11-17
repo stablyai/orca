@@ -219,6 +219,9 @@ function buildAgentResumeInvocation(
     case 'omp':
     case 'prime-agent':
       return `${baseCommand} --resume ${sessionArg}`
+    // Pin the backend, matching getAgentResumeArgv; dsh-tui otherwise boots its remembered one.
+    case 'dsh':
+      return `${baseCommand} --backend=dsh --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
     case 'kiro':

@@ -60,6 +60,7 @@ function isolatedScanRoots(root: string) {
     ompSessionsDir: join(root, 'omp-sessions'),
     jcodeSessionsDir: join(root, 'jcode-sessions'),
     kiroSessionsDir: join(root, 'kiro-sessions'),
+    dshSessionsDir: join(root, 'dsh-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }

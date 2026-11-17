@@ -54,6 +54,7 @@ export async function discoverFiles(args: {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
+  selectFiles?: (files: readonly FileWithMtime[]) => FileWithMtime[]
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
   // Sees each listing the walk already made, so callers can read layout without another readdir.
@@ -62,7 +63,9 @@ export async function discoverFiles(args: {
   keepScopeFiles?: boolean
   signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
-  const files = new SessionNewestFiles(args.limit)
+  // Selection needs every candidate, so an opting agent collects first and limits after.
+  const selectFiles = args.selectFiles
+  const files = new SessionNewestFiles(selectFiles ? Number.POSITIVE_INFINITY : args.limit)
   const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
@@ -208,7 +211,11 @@ export async function discoverFiles(args: {
   } finally {
     source.close()
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest(), scopeFiles }
+  const selected = selectFiles ? selectFiles(files.newest()) : files.newest()
+  const retained = selectFiles ? selected.slice(0, args.limit) : selected
+  // Scope passes still see selected candidates beyond the recency limit.
+  const overflow = selectFiles && scopeFiles ? selected.slice(args.limit) : scopeFiles
+  return { agent: args.agent, rootDir: args.rootDir, files: retained, scopeFiles: overflow }
 }
 
 async function observeSessionFile(
