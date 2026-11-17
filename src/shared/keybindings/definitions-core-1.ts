@@ -37,7 +37,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     title: 'Search everything',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'search', 'palette', 'worktree', 'switch', 'jump'],
+    searchKeywords: ['shortcut', 'global', 'search', 'palette', 'switch worktree', 'jump'],
     defaultBindings: platformBindings(['Mod+K'])
   },
   {
