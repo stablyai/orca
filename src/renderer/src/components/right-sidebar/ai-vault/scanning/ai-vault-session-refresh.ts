@@ -28,7 +28,13 @@ import {
 
 // Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
 
-type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
+type AiVaultRefreshArgs = {
+  force?: boolean
+  background?: boolean
+  reuseLoadedDepth?: boolean
+  /** A queued foreground refresh whose list is already on screen: report refreshing, skip the spinner. */
+  listShown?: boolean
+}
 
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
@@ -71,6 +77,7 @@ export function useAiVaultSessionRefresh(
   const pendingRefreshRef = useRef(false)
   const pendingForceRef = useRef(false)
   const pendingBackgroundRef = useRef(true)
+  const pendingForegroundRef = useRef(false)
   const conditionalSnapshotRef = useRef<(AiVaultConditionalSnapshot & { scopeKey: string }) | null>(
     null
   )
@@ -159,6 +166,9 @@ export function useAiVaultSessionRefresh(
         pendingRefreshRef.current = true
         pendingForceRef.current ||= args.force === true
         pendingBackgroundRef.current &&= args.background === true || cachedResult !== null
+        if (args.background !== true) {
+          pendingForegroundRef.current = true
+        }
         if (args.force === true && args.background !== true) {
           void window.api.aiVault
             .cancelListSessions({ requestToken: requestTokenRef.current })
@@ -177,7 +187,7 @@ export function useAiVaultSessionRefresh(
       // Background cache hits must not flash a loading spinner on every refocus.
       if (args.background !== true) {
         setRefreshing(true)
-        if (!cachedResult) {
+        if (!cachedResult && args.listShown !== true) {
           setLoading(true)
         }
       }
@@ -229,11 +239,13 @@ export function useAiVaultSessionRefresh(
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
           const force = pendingForceRef.current
-          // The queued refresh is background-only if every queued caller was.
-          const background = pendingBackgroundRef.current
+          // Spinner-free if every queued caller was background or already showing a list; foreground if any caller was.
+          const silent = pendingBackgroundRef.current
+          const foreground = pendingForegroundRef.current
           pendingForceRef.current = false
           pendingBackgroundRef.current = true
-          void refresh({ force, background })
+          pendingForegroundRef.current = false
+          void refresh({ force, background: !foreground, listShown: foreground && silent })
         }
       }
       // Read changing scope through refs; recursion requires a stable refresh identity.
@@ -250,6 +262,7 @@ export function useAiVaultSessionRefresh(
       pendingRefreshRef.current = false
       pendingForceRef.current = false
       pendingBackgroundRef.current = true
+      pendingForegroundRef.current = false
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
       // The scan keeps running so the host caches it; the next visit joins it rather than restarting.
@@ -262,6 +275,7 @@ export function useAiVaultSessionRefresh(
     pendingRefreshRef.current = false
     pendingForceRef.current = false
     pendingBackgroundRef.current = true
+    pendingForegroundRef.current = false
     if (refreshInFlightRef.current) {
       void window.api.aiVault.cancelListSessions({
         requestToken: requestTokenRef.current
