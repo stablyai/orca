@@ -14,6 +14,7 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     cursor: null,
     zcode: null,
     muse: null,
+    kiro: null,
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
     opencodeGoApiKeyConfigured: false,

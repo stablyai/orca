@@ -21,6 +21,7 @@ import type {
   AntigravityUsageEnabledResolver,
   ClaudeOAuthUsageEnabledResolver,
   MuseUsageEnabledResolver,
+  KiroUsageEnabledResolver,
   ZcodePlanRateLimitConfig,
   GeminiCliOAuthEnabledResolver,
   InactiveCodexAccountInfo
@@ -119,6 +120,10 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
     this.museUsageEnabledResolver = resolver
+  }
+
+  setKiroUsageEnabledResolver(resolver: KiroUsageEnabledResolver): void {
+    this.kiroUsageEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

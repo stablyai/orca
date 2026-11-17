@@ -10,6 +10,7 @@ const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 const DEFAULT_ON_CURSOR_STATUS_BAR_ITEM: StatusBarItem = 'cursor'
 const DEFAULT_ON_ZCODE_STATUS_BAR_ITEM: StatusBarItem = 'zcode'
 const DEFAULT_ON_MUSE_STATUS_BAR_ITEM: StatusBarItem = 'muse'
+const DEFAULT_ON_KIRO_STATUS_BAR_ITEM: StatusBarItem = 'kiro'
 const DEFAULT_ON_GIT_BLAME_STATUS_BAR_ITEM: StatusBarItem = 'git-blame'
 
 export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
@@ -23,6 +24,7 @@ export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM],
     ['_zcodeStatusBarDefaultAdded', DEFAULT_ON_ZCODE_STATUS_BAR_ITEM],
     ['_museStatusBarDefaultAdded', DEFAULT_ON_MUSE_STATUS_BAR_ITEM],
+    ['_kiroStatusBarDefaultAdded', DEFAULT_ON_KIRO_STATUS_BAR_ITEM],
     ['_gitBlameStatusBarDefaultAdded', DEFAULT_ON_GIT_BLAME_STATUS_BAR_ITEM]
   ] as const
   for (const [flag, item] of defaults) {

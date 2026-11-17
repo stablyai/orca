@@ -9,6 +9,12 @@ type CursorProfileRequest = {
   dbPath: string
 }
 
+type KiroCliCredentialsRequest = {
+  id: number
+  kind: 'kiroCliCredentials'
+  dbPath: string
+}
+
 type OpenCodeBinderSessionsRequest = {
   id: number
   kind: 'openCodeBinderSessions'
@@ -23,6 +29,7 @@ type OpenCodePromptFailureRequest = OpenCodePromptFailureQuery & {
 
 export type ForeignSqliteReaderRequest =
   | CursorProfileRequest
+  | KiroCliCredentialsRequest
   | OpenCodeBinderSessionsRequest
   | OpenCodePromptFailureRequest
 

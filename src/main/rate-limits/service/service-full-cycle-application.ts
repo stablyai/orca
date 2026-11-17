@@ -28,6 +28,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
   ): Promise<void> {
     const museBeforeFetch = this.state.muse
     const museResultPromise = this.startMuseUsageFetch(signal)
+    // Like Muse, Kiro starts before the shared preparation awaits; its result still joins the sibling batch.
+    const kiroBeforeFetch = this.state.kiro
+    const kiroFetch = this.startKiroUsageFetch(signal, kiroBeforeFetch)
+    this.updateState({ ...this.state, kiro: kiroFetch.pending })
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -216,17 +220,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, kiroSettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        kiroFetch.result
+      ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const kiro = settleSiblingProviderResult('kiro', kiroSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
       ? settledZcode
@@ -249,8 +256,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount !== undefined &&
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
+    // Like Cursor: a different kiro-cli profile must not inherit the old account's reading.
+    const kiroAccountChanged = hasKnownProvenanceChange(kiroBeforeFetch, kiro)
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
+    if (kiroFetch.enabled) {
+      this.trackActiveFailureStreak('kiro', kiro)
+    }
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
@@ -273,7 +285,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? this.state.antigravity
         : hasKnownProvenanceChange(previousState.antigravity, antigravity)
           ? antigravity
-          : this.applyStalePolicy(antigravity, previousState.antigravity)
+          : this.applyStalePolicy(antigravity, previousState.antigravity),
+      kiro:
+        !kiroFetch.enabled || kiroAccountChanged
+          ? kiro
+          : this.applyStalePolicy(kiro, kiroBeforeFetch)
     })
 
     // Published separately so a slow Muse CLI never delays the sibling batch above.

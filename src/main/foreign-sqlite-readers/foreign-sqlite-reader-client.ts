@@ -6,6 +6,11 @@ import {
   type CursorDesktopProfileReadResult
 } from './cursor-profile-result'
 import {
+  kiroCliCredentialsReadFailure,
+  parseKiroCliCredentialsReadResult,
+  type KiroCliCredentialsReadResult
+} from './kiro-cli-credentials-result'
+import {
   openCodeBinderSessionsFailure,
   parseOpenCodeBinderSessions,
   type BinderSessionRow,
@@ -28,12 +33,14 @@ import {
 const READ_TIMEOUT_MS: Record<ForeignSqliteReaderKind, number> = {
   // Allow margin beyond observed 4–6s WAL-index rebuilds.
   cursorProfile: 10_000,
+  kiroCliCredentials: 10_000,
   openCodeBinderSessions: 60_000,
   openCodePromptFailure: 2_000
 }
 // Keep workers alive across poll intervals to avoid spawning on every round.
 const DEFAULT_IDLE_TEARDOWN_MS: Record<ForeignSqliteReaderKind, number> = {
   cursorProfile: 30_000,
+  kiroCliCredentials: 30_000,
   // The binder polls once per minute.
   openCodeBinderSessions: 120_000,
   openCodePromptFailure: 30_000
@@ -129,6 +136,7 @@ export class ForeignSqliteReaderLane<T> {
 
 export class ForeignSqliteReaderClient {
   private readonly cursorProfile: ForeignSqliteReaderLane<CursorDesktopProfileReadResult>
+  private readonly kiroCliCredentials: ForeignSqliteReaderLane<KiroCliCredentialsReadResult>
   private readonly openCodeBinderSessions: ForeignSqliteReaderLane<BinderSessionRow[]>
   private readonly openCodePromptFailure: ForeignSqliteReaderLane<OpenCodePromptFailureResult>
 
@@ -150,6 +158,12 @@ export class ForeignSqliteReaderClient {
       cursorProfileReadFailure,
       settings('cursorProfile')
     )
+    this.kiroCliCredentials = new ForeignSqliteReaderLane(
+      'kiroCliCredentials',
+      parseKiroCliCredentialsReadResult,
+      kiroCliCredentialsReadFailure,
+      settings('kiroCliCredentials')
+    )
     this.openCodeBinderSessions = new ForeignSqliteReaderLane(
       'openCodeBinderSessions',
       parseOpenCodeBinderSessions,
@@ -166,6 +180,14 @@ export class ForeignSqliteReaderClient {
 
   readCursorProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
     return this.cursorProfile.read(dbPath, (id) => ({ id, kind: 'cursorProfile', dbPath }))
+  }
+
+  readKiroCliCredentials(dbPath: string): Promise<KiroCliCredentialsReadResult> {
+    return this.kiroCliCredentials.read(dbPath, (id) => ({
+      id,
+      kind: 'kiroCliCredentials',
+      dbPath
+    }))
   }
 
   /** Return oldest-first sessions after cursor, or [] if the worker cannot answer. */
@@ -185,6 +207,7 @@ export class ForeignSqliteReaderClient {
 
   dispose(): void {
     this.cursorProfile.dispose()
+    this.kiroCliCredentials.dispose()
     this.openCodeBinderSessions.dispose()
     this.openCodePromptFailure.dispose()
   }
