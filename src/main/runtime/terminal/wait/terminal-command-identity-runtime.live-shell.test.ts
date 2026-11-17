@@ -32,7 +32,7 @@ it.skipIf(process.platform === 'win32')('carries a generated command through run
       onWrite: (data) => writes.push(data)
     })
     vi.mocked(randomUUID).mockReturnValueOnce('01234567-89ab-cdef-0123-456789abcdef')
-    const launch = identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'bash')
+    const launch = identifyTerminalCommand('(__orca_osc133_emit_command_finished 0); false', 'bash')
     let active = 0
     const subscribe = runtime.subscribeToTerminalData.bind(runtime)
     vi.spyOn(runtime, 'subscribeToTerminalData').mockImplementation((ptyId, listener) => {

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -28,6 +28,32 @@ function finishes(output: string) {
 
 describe.skipIf(process.platform === 'win32')('identified POSIX submissions', () => {
   it.each([
+    ['local/10', getBashShellReadyRcfileContent, 10],
+    ['local/100', getBashShellReadyRcfileContent, 100],
+    ['daemon/10', getDaemonBashShellReadyRcfileContent, 10],
+    ['daemon/100', getDaemonBashShellReadyRcfileContent, 100]
+  ] as const)('%s bash keeps internal completion work out of DEBUG hooks across repeated commands', (_name, content, count) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-command-debug-'))
+    try {
+      const rcfile = join(root, 'rcfile')
+      writeFileSync(rcfile, content())
+      writeFileSync(join(root, '.bash_profile'), `set -T\ntrap 'builtin printf "%s\\n" "$BASH_COMMAND" >> "$HOME/debug.log"' DEBUG\nPROMPT_COMMAND="printf user-prompt"\n`)
+      const result = spawnSync('bash', ['--noprofile', '--rcfile', rcfile, '-i'], {
+        input: ': > "$HOME/debug.log"\n' + 'true\n'.repeat(count) + 'exit 0\n',
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, HOME: root, ORCA_SHELL_FEATURES: 'markers', TERM: 'xterm' }
+      })
+      expect(result.error).toBeUndefined()
+      const commands = readFileSync(join(root, 'debug.log'), 'utf8').split('\n')
+      expect(commands.filter((line) => line === 'true')).toHaveLength(count)
+      expect(commands).toContain('printf user-prompt')
+      expect(commands.filter((line) => /__orca_(?:osc133_)?command_is_owner/.test(line))).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
     ['local', getBashShellReadyRcfileContent],
     ['daemon', getDaemonBashShellReadyRcfileContent]
   ] as const)('%s bash excludes subshell completion and clears identity before rapid reuse', (_name, content) => {
@@ -35,7 +61,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
     try {
       const rcfile = join(root, 'rcfile')
       writeFileSync(rcfile, content())
-      const launch = identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'bash')
+      const launch = identifyTerminalCommand('(__orca_osc133_emit_command_finished 0); false', 'bash')
       const result = spawnSync('bash', ['--noprofile', '--rcfile', rcfile, '-i'], {
         input: `${launch.command}\ntrue\nexit 0\n`, encoding: 'utf8', timeout: 10_000,
         env: { ...process.env, HOME: root, ORCA_SHELL_FEATURES: 'markers', TERM: 'xterm' }
@@ -76,7 +102,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
       mkdirSync(home)
       const run = await runZshPty({
         env: { PATH: process.env.PATH ?? '', HOME: home, ZDOTDIR: root, ORCA_SHELL_FEATURES: 'ready,markers' },
-        commands: [identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'zsh').command, 'true']
+        commands: [identifyTerminalCommand('(__orca_osc133_emit_command_finished 0); false', 'zsh').command, 'true']
       })
       expect(finishes(run.output)).toEqual([{ id: expectedId, status: 1 }])
     } finally {

@@ -9,7 +9,7 @@ function watch(replay = '', alreadySubmitted = true) {
   const listeners = new Set<(data: string) => void>()
   let recent = replay
   const runtime: LaunchedAgentExitRuntime = {
-    readLaunchedAgentForeground: vi.fn(async () => 'agent'),
+    readLaunchedAgentForeground: vi.fn(async () => 'agent' as const),
     readRecentTerminalOutput: () => recent,
     subscribeToTerminalData: (_ptyId, listener) => {
       listeners.add(listener)
@@ -36,6 +36,19 @@ function watch(replay = '', alreadySubmitted = true) {
 }
 
 afterEach(() => vi.useRealTimers())
+
+it.each([1_000, 10_000])('coalesces %i legacy finishes into one owned check and still observes the latest return', async (count) => {
+  vi.useFakeTimers()
+  const launch = watch()
+  vi.mocked(launch.runtime.readLaunchedAgentForeground).mockResolvedValue('shell')
+  launch.emit('\x1b]133;C\x07' + '\x1b]133;D;1\x07'.repeat(count))
+  await Promise.resolve()
+  expect(vi.getTimerCount()).toBe(1)
+  await vi.advanceTimersByTimeAsync(350)
+  expect(await launch.result).toMatchObject({ message: "The agent's launch command exited before the agent was ready, without printing anything." })
+  expect(vi.getTimerCount()).toBe(0)
+  expect(launch.listeners.size).toBe(0)
+})
 
 it('retires the original wait immediately while the successor keeps the same terminal', async () => {
   const launch = watch()

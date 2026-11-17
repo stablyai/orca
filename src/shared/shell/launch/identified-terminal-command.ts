@@ -14,6 +14,6 @@ export function identifyTerminalCommand(command: string, shell: string | undefin
   const bind =
     name === 'powershell' || name === 'pwsh'
       ? `if (Test-Path function:__OrcaBindCommand) { & (Get-Item function:__OrcaBindCommand) '${commandId}' }; `
-      : `if builtin typeset -f __orca_bind_command >/dev/null 2>&1; then \\__orca_bind_command '${commandId}'; fi; `
+      : `if builtin typeset -f __orca_osc133_bind_command >/dev/null 2>&1; then \\__orca_osc133_bind_command '${commandId}'; fi; `
   return { command: bind + command, commandId }
 }

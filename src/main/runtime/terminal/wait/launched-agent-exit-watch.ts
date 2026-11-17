@@ -69,19 +69,6 @@ export class TerminalCommandFinishedError extends Error {
   }
 }
 
-function waitForShellReturn(delayMs: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const finish = (): void => {
-      clearTimeout(timer)
-      signal.removeEventListener('abort', finish)
-      resolve()
-    }
-    const timer = setTimeout(finish, delayMs)
-    signal.addEventListener('abort', finish, { once: true })
-    if (signal.aborted) finish()
-  })
-}
-
 /** Fails a fresh launch's readiness wait once its launch command has finished and the shell is back in front.
  * Neither proves it alone: a shell nested in the agent leaks OSC 133;D, and the shell also leads until the agent starts.
  * Panes without shell integration, or that cannot prove a shell, wait as long as they did without this. */
@@ -95,35 +82,49 @@ export function failOnLaunchedAgentExit<T>(
 ): Promise<T> {
   const stop = new AbortController()
   let unsubscribe = (): void => {}
+  let cancelDelay = (): void => {}
   const cleanup = (): void => {
     const dispose = unsubscribe
     unsubscribe = (): void => {}
     dispose()
     stop.abort()
+    cancelDelay()
   }
   return new Promise<T>((resolve, reject) => {
     let commandStarted = false
     let identified = false
     // Moves on every start and finish: only the latest shell return may decide.
     let marks = 0
+    let latestFinish = -1
+    let checking = false
     const checkForExit = async (): Promise<void> => {
-      const mark = marks
-      for (const delayMs of SHELL_RETURN_READ_DELAYS_MS) {
-        await waitForShellReturn(delayMs, stop.signal)
-        if (stop.signal.aborted || identified || mark !== marks) {
-          return
+      checking = true
+      try {
+        while (!stop.signal.aborted && !identified && latestFinish === marks) {
+          const mark = marks
+          for (const delayMs of SHELL_RETURN_READ_DELAYS_MS) {
+            await new Promise<void>((next) => {
+              const timer = setTimeout(next, delayMs)
+              cancelDelay = (): void => { clearTimeout(timer); next() }
+            })
+            if (stop.signal.aborted || identified || mark !== marks) break
+            const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+            if (stop.signal.aborted || identified || mark !== marks) break
+            if (foreground === 'shell') {
+              reject(launchedAgentExitError(runtime.readRecentTerminalOutput(ptyId)))
+              return
+            }
+          }
+          if (mark === marks) return
         }
-        const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
-        if (foreground === 'shell' && !stop.signal.aborted && !identified && mark === marks) {
-          reject(launchedAgentExitError(runtime.readRecentTerminalOutput(ptyId)))
-          return
-        }
+      } finally {
+        checking = false
       }
     }
     const scanner = createOsc133CommandFinishedScanner(
       (exitCode, commandId) => {
         if (stop.signal.aborted) return
-        if (command && commandId === command.commandId) {
+        if (commandId && commandId === command?.commandId) {
           cleanup()
           reject(new TerminalCommandFinishedError(commandId, exitCode))
           return
@@ -132,15 +133,18 @@ export function failOnLaunchedAgentExit<T>(
         // Prompt hooks can report a finish before any command began.
         if (commandStarted) {
           marks += 1
+          latestFinish = marks
+          cancelDelay()
           // A failed read proves nothing; the wait goes on.
-          void checkForExit().catch(() => {})
+          if (!checking) void checkForExit().catch(() => {})
         }
       },
       (_end, commandId) => {
         if (stop.signal.aborted) return
-        if (command && commandId === command.commandId) identified = true
+        if (commandId && commandId === command?.commandId) identified = true
         commandStarted = true
         marks += 1
+        cancelDelay()
       }
     )
     unsubscribe = runtime.subscribeToTerminalData(ptyId, scanner.scan)

@@ -61,7 +61,7 @@ __orca_osc133_precmd() {
   local exit_code=$?
   __orca_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
-    __orca_emit_command_finished "$exit_code"
+    __orca_osc133_emit_command_finished "$exit_code"
     builtin unset __orca_in_command
   fi
   builtin printf "\\033]133;A\\007"
