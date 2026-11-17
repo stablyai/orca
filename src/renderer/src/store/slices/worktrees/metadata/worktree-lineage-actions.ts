@@ -1,13 +1,16 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetForOwnerEnvironment
 } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 import { refreshCrossStoreLineageForTarget } from './cross-store-lineage-hydration'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   applyWorktreeLineageUpdate,
   refreshWorktreeLineageForTarget,

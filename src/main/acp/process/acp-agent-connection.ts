@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
@@ -7,6 +7,7 @@ import {
   type ProviderProcessExit
 } from '../../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import {
   afterProviderOutputDrains,
   PROVIDER_EXIT_OUTPUT_DRAIN_MS
@@ -47,7 +48,7 @@ export type AcpAgentConnectionOptions = Omit<AcpSessionRuntimeOptions, 'peer'> &
 export function createAcpAgentConnection(
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): AcpAgentConnection {
   return new AcpAgentConnection(launch, options, spawnImpl)
 }
@@ -70,10 +71,14 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly diagnoseLifecycle: (message: string) => void
   readonly spawned: Promise<void>
 
+  /** Any session the agent reports on this connection, including a subagent's child session. */
+  closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>
+    this.peer.request('session/close', { sessionId }, { timeoutMs, onTimeout: 'cancel' })
+
   constructor(
     launch: ProviderProcessLaunch,
     options: AcpAgentConnectionOptions = {},
-    spawnImpl: PipedProcessSpawner = spawnProcess
+    spawnImpl: ProviderProcessSpawner = spawnProcess
   ) {
     // Invalid limits must fail before spawning an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
@@ -199,6 +204,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
               : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
           managed.spawnAbsence
         )
+        withLostProviderOutcome(error, exit)
         super.close(error)
         try {
           options.onExit?.(error, { expected, exit })
@@ -249,8 +255,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   }
 
   /** Requires advertised session listing support. */
-  listSessions(cwd: string): Promise<unknown> {
-    return this.call('session/list', { cwd }, z.unknown())
+  listSessions(params: { cwd?: string; cursor?: string }): Promise<unknown> {
+    return this.call('session/list', params, z.unknown())
   }
 
   /** The stderr tail once an exited process's stderr ends, bounded for a descendant holding it. */

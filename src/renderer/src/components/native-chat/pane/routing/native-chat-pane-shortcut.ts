@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type {
   KeybindingInput,

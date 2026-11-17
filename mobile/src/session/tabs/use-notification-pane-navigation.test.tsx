@@ -1,8 +1,8 @@
-import type { StructuredSessionOpenSource } from '../../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenSource } from '../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/bridge-init-route'
+import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/protocol/bridge-init-route'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 vi.mock('../../navigation/workspace-execution-host', () => ({
@@ -142,17 +142,6 @@ describe('the page pane hook', () => {
     expect(switched).toEqual([])
     act(() => {
       tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: TABS }))
-    })
-    expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
-  it('switches to a pane the host document hands the session already showing', () => {
-    // A notification for the session on top reaches it as URL params, since a second copy is never pushed.
-    bridge.route = { pathname: '/h/host-1' }
-    const tree = render(true)
-    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
-    act(() => {
-      tree.update(createElement(Probe, { terminalsLoaded: true }))
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })

@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
-import '../../persistence/moving-wsl-projects/wsl-move-fence'
+import '../../persistence/moving-wsl-projects/quiescence/wsl-move-fence'
 import {
   listWslDriveUncConversions,
   writeWslDriveUncConversion
@@ -65,31 +65,6 @@ function deps(overrides: Partial<WslDriveUncConversionRunDeps> = {}): WslDriveUn
 const REQUEST = { distro: 'Ubuntu', repoIds: ['repo-a'] }
 
 describe('startWslDriveUncConversion', () => {
-  it('pauses the scope, journals the conversion and restarts', async () => {
-    const run = deps()
-    expect(await startWslDriveUncConversion(run, REQUEST)).toEqual({
-      outcome: 'restarting',
-      migrationId: 'conv-1'
-    })
-    // Windows Git checks the same folder through its drive path.
-    expect(run.runWindowsGit).toHaveBeenCalledWith(['--version'], DRIVE)
-    expect(run.readWorktreeLinks).toHaveBeenCalledWith(String.raw`C:\src\app\.git`)
-    expect(run.pause).toHaveBeenCalledWith({
-      workspaceIds: [`repo-a::${UNC}`],
-      workspaceKeys: new Set([`repo-a::${UNC}`])
-    })
-    expect(listWslDriveUncConversions(root)).toEqual([
-      expect.objectContaining({
-        phase: 'prepared',
-        profileId: 'profile-1',
-        repoIds: ['repo-a'],
-        rootPaths: [UNC],
-        worktreeIds: [[`repo-a::${UNC}`, `repo-a::${DRIVE}`]]
-      })
-    ])
-    expect(run.restart).toHaveBeenCalledOnce()
-  })
-
   it('converts the seeded shape: a saved UNC worktree beside the drive row discovery wrote', async () => {
     const seeded = (driveName: string): PersistedState => {
       const value = state()

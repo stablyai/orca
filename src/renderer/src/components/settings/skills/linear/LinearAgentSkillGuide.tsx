@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import {
   IntegrationStatusPill,
   type IntegrationStatusTone
-} from '@/components/integration-status-pill'
+} from '@/components/integrations/presentation/integration-status-pill'
 import {
   TASK_PROVIDER_SETUP_STATUS_TONE,
   getTaskProviderCompletedSteps,
@@ -226,7 +226,7 @@ export function LinearAgentSkillGuide({
             className="shrink-0"
             onClick={onOpenTaskSources}
           >
-            {t('auto.components.settings.LinearAgentSkillGuide.openTaskSources', 'Task Sources')}
+            {t('auto.components.settings.LinearAgentSkillGuide.c5cd02806b', 'Task sources')}
           </Button>
         </div>
       </div>

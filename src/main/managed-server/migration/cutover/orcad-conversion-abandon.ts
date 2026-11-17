@@ -9,7 +9,7 @@ import {
   type OrcadMigrationCutoverContext,
   type OrcadMigrationDestinationCatalog
 } from './orcad-migration-cutover-coordinator'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   releaseOrcadMigrationFence,
   releaseUndeployedMigrationFence
@@ -27,9 +27,9 @@ export async function abandonOrcadConversion(args: {
   if (!cutover || cutover.supersedesMigrationId) {
     return 'none'
   }
-  const isRegistered = (id: string): boolean =>
-    listEnvironments(args.userDataPath).some((entry) => entry.id === id)
-  const environment = listEnvironments(args.userDataPath).find(
+  const isRegistered = async (id: string): Promise<boolean> =>
+    (await listEnvironments(args.userDataPath)).some((entry) => entry.id === id)
+  const environment = (await listEnvironments(args.userDataPath)).find(
     (entry) => entry.id === cutover.destinationEnvironmentId
   )
   if (!environment) {
@@ -39,7 +39,7 @@ export async function abandonOrcadConversion(args: {
   const context = { ...args, destination: args.destinationFor(environment) }
   return abortOrcadMigrationCutover(context, cutover.migrationId, async (aborted) => {
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
-    removeManagedOrcadEnvironment(args.userDataPath, environment.id)
+    await removeManagedOrcadEnvironment(args.userDataPath, environment.id)
     await releaseOrcadMigrationFence(context, aborted)
   })
 }

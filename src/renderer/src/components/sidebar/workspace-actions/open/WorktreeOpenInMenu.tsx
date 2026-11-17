@@ -13,18 +13,18 @@ import {
   getLocalPathOpenOwnerForRoute,
   isRevealOrEditorOpenBlocked,
   showLocalPathOpenBlockedToast
-} from '@/lib/local-path-open-guard'
-import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
+} from '@/lib/files/os-open/local-path-open-guard'
+import { getLocalFileManagerLabel } from '@/lib/files/os-open/local-file-manager-label'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
+import { getExternalEditorOpenCapability } from '@/lib/files/os-open/external-editor-open-capability'
 import {
   getWorkspaceEditorSshHost,
   type WorkspaceEditorSshHost
-} from '@/lib/workspace-editor-ssh-target'
-import type { WorkspaceOwnerRef } from '@/lib/resolve-owner'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+} from '@/components/file-actions/workspace-editor-ssh-target'
+import type { WorkspaceOwnerRef } from '@/lib/workspace/ownership/resolve-owner'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import { showOpenFailureToast } from './worktree-open-failure-toast'
-import type { OpenInApplication } from '../../../../../../shared/ui-chrome-types'
+import type { OpenInApplication } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

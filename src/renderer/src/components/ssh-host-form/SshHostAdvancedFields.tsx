@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
-import { SettingsSwitch } from '../settings/form-controls/SettingsFormControls'
+import { cn } from '@/lib/class-names'
+import { Switch } from '@/components/ui/switch'
 import type { EditingTarget } from './ssh-target-draft'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -97,16 +97,16 @@ export function SshHostAdvancedFields({
                 )}
               </p>
             </div>
-            <SettingsSwitch
+            <Switch
               checked={form.systemSshConnectionReuse}
               disabled={disabled}
-              onChange={() =>
+              onCheckedChange={() =>
                 onFormChange((f) => ({
                   ...f,
                   systemSshConnectionReuse: !f.systemSshConnectionReuse
                 }))
               }
-              ariaLabel={t(
+              aria-label={t(
                 'auto.components.settings.SshTargetForm.8c922dffba',
                 'Reuse SSH connection for faster setup'
               )}
@@ -128,16 +128,16 @@ export function SshHostAdvancedFields({
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={form.systemSshProxyConnectionReuse}
                 disabled={disabled || !form.systemSshConnectionReuse}
-                onChange={() =>
+                onCheckedChange={() =>
                   onFormChange((f) => ({
                     ...f,
                     systemSshProxyConnectionReuse: !f.systemSshProxyConnectionReuse
                   }))
                 }
-                ariaLabel={t(
+                aria-label={t(
                   'auto.components.settings.SshTargetForm.proxyConnectionReuse',
                   'Reuse one proxy connection'
                 )}
@@ -160,13 +160,13 @@ export function SshHostAdvancedFields({
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={form.reconnectOnLaunch}
                 disabled={disabled}
-                onChange={() =>
+                onCheckedChange={() =>
                   onFormChange((f) => ({ ...f, reconnectOnLaunch: !f.reconnectOnLaunch }))
                 }
-                ariaLabel={t(
+                aria-label={t(
                   'auto.components.settings.SshTargetForm.reconnectOnLaunch',
                   'Reconnect on launch'
                 )}
@@ -188,16 +188,16 @@ export function SshHostAdvancedFields({
                 )}
               </p>
             </div>
-            <SettingsSwitch
+            <Switch
               checked={form.allowRemoteCliControl}
               disabled={disabled}
-              onChange={() =>
+              onCheckedChange={() =>
                 onFormChange((f) => ({
                   ...f,
                   allowRemoteCliControl: !f.allowRemoteCliControl
                 }))
               }
-              ariaLabel={t(
+              aria-label={t(
                 'auto.components.settings.SshTargetForm.allowRemoteCliControl',
                 'Allow this host to control Orca browser tabs in its workspaces'
               )}

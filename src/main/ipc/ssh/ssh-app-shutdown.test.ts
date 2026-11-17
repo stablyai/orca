@@ -20,7 +20,7 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', async (importOrig
 }))
 
 import { beginSshShutdown } from './ssh-shutdown-drain'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 

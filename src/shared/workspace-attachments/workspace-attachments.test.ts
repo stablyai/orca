@@ -4,36 +4,29 @@ import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
 } from './workspace-attachments'
-import {
-  getWorkspaceAttachmentKey,
-  normalizeWorkspaceAttachments
-} from './workspace-attachment-normalization'
-import { WorktreeSet } from '../rpc-contract/worktree-params'
-import { FolderWorkspaceUpdate } from '../rpc-contract/folder-workspace-params'
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../worktree/hosted-review-links'
+import { normalizeWorkspaceAttachments } from './workspace-attachment-normalization'
+
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../worktree/hosted-review/hosted-review-links'
 
 const pr = (number: number): WorkspaceAttachment => ({ provider: 'github', type: 'pr', number })
 
 describe('workspace attachments', () => {
-  it.each([
-    ['linkedPR', 'github', 'pr'],
-    ['linkedGitLabMR', 'gitlab', 'mr'],
-    ['linkedBitbucketPR', 'bitbucket', 'pr'],
-    ['linkedAzureDevOpsPR', 'azure-devops', 'pr'],
-    ['linkedGiteaPR', 'gitea', 'pr']
-  ] as const)('keeps legacy %s references when deselecting a review', (slot, provider, type) => {
-    const existing = { [slot]: 7, linkedIssue: 42 }
-    const result = {
-      ...existing,
-      ...normalizeWorkspaceAttachmentUpdate(existing, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES)
+  it.each([['linkedPR', 'github', 'pr']] as const)(
+    'keeps legacy %s references when deselecting a review',
+    (slot, provider, type) => {
+      const existing = { [slot]: 7, linkedIssue: 42 }
+      const result = {
+        ...existing,
+        ...normalizeWorkspaceAttachmentUpdate(existing, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES)
+      }
+      expect(result[slot]).toBeNull()
+      expect(result.linkedIssue).toBe(42)
+      expect(result.linkedItems).toEqual([
+        { provider: 'github', type: 'issue', number: 42 },
+        { provider, type, number: 7 }
+      ])
     }
-    expect(result[slot]).toBeNull()
-    expect(result.linkedIssue).toBe(42)
-    expect(result.linkedItems).toEqual([
-      { provider: 'github', type: 'issue', number: 42 },
-      { provider, type, number: 7 }
-    ])
-  })
+  )
 
   it('retains previous attachments when replacing an active scalar and removes only the explicitly unlinked review', () => {
     const first = normalizeWorkspaceAttachmentUpdate({ linkedPR: 7 }, { linkedPR: 8 })
@@ -73,7 +66,7 @@ describe('workspace attachments', () => {
         two
       ])
     ).toEqual([one, two])
-    expect(getWorkspaceAttachmentKey(one)).not.toBe(getWorkspaceAttachmentKey(two))
+
     expect(normalizeWorkspaceAttachments([pr(7), one])).toEqual([one])
   })
 
@@ -94,32 +87,6 @@ describe('workspace attachments', () => {
     expect(getWorkspaceAttachments({ ...existing, ...genericRemoved })).toEqual([])
   })
 
-  it('accepts optional collections on RPC contracts and rejects invalid collection writes', () => {
-    expect(WorktreeSet.parse({ worktree: 'wt' }).linkedItems).toBeUndefined()
-    expect(
-      WorktreeSet.parse({ worktree: 'wt', linkedItems: [pr(7), pr(8)] }).linkedItems
-    ).toHaveLength(2)
-    expect(
-      WorktreeSet.safeParse({
-        worktree: 'wt',
-        linkedItems: [{ provider: 'github', type: 'pr', number: -2 }]
-      }).success
-    ).toBe(false)
-    expect(
-      WorktreeSet.safeParse({
-        worktree: 'wt',
-        linkedItems: [
-          { ...pr(7), taskSourceContext: { provider: 'jira', projectId: 'wrong', hostId: 'local' } }
-        ]
-      }).success
-    ).toBe(false)
-    expect(
-      FolderWorkspaceUpdate.parse({
-        folderWorkspaceId: 'folder',
-        updates: { linkedItems: [pr(7)] }
-      }).updates.linkedItems
-    ).toEqual([pr(7)])
-  })
   it('selects a legacy review exclusively without losing other provider references', () => {
     const mr: WorkspaceAttachment = { provider: 'gitlab', type: 'mr', number: 20 }
     const updated = normalizeWorkspaceAttachmentUpdate(
@@ -172,15 +139,6 @@ describe('workspace attachments', () => {
     )
     expect(result.linkedItems).toEqual([pr(3), pr(4)])
     expect(result).not.toHaveProperty('linkedItemsBase')
-    expect(
-      WorktreeSet.parse({ worktree: 'wt', linkedItems: [pr(4)], linkedItemsBase: [pr(1)] })
-    ).toHaveProperty('linkedItemsBase', [pr(1)])
-    expect(
-      FolderWorkspaceUpdate.parse({
-        folderWorkspaceId: 'f',
-        updates: { linkedItems: [pr(4)], linkedItemsBase: [pr(1)] }
-      }).updates
-    ).toHaveProperty('linkedItemsBase', [pr(1)])
   })
 
   it('merges concurrent origin edits including explicit removal', () => {

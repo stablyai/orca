@@ -6,12 +6,12 @@ import type {
 } from '../../shared/ai-vault/search/ai-vault-search-types'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
-import { SessionSearchIndexer } from './session-search-indexer'
-import { SessionSearchReaders } from './session-search-readers'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
+import { SessionSearchReaders } from './worker/session-search-readers'
 import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'
-import { removeSessionSearchDatabaseAsync } from './session-search-schema'
-import type { SessionSearchScanRoots } from './session-search-scan-roots'
-import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
+import { removeSessionSearchDatabaseAsync } from './storage/session-search-schema'
+import type { SessionSearchScanRoots } from './discovery/session-search-scan-roots'
+import type { SessionSearchIndexerOptions } from './indexing/session-search-indexer-options'
 import type { SessionSearchHostScope } from './session-search-service'
 
 export type SessionSearchInstanceOptions = {

@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { NativeChatTextAttachmentOpener } from '../../media/text/NativeChatTextAttachments'
-import { isCommittedChatAttachmentCandidate } from '../../../../../../shared/native-chat-text-attachment-references'
+import { isCommittedChatAttachmentCandidate } from '../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
   useNativeChatPastedTextScope,
   useNativeChatPastedTextState
@@ -9,9 +9,9 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { FileX, Hourglass } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { getFileTypeIcon } from '@/lib/file-icons/file-type-icons'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import {
   nativeChatPastedTextOperations,
   nativeChatPasteNotSavedNotice,

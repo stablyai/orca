@@ -12,12 +12,10 @@ import {
   type EnglishSourceLookup
 } from '../../../shared/plugins/languages/plugin-translation-string-policy'
 import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
-import {
-  PLUGIN_LANGUAGE_PACK_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+import { PLUGIN_LANGUAGE_PACK_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 
 type LanguagePackContribution = PluginManifest['contributes']['languagePacks'][number]
 

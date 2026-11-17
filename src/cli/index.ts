@@ -1,42 +1,44 @@
 #!/usr/bin/env node
+import './runtime/app-launch/packaged-cli-interpreter'
 import {
   findCommandSpec,
   isCommandGroup,
   normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
-  specPaths,
   validateCommandAndFlags
-} from './args'
+} from './arguments/args'
+import { specPaths } from './discovery/command-spec'
 import { readOrcaCliVersion } from './cli-version'
-import { dispatch } from './dispatch'
+import { dispatch } from './dispatch/dispatch'
 import {
   resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
-} from './execution-host-flag'
-import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
-import { reportCliError } from './cli-error'
-import { RuntimeClientError } from './runtime/types'
-import { cliErrorExitCode } from './cli-exit-code'
-import { printHelp } from './help'
-import type { RuntimeClient } from './runtime-client'
+} from './hosts/execution-host-flag'
+import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { reportCliError } from './output/cli-error'
+import { RuntimeClientError } from './runtime/connection/types'
+import { cliErrorExitCode } from './output/cli-exit-code'
+import { printHelp } from './discovery/help'
+import type { RuntimeClient } from './runtime/client'
 import { COMMAND_SPECS } from './specs'
-import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
-import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
-import { ignoresRemoteSelection } from './remote-selection-scope'
+import { resolveOrchestrationCliExecutable } from './orchestration/recovery/orchestration-recovery-command'
+import { refuseConflictingSessionCallerFlags } from './orchestration/identity/session-caller-flags'
+import { ignoresRemoteSelection } from './dispatch/remote-selection-scope'
 import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
-} from './local-environment-selector'
-
-export { COMMAND_SPECS } from './specs'
-export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
+} from './hosts/local-environment-selector'
+import {
+  closeAdmittedEnvironmentStore,
+  useInlineEnvironmentStoreForCli
+} from '../shared/remote-runtime/host-store/runtime-environment-store-execution'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
 // Defer the runtime graph until after help and validation; await it to keep ctx.client synchronous.
 async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
-  return (await import('./runtime-client.js')).RuntimeClient
+  return (await import('./runtime/client.js')).RuntimeClient
 }
 
 // The SSH bridge runs here, but ORCA_CLI_CWD carries the remote caller's directory.
@@ -47,7 +49,8 @@ function resolveInvocationCwd(): string {
 
 export async function main(
   argv = process.argv.slice(2),
-  cwd = resolveInvocationCwd()
+  cwd = resolveInvocationCwd(),
+  configureExecutable?: (commandPath: readonly string[]) => void
 ): Promise<void> {
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
@@ -61,16 +64,24 @@ export async function main(
     return
   }
   if (argv[0] === 'agent-teams-tmux') {
+    configureExecutable?.(['agent-teams-tmux'])
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
   }
   if (argv[0] === 'claude-teams') {
+    if (argv.length === 2 && (argv[1] === '--help' || argv[1] === '-h')) {
+      printHelp(COMMAND_SPECS, ['claude-teams'])
+      return
+    }
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
+  // Why: tools that use orca as BROWSER run it with the URL as the only argument (#21956).
+  const commandArgv =
+    argv.length === 1 && /^https?:\/\//i.test(argv[0]) ? ['open-url', '--url', argv[0]] : argv
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
-    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+    parseArgs(commandArgv, COMMAND_PATHS, COMMAND_SPECS)
   )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
@@ -101,11 +112,25 @@ export async function main(
   try {
     // Report invalid commands before runtime lookup can mask them with connection errors.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
-    const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
+    // `--on` runs on the caller's own Orca, which reaches that server; an inherited selection never reroutes it.
+    const onCallersOrca = runsOnCallersOrca(parsed.commandPath, parsed.flags)
+    if (
+      onCallersOrca &&
+      (parsed.flags.has('pairing-code') ||
+        (parsed.flags.has('environment') &&
+          !isLocalEnvironmentSelector(parsed.flags.get('environment'))))
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--on already names the server; drop --environment. Your own Orca reaches it.'
+      )
+    }
+    const ignoreRemoteSelection = onCallersOrca || ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
@@ -192,6 +217,19 @@ export async function main(
   }
 }
 
+const ON_CALLERS_ORCA_COMMANDS: ReadonlySet<string> = new Set(['send', 'reply', 'worker-start'])
+
+function runsOnCallersOrca(
+  commandPath: readonly string[],
+  flags: ReadonlyMap<string, string | boolean>
+): boolean {
+  return (
+    commandPath[0] === 'orchestration' &&
+    ON_CALLERS_ORCA_COMMANDS.has(commandPath[1] ?? '') &&
+    flags.has('on')
+  )
+}
+
 async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   try {
     // Forward Claude Code arguments verbatim so new flags work without Orca changes.
@@ -235,5 +273,10 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
-  void main()
+  void main(process.argv.slice(2), resolveInvocationCwd(), (commandPath) => {
+    // Serve supervises a local host; claude-teams supervises its agent child and stays on the worker default.
+    if (commandPath[0] !== 'serve') {
+      useInlineEnvironmentStoreForCli()
+    }
+  }).finally(closeAdmittedEnvironmentStore)
 }

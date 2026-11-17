@@ -1,10 +1,7 @@
 import { useState } from 'react'
-import {
-  BrowserChromeToolbar,
-  type BrowserChromeElementTools,
-  type BrowserChromeShareControl
-} from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
-import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/browser-reload-control'
+import { BrowserChromeToolbar } from '@/components/browser-pane/assemble-chrome/toolbar/browser-chrome-toolbar'
+import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-tool-button'
+import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/toolbar/browser-reload-control'
 import { useTranslate } from '@/i18n/use-translate'
 import { DocPreviewAddressEdit } from './doc-preview-address-edit'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
@@ -46,7 +43,7 @@ export function DocPreviewToolbar({
   onToggleMarkup: () => void
   markupDisabled: boolean
   /** Absent for documents a share link can't render. */
-  shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
+  shareControl?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
@@ -83,8 +80,6 @@ export function DocPreviewToolbar({
           onHardReload={onHardReload}
         />
       }
-      // Preview grants read workspace disk without a browsing session to receive imported cookies.
-      importControl={null}
       elementTools={elementTools}
       markup={{
         active: markupActive,
@@ -94,23 +89,12 @@ export function DocPreviewToolbar({
         canShowDiscoveryHint: false
       }}
       shareControl={shareControl}
-      viewSource={{
-        onSelect: onOpenSource,
-        label: t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file'),
-        alreadyInOverflowMenu: true
-      }}
-      openExternal={{
-        onSelect: onOpenExternally,
-        label: t(
-          'auto.components.editor.HtmlDocPreview.openExternallyControl',
-          'Open with default app'
-        )
-      }}
       overflowMenu={(overflow) => (
         <DocPreviewOverflowMenu
           onReload={onReload}
           onHardReload={onHardReload}
           onOpenSource={onOpenSource}
+          onOpenExternally={onOpenExternally}
           onCopyPath={onCopyPath}
           onCopyRelativePath={onCopyRelativePath}
           overflow={overflow}

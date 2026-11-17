@@ -1,11 +1,16 @@
+import {
+  getTerminalNoticeLifetime,
+  isTerminalNoticeLifetimeCurrent,
+  type TerminalNoticeLifetime
+} from '../terminal-notice-lifetime'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { isCodexSharedServerWarningEnabled } from '../../../../../../shared/codex-terminal-server-isolation'
-import type { CodexSharedServerStatus } from '../../../../../../shared/codex-shared-server-command'
+import { isCodexSharedServerWarningEnabled } from '../../../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
+import type { CodexSharedServerStatus } from '../../../../../../shared/agent-launch/startup/codex-shared-server-command'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { OldTerminalDialog } from '../terminal-upgrade/OldTerminalDialog'
 import { CodexSharedServerFixDialog } from './CodexSharedServerFixDialog'
 import { openTerminalBesideTab } from '../../context-menu/open-terminal-beside-tab'
@@ -17,8 +22,6 @@ import { retireCodexTerminalServerIsolationNotice } from './codex-terminal-serve
 
 // Why a ladder: Codex joins or starts the server a few seconds after its process appears.
 const CHECK_DELAYS_MS = [1_000, 4_000, 10_000] as const
-// Why module scope: a pane remounts on tab switches, and × must hold for the app session.
-const dismissedPtyIds = new Set<string>()
 
 /** Asks on the ladder until an answer is yes; returns a cancel that drops any later answer. */
 function askUntilOnSharedServer(
@@ -54,20 +57,28 @@ function askUntilOnSharedServer(
 function usePaneCodexSharedServerStatus(
   ptyId: string,
   enabled: boolean,
-  recheck: number
+  recheck: number,
+  lifetime: TerminalNoticeLifetime | undefined
 ): CodexSharedServerStatus | null {
-  const [status, setStatus] = useState<CodexSharedServerStatus | null>(null)
+  const [answer, setAnswer] = useState<{
+    lifetime: TerminalNoticeLifetime
+    status: CodexSharedServerStatus
+  }>()
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !lifetime) {
       return
     }
-    const cancel = askUntilOnSharedServer(window.api.pty.isCodexOnSharedServer, ptyId, setStatus)
+    const cancel = askUntilOnSharedServer(window.api.pty.isCodexOnSharedServer, ptyId, (status) => {
+      if (isTerminalNoticeLifetimeCurrent(lifetime)) {
+        setAnswer({ lifetime, status })
+      }
+    })
     return () => {
       cancel()
-      setStatus(null)
+      setAnswer(undefined)
     }
-  }, [enabled, ptyId, recheck])
-  return status
+  }, [enabled, ptyId, recheck, lifetime])
+  return answer?.lifetime === lifetime ? (answer?.status ?? null) : null
 }
 
 export function CodexSharedServerBanner({
@@ -81,7 +92,11 @@ export function CodexSharedServerBanner({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
-  const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
+  const lifetime = getTerminalNoticeLifetime(ptyId)
+  const [dismissedLifetime, setDismissedLifetime] = useState<TerminalNoticeLifetime>()
+  const dismissed =
+    lifetime !== undefined &&
+    (dismissedLifetime === lifetime || lifetime.dismissed.has('codex-shared-server'))
   const warningEnabled = useAppStore(
     (state) => state.settings !== null && isCodexSharedServerWarningEnabled(state.settings)
   )
@@ -89,14 +104,15 @@ export function CodexSharedServerBanner({
   const codexInPane = useAppStore(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'codex' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'codex'
+      state.agentStatusByPaneKey.get(paneKey)?.agentType === 'codex'
   )
   // Why a recheck: after the fix stops the server, the banner hides unless a new one is joined.
   const [recheck, setRecheck] = useState(0)
   const status = usePaneCodexSharedServerStatus(
     ptyId,
     warningEnabled && codexInPane && !dismissed,
-    recheck
+    recheck,
+    lifetime
   )
   const [openDialog, setOpenDialog] = useState<'fix' | 'oldTerminal' | null>(null)
   // Why: neither dialog has a Radix trigger, so closing it would leave focus on document.body.
@@ -164,8 +180,10 @@ export function CodexSharedServerBanner({
           body={body}
           primaryAction={primaryAction}
           onDismiss={() => {
-            dismissedPtyIds.add(ptyId)
-            setDismissed(true)
+            if (lifetime && isTerminalNoticeLifetimeCurrent(lifetime)) {
+              lifetime.dismissed.add('codex-shared-server')
+            }
+            setDismissedLifetime(lifetime)
           }}
           onDontShowAgain={() =>
             void useAppStore.getState().updateSettings({ codexSharedServerWarning: false })

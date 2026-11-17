@@ -35,8 +35,19 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-sync-fs-ratchet.mjs': ['src/main/', 'src/shared/'],
-  'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
+  'check-main-sync-fs-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
+  'check-main-sync-spawn-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'src/preload/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -47,6 +58,9 @@ const RATCHET_INPUTS = {
   'check-render-path-translate-ratchet.mjs': ['src/renderer/src/'],
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
+  'check-agent-status-map-ratchet.mjs': ['src/renderer/src/', 'tests/'],
+  'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
+  'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
@@ -101,7 +115,33 @@ export const VERIFY_CHECKS = [
       'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
       '--check'
     ],
-    inputs: ['src/renderer/src/', LOCALES]
+    inputs: [
+      'src/renderer/src/',
+      LOCALES,
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+    ]
+  },
+  {
+    name: 'startup and worktree localization coverage',
+    args: [
+      'config/scripts/localization/source-extraction/audit-localization-coverage.mjs',
+      '--check',
+      '--native-dialog-fields',
+      '--source-root',
+      'src/main/startup',
+      '--source-root',
+      'src/shared/worktree',
+      '--allowlist',
+      'config/startup-worktree-localization-allowlist.json'
+    ],
+    inputs: [
+      'src/main/startup/',
+      'src/shared/worktree/',
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/startup-worktree-localization-allowlist.json'
+    ]
   },
   {
     name: 'mobile localization',
@@ -112,7 +152,7 @@ export const VERIFY_CHECKS = [
       'mobile/web-entry/',
       'mobile/app.json',
       'mobile/locales/',
-      'src/shared/ui-locale',
+      'src/shared/i18n/ui-locale',
       'config/scripts/verify-mobile-localization',
       'config/scripts/localization/catalog-validation/verify-mobile-localization',
       'config/scripts/verify-localization-',
@@ -144,7 +184,8 @@ export const VERIFY_CHECKS = [
       'mobile/web-entry/',
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/audit-localization-coverage'
+      'config/scripts/localization/source-extraction/audit-localization-coverage',
+      'config/scripts/localization/source-extraction/localization-visible-object-keys'
     ]
   },
   {
@@ -162,7 +203,7 @@ export const VERIFY_CHECKS = [
     name: 'node runtime pin',
     args: ['config/scripts/node-runtime/pin-policy/check-node-runtime-pin.mjs'],
     inputs: [
-      'src/shared/node-runtime-pin',
+      'src/shared/node-runtime/node-runtime-pin',
       'config/scripts/node-dist-archive-name',
       'config/scripts/node-runtime/archive-identity/node-dist-archive-name'
     ]
@@ -264,6 +305,7 @@ export function selectTypecheckProjects(files) {
 // Shared analysis modules select every ratchet built on them.
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
     'check-daemon-blocking-call-ratchet.mjs',
     'check-main-sync-fs-ratchet.mjs',
     'check-main-sync-spawn-ratchet.mjs',
@@ -272,6 +314,7 @@ const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'
   ],
+  'config/react-compiler-uncompiled-files.txt': ['check-react-compiler-compat-ratchet.mjs'],
   'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
     'check-render-path-translate-ratchet.mjs'
   ]

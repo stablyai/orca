@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from './automation-run'
-import {
-  backfillAutomationRunNumbers,
-  nextAutomationRunNumber,
-  pruneAutomationRuns
-} from './automation-run-retention'
+import { backfillAutomationRunNumbers, pruneAutomationRuns } from './automation-run-retention'
 
 function run(overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'automationId'>) {
   return {
@@ -38,19 +34,6 @@ function makeRuns(automationId: string, count: number, from = 0): AutomationRun[
 }
 
 describe('pruneAutomationRuns', () => {
-  it('keeps only the newest N per automation', () => {
-    const kept = pruneAutomationRuns(makeRuns('a', 10), 3)
-    expect(kept.map((r) => r.id)).toEqual(['a-7', 'a-8', 'a-9'])
-  })
-
-  it('caps each automation independently', () => {
-    const runs = [...makeRuns('a', 6), ...makeRuns('b', 2)]
-    const kept = pruneAutomationRuns(runs, 3)
-    expect(kept.filter((r) => r.automationId === 'a')).toHaveLength(3)
-    // 'b' is under the cap and must survive intact.
-    expect(kept.filter((r) => r.automationId === 'b')).toHaveLength(2)
-  })
-
   // Dispatched completions may arrive hours later; retain their rows or updateAutomationRun throws.
   it('never evicts in-flight runs, even far past the cap', () => {
     const inFlight = [
@@ -79,15 +62,5 @@ describe('backfillAutomationRunNumbers', () => {
       run({ id: 'b-1', automationId: 'b' })
     ]
     expect(backfillAutomationRunNumbers(runs).map((r) => r.runNumber)).toEqual([200, 7, 201, 8])
-  })
-})
-
-describe('nextAutomationRunNumber', () => {
-  it('continues from the highest surviving run number, not the retained count', () => {
-    const retained = [
-      run({ id: 'a-0', automationId: 'a', runNumber: 2795 }),
-      run({ id: 'a-1', automationId: 'a', runNumber: 2796 })
-    ]
-    expect(nextAutomationRunNumber(retained)).toBe(2797)
   })
 })

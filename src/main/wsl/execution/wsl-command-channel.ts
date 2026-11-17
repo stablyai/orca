@@ -1,12 +1,12 @@
 import { Duplex } from 'node:stream'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { RemoteCommandChannel } from '../../managed-server/install/remote-install-transport'
 
 /** How long a closed channel's guest gets to exit on stdin EOF before wsl.exe is killed. */
 export const WSL_CHANNEL_CLOSE_GRACE_MS = 2_000
 
 // wsl.exe children inside their close grace; quit kills them so none outlives Orca.
-const closingChildren = new Set<PipedChildProcess>()
+const closingChildren = new Set<ChildProcessWithoutNullStreams>()
 
 /** App quit: no grace left, so a guest still running after close must not keep wsl.exe up. */
 export function killWslChannelsInCloseGrace(): void {
@@ -19,7 +19,7 @@ export function killWslChannelsInCloseGrace(): void {
 }
 
 /** Expose wsl.exe stdio as an SSH-style channel; exit reports status and close follows stdio teardown. */
-export function wrapWslCommandProcess(child: PipedChildProcess): RemoteCommandChannel {
+export function wrapWslCommandProcess(child: ChildProcessWithoutNullStreams): RemoteCommandChannel {
   // Only the child emits close, once after exit status, like ssh2.
   const duplex = new Duplex({
     emitClose: false,

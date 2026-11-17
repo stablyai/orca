@@ -1,5 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalOrphanRecoveryState } from '../surfaces/web-session-terminal-orphan-recovery-surface'
 

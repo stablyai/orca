@@ -2,13 +2,16 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import {
+  getCommitMessageModelDiscoveryHostKeyForScope,
+  getRepoCommitMessageModelDiscoveryHostKey
+} from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { TextGenerationFailureFields } from '../../../../../shared/text-generation-failure-copy'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { TextGenerationFailureFields } from '../../../../../shared/text-generation/text-generation-failure-copy'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -85,6 +88,18 @@ export function getRuntimeGitScope(
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
+/** The host key a repo's text-model picks are saved under, so generation reads the pick the picker wrote. */
+export function getRuntimeGitRepoDiscoveryHostKey(
+  target: RuntimeClientTarget,
+  repo: { connectionId?: string | null; executionHostId?: string | null } | null | undefined,
+  connectionId: string | null | undefined
+): string {
+  // Why: without a loaded repo record only the connection can say where it runs; unknown keeps no host's pick.
+  return target.kind !== 'environment' && repo
+    ? getRepoCommitMessageModelDiscoveryHostKey(repo)
+    : getCommitMessageModelDiscoveryHostKeyForScope(getRuntimeGitScope(target, connectionId))
+}
+
 export function getRuntimeCommitMessageSettings(
   target: RuntimeClientTarget,
   settings: RuntimeGitPrefs | null | undefined,
@@ -112,8 +127,9 @@ export function getRuntimeCommitMessageSettings(
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
       : {}),
+    // Why: hosts before the contract accepted 'blank' reject it; null picks the same fallback agent.
     ...(settings.defaultTuiAgent !== undefined
-      ? { defaultTuiAgent: settings.defaultTuiAgent }
+      ? { defaultTuiAgent: settings.defaultTuiAgent === 'blank' ? null : settings.defaultTuiAgent }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }

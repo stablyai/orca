@@ -9,14 +9,14 @@ import {
   PullRequestFileViewed,
   RerunPullRequestChecks,
   ReviewThread
-} from '../../../../../../shared/rpc-contract/github-pull-request-params'
+} from '../../../../../../shared/rpc-contract/github/github-pull-request-params'
 
 export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prForBranch',
     permission: 'workspace',
     params: PrForBranch,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, clientKind, signal }) =>
       runtime.getRepoPRForBranch(
         params.repo,
         params.branch,
@@ -25,7 +25,12 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.acceptMergedFallbackPR,
         params.currentHeadOid,
         params.reason,
-        params.userRefresh
+        params.userRefresh,
+        clientKind,
+        signal,
+        params.acceptRevalidationOnly,
+        params.selected,
+        params.linkedPRUrl
       )
   }),
   defineMethod({
@@ -35,7 +40,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
         noCache: params.noCache,
-        ...(params.userRefresh === true ? { userRefresh: true } : {})
+        ...(params.userRefresh === true ? { userRefresh: true } : {}),
+        ...(params.reason !== undefined ? { reason: params.reason } : {})
       })
   }),
   defineMethod({

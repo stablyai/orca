@@ -88,8 +88,9 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         cacheKey: string
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =

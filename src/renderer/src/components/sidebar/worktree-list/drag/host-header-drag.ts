@@ -5,7 +5,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent
 } from 'react'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   createSidebarDragPreview,
   setSidebarPointerDragDocumentStyles,

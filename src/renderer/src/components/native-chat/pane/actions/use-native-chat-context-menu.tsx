@@ -7,7 +7,7 @@ import {
   type RefObject
 } from 'react'
 import { flushSync } from 'react-dom'
-import { markdownMathSelectionText } from '../../../../../../shared/markdown-math-selection'
+import { markdownMathSelectionText } from '../../../../../../shared/markdown/markdown-math-selection'
 import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -24,16 +24,14 @@ import {
   type NativeChatCopyImage
 } from '../../media/images/native-chat-image-copy'
 import { isMacPlatform } from '../routing/native-chat-shortcut'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { isEditableTarget } from '@/lib/editable-target'
-import { findEditablePrimarySelectionPasteTarget } from '@/lib/primary-selection-paste'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from '../../selection-quotes/NativeChatSelectionQuote'
-import {
-  formatNativeChatQuote,
-  readNativeChatTranscriptSelection
-} from '../../selection-quotes/native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { readNativeChatTranscriptSelection } from '../../selection-quotes/native-chat-transcript-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'

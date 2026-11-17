@@ -3,7 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../../store/index'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
@@ -13,7 +16,7 @@ import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalD
 import type { TerminalLinkActionRequest } from '../links/terminal-link-action-request'
 import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
 import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'

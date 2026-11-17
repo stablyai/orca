@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { WebContents } from 'electron'
-import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { enrichFrameMetadata, readFrameMetadata } from './browser-screencast-frame-metadata'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
@@ -9,7 +9,7 @@ import type {
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
-import type { BrowserJavaScriptDialog } from '../../../../shared/browser-javascript-dialog'
+import type { BrowserJavaScriptDialog } from '../../../../shared/browser/prompts/browser-javascript-dialog'
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -18,7 +18,7 @@ type BrowserScreencastMessageHandlerDeps = {
   isStopping: () => boolean
   queueFrame: (frame: PendingScreencastFrame) => void
   ackScreencastFrame: (sessionId: number | undefined) => void
-  scheduleNavigationFrameCapture: () => void
+  scheduleNavigationFrameCapture: (reason?: 'navigation' | 'viewport-recovery') => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
   /** True while guest frames must be dropped pending re-emulation. */
@@ -108,7 +108,7 @@ export function createBrowserScreencastMessageHandler(
       if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
         // Tab switches and navigation can briefly stream the host surface instead of the client viewport.
         ackScreencastFrame(sessionId)
-        scheduleNavigationFrameCapture()
+        scheduleNavigationFrameCapture('viewport-recovery')
         return
       }
       bumpSnapshotGeneration()

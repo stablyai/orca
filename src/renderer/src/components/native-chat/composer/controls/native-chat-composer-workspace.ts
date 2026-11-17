@@ -1,14 +1,12 @@
-import type { AppState } from '@/store/types'
-import { workspaceTabs } from '@/lib/structured-chat-tab-index'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { workspaceTabs } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { getWslDistroFromPath } from '@/lib/local-preflight-context'
+import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
 import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getHostSettingOverride } from '../../../../../../shared/host-setting-overrides'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getHostSettingOverride } from '../../../../../../shared/execution-host/host-setting-overrides'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
@@ -19,16 +17,18 @@ import {
 import {
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+  toRuntimeExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { createNativeChatTabOwnerSelector } from '../../pane/ownership/native-chat-tab-owner'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../../links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
+import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 
 const OWNER_CONTEXT_INPUT_KEYS = FILE_LINK_CONTEXT_INPUT_KEYS.filter(

@@ -1,7 +1,7 @@
 import { isIP } from 'node:net'
 import { connect as connectTls, type ConnectionOptions } from 'node:tls'
 import { separateElectronProxyCredentials } from '../../../network/electron-proxy-credentials'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { ProxyHandshakeSocket, type ProxyHandshakeTransport } from './proxy-handshake-socket'
 
 const MAX_RESPONSE_HEAD_BYTES = 16 * 1024

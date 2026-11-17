@@ -1,9 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import {
@@ -14,7 +12,7 @@ import {
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
 import { getStructuredAgentSessionLaunchOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
@@ -66,7 +64,9 @@ export async function launchStructuredWorktreeSession(
   }
   // Freeze the first send; unsent typing stays with the composer until its replacement is ready.
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
-    chatInputHandedOff: true
+    worktreeId: args.worktreeId,
+    chatInputHandedOff: true,
+    chatHandedOffAt: Date.now()
   })
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   const request = withPendingChatInput(pending, {

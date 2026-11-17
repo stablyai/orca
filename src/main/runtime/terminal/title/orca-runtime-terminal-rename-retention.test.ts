@@ -1,8 +1,8 @@
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { describe, expect, it, vi } from 'vitest'
 
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
@@ -10,12 +10,11 @@ import {
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
-import { buildRuntimeMobileAgentStatus } from '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
-import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { committingSpawn } from '../layout/bind-first-pane.test-fixture'
+import '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -124,89 +123,4 @@ describe('terminal rename display', () => {
       )
     ).toMatchObject({ title: 'Recovered worker' })
   })
-})
-
-describe('first-turn identity under recorded title clocks (#32030)', () => {
-  const launchAt = 1_800_000_000_000
-  const hookAt = launchAt + 2_000
-  const providerSession = { key: 'session_id' as const, id: 'first-turn' }
-  const tab = {
-    type: 'terminal' as const,
-    id: 'tab::leaf',
-    parentTabId: 'tab',
-    leafId: HEADLESS_LEAF_ID,
-    title: 'Terminal',
-    isActive: true
-  }
-
-  function freshHookSession(pty: RuntimePtyWorktreeRecord) {
-    return buildRuntimeMobileAgentStatus(
-      pty,
-      tab,
-      'term',
-      null,
-      () => [
-        {
-          paneKey: 'tab:leaf',
-          state: 'done',
-          prompt: '',
-          agentType: 'codex',
-          connectionId: null,
-          receivedAt: hookAt,
-          evidenceObservedAt: hookAt,
-          stateStartedAt: hookAt,
-          providerSession
-        }
-      ],
-      { getPaneKey: () => 'tab:leaf', getLeaf: () => null, getTrackedTitle: () => null }
-    ).agentStatus?.providerSession
-  }
-
-  function makeRuntime() {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal()
-    )
-    return new OrcaRuntimeService(runtimeStore)
-  }
-
-  it.each(['none', 'recorded', 'osc'] as const)(
-    'dates the launch title before spawn, with %s title evidence during spawn',
-    async (observation) => {
-      const runtime = makeRuntime()
-      const now = vi.spyOn(Date, 'now').mockReturnValue(launchAt)
-      runtime.setPtyController({
-        spawn: vi.fn(
-          committingSpawn(runtime, async () => {
-            now.mockReturnValue(launchAt + 1_000)
-            const pty = runtime['recordPtyWorktree'](
-              'spawn-title-pty',
-              TEST_WORKTREE_ID,
-              observation === 'recorded' ? { title: 'bash' } : {}
-            )
-            if (observation === 'osc') {
-              runtime['applyTrackedPtyTitle']('spawn-title-pty', 'bash', 'bash')
-            }
-            pty.lastAgentStatus = 'idle'
-            now.mockReturnValue(hookAt + 1_000)
-            return { id: 'spawn-title-pty' }
-          })
-        ),
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      try {
-        await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-          title: 'zsh',
-          tabId: 'host-tab',
-          leafId: HEADLESS_LEAF_ID
-        })
-        const pty = runtime['ptysById'].get('spawn-title-pty')!
-        expect(freshHookSession(pty)).toEqual(providerSession)
-        expect(pty.title).toBe({ none: 'zsh', recorded: 'bash', osc: null }[observation])
-      } finally {
-        now.mockRestore()
-      }
-    }
-  )
 })

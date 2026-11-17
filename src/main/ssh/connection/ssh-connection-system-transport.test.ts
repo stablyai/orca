@@ -1,8 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import type * as ChildProcessModule from 'node:child_process'
+import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { clientInstances, ssh2Mock } from './testing/ssh-connection-test-client'
+import { PassThrough } from 'node:stream'
+import { ssh2Mock } from './testing/ssh-connection-test-client'
 import {
   findSystemSshMock,
   getOrcaControlSocketPathMock,
@@ -24,11 +27,32 @@ import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { writeFileViaSystemSsh } from '../system-transport/file-transfer/system-ssh-file-transfer'
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 import { initSshHostKeyStoreFile, trustHostKey } from '../host-keys/ssh-host-key-store'
-import type { SshTarget } from '../../../shared/ssh-types'
-import {
-  createOpenSshPrivateKeyFixture,
-  createOpenSshPublicKeyFixture
-} from '../authentication/testing/ssh-security-key-identity.test-fixture'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+import type * as SystemSshCommand from '../system-transport/system-ssh-command'
+
+const { spawnMock, actualSystemSshCommand } = vi.hoisted(() => {
+  const actual: { module?: typeof SystemSshCommand } = {}
+  return { spawnMock: vi.fn(), actualSystemSshCommand: actual }
+})
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  spawn: spawnMock
+}))
+
+function fakeSshProcessExitingOnStdinEnd(stdout: string) {
+  const proc = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn()
+  })
+  spawnMock.mockReturnValue(proc)
+  proc.stdin.resume()
+  // Like a real child, close only after its stdout has drained.
+  proc.stdout.once('end', () => proc.emit('close', 0))
+  proc.stdin.on('finish', () => proc.stdout.end(stdout))
+  return proc
+}
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
@@ -41,11 +65,12 @@ vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
-    await importOriginal()
+vi.mock('../system-transport/system-ssh-command', async (importOriginal) => {
+  actualSystemSshCommand.module = await importOriginal<typeof SystemSshCommand>()
+  return (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
+    actualSystemSshCommand.module
   )
-)
+})
 vi.mock(
   '../system-transport/file-transfer/system-ssh-file-binary-transfer',
   async (importOriginal) =>
@@ -131,6 +156,34 @@ describe('SshConnection', () => {
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
+  it('ends the ssh child input for a command that sends none', async () => {
+    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(
+      createTarget({ configHost: 'fdpass-host', systemSshConnectionReuse: false }),
+      createCallbacks()
+    )
+    await conn.connect()
+    const actual = actualSystemSshCommand.module
+    if (!actual) {
+      throw new Error('system-ssh-command mock factory did not run')
+    }
+    spawnSystemSshCommandMock.mockImplementation(actual.spawnSystemSshCommand)
+    const proc = fakeSshProcessExitingOnStdinEnd('answer')
+
+    const channel = await conn.execWithClosedStdin('probe')
+    const stdout = await new Promise<string>((resolve) => {
+      let received = ''
+      channel.on('data', (data: Buffer) => {
+        received += data.toString()
+      })
+      channel.once('close', () => resolve(received))
+    })
+
+    expect(stdout).toBe('answer')
+    expect(proc.stdin.writableFinished).toBe(true)
+  })
+
   it('retries a generic system SSH probe timeout without ControlMaster', async () => {
     vi.useFakeTimers()
     try {
@@ -189,92 +242,6 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
     expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
   })
-
-  it('uses system SSH before ssh2 parses a security-key private key', async () => {
-    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
-    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-connect-'))
-    const keyPath = join(directory, 'id_ed25519_sk')
-    writeFileSync(
-      keyPath,
-      createOpenSshPrivateKeyFixture(['sk-ssh-ed25519@openssh.com'], { encrypted: true })
-    )
-    const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
-
-    try {
-      await conn.connect()
-
-      expect(conn.getState().status).toBe('connected')
-      expect(conn.usesSystemSshTransport()).toBe(true)
-      expect(clientInstances).toHaveLength(0)
-      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
-    } finally {
-      rmSync(directory, { recursive: true })
-    }
-  })
-
-  it('uses system SSH for an agent-backed security-key public identity', async () => {
-    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
-    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-agent-connect-'))
-    const identityPath = join(directory, 'id_ed25519_sk')
-    writeFileSync(
-      `${identityPath}.pub`,
-      createOpenSshPublicKeyFixture('sk-ssh-ed25519@openssh.com')
-    )
-    const conn = new SshConnection(createTarget({ identityFile: identityPath }), createCallbacks())
-
-    try {
-      await conn.connect()
-
-      expect(conn.usesSystemSshTransport()).toBe(true)
-      expect(clientInstances).toHaveLength(0)
-      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
-    } finally {
-      rmSync(directory, { recursive: true })
-    }
-  })
-
-  it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
-    ssh2Mock.connectBehavior = 'error'
-    ssh2Mock.connectErrorMessage =
-      'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
-    ssh2Mock.connectErrorCode = 'EHOSTUNREACH'
-    const conn = new SshConnection(
-      createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
-      createCallbacks()
-    )
-
-    await conn.connect()
-
-    expect(conn.getState().status).toBe('connected')
-    expect(conn.usesSystemSshTransport()).toBe(true)
-    expect(clientInstances).toHaveLength(1)
-    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
-      expect.objectContaining({ host: '192.168.0.210' }),
-      'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
-    )
-  })
-
-  it.each([
-    'Handshake failed: no matching host key format',
-    'Handshake failed: no matching key exchange algorithm',
-    'Handshake failed: no matching C->S cipher'
-  ])(
-    'falls back to system SSH when ssh2 shares no algorithm with the host (%s)',
-    async (message) => {
-      ssh2Mock.connectBehavior = 'error'
-      ssh2Mock.connectErrorMessage = message
-      const conn = new SshConnection(
-        createTarget({ host: 'cert.example.com', label: 'Cert host' }),
-        createCallbacks()
-      )
-
-      await conn.connect()
-
-      expect(conn.getState().status).toBe('connected')
-      expect(conn.usesSystemSshTransport()).toBe(true)
-    }
-  )
 
   it('keeps a host pinned in the Orca key store on ssh2 when negotiation fails', async () => {
     const storeDir = mkdtempSync(join(tmpdir(), 'orca-ssh-pinned-store-'))

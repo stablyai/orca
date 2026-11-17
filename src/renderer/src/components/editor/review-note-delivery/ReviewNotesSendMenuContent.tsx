@@ -3,6 +3,7 @@ import {
   useAppStateView,
   useAppStateViewActive
 } from '@/store/retained-views/app-state-view'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -20,39 +21,39 @@ import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { QuickLaunchAgentMenuItems } from '@/components/agent/launch-menu/AgentMenuItems'
+import { AgentStateDot, agentStateLabel } from '@/components/agent/status/AgentStateDot'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import '@/lib/active-agent-note-send'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import '@/lib/agent-session/messaging/terminal/active-agent-note-send'
 import {
   activeAgentNotesSendFailureMessage,
   type ActiveAgentNotesSendResult
-} from '@/lib/active-agent-note-send-result'
-import { sendMessageToAgent } from '@/lib/agent-message-send'
+} from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
+import { sendMessageToAgent } from '@/lib/agent-session/messaging/agent-message-send'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
-} from '@/lib/notes-send-agent-targets'
-import { agentKindForAgentType } from '@/lib/agent-status'
+} from '@/lib/agent-session/messaging/notes-send-agent-targets'
+import { agentKindForAgentType } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { track } from '@/lib/telemetry'
-import { useNow } from '@/hooks/use-now'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { useNow } from '@/lib/window-activity/use-now'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
+import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/useWorktreeAgentRows'
-import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
+import { useAgentRowConversationName } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import type { LaunchSource } from '../../../../../shared/telemetry-property-schemas'
-import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { addQuoteToAgent } from '@/components/native-chat/selection-quotes/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 import { orderSendTargetsByWorktreeAgentRows } from './review-notes-send-target-order'
@@ -110,6 +111,7 @@ export function ReviewNotesSendMenuContent({
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
         state.agentStatusEpoch
       ]
       if (shallow(inputs, nextInputs)) {

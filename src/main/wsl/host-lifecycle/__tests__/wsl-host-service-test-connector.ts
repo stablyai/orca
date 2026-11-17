@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
-import type { WslHostServerStop } from '../../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostDistroCandidate } from '../wsl-host-distro-list'
 import type { WslHostConnector } from '../wsl-host-connector-contract'
 import type { WslOrcadConnection } from '../../orcad/wsl-orcad-connection-types'

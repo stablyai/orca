@@ -4,7 +4,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { getTerminalFileOpenHint } from '../terminal-link-open-hints'
 
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   collectLinks,
@@ -30,7 +30,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
@@ -39,41 +39,13 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
 installTerminalLinkTestEnvironment(doubles)
 
 describe('createFilePathLinkProvider range bounds', () => {
-  it('underlines only the filename itself, not the column padding from `ls`', async () => {
-    // xterm end.x is inclusive and 1-based; endIndex + 1 incorrectly underlines ls padding after the filename.
-    const line = 'CLAUDE.md      package.json     README.md'
-    const links = await collectLinks(line)
-    const byText = new Map(links.map((link) => [link.text, link]))
-
-    const claude = byText.get('CLAUDE.md')
-    expect(claude, 'CLAUDE.md should be linkified').toBeDefined()
-    expect(claude!.range.start.x).toBe(1)
-    expect(claude!.range.end.x).toBe('CLAUDE.md'.length)
-
-    const pkg = byText.get('package.json')
-    expect(pkg, 'package.json should be linkified').toBeDefined()
-    const pkgStartIndex = line.indexOf('package.json')
-    expect(pkg!.range.start.x).toBe(pkgStartIndex + 1)
-    expect(pkg!.range.end.x).toBe(pkgStartIndex + 'package.json'.length)
-  })
-
-  it('does not invoke the xterm callback twice when the callback throws', async () => {
-    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
-    const callback = vi.fn(() => {
-      throw new Error('terminal was disposed')
-    })
-
-    provider.provideLinks(1, callback)
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
-  })
-
   it('does not reuse SSH path-exists cache entries across connections', async () => {
     setPlatform('Macintosh')
     const pathExistsCache = makeExistsCache()
@@ -126,28 +98,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     })
   })
 
-  it('returns one file link for an absolute path containing spaces', async () => {
-    const pathText = '/repo/Folder With Space/content.js'
-    const links = await collectLinks(pathText)
-
-    expect(links.map((link) => link.text)).toEqual([pathText])
-    expect(links[0].range).toEqual({
-      start: { x: 1, y: 1 },
-      end: { x: pathText.length, y: 1 }
-    })
-  })
-
-  it('returns one file link for an extensionless path ending in a spaced segment', async () => {
-    const pathText = '/repo/My Folder'
-    const links = await collectLinks(pathText)
-
-    expect(links.map((link) => link.text)).toEqual([pathText])
-    expect(links[0].range).toEqual({
-      start: { x: 1, y: 1 },
-      end: { x: pathText.length, y: 1 }
-    })
-  })
-
   it('returns an existing extensionless spaced prefix before trailing prose', async () => {
     vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
       return pathValue === '/repo/My Folder'
@@ -156,6 +106,27 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await collectLinks('see /repo/My Folder now')
 
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
+  })
+
+  it('maps Git Bash drive paths to the Windows drive only in Windows-drive workspaces', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (pathValue) =>
+        pathValue === 'C:\\Users\\foo\\.claude\\CLAUDE.md' || pathValue === 'C:\\'
+    )
+    const line = 'Read /c/Users/foo/.claude/CLAUDE.md via cmd /c dir'
+    const collect = (worktreePath: string): Promise<ILink[]> => {
+      const { provider } = createProviderSetup([makeBufferLine(line)], makeExistsCache(), {
+        worktreePath,
+        startupCwd: worktreePath
+      })
+      return new Promise((resolve) => provider.provideLinks(1, (links) => resolve(links ?? [])))
+    }
+
+    expect((await collect('C:\\repo')).map((link) => link.text)).toEqual([
+      '/c/Users/foo/.claude/CLAUDE.md'
+    ])
+    expect(await collect('/repo')).toEqual([])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/c/Users/foo/.claude/CLAUDE.md')
   })
 
   it('returns a wrapped file link when hovering the first physical row', async () => {

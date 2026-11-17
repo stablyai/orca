@@ -1,8 +1,14 @@
-import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from '../fleet/orchestration-fleet-projection'
-import type { RuntimeTerminalRead, RuntimeTerminalState } from '../../runtime-types'
+import type {
+  RuntimeTerminalRead,
+  RuntimeTerminalState
+} from '../../terminal/runtime/runtime-terminal-contracts'
 import type { PtyLivenessVerdict } from '../../terminal/pty/lifecycle/pty-liveness-verdict'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
@@ -29,6 +35,8 @@ export type ExactWorkerProviderSession = {
   wslDistro?: string
   agent: AgentType
   providerSession: AgentProviderSessionMetadata
+  /** The recipe Orca launched this worker's agent with; a reopen replays it. */
+  launchConfig?: SleepingAgentLaunchConfig
   observedAt: number
 }
 
@@ -58,7 +66,7 @@ export type OrchestrationWorkerReadTranscriptResult = {
   contentComplete?: boolean
   clipping?: string[]
   warnings: string[]
-  // The live PTY was released; output comes from the frozen archive source.
+  // The worker was released; output is read from its original transcript or chat history.
   archived?: boolean
 }
 
@@ -80,7 +88,7 @@ export type OrchestrationWorkerReadTerminalResult = {
   contentComplete?: boolean
   clipping?: string[]
   warnings: string[]
-  // The live PTY was released; output comes from the frozen archive source.
+  // The worker was released; output is read from its original transcript or chat history.
   archived?: boolean
 }
 

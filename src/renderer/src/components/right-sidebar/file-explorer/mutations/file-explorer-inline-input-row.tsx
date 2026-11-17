@@ -1,10 +1,10 @@
 import React, { useCallback, useRef } from 'react'
 import { File } from 'lucide-react'
-import { FolderIcon } from '@/components/FileTypeIcon'
+import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import {
   isImeCompositionKeyDown,
   useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
+} from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 export type InlineInput = {

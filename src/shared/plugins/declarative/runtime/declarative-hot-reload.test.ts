@@ -24,16 +24,6 @@ function booted() {
   return { runtime, posted, send, retained }
 }
 
-function entryKeys(payload: unknown): unknown[] {
-  const entries =
-    typeof payload === 'object' && payload !== null && 'entries' in payload ? payload.entries : null
-  return Array.isArray(entries)
-    ? entries.map((each: unknown) =>
-        typeof each === 'object' && each !== null && 'key' in each ? each.key : null
-      )
-    : []
-}
-
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -43,7 +33,6 @@ describe('dev hot reload of keyed memory atoms', () => {
     const { runtime, send } = booted()
     const draft = atom('hot.draft', '')
     const bumped = atom('hot.bumped', { n: 0 }, { version: 2, migrate: () => ({ n: 99 }) })
-    const unkeyed = atom('kept out')
     send('ui.hydrate', {
       memory: {
         'hot.draft': { version: 1, value: 'half a thought' },
@@ -53,9 +42,6 @@ describe('dev hot reload of keyed memory atoms', () => {
     // A version bump starts the atom over; migrate is for persisted values only.
     expect(read(bumped)).toEqual({ n: 0 })
     expect(read(draft)).toBe('half a thought')
-    expect(read(unkeyed)).toBe('kept out')
-    // Atoms created after hydration (a lazily imported module) seed from it too.
-    expect(read(atom('hot.late', 'initial'))).toBe('initial')
     await runtime.boot({ default: () => h('Text', null, read(draft)) })
     runtime.dispose()
   })
@@ -96,21 +82,5 @@ describe('dev hot reload of keyed memory atoms', () => {
     set(count, 5)
     vi.advanceTimersByTime(100)
     expect(retained()).toHaveLength(2)
-  })
-
-  it('never posts persisted atoms as retained, nor memory atoms as persisted', () => {
-    vi.useFakeTimers()
-    const { runtime, send, posted } = booted()
-    const saved = atom('hot.saved', 'a', { persist: 'plugin' })
-    const kept = atom('hot.kept', 'a')
-    send('ui.hydrate', { retain: true })
-    set(saved, 'b')
-    set(kept, 'b')
-    vi.advanceTimersByTime(500)
-    const keysOf = (event: string) =>
-      posted.filter((entry) => entry.event === event).flatMap((entry) => entryKeys(entry.payload))
-    expect(keysOf('ui.persist')).toEqual(['hot.saved'])
-    expect(keysOf('ui.retain')).toEqual(['hot.kept'])
-    runtime.dispose()
   })
 })

@@ -1,6 +1,6 @@
 // HostRelay's state and shared plumbing: socket attachments, the session, the host's connection
 // bookkeeping (splice pool), alarm scheduling. The class chain is base → handshake → control →
-// phones → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
+// phones → director → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
 import { DurableObject } from 'cloudflare:workers'
 import type { RelayHello } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
@@ -13,6 +13,8 @@ import { metric } from './metrics'
 import { ObjectStore } from './object-store'
 import { edgeConfig, type EdgeClaims, type EdgeConfig, type Env } from './env'
 import { edgeBackend, type CredentialReservation, type EdgeBackend } from './edge-backend'
+import { directorConfig } from './director-config'
+import { USER_INDEX_PENDING_KEY, type UserIndexPending } from './user-index'
 
 // Longer than one database operation can take (connect 2 s + query 5 s, edge-database.ts).
 export const ASSIGNMENT_CHECK_DEADLINE_MS = 8_000
@@ -45,6 +47,9 @@ export type ControlAttachment = {
   clientKeepalive?: boolean
   // A keepalive control found silent: one relay ping sent at this time (see probeSilentControls).
   probeAt?: number
+  // Upgrade and activation times, for metrics (absent on attachments from before these fields).
+  openedAt?: number
+  activeAt?: number
 }
 export type Attachment = ControlAttachment
 export type Conn = {
@@ -74,6 +79,9 @@ export const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 // How long a silent keepalive control has to answer the relay ping before it is closed.
 export const KEEPALIVE_PROBE_MS = 10_000
 export const SWEEP_AT_KEY = 'sweepAt'
+// Diagnostics only: the host's last control close, read once by the next activation.
+export const LAST_CONTROL_CLOSE_KEY = 'lastControlClose'
+export type LastControlClose = { goneAt: number; closedAt: number; code: number }
 // 6 h ± 30 min, as the cells: desktops re-ask the director at least this often.
 export const LEASE_BASE_MS = 6 * 60 * 60 * 1000
 export const LEASE_JITTER_MS = 30 * 60 * 1000
@@ -178,6 +186,7 @@ export abstract class HostRelayBase extends DurableObject<Env> {
     this.attach(ws, null)
     if (a.k === 'control' && a.phase === 'active') { metric(this.env, 'control_close', 1, String(code), [], '', a.place) }
     if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
+      await this.ctx.storage.put<LastControlClose>(LAST_CONTROL_CLOSE_KEY, { goneAt, closedAt: Date.now(), code })
       const session = await this.ctx.storage.get<Session>('session')
       if (session && session.generation === a.generation) {
         const hostReason = relayHostCloseReasonFrom(reason)
@@ -232,6 +241,11 @@ export abstract class HostRelayBase extends DurableObject<Env> {
         await this.ctx.storage.put(SWEEP_AT_KEY, sweepAt)
       }
       next = Math.min(next, sweepAt)
+    }
+    // An erasure index write still unacknowledged (user-index.ts). Director off: not even read.
+    if (directorConfig(this.env)) {
+      const indexRetryAt = (await this.ctx.storage.get<UserIndexPending>(USER_INDEX_PENDING_KEY))?.retryAt
+      if (indexRetryAt !== undefined) { next = Math.min(next, indexRetryAt) }
     }
     if (next === NO_DEADLINE) {
       await this.ctx.storage.deleteAlarm()

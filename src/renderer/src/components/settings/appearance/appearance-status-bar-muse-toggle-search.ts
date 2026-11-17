@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
@@ -11,7 +11,7 @@ export function getMuseStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'muse',
-    title: translate('auto.components.settings.appearance.search.museUsageTitle', 'Muse Usage'),
+    title: translate('auto.components.settings.appearance.search.e8d2710689', 'Muse usage'),
     description: translate(
       'auto.components.settings.appearance.search.museUsageDescription',
       'Show Muse subscription quota in the status bar.'

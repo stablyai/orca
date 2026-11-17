@@ -21,10 +21,13 @@ import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
 } from '../../../codex/structured/launch/codex-structured-launch-resolution'
-import type { PrepareNativeChatVisuals } from '../../../native-chat/native-chat-visuals-delivery'
-import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
+import type { PrepareNativeChatVisuals } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../../../pi/rpc-agent-definition'
-import { piRpcLaunchPart, type PiRpcLaunchPartDeps } from '../../../pi/rpc-launch-resolution'
+import {
+  piRpcLaunchPart,
+  type PiRpcLaunchPartDeps
+} from '../../../pi/rpc/launch/rpc-launch-resolution'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import {
   composeStructuredLaunch,
@@ -121,12 +124,14 @@ function withTestSpawnToken<L>(
 
 /** Unsealed unless a token is passed: the env an agent part produced, before the seal. */
 export function createCodexStructuredLaunchResolver(
-  deps: LaunchTestSources & CodexStructuredLaunchPartDeps
+  deps: LaunchTestSources &
+    Omit<CodexStructuredLaunchPartDeps, 'savedSession'> &
+    Partial<Pick<CodexStructuredLaunchPartDeps, 'savedSession'>>
 ) {
   return withTestSpawnToken(
     CODEX_STRUCTURED_AGENT,
     launchSources(deps),
-    codexStructuredLaunchPart(deps),
+    codexStructuredLaunchPart({ savedSession: { hasProviderTurn: async () => false }, ...deps }),
     null
   )
 }

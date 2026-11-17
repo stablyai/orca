@@ -3,11 +3,11 @@ import { ChevronRight, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import NoticeHostGlyph from '../rows/NoticeHostGlyph'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getExternalWorktreeParentPath } from '../../../../../../shared/external-worktree-visibility'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getExternalWorktreeParentPath } from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type ImportedWorktreeVisibilityPreview = {
@@ -222,19 +222,9 @@ export default function ImportedWorktreesVisibilityLine({
           {visibleWorktreeGroups.map((group) => (
             <div key={group.path} className="grid min-w-0 gap-0.5 rounded-md px-1.5 py-1">
               <div className="flex min-h-7 min-w-0 items-center gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      tabIndex={0}
-                      className="block min-w-0 flex-1 truncate font-mono text-[10px] leading-4 text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-                    >
-                      {group.path}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={4}>
-                    {group.path}
-                  </TooltipContent>
-                </Tooltip>
+                <span className="min-w-0 flex-1 break-all font-mono text-3xs leading-4 text-muted-foreground">
+                  {group.path}
+                </span>
                 <span className="shrink-0 rounded-full border border-worktree-sidebar-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
                   {group.worktrees.length}
                 </span>

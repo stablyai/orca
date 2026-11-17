@@ -1,10 +1,10 @@
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
-import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
-import type { NetworkSourceClass } from '../../network-source-class'
+import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
+import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
+import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
 
 export type DeviceEntry = {
   deviceId: string

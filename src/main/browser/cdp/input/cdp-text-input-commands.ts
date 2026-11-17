@@ -5,7 +5,7 @@ import type {
   BrowserKeypressResult,
   BrowserSelectAllResult,
   BrowserTypeResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { CdpBridgeState } from '../commands/cdp-bridge-state'
 import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'

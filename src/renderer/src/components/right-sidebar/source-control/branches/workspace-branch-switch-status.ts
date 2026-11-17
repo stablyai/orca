@@ -1,11 +1,11 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
   resolveWorktreeGitCopyNow,
   worktreeCopyPushTarget,
   worktreeGitCopyHostId
-} from '@/lib/worktree-git-copy'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '@/lib/workspace/ownership/worktree-git-copy'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   clearLandedBranchSwitchError,
   getWorktreeOperationStore

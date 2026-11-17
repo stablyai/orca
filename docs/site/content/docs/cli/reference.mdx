@@ -39,6 +39,8 @@ orca open --json
 orca status --json
 ```
 
+`orca open` starts Orca without taking keyboard focus from the app you're using. If an Orca window is already open, it does nothing.
+
 Use `--json` when another tool will parse the result. Human-readable output is for quick terminal checks.
 
 ## Selectors
@@ -95,9 +97,13 @@ orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
+orca repo hide --repo id:<repoId> --json
+orca repo unhide --repo id:<repoId> --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
 
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
@@ -147,6 +153,16 @@ Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only 
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
 
+### Workspace cleanup
+
+```bash
+orca workspace cleanup preview --json
+orca workspace cleanup run --json
+orca workspace cleanup report --json
+```
+
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete chat history with the workspace** on, `run` also deletes Orca, Claude Code and Codex chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
+
 ## Ports
 
 ```bash
@@ -179,8 +195,8 @@ orca reference find STA-1234 --json
 Choose an agent from `find`, then use its exact address:
 
 ```bash
-orca terminal send --terminal '<terminal-from-find>' --text 'Status?' --enter
-orca orchestration send --to '<mailbox-from-find>' --subject 'Status?' --type question
+orca orchestration send --to '<terminal-from-find>' --subject 'Status' --body 'Status?' --type question
+orca orchestration send --to '<mailbox-from-find>' --subject 'Status' --body 'Status?' --type question
 ```
 
 Mailboxes are `dispatch:<id>` or `orca_session_id:<id>`; a `run:<id>` addresses a coordinator. Find never sends messages or assigns ownership. Adding references from a shell does not associate that shell with an agent.
@@ -193,7 +209,7 @@ orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --screen --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
-orca terminal send --terminal <handle> --text "continue" --enter --json
+orca terminal send --terminal <handle> --text "npm test" --enter --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
@@ -223,6 +239,28 @@ close returns a failing `unverifiable` result rather than claiming the processes
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+## Installed agents
+
+```bash
+orca agent installed --json
+orca agent installed --worktree active
+```
+
+Lists the agent CLIs Orca detects on the host that can start: agents turned off in Settings → Agents are left out, and ones set up there with a custom command are included. Each `id` is what `--agent` takes in `orca agent launch` and `orca worktree create`, and `default` marks the default agent. For running agents, use `agent list`. `--worktree` checks where that workspace runs agents, such as its SSH host or WSL distro; a stopped WSL distro is not started to check.
+
+## Agents by ID
+
+```bash
+orca agent list --json
+orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+```
+
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<id>`), what Copy Orca Session ID copies. `agent list` lists agents in this host's workspaces with their IDs; a terminal agent shows none until it first reports to Orca. A chat keeps its ID across `/clear`; a terminal agent gets a new one. IDs belong to the host that runs the agent: agents on other hosts are not listed, and the output names those hosts with the `--environment` that lists them. A finished terminal agent stays listed as `done` while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `agent read` still reads it in all these cases. `agent show` shows a listed sleeping agent's last state and where it wakes when its workspace is reopened.
+
+`agent read` reads the conversation, not a screen: a chat's history, or a terminal agent's own transcript. The agent need not be running and reading never starts it. A terminal agent can be read while Orca knows where its transcript is (it is open, or asleep in a workspace; on Windows, a sleeping WSL agent only once its tab is reopened). The read can start with a state (`state` in `--json`) for the latest turn its own history records: `working` means that history shows an unfinished turn, so its reply may not be there yet, and `done` means the turn ended with its reply in the read. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `agent list` and `agent show` report the last state known to Orca, which may differ. To message an agent, use `orca orchestration send` with its terminal handle (a terminal agent) or `orca_session_id:<id>` (a chat), not `orca terminal send`; a sleeping terminal agent can't be messaged, so reopen its workspace first.
 
 ## Chats
 
@@ -292,6 +330,7 @@ Use `orca computer` for native desktop apps outside the built-in browser:
 ```bash
 orca computer permissions --json
 orca computer list-apps --json
+orca computer launch-app Safari --json
 orca computer get-app-state --app com.apple.Safari --json
 orca computer click --app com.apple.Safari --element-index 12 --json
 orca computer paste-text --app com.apple.Safari --text "hello" --json
@@ -412,7 +451,7 @@ A selection applies to every agent of that provider launched on the host after i
 
 ## Artifacts
 
-Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
 
 ```bash
 orca artifacts share ./report.html --json
@@ -456,6 +495,13 @@ Agent status hooks:
 orca agent hooks status --json
 orca agent hooks on --json
 orca agent hooks off --json
+```
+
+Before deleting the app, remove what Orca added outside its own folders (agent hooks, the `orca` command, the background service and `~/.orca/agent-hooks`). Projects, worktrees, chat history and settings stay:
+
+```bash
+orca uninstall
+orca uninstall --yes --json
 ```
 
 ## Agent habits

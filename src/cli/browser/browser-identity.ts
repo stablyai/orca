@@ -2,13 +2,13 @@ import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../shared/browser-user-agent-mode'
-import { BROWSER_IDENTITY_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getRequiredStringFlag } from '../flags'
-import { printResult } from '../format'
-import { RuntimeClientError } from '../runtime/types'
+} from '../../shared/browser/identity/browser-user-agent-mode'
+import { BROWSER_IDENTITY_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 async function assertBrowserIdentitySupported({ client }: HandlerContext): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
@@ -31,7 +31,7 @@ function parseMode(flags: Map<string, string | boolean>): BrowserUserAgentMode {
 function formatStatus(status: BrowserIdentityModeStatus): string {
   const { identity } = status
   if (identity.configuredMode === null) {
-    return `Browser identity: ${identity.state}; Cleaned is applied for this launch. Explicit reset required.`
+    return `Browser identity: ${identity.state}; ${identity.appliedMode} is applied for this launch. Explicit reset required.`
   }
   return `Browser identity: ${identity.configuredMode} (applied: ${identity.appliedMode}${identity.restartRequired ? ', restart required' : ''})`
 }
