@@ -118,7 +118,16 @@ ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.wo
   # with real values. You are done when it confirms; if it fails, follow the
   # recovery it prints.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
-\`\`\`
+${
+  chat
+    ? ''
+    : `
+  # Mail for you arrives in your own check while you work; run it when told
+  # messages are waiting. check is the one command that takes --terminal,
+  # not --from:
+  ${cli} orchestration check --terminal ${params.workerHandle}
+`
+}\`\`\`
 
 ${postDoneInstructions}`
 
