@@ -27,6 +27,10 @@ import {
   setBrowserExtensionListChangedListener
 } from './installation/browser-extension-list-changes'
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
+import {
+  isBrowserExtensionPageContents,
+  scheduleIdleBrowserExtensionProfileCheck
+} from './profile-sessions/browser-extension-idle-profiles'
 import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
 import {
   setSavedBrowserTabsSource,
@@ -119,16 +123,15 @@ const observedContents = new WeakSet<Electron.WebContents>()
 
 /** Tabs (webview guests and serve's offscreen pages) and extension popouts in a session that runs extensions. */
 function observeExtensionContents(contents: Electron.WebContents): void {
-  const type = contents.getType()
-  if (
-    (type !== 'webview' && type !== 'window' && type !== 'offscreen') ||
-    isHiddenHelperContents(contents) ||
-    observedContents.has(contents) ||
-    !getBrowserExtensionProfileIdForSession(contents.session)
-  ) {
+  const profileId = getBrowserExtensionProfileIdForSession(contents.session)
+  if (!isBrowserExtensionPageContents(contents) || observedContents.has(contents) || !profileId) {
     return
   }
   observedContents.add(contents)
+  const sess = contents.session
+  contents.once('destroyed', () =>
+    scheduleIdleBrowserExtensionProfileCheck(profileId, sess, observeExtensionContents)
+  )
   // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
   if (!isBrowserExtensionSidePanelGuest(contents)) {
     observeBrowserExtensionWebNavigation(contents)
