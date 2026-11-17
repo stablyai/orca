@@ -41,6 +41,8 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  /** A steady poll whose caller ignores child evidence; Windows skips the Store-shell table read. */
+  jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -121,7 +123,8 @@ export async function inspectTerminalHostProcess(args: {
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
-      args.ignoreDetached === true
+      args.ignoreDetached === true,
+      args.steadyState === true && args.jobMembershipOnly === true
     )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')

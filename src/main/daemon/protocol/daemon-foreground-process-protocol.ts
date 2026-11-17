@@ -21,6 +21,8 @@ export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & 
     expectedIncarnationId?: string
     /** Older daemons ignore this and return a full capture. */
     steadyState?: boolean
+    /** Older daemons ignore this and judge Windows children by job membership alone, as asked. */
+    jobMembershipOnly?: boolean
     /** Older daemons still count detached daemons as children. */
     ignoreDetached?: boolean
   }

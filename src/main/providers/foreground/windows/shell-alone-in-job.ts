@@ -18,13 +18,15 @@ export async function isWindowsShellAloneInJob(
   spawnedShellPath: string,
   jobProcessIds: ReadonlySet<number> | null | undefined,
   readIdentityTable: () => Promise<WindowsProcessIdentityRow[]>,
-  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  readConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>,
+  /** Skips the table read for a shell-only job, missing a Store shell's escaped children. */
+  jobMembershipOnly = false
 ): Promise<boolean> {
   if (!jobProcessIds?.has(shellPid)) {
     return false
   }
   if (jobProcessIds.size === 1) {
-    return !hasLiveDescendant(shellPid, await readIdentityTable())
+    return jobMembershipOnly || !hasLiveDescendant(shellPid, await readIdentityTable())
   }
   const isLauncher = isGitForWindowsBashLauncherPath(spawnedShellPath)
   if (!isLauncher && !readConsoleAttachedProcessIds) {

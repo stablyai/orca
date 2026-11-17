@@ -120,7 +120,13 @@ export function createAgentCompletionProcessMonitor({
               ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
               : {}),
             ...(priority === 'cadence' && options.isRemotePtyId?.(ptyId) !== true
-              ? { steadyState: true }
+              ? {
+                  steadyState: true,
+                  // Child evidence matters only while an agent is tracked; skip the Windows table read otherwise.
+                  ...(state.lastForegroundAgent && state.hasAgentRunEvidence
+                    ? {}
+                    : { jobMembershipOnly: true })
+                }
               : {})
           }
           let result = await (Object.keys(inspectOptions).length > 0
