@@ -6,7 +6,11 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
-import { parseTomlTableHeaderPath, type ParsedTomlTableHeaderPath } from './config-toml-key-path'
+import {
+  parseTomlKeyPath,
+  parseTomlTableHeaderPath,
+  type ParsedTomlTableHeaderPath
+} from './config-toml-key-path'
 import { findProjectTrustLevelEntries } from '../../trust/toml/config-toml-project-trust-level'
 import { CODEX_HOOK_TRUST_KEY } from './config-toml-syntax'
 import '../../trust/toml/config-toml-trust'
@@ -111,6 +115,42 @@ export function isRuntimePreservedTomlSection(section: TomlSection): boolean {
 // Codex counts its model tip per session here; replacing it each launch restarts the count.
 export function isCodexTuiBookkeepingTomlSection(section: TomlSection): boolean {
   return sectionLeafKey(section, ['tui']) === 'model_availability_nux'
+}
+
+/** False when the config defines the tip table any other way, which a kept copy would redefine. */
+export function definesCodexTuiBookkeepingOnlyAsTable(config: string): boolean {
+  const target = ['tui', 'model_availability_nux']
+  const overlaps = (path: readonly string[]): boolean =>
+    path.length > 0 &&
+    target.every((segment, index) => index >= path.length || path[index] === segment)
+  let table: string[] = []
+  let state = createTomlLineScanState()
+  for (const line of config.split('\n')) {
+    const structural = isTomlStructuralLine(state)
+    state = updateTomlLineScanState(state, line)
+    if (!structural) {
+      continue
+    }
+    const header = getTomlTableHeader(line)
+    if (header) {
+      const parsed = parseTomlTableHeaderPath(header)
+      table = parsed?.segments ?? []
+      const exact = !!parsed && !parsed.isArray && table.join('\0') === target.join('\0')
+      if (!parsed || (!exact && table.length >= target.length && overlaps(table))) {
+        return false
+      }
+      continue
+    }
+    const key = parseTomlKeyPath(line)
+    if (!key || line[key.end] !== '=') {
+      continue
+    }
+    const path = [...table, ...key.segments]
+    if (table.join('\0') !== target.join('\0') && overlaps(path)) {
+      return false
+    }
+  }
+  return true
 }
 
 export function isRuntimeHookTrustTomlSection(section: TomlSection): boolean {

@@ -7,6 +7,7 @@ import {
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
   getTomlSections,
+  definesCodexTuiBookkeepingOnlyAsTable,
   isCodexTuiBookkeepingTomlSection,
   isRuntimePreservedTomlSection,
   isRuntimeProjectTomlSection,
@@ -24,16 +25,7 @@ export function mergeSystemCodexConfigIntoRuntime(
 ): string {
   const systemSections = deduplicateProjectTomlSections(getTomlSections(systemConfig))
   // Another spelling in ~/.codex (a [tui] key or inline table) would define the table twice.
-  const countTuiBookkeeping = (text: string): number =>
-    text.split('model_availability_nux').length - 1
-  const keepsTuiBookkeeping =
-    countTuiBookkeeping(systemConfig) ===
-    countTuiBookkeeping(
-      systemSections
-        .filter((section) => isCodexTuiBookkeepingTomlSection(section))
-        .map((section) => section.block)
-        .join('\n')
-    )
+  const keepsTuiBookkeeping = definesCodexTuiBookkeepingOnlyAsTable(systemConfig)
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig)).filter(
     (section) => keepsTuiBookkeeping || !isCodexTuiBookkeepingTomlSection(section)
   )

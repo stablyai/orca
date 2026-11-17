@@ -77,28 +77,30 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
-  it.each(['model_availability_nux = { "gpt" = 4 }', 'model_availability_nux."gpt" = 4'])(
-    'leaves one model-tip table when ~/.codex has %s in [tui]',
-    (spelling) => {
-      const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
-      mkdirSync(accountHome, { recursive: true })
-      writeFileSync(
-        join(accountHome, 'config.toml'),
-        ['[tui.model_availability_nux]', '"gpt" = 2', ''].join('\n'),
-        'utf-8'
-      )
-      writeFileSync(getSystemConfigPath(), ['[tui]', spelling, ''].join('\n'), 'utf-8')
+  it.each([
+    '[tui]\nmodel_availability_nux = { "gpt" = 4 }\n',
+    '[tui]\nmodel_availability_nux."gpt" = 4\n',
+    '[tui]\n"model_availability_nu\\u0078" = { "gpt" = 4 }\n',
+    'tui = { notifications = true }\n'
+  ])('leaves one model-tip table when ~/.codex is %j', (systemConfig) => {
+    const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
+    mkdirSync(accountHome, { recursive: true })
+    writeFileSync(
+      join(accountHome, 'config.toml'),
+      ['[tui.model_availability_nux]', '"gpt" = 2', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(getSystemConfigPath(), systemConfig, 'utf-8')
 
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: accountHome,
-        systemHomePath: getSystemCodexHomePath()
-      })
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: accountHome,
+      systemHomePath: getSystemCodexHomePath()
+    })
 
-      expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).not.toContain(
-        '[tui.model_availability_nux]'
-      )
-    }
-  )
+    expect(readFileSync(join(accountHome, 'config.toml'), 'utf-8')).not.toContain(
+      '[tui.model_availability_nux]'
+    )
+  })
 
   it("keeps Codex's own model-tip count in the managed home instead of resetting it", () => {
     const accountHome = join(userDataDir, 'codex-accounts', 'a', 'home')
