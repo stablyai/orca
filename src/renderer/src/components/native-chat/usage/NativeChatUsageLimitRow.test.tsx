@@ -48,7 +48,8 @@ function limitBlock(
 function stopView(
   active: boolean,
   auto: NativeChatUsageLimitAutoContinueState | null,
-  continueUsageLimit: (hadFocus?: boolean) => void
+  continueUsageLimit: (hadFocus?: boolean) => void,
+  autoUnavailable = false
 ): NativeChatOrcaStopView {
   return {
     hostLabel: null,
@@ -58,6 +59,7 @@ function stopView(
     continueNow: () => {},
     usageLimitTurnItemId: active ? 'cut-turn' : null,
     usageLimitAutoContinue: auto,
+    usageLimitAutoContinueUnavailable: autoUnavailable,
     continueUsageLimit
   }
 }
@@ -197,6 +199,24 @@ describe('usage-limit row over time', () => {
       'aria-disabled',
       'true'
     )
+  })
+
+  it('offers no auto-continue control where this machine has no say', () => {
+    // A host without the feature, or a remote host whose own setting is off, both arrive as this.
+    const view = stopView(true, null, () => {}, true)
+    render(
+      <TranslationScopeProvider>
+        <TooltipProvider>
+          <NativeChatOrcaStopContext.Provider value={view}>
+            <NativeChatNoticeRow agentName="Codex" block={limitBlock(start + HOUR)} />
+          </NativeChatOrcaStopContext.Provider>
+        </TooltipProvider>
+      </TranslationScopeProvider>
+    )
+    expect(screen.queryByRole('button', { name: 'Auto-continue settings' })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions' }), { key: 'Enter' })
+    expect(screen.getByRole('menuitem', { name: 'Copy error' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Auto-continue settings…' })).toBeNull()
   })
 
   it('offers the auto-continue setting while waiting even with no published state', () => {

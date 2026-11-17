@@ -162,6 +162,8 @@ export function NativeChatUsageLimitRow({
   // Historical rows pass no time, so they never schedule a wake.
   const passed = useUsageLimitContinueClock(manualAt)
   const auto = active ? (view.usageLimitAutoContinue ?? null) : null
+  // A host without the feature, or another machine whose setting is off: no control would apply.
+  const autoOffered = active && view.usageLimitAutoContinueUnavailable !== true
   const scheduled: ScheduledAutoContinue | null = auto?.kind === 'scheduled' ? auto : null
   const phase: UsageLimitPhase = !active
     ? 'historical'
@@ -238,7 +240,7 @@ export function NativeChatUsageLimitRow({
           }
         ]
       : []),
-    ...(auto || phase === 'waiting' || phase === 'ready'
+    ...(auto || (autoOffered && (phase === 'waiting' || phase === 'ready'))
       ? [
           {
             key: 'settings',
@@ -308,9 +310,8 @@ export function NativeChatUsageLimitRow({
                       )}
                     </UsageLimitToolButton>
                   ) : null}
-                  {phase === 'waiting' ? (
-                    // No published state (host still loading, without the feature, remote "off",
-                    // or a cut it can't schedule) still offers the setting, as "off" does.
+                  {phase === 'waiting' && autoOffered ? (
+                    // A host still loading, or with no state for this cut yet, offers the setting as "off".
                     <AutoContinueTool auto={auto ?? AUTO_CONTINUE_OFF} autoTime={autoTime} />
                   ) : null}
                 </>
