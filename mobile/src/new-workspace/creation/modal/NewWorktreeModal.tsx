@@ -18,7 +18,10 @@ import { composerCreateRepoId } from '../source-workspace-create'
 import { useNewWorktreeRuntimeCapabilities } from '../worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../use-worktree-create-base-prefetch'
 import { useHostDescriptor } from '../../../host-descriptors/host-descriptor-store'
-import { isSameMobileWorkspaceRepo } from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
+import {
+  isSameMobileWorkspaceRepo,
+  refreshMobileNewWorkspaceDialogSelectedRepo
+} from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
@@ -144,10 +147,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     ? composerCreateRepoId(composer.createSelection, selectedRepo.id)
     : null
   const defaultRepo =
-    selectedRepo?.id === defaultRepoId
-      ? selectedRepo
-      : (allRepos.find((repo) => repo.id === defaultRepoId && serverOf(repo) === repoServer) ??
-        null)
+    !selectedRepo || defaultRepoId === null
+      ? null
+      : selectedRepo.id === defaultRepoId
+        ? selectedRepo
+        : refreshMobileNewWorkspaceDialogSelectedRepo(allRepos, {
+            ...selectedRepo,
+            id: defaultRepoId
+          })
   const projectDefault = useNewWorkspaceProjectDefaultAgent(client, defaultRepo, visible)
   // The folder's name, seeded once per opening; the user's edits stand.
   const seededFolderName = useRef(false)

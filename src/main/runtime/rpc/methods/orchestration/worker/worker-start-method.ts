@@ -167,6 +167,13 @@ export async function prepareWorkerStart(
       { effectsApplied: false }
     )
   }
+  if (params.resolvedAgentSelection && orchestrationCaller?.kind !== 'peer') {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Only a paired Orca can forward a resolved default agent. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
   if (params.adoptTaskId !== undefined && orchestrationCaller?.kind !== 'peer') {
     throw new OrchestrationError(
       'invalid_argument',

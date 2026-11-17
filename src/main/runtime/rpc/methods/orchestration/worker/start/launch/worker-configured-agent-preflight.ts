@@ -1,25 +1,23 @@
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
-import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { z } from 'zod'
+import type { ResolvedProjectDefaultAgentSelection } from '../../../../../../../../shared/rpc-contract/project-default-agent-params'
 import { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
 import { resolveProjectDefaultAgent } from '../../../../../../project-default-agent-resolution'
 
 type WorkerAgentTarget = { repo?: string; worktree?: string }
 
-export type WorkerDefaultAgentSelection = {
-  agent: TuiAgent
-  source: 'project' | 'global' | 'automatic' | 'explicit'
-  projectId?: string
-  projectName?: string
-}
+export type WorkerDefaultAgentSelection = z.infer<typeof ResolvedProjectDefaultAgentSelection>
 
-export async function resolveWorkerDefaultAgentParams<T extends { agent?: string }>(
+export async function resolveWorkerDefaultAgentParams<
+  T extends { agent?: string; resolvedAgentSelection?: WorkerDefaultAgentSelection }
+>(
   runtime: OrcaRuntimeService,
   params: T,
   resolveTarget: () => Promise<WorkerAgentTarget>
 ): Promise<{ params: T; selection?: WorkerDefaultAgentSelection }> {
-  if (params.agent !== 'default') {
+  if (params.agent !== 'default' && !params.resolvedAgentSelection) {
     return { params }
   }
   const target = await resolveTarget()
@@ -27,7 +25,8 @@ export async function resolveWorkerDefaultAgentParams<T extends { agent?: string
     runtime,
     target.repo
       ? { repo: await runtime.showRepo(target.repo) }
-      : { worktreeId: (await runtime.showManagedTerminalWorkspace(target.worktree!)).id }
+      : { worktreeId: (await runtime.showManagedTerminalWorkspace(target.worktree!)).id },
+    params.resolvedAgentSelection?.agent
   )
   if (!resolved.agent) {
     throw new OrchestrationError(
@@ -37,7 +36,7 @@ export async function resolveWorkerDefaultAgentParams<T extends { agent?: string
   }
   return {
     params: { ...params, agent: resolved.agent },
-    selection: {
+    selection: params.resolvedAgentSelection ?? {
       agent: resolved.agent,
       source: resolved.source,
       ...(resolved.projectId ? { projectId: resolved.projectId } : {}),

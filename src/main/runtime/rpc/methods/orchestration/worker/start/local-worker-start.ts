@@ -83,19 +83,19 @@ export async function startLocalWorker(args: {
       callerWorktreeId,
       crossStoreParent: params.crossStoreParent
     })
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+  const callerWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,
     params.from,
     callerSession
   )
   const existingWorktree =
-    requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
+    requestedWorktree === 'current' ? `id:${callerWorktreeId}` : requestedWorktree
   const { launchParams, defaultSelection, openCodeModelLaunchSupported } =
     await prepareLocalWorkerAgentParams({
       runtime,
       db,
       params,
-      callerWorktreeId: coordinatorWorktreeId,
+      callerWorktreeId,
       requestedWorktree,
       createsWorktree,
       creationTargetFor
@@ -110,9 +110,7 @@ export async function startLocalWorker(args: {
   const agentSelection =
     defaultSelection ?? (agent ? { agent, source: 'explicit' as const } : undefined)
 
-  const creationTarget = createsWorktree
-    ? await creationTargetFor(coordinatorWorktreeId)
-    : undefined
+  const creationTarget = createsWorktree ? await creationTargetFor(callerWorktreeId) : undefined
   if (creationTarget) {
     await assertOrchestrationWorktreeCreationSupported({
       runtime,

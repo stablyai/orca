@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ResolvedProjectDefaultAgentSelection } from '../project-default-agent-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { CrossStoreParentRefSchema } from '../workspaces/cross-store-parent-params'
 
@@ -28,6 +29,7 @@ export const WorkerStartParams = z
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
     terminal: OptionalString,
     agent: OptionalString,
+    resolvedAgentSelection: ResolvedProjectDefaultAgentSelection.optional(),
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
@@ -48,6 +50,13 @@ export const WorkerStartParams = z
     chatLineage: z.literal(true).optional()
   })
   .superRefine((params, ctx) => {
+    if (params.resolvedAgentSelection && params.resolvedAgentSelection.agent !== params.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['resolvedAgentSelection'],
+        message: 'Resolved selection must match the concrete agent'
+      })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

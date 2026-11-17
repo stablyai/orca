@@ -54,9 +54,10 @@ export async function resolveFederatedWorkerAgent(args: {
   createsWorktree: boolean
   capabilities?: readonly string[]
   preflightTimeoutMs: number
+  retried?: ReturnType<typeof retriedWorkerDefaultAgent>
 }) {
   const { runtime, server, worktree } = args
-  const retried = retriedWorkerDefaultAgent(args.db, args.params)
+  const retried = args.retried ?? retriedWorkerDefaultAgent(args.db, args.params)
   const params = retried ? { ...args.params, agent: retried.agent } : args.params
   const retriedSelection = retried?.selection
   if (

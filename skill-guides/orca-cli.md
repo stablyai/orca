@@ -212,9 +212,7 @@ ORCA worktree create --name task --parent-worktree active --agent claude --setup
 ORCA worktree create --name task --parent-worktree active --setup skip --json
 ```
 
-- `--agent <id|default>` starts the selected agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known explicit ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
-
-- `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. `ORCA agent installed --json` lists the ids available on this host.
+- `--agent <id|default>` starts the selected agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. `ORCA agent installed --json` lists the ids available on this host.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.

@@ -1,3 +1,4 @@
+import { refreshMobileNewWorkspaceDialogSelectedRepo } from '../../../worktree/repositories/new-workspace-dialog-repo-selection'
 import { resolveMobileNewWorkspaceDefaultAgent } from './new-workspace-project-default-agent'
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
@@ -134,14 +135,14 @@ export function useNewWorkspaceCreateSubmit(args: {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
         return
       }
-      let latestRuntimeSettings = args.runtimeSettings
+      let runtimeSettings = args.runtimeSettings
       try {
         const settingsReply = await settingsRead.request(client)
         const settings = settingsRead.interpret(settingsReply)
         if (settings.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          latestRuntimeSettings = settings.value as NewWorktreeRuntimeSettings
-          args.setRuntimeSettings(latestRuntimeSettings)
+          runtimeSettings = settings.value as NewWorktreeRuntimeSettings
+          args.setRuntimeSettings(runtimeSettings)
         }
       } catch {
         // The runtime validates the same setting before spawning.
@@ -149,11 +150,9 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (
         args.agentOverridden &&
         args.selectedAgent.id !== '__blank__' &&
-        !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
+        !isMobileTuiAgentEnabled(args.selectedAgent.id, runtimeSettings?.disabledTuiAgents)
       ) {
-        args.setSelectedAgent(
-          pickPreferredNewWorktreeAgent(latestRuntimeSettings, args.detectedAgentIds)
-        )
+        args.setSelectedAgent(pickPreferredNewWorktreeAgent(runtimeSettings, args.detectedAgentIds))
         args.setAgentOverridden(false)
         args.setError('Selected agent is disabled. Choose an enabled agent before creating.')
         return
@@ -176,11 +175,10 @@ export function useNewWorkspaceCreateSubmit(args: {
       const setupRepo =
         createRepoId === selectedRepo.id
           ? selectedRepo
-          : args.repos.find(
-              (repo) =>
-                repo.id === createRepoId &&
-                getRepoExecutionHostId(repo) === getRepoExecutionHostId(selectedRepo)
-            )
+          : refreshMobileNewWorkspaceDialogSelectedRepo(args.repos, {
+              ...selectedRepo,
+              id: createRepoId
+            })
       if (!setupRepo) {
         args.setError("This item's project isn't available on this host.")
         return
