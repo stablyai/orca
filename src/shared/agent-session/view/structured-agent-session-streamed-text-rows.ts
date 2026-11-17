@@ -1,13 +1,13 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 
 // A row list maps to the earlier list it differs from only by streamed message text.
-type TextRevision = { base: readonly AgentJournalRenderItem[]; indexes: ReadonlySet<number> }
-const textOnlyBases = new WeakMap<readonly AgentJournalRenderItem[], TextRevision>()
+type TextRevision = { base: readonly unknown[]; indexes: ReadonlySet<number> }
+const textOnlyBases = new WeakMap<readonly unknown[], TextRevision>()
 
 /** Everything but the text of a message's blocks, which streaming alone changes. */
 function shape(item: AgentJournalRenderItem): string | null {
   const { body } = item
-  if (body.kind !== 'message' || body.role === 'user') {
+  if (body.kind !== 'message' || (body.role !== 'assistant' && body.role !== 'reasoning')) {
     return null
   }
   const { revision: _revision, ...row } = item
@@ -20,7 +20,7 @@ function shape(item: AgentJournalRenderItem): string | null {
           return block
         }
         const { text: _text, ...rest } = block
-        return rest
+        return { ...rest, hasText: block.text.length > 0 }
       })
     }
   })
@@ -34,9 +34,9 @@ export function onlyStreamedTextChanged(
   return before !== null && before === shape(next)
 }
 
-export function noteStreamedTextRevision(
-  next: AgentJournalRenderItem[],
-  base: readonly AgentJournalRenderItem[],
+export function noteStreamedTextRevision<T>(
+  next: T[],
+  base: readonly T[],
   changedIndexes: Iterable<number>
 ): void {
   const prior = textOnlyBases.get(base)
@@ -47,9 +47,9 @@ export function noteStreamedTextRevision(
 }
 
 /** Known replacements, including skipped frames, without retaining a chain of previous arrays. */
-export function streamedTextReplacementIndexes(
-  before: readonly AgentJournalRenderItem[],
-  after: readonly AgentJournalRenderItem[]
+export function streamedTextReplacementIndexes<T>(
+  before: readonly T[],
+  after: readonly T[]
 ): number[] | null {
   if (before === after) {
     return []
@@ -65,10 +65,8 @@ export function streamedTextReplacementIndexes(
 
 /** Rows to give a projection that never reads assistant or reasoning text: the same list across a
  *  stream's text revisions, so its memo holds while a reply streams. */
-export function rowsBesideStreamedText(
-  items: readonly AgentJournalRenderItem[]
-): readonly AgentJournalRenderItem[] {
-  return textOnlyBases.get(items)?.base ?? items
+export function rowsBesideStreamedText<T>(items: readonly T[]): readonly T[] {
+  return (textOnlyBases.get(items)?.base as readonly T[] | undefined) ?? items
 }
 
 const transcriptFloors = new WeakMap<
@@ -116,4 +114,50 @@ export function streamedAgentSessionTranscriptRows(
     changed.map((index) => index - cached.start)
   )
   return rows
+}
+
+/** A row-local map/filter keeps its structural index across text revisions. */
+export function createStreamedTextRowProjection<T, U>(
+  project: (row: T, index: number) => U | null
+) {
+  let held: { base: readonly T[]; rows: U[]; at: Map<number, number> } | null = null
+  return (items: readonly T[]): U[] => {
+    const base = rowsBesideStreamedText(items)
+    if (held?.base !== base) {
+      const rows: U[] = []
+      const at = new Map<number, number>()
+      base.forEach((row, index) => {
+        const next = project(row, index)
+        if (next !== null) {
+          at.set(index, rows.length)
+          rows.push(next)
+        }
+      })
+      held = { base, rows, at }
+    }
+    const indexes = streamedTextReplacementIndexes(base, items) ?? []
+    if (!indexes.length) {
+      return held.rows
+    }
+    const rows = held.rows.slice()
+    const changed: number[] = []
+    for (const index of indexes) {
+      const at = held.at.get(index)
+      const next = project(items[index]!, index)
+      if (at !== undefined && next !== null) {
+        rows[at] = next
+        changed.push(at)
+      }
+    }
+    noteStreamedTextRevision(rows, held.rows, changed)
+    return rows
+  }
+}
+
+const partitionBases = new WeakMap<object, object>()
+export function noteStreamedTextPartition<T extends object>(next: T, before: T): void {
+  partitionBases.set(next, partitionBases.get(before) ?? before)
+}
+export function partitionsBesideStreamedText<T extends object>(partitions: T): T {
+  return (partitionBases.get(partitions) as T | undefined) ?? partitions
 }

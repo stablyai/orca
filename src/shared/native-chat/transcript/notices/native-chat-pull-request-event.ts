@@ -1,5 +1,9 @@
 import { parseAgentJournalItemKey } from '../../../agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../native-chat-types'
+import {
+  createStreamedTextRowProjection,
+  rowsBesideStreamedText
+} from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** A host status line about a finished CI result on a pull request a chat opened or pushed to. */
 export const PULL_REQUEST_EVENT_PRESENTATION = 'pull-request-event'
@@ -100,6 +104,33 @@ export function withoutPullRequestEventRows(rows: {
     }
   })
   return { messages, turnKeys }
+}
+
+export function createNativeChatCiRowProjection() {
+  const project = createStreamedTextRowProjection((message: NativeChatMessage) =>
+    isPullRequestEventMessage(message) ? null : message
+  )
+  let held:
+    | {
+        messages: readonly NativeChatMessage[]
+        keys: readonly (string | undefined)[]
+        turnKeys: readonly (string | undefined)[]
+      }
+    | undefined
+  return (rows: {
+    messages: readonly NativeChatMessage[]
+    turnKeys: readonly (string | undefined)[]
+  }) => {
+    const messages = rowsBesideStreamedText(rows.messages)
+    if (held?.messages !== messages || held.keys !== rows.turnKeys) {
+      held = {
+        messages,
+        keys: rows.turnKeys,
+        turnKeys: withoutPullRequestEventRows({ ...rows, messages }).turnKeys
+      }
+    }
+    return { messages: project(rows.messages), turnKeys: held.turnKeys }
+  }
 }
 
 /** Messages without CI lines; the same array when there's nothing to drop, so identity checks hold. */

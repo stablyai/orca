@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   subscribe: vi.fn(),
   watchHostContact: vi.fn(),
-  supports: vi.fn()
+  supports: vi.fn(),
+  localCapabilities: vi.fn()
 }))
 
 vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
@@ -18,6 +19,10 @@ vi.mock(
     subscribeStructuredAgentSession: mocks.subscribe
   })
 )
+
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
+  ensureLocalRuntimeCapabilities: mocks.localCapabilities
+}))
 
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapabilities: mocks.supports
@@ -40,8 +45,9 @@ type SubscribeAttempt = {
 const target = { kind: 'local' } as const
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let step = 0; step < 8; step++) {
+    await Promise.resolve()
+  }
 }
 
 describe('structured agent-session read transport generations', () => {
@@ -50,6 +56,10 @@ describe('structured agent-session read transport generations', () => {
   beforeEach(() => {
     attempts.length = 0
     vi.clearAllMocks()
+    mocks.localCapabilities.mockResolvedValue([
+      'agent-session.text-append.v1',
+      'agent-session.tool-output-append.v1'
+    ])
     mocks.subscribe.mockImplementation((_target, _params, onEvent, onError, onClose) => {
       const attempt: SubscribeAttempt = {
         closed: Promise.withResolvers<{ unsubscribe: () => void }>(),
@@ -116,7 +126,10 @@ describe('structured agent-session read transport generations', () => {
       ])
     )
     expect(asked).toEqual({
-      local: { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
+      local: {
+        sessionId: 'session-a',
+        capabilities: { textAppend: 1, toolOutputAppend: 1, promptSuggestions: 1 }
+      },
       'env-new': { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
       'env-old': { sessionId: 'session-a' }
     })

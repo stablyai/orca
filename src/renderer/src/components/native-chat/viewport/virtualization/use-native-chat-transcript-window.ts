@@ -9,7 +9,7 @@ import {
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
-import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
+import { nativeChatSlotKeys } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import {
   nativeChatScrollOffsetWithin,
@@ -79,8 +79,7 @@ export function useNativeChatTranscriptWindow({
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
   // Encoded only when the slots change: scroll and range renders reuse it.
-  const encodedItemKeys = useMemo(() => JSON.stringify(slots.map(nativeChatSlotKey)), [slots])
-  const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
+  const itemKeys = nativeChatSlotKeys(slots)
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
     [slots]

@@ -41,7 +41,7 @@ export function createStructuredAgentSessionSubscribeAsks(asks: {
     refuseOn: (error: unknown): void => {
       paramRefused ||= sent && agentSessionReadInvalidArgument(error)
     },
-    /** Answers at once when nothing needs checking, so a local read subscribes in the same turn.
+    /** Answers at once when nothing needs checking, so a reader needing no capability check subscribes in the same turn.
      *  A failed support check asks for nothing; it must not keep the transcript closed. */
     read: (): StructuredAgentSessionSubscribeAsk | Promise<StructuredAgentSessionSubscribeAsk> => {
       const textAppend =

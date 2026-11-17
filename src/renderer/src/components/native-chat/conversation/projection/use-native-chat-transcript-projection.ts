@@ -1,4 +1,7 @@
 import { useMemo } from 'react'
+import { useAppStore } from '@/store'
+import { nativeChatShowsCiResultLines } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { createNativeChatCiRowProjection } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -9,6 +12,15 @@ import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-sess
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { createNativeChatConversationProjection } from './native-chat-conversation-projection'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
+
+export function useNativeChatCiRows(rows: {
+  messages: readonly NativeChatMessage[]
+  turnKeys: readonly (string | undefined)[]
+}) {
+  const show = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
+  const hideCiRows = useMemo(() => createNativeChatCiRowProjection(), [])
+  return show ? rows : hideCiRows(rows)
+}
 
 /** Separate conversation/subagent rows, using journal turn placement when available. */
 export function useNativeChatTranscriptProjection(

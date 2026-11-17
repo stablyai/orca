@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useNativeChatUsageLimitAutoContinue } from '@/components/native-chat/usage/use-native-chat-usage-limit-auto-continue'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
@@ -84,14 +85,15 @@ export function useNativeChatInterruptedContinuation(input: {
   // Suppress continuation during local launch resume; paired servers own their own chats.
   const launchPending = useNativeChatLaunchResumePending() && target.kind === 'local'
   const resuming = useNativeChatTargetRestartResuming(target).includes(sessionId) || launchPending
+  const journalItems = rowsBesideStreamedText(input.journalItems)
   const cut = useMemo(
-    () => latestNativeChatOrcaStopCut(input.journalItems, input.submissions),
-    [input.journalItems, input.submissions]
+    () => latestNativeChatOrcaStopCut(journalItems, input.submissions),
+    [journalItems, input.submissions]
   )
   // Any host: Continue past a usage limit is the person's own message, which every host takes.
   const usageLimitCut = useMemo(
-    () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
-    [input.journalItems, input.submissions]
+    () => latestNativeChatUsageLimitCut(journalItems, input.submissions),
+    [journalItems, input.submissions]
   )
   const {
     auto: usageLimitAutoContinue,

@@ -1,7 +1,15 @@
+import {
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes,
+  noteStreamedTextRevision
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useContext, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import { nativeChatGeneratedImageAnswers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-generated-image-answers'
+import {
+  nativeChatGeneratedImageAnswers,
+  reviseNativeChatGeneratedImageAnswer
+} from '../../../../../../src/shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
 import {
   mobileNativeChatMarkdownImageSources,
@@ -18,11 +26,12 @@ export function useMobileNativeChatGeneratedImageAnswers(
   const sources = visuals
     ? mobileNativeChatVisualMarkdownImageSources
     : mobileNativeChatMarkdownImageSources
-  return useMemo(
+  const base = rowsBesideStreamedText(messages)
+  const projected = useMemo(
     () =>
       enabled
         ? nativeChatGeneratedImageAnswers(
-            messages,
+            base,
             turnKeys,
             new Set(
               Object.entries(completedByTurn).flatMap(([key, status]) =>
@@ -31,7 +40,20 @@ export function useMobileNativeChatGeneratedImageAnswers(
             ),
             sources
           )
-        : messages,
-    [enabled, messages, turnKeys, completedByTurn, sources]
+        : base,
+    [enabled, base, turnKeys, completedByTurn, sources]
   )
+  if (projected === base) {
+    return messages
+  }
+  const indexes = streamedTextReplacementIndexes(base, messages) ?? []
+  if (!indexes.length) {
+    return projected
+  }
+  const next = projected.slice()
+  for (const index of indexes) {
+    next[index] = reviseNativeChatGeneratedImageAnswer(base[index]!, messages[index]!)
+  }
+  noteStreamedTextRevision(next, projected, indexes)
+  return next
 }

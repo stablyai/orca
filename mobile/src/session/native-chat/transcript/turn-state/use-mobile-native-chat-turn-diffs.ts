@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatTurnMembership } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
@@ -9,6 +10,7 @@ export function useMobileNativeChatTurnDiffs(
   turnKeys: readonly (string | undefined)[],
   partialTurnKey: string | undefined
 ) {
+  rows = rowsBesideStreamedText(rows)
   return useMemo(() => {
     const keys = structured ? turnKeys : nativeChatTurnMembership(rows, null).turnKeys
     const diffs = nativeChatTurnDiffs(rows, keys, undefined, partialTurnKey)

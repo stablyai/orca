@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { readStructuredAgentSessionItem } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
@@ -58,13 +59,16 @@ export function useNativeChatTurnOpenedPullRequests(
     outputs: ReadonlyMap<string, string | null>
   }>({ owner, outputs: NO_FULL_OUTPUTS })
   const ownedOutputs = fullOutputs.owner === owner ? fullOutputs.outputs : NO_FULL_OUTPUTS
+  const messages = turns && rowsBesideStreamedText(turns.messages)
+  const turnKeys = turns?.turnKeys
+  const partialTurnKey = turns?.partialTurnKey
   const opened = useMemo(() => {
-    if (!enabled || !turns) {
+    if (!enabled || !messages || !turnKeys) {
       return NONE
     }
-    const merged = nativeChatRowsInTranscriptOrder(turns.messages, turns.turnKeys, subagentRows)
+    const merged = nativeChatRowsInTranscriptOrder(messages, turnKeys, subagentRows)
     const found = nativeChatTurnOpenedPullRequests(merged.messages, merged.turnKeys, {
-      partialTurnKey: turns.partialTurnKey,
+      partialTurnKey: partialTurnKey,
       fullOutputs: ownedOutputs,
       cache: evidenceCacheFor(ownedOutputs)
     })
@@ -75,7 +79,7 @@ export function useNativeChatTurnOpenedPullRequests(
         .filter(([, list]) => list.length > 0)
     )
     return { ...found, byTurn }
-  }, [enabled, ownedOutputs, subagentRows, turns])
+  }, [enabled, ownedOutputs, subagentRows, messages, turnKeys, partialTurnKey])
 
   const clippedKey = opened.clippedCreateOutputs.join('\n')
   // A hidden chat reads nothing; what is still pending is asked again when it is shown.

@@ -1,4 +1,7 @@
-import { streamedTextReplacementIndexes } from './structured-agent-session-streamed-text-rows'
+import {
+  streamedTextReplacementIndexes,
+  noteStreamedTextRevision
+} from './structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -83,12 +86,13 @@ function reuseMessages(
   items: readonly AgentJournalRenderItem[],
   projectItems: StructuredAgentSessionItemProjector
 ): MessageStream | null {
-  if (previous.hasStoppedSends || items.length < previous.items.length) {
+  const replacements = streamedTextReplacementIndexes(previous.items, items)
+  if ((previous.hasStoppedSends && replacements === null) || items.length < previous.items.length) {
     return null
   }
   let output: NativeChatMessage[] | null = null
-  for (const index of streamedTextReplacementIndexes(previous.items, items) ??
-    previous.items.keys()) {
+  const changedRows: number[] = []
+  for (const index of replacements ?? previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {
@@ -121,9 +125,13 @@ function reuseMessages(
       return null
     }
     ;(output ??= previous.output.slice())[at] = row
+    changedRows.push(at)
   }
   const appended = items.slice(previous.items.length)
   if (appended.length === 0) {
+    if (output && replacements !== null) {
+      noteStreamedTextRevision(output, previous.output, changedRows)
+    }
     return output ? { ...previous, items, output } : { ...previous, items }
   }
   if (

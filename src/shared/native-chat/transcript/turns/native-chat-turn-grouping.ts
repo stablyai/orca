@@ -1,3 +1,8 @@
+import {
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes,
+  noteStreamedTextRevision
+} from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 // Share desktop/mobile turn ownership, bar placement and row order.
 
 import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
@@ -182,10 +187,46 @@ export function nativeChatTurnDrawOrder(
   ])
 }
 
+const orderedRows = new WeakMap<
+  readonly unknown[],
+  WeakMap<readonly number[], { rows: unknown[]; at: Map<number, number> }>
+>()
+
 /** `rows` in the transcript's draw order. */
 export function nativeChatRowsInDrawOrder<T>(
   rows: readonly T[],
   drawOrder: readonly number[] | null
 ): readonly T[] {
-  return drawOrder === null ? rows : drawOrder.map((index) => rows[index]!)
+  if (drawOrder === null) {
+    return rows
+  }
+  const base = rowsBesideStreamedText(rows)
+  let orders = orderedRows.get(base)
+  if (!orders) {
+    orders = new WeakMap()
+    orderedRows.set(base, orders)
+  }
+  let cached = orders.get(drawOrder)
+  if (!cached) {
+    cached = {
+      rows: drawOrder.map((index) => base[index]!),
+      at: new Map(drawOrder.map((index, at) => [index, at]))
+    }
+    orders.set(drawOrder, cached)
+  }
+  const indexes = streamedTextReplacementIndexes(base, rows) ?? []
+  if (!indexes.length) {
+    return cached.rows as T[]
+  }
+  const next = cached.rows.slice() as T[]
+  const changed: number[] = []
+  for (const index of indexes) {
+    const at = cached.at.get(index)
+    if (at !== undefined) {
+      next[at] = rows[index]!
+      changed.push(at)
+    }
+  }
+  noteStreamedTextRevision(next, cached.rows, changed)
+  return next
 }

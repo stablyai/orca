@@ -59,6 +59,18 @@ function slotHoldsControls(
   )
 }
 
+export function nativeChatResponseControlsStayInFlow(
+  slot: NativeChatMessageSlot,
+  typography?: NativeChatRowTypography
+): boolean {
+  return (
+    slot.drawsMessage &&
+    slot.message.role === 'assistant' &&
+    slot.actionsHang !== true &&
+    slotHoldsControls(slot, typography)
+  )
+}
+
 /** Set `actionsHang` on the conversation's own agent rows, and charge the estimate of a row whose
  *  controls stay in flow. Runs after `endsResponse` and `continuesTurn` are known. */
 export function markNativeChatResponseActionsHang(

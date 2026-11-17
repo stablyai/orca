@@ -99,7 +99,19 @@ it('projects only changed streamed rows after IPC, including frames a consumer s
     let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'history-page',
       page: {
-        ...hydrationPage(rows),
+        ...hydrationPage(rows, [
+          {
+            clientMessageId: 'withdrawn',
+            fence: 1,
+            payloadFingerprint: 'withdrawn',
+            submittedAt: 0,
+            submittedSequence: 0,
+            dispatchState: 'rejected',
+            reason: 'provider_cancelled_before_start',
+            resolvedAt: 1,
+            providerItemId: null
+          }
+        ]),
         hasOlder: true,
         latestTurn: {
           itemId: 'turn',

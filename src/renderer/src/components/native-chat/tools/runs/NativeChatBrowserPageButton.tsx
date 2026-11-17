@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
@@ -76,7 +77,9 @@ function useLatestBrowserCallId(owner: NativeChatVisualOwner | null): string | n
   const read = (): string | null => {
     const snapshot = readOwner?.getSnapshot()
     // A transcript behind the host may lack the newer call that drove the latest activity.
-    return snapshot?.current ? latestBrowserCallId(snapshot.state.items) : null
+    return snapshot?.current
+      ? latestBrowserCallId(rowsBesideStreamedText(snapshot.state.items))
+      : null
   }
   return useSyncExternalStore(readOwner?.subscribe ?? NO_READ_OWNER, read, read)
 }

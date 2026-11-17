@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMemo } from 'react'
 import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInTranscriptOrder } from '../../subagents/native-chat-subagent-scope'
@@ -14,11 +15,14 @@ export function useNativeChatTurnDiffs(
   turns: NativeChatTurnRows | null,
   subagentRows: readonly NativeChatSubagentRow[]
 ): ReadonlyMap<string, NativeChatTurnDiff> {
+  const messages = turns && rowsBesideStreamedText(turns.messages)
+  const turnKeys = turns?.turnKeys
+  const partialTurnKey = turns?.partialTurnKey
   return useMemo(() => {
-    if (!turns) {
+    if (!messages || !turnKeys) {
       return NO_TURN_DIFFS
     }
-    const merged = nativeChatRowsInTranscriptOrder(turns.messages, turns.turnKeys, subagentRows)
-    return nativeChatTurnDiffs(merged.messages, merged.turnKeys, undefined, turns.partialTurnKey)
-  }, [subagentRows, turns])
+    const merged = nativeChatRowsInTranscriptOrder(messages, turnKeys, subagentRows)
+    return nativeChatTurnDiffs(merged.messages, merged.turnKeys, undefined, partialTurnKey)
+  }, [subagentRows, messages, turnKeys, partialTurnKey])
 }

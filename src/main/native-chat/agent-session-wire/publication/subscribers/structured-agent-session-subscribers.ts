@@ -57,9 +57,10 @@ export class AgentSessionSubscribers {
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
-  subscriberCountForTests(sessionId: string): number {
-    return this.bySession.get(sessionId)?.size ?? 0
-  }
+  hasLiveTextSubscribers = (sessionId: string): boolean =>
+    this.subscribers(sessionId).some((subscriber) => subscriber.projectLiveItem !== undefined)
+
+  subscriberCountForTests = (sessionId: string): number => this.bySession.get(sessionId)?.size ?? 0
 
   open(
     input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
@@ -137,7 +138,8 @@ export class AgentSessionSubscribers {
     read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
     targets = this.subscribers(sessionId)
   ): void => {
-    for (const subscriber of targets) {
+    // Released readers keep the durable cadence; only append readers opt into live windows.
+    for (const subscriber of targets.filter((target) => target.projectLiveItem)) {
       // Read at emission, so text never trails a durable frame queued ahead of it.
       this.enqueue(subscriber, () =>
         publishSubscriberLiveText(this.deliveryPort(), {

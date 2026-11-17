@@ -34,7 +34,7 @@ test.each([
   { label: 'current desktop', kind: 'runtime' as const, release: null, append: true },
   { label: 'current phone', kind: 'mobile' as const, release: null, append: true }
 ])(
-  '$label receives exact live text at an unchanged durable cursor',
+  '$label preserves text with negotiated live appends or durable whole-item fallback',
   async ({ kind, release, append }) => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-live-text-wire-'))
     const journals = createTrackedJournalOpener()
@@ -129,6 +129,9 @@ test.each([
         delivered = Promise.withResolvers<AgentSessionSubscribeEvent>()
         live = [liveRow(text)]
         subscribers.publishLiveText('session-1', journal, 1, () => live)
+        if (!append) {
+          continue
+        }
         const event = await delivered.promise
         expect(event.type).toBe('batch')
         expect(state.items[0]?.body).toMatchObject({ blocks: [{ text }] })
@@ -141,7 +144,25 @@ test.each([
           }
         }
       }
-      expect(wire).toHaveLength(3)
+      if (!append) {
+        // Legacy readers get no below-growth-gate frames; the next durable save remains whole.
+        delivered = Promise.withResolvers<AgentSessionSubscribeEvent>()
+        await journal.appendItem(
+          { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
+          live[0]!.body,
+          { fence: 1, turnScope: { kind: 'thread' } }
+        )
+        subscribers.publish('session-1', journal)
+        const event = await delivered.promise
+        expect(event.type).toBe('batch')
+        expect(state.items[0]?.body).toMatchObject({ blocks: [{ text: 'hello world!' }] })
+        expect(wire).toHaveLength(2)
+        if (event.type === 'batch') {
+          expect(event.batch.items[0]).not.toHaveProperty('textAppend')
+        }
+      } else {
+        expect(wire).toHaveLength(3)
+      }
       // Reopening the stream resets append bases and carries current live text whole.
       close()
       delivered = Promise.withResolvers<AgentSessionSubscribeEvent>()

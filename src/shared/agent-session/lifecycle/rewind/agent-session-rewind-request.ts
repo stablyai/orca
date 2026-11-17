@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../view/structured-agent-session-streamed-text-rows'
 import type * as React from 'react'
 import type { AgentSessionRewindResult, AgentSessionRewindSupport } from './agent-session-rewind'
 import { AGENT_SESSION_REWIND_REASONS } from './agent-session-rewind-reasons'
@@ -283,8 +284,12 @@ export function createAgentSessionRewindHook(
       return !blockedRef.current
     }, [])
     const offered = nativeChatRewindOffered(input.support)
-    const floor = agentSessionRewindContextFloor(input.state, input.contextFloor)
-    const { items, submissions } = input.state
+    const items = rowsBesideStreamedText(input.state.items)
+    const { submissions, epoch } = input.state
+    const floor = useMemo(
+      () => agentSessionRewindContextFloor({ items, epoch }, input.contextFloor),
+      [items, epoch, input.contextFloor]
+    )
     // Streaming rebuilds items per chunk; keep the set while its ids hold so row actions don't redraw.
     const heldTargets = useRef<ReadonlySet<string>>(new Set())
     const eligibleItemIds = useMemo(() => {

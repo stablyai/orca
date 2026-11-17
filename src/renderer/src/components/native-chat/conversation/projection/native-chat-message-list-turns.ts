@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
@@ -36,7 +37,9 @@ export function appendedTurnNeutralItems(
   ) {
     return null
   }
-  for (const [index, item] of before.items.entries()) {
+  const beforeItems = rowsBesideStreamedText(before.items)
+  const afterItems = rowsBesideStreamedText(after.items)
+  for (const [index, item] of beforeItems === afterItems ? [] : before.items.entries()) {
     const next = after.items[index]!
     if (
       item !== next &&

@@ -10,7 +10,7 @@ import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-s
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
 import { codexJournalItem } from './codex-structured-item-translation'
-import { codexRunningStreamBody, codexShowsLiveText } from './codex-streamed-item-body'
+import * as streamedBody from './codex-streamed-item-body'
 import {
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
@@ -98,16 +98,16 @@ export function createCodexStructuredItemStreams(
   }
 
   const append = (key: string, state: CodexItemStreamState, text: string): boolean => {
-    const body = codexRunningStreamBody(state.item, text)
+    const body = streamedBody.codexRunningStreamBody(state.item, text)
     const observed = state.startedAt === undefined ? {} : { observedAt: state.startedAt }
-    const committed = codexShowsLiveText(state.item) ? live.committed(key) : undefined
+    const committed = streamedBody.codexShowsLiveText(state.item) ? live.committed(key) : undefined
     const options = { ...attributionOf(key), ...observed }
     return (
       !body ||
       appendCodexItemAndPublish(deps.sink, state.identity, body, options, committed).accepted
     )
   }
-  const isText = (key: string): boolean => codexShowsLiveText(states.get(key)?.item)
+  const isText = (key: string): boolean => streamedBody.codexShowsLiveText(states.get(key)?.item)
 
   const shouldPersist = (key: string, textLength: number): boolean => {
     const checkpointLength = checkpointLengths.get(key) ?? 0
@@ -158,7 +158,7 @@ export function createCodexStructuredItemStreams(
   const live = new StructuredAgentSessionLiveTextRows(
     deps.sink,
     (key) => (isText(key) ? coalescer.snapshot(key)?.text : undefined),
-    (key, text) => codexRunningStreamBody(states.get(key)?.item, text),
+    (key, text) => streamedBody.codexLiveStreamBody(states.get(key)?.item, text),
     (key) => coalescer.textSource(key)
   )
 

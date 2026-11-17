@@ -1,3 +1,6 @@
+import { jsonBytes } from '../history/json-string-shortening'
+import { BOUNDED_FRAME_ROW_BYTES } from '../history/agent-session-bounded-frame-item'
+import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
 import { agentSessionTextAppendSource } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append-source'
 import { onlyStreamedTextChanged } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
@@ -181,10 +184,26 @@ export async function publishSubscriberLiveText(
         before.identity === after.identity &&
         before.length <= after.length &&
         onlyStreamedTextChanged(prior.source, source)
+      // A suffix must fit both the frame and the full row the next durable read will carry.
+      const text =
+        source.body.kind === 'message' && source.body.blocks[0]?.type === 'text'
+          ? source.body.blocks[0]
+          : null
+      const fullBytes =
+        after?.jsonBytes !== undefined && text
+          ? jsonBytes({ ...source, body: { ...source.body, blocks: [{ ...text, text: '' }] } }) +
+            after.jsonBytes
+          : undefined
+      const budget = subscriber.boundedFrames
+        ? BOUNDED_FRAME_ROW_BYTES
+        : HISTORY_PAGE_CONTENT_BUDGET_BYTES
+      const fits = fullBytes !== undefined ? fullBytes <= budget : form(source).item === source
       const projected =
         prior?.source === source || clippedUnchanged
           ? prior.sent
-          : (subscriber.projectLiveItem?.(source) ?? source)
+          : fits
+            ? (subscriber.projectLiveItem?.(source) ?? source)
+            : source
       const fitted = prior?.sent === projected ? projected : form(projected).item
       // A clipped append cannot be decoded; send the ordinary bounded item instead.
       const wire = 'textAppend' in projected && fitted !== projected ? form(source).item : fitted

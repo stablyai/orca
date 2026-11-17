@@ -223,7 +223,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe()
     unsubscribe = (): void => {}
     try {
-      // Local desktop reads ask for no appends, so their subscribe still goes out in the same turn.
+      // Wait for capability negotiation before decoding this stream's frames.
       const asked = asks.read()
       const { textAppend, capabilities } = asked instanceof Promise ? await asked : asked
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {

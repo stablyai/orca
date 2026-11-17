@@ -1,5 +1,9 @@
 import type { AgentSessionTextAppendSource } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append-source'
-import { appendWithinUtf8ByteLimit, streamedTextAppendSource } from './agent-session-delta-prefix'
+import {
+  appendWithinUtf8ByteLimit,
+  streamedTextAppendSource,
+  trackStreamedTextAppend
+} from './agent-session-delta-prefix'
 
 // Coalesce token deltas into text snapshots to reduce journal writes and subscriber frames.
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
@@ -78,8 +82,10 @@ export function createAgentSessionDeltaCoalescer(
       chunks: string[]
       offsets: number[]
       identity: object
-      joinedCount: number
+      joinedLength: number
       joinedText: string
+      jsonBytes: number
+      lastUnit: number
       retainedBytes: number
       textLength: number
       observedBytes: number
@@ -126,9 +132,14 @@ export function createAgentSessionDeltaCoalescer(
   type Stream = NonNullable<ReturnType<typeof streams.get>>
   // Keep the joined text so rereading an unchanged stream copies nothing.
   const joined = (stream: Stream): string => {
-    if (stream.joinedCount < stream.chunks.length) {
-      stream.joinedText += stream.chunks.slice(stream.joinedCount).join('')
-      stream.joinedCount = stream.chunks.length
+    if (stream.joinedLength < stream.textLength) {
+      stream.joinedText += streamedTextAppendSource(
+        stream.identity,
+        stream.chunks,
+        stream.offsets,
+        stream.textLength
+      ).suffix(stream.joinedLength)
+      stream.joinedLength = stream.textLength
     }
     return stream.joinedText
   }
@@ -200,8 +211,10 @@ export function createAgentSessionDeltaCoalescer(
           chunks: [],
           offsets: [],
           identity: {},
-          joinedCount: 0,
+          joinedLength: 0,
           joinedText: '',
+          jsonBytes: 0,
+          lastUnit: Number.NaN,
           retainedBytes: 0,
           textLength: 0,
           observedBytes: 0,
@@ -222,6 +235,7 @@ export function createAgentSessionDeltaCoalescer(
       if (!stream.truncated) {
         const availableTotal = Math.max(0, maxTotalRetainedBytes - totalRetainedBytes)
         const streamLimit = Math.min(maxRetainedBytes, stream.retainedBytes + availableTotal)
+        const chunkCount = stream.chunks.length
         const next = appendWithinUtf8ByteLimit(
           stream.chunks,
           stream.retainedBytes,
@@ -229,14 +243,7 @@ export function createAgentSessionDeltaCoalescer(
           deltaBytes,
           streamLimit
         )
-        if (next.truncated) {
-          stream.identity = {}
-          stream.offsets = [0]
-          stream.joinedCount = 0
-          stream.joinedText = ''
-        } else {
-          stream.offsets.push(stream.textLength)
-        }
+        trackStreamedTextAppend(stream, next, delta, chunkCount)
         totalRetainedBytes += next.retainedBytes - stream.retainedBytes
         stream.textLength = next.truncated
           ? (next.chunks[0]?.length ?? 0)
@@ -295,7 +302,8 @@ export function createAgentSessionDeltaCoalescer(
         stream.identity,
         stream.chunks,
         stream.offsets,
-        stream.textLength
+        stream.textLength,
+        stream.jsonBytes
       )
     },
     dirty: () =>

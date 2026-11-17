@@ -30,3 +30,8 @@ export function withJournalReasoningLifecycle(
 export function endedJournalReasoning(completedAt?: number): JournalReasoningLifecycle {
   return { state: 'completed', ...(completedAt === undefined ? {} : { completedAt }) }
 }
+
+/** A placed live row already passed the durable nonblank check; appending cannot erase it. */
+export function liveJournalReasoningBody(text: string): AgentJournalMessageItem {
+  return { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }], state: 'running' }
+}

@@ -4,6 +4,8 @@ import type { AgentJournalRenderItem } from '../../journal/agent-session-journal
 export type AgentSessionTextAppendSource = {
   identity: object
   length: number
+  /** JSON string content bytes, maintained from deltas by the host. */
+  jsonBytes?: number
   suffix: (from: number) => string
 }
 

@@ -1,6 +1,7 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
 import { useCallback, useMemo, useState } from 'react'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -189,7 +190,11 @@ export function useNativeChatNewRowsMarker(
     }
   }
   const { missed } = seen
-  const placement = useMemo(() => nativeChatNewRowsMarkerPlacement(slots, missed), [slots, missed])
+  const structuralSlots = rowsBesideStreamedText(slots)
+  const placement = useMemo(
+    () => nativeChatNewRowsMarkerPlacement(structuralSlots, missed),
+    [structuralSlots, missed]
+  )
   const dismiss = useCallback(() => {
     // Where they left as well: an answer sent before the chat has caught up settles that too.
     setSeen((held) =>

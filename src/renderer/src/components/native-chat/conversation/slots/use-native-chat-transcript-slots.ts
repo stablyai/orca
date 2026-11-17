@@ -1,3 +1,4 @@
+import { createNativeChatStreamedTranscript } from './native-chat-streamed-transcript'
 import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
 import {
   nativeChatMarkdownImageSources,
@@ -9,10 +10,7 @@ import {
   type NativeChatLiveLine
 } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
-import {
-  buildNativeChatTranscript,
-  type NativeChatTranscriptSlot
-} from './native-chat-transcript-slots'
+import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
@@ -85,9 +83,10 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
+  const project = useMemo(() => createNativeChatStreamedTranscript(), [])
   const { slots, forkPoint } = useMemo(
     () =>
-      buildNativeChatTranscript({
+      project({
         imageSources,
         messages,
         unresolvedRowIds,
@@ -106,6 +105,7 @@ export function useNativeChatTranscriptSlots({
         forkOffer
       }),
     [
+      project,
       expandedTurnKeys,
       imageSources,
       forkOffer,

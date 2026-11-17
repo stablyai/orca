@@ -100,6 +100,15 @@ function answerWithImages(
   return message
 }
 
+/** Retain the generated previews when only an answer's words are revised. */
+export function reviseNativeChatGeneratedImageAnswer(
+  before: NativeChatMessage,
+  after: NativeChatMessage
+): NativeChatMessage {
+  const cached = projected.get(before)
+  return cached ? answerWithImages(after, cached.images, cached.sources, cached.synthetic) : after
+}
+
 /** Project completed output into its answer without rewriting the journal or moving viewed inputs. */
 export function nativeChatGeneratedImageAnswers(
   messages: readonly NativeChatMessage[],

@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMobileNativeChatGeneratedImageAnswers } from '../message-content/use-mobile-native-chat-generated-image-answers'
 import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
 import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-chat-row-props'
@@ -20,7 +21,7 @@ import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
+import { useMobileNativeChatWaitingRows } from './use-mobile-native-chat-waiting-rows'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
@@ -101,31 +102,32 @@ export function useMobileNativeChatTurnDisclosure({
   liveLine: MobileNativeChatLiveLine | null
   onToggleReasoning: (key: string) => void
 } {
-  const {
-    rows: sourceRows,
-    turnKeys,
-    liveTurnKey,
-    unresolvedRowIds,
-    partialTurnKey
-  } = useMemo(() => {
+  const structuralMessages = rowsBesideStreamedText(messages)
+  const journalItems = turnJournal && rowsBesideStreamedText(turnJournal.items)
+  const stableJournal = useMemo(
+    () => turnJournal && { ...turnJournal, items: journalItems! },
+    [journalItems, turnJournal?.submissions, turnJournal?.latestTurn, turnJournal?.working]
+  )
+  const { drawOrder, turnKeys, liveTurnKey, unresolvedRowIds, partialTurnKey } = useMemo(() => {
     if (!enabled) {
       return {
-        rows: messages,
+        drawOrder: null,
         turnKeys: NO_TURN_KEYS,
         liveTurnKey: undefined,
         unresolvedRowIds: undefined,
         partialTurnKey: undefined
       }
     }
-    const membership = nativeChatTurnMembership(messages, turnJournal)
+    const membership = nativeChatTurnMembership(structuralMessages, stableJournal)
     return {
-      rows: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
+      drawOrder: membership.drawOrder,
       turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder),
       liveTurnKey: membership.liveTurnKey,
       partialTurnKey: membership.partialTurnKey,
       unresolvedRowIds: membership.unresolvedRowIds
     }
-  }, [enabled, messages, turnJournal])
+  }, [enabled, structuralMessages, stableJournal])
+  const sourceRows = nativeChatRowsInDrawOrder(messages, drawOrder)
   const turnStatuses = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
@@ -146,30 +148,16 @@ export function useMobileNativeChatTurnDisclosure({
     completedByTurn
   )
   const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
-  const waiting = useMemo(() => {
-    const ids = enabled
-      ? nativeChatMessagesWaitingBehindLiveTurn(
-          rows,
-          turnJournal?.items,
-          stopping,
-          turnJournal?.submissions,
-          turnJournal ?? {}
-        )
-      : null
-    if (!ids?.size) {
-      return { listMessages: rows, waitingRows: [], indexById: null }
-    }
-    return {
-      listMessages: rows.filter((message) => !ids.has(message.id)),
-      waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
-      indexById: new Map(rows.map((message, index) => [message.id, index]))
-    }
-  }, [enabled, rows, stopping, turnJournal])
+  const structuralRows = rowsBesideStreamedText(rows)
+  const waiting = useMobileNativeChatWaitingRows(rows, stableJournal, enabled, stopping)
   const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useScopedOpenKeys(scopeKey)
-  const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
+  const bars = useMemo(
+    () => nativeChatTurnBarRows(structuralRows, turnKeys),
+    [structuralRows, turnKeys]
+  )
 
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -219,8 +207,8 @@ export function useMobileNativeChatTurnDisclosure({
     [rows, workRuns, turnKeys, receipts]
   )
   const latestAssistantId = useMemo(
-    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
-    [waiting.listMessages]
+    () => structuralRows.findLast((row) => row.role === 'assistant')?.id ?? null,
+    [structuralRows]
   )
   const resolveRow = useCallback(
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {

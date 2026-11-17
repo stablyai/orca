@@ -4,7 +4,8 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   endedJournalReasoning,
-  journalReasoningBody
+  journalReasoningBody,
+  liveJournalReasoningBody
 } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -54,7 +55,7 @@ export function createClaudeStreamedThinking(deps: {
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: deps.producer,
     sink: deps.sink,
-    liveBody: (text) => journalReasoningBody(text, { state: 'running' }),
+    liveBody: liveJournalReasoningBody,
     persist: (identity, text, options, ended, onCommitted) => {
       const body = journalReasoningBody(
         text,

@@ -1,3 +1,4 @@
+import { noteStreamedTextRevision } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -156,4 +157,43 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       ).toEqual(retained ? [{ type: 'image-ref' as const, path: '/tmp/p.png' }] : [])
     }
   )
+})
+
+it.each([128, 1280])('keeps mobile transcript derivations local at %s rows', (size) => {
+  let reads = 0
+  const row = (index: number, text: string): NativeChatMessage => {
+    const blocks: NativeChatMessage['blocks'] = [{ type: 'text', text }]
+    return {
+      id: `row-${index}`,
+      role: index === 0 ? 'user' : 'assistant',
+      timestamp: index,
+      source: 'transcript',
+      get blocks() {
+        reads++
+        return blocks
+      }
+    }
+  }
+  const messages = Array.from({ length: size }, (_, index) => row(index, 'words'))
+  let renderer: ReactTestRenderer | null = null
+  try {
+    act(() => {
+      renderer = create(createElement(Harness, { messages, enabled: true }))
+    })
+    const before = renderer!.root.findByType(Result).props.disclosure
+    reads = 0
+    const next = messages.slice()
+    next[size - 1] = row(size - 1, 'words extended')
+    noteStreamedTextRevision(next, messages, [size - 1])
+    act(() => {
+      renderer!.update(createElement(Harness, { messages: next, enabled: true }))
+    })
+    const after = renderer!.root.findByType(Result).props.disclosure
+    expect(reads).toBeLessThan(80)
+    expect(after.listMessages.at(-1)).toBe(next.at(-1))
+    expect(after.listMessages[0]).toBe(before.listMessages[0])
+    expect(after.presentation.turnKeys).toBe(before.presentation.turnKeys)
+  } finally {
+    act(() => renderer?.unmount())
+  }
 })

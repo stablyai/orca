@@ -51,3 +51,26 @@ describe('agent-session delta coalescer', () => {
     expect(emitted).toEqual([['first', 'preserve me']])
   })
 })
+
+it('keeps old suffix snapshots exact while compacting tiny chunks and sizing escaped text', () => {
+  const coalescer = createAgentSessionDeltaCoalescer({ schedule: () => () => {}, emit: () => {} })
+  let text = ''
+  let old: ReturnType<typeof coalescer.textSource>
+  for (let index = 0; index < 10000; index++) {
+    const delta = ['x', '\n', '"', '\\', '\ud800', '\udc00'][index % 6]!
+    text += delta
+    coalescer.append('a', delta)
+    if (index === 100) {
+      old = coalescer.textSource('a')
+    }
+    const source = coalescer.textSource('a')!
+    expect(source.jsonBytes).toBe(Buffer.byteLength(JSON.stringify(text)) - 2)
+    if (index % 31 === 0) {
+      expect(coalescer.snapshot('a')?.text).toBe(text)
+    }
+  }
+  expect(old!.suffix(20)).toBe(text.slice(20, old!.length))
+  expect(coalescer.textSource('a')!.suffix(9900)).toBe(text.slice(9900))
+  expect(coalescer.snapshot('a')?.text).toBe(text)
+  coalescer.dispose()
+})

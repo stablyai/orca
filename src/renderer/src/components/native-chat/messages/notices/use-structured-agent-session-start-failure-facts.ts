@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -13,6 +14,7 @@ export function useStructuredAgentSessionStartFailureFacts(
   items: readonly AgentJournalRenderItem[],
   enabled: boolean
 ): readonly AgentSessionFailureFact[] {
+  items = rowsBesideStreamedText(items)
   const facts = useMemo(
     () => (enabled ? agentSessionVisibleFailureFacts(items) : NO_FACTS),
     [enabled, items]

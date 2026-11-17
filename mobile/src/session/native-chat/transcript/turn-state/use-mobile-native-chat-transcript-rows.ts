@@ -1,3 +1,7 @@
+import {
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMemo } from 'react'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
@@ -101,11 +105,12 @@ export function useMobileNativeChatTranscriptRows({
   expandedTurnKeys: ReadonlySet<string>
   liveReasoningId: string | undefined
 }): { fold: NativeChatTurnFold; trailingRunIndex: number; workRuns: MobileNativeChatWorkRuns } {
+  const base = rowsBesideStreamedText(rows)
   const fold = useMemo(
     () =>
       enabled
         ? mobileNativeChatTurnFold({
-            rows,
+            rows: base,
             turnKeys,
             receipts,
             settledTurnKeys: new Set(
@@ -116,24 +121,52 @@ export function useMobileNativeChatTranscriptRows({
             expandedTurnKeys
           })
         : NATIVE_CHAT_EMPTY_TURN_FOLD,
-    [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
+    [completedByTurn, enabled, expandedTurnKeys, receipts, base, turnKeys]
   )
   // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
     () =>
       enabled
-        ? rows.findLastIndex((row) =>
+        ? base.findLastIndex((row) =>
             nativeChatRowSpeaksOrActs(row, nativeChatRowRendersProse(row), receipts ?? NO_RECEIPTS)
           )
         : -1,
-    [enabled, receipts, rows]
+    [enabled, receipts, base]
   )
-  const workRuns = useMemo(
+  const baseWorkRuns = useMemo(
     () =>
       enabled
-        ? mobileNativeChatWorkRuns({ rows, turnKeys, receipts, liveReasoningId })
+        ? mobileNativeChatWorkRuns({ rows: base, turnKeys, receipts, liveReasoningId })
         : NO_WORK_RUNS,
-    [enabled, liveReasoningId, receipts, rows, turnKeys]
+    [enabled, liveReasoningId, receipts, base, turnKeys]
   )
+  const places = useMemo(() => {
+    const byIndex = new Map<number, { head: number; offset: number }>()
+    const sourceIndex = new Map(base.map((row, index) => [row, index]))
+    for (const [head, run] of baseWorkRuns.heads) {
+      run.forEach((row, offset) => {
+        const index = sourceIndex.get(row)
+        if (index !== undefined) {
+          byIndex.set(index, { head, offset })
+        }
+      })
+    }
+    return byIndex
+  }, [base, baseWorkRuns])
+  const workRuns = useMemo(() => {
+    const indexes = streamedTextReplacementIndexes(base, rows) ?? []
+    let heads: Map<number, readonly NativeChatMessage[]> | null = null
+    for (const index of indexes) {
+      const at = places.get(index)
+      if (!at) {
+        continue
+      }
+      heads ??= new Map(baseWorkRuns.heads)
+      const run = heads.get(at.head)!.slice()
+      run[at.offset] = rows[index]!
+      heads.set(at.head, run)
+    }
+    return heads ? { ...baseWorkRuns, heads } : baseWorkRuns
+  }, [base, rows, baseWorkRuns, places])
   return { fold, trailingRunIndex, workRuns }
 }

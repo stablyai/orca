@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMemo } from 'react'
 import type {
   AgentJournalRenderItem,
@@ -25,20 +26,23 @@ export function useNativeChatTurnMembership(
   journalSubmissions: readonly AgentJournalSubmission[] | undefined,
   latestTurn?: AgentSessionLatestTurn | null
 ): NativeChatTurnRows {
-  return useMemo(() => {
+  const structuralMessages = rowsBesideStreamedText(messages)
+  const structuralItems = journalItems && rowsBesideStreamedText(journalItems)
+  const membership = useMemo(() => {
     const { turnKeys, liveTurnKey, drawOrder, partialTurnKey, unresolvedRowIds } =
       nativeChatTurnMembership(
-        messages,
-        journalItems
-          ? { items: journalItems, submissions: journalSubmissions ?? [], latestTurn }
+        structuralMessages,
+        structuralItems
+          ? { items: structuralItems, submissions: journalSubmissions ?? [], latestTurn }
           : null
       )
     return {
-      messages: nativeChatRowsInDrawOrder(messages, drawOrder),
+      drawOrder,
       turnKeys: nativeChatRowsInDrawOrder(turnKeys, drawOrder),
       liveTurnKey,
       unresolvedRowIds,
       ...(partialTurnKey !== undefined ? { partialTurnKey } : {})
     }
-  }, [journalItems, journalSubmissions, latestTurn, messages])
+  }, [structuralItems, journalSubmissions, latestTurn, structuralMessages])
+  return { ...membership, messages: nativeChatRowsInDrawOrder(messages, membership.drawOrder) }
 }

@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { pendingStructuredSessionPrompts } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type {
@@ -32,4 +34,20 @@ export function actionableStructuredQuestion(state: PromptState): StructuredQues
       (item): item is StructuredQuestionItem => item.body.kind === 'question'
     ) ?? null
   )
+}
+
+export function useMobileStructuredActionablePrompts(state: PromptState) {
+  const items = rowsBesideStreamedText(state.items)
+  const { currentRequests, actionablePromptIds } = state
+  return useMemo(() => {
+    const prompts = pendingStructuredSessionPrompts({
+      journalItems: items,
+      currentRequests,
+      actionablePromptIds
+    })
+    return [
+      prompts.find((row): row is StructuredApprovalItem => row.body.kind === 'approval') ?? null,
+      prompts.find((row): row is StructuredQuestionItem => row.body.kind === 'question') ?? null
+    ] as const
+  }, [items, currentRequests, actionablePromptIds])
 }

@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useMemo } from 'react'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { NativeChatLiveTurnIndicator } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
@@ -27,11 +28,15 @@ export function useMobileStructuredTurnIndicator(input: {
   sendFollowUp?: NativeChatSendFollowUp
 } {
   const { state, turnId, hostStopping, stopPressed, queueCapable, queueFollowUps } = input
+  const items = rowsBesideStreamedText(state.items)
   const activityText = useMemo(
-    () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null,
-    [state.items, turnId, state.activity]
+    () => selectStructuredAgentTurnActivity(items, turnId, state.activity)?.text ?? null,
+    [items, turnId, state.activity]
   )
-  const thinking = isStructuredAgentSessionThinking(state)
+  const thinking = useMemo(
+    () => isStructuredAgentSessionThinking({ ...state, items }),
+    [items, state.latestTurn]
+  )
   const working = input.isWorking || input.canStop
   const stopping = agentStopDisplayStatus({ working, hostStopping, stopPressed }) === 'stopping'
   const stopRequestInFlight = working && stopPressed

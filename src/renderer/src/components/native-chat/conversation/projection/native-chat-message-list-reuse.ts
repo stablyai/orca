@@ -1,3 +1,8 @@
+import {
+  streamedTextReplacementIndexes,
+  noteStreamedTextRevision,
+  noteStreamedTextPartition
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   sameNativeChatRowPlacement,
@@ -45,7 +50,10 @@ export function reuseUnits(
     return null
   }
   const changed: [NativeChatMessage, NativeChatMessage][] = []
-  for (let index = 0; index < before.length; index += 1) {
+  const replacements = streamedTextReplacementIndexes(before, messages)
+  const conversationIndexes: number[] = []
+  const subagentIndexes = new Map<string, number[]>()
+  for (const index of replacements ?? before.keys()) {
     const prior = before[index]!
     const message = messages[index]!
     if (prior === message) {
@@ -166,8 +174,12 @@ export function reuseUnits(
       conversation =
         conversation === state.projection.conversation ? conversation.slice() : conversation
       conversation.splice(start, rebuilt.rows.length, ...rebuilt.rows)
+      conversationIndexes.push(...rebuilt.rows.map((_, offset) => start + offset))
     } else {
       const rows = agentRowsFor(scope.agentId)
+      const indexes = subagentIndexes.get(scope.agentId) ?? []
+      subagentIndexes.set(scope.agentId, indexes)
+      indexes.push(...rebuilt.rows.map((_, offset) => start + offset))
       for (const [offset, row] of rebuilt.rows.entries()) {
         rows[start + offset] = { message: row, turnKey: rows[start + offset]!.turnKey }
       }
@@ -265,6 +277,18 @@ export function reuseUnits(
       return null
     }
   }
+  if (replacements !== null) {
+    if (conversation !== state.projection.conversation) {
+      noteStreamedTextRevision(conversation, state.projection.conversation, conversationIndexes)
+    }
+    for (const [id, rows] of copiedRows) {
+      noteStreamedTextRevision(
+        rows,
+        state.projection.subagentRows.get(id)!,
+        subagentIndexes.get(id) ?? []
+      )
+    }
+  }
   const projection =
     conversation === state.projection.conversation && copiedRows.size === 0
       ? state.projection
@@ -275,5 +299,8 @@ export function reuseUnits(
               ? state.projection.subagentRows
               : new Map([...state.projection.subagentRows, ...copiedRows])
         }
+  if (replacements !== null && projection.subagentRows !== state.projection.subagentRows) {
+    noteStreamedTextPartition(projection.subagentRows, state.projection.subagentRows)
+  }
   return { ...state, input: messages, journal, projection, scopes }
 }

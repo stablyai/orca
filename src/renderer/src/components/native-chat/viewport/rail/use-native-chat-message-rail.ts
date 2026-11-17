@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 // Compute the active tick after scrolling settles to avoid expensive, flickering position reports mid-scroll.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -60,9 +61,10 @@ export function useNativeChatMessageRail({
 
   const previousItemsRef = useRef<readonly NativeChatRailItem[]>([])
   // Rebuilt only when the slots change: scroll and range renders reuse the last build.
+  const structuralSlots = rowsBesideStreamedText(slots)
   const loadedItems = useMemo(
-    () => buildNativeChatRailItems(slots, previousItemsRef.current),
-    [slots]
+    () => buildNativeChatRailItems(structuralSlots, previousItemsRef.current),
+    [structuralSlots]
   )
   // Written after commit so a discarded render cannot become the next one's baseline.
   useEffect(() => {

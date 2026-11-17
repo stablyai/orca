@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   nativeChatSetupAction,
   type NativeChatHostSetup
@@ -76,7 +77,8 @@ export function useNativeChatAvailabilityNotice(input: {
   deliveryNotices?: ReadonlyMap<string, unknown>
 }): NativeChatComposerNotice | null {
   const t = useTranslate()
-  const { unavailable, journalItems } = input
+  const { unavailable } = input
+  const journalItems = input.journalItems && rowsBesideStreamedText(input.journalItems)
   const key = !unavailable
     ? null
     : unavailable.reason === 'notSignedIn'
