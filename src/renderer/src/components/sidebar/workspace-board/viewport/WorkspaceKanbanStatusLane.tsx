@@ -17,7 +17,7 @@ import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
 import { serializeWorkspaceLaneFullIds } from '../drag/workspace-kanban-filtered-drop-index'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
-import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '../../workspace-status/presentation/workspace-board-status-label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
