@@ -1,4 +1,4 @@
-import { runProcess, runProcessSync } from '@orca/process-host'
+import { runProcess } from '@orca/process-host'
 import {
   _resetWslNotInstalledLatchForTests,
   latchWslNotInstalled
@@ -65,22 +65,6 @@ function rememberInstallation(found: WslInstallation): WslInstallation {
   return found
 }
 
-function queryServicesSync(): WslInstallation {
-  const results: WslInstallation[] = []
-  for (const name of WSL_SERVICE_NAMES) {
-    try {
-      results.push(classifyServiceQuery(runProcessSync(serviceQuerySpec(name))))
-    } catch {
-      results.push('unknown')
-      break
-    }
-    if (results.at(-1) === 'present') {
-      break
-    }
-  }
-  return rememberInstallation(combineServiceQueries(results))
-}
-
 async function queryServices(): Promise<WslInstallation> {
   const results: WslInstallation[] = []
   for (const name of WSL_SERVICE_NAMES) {
@@ -97,14 +81,6 @@ async function queryServices(): Promise<WslInstallation> {
   return rememberInstallation(combineServiceQueries(results))
 }
 
-/** Cached answer only. Null means the service query has not finished. */
-export function peekWslInstallation(): WslInstallation | null {
-  if (process.platform !== 'win32') {
-    return 'absent'
-  }
-  return installation
-}
-
 function cachedInstallation(): WslInstallation | null {
   if (installation) {
     return installation
@@ -112,12 +88,12 @@ function cachedInstallation(): WslInstallation | null {
   return Date.now() < unknownUntilMs ? 'unknown' : null
 }
 
-/** Synchronous read for listWslDistros. Absent is cached for the process lifetime. */
-export function readWslInstallationSync(): WslInstallation {
+/** Cached answer only; sync readers must not spawn. Null means no service query has finished. */
+export function peekWslInstallation(): WslInstallation | null {
   if (process.platform !== 'win32') {
     return 'absent'
   }
-  return cachedInstallation() ?? queryServicesSync()
+  return cachedInstallation()
 }
 
 /** Shared probe. Absent is cached for the process lifetime; unknown only briefly. */

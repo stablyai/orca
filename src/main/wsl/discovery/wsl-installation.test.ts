@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import {
   _resetWslCachesForTests,
+  getWslHome,
   listRunningWslDistrosAsync,
   listWslDistros,
   listWslDistrosAsync
@@ -191,5 +192,33 @@ describe('WSL is not installed', () => {
     })
     expect(calls.filter(isServiceQuery).length).toBeLessThanOrEqual(2)
     expect(calls.filter(isWslExe).length).toBe(1)
+  })
+
+  it('a first sync read on a host without WSL never spawns, sync or async', async () => {
+    const calls: ProcessSpec[] = []
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
+      calls.push(spec)
+      return isServiceQuery(spec) ? exited('', 1060) : exited('', 1)
+    })
+    await withPlatformAsync('win32', async () => {
+      expect(listWslDistros()).toEqual([])
+      expect(getWslHome('Ubuntu')).toBeNull()
+      await vi.waitFor(() => expect(isWslNotInstalledLatched()).toBe(true))
+      expect(listWslDistros()).toEqual([])
+      expect(getWslHome('Ubuntu')).toBeNull()
+    })
+    expect(runProcessSyncMock).not.toHaveBeenCalled()
+    expect(calls.filter(isWslExe)).toEqual([])
+  })
+
+  it('a first sync read on a WSL host answers from the async probe it starts', async () => {
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) =>
+      isServiceQuery(spec) ? exited('', 0) : exited('Ubuntu\n')
+    )
+    await withPlatformAsync('win32', async () => {
+      expect(listWslDistros()).toEqual([])
+      await vi.waitFor(() => expect(listWslDistros()).toEqual(['Ubuntu']))
+    })
+    expect(runProcessSyncMock).not.toHaveBeenCalled()
   })
 })
