@@ -1,5 +1,5 @@
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
-import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import type { ShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import logo from '../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
 

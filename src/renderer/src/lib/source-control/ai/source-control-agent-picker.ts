@@ -19,7 +19,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type {
   AgentMenuRowsTarget,
   NewTabAgentMenuModel

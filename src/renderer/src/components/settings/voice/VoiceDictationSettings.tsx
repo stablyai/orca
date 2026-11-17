@@ -10,7 +10,7 @@ import {
 } from '../../../../../shared/speech/dictation/dictation-shortcut-mode'
 import { useAppStore } from '@/store'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeyDetails, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 import { Button } from '../../ui/button'

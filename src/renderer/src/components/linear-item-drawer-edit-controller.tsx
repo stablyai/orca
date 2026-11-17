@@ -11,9 +11,9 @@ import { useAppStore } from '@/store'
 import {
   useTeamStates,
   useTeamLabels,
-  useTeamMembers,
-  useImmediateMutation
-} from '@/hooks/useIssueMetadata'
+  useTeamMembers
+} from '@/lib/work-items/linear/useIssueMetadata'
+import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { formatLinearEstimateInput } from '@/components/linear-item-drawer-edit-controls'

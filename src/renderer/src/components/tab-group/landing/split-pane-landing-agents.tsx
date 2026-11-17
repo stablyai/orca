@@ -1,12 +1,12 @@
 import { Bot, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
 import {
   DropdownMenu,

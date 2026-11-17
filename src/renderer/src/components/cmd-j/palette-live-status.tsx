@@ -36,7 +36,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {

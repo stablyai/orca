@@ -1,7 +1,7 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import '@/store/slices/linear/linear-issue-read'
 import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
+import { useLinearIssuePublication } from '@/lib/work-items/linear/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { findLinearIssueWorkspaceAttachment } from '@/lib/work-items/linear/linear-issue-workspace-attachment'

@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { DemoSessionPanel, DemoSessionRow } from './feature-tip-session-panel-demo'
 import {
   getSessionSearchDemoRecentRows,
