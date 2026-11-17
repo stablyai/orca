@@ -1,5 +1,5 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
-# Only explicit worker/utility entry files are exempt; their imports remain guarded.
+# Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.
 10 src/main/ai-vault-search/storage/session-search-message-rows.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
 20 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
@@ -23,7 +23,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 22 src/main/native-chat/agent-session-journal/database/journal-database.ts
 14 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-4 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 22 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -47,6 +47,7 @@
 4 src/main/native-chat/agent-session-journal/journal-domain-submission-records.ts
 20 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
+4 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
 15 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 6 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
 2 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts

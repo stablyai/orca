@@ -1,5 +1,7 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { measureJournalStoredRow } from './journal-stored-output-rows'
 
 /**
  * A row-count page of tool output can reach hundreds of MB, which main decodes on its shared heap;
@@ -8,29 +10,38 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
  */
 export const ITEMS_BY_KIND_PAGE_JSON_BUDGET = 8 * 2 ** 20
 
+/** A row's decoded JSON length, and its item, decoded only once the row fits the page. */
+export type ItemsByKindRowRead = { bytes: number; item: () => AgentJournalRenderItem }
+
+function readInlineRow(row: Record<string, unknown>): ItemsByKindRowRead {
+  const json = String(row.payload_json)
+  return { bytes: json.length, item: () => JSON.parse(json) }
+}
+
 /** `rows` are the chosen items in ordinal order, read lazily so rows past the budget stay unread. */
 export function budgetItemsByKindPage(
   rows: Iterable<Record<string, unknown>>,
   nextOrdinal: number | null,
-  budget = ITEMS_BY_KIND_PAGE_JSON_BUDGET
+  budget = ITEMS_BY_KIND_PAGE_JSON_BUDGET,
+  read: (row: Record<string, unknown>) => ItemsByKindRowRead = readInlineRow
 ): { items: AgentJournalRenderItem[]; nextOrdinal: number | null } {
   const items: AgentJournalRenderItem[] = []
   let used = 0
   let lastKept = -1
   for (const row of rows) {
-    const json = String(row.payload_json)
-    if (items.length > 0 && used + json.length > budget) {
+    const { bytes, item } = read(row)
+    if (items.length > 0 && used + bytes > budget) {
       return { items, nextOrdinal: lastKept }
     }
-    used += json.length
+    used += bytes
     lastKept = Number(row.ordinal)
-    items.push(JSON.parse(json))
+    items.push(item())
   }
   return { items, nextOrdinal }
 }
 
 /** Payload by primary key, so a page cut by the budget looks up no further rows. */
-export const ITEMS_BY_KIND_PAYLOAD_SQL = `SELECT payload_json,ordinal FROM journal_items
+export const ITEMS_BY_KIND_PAYLOAD_SQL = `SELECT payload_json,ordinal,output_blob FROM journal_items
   WHERE session_id=? AND epoch=? AND item_id=?`
 
 /** Each chosen item's row, in order, read only as the page budget asks for it. */
@@ -44,4 +55,20 @@ export function* itemsByKindPayloads(
       yield row
     }
   }
+}
+
+/** One budgeted page of the chosen items, stored outputs restored and counted at full size. */
+export function readItemsByKindPage(
+  db: Database.Database,
+  prefix: readonly [sessionId: string, epoch: string],
+  chosen: readonly SqliteRow[],
+  nextOrdinal: number | null
+): { items: AgentJournalRenderItem[]; nextOrdinal: number | null } {
+  const payload = db.prepare(ITEMS_BY_KIND_PAYLOAD_SQL)
+  return budgetItemsByKindPage(
+    itemsByKindPayloads(chosen, (itemId) => payload.get(...prefix, itemId)),
+    nextOrdinal,
+    undefined,
+    (row) => measureJournalStoredRow(db, prefix, row)
+  )
 }

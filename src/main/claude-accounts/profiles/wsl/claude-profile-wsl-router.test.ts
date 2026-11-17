@@ -28,9 +28,10 @@ vi.mock('../../../../shared/file-access/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
+const listRunning = vi.hoisted(() => vi.fn(async () => ['Ubuntu']))
 vi.mock('../../../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
-  listRunningWslDistrosAsync: async () => ['Ubuntu']
+  listRunningWslDistrosAsync: listRunning
 }))
 const gate = vi.hoisted(() => ({
   blocked: vi.fn(
@@ -113,6 +114,14 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
+  it('lists no running distros without a WSL account', async () => {
+    const f = fixture()
+    f.settings.claudeManagedAccounts = [{ ...f.account('h'), managedAuthRuntime: 'host' }]
+    listRunning.mockClear()
+    await expect(f.router.runningDistros()).resolves.toEqual([])
+    expect(listRunning).not.toHaveBeenCalled()
+  })
+
   it('writes the guest pointer per build, sets up even a missing folder, and removes it with the last account', async () => {
     const f = fixture()
     await f.router.publish('Ubuntu')

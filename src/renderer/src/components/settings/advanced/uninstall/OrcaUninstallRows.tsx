@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Folder, Server, Terminal } from 'lucide-react'
+import { Folder, Server, SquareTerminal, Terminal } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import type {
   OrcaUninstallAgentEntry,
@@ -216,7 +216,8 @@ function SimpleStepRow({
   entry,
   icon,
   label,
-  mono
+  mono,
+  meta
 }: {
   model: RowsModel
   step: OrcaUninstallStep
@@ -224,6 +225,8 @@ function SimpleStepRow({
   icon: React.ReactNode
   label: React.ReactNode
   mono: boolean
+  /** Shown before the run instead of the entry's location. */
+  meta?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (!entry) {
@@ -245,7 +248,9 @@ function SimpleStepRow({
             model={model}
             step={step}
             detail={entry.detail}
-            meta={<span className={cn('break-all', mono && 'font-mono')}>{entry.location}</span>}
+            meta={
+              <span className={cn('break-all', mono && 'font-mono')}>{meta ?? entry.location}</span>
+            }
           />
         </span>
       }
@@ -288,7 +293,22 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
         step="background-service"
         entry={plan.backgroundService}
         icon={<Server className="size-3.5" />}
-        label={t('settings.uninstall.rows.service', 'Background service')}
+        label={
+          <Trans
+            i18n={i18n}
+            defaults={t('settings.uninstall.rows.service', '<cmd>orca serve</cmd> server')}
+            components={{ cmd: <code className="font-mono text-xs" /> }}
+          />
+        }
+        mono={false}
+      />
+      <SimpleStepRow
+        model={model}
+        step="terminal-daemon"
+        entry={plan.terminalDaemon}
+        icon={<SquareTerminal className="size-3.5" />}
+        label={t('settings.uninstall.rows.terminalDaemon', 'Terminal background process')}
+        meta={t('settings.uninstall.closesTerminals', 'Open terminals will close.')}
         mono={false}
       />
     </>

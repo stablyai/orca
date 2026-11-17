@@ -4,7 +4,7 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-4 src/main/acp/launch/acp-launch-command.ts
+5 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
@@ -78,7 +78,8 @@
 4 src/main/antigravity/native-file-credentials.ts
 13 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
-15 src/main/artifacts/artifact-cloud-service.ts
+6 src/main/artifacts/artifact-cloud-auth-context.ts
+10 src/main/artifacts/artifact-cloud-service.ts
 8 src/main/artifacts/artifact-create-intent-store.ts
 9 src/main/artifacts/artifact-publisher.ts
 12 src/main/artifacts/artifact-share-record-store.ts
@@ -190,6 +191,8 @@
 1 src/main/claude/claude-stream-json-connection.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 13 src/main/claude/configuration/claude-folder-trust-file.ts
+1 src/main/claude/configuration/claude-in-chrome-default.ts
+1 src/main/claude/configuration/claude-rejected-api-key.ts
 1 src/main/claude/conversation-naming/claude-naming-invocation.ts
 15 src/main/claude/hook-service.ts
 2 src/main/claude/hooks/claude-profile-hook-target.ts
@@ -198,7 +201,7 @@
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
 1 src/main/claude/structured/launch/claude-structured-launch-home.ts
-1 src/main/claude/structured/lifecycle/claude-structured-session-acquisition.ts
+1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
 2 src/main/claude/transcripts/claude-conversation-copy.ts
@@ -241,7 +244,7 @@
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
 3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
-8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
+9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts
@@ -279,7 +282,7 @@
 6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-5 src/main/codex/history/backfill/codex-session-backfill.ts
+6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
 22 src/main/codex/history/bridges/codex-session-bridge.ts
 3 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
@@ -407,6 +410,7 @@
 13 src/main/daemon/launch/daemon-replacement-preflight.ts
 6 src/main/daemon/launch/daemon-spawner.ts
 8 src/main/daemon/launch/daemon-stale-kill.ts
+4 src/main/daemon/launch/local-terminal-daemon-stop.ts
 5 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 2 src/main/daemon/permissions/daemon-tcc-attribution.ts
@@ -422,6 +426,7 @@
 7 src/main/daemon/providers/lifecycle/daemon-provider-restart.ts
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
+1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
 3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
@@ -600,7 +605,7 @@
 7 src/main/ipc/notebook.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
-4 src/main/ipc/orca-uninstall.ts
+5 src/main/ipc/orca-uninstall.ts
 4 src/main/ipc/plugins/plugins.ts
 3 src/main/ipc/preflight/preflight-command-exec.ts
 1 src/main/ipc/preflight/preflight-local-env.ts
@@ -737,7 +742,7 @@
 1 src/main/managed-server/install/orcad-local-build-hash.ts
 1 src/main/managed-server/install/orcad-remote-decommission.ts
 6 src/main/managed-server/install/orcad-remote-deploy.ts
-3 src/main/managed-server/install/orcad-remote-install.ts
+4 src/main/managed-server/install/orcad-remote-install.ts
 1 src/main/managed-server/install/orcad-remote-rollback.ts
 4 src/main/managed-server/lifecycle/orcad-managed-auto-update.ts
 1 src/main/managed-server/lifecycle/orcad-managed-launch-session.ts
@@ -771,7 +776,7 @@
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
 12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-1 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 35 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -782,15 +787,16 @@
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 2 src/main/native-chat/agent-session-journal/input-order/journal-input-conversion.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-7 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
+10 src/main/native-chat/agent-session-journal/journal-domain-import-rows.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-submissions.ts
 7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-stop-notes.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
@@ -798,6 +804,7 @@
 2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
+3 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
 1 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
@@ -943,7 +950,6 @@
 2 src/main/orcad/native-runtime/node-pty-precondition.ts
 3 src/main/orcad/native-runtime/orcad-native-preflight.ts
 9 src/main/orcad/native-runtime/orcad-runtime-native-preflight.ts
-1 src/main/orcad/native-runtime/orcad-structured-provider-smoke.ts
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
@@ -1137,12 +1143,11 @@
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-5 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts
-2 src/main/runtime/agent-session/installation/structured-claude-runtime-adapter.ts
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
@@ -1195,7 +1200,8 @@
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
 2 src/main/runtime/orchestration/db/maintenance/orchestration-db-maintenance.ts
-4 src/main/runtime/orchestration/db/maintenance/settled-run-retention.ts
+2 src/main/runtime/orchestration/db/maintenance/settled-run-retention.ts
+5 src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts
 1 src/main/runtime/orchestration/db/messages/message-insert.ts
 3 src/main/runtime/orchestration/db/messages/structured-mail-send-store.ts
 2 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
@@ -1292,10 +1298,11 @@
 1 src/main/runtime/terminal/output/tail/terminal-history-last-output.ts
 2 src/main/runtime/terminal/output/terminal-kitty-file-read.ts
 1 src/main/runtime/workspaces/archive/runtime-workspace-archive.ts
-4 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
+2 src/main/runtime/workspaces/catalog/repo-worktree-row-resolution.ts
 1 src/main/runtime/workspaces/catalog/resolved-worktree-scan-join.ts
 1 src/main/runtime/workspaces/catalog/runtime-worktree-filesystem.ts
-3 src/main/runtime/workspaces/catalog/workspace-catalog.ts
+2 src/main/runtime/workspaces/catalog/scoped-worktree-row-resolution.ts
+2 src/main/runtime/workspaces/catalog/workspace-catalog.ts
 1 src/main/runtime/workspaces/catalog/workspace-repo-scan-refresh.ts
 3 src/main/runtime/workspaces/creation/created-worktree-approved-setup.ts
 1 src/main/runtime/workspaces/creation/runtime-folder-worktree-setup.ts

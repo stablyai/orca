@@ -1,3 +1,7 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../../shared/source-control/ai/generation/generation-argument'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -87,15 +91,16 @@ function jsonObject(text: string): Record<string, unknown> {
 }
 
 async function antigravityPolicy(
-  plan: CommitMessagePlan,
+  plan: CommitMessagePlan<GenerationArgument>,
   target: LocalGenerationTarget,
   signal: AbortSignal
 ) {
   let settings: Record<string, unknown> = {}
   let cursor = 0
+  const optionTokens = generationOptionTokens(plan.args)
   for (;;) {
     const option = findOptionOccurrence(
-      plan.args,
+      optionTokens,
       ['--settings'],
       true,
       settingsOptions,
@@ -154,12 +159,14 @@ async function antigravityPolicy(
     args: [
       ...compactRecipeOptions(plan.args, ['--settings'], settingsOptions),
       '--settings',
-      JSON.stringify(composed)
+      { value: JSON.stringify(composed), literal: true as const }
     ]
   }
 }
 
-function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
+function dshPolicy(
+  plan: CommitMessagePlan<GenerationArgument>
+): CommitMessagePlan<GenerationArgument> {
   const plugin = `export const inject = ['tools']\nexport function apply(ctx) {\n  ctx.tools.guard(exec => exec.name === 'read' ? undefined : 'This text task permits only file reads')\n  ctx.provide('orcaTextReadPolicy', Object.freeze({}))\n}\n`
   const patch = JSON.stringify([
     { id: 'tools', config: { mode: 'native' } },
@@ -189,12 +196,12 @@ function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
 
 export function prepareSourceControlReadOnlyPlan(input: {
   agentId: string
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
   operation?: TextGenerationOperation
-}): LocalProcessExecution<CommitMessagePlan> {
+}): LocalProcessExecution<CommitMessagePlan<GenerationArgument>> {
   let probeClosed = Promise.resolve()
   const probe = async (args: string[]) => {
     const execution = runSourceControlPolicyProbe({ ...input, args })
@@ -213,7 +220,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     )
   }
 
-  async function prepare(): Promise<CommitMessagePlan> {
+  async function prepare(): Promise<CommitMessagePlan<GenerationArgument>> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
     if (isNamingOnlyTextAgent(input.agentId)) {
@@ -234,7 +241,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     }
     if (input.agentId === 'kimi') {
       const selected = findOptionOccurrence(
-        plan.args,
+        generationOptionTokens(plan.args),
         ['--agent', '--session', '-S', '--resume', '-r', '--continue', '-c', '-C'],
         true,
         [...KIMI_VALUE_OPTIONS, '--session', '-S', '--resume', '-r'],

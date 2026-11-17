@@ -27,6 +27,11 @@ import {
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
+import {
+  hydrateJournalStoredItem,
+  journalStoredItemRow,
+  readJournalStoredItem
+} from './journal-stored-output-rows'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -59,10 +64,15 @@ function nextJournalDomainItemOrdinal(
 export function writeJournalDomainCurrentItem(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  input: JournalDomainCurrentItemWrite
+  write: JournalDomainCurrentItemWrite
 ): AgentJournalRenderItem[] {
   if (!db.isTransaction) {
     throw new Error('journal item persistence requires its writer transaction')
+  }
+  // A stored form handed back is written from its text, so every derived column stays exact.
+  const input = {
+    ...write,
+    item: hydrateJournalStoredItem(db, [target.sessionId, target.epoch], write.item)
   }
   const body = normalizeJournalDomainItemBody(
     db,
@@ -98,7 +108,7 @@ export function writeJournalDomainCurrentItem(
           (SELECT item_id FROM journal_item_aliases
             WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
       .get(...prefix, ...prefix, id, id)
-    return row ? JSON.parse(String(row.payload_json)) : undefined
+    return row ? readJournalStoredItem(db, prefix, row.payload_json) : undefined
   })
   const next = stopNote.item
   const sequence = input.writtenSequence ?? next.sequence
@@ -111,11 +121,13 @@ export function writeJournalDomainCurrentItem(
           .get(...prefix, next.itemId)
       : undefined
   const payload = JSON.stringify(item)
-  const { metadata, values } = journalDomainItemColumns(item, payload, next)
+  const columns = journalDomainItemColumns(item, payload, next)
+  const { metadata } = columns
+  const row = journalStoredItemRow(db, prefix, item, payload, columns.values)
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
       hidden,original_stop_note_json,queue_command_turn,queue_failed_outcome,queue_failed_at,
-      queue_failure_witnessed_through,queue_failure_report_turn_item_id,placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
-    VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})
+      queue_failure_witnessed_through,queue_failure_report_turn_item_id,placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')},output_blob)
+    VALUES(${Array.from({ length: 19 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})
     ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
       ordinal=excluded.ordinal, revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
       owner_fence=excluded.owner_fence, execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
@@ -123,7 +135,8 @@ export function writeJournalDomainCurrentItem(
       queue_command_turn=excluded.queue_command_turn, queue_failed_outcome=excluded.queue_failed_outcome,
       queue_failed_at=excluded.queue_failed_at, queue_failure_witnessed_through=excluded.queue_failure_witnessed_through,
       queue_failure_report_turn_item_id=excluded.queue_failure_report_turn_item_id,placement_json=excluded.placement_json,
-      ${JOURNAL_DOMAIN_ITEM_COLUMNS.map((column) => `${column}=excluded.${column}`).join(',')}`).run(
+      ${JOURNAL_DOMAIN_ITEM_COLUMNS.map((column) => `${column}=excluded.${column}`).join(',')},
+      output_blob=CASE WHEN ? THEN journal_items.output_blob ELSE excluded.output_blob END`).run(
     ...prefix,
     next.itemId,
     ordinal,
@@ -132,7 +145,7 @@ export function writeJournalDomainCurrentItem(
     next.sequenceIndex ?? 0,
     input.ownerFence,
     input.executionOwner ?? null,
-    payload,
+    row.payload,
     Number(input.hidden),
     stopNote.originalStopNoteJson,
     failure.commandTurn,
@@ -141,7 +154,9 @@ export function writeJournalDomainCurrentItem(
     failure.witnessedThrough,
     failure.reportTurnItemId,
     journalDomainItemPlacement(next),
-    ...values
+    ...row.values,
+    row.blob,
+    Number(row.keep)
   )
   writeJournalDomainItemNames(
     db,

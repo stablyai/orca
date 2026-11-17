@@ -1,7 +1,10 @@
 import { Fragment, useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
+import {
+  formatShortcutKeyComboDetails,
+  useShortcutKeyDetails
+} from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 
 const TYPED_QUERY = 'auth'

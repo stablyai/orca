@@ -105,6 +105,8 @@ export type AcpHostBackend = {
     /** The account type Orca's own Chat signs in with, saved on this host. */
     settings: AcpHostBackendSettings
   }): Promise<AgentSessionAccountHome | null>
+  /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
+  selectionRevision?(): number
 }
 
 export type AcpHostBackendSettings = Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>

@@ -36,12 +36,6 @@ export function BitbucketApiTokenScopes(): React.JSX.Element {
   ]
   return (
     <div className="space-y-2">
-      <p>
-        {t(
-          'auto.components.settings.bitbucket.credentials.dialog.scopesTitle',
-          'Select these Bitbucket API token scopes:'
-        )}
-      </p>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
         {scopes.map(({ scope, purpose }) => (
           <Fragment key={scope}>

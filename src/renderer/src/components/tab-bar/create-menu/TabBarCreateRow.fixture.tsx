@@ -15,6 +15,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,9 +93,15 @@ const PLUGIN_FILES: TabBarCreateRowItem[] = [
   pluginFile('snippet', 'New Snippet', 'Snippets', Code)
 ]
 
-function Menu({ items }: { items: TabBarCreateRowItem[] }): React.JSX.Element {
+function Menu({
+  items,
+  className
+}: {
+  items: TabBarCreateRowItem[]
+  className?: string
+}): React.JSX.Element {
   return (
-    <div className="flex h-[260px] items-start bg-background p-3">
+    <div className={cn('flex h-[260px] items-start bg-background p-3', className)}>
       <DropdownMenu defaultOpen modal={false}>
         <DropdownMenuTrigger>+</DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">
@@ -140,4 +147,32 @@ export const overflowEnd = defineFixture({
   width: 340,
   render: () => <Menu items={[...BUILT_IN, ...PLUGIN_FILES]} />,
   interact: scrollRow(1)
+})
+
+export const customizer = defineFixture({
+  width: 640,
+  render: () => <Menu items={BUILT_IN} className="h-[340px]" />,
+  interact: async (frame) => {
+    await new Promise(requestAnimationFrame)
+    const trigger = frame.ownerDocument.querySelector<HTMLElement>(
+      '[data-slot="dropdown-menu-sub-trigger"]'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
+    trigger?.click()
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  }
+})
+
+export const customizerHiddenTooltip = defineFixture({
+  ...customizer,
+  interact: async (frame) => {
+    await customizer.interact?.(frame)
+    const infoButton = frame.ownerDocument.querySelector<HTMLElement>(
+      'button[aria-label="Hidden items still open from search and their shortcuts."]'
+    )
+    infoButton?.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 700))
+  }
 })

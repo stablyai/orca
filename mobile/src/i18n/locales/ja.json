@@ -665,6 +665,10 @@
       "mark": "分岐 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分岐: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "選択したテキストを引用としてメッセージに追加します"
     }
   },
   "common": {
@@ -2422,7 +2426,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "chat": "チャット",
       "copyAllAndLeave": "すべてコピーして戻る",
       "copyDraftsFailed": "下書きをコピーできませんでした。",
@@ -2518,7 +2521,6 @@
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
       "browserCreateFailed": "ブラウザの作成に失敗しました。",
       "browserUnavailable": "ブラウザのページはまだ利用できません。",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "invalidUrl": "有効な URL を入力してください。",
       "noteCreateFailed": "Markdown ノートの作成に失敗しました。",
       "untitledNoteCreateFailed": "無題の Markdown ノートを作成できませんでした。"
@@ -2671,6 +2673,7 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
       "hostReconciling": "Orca は再起動後、このチャットをまだ確認しています。",

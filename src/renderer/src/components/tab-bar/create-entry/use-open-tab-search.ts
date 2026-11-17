@@ -12,7 +12,7 @@ import {
   searchOpenTabCandidates,
   type OpenTabSearchResult
 } from './open-tab-search'
-import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
+import { usePaletteSearchEvaluationContext } from '@/lib/workspace/search/palette/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useWorktreeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { useTranslate } from '@/i18n/use-translate'

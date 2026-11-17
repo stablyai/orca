@@ -106,8 +106,9 @@ export function structuredMailSource(input: {
   }
 }
 
-/** One orchestration message as one chat card: the whole message, with who it is from, for people.
- *  `whole` is false when it would exceed a chat message's limit; that card then shows the pointer. */
+/** One orchestration message as one chat message: the whole message, with who it is from.
+ *  `whole` is false when it would exceed a chat message's limit; that one then points at `check`
+ *  and stays unread there. */
 export function structuredMailMessage(input: {
   db: OrchestrationDb
   mailboxHandle: string

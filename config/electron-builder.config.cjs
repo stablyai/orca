@@ -373,6 +373,7 @@ module.exports = {
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
     // `orca uninstall` runs the app's cleanup in the CLI process.
     'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
+    'out/main/daemon/launch/local-terminal-daemon-stop.js',
     'out/main/cli/cli-installer.js',
     'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
