@@ -13,6 +13,7 @@ import {
   claimJournalReaderRecord,
   describeJournalReaderOperation,
   recordJournalReaderRequest,
+  type JournalReaderRunningRequest,
   releaseJournalReaderRecord
 } from './journal-sql-reader-requests'
 
@@ -91,8 +92,10 @@ export class ReaderSlot {
       reject: (error: Error) => void
     }
   >()
-  private record = claimJournalReaderRecord(this)
-  private runningId?: number
+  private record?: number
+  private running?: { id: number; queued: number; request: JournalReaderRunningRequest }
+  /** A fork or conversion reservation's later steps name the chat its first step opened. */
+  private readonly reservedChats = new Map<number, string | null>()
   failed = false
   private failure?: Error
   private conversions = 0
@@ -110,6 +113,7 @@ export class ReaderSlot {
       workerData: { filename, originalFilename },
       execArgv: []
     })
+    this.record = claimJournalReaderRecord(this)
     const startup = setTimeout(() => {
       this.fail(new Error('journal SQL reader did not open within 10000 ms'))
       void this.close()
@@ -264,20 +268,60 @@ export class ReaderSlot {
       return
     }
     const oldest = this.pending.entries().next().value
-    if (oldest?.[0] === this.runningId) {
+    const queued = this.pending.size - 1
+    if (oldest?.[0] === this.running?.id && queued === this.running?.queued) {
       return
     }
-    this.runningId = oldest?.[0]
-    recordJournalReaderRequest(
-      this.record,
-      oldest
-        ? {
-            ...describeJournalReaderOperation(oldest[1].operation),
+    if (!oldest) {
+      this.running = undefined
+      recordJournalReaderRequest(this.record, null)
+      return
+    }
+    const [id, { operation }] = oldest
+    const request: JournalReaderRunningRequest =
+      id === this.running?.id
+        ? { ...this.running.request, queued }
+        : {
+            ...this.describe(id, operation),
             startedAt: Date.now(),
-            queued: this.pending.size - 1,
+            queued,
             threadId: this.worker.threadId
           }
-        : null
-    )
+    this.running = { id, queued, request }
+    recordJournalReaderRequest(this.record, request)
   }
+
+  private describe(
+    id: number,
+    operation: JournalSqlReaderOperation
+  ): Pick<JournalReaderRunningRequest, 'operation' | 'chat'> {
+    const described = describeJournalReaderOperation(operation)
+    switch (operation.kind) {
+      case 'fork-prepare':
+      case 'conversion-prepare':
+        this.reservedChats.set(id, described.chat)
+        return described
+      case 'fork-next':
+      case 'conversion-page':
+        return { ...described, chat: this.reservedChat(operation) }
+      case 'fork-release':
+      case 'conversion-release': {
+        const chat = this.reservedChat(operation)
+        this.reservedChats.delete(reservationId(operation))
+        return { ...described, chat }
+      }
+      default:
+        return described
+    }
+  }
+
+  private reservedChat(
+    operation: { preparationId: number } | { conversionId: number }
+  ): string | null {
+    return this.reservedChats.get(reservationId(operation)) ?? null
+  }
+}
+
+function reservationId(operation: { preparationId: number } | { conversionId: number }): number {
+  return 'preparationId' in operation ? operation.preparationId : operation.conversionId
 }

@@ -10,14 +10,14 @@ export type JournalReaderRunningRequest = {
   /** A hash of the chat id: matches a local journal without putting the id in a crash report. */
   chat: string | null
   startedAt: number
-  /** Requests waiting behind this one on the same reader. */
+  /** Requests waiting behind this one on the same reader, kept current. */
   queued: number
   threadId: number
 }
 
 type RunningRequestSink = (reader: number, request: JournalReaderRunningRequest | null) => void
 
-/** The pool runs at most four readers; a fifth (only while one retires) goes unrecorded. */
+/** The pool runs at most four readers; a closing reader frees its record first. */
 const READERS = 4
 const owners: (object | undefined)[] = Array.from({ length: READERS })
 const running: (JournalReaderRunningRequest | null)[] = Array.from({ length: READERS }, () => null)
@@ -77,6 +77,8 @@ export function describeJournalReaderOperation(
         operation: `database:${operation.operation.kind}`,
         chat: 'sessionId' in operation.operation ? chatHash(operation.operation.sessionId) : null
       }
+    case 'fork-prepare':
+      return { operation: operation.kind, chat: chatHash(operation.input.source.sessionId) }
     case 'conversion-prepare':
     case 'import-state':
       return { operation: operation.kind, chat: chatHash(operation.sessionId) }

@@ -34,7 +34,7 @@ parentPort.postMessage({ type: 'ready' })`
     ]
     rest.forEach((request) => request.catch(() => {}))
     expect(readJournalReaderRequests()).toMatchObject([
-      { reader: 0, operation: 'import-state', chat: '3f3af1ec', queued: 0 }
+      { reader: 0, operation: 'import-state', chat: '3f3af1ec', queued: 2 }
     ])
     await first
     expect(readJournalReaderRequests()).toMatchObject([
