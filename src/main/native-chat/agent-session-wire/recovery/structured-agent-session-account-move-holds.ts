@@ -75,10 +75,8 @@ export class AccountMoveHolds {
     if (hold && hold.stale !== 'account') {
       hold.stale = level
     }
-    if (level === 'account') {
-      // A read begun before the selection changed may not install the move it saw.
-      this.reading.delete(sessionId)
-    }
+    // A read begun before this edge may not install what it saw; the edge's own pass reads again.
+    this.reading.delete(sessionId)
   }
 
   observe(
