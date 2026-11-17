@@ -4,16 +4,16 @@ import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
-import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
-import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
+import { useActiveTerminalRepair } from './terminal/workspace-mounting/use-active-terminal-repair'
+import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/workspace-mounting/background-terminal-worktree-visibility'
 import {
   applyBackgroundMountTabRestriction,
   revealActivationDeferredTabs,
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
-} from './terminal/background-terminal-worktree-mount'
-import type { StartupTerminalTabHold } from './terminal/startup-terminal-tab-hold'
-import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
+} from './terminal/workspace-mounting/background-terminal-worktree-mount'
+import type { StartupTerminalTabHold } from './terminal/workspace-mounting/startup-terminal-tab-hold'
+import type { TerminalPrewarmStage } from './terminal/worktree-prewarm/terminal-worktree-prewarm'
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking

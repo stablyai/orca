@@ -21,7 +21,7 @@ import {
 } from './tracking'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web-session-terminal-handle-events'
-import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
 import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */

@@ -17,6 +17,7 @@ import {
   type JournalDomainMaintenance,
   type JournalDomainMaintenanceResult
 } from './journal-domain-maintenance'
+import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 import {
   discardJournalDomainImportPage,
@@ -27,6 +28,14 @@ import { installAgentSessionStoreRows } from '../../runtime/agent-session/record
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
+
+/** Operations the background pass runs a bounded page at a time. */
+export type JournalPagedMaintenanceKind =
+  | 'event-tail-prune'
+  | 'domain-retired-prune'
+  | 'page-reclaim'
+  | 'chat-discard'
+  | 'stored-output-compaction'
 
 export type JournalSqlMaintenance =
   | { kind: 'records-install' }
@@ -109,5 +118,7 @@ export function applyJournalSqlMaintenance(
     case 'legacy-copy-failed':
       recordJournalLegacyCopyFailure(db, operation.sessionId, operation.error)
       return null
+    case 'stored-output-compaction':
+      return compactJournalStoredOutputPage(db)
   }
 }

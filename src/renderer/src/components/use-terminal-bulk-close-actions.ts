@@ -8,7 +8,7 @@ import {
   hasEditorFrameFlush,
   runAfterEditorFramesFlush
 } from './editor/save/flush/editor-pending-flush'
-import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import { closeTerminalTab } from './terminal/tab-lifecycle/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
 import { destroyWorkspaceWebviews } from '../store/slices/browser/cleanup/browser-webview-cleanup'

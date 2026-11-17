@@ -126,6 +126,10 @@ it('starts a reopened picker from the setup the fields saved after an earlier pi
 it('removes a chip from the Arguments text being typed, not the saved text', async () => {
   await open()
   fireEvent.click(getByRole(document.body, 'option', { name: 'Codex B' }))
+  // A model pick applies at once and keeps the dropdown open.
+  expect(picks.mock.lastCall?.[1]?.choices.model).toBe('codex-b')
+  expect(search()).not.toBeNull()
+  fireEvent.keyDown(search()!, { key: 'Escape' })
   await waitFor(() => expect(search()).toBeNull())
   fireEvent.change(args(), { target: { value: '--saved --verbose' } })
   fireEvent.click(getByRole(document.body, 'button', { name: 'Remove -m codex-b' }))

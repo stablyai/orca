@@ -45,7 +45,11 @@ import {
   resolveCodexSessionBackfillPaths,
   startCodexSessionBackfillInBackground
 } from './codex-session-backfill'
-import { markCodexSessionBackfillMarkerPending } from './codex-session-backfill-marker'
+import { createCodexSessionMigrationScheduler } from './codex-session-migration-scheduler'
+import {
+  markCodexSessionBackfillMarkerNeedsFullScan,
+  markCodexSessionBackfillMarkerPending
+} from './codex-session-backfill-marker'
 import { fsMockState, resetCodexSessionBackfillFsMocks } from './codex-session-backfill-fs-mocks'
 import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
 
@@ -131,6 +135,8 @@ afterEach(() => {
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
   vi.clearAllMocks()
 })
 
@@ -212,70 +218,249 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 })
 
 describe('startCodexSessionBackfillInBackground', () => {
-  it('stops target mutations after real-home opt-out and leaves the run retryable', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    writeManagedSession(join('2026', '05', '26', 'rollout-b.jsonl'), '{"id":"b"}\n')
-    let stopChecks = 0
-
-    const stopped = await startCodexSessionBackfillInBackground({
-      yieldMs: 0,
-      shouldStop: () => stopChecks++ >= 1
-    })
-
-    expect(stopped).toMatchObject({ stopped: true, linkedFiles: 1 })
-    expect(existsSync(getMarkerPath())).toBe(false)
-
-    const resumed = await startCodexSessionBackfillInBackground({ yieldMs: 0 })
-    expect(resumed).toMatchObject({ stopped: false, linkedFiles: 1, skippedExistingFiles: 1 })
-    expect(existsSync(getMarkerPath())).toBe(true)
-  })
-
-  it('keeps a racing launch date pending without discarding the baseline', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    let raceStarted = false
-
-    const raced = await startCodexSessionBackfillInBackground({
-      shouldStop: () => {
-        if (!raceStarted) {
-          raceStarted = true
-          markLaunchPending(['2026', '08', '05'])
+  describe.each([
+    ['Asia/Seoul', '2026-10-26T15:53:24Z'],
+    ['America/Los_Angeles', '2026-10-27T05:00:00Z']
+  ])('local and shell-TZ rollouts in %s', (timeZone, instant) => {
+    it.each(['launch', 'exit', 'recovery'])(
+      'publishes both date shards after %s',
+      async (trigger) => {
+        vi.stubEnv('TZ', timeZone)
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date(instant))
+        writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
+        await startCodexSessionBackfillInBackground()
+        if (trigger === 'recovery') {
+          markLaunchPending(['2026', '10', timeZone === 'Asia/Seoul' ? '25' : '28'])
+          await startCodexSessionBackfillInBackground({ retainPendingScanDates: true })
         }
-        return false
+        writeManagedSession(join('2026', '10', '26', 'rollout-26.jsonl'), 'day 26\n')
+        writeManagedSession(join('2026', '10', '27', 'rollout-27.jsonl'), 'day 27\n')
+        writeManagedSession(join('2026', '01', '01', 'rollout-unrelated.jsonl'), 'unrelated\n')
+        await (trigger === 'exit'
+          ? new Promise<void>((resolve, reject) => {
+              const scheduler = createCodexSessionMigrationScheduler({
+                isEligible: () => true,
+                isQuitting: () => false,
+                resolveSystemCodexHomePathOverride: () => undefined,
+                startBackfill: (options) =>
+                  startCodexSessionBackfillInBackground(options).catch(reject),
+                startIndexHeal: async () => {},
+                finishScheduledRun: resolve,
+                initialDelayMs: 0
+              })
+              scheduler.beginLaunch('launch', false, new Date(instant))
+              scheduler.finishLaunch('launch')
+            })
+          : startCodexSessionBackfillInBackground({ ignoreCompletionMarker: trigger === 'launch' }))
+        expect(
+          readFileSync(
+            join(getSystemSessionsRoot(), '2026', '10', '26', 'rollout-26.jsonl'),
+            'utf-8'
+          )
+        ).toBe('day 26\n')
+        expect(
+          readFileSync(
+            join(getSystemSessionsRoot(), '2026', '10', '27', 'rollout-27.jsonl'),
+            'utf-8'
+          )
+        ).toBe('day 27\n')
+        expect(
+          existsSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-unrelated.jsonl'))
+        ).toBe(false)
       }
-    })
-
-    expect(raced).toMatchObject({ linkedFiles: 1, stopped: false })
-    expect(readMarker()).toMatchObject({
-      version: 4,
-      coverage: 'full',
-      pendingScanDates: [['2026', '08', '05']]
-    })
-    const racedAudit = readFileSync(getAuditLogPath(), 'utf-8')
-
-    writeManagedSession(join('2026', '08', '05', 'rollout-raced.jsonl'), '{"id":"raced"}\n')
-    const recovered = await startCodexSessionBackfillInBackground()
-
-    expect(recovered).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(readMarker()).toMatchObject({ pendingScanDates: [] })
-    expect(readFileSync(getAuditLogPath(), 'utf-8')).not.toBe(racedAudit)
+    )
   })
 
-  it('does not let a bounded pass certify history no baseline ever covered', async () => {
-    const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
-    writeManagedSession(missedRelativePath, 'missed\n')
-    writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
+  it.each([true, false])(
+    'recovers historical sessions omitted by a date-filtered pass with boundedScan=%s',
+    async (boundedScan) => {
+      const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
+      writeManagedSession(missedRelativePath, 'missed\n')
+      writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
+      await startCodexSessionBackfillInBackground({
+        boundedScan,
+        scanFrom: ['2026', '08', '05']
+      })
+      expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(false)
+      await startCodexSessionBackfillInBackground()
+      expect(readFileSync(join(getSystemSessionsRoot(), missedRelativePath), 'utf-8')).toBe(
+        'missed\n'
+      )
+    }
+  )
 
-    const bounded = await startCodexSessionBackfillInBackground({
+  it.each([100, 1000])(
+    'caps launch folder reads with %i historical year folders',
+    async (years) => {
+      writeManagedSession(join('2000', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+      await startCodexSessionBackfillInBackground()
+      for (let year = 3000; year < 3000 + years; year += 1) {
+        mkdirSync(join(getManagedSessionsRoot(), String(year), '01'), { recursive: true })
+      }
+      fsMockState.scanDirectoryReads = []
+      await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+      expect(fsMockState.scanDirectoryReads.length).toBeLessThanOrEqual(128)
+    }
+  )
+
+  it('resumes older publication after a capped launch while still publishing fresh rollouts', async () => {
+    writeManagedSession(join('2025', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-a.jsonl'),
+          'history\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+    expect(existsSync(join(getSystemSessionsRoot(), '2026', '01', '25', 'rollout-a.jsonl'))).toBe(
+      false
+    )
+    for (const day of ['01', '02', '03']) {
+      writeManagedSession(join('2026', '03', day, 'rollout-new.jsonl'), 'new\n')
+    }
+    await startCodexSessionBackfillInBackground()
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '03', '01', 'rollout-new.jsonl'), 'utf-8')
+    ).toBe('new\n')
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-a.jsonl'), 'utf-8')
+    ).toBe('history\n')
+  })
+
+  it('resumes a capped full-history request below the previous scan floor', async () => {
+    writeManagedSession(join('2026', '10', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-older.jsonl'),
+          'older\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({
       ignoreCompletionMarker: true,
-      scanDates: [['2026', '08', '05']]
+      fullScanRequired: true
     })
-    expect(bounded).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(existsSync(getMarkerPath())).toBe(false)
+    expect(
+      existsSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-older.jsonl'))
+    ).toBe(false)
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-older.jsonl'),
+        'utf-8'
+      )
+    ).toBe('older\n')
+  })
 
-    const recovered = await startCodexSessionBackfillInBackground()
-    expect(recovered).toMatchObject({ scannedFiles: 2, linkedFiles: 1 })
-    expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(true)
-    expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
+  it('revisits a scanned prefix when a bounded continuation receives a full-history request', async () => {
+    writeManagedSession(join('2025', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-older.jsonl'),
+          'older\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+    writeManagedSession(join('2026', '02', '01', 'rollout-late.jsonl'), 'late\n')
+    await startCodexSessionBackfillInBackground({
+      ignoreCompletionMarker: true,
+      fullScanRequired: true
+    })
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '02', '01', 'rollout-late.jsonl'), 'utf-8')
+    ).toBe('late\n')
+  })
+
+  it('replays the visited prefix after a new full request without dropping the owed tail', async () => {
+    writeManagedSession(join('2026', '10', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-older.jsonl'),
+          'older\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({
+      ignoreCompletionMarker: true,
+      fullScanRequired: true
+    })
+    writeManagedSession(join('2026', '02', '01', 'rollout-late.jsonl'), 'late\n')
+    markCodexSessionBackfillMarkerNeedsFullScan(getMarkerPath(), true)
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-older.jsonl'),
+        'utf-8'
+      )
+    ).toBe('older\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '02', '01', 'rollout-late.jsonl'), 'utf-8')
+    ).toBe('late\n')
+    await startCodexSessionBackfillInBackground()
+  })
+
+  it.each([
+    ['month', ['2017', '03']],
+    ['year', ['2017']]
+  ])('resumes a %s subtree cursor through its day folders', async (_kind, cursor) => {
+    writeManagedSession(join('2000', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    writeFileSync(
+      getMarkerPath(),
+      JSON.stringify({
+        ...readMarker(),
+        scanCursor: cursor,
+        scanCheckpoint: ['2026', '02', '28'],
+        launchActive: true
+      })
+    )
+    for (const day of ['01', '02', '03']) {
+      writeManagedSession(join('2026', '03', day, 'rollout-new.jsonl'), 'fresh\n')
+    }
+    writeManagedSession(join('2017', '03', '01', 'rollout-older.jsonl'), 'older\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2017', '03', '01', 'rollout-older.jsonl'),
+        'utf-8'
+      )
+    ).toBe('older\n')
+  })
+
+  it('recovers a local rollout below an old UTC-only pending marker', async () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-27T05:00:00Z'))
+    mkdirSync(dirname(getMarkerPath()), { recursive: true })
+    writeFileSync(
+      getMarkerPath(),
+      JSON.stringify({
+        version: 4,
+        coverage: 'full',
+        systemSessionsRoot: getSystemSessionsRoot(),
+        baselineScannedFiles: 1,
+        pendingScanDates: [['2026', '10', '27']],
+        launchActive: true
+      })
+    )
+    writeManagedSession(join('2026', '10', '26', 'rollout-la.jsonl'), 'local\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '10', '26', 'rollout-la.jsonl'), 'utf-8')
+    ).toBe('local\n')
   })
 
   it('recovers a post-install audit interruption without duplicating prior events', async () => {
