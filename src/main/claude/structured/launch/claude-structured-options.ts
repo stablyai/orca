@@ -12,7 +12,7 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
-import { beginClaudeOptionMutation } from '../claude-structured-execution-observations'
+import { beginClaudeOptionMutation } from '../turns/claude-structured-execution-observations'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS

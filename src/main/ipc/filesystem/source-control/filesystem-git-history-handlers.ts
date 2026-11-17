@@ -4,6 +4,9 @@ import type {
   GitHistoryResult
 } from '../../../../shared/git/history/git-history-types'
 import { getHistory, getHistoryRefs } from '../../../git/source-control/history'
+import type { GitBlameResult } from '../../../../shared/git/blame/git-blame-types'
+import { getBlame } from '../../../git/source-control/blame/git-blame-read'
+import { validateGitRelativeFilePath } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
@@ -48,6 +51,34 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
         args.worktreePath,
         args.wakeWslDistro,
         (worktreePath, gitOptions) => getHistory(worktreePath, { ...options, ...gitOptions })
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'git:blame',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        knownHeadOid?: string
+        connectionId?: string
+      }
+    ): Promise<GitBlameResult> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // Passive: never wakes a stopped WSL distro.
+      return readWorktreeGitUnlessWslStopped(
+        store,
+        args.worktreePath,
+        false,
+        (worktreePath, gitOptions) =>
+          getBlame(
+            worktreePath,
+            validateGitRelativeFilePath(worktreePath, args.filePath),
+            gitOptions,
+            args.knownHeadOid
+          )
       )
     }
   )
