@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { attachDividerDropForwarding } from '@/lib/divider-drop-forwarding'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
@@ -36,7 +35,6 @@ export function ResizeHandle({
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
   const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
-  const handleRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(
     () => () => {
@@ -44,14 +42,6 @@ export function ResizeHandle({
     },
     []
   )
-
-  useEffect(() => {
-    const handle = handleRef.current
-    if (!wide || !handle) {
-      return
-    }
-    return attachDividerDropForwarding(handle, () => isHorizontal)
-  }, [wide, isHorizontal])
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -75,35 +65,22 @@ export function ResizeHandle({
       handle.setPointerCapture(event.pointerId)
       // Why: a guest page under the first move takes the gesture before capture activates; keep guests click-through.
       const releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
-      // Why: measure outside pointermove so pane writes never force a readback.
-      let rect = container.getBoundingClientRect()
-      const startRect = rect
+      const startRect = container.getBoundingClientRect()
       const handleRect = handle.getBoundingClientRect()
       const handleSize = isHorizontal ? handleRect.width : handleRect.height
       const startPos = isHorizontal ? event.clientX : event.clientY
       const startRatio =
         readSplitRatio(firstPane, secondPane) ??
         measureSplitRatio(firstPane, secondPane, isHorizontal)
-      const resizeObserver = new ResizeObserver(() => {
-        rect = container.getBoundingClientRect()
-      })
-      resizeObserver.observe(container)
       let draggedRatio: number | null = null
 
-      const onPointerMove = (moveEvent: PointerEvent): void => {
-        // Why: Linux Chromium delivers pointermove while hasPointerCapture() reports false; own by pointerId only.
-        if (moveEvent.pointerId !== event.pointerId) {
-          return
-        }
-        // Why: a release outside the window can arrive as a buttonless move instead of pointerup.
-        if (moveEvent.buttons === 0) {
-          cleanup()
-          return
-        }
+      const followPointer = (pointerEvent: PointerEvent): void => {
+        // Why: read the container each event so a mid-drag move or resize (sidebar, window, dock) keeps the seam under the pointer.
+        const rect = container.getBoundingClientRect()
         const clamped = getDraggedSplitRatio({
           startRatio,
           startPos,
-          pos: isHorizontal ? moveEvent.clientX : moveEvent.clientY,
+          pos: isHorizontal ? pointerEvent.clientX : pointerEvent.clientY,
           startContainerPos: isHorizontal ? startRect.left : startRect.top,
           containerPos: isHorizontal ? rect.left : rect.top,
           startAvailablePx: (isHorizontal ? startRect.width : startRect.height) - handleSize,
@@ -118,13 +95,25 @@ export function ResizeHandle({
         secondPane.style.flex = `${1 - clamped} 1 0%`
       }
 
+      const onPointerMove = (moveEvent: PointerEvent): void => {
+        // Why: Linux Chromium delivers pointermove while hasPointerCapture() reports false; own by pointerId only.
+        if (moveEvent.pointerId !== event.pointerId) {
+          return
+        }
+        // Why: a release outside the window can arrive as a buttonless move instead of pointerup.
+        if (moveEvent.buttons === 0) {
+          cleanup()
+          return
+        }
+        followPointer(moveEvent)
+      }
+
       let cleaned = false
       const cleanup = (updateDragging = true): void => {
         if (cleaned) {
           return
         }
         cleaned = true
-        resizeObserver.disconnect()
         releaseWebviewDragPassthrough()
         onResizeEnd?.()
         if (draggedRatio !== null) {
@@ -153,9 +142,14 @@ export function ResizeHandle({
       }
 
       const onPointerUp = (upEvent: PointerEvent): void => {
-        if (upEvent.pointerId === event.pointerId) {
-          cleanup()
+        if (upEvent.pointerId !== event.pointerId) {
+          return
         }
+        // Why: the layout may have shifted since the last move; commit where the pointer actually released.
+        if (draggedRatio !== null) {
+          followPointer(upEvent)
+        }
+        cleanup()
       }
 
       const onPointerCancel = (cancelEvent: PointerEvent): void => {
@@ -198,7 +192,6 @@ export function ResizeHandle({
 
   return (
     <div
-      ref={handleRef}
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
       }${wide ? ' is-wide' : ''}${tabBand ? ' has-tab-band' : ''}${dragging ? ' is-dragging' : ''}`}

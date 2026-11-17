@@ -1,9 +1,6 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from '../pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
 import { DIVIDER_HIT_PX } from '../../divider-hit-area'
-import { attachDividerDropForwarding } from '../../divider-drop-forwarding'
-
-const dropForwardingCleanups = new WeakMap<HTMLElement, () => void>()
 
 export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   const thickness = styleOptions.dividerThicknessPx ?? 4
@@ -32,17 +29,11 @@ export function createDivider(
   divider.style.position = 'relative'
 
   attachDividerDrag(divider, isVertical, callbacks)
-  dropForwardingCleanups.set(
-    divider,
-    attachDividerDropForwarding(divider, () => divider.classList.contains('is-vertical'))
-  )
   return divider
 }
 
 export function disposeDivider(divider: HTMLElement): void {
   disposeDividerDrag(divider)
-  dropForwardingCleanups.get(divider)?.()
-  dropForwardingCleanups.delete(divider)
 }
 
 export function disposeDividersIn(root: HTMLElement): void {
