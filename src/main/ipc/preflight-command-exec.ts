@@ -57,6 +57,15 @@ async function withPreflightTimeout<T>(
   }
 }
 
+// Windows may queue a launch behind others on a worker; time the run, not the queue.
+function spawnStart(): { started: Promise<void>; onSpawn: () => void } {
+  let onSpawn = (): void => {}
+  const started = new Promise<void>((resolve) => {
+    onSpawn = () => resolve()
+  })
+  return { started, onSpawn }
+}
+
 /** Reject execution failures; callers must distinguish them from absence (docs/reference/wsl-probe-failure-semantics.md). */
 export async function execLocalPreflightCommandOrThrow(
   command: string,
@@ -70,17 +79,13 @@ export async function execLocalPreflightCommandOrThrow(
     options.terminationBarrier ||
     (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
   ) {
-    let spawned = (): void => {}
-    // Windows may queue the launch behind others on a worker; time the run, not the queue.
-    const started = new Promise<void>((resolve) => {
-      spawned = () => resolve()
-    })
+    const { started, onSpawn } = spawnStart()
     const pending = runProcess({
       program: command,
       args,
       env,
       timeoutMs,
-      onSpawn: spawned,
+      onSpawn,
       ...(options.terminationBarrier ? { terminationBarrier: true } : {})
     })
     const result = options.terminationBarrier
@@ -110,9 +115,15 @@ export async function execCommandInWslOrThrow(
   target: WslPreflightTarget,
   command: string
 ): Promise<PreflightCommandResult> {
-  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
+  const { started, onSpawn } = spawnStart()
+  const commandPromise = runPreflightCommandInWsl(
+    target,
+    command,
+    PREFLIGHT_COMMAND_TIMEOUT_MS,
+    onSpawn
+  )
   // Diagnostic label only; runPreflightCommandInWsl owns process invocation.
-  return withPreflightTimeout('wsl command', commandPromise)
+  return withPreflightTimeout('wsl command', commandPromise, PREFLIGHT_COMMAND_TIMEOUT_MS, started)
 }
 
 const PREFLIGHT_LOCAL_PROBE_LIMIT = 4

@@ -7,7 +7,8 @@ export type PreflightWslCommandResult = { stdout: string; stderr: string }
 export async function runPreflightCommandInWsl(
   target: WslPreflightTarget,
   command: string,
-  timeoutMs: number
+  timeoutMs: number,
+  onSpawn?: () => void
 ): Promise<PreflightWslCommandResult> {
   // Use cached login PATH without shell startup banners.
   const result = await runWslProcess({
@@ -15,7 +16,8 @@ export async function runPreflightCommandInWsl(
     loginPath: 'preferred',
     // Append version-manager fallback directories while keeping resolved login PATH authoritative (#9725).
     script: `${buildPosixFallbackPathPrelude()}\n${command}`,
-    timeoutMs
+    timeoutMs,
+    onSpawn
   })
   // Match execFile rejection semantics so callers retain captured output for auth-success fallback.
   if (result.timedOut || result.code !== 0) {
