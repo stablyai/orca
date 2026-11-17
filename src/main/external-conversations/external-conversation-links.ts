@@ -127,6 +127,8 @@ type LinkIndex = {
   byConversation: Map<string, LinkedConversation>
   /** Each folder's id and links as indexed, so a folder write that kept them reuses the index. */
   folderLinks: readonly (readonly [string, unknown])[]
+  /** A metadata write first stamps an unstamped legacy row's host, moving its links off other hosts. */
+  unstampedLinkedRows: boolean
 }
 
 type LinkIndexSlot = {
@@ -149,7 +151,10 @@ function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
   const index: LinkIndex = {
     byPane: new Map(),
     byConversation: new Map(),
-    folderLinks: folderLinkRefs(store)
+    folderLinks: folderLinkRefs(store),
+    unstampedLinkedRows: Object.values(store.getAllWorktreeMeta()).some(
+      (meta) => !meta.hostId && linksOf(meta.externalConversations).length > 0
+    )
   }
   // First in scan order wins, as the scans this replaces returned.
   for (const linked of allLinks(store)) {
@@ -212,6 +217,7 @@ function watchLinkWrites(
   store.onWorktreeMetaWritten?.(({ previous, next }) => {
     if (
       slot.held &&
+      !slot.held.unstampedLinkedRows &&
       previous?.hostId === next.hostId &&
       previous?.externalConversations === next.externalConversations
     ) {

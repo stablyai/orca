@@ -1,14 +1,30 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  closeTestStores,
+  createStore,
+  makeRepo,
+  testState,
+  writeDataFile
+} from '../persistence/persistence-test-harness'
+import { canonicalWorktreeIdentity } from '../../shared/worktree/identity'
 import { Store } from '../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
-import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  hostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { findLink, findLinkForPane, writeLink } from './external-conversation-links'
 
 const WORKTREE = 'repo-1::/work/a'
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: { isEncryptionAvailable: () => false }
+}))
+
 const TARGET = hostWorktreeTarget({ id: WORKTREE, hostId: 'local' })
 const WORKSPACE = { worktreeId: WORKTREE, sshHostId: null }
 const KEY = { source: 'slack', externalId: 'thread-1' } as const
@@ -92,5 +108,50 @@ describe('external conversation link lookups', () => {
     writeLink(store, workspace, link(SECOND_PANE))
     expect(findLinkForPane(store, FIRST_PANE)).toBeNull()
     expect(findLink(store, KEY)?.link.paneKey).toBe(SECOND_PANE)
+  })
+})
+
+describe('external conversation links in a legacy profile', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-connector-legacy-'))
+  })
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('drops a link a metadata write moved by stamping its unstamped legacy row', () => {
+    const sshHost = 'ssh:conn-1'
+    const instanceId = 'instance-1'
+    const remoteLink = { ...link(SECOND_PANE), externalId: 'thread-2' }
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: 'repo-1', path: '/work', connectionId: 'conn-1' })],
+      // An unstamped legacy row reads as every host's; the canonical SSH row is the host's own.
+      worktreeMeta: { [WORKTREE]: { externalConversations: [link(FIRST_PANE)] } },
+      worktreeMetaByIdentity: {
+        [canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })]: {
+          instanceId,
+          hostId: sshHost,
+          externalConversations: [remoteLink]
+        }
+      },
+      worktreeIdentityAliases: {
+        [composeWorktreeHostIdentity(sshHost, WORKTREE)]: [
+          canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })
+        ]
+      }
+    })
+    const store = createStore()
+    expect(findLink(store, KEY)?.workspace).toEqual(WORKSPACE)
+
+    store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE, hostId: sshHost }), {
+      lastActivityAt: 5
+    })
+    expect(findLink(store, KEY)).toBeNull()
+    expect(findLinkForPane(store, SECOND_PANE)?.workspace).toEqual({
+      worktreeId: WORKTREE,
+      sshHostId: sshHost
+    })
   })
 })
