@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/index'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { AiVaultSearchHostOutcome } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { getTranslatedExecutionHostLabel } from '../../../sidebar/execution-host-label'
+import { getTranslatedExecutionHostLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
 // Keep reasons short to match adjacent host labels; null means the host answered.

@@ -6,7 +6,7 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../../runtime/hosts/display/execution-host-label'
 import { QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsToolbarProps = {

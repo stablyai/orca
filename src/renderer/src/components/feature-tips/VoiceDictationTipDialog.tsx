@@ -1,6 +1,6 @@
 import { useRef, type JSX } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { i18n } from '@/i18n/i18n'
