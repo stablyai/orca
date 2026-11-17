@@ -14,19 +14,18 @@ if (!parentPort) {
 const port = parentPort
 
 port.on('message', (request: CodexHistoryDiskUsageWorkerRequest) => {
-  let response: CodexHistoryDiskUsageWorkerResponse
-  try {
-    response = {
-      id: request.id,
-      ok: true,
-      usage: measureCodexHistoryDiskUsage(request.homes, request.budget)
+  void measureCodexHistoryDiskUsage(request.homes, request.budget).then(
+    (usage) => {
+      const response: CodexHistoryDiskUsageWorkerResponse = { id: request.id, ok: true, usage }
+      port.postMessage(response)
+    },
+    (error: unknown) => {
+      const response: CodexHistoryDiskUsageWorkerResponse = {
+        id: request.id,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+      port.postMessage(response)
     }
-  } catch (error) {
-    response = {
-      id: request.id,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error)
-    }
-  }
-  port.postMessage(response)
+  )
 })

@@ -36,6 +36,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
   claudeProfileSetup:
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
+  codexHistoryDiskUsage:
+    'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
   computerSidecar: 'src/main/computer/computer-sidecar.ts'

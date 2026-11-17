@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   runtimeTargetEnvironmentId,
   runtimeTargetForOwnerEnvironment
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CodexHistoryDiskUsage } from '../../../../../shared/workspace-cleanup/codex-history-disk-usage'
 
@@ -19,11 +23,19 @@ export function useCodexHistoryDiskUsage(
 ): CodexHistoryDiskUsage | null {
   const environmentId = runtimeTargetEnvironmentId(owner)
   const ownerKey = environmentId ?? 'local'
+  const windowVisible = useSyncExternalStore(
+    subscribeWindowParkVisibility,
+    getWindowParkVisible,
+    getWindowParkVisible
+  )
+  // `revision` counts cleanup runs that may have freed history; each is read at most once.
+  const [revision, setRevision] = useState(0)
   const [state, setState] = useState<{
     ownerKey: string
-    usage: CodexHistoryDiskUsage
+    revision: number
+    usage: CodexHistoryDiskUsage | null
   } | null>(null)
-  const [revision, setRevision] = useState(0)
+  const readRevision = state?.ownerKey === ownerKey ? state.revision : null
 
   useEffect(
     () =>
@@ -36,7 +48,8 @@ export function useCodexHistoryDiskUsage(
   )
 
   useEffect(() => {
-    if (!shown) {
+    // A hidden window or row waits; it reads once when shown if a run finished meanwhile.
+    if (!shown || !windowVisible || readRevision === revision) {
       return
     }
     let current = true
@@ -48,16 +61,20 @@ export function useCodexHistoryDiskUsage(
     ).then(
       (usage) => {
         if (current) {
-          setState({ ownerKey, usage })
+          setState({ ownerKey, revision, usage })
         }
       },
-      // An older host lacks the method; a failed walk leaves the row as it was.
-      () => undefined
+      // An older host lacks the method; a failed walk shows no line.
+      () => {
+        if (current) {
+          setState({ ownerKey, revision, usage: null })
+        }
+      }
     )
     return () => {
       current = false
     }
-  }, [environmentId, ownerKey, revision, shown])
+  }, [environmentId, ownerKey, revision, readRevision, shown, windowVisible])
 
   return state?.ownerKey === ownerKey ? state.usage : null
 }

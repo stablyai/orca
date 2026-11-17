@@ -36,7 +36,7 @@ afterEach(() => {
 
 // File symlinks need elevation on Windows; permission bits don't restrict reads there.
 describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', () => {
-  it('counts each rollout file once across homes and never through a link', () => {
+  it('counts each rollout file once across homes and never through a link', async () => {
     const root = tempRoot()
     const store = join(root, 'store')
     const account = join(root, 'account')
@@ -61,18 +61,18 @@ describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', ()
       join(store, 'sessions', day, 'rollout-d.jsonl')
     )
 
-    expect(
+    await expect(
       measureCodexHistoryDiskUsage([store, account, join(root, 'missing')], open, 'win32')
-    ).toEqual({ bytes: 169, rollouts: 4, complete: true })
+    ).resolves.toEqual({ bytes: 169, rollouts: 4, complete: true })
   })
 
-  it('reports a lower bound when a folder cannot be read or the budget runs out', () => {
+  it('reports a lower bound when a folder cannot be read or the budget runs out', async () => {
     const root = tempRoot()
     for (const name of ['a', 'b', 'c']) {
       write(join(root, 'sessions', `rollout-${name}.jsonl`), 10)
     }
     expect(
-      measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32').complete
+      (await measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32')).complete
     ).toBe(false)
 
     // Root reads through permission bits.
@@ -81,18 +81,18 @@ describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', ()
     }
     chmodSync(join(root, 'sessions'), 0o000)
     try {
-      expect(measureCodexHistoryDiskUsage([root], open, 'win32').complete).toBe(false)
+      expect((await measureCodexHistoryDiskUsage([root], open, 'win32')).complete).toBe(false)
     } finally {
       chmodSync(join(root, 'sessions'), 0o700)
     }
   })
 
   // What the disk gives back is whole blocks, not the bytes written.
-  it('counts allocated blocks off Windows', () => {
+  it('counts allocated blocks off Windows', async () => {
     const root = tempRoot()
     write(join(root, 'sessions', 'rollout-a.jsonl'), 1)
 
-    const { bytes } = measureCodexHistoryDiskUsage([root], open)
+    const { bytes } = await measureCodexHistoryDiskUsage([root], open)
     expect(bytes).toBeGreaterThanOrEqual(512)
     expect(bytes % 512).toBe(0)
   })

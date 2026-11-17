@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
@@ -26,11 +25,10 @@ const IDLE_TEARDOWN_MS = 30_000
 const REUSE_MS = 5 * 60_000
 
 function createWorker(): Worker {
-  const path = resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME)
-  if (!existsSync(path)) {
-    throw new Error(`Codex history disk usage worker entry not found: ${path}`)
-  }
-  return spawnWorkerThread(path, { name: 'orca-codex-history-disk-usage' })
+  return spawnWorkerThread(
+    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME),
+    { name: 'orca-codex-history-disk-usage' }
+  )
 }
 
 let queue: WorkerThreadRequestQueue<

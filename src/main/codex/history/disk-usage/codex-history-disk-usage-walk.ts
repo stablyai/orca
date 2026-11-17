@@ -1,4 +1,4 @@
-import { lstatSync, opendirSync, readdirSync, realpathSync } from 'node:fs'
+import { lstat, opendir, readdir, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
@@ -31,10 +31,10 @@ function overBudget(walk: Walk): boolean {
   return false
 }
 
-function historyFolders(walk: Walk, home: string): string[] {
+async function historyFolders(walk: Walk, home: string): Promise<string[]> {
   const folders = HISTORY_FOLDERS.map((name) => join(home, name))
   try {
-    for (const entry of readdirSync(home, { withFileTypes: true })) {
+    for (const entry of await readdir(home, { withFileTypes: true })) {
       if (entry.isDirectory() && MERGE_PENDING_FOLDER.test(entry.name)) {
         folders.push(join(home, entry.name))
       }
@@ -50,18 +50,22 @@ function historyFolders(walk: Walk, home: string): string[] {
  * inside them are never followed, so a symlinked or junctioned log is never read through; a
  * folder that is itself a link (an account home sharing ~/.codex) is resolved and walked once.
  */
-export function measureCodexHistoryDiskUsage(
+export async function measureCodexHistoryDiskUsage(
   homes: readonly string[],
   budget: CodexHistoryDiskUsageBudget,
   platform: NodeJS.Platform = process.platform
-): CodexHistoryDiskUsage {
+): Promise<CodexHistoryDiskUsage> {
   const walk: Walk = { usage: { bytes: 0, rollouts: 0, complete: true }, entries: 0, budget }
   const seenFiles = new Set<string>()
   const seenFolders = new Set<string>()
   const pending: string[] = []
-  for (const folder of homes.flatMap((home) => historyFolders(walk, home))) {
+  const folders: string[] = []
+  for (const home of homes) {
+    folders.push(...(await historyFolders(walk, home)))
+  }
+  for (const folder of folders) {
     try {
-      const real = realpathSync(folder)
+      const real = await realpath(folder)
       if (!seenFolders.has(real)) {
         seenFolders.add(real)
         pending.push(real)
@@ -72,16 +76,13 @@ export function measureCodexHistoryDiskUsage(
   }
   while (pending.length > 0) {
     const dir = pending.pop()!
-    let handle
     try {
-      handle = opendirSync(dir)
-    } catch (error) {
-      noteFailure(walk, error)
-      continue
-    }
-    try {
-      // Streamed so the budget holds inside one huge folder too.
-      for (let child = handle.readSync(); child; child = handle.readSync()) {
+      // A queued folder replaced by a link since it was listed is not walked through.
+      if (!(await lstat(dir)).isDirectory()) {
+        continue
+      }
+      // Streamed (and closed on exit) so the budget holds inside one huge folder too.
+      for await (const child of await opendir(dir)) {
         if (overBudget(walk)) {
           return walk.usage
         }
@@ -95,9 +96,12 @@ export function measureCodexHistoryDiskUsage(
         }
         let stats
         try {
-          stats = lstatSync(path, { bigint: true })
+          stats = await lstat(path, { bigint: true })
         } catch (error) {
           noteFailure(walk, error)
+          continue
+        }
+        if (!stats.isFile()) {
           continue
         }
         // Some filesystems report inode 0 for every file; those count per name.
@@ -112,8 +116,6 @@ export function measureCodexHistoryDiskUsage(
       }
     } catch (error) {
       noteFailure(walk, error)
-    } finally {
-      handle.closeSync()
     }
   }
   return walk.usage
