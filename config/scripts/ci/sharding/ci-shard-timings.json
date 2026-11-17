@@ -1284,7 +1284,6 @@
       "src/main/git/worktrees/creation/worktree-create-preparation-real-wsl.test.ts": 382,
       "src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts": 1119,
       "src/main/git/worktrees/catalog/worktree-created-disk-witness.test.ts": 259,
-      "src/main/git/worktrees/catalog/worktree-git-capabilities.test.ts": 297,
       "src/main/git/worktrees/catalog/worktree-graph-listing.test.ts": 302,
       "src/main/git/worktrees/catalog/worktree-list-paths.test.ts": 755,
       "src/main/git/worktrees/catalog/worktree-list-porcelain.test.ts": 285,
