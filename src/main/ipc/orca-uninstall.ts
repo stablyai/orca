@@ -30,6 +30,7 @@ async function createHost(store: Store): Promise<OrcaUninstallHost> {
   return {
     platform: process.platform,
     homeDir: homedir(),
+    userDataPath,
     uid: process.getuid?.() ?? 0,
     identity: await resolveOrcaInstallIdentity({
       platform: process.platform,

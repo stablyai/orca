@@ -1,16 +1,19 @@
 import { journalForkStageEpochs } from './journal-fork-stage-state'
 import type Database from '../../sqlite/sync-database'
+import type { JournalStoredOutputCompaction } from './journal-stored-output-compaction'
 
 export type JournalDomainMaintenance =
   | { kind: 'domain-retired-prune'; sessionId: string; epoch: string }
   | { kind: 'page-reclaim' }
   | { kind: 'compaction-state' }
   | { kind: 'compaction-complete'; now: number }
+  | { kind: 'stored-output-compaction' }
 
 export type JournalDomainMaintenanceResult =
   | { kind: 'domain-retired'; deleted: number; more: boolean }
   | { kind: 'page-reclaim'; more: boolean }
   | { kind: 'compaction-state'; completedAt: number | null }
+  | JournalStoredOutputCompaction
 
 const RETIRED_PAGE_BYTES = 1024 * 1024
 // Only a ready head naming another epoch proves retirement; import shells have no epoch.
@@ -27,7 +30,8 @@ export const JOURNAL_EPOCH_TABLES: readonly {
       'original_stop_note_json',
       'wire_json',
       'detail_json',
-      'outline_source_json'
+      'outline_source_json',
+      'output_blob'
     ]
   },
   { name: 'journal_outline_cache', key: '', payload: ['outline_json'] },

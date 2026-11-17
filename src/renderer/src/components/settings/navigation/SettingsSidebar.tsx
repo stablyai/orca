@@ -146,10 +146,13 @@ export function SettingsSidebar({
   const searchResults = rankedResults.slice(0, SETTINGS_SEARCH_RESULT_LIMIT)
   const hiddenResultCount = rankedResults.length - searchResults.length
   const isSearching = searchQuery.trim() !== ''
-  // Nothing is selected until the user moves or picks; typing only changes the rows.
+  // The first result is highlighted until the user moves or picks, so Enter opens it.
   const [selectedResultKey, setSelectedResultKey] = useState<string | null>(null)
-  const selectedResultIndex = searchResults.findIndex((result) => result.key === selectedResultKey)
-  const selectedResult = selectedResultIndex === -1 ? undefined : searchResults[selectedResultIndex]
+  const selectedResultIndex = Math.max(
+    0,
+    searchResults.findIndex((result) => result.key === selectedResultKey)
+  )
+  const selectedResult = isSearching ? searchResults[selectedResultIndex] : undefined
   const repoSectionById = useMemo(
     () => new Map(repoSections.map((section) => [section.id, section] as const)),
     [repoSections]
@@ -178,23 +181,18 @@ export function SettingsSidebar({
       changeSearchQuery('')
       return
     }
-    if (!isSearching || searchResults.length === 0) {
+    if (!selectedResult) {
       return
     }
     const count = searchResults.length
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
-      const nextIndex =
-        selectedResultIndex === -1
-          ? event.key === 'ArrowDown'
-            ? 0
-            : count - 1
-          : (selectedResultIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+      const nextIndex = (selectedResultIndex + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
       setSelectedResultKey(searchResults[nextIndex].key)
       document.getElementById(getOptionId(nextIndex))?.scrollIntoView({ block: 'nearest' })
       return
     }
-    if (event.key === 'Enter' && selectedResult) {
+    if (event.key === 'Enter') {
       event.preventDefault()
       pickResult(selectedResult)
     }

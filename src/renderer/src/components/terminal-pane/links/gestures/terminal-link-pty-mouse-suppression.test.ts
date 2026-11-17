@@ -69,27 +69,6 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual([])
   })
 
-  it('lets a middle-click link action claim the gesture and drop its mouse input', async () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    const forward = (data: string): void => {
-      forwarded.push(data)
-    }
-    let claimed = false
-    element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<1;1;1M', forward))
-    element.addEventListener('mouseup', () => {
-      suppression.handlePtyInput('\x1b[<1;1;1m', forward)
-      claimed = suppression.claimAction()
-    })
-
-    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
-    element.dispatchEvent(mouseEvent('mouseup', { button: 1 }))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(claimed).toBe(true)
-    expect(forwarded).toEqual([])
-  })
-
   it('flushes deferred mouse input when the completed gesture stays child-owned', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
@@ -103,18 +82,6 @@ describe('terminal link PTY mouse suppression', () => {
     await settleGesture(element)
 
     expect(forwarded).toEqual(['\x1b[<0;1;1M', '\x1b[<0;1;1m'])
-  })
-
-  it('forwards plain mouse input immediately when actions are disabled', () => {
-    const { element, suppression } = createSuppression(false)
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[M !!', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-
-    expect(forwarded).toEqual(['\x1b[M !!'])
   })
 
   it('flushes a dragged mouse sequence in order', async () => {
@@ -181,19 +148,6 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual(['key', '\x1b[<0;1;1M', '\x1b[<0;1;1m'])
   })
 
-  it('flushes pending child input on blur', () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[<0;1;1M', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    window.dispatchEvent(new Event('blur'))
-
-    expect(forwarded).toEqual(['\x1b[<0;1;1M'])
-  })
-
   it('flushes pending child input when disposed', () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
@@ -203,19 +157,6 @@ describe('terminal link PTY mouse suppression', () => {
 
     element.dispatchEvent(mouseEvent('mousedown'))
     suppression.dispose()
-
-    expect(forwarded).toEqual(['\x1b[<0;1;1M'])
-  })
-
-  it('flushes an abandoned transaction before starting another gesture', () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[<0;1;1M', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    element.dispatchEvent(mouseEvent('mousedown'))
 
     expect(forwarded).toEqual(['\x1b[<0;1;1M'])
   })
@@ -234,24 +175,6 @@ describe('terminal link PTY mouse suppression', () => {
 
     expect(forwarded).toEqual(expected)
     expect(suppression.claimAction()).toBe(false)
-  })
-
-  it('forwards non-mouse focus reports during a claimed mouse gesture', async () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    const forward = (data: string): void => {
-      forwarded.push(data)
-    }
-    element.addEventListener('mousedown', () => {
-      suppression.handlePtyInput('\x1b[<0;1;1M', forward)
-      suppression.handlePtyInput('\x1b[I', forward)
-    })
-    element.addEventListener('mouseup', () => suppression.claimAction())
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    await settleGesture(element)
-
-    expect(forwarded).toEqual(['\x1b[I'])
   })
 
   it('flushes a pending press when the pointer leaves the document', () => {

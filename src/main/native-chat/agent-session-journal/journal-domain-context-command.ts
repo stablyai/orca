@@ -8,7 +8,7 @@ import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalDomainQueueClear } from './journal-domain-queue-clear'
 import type Database from '../../sqlite/sync-database'
-import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { applyJournalDomainItem } from './journal-domain-item'
 import {
   SELECT_JOURNAL_DOMAIN_QUEUE_ROW,

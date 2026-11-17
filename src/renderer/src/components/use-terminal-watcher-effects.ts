@@ -1,9 +1,9 @@
-import { MountedTerminalWorktrees } from './terminal/split-group-mount'
+import { MountedTerminalWorktrees } from './terminal/workspace-mounting/split-group-mount'
 import { useEffect, useRef } from 'react'
-import { useTerminalStartupActivation } from './terminal/use-terminal-startup-activation'
+import { useTerminalStartupActivation } from './terminal/workspace-mounting/use-terminal-startup-activation'
 import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-terminal-parking-workspace-changes'
 import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
-import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
+import { findActivityTerminalPortal } from './activity/terminal-portal/activity-terminal-portal'
 import {
   syncParkedTerminalTabWatchersForWorkspaces,
   type ParkedTerminalTabWatcherSyncEntry
@@ -17,7 +17,7 @@ import {
 
 import { useAppStore } from '@/store'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
-import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
+import { selectParkedEquivalentMountTabIds } from './terminal/workspace-mounting/startup-terminal-tab-hold'
 
 // Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()

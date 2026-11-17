@@ -79,6 +79,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Inline git blame after the cursor line; the status-bar item is separate. */
+  editorInlineBlame: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
@@ -375,6 +377,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or
    *  into ~/.codex, and removes nothing already linked (#24511). Absent means on (#10770). */
   codexShareHistoryAcrossAccounts?: boolean
+  /** Workspace cleanup also deletes agent chat history whose Orca workspace folder is gone. Absent means off. */
+  deleteChatHistoryWithWorkspace?: boolean
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
    *  History-only: does not change which account/config/hooks Orca uses. */
   codexSessionSourceHome?: {

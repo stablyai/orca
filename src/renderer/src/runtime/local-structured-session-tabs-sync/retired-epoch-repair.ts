@@ -1,4 +1,4 @@
-import { createSessionTabsAuthorityRepairLane } from '../web-session-tabs-sync/session-tabs-authority-repair'
+import { createSessionTabsAuthorityRepairLane } from '../web-session-tabs-sync/tracking/session-tabs-authority-repair'
 import {
   isCurrentLocalStructuredSessionGeneration,
   localStructuredSessionEpochHistoryByWorktree,

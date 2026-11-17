@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { Crosshair } from 'lucide-react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -148,9 +147,7 @@ export function useSidebarRevealRequests(args: {
         let confirmed: boolean
         try {
           confirmed = await confirm({
-            icon: Crosshair,
             initialFocus: 'confirm',
-            cancelVariant: 'ghost',
             title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
             description: translate(
               'sidebar.revealFiltered.description',

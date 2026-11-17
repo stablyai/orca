@@ -127,11 +127,7 @@
       "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente."
     },
     "terminalSettings": {
-      "defaultText": "Padrão (100%)",
       "keepPhoneSize": "Manter no tamanho do celular (padrão)",
-      "largeText": "Grande (125%)",
-      "largerText": "Maior (150%)",
-      "largestText": "Máximo (200%)",
       "leaveAppDescription": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o app ou alternar para outro, esta opção define se o terminal mantém o tamanho do celular (evitando que ferramentas de CLI interativas reorganizem o conteúdo) ou volta ao tamanho do desktop. Você pode usar Restaurar no banner do desktop a qualquer momento para redimensioná-lo manualmente.",
       "leaveAppHeading": "AO SAIR DO APP",
       "noPairedDesktops": "Nenhum desktop pareado ainda. Pareie um para controlar o comportamento do terminal.",
@@ -142,12 +138,6 @@
       "restoreAfterSeconds_one": "Após {{count}}s",
       "restoreAfterSeconds_other": "Após {{count}}s",
       "restoreHost": "Restaurar {{name}}",
-      "smallerText": "Menor (75%)",
-      "smallestText": "Mínimo (50%)",
-      "textSize": "Tamanho do texto",
-      "textSizeDescription": "Ajuste o tamanho do texto do terminal. Tamanhos menores exibem mais colunas com margens laterais; tamanhos maiores exibem menos colunas — arraste para os lados para navegar. Você também pode usar o gesto de pinça no próprio terminal para ajustar o zoom e atualizar esta configuração. Afeta apenas a exibição neste dispositivo; não altera o terminal no desktop.",
-      "textSizeHeading": "TAMANHO DO TEXTO",
-      "textSizePickerTitle": "Tamanho do texto do terminal",
       "title": "Terminal"
     }
   },
@@ -1024,7 +1014,8 @@
       "copyCode": "Copiar código",
       "openImage": "Abrir imagem",
       "wrapLines": "Quebrar linhas",
-      "disableLineWrap": "Desativar quebra de linha"
+      "disableLineWrap": "Desativar quebra de linha",
+      "codeLabel": "Código"
     },
     "markdownCallout": {
       "note": "Nota",
@@ -1132,7 +1123,6 @@
       "clearSearch": "Limpar busca"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "description": "O orca.yaml deste repositório é executado antes de o espaço de trabalho iniciar. Só o execute se você confiar neste repositório.",
       "dontRun": "Não executar",
       "newScriptLabel": "Novo script de configuração",
@@ -4530,28 +4520,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "creating": "Criando…",
       "directoriesLabel": "Diretórios",
       "directories_many": "{{count}} diretórios",
       "directories_one": "{{count}} diretório",
       "directories_other": "{{count}} diretórios",
-      "dontRun": "Não executar",
       "editSparsePreset": "Editar predefinição de checkout esparso",
       "nameLabel": "Nome",
       "namePlaceholder": "Interface do renderizador",
-      "newSetupScript": "Novo script de configuração",
       "newSparsePreset": "Nova predefinição de checkout esparso",
-      "runHooks": "Executar hooks",
       "runSetupAndCreate": "Executar configuração e criar",
-      "runSetupTitle": "Executar a configuração de {{name}}?",
-      "setupChangedTitle": "O script de configuração de {{name}} mudou",
-      "setupScript": "Script de configuração",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
       "setupTitle": "Executar script de configuração?",
       "skipSetupAndCreate": "Pular configuração e criar",
-      "trustFailed": "Falha ao marcar o script de configuração como confiável.",
-      "trustSubtitle": "O orca.yaml deste repositório é executado no seu computador antes de iniciar o espaço de trabalho. Execute-o apenas se você confiar neste repositório."
+      "trustFailed": "Falha ao marcar o script de configuração como confiável."
     },
     "worktreeCreateRetry": {
       "createFailed": "Falha ao criar espaço de trabalho"

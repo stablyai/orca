@@ -25,7 +25,7 @@ import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailS
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import { CommentMarkdownAsync, preloadCommentMarkdown } from '../../comment-markdown-lazy'
-import { useActivityThreadHoverCardIntent } from '@/components/activity/activity-thread-hover-card-intent'
+import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-preview/activity-thread-hover-card-intent'
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'

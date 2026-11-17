@@ -18,7 +18,7 @@ import '@/store/testing/app-store-test-fixture'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
 
-import './tab-bar/agent-menu-shortcut-labels'
+import './agent/launch-menu/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
@@ -90,7 +90,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
-vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+vi.mock('./terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
@@ -107,7 +109,9 @@ vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: vi.fn()
 }))
-vi.mock('./tab-bar/web-runtime-tab-move-mirror', () => ({ mirrorWebRuntimeTabMove: vi.fn() }))
+vi.mock('../runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror', () => ({
+  mirrorWebRuntimeTabMove: vi.fn()
+}))
 
 const controller = {
   activeWorktreeId: 'repo-1::/repo/worktree',

@@ -11,6 +11,7 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -107,7 +108,9 @@ export function readJournalDomainEntity(
         .prepare(`SELECT payload_json FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
         .get(...prefix, operation.itemId)
-      const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null
+      const item: AgentJournalRenderItem | null = row
+        ? readJournalStoredItem(db, prefix, row.payload_json)
+        : null
       return { kind: operation.kind, item }
     }
     case 'submission': {

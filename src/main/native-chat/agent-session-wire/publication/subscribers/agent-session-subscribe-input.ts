@@ -43,6 +43,8 @@ export type Subscriber = {
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
   snapshotCatchUp?: boolean
+  /** The fence of a snapshot whose capture was abandoned; the next delivery sends it, not a batch. */
+  owedSnapshotFence?: number
   /** The current-work view the last frame's fields were read under
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string

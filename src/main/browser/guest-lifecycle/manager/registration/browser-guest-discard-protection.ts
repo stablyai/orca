@@ -51,7 +51,7 @@ export function readBrowserGuestDiscardProtection(
     return result('unknown', 'observer')
   }
   // Input does not bubble out of child frames; retain their unobserved drafts conservatively.
-  if (guest.mainFrame.frames.length > 0) {
+  if (mayHaveChildFrames(guest)) {
     return result('unknown', 'frames')
   }
   if (owner.dirty) {
@@ -85,6 +85,16 @@ export function readBrowserGuestDiscardProtection(
     return result('unknown', 'observer')
   }
   return result('discardable', 'clean')
+}
+
+function mayHaveChildFrames(guest: Electron.WebContents): boolean {
+  try {
+    // Electron can omit or throw for the frame list of a disposed render frame.
+    const frames: unknown = guest.mainFrame.frames
+    return !Array.isArray(frames) || frames.length > 0
+  } catch {
+    return true
+  }
 }
 
 export function readBrowserGuestDiscardAdmission(

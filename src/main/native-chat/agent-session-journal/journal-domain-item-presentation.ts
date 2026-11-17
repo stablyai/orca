@@ -8,6 +8,7 @@ import {
 } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type { HistoryItemForm } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { journalDomainItemWire } from './journal-domain-item-wire'
+import { hydrateJournalStoredItem, readJournalStoredItem } from './journal-stored-output-rows'
 import {
   journalDomainDisplayTurnState,
   readJournalDomainStopStates,
@@ -20,7 +21,9 @@ export function journalDomainClientFormColumns(alias = 'item'): string {
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
       THEN COALESCE(${alias}.wire_json,${alias}.payload_json) ELSE ${alias}.payload_json END AS client_json,
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
-      THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes`
+      THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes,
+    CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} AND ${alias}.wire_json IS NOT NULL
+      THEN NULL ELSE ${alias}.output_blob END AS output_blob`
 }
 
 /** Decode only this selected set; callers retain admitted forms and discard a rejected whole group. */
@@ -44,16 +47,24 @@ export function readJournalDomainClientForms(
     if (row.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION && states === undefined) {
       states = readJournalDomainStopStates(db, target, wanted, wantedJson)
     }
-    forms.set(String(row.item_id), readJournalDomainClientForm(row, states))
+    forms.set(String(row.item_id), readJournalDomainClientForm(db, target, row, states))
   }
   return forms
 }
 
 export function readJournalDomainClientForm(
+  db: Database.Database,
+  target: JournalDomainItemTarget,
   row: SqliteRow,
   states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
-  const item: AgentJournalRenderItem = JSON.parse(String(row.client_json))
+  // The blob is selected only when the client form is the stored payload, never beside a saved head.
+  const item = readJournalStoredItem(
+    db,
+    [target.sessionId, target.epoch],
+    row.client_json,
+    row.output_blob
+  )
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
     ? rememberAgentJournalItemWireForm(item, Number(row.client_bytes))
     : agentJournalItemForWire(
@@ -91,7 +102,8 @@ export function readJournalDomainItemDetail(
   if (!row) {
     return null
   }
-  const item: AgentJournalRenderItem = JSON.parse(String(row.detail_json))
+  const parsed: AgentJournalRenderItem = JSON.parse(String(row.detail_json))
+  const item = hydrateJournalStoredItem(db, [target.sessionId, target.epoch], parsed)
   if (row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION) {
     return item
   }
@@ -102,6 +114,10 @@ export function readJournalDomainItemDetail(
     null,
     journalDomainDisplayTurnState(item, states)
   )
-  const wire = journalDomainItemWire(item, String(row.detail_json), displayed)
+  const wire = journalDomainItemWire(
+    item,
+    item === parsed ? String(row.detail_json) : undefined,
+    displayed
+  )
   return wire.detailJson === null ? displayed : JSON.parse(wire.detailJson)
 }
