@@ -33,6 +33,7 @@ const SECOND_PANE = 'tab-2:22222222-2222-4222-8222-222222222222'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const cleanup of cleanups.splice(0)) {
     cleanup()
   }
@@ -88,6 +89,19 @@ describe('external conversation link lookups', () => {
     store.removeWorktreeMeta(TARGET)
     expect(findLinkForPane(store, SECOND_PANE)).toBeNull()
     expect(findLink(store, KEY)).toBeNull()
+  })
+
+  it('follow a relink even when an earlier write observer throws', () => {
+    const store = realStore()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.onStateWritten(() => {
+      throw new Error('observer failed')
+    })
+    writeLink(store, WORKSPACE, link(FIRST_PANE))
+    expect(findLinkForPane(store, FIRST_PANE)?.link.paneKey).toBe(FIRST_PANE)
+
+    writeLink(store, WORKSPACE, link(SECOND_PANE))
+    expect(findLinkForPane(store, FIRST_PANE)).toBeNull()
   })
 
   it('follow folder relinks across folder writes that keep links', () => {
