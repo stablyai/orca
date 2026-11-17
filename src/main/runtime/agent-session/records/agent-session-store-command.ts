@@ -40,6 +40,10 @@ import {
   showAgentSessionTabs
 } from './agent-session-tab-table'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
+import {
+  forgetIdleAgentSessionRecord,
+  type AgentSessionIdleForget
+} from './agent-session-record-forget'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
 export type AgentSessionStoreCommand =
@@ -66,6 +70,7 @@ export type AgentSessionStoreCommand =
       legacyTabIds: readonly string[]
     }
   | { kind: 'permission-backfill'; fullAccess: ReadonlyMap<string, boolean> }
+  | ({ kind: 'forget-idle'; legacyTabIds: readonly string[] } & AgentSessionIdleForget)
 
 export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> = C extends {
   kind: 'reserve' | 'found'
@@ -87,7 +92,9 @@ export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> =
                 ? AgentSessionOperationClaim
                 : C extends { kind: 'tab-visibility' }
                   ? string | null
-                  : void
+                  : C extends { kind: 'forget-idle' }
+                    ? boolean
+                    : void
 
 export function agentSessionStoreCommandSelection(command: AgentSessionStoreCommand): {
   recordIds: string[]
@@ -148,6 +155,8 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
       return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
     case 'permission-backfill':
       return { recordIds: [], missingPermission: true }
+    case 'forget-idle':
+      return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
   }
 }
 
@@ -212,6 +221,8 @@ export function applyAgentSessionStoreCommand(
       )
       return command.visible ? (state.sessionTabs?.tabIdFor(command.sessionId) ?? null) : retired
     }
+    case 'forget-idle':
+      return forgetIdleAgentSessionRecord(state, command, command.legacyTabIds)
     case 'permission-backfill':
       for (const [id, record] of state.records) {
         if (record.permissionMode !== undefined) {

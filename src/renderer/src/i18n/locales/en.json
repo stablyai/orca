@@ -22748,9 +22748,9 @@
           "updateFailed": "Couldn't update the setting on {{host}}.",
           "unsupported": "Update Orca on {{host}} to use this setting there.",
           "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         }
       },
       "repository": {

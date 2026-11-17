@@ -268,6 +268,12 @@ export class JournalSqlDatabase {
     })
   }
 
+  /** In the chat's lane after any conversion. Its epoch stays remembered as ready, so a conversion
+   *  page listed before the deletion returns it instead of importing the original again. */
+  forgetChat(sessionId: string, forget: () => Promise<boolean>): Promise<boolean> {
+    return this.serialize(sessionId, () => this.conversions.ensure(sessionId).then(forget))
+  }
+
   write(command: JournalWriterCommand): Promise<JournalWriterCommit> {
     return this.serialize(command.target.sessionId, () => this.writer.write(command))
   }
