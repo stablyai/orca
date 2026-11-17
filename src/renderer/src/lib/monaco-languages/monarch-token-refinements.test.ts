@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { CONTROL_KEYWORD_LANGUAGES } from './monarch-control-keyword-languages'
-import { withControlKeywords } from './monarch-control-keywords'
+import { TOKEN_REFINEMENT_LANGUAGES } from './monarch-token-refinement-languages'
+import { pluginMonacoTokenRules } from '../editor/appearance/plugin-monaco-token-rules'
+import { PLUGIN_SYNTAX_TOKEN_TYPES, pluginSyntaxTokenType } from './plugin-syntax-token-legend'
+import { REFINED_TOKEN_SCOPES, withTokenRefinements } from './monarch-token-refinements'
 import { tokenizeMonarchDocument, tokenTypeAt } from './monarch-tokenizer-test-harness'
 
 async function controlLanguage(languageId: string) {
-  const { load, ...spec } = CONTROL_KEYWORD_LANGUAGES[languageId]
-  return withControlKeywords((await load()).language, spec)
+  const { load, ...spec } = TOKEN_REFINEMENT_LANGUAGES[languageId]
+  return withTokenRefinements((await load()).language, spec)
 }
 
 /** The token type of each occurrence of `word` in `source`, without the language postfix. */
@@ -28,12 +30,14 @@ const CONTEXT: Record<string, (word: string) => string> = {
   ruby: (word) => (word === 'end' ? 'def f\nend' : `${word} x`)
 }
 
-describe('control keywords', () => {
+describe('token refinements', () => {
   describe.each(
-    Object.keys(CONTROL_KEYWORD_LANGUAGES).filter((id) => CONTROL_KEYWORD_LANGUAGES[id].keywords)
+    Object.keys(TOKEN_REFINEMENT_LANGUAGES).filter(
+      (id) => TOKEN_REFINEMENT_LANGUAGES[id].controlWords
+    )
   )('%s', (languageId) => {
-    const { keywords } = CONTROL_KEYWORD_LANGUAGES[languageId]
-    const words = keywords?.split(' ') ?? []
+    const { controlWords } = TOKEN_REFINEMENT_LANGUAGES[languageId]
+    const words = controlWords?.split(' ') ?? []
     it.each(words)('tokenizes `%s` as a control keyword', async (word) => {
       const source = (CONTEXT[languageId] ?? ((w: string) => `${w} x`))(word)
       expect(await typesOf(languageId, source, word)).toEqual([
@@ -53,10 +57,10 @@ describe('control keywords', () => {
   })
 
   it('reads a keyword-named member after a lone `.` as a plain word', async () => {
-    expect(await typesOf('typescript', 'promise.catch(f).finally(g)', 'catch')).toEqual([
+    expect(await typesOf('typescript', 'const handler = promise.catch', 'catch')).toEqual([
       'identifier'
     ])
-    expect(await typesOf('typescript', 'Array.from(x)', 'from')).toEqual(['identifier'])
+    expect(await typesOf('typescript', 'const f = Array.from', 'from')).toEqual(['identifier'])
     expect(await typesOf('javascript', 'a?.default', 'default')).toEqual(['identifier'])
     expect(await typesOf('python', 'm = re.match(p, s)', 'match')).toEqual(['identifier'])
     expect(await typesOf('ruby', 'self.class', 'class')).toEqual(['identifier'])
@@ -87,11 +91,40 @@ describe('control keywords', () => {
     expect(await typesOf('cpp', '#include <vector>', '#include')).toEqual([
       'keyword.flow.directive.include'
     ])
-    expect(await typesOf('css', '@import url("a.css");', '@import')).toEqual(['keyword.flow'])
+    expect(await typesOf('css', '@import url(base);', '@import')).toEqual(['keyword.flow'])
     expect(await typesOf('css', 'a { color: red !important; }', '!important')).toEqual(['keyword'])
   })
 
   it('recolors control words a language lists as builtins', async () => {
     expect(await typesOf('perl', 'return unless $x;', 'return')).toEqual(['keyword.flow'])
   })
+
+  it('tokenizes a plain word right before `(` as a function, keyword-named members included', async () => {
+    const source = 'promise.catch(f).finally (g); foo(); if (x) bar?.(1); a.b'
+    expect(await typesOf('typescript', source, 'catch')).toEqual(['function'])
+    expect(await typesOf('typescript', source, 'finally')).toEqual(['function'])
+    expect(await typesOf('typescript', source, 'foo')).toEqual(['function'])
+    expect(await typesOf('typescript', source, 'if')).toEqual(['keyword.flow'])
+    expect(await typesOf('typescript', source, 'b')).toEqual(['identifier'])
+    expect(await typesOf('go', 'func f() { fmt.Println(x) }', 'Println')).toEqual(['function'])
+    expect(await typesOf('go', 'func f() { fmt.Println(x) }', 'f')).toEqual(['function'])
+    expect(await typesOf('c', 'while (n) free(p);', 'free')).toEqual(['function'])
+    expect(await typesOf('c', 'while (n) free(p);', 'while')).toEqual(['keyword.flow.while'])
+  })
+
+  it('leaves calls plain in languages whose grammar does not scope them', async () => {
+    expect(await typesOf('python', 'run(x)', 'run')).toEqual(['identifier'])
+  })
+
+  it.each(Object.entries(REFINED_TOKEN_SCOPES))(
+    'gives plugins `%s` through `%s`, as on plugin syntaxes',
+    (token, scope) => {
+      const rules = pluginMonacoTokenRules(
+        [{ scope, settings: { foreground: '#123456' } }],
+        (v) => v
+      )
+      expect(rules).toContainEqual(expect.objectContaining({ token, foreground: '#123456' }))
+      expect(PLUGIN_SYNTAX_TOKEN_TYPES[pluginSyntaxTokenType([scope]) ?? -1]).toBe(token)
+    }
+  )
 })

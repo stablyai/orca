@@ -5,20 +5,39 @@ type MonarchRule = Monaco.languages.IMonarchLanguageRule
 type MonarchAction = Monaco.languages.IMonarchLanguageAction
 type ActionPart = string | Monaco.languages.IExpandedMonarchLanguageAction
 
-// Why `keyword.flow`: Monaco's stock themes color it as VS Code themes color `keyword.control`,
-// and plugin themes resolve it through their `keyword.control` rule.
+// Why these names: Monaco's stock themes color `keyword.flow` as TextMate themes color
+// `keyword.control`, and plugin themes resolve both through their TextMate scope rules.
 const CONTROL_TOKEN = 'keyword.flow'
+const CALL_TOKEN = 'function'
+
+/** The token names these refinements emit, by the TextMate scope each stands for. Plugin themes
+ *  and plugin syntaxes reach them through that scope, so a plugin sees the same names on core and
+ *  plugin languages. */
+export const REFINED_TOKEN_SCOPES: Record<string, string> = {
+  [CONTROL_TOKEN]: 'keyword.control',
+  [CALL_TOKEN]: 'entity.name.function'
+}
+
+/** Stock Dark and Light colors for the token names these refinements add that Monaco's own stock
+ *  themes leave plain, as TextMate's Dark+ and Light+ color `entity.name.function`. */
+export const REFINED_TOKEN_STOCK_RULES: Record<'dark' | 'light', Monaco.editor.ITokenThemeRule[]> =
+  {
+    dark: [{ token: CALL_TOKEN, foreground: 'DCDCAA' }],
+    light: [{ token: CALL_TOKEN, foreground: '795E26' }]
+  }
 const MEMBER_STATE = 'orcaControlKeywordMember'
 const LIST_ATTRIBUTE = 'orcaControlKeywordWords'
 
-export type ControlKeywordSpec = {
-  /** Space-separated words VS Code's grammar for the language scopes `keyword.control`. */
-  keywords?: string
+export type TokenRefinementSpec = {
+  /** Space-separated words the language's TextMate grammar scopes `keyword.control`. */
+  controlWords?: string
   /** Rules, by regex source, whose keyword tokens are all control keywords (`#include`, `@import`). */
   controlRules?: RegExp
   /** The token the language gives `.`, for languages where a keyword right after it names a
    *  member (`promise.catch()`, `re.match()`), which then keeps the language's plain-word token. */
   memberAfterDot?: string
+  /** Whether a plain word right before `(` is a function call or definition (`foo(`, `a.then(`). */
+  calls?: boolean
 }
 
 const isKeywordToken = (token: string): boolean =>
@@ -121,16 +140,31 @@ function rewriteCases(part: ActionPart, rewrite: Rewrite): ActionPart {
   return changed && typeof part !== 'string' ? { ...part, cases } : part
 }
 
-/** The rule's word cases for a member name: keywords read as plain words, other words (builtins)
- *  keep their token, and none changes state. */
-function memberAction(part: ActionPart, plainWord: string): ActionPart {
+/** The rule's word cases for a member name: keywords read as plain words (`plain`), other words
+ *  (builtins) keep their token, and none changes state. */
+function memberAction(part: ActionPart, plain: ActionPart): ActionPart {
   const cases = caseEntries(part).flatMap(([key, value]): [string, ActionPart][] => {
     const token = typeof value === 'string' ? value : Array.isArray(value) ? null : value.token
-    return typeof token === 'string' && !token.startsWith('@')
-      ? [[key, { token: isKeywordToken(token) ? plainWord : token, next: '@pop' }]]
-      : []
+    if (typeof token !== 'string' || token.startsWith('@')) {
+      return []
+    }
+    return [[key, key === '@default' || isKeywordToken(token) ? plain : { token, next: '@pop' }]]
   })
   return { cases: Object.fromEntries(cases) }
+}
+
+/** The token an identifier rule gives words in no list: a rule testing words (not operators) with
+ *  plain-token cases and no group actions, which extra groups in its regex would break. */
+function plainWordToken(part: ActionPart, language: MonarchLanguage): string | null {
+  const cases = caseEntries(part)
+  const plain = cases.find(([key]) => key === '@default')?.[1]
+  const testsWords = cases.some(([key]) => caseKeyWords(key, language)?.some((w) => /^\w/.test(w)))
+  return typeof plain === 'string' &&
+    (plain === '' || /^identifier(\.|$)/.test(plain)) &&
+    testsWords &&
+    !cases.some(([, value]) => Array.isArray(value))
+    ? plain
+    : null
 }
 
 /** The capture groups of a Monarch regex source, with `@attr` references expanded as Monarch does. */
@@ -146,47 +180,62 @@ function groupCount(source: string, language: MonarchLanguage): number {
   return (new RegExp(`${expanded}|`).exec('')?.length ?? 1) - 1
 }
 
-type WordRule = { source: string; original: ActionPart; rewritten: ActionPart }
-
-/** `rule` also reading a run of dots right before a word, and sending the word after a lone `.` to
- *  a member state; null when the rule has no plain-word case to give members. */
-function withMemberAfterDot(
-  rule: WordRule,
-  dotToken: string,
-  language: MonarchLanguage,
+type WordContext = {
+  spec: TokenRefinementSpec
+  language: MonarchLanguage
   memberStates: MonarchLanguage['tokenizer']
+}
+
+/** A word rule that also reads what follows and precedes a word, for `spec.calls` and
+ *  `spec.memberAfterDot`; null when `spec` asks for neither or `original` is no identifier rule.
+ *  Why one rule: a rule of its own ahead of this one would cost every token one more regex. The
+ *  context is in optional groups after the rule's own, so a word is tried first as before, the
+ *  cases' own `$n` keep their numbers, and a word pays only empty-group tests. */
+function withWordContext(
+  rule: { source: string; original: ActionPart; rewritten: ActionPart },
+  { spec, language, memberStates }: WordContext
 ): { source: string; action: ActionPart } | null {
   const { source, original, rewritten } = rule
-  const plainWord = caseEntries(original).find(([key]) => key === '@default')?.[1]
-  if (typeof plainWord !== 'string' || typeof rewritten === 'string') {
+  const plainWord = plainWordToken(original, language)
+  if (
+    plainWord === null ||
+    typeof rewritten === 'string' ||
+    !(spec.calls || spec.memberAfterDot !== undefined)
+  ) {
     return null
   }
-  // Why a state per rule: each rule names members with its own word pattern.
-  const memberState = `${MEMBER_STATE}${Object.keys(memberStates).length}`
-  memberStates[memberState] = [[new RegExp(source), memberAction(original, plainWord)]]
-  // Why one rule rather than a dot rule ahead of it: every token tried there would pay one more
-  // regex. The dots are the last group so the word is tried first, as before, and the cases' own
-  // `$n` keep their numbers; a word then pays one empty-group test.
-  const dots = `$${groupCount(source, language) + 1}`
-  const dotCase = {
-    cases: {
-      // Why only a lone dot: after `...` (a spread) or `..` (a range) the word is no member.
-      [`${dots}==.`]: { token: dotToken, next: `@${memberState}` },
-      '@default': dotToken
-    }
+  const groups = groupCount(source, language)
+  const word = `(?:${source})${spec.calls ? '(?=(\\s*\\()?)' : ''}`
+  const call = `$${groups + 1}`
+  const plain = (next?: string): ActionPart => {
+    const token = { token: plainWord, ...(next ? { next } : {}) }
+    return spec.calls
+      ? { cases: { [call]: { ...token, token: CALL_TOKEN }, '@default': token } }
+      : token
+  }
+  const context: [string, MonarchAction][] = spec.calls ? [[call, plain()]] : []
+  let memberSource = ''
+  if (spec.memberAfterDot !== undefined) {
+    // Why a state per rule: each rule names members with its own word pattern.
+    const memberState = `${MEMBER_STATE}${Object.keys(memberStates).length}`
+    memberStates[memberState] = [[new RegExp(word), memberAction(original, plain('@pop'))]]
+    const dots = `$${groups + (spec.calls ? 2 : 1)}`
+    context.unshift([
+      dots,
+      {
+        cases: {
+          // Why only a lone dot: after `...` (a spread) or `..` (a range) the word is no member.
+          [`${dots}==.`]: { token: spec.memberAfterDot, next: `@${memberState}` },
+          '@default': spec.memberAfterDot
+        }
+      }
+    ])
+    memberSource = `|(\\.+)(?=(?:${source}))`
   }
   const cases = caseEntries(rewritten).flatMap(([key, value]): [string, MonarchAction][] =>
-    key === '@default'
-      ? [
-          [dots, dotCase],
-          [key, value]
-        ]
-      : [[key, value]]
+    key === '@default' ? [...context, [key, value]] : [[key, value]]
   )
-  return {
-    source: `(?:${source})|(\\.+)(?=(?:${source}))`,
-    action: { ...rewritten, cases: Object.fromEntries(cases) }
-  }
+  return { source: word + memberSource, action: { ...rewritten, cases: Object.fromEntries(cases) } }
 }
 
 type RuleParts = {
@@ -201,7 +250,6 @@ function ruleParts(rule: MonarchRule): RuleParts | null {
     const [regex, action, ...rest] = rule
     const source = regex instanceof RegExp ? regex.source : regex
     // Why: Monaco's rule types promise an action, but some grammars ship `[regex]` alone.
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- SAFETY: see above.
     if (action === undefined) {
       return null
     }
@@ -247,14 +295,14 @@ function listedWords(language: MonarchLanguage, normalize: (word: string) => str
   return listed
 }
 
-/** A Monaco Monarch language that tokenizes `spec`'s control keywords as `keyword.flow`, keeping
- *  every other token, state change and bracket of the original. */
-export function withControlKeywords(
+/** A Monaco Monarch language that tokenizes `spec`'s control keywords as `keyword.flow` and, with
+ *  `spec.calls`, called words as `function`, keeping every other token, state change and bracket. */
+export function withTokenRefinements(
   language: MonarchLanguage,
-  spec: ControlKeywordSpec
+  spec: TokenRefinementSpec
 ): MonarchLanguage {
   const normalize = (word: string): string => (language.ignoreCase ? word.toLowerCase() : word)
-  const control = (spec.keywords ?? '').split(/\s+/).filter(Boolean)
+  const control = (spec.controlWords ?? '').split(/\s+/).filter(Boolean)
   const controlSet = new Set(control.map(normalize))
   const listed = listedWords(language, normalize)
   const unlisted = control.filter((word) => !listed.has(normalize(word)))
@@ -279,19 +327,17 @@ export function withControlKeywords(
       const rewritten = spec.controlRules?.test(source)
         ? mapParts(action, (part) => controlPart(part, false) ?? part)
         : mapParts(action, (part) => rewriteCases(part, rewrite))
-      if (rewritten === action) {
-        return rule
-      }
-      const member =
-        spec.memberAfterDot !== undefined && !Array.isArray(action) && !Array.isArray(rewritten)
-          ? withMemberAfterDot(
+      const word =
+        Array.isArray(action) || Array.isArray(rewritten)
+          ? null
+          : withWordContext(
               { source, original: action, rewritten },
-              spec.memberAfterDot,
-              language,
-              memberStates
+              { spec, language, memberStates }
             )
-          : null
-      return member ? parts.rebuild(member.source, member.action) : parts.rebuild(source, rewritten)
+      if (word) {
+        return parts.rebuild(word.source, word.action)
+      }
+      return rewritten === action ? rule : parts.rebuild(source, rewritten)
     })
   }
   return { ...language, ...lists, tokenizer: { ...tokenizer, ...memberStates } }
