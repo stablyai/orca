@@ -1,9 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
-import { buildTabStripSegments, useTabStripWindowState } from './strip/tab-strip-window'
-import { useActiveDragVisibleTabId } from '../tab-group/drag/tab-drag-context'
-import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarItem } from './model/tab-bar-item-model'
 import { useTabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
@@ -127,49 +124,6 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     },
     [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
   )
-  const { range: tabStripRange, focusedSlotId } = useTabStripWindowState(
-    tabStripNavigation.tabStripRef,
-    itemProjection.orderedItems.length,
-    tabStripNavigation.subscribeToStripResize
-  )
-  const activeDragVisibleTabId = useActiveDragVisibleTabId()
-  const { orderedItems, sortableIds, activeVisibleTabId } = itemProjection
-  const windowed = tabStripRange !== null
-  // Why keyed on sortableIds: they change only when tabs open, close or move, not on every tab write.
-  const indexBySortableId = useMemo(
-    () => (windowed ? new Map(sortableIds.map((id, index) => [id, index])) : null),
-    [sortableIds, windowed]
-  )
-  const tabStripWindow = useMemo(() => {
-    if (tabStripRange === null || indexBySortableId === null) {
-      return { segments: buildTabStripSegments(orderedItems.length, null, []), sortableIds }
-    }
-    // Keep the active, dragged and focused tabs mounted wherever they sit in the order.
-    const keptIndices = [activeVisibleTabId, activeDragVisibleTabId, focusedSlotId].flatMap(
-      (id) => {
-        const index = id === null ? undefined : indexBySortableId.get(id)
-        return index === undefined ? [] : [index]
-      }
-    )
-    const segments = buildTabStripSegments(orderedItems.length, tabStripRange, keptIndices)
-    const mountedIds = segments.flatMap((segment) =>
-      segment.kind === 'tabs' ? sortableIds.slice(segment.start, segment.end) : []
-    )
-    return { segments, sortableIds: mountedIds }
-  }, [
-    activeDragVisibleTabId,
-    activeVisibleTabId,
-    focusedSlotId,
-    indexBySortableId,
-    orderedItems.length,
-    sortableIds,
-    tabStripRange
-  ])
-  // Why: dnd-kit re-renders every mounted tab when this array's identity changes, and tab writes rebuild it.
-  const [mountedSortableIds, setMountedSortableIds] = useState(tabStripWindow.sortableIds)
-  if (!sameStringArray(mountedSortableIds, tabStripWindow.sortableIds)) {
-    setMountedSortableIds(tabStripWindow.sortableIds)
-  }
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
@@ -185,8 +139,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
-      surfaceRef,
-      tabStripWindow: { segments: tabStripWindow.segments, sortableIds: mountedSortableIds }
+      surfaceRef
     },
     t
   )
