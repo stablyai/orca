@@ -175,6 +175,7 @@ function WorkspaceCleanupDialogContent({
     open,
     loading,
     gitChecking: gitEvidence.pendingWorktreeIds.size > 0,
+    pinnedIdentities: selectedIds,
     // Re-sorting at settle is safe only while the user has not started working in the list.
     shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
   })

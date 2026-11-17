@@ -34,6 +34,7 @@ import {
   getReviewStateTone
 } from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
+import { WorkspaceCleanupGitStatusPills } from './workspace-cleanup-git-status-pills'
 import {
   WorkspaceCleanupMetadataChip,
   WorkspaceCleanupMetadataText
@@ -260,17 +261,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                             )}
                       </StatusPill>
                     ) : (
-                      gitStatusPillsOrdered.map((status, index) => (
-                        <StatusPill
-                          key={status.label}
-                          tone={status.tone}
-                          className={
-                            index < gitStatusPillsOrdered.length - 1 ? 'shrink-0' : undefined
-                          }
-                        >
-                          {status.label}
-                        </StatusPill>
-                      ))
+                      <WorkspaceCleanupGitStatusPills statuses={gitStatusPillsOrdered} />
                     )}
                     {gitEvidencePending ? (
                       <span
