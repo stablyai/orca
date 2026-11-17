@@ -129,6 +129,10 @@ describe('Claude outer hook process capture', () => {
         expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
         expect(await run(toolEvent)).toBe(fresh)
         await chmod(join(home, 'hook-metadata'), 0o700)
+        await rm(cacheFile)
+        await chmod(join(home, 'hook-metadata'), 0o500)
+        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
+        await chmod(join(home, 'hook-metadata'), 0o700)
       } finally {
         await rm(home, { recursive: true, force: true })
       }
