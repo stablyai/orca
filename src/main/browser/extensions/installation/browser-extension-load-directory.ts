@@ -274,13 +274,33 @@ export async function prepareBrowserExtensionDirectory(
     const result = await running
     // Forgotten meanwhile (its folder was replaced): this result describes the old contents.
     if (pending.get(key) === running) {
-      preparedThisRun.set(key, result)
+      keepPreparedForInstalledFolders(key, result)
     }
     return result
   } finally {
     if (pending.get(key) === running) {
       pending.delete(key)
     }
+  }
+}
+
+/** Holds only installed folders, so failed installs, updates and removals never accumulate. */
+function keepPreparedForInstalledFolders(
+  key: string,
+  result: PreparedBrowserExtensionDirectory
+): void {
+  const installed = new Set(
+    getBrowserExtensionInstallStore()
+      .list()
+      .map((extension) => resolve(extension.path))
+  )
+  for (const path of preparedThisRun.keys()) {
+    if (!installed.has(path)) {
+      preparedThisRun.delete(path)
+    }
+  }
+  if (installed.has(key)) {
+    preparedThisRun.set(key, result)
   }
 }
 
