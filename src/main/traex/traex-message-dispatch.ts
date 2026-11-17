@@ -1,4 +1,7 @@
-import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
@@ -109,10 +112,15 @@ export async function dispatchTraexMessage(
         session.pending.delete(input.clientMessageId)
         return {
           state: 'rejected',
-          ...agentSessionFailureWords(agentSessionFailureFact('providerRejected'), {
-            agentName: 'TRAE CLI',
-            surface: 'rejection'
-          })
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('providerRejected', {
+              detail: providerDiagnosticOf(error)
+            }),
+            {
+              agentName: 'TRAE CLI',
+              surface: 'rejection'
+            }
+          )
         }
       }
       send.unknown = true

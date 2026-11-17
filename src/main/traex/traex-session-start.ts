@@ -13,6 +13,7 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import { reportedTraexPermissionMode } from './traex-permission-mode'
 import { readTraexThreadGoal } from './traex-thread-goal'
 import { refreshTraexBackgroundTerminals } from './traex-background-task-stops'
+import { traexNativeExecutionSettings } from './traex-execution-settings'
 
 export async function openTraexSession(
   session: TraexSession,
@@ -31,6 +32,12 @@ export async function openTraexSession(
   check()
   await run(session.extras.prepareWindowsSandbox(session.launch.cwd, session.launch.permissionMode))
   check()
+  const catalog = await run(readTraexModelCatalog(session.connection).catch(() => null))
+  check()
+  if (catalog) {
+    session.nativeModels = catalog.native
+    session.models = catalog.models
+  }
   const config = Object.fromEntries(
     Object.entries(session.launch.commandEnv ?? {}).map(([key, value]) => [
       `shell_environment_policy.set.${key}`,
@@ -79,7 +86,7 @@ export async function openTraexSession(
     response = await run(
       session.connection.request('thread/start', {
         ...settings,
-        ...(session.options.model ? { model: session.options.model } : {})
+        ...traexNativeExecutionSettings(session, { model: session.options.model })
       })
     )
   }
@@ -156,11 +163,8 @@ export async function openTraexSession(
         .catch(() => {})
     ])
   )
-  const catalog = await run(readTraexModelCatalog(session.connection).catch(() => null))
   check()
   if (catalog) {
-    session.nativeModels = catalog.native
-    session.models = catalog.models
     const current = catalog.native.find(
       (model) => model.id === session.options.model || model.model === session.options.model
     )

@@ -5,6 +5,42 @@ let turnId
 let serial = 0
 let backgroundCommand = false
 let delayedStartReply = null
+const models = [
+  {
+    id: 'contract-id',
+    model: 'contract-model',
+    displayName: 'Contract model',
+    isDefault: true,
+    hidden: false,
+    defaultReasoningEffort: 'medium',
+    supportedReasoningEfforts: [
+      { reasoningEffort: 'medium', description: 'Medium' },
+      { reasoningEffort: 'high', description: 'High' }
+    ],
+    businessMetadata: { variants: { max_key: 'contract-large' } }
+  },
+  {
+    id: 'small-id',
+    model: 'small-model',
+    displayName: 'Standard-only model',
+    isDefault: false,
+    hidden: false,
+    defaultReasoningEffort: 'medium',
+    supportedReasoningEfforts: [],
+    businessMetadata: { variants: { max_key: null } }
+  },
+  {
+    id: 'custom-id',
+    model: 'custom-model',
+    displayName: 'Custom model',
+    modelProviderId: 'custom-provider',
+    isDefault: false,
+    hidden: false,
+    defaultReasoningEffort: 'medium',
+    supportedReasoningEfforts: [],
+    businessMetadata: { variants: { max_key: null } }
+  }
+]
 const send = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 const reply = (id, result) => send({ id, result })
 const notify = (method, params) => send({ method, params: { threadId, ...params } })
@@ -24,29 +60,27 @@ createInterface({ input: process.stdin })
     if (method === 'initialize') {
       reply(id, { userAgent: 'trae-contract' })
     } else if (method === 'thread/start' || method === 'thread/resume') {
+      const selected = models.find(
+        (model) => model.id === params.model || model.model === params.model
+      )
+      if (
+        selected &&
+        !selected.businessMetadata.variants.max_key &&
+        params.modelBackendVariant !== null
+      ) {
+        send({ id, error: { code: -32602, message: 'Selected model does not provide Max mode' } })
+        return
+      }
       reply(id, {
         thread: { id: threadId, turns: [] },
-        model: 'contract-model',
+        model: selected?.model ?? 'contract-model',
         approvalPolicy: 'on-request',
         approvalsReviewer: 'user',
         sandbox: { type: 'readOnly' }
       })
     } else if (method === 'model/list') {
       reply(id, {
-        data: [
-          {
-            id: 'contract-id',
-            model: 'contract-model',
-            displayName: 'Contract model',
-            isDefault: true,
-            hidden: false,
-            defaultReasoningEffort: 'medium',
-            supportedReasoningEfforts: [
-              { reasoningEffort: 'medium', description: 'Medium' },
-              { reasoningEffort: 'high', description: 'High' }
-            ]
-          }
-        ],
+        data: models,
         nextCursor: null
       })
     } else if (method === 'model/internalUsage/read') {
@@ -74,8 +108,21 @@ createInterface({ input: process.stdin })
       backgroundCommand = false
       reply(id, { outcome: 'terminationRequested' })
     } else if (method === 'turn/start') {
-      if (params.model !== 'contract-model') {
+      const selected = models.find((model) => model.model === params.model)
+      if (!selected) {
         send({ id, error: { code: -32602, message: 'Expected the sampling model name' } })
+        return
+      }
+      if (!selected.businessMetadata.variants.max_key && params.modelBackendVariant !== null) {
+        send({ id, error: { code: -32602, message: 'Selected model does not provide Max mode' } })
+        return
+      }
+      if (selected.modelProviderId && params.modelProvider !== selected.modelProviderId) {
+        send({ id, error: { code: -32602, message: 'Selected model provider was not supplied' } })
+        return
+      }
+      if (params.input[0].text === 'model-rejected') {
+        send({ id, error: { code: -32602, message: 'Selected model is unavailable' } })
         return
       }
       turnId = `turn-${++serial}`
@@ -121,7 +168,9 @@ createInterface({ input: process.stdin })
         })
         return
       }
-      if (text === 'permissions') {
+      if (text === 'model-switch') {
+        complete('Model switch accepted')
+      } else if (text === 'permissions') {
         send({
           id: 'permissions',
           method: 'item/permissions/requestApproval',

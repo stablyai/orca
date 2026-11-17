@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 
 export const traexRecordSchema = z.record(z.string(), z.unknown())
 export const traexItemSchema = z.looseObject({ id: z.string(), type: z.string() })
@@ -52,6 +56,8 @@ export function traexContentText(value: unknown): string {
 }
 
 export class TraexRequestError extends Error {
+  readonly providerDiagnostic: ProviderDiagnostic | undefined
+
   constructor(
     readonly method: string,
     readonly code: number | null,
@@ -60,5 +66,6 @@ export class TraexRequestError extends Error {
   ) {
     super(message)
     this.name = 'TraexRequestError'
+    this.providerDiagnostic = providerDiagnostic(message, 'person')
   }
 }

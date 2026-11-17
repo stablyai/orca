@@ -16,6 +16,7 @@ let directory: string
 let journal: AgentSessionJournal
 let session: TraexSession
 let drained: () => Promise<void>
+let createSession: (options?: Record<string, string>) => TraexSession
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-trae-controls-'))
@@ -39,19 +40,20 @@ beforeEach(async () => {
   drained = async () => {
     await sink.drained()
   }
-  session = new TraexSession(
-    { identity, fence: 1, spawnToken: 'controls-spawn', events: sink.sink },
-    {
-      command: process.execPath,
-      args: [join(import.meta.dirname, '__fixtures__', 'traex-scripted-app-server.mjs')],
-      cwd: directory,
-      previousThreadId: null,
-      mayBeUnsaved: false,
-      options: {},
-      permissionMode: 'ask'
-    },
-    { logger, onLifecycle: () => {}, onSettled: () => {} }
-  )
+  createSession = (options = {}) =>
+    new TraexSession(
+      { identity, fence: 1, spawnToken: 'controls-spawn', events: sink.sink },
+      {
+        command: process.execPath,
+        args: [join(import.meta.dirname, '__fixtures__', 'traex-scripted-app-server.mjs')],
+        cwd: directory,
+        previousThreadId: null,
+        mayBeUnsaved: false,
+        options,
+        permissionMode: 'ask'
+      },
+      { logger, onLifecycle: () => {}, onSettled: () => {} }
+    )
 })
 
 afterEach(async () => {
@@ -100,6 +102,7 @@ async function permissionReceipt(decision: string | null, withdraw = false) {
 }
 
 it('grants permissions only for explicit approvals, including dismissal and withdrawal', async () => {
+  session = createSession()
   await session.open(new AbortController().signal)
   expect(await permissionReceipt(null)).toEqual({ permissions: {}, scope: 'turn' })
   expect(await permissionReceipt(null, true)).toEqual({ permissions: {}, scope: 'turn' })
@@ -120,6 +123,7 @@ it('grants permissions only for explicit approvals, including dismissal and with
 })
 
 it('settles successful and failed recaps delivered together with their RPC replies', async () => {
+  session = createSession()
   await session.open(new AbortController().signal)
   const recap = async (turnId: string) => {
     const identity = { provider: 'orca' as const, clientMessageId: turnId }
@@ -140,6 +144,7 @@ it('settles successful and failed recaps delivered together with their RPC repli
 })
 
 it('handles numeric sandbox completions before startup history is released', async () => {
+  session = createSession()
   await session.connection.initialize()
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
   const prepare = (cwd: string) => {
@@ -154,4 +159,41 @@ it('handles numeric sandbox completions before startup history is released', asy
   await prepare('sandbox-failure')
   await session.open(new AbortController().signal)
   expect(session.readOptions().current.reportedPermissionMode).toBe('ask')
+})
+
+it('sends with standard-only and custom models despite inherited Max configuration', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  for (const model of ['small-id', 'custom-id']) {
+    await session.setOption('model', model)
+    const result = await dispatchTraexMessage(session, {
+      sessionId: 'trae-controls',
+      fence: 1,
+      clientMessageId: model,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'model-switch' }] }
+    })
+    expect(result.state).toBe('accepted')
+    await expect.poll(async () => (await journal.reads.newestTurn())?.state).toBe('completed')
+  }
+})
+
+it('opens a standard-only model with inherited Max configuration', async () => {
+  session = createSession({ model: 'small-id' })
+  const opened = await session.open(new AbortController().signal)
+  expect(opened.reportedOptions.model).toBe('small-id')
+})
+
+it('preserves the provider reason when a message is refused', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  const result = await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'model-rejected',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'model-rejected' }] }
+  })
+  expect(result).toMatchObject({
+    state: 'rejected',
+    rejection: { kind: 'providerRejected', detail: { text: 'Selected model is unavailable' } }
+  })
 })

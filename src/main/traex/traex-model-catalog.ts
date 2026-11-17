@@ -27,7 +27,8 @@ const modelSchema = z.looseObject({
       is_internal_usage_limit: z.boolean().optional(),
       internal_usage: quotaSchema.nullish(),
       internal_daily_quota_key: z.string().nullish(),
-      internal_daily_usage: quotaSchema.nullish()
+      internal_daily_usage: quotaSchema.nullish(),
+      variants: z.looseObject({ max_key: z.string().nullish() }).optional()
     })
     .optional()
 })

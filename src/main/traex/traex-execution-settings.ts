@@ -16,9 +16,11 @@ export function traexNativeExecutionSettings(
     throw new AgentSessionOptionRejectedError('TRAE CLI modes have not been negotiated')
   }
   const model = selected?.model ?? options.model
+  const variants = selected?.businessMetadata?.variants
   return {
     ...(model ? { model } : {}),
     ...(selected?.modelProviderId ? { modelProvider: selected.modelProviderId } : {}),
+    ...(variants && !variants.max_key ? { modelBackendVariant: null } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.interactionMode && model
       ? {
