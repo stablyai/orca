@@ -5,6 +5,8 @@ import {
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
 import { isCommittedAgentSessionAttachmentPath } from '../../../../../shared/agent-session/agent-session-attachments'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { IMAGE_FILE_MIME_TYPES } from '../../../../../shared/file-preview/image-mime-types'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -151,17 +153,38 @@ export function isImmutableLocalImageCacheKey(key: string): boolean {
   return isCommittedAgentSessionAttachmentPath(key.slice(key.lastIndexOf('\0') + 1))
 }
 
-export function invalidateLocalImageCache(): void {
+function matchesCacheKeyPath(key: string, targetPath: string): boolean {
+  if (key === targetPath || key.endsWith(`\0${targetPath}`)) {
+    return true
+  }
+  const normalizedTarget = targetPath.replace(/\\/g, '/')
+  const lastIndex = key.lastIndexOf('\0')
+  const keyPath = lastIndex === -1 ? key : key.slice(lastIndex + 1)
+  return keyPath.replace(/\\/g, '/') === normalizedTarget
+}
+
+function isImageFilePath(filePath: string): boolean {
+  const dotIndex = filePath.lastIndexOf('.')
+  if (dotIndex === -1) {
+    return false
+  }
+  return filePath.slice(dotIndex).toLowerCase() in IMAGE_FILE_MIME_TYPES
+}
+
+export function invalidateLocalImageCache(targetPath?: string): void {
   const staleUrls: string[] = []
-  for (const [key, url] of blobUrlCache) {
-    if (!isImmutableLocalImageCacheKey(key)) {
+  const shouldInvalidate = (key: string): boolean =>
+    !isImmutableLocalImageCacheKey(key) &&
+    (targetPath === undefined || matchesCacheKeyPath(key, targetPath))
+  for (const [key, url] of blobUrlCache.entries()) {
+    if (shouldInvalidate(key)) {
       staleUrls.push(url)
       blobUrlCache.delete(key)
       blobUrlCacheBytes.delete(key)
     }
   }
   for (const key of inFlightBlobUrlLoads.keys()) {
-    if (!isImmutableLocalImageCacheKey(key)) {
+    if (shouldInvalidate(key)) {
       inFlightBlobUrlLoads.delete(key)
     }
   }
@@ -199,18 +222,46 @@ function invalidateWhenShownUnfocused(): void {
   }
 }
 
+function handleWorktreeFileChange(
+  event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]
+): void {
+  const { payload } = event.detail
+  if (payload.resync) {
+    invalidateLocalImageCache()
+    return
+  }
+  for (const fsEvent of payload.events) {
+    if (fsEvent.kind === 'overflow') {
+      invalidateLocalImageCache()
+      return
+    }
+    if (isImageFilePath(fsEvent.absolutePath)) {
+      invalidateLocalImageCache(fsEvent.absolutePath)
+    }
+    if (fsEvent.oldAbsolutePath && isImageFilePath(fsEvent.oldAbsolutePath)) {
+      invalidateLocalImageCache(fsEvent.oldAbsolutePath)
+    }
+  }
+}
+
+function onWindowFocus(): void {
+  invalidateLocalImageCache()
+}
+
 export function disposeLocalImageCacheState(): void {
   if (typeof window !== 'undefined') {
-    window.removeEventListener('focus', invalidateLocalImageCache)
+    window.removeEventListener('focus', onWindowFocus)
     document.removeEventListener('visibilitychange', invalidateWhenShownUnfocused)
+    window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
   }
   resetLocalImageCacheState()
 }
 
 // Every shown image, including one whose read failed, reads again when the window comes back.
 if (typeof window !== 'undefined') {
-  window.addEventListener('focus', invalidateLocalImageCache)
+  window.addEventListener('focus', onWindowFocus)
   document.addEventListener('visibilitychange', invalidateWhenShownUnfocused)
+  window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
 }
 
 if (import.meta !== undefined && import.meta.hot) {
