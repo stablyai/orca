@@ -1,5 +1,4 @@
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
-import { traceAccountMove } from '../recovery/structured-agent-session-account-move-trace'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import type {
   StructuredAgentSessionCaller,
@@ -63,7 +62,6 @@ export function wireStructuredAgentSessionQueuedMessages(
         return false
       }
       const waiting = await waitingCards(journal)
-      traceAccountMove('idle?', waiting)
       return waiting.person && !waiting.other
     },
     captureSelection: async (sessionId, journal) => {
@@ -73,7 +71,6 @@ export function wireStructuredAgentSessionQueuedMessages(
       const record = ctx.deps.store.getRecord(sessionId)
       // Only a waiting card from the person needs the account a start would use; with none, a
       // hold has nothing left to keep.
-      traceAccountMove('capture', await waitingCards(journal))
       const transition = (await waitingCards(journal)).person
         ? await ctx.accountTransition?.(sessionId)
         : (ctx.accountMoveSettled?.(sessionId) ?? null)

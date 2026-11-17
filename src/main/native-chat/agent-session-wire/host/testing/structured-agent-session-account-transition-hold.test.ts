@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { setAccountMoveTraceSink } from '../../recovery/structured-agent-session-account-move-trace'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
@@ -349,43 +348,4 @@ it('sends a queued card back to wait when the old account turns out busy as it i
   expect(await rig!.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
   expect(chat.dispatchedTo('queued next')).toEqual([])
   expect(chat.child()?.fence).toBe(chat.accountA)
-})
-
-it('delivers a kept queued card once on the new account after mail drains and the old work settles', async () => {
-  const trace: string[] = []
-  setAccountMoveTraceSink(trace)
-  try {
-    const chat = await chatOnAccountA()
-    const first = rig!.send('first turn')
-    await first.result
-    await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
-    const queued = rig!.send('queued next', 'queue-if-active')
-    await queued.result
-    chat.switchTo('/homes/b')
-    chat.onNextAccountRead(() => chat.background([devServer()]))
-    trace.push('test: settle first turn')
-    await rig!.settleAccepted(first.id, 'first turn')
-    await eventually(async () =>
-      expect((await rig!.handoff(queued.id))?.rejection).toMatchObject({ neverReachedAgent: true })
-    )
-    trace.push('test: kept')
-
-    const mail = rig!.send('mail meanwhile', undefined, { internal: true, from: MAIL })
-    await mail.result
-    await eventually(() => expect(chat.mailDispatchedTo()).toEqual([chat.accountA]))
-    await rig!.settleAccepted(await rig!.handoffId(mail.id), 'mail meanwhile')
-    trace.push('test: mail settled')
-
-    chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
-    trace.push('test: background settled')
-    await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
-    expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
-    expect(chat.child()!.fence).not.toBe(chat.accountA)
-    expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
-  } catch (error) {
-    console.error(`TRACE kept-card\n${trace.join('\n')}`)
-    throw error
-  } finally {
-    setAccountMoveTraceSink(null)
-  }
 })

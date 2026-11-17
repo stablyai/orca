@@ -1,5 +1,4 @@
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
-import { traceAccountMove } from './structured-agent-session-account-move-trace'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import { StructuredAgentSessionUsageLimitContinue } from './structured-agent-session-usage-limit-continue'
@@ -35,7 +34,6 @@ export function childWorkChanged(
   id: string
 ): void {
   tasks.publish(id)
-  traceAccountMove('childWorkChanged', 'open', delivery.childWorkOpen(id))
   if (!delivery.childWorkOpen(id)) {
     queued.accountMoveEvidence(id)
   }

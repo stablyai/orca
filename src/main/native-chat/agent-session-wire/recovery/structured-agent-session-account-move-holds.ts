@@ -1,6 +1,5 @@
 // Chats whose person-sent work waits for an account move, and the edges that may end the wait.
 
-import { traceAccountMove } from './structured-agent-session-account-move-trace'
 import type {
   StructuredAgentSessionAccountMoveEdge,
   StructuredAgentSessionHostDeps,
@@ -73,7 +72,6 @@ export class AccountMoveHolds {
 
   stale(sessionId: string, level: 'work' | 'account'): void {
     const hold = this.held.get(sessionId)
-    traceAccountMove('stale', level, 'hold', hold?.transition.waitsFor ?? null, hold?.stale ?? null)
     if (hold && hold.stale !== 'account') {
       hold.stale = level
     }
@@ -91,7 +89,6 @@ export class AccountMoveHolds {
       return
     }
     const wasHeld = this.held.has(sessionId)
-    traceAccountMove('observe', transition?.waitsFor ?? null, 'wasHeld', wasHeld)
     if (!transition || !session?.child) {
       if (session) {
         delete session.awaitsAccountMove
