@@ -1,3 +1,4 @@
+import type { GenerationArgument } from '../../../shared/source-control/ai/generation/generation-argument'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
@@ -24,7 +25,7 @@ import type {
 
 export function runLocalPlanForAgent(input: {
   agentId: string
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
@@ -44,7 +45,7 @@ export function runLocalPlanForAgent(input: {
       wslDistro ? 'linux' : process.platform
     )
   }
-  const launch = (plan: CommitMessagePlan, timeoutMs?: number) =>
+  const launch = (plan: CommitMessagePlan<GenerationArgument>, timeoutMs?: number) =>
     runLocalSourceControlPlan({
       plan,
       cwd: input.target.cwd,
@@ -77,7 +78,7 @@ export function runLocalPlanForAgent(input: {
     const cancel = () => canceled.abort()
     setLocalGenerationCancelToken(lane, cancel)
     signal.addEventListener('abort', abort, { once: true })
-    let preparation: LocalProcessExecution<CommitMessagePlan> | undefined
+    let preparation: LocalProcessExecution<CommitMessagePlan<GenerationArgument>> | undefined
     let execution: LocalProcessExecution<InternalTextGenerationResult> | undefined
     const processClosed = (async () => {
       try {

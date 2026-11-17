@@ -92,6 +92,7 @@ export const ORCA_ISSUE_FIELDS = `
   id
   identifier
   title
+  branchName
   description
   url
   priority

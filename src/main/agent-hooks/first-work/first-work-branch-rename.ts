@@ -1,3 +1,4 @@
+import type { FirstWorkBranchRenameEvent } from './first-work-branch-rename-event'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
@@ -10,7 +11,10 @@ import {
   stripConfiguredBranchPrefix
 } from '../../../shared/source-control/ai/naming/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../../ipc/worktree-branch-name'
+import {
+  computeBranchName,
+  getConfiguredBranchPrefix
+} from '../../ipc/worktrees/creation/worktree-branch-name'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
@@ -37,17 +41,6 @@ import {
   resetFirstWorkGenerationBackoff,
   retryFailedGeneration
 } from './first-work-generation-backoff'
-
-export type FirstWorkBranchRenameEvent = {
-  paneKey: string
-  /** Untrusted agent echo; use only as a fallback. */
-  worktreeId: string | undefined
-  tabId: string | undefined
-  state: string
-  prompt: string | undefined
-  assistantMessage: string | undefined
-  isReplay: boolean | undefined
-}
 
 export type FirstWorkBranchRenameDeps = {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &

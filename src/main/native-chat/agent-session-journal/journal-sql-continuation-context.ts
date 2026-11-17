@@ -7,6 +7,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalContinuationContext } from './journal-reads'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
+import { readJournalStoredRow } from './journal-stored-output-rows'
 
 const PAGE = 256
 
@@ -45,14 +46,14 @@ export function readJournalDomainContinuationContext(
   let afterItem: SqliteBindings = []
   do {
     const rows = db
-      .prepare(`SELECT payload_json, sequence, sequence_index, ordinal
+      .prepare(`SELECT payload_json, output_blob, sequence, sequence_index, ordinal
       FROM journal_items INDEXED BY journal_items_visible_position
       WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>?
         ${afterItem.length ? 'AND (sequence, sequence_index, ordinal)>(?, ?, ?)' : ''}
       ORDER BY sequence, sequence_index, ordinal LIMIT ?`)
       .all(...prefix, clear, ...afterItem, PAGE)
     for (const row of rows) {
-      items.push(JSON.parse(String(row.payload_json)))
+      items.push(readJournalStoredRow(db, prefix, row))
     }
     afterItem = nextPage(rows, ['sequence', 'sequence_index', 'ordinal'])
   } while (afterItem.length)

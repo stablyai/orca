@@ -150,6 +150,8 @@ export type PersistedUIState = {
   _zcodeStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Muse status item. */
   _museStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Git blame status item. */
+  _gitBlameStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
@@ -261,6 +263,10 @@ export type PersistedUIState = {
   starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]
+  /** Collapses the sidebar's "Moved to WSL host" list to its header. Desktop-only. */
+  wslMovedSectionCollapsed?: boolean
+  /** Moved-project entries the user hid from that list (`wslMovedProjectKey`); dropped once the project is no longer moved. */
+  hiddenWslMovedProjectKeys?: string[]
   /** Pet overlay visibility, separate from the experimentalPet settings flag so "Hide pet" is a reversible dismiss; absent = true. */
   petVisible?: boolean
   /** Active pet id (bundled id or custom UUID); unknown ids fall back to the default on read so a removed custom pet doesn't blank the overlay. */

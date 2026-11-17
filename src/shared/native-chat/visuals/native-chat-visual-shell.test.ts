@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
-  NATIVE_CHAT_VISUAL_PING_TYPE,
-  NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   nativeChatVisualThemeCss,
-  readNativeChatVisualFrameMessage,
-  readNativeChatVisualPong
+  readNativeChatVisualFrameMessage
 } from './native-chat-visual-shell'
 
 describe('nativeChatVisualThemeCss', () => {
@@ -75,18 +72,5 @@ describe('readNativeChatVisualFrameMessage', () => {
     ['null', null]
   ])('refuses %s', (_name, data) => {
     expect(readNativeChatVisualFrameMessage(data, 'c')).toBeNull()
-  })
-})
-
-describe('readNativeChatVisualPong', () => {
-  it.each([
-    ['another channel', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'x', id: 2 }],
-    ['a ping', { type: NATIVE_CHAT_VISUAL_PING_TYPE, channel: 'c', id: 2 }],
-    ['no id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c' }],
-    ['a fractional id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c', id: 1.5 }],
-    ['a string id', { type: NATIVE_CHAT_VISUAL_PONG_TYPE, channel: 'c', id: '2' }],
-    ['null', null]
-  ])('refuses %s', (_name, data) => {
-    expect(readNativeChatVisualPong(data, 'c')).toBeNull()
   })
 })

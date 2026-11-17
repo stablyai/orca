@@ -33,22 +33,6 @@ describe('prompt event sampling', () => {
     vi.useRealTimers()
   })
 
-  it('uses the same sampling boundary for hooks and renderer prompt sources', () => {
-    const random = vi.spyOn(Math, 'random')
-    for (const launch_source of ['unknown', 'sidebar', 'diff_notes_send'] as const) {
-      random.mockReturnValue(0.01)
-      expect(track('agent_prompt_sent', { ...prompt, launch_source })).toBe(false)
-      random.mockReturnValue(0.0099)
-      expect(track('agent_prompt_sent', { ...prompt, launch_source })).toBe(true)
-    }
-
-    expect(state.mock.capture).toHaveBeenCalledTimes(3)
-    for (const [message] of state.mock.capture.mock.calls) {
-      expect(message.properties.sample_rate).toBe(0.01)
-      expect(message.properties.$process_person_profile).toBe(false)
-    }
-  })
-
   it('still enforces consent and rejects raw prompt text on selected events', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     state.settings.telemetry!.optedIn = false

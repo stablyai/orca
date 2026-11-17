@@ -46,7 +46,6 @@ export async function deleteWithPermanentFallback({
     ].join('\n'),
     confirmLabel: translate('common.delete', 'Delete'),
     confirmVariant: 'destructive',
-    cancelVariant: 'ghost',
     surface: 'security'
   })
   if (!confirmed) {

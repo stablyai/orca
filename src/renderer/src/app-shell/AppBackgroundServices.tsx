@@ -17,7 +17,7 @@ const DashboardPopoutBridge = lazy(
   () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
 )
 const AgentListVerdictPublisher = lazy(
-  () => import('../components/activity/agent-list-verdict-publisher')
+  () => import('../components/activity/paired-clients/agent-list-verdict-publisher')
 )
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */

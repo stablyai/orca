@@ -4,7 +4,7 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
 } from '../../../../shared/workspace/identity/floating-workspace-worktree'
-import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
+import { resolveFloatingTerminalCwd } from '../../../ipc/worktrees/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
   type ExecutionHostId,
