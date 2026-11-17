@@ -144,6 +144,18 @@ describe('ACP process-owning connection', () => {
     expect(connection.stderrTail()).not.toContain('Q7Q7')
   })
 
+  it('drops a private key body the stderr tail cut from its BEGIN marker', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const body = `${'K9'.repeat(32)}\n`.repeat(4)
+    child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${body}-----END PRIVATE KEY-----\n`)
+    // Leaves part of the second body line, the last two and the END marker in the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8025)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('K9K9')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))

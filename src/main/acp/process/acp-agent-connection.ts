@@ -24,7 +24,7 @@ import {
 } from '../transport/acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from '../transport/acp-peer-limits'
 import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
-import { redactString } from '../../observability/redactor'
+import { redactString, redactTextTail } from '../../observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 
 export type AcpSignInWatch = {
@@ -256,10 +256,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   /** Redacted, since it reaches chat errors and saved chats; sign-in watching reads raw lines. */
   stderrTail(): string {
     const tail = this.managed.stderrTail()
-    // A full tail starts mid-line, where a credential may have lost the prefix that marks it.
-    const whole =
-      tail.length < STDERR_TAIL_MAX_CHARS ? tail : tail.slice(tail.indexOf('\n') + 1 || tail.length)
-    return redactString(whole).trim()
+    // A full tail starts mid-line, where a credential may have lost the marker that identifies it.
+    return (tail.length < STDERR_TAIL_MAX_CHARS ? redactString(tail) : redactTextTail(tail)).trim()
   }
 
   /** Requires advertised session listing support. */
