@@ -29,6 +29,8 @@ import {
   isPiTerminalTitle,
   isGeminiTerminalTitle,
   grokFrameTitleStatus,
+  GROK_PERMISSION_TITLE,
+  GROK_WORKING_TITLE,
   type AgentStatus
 } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
@@ -145,8 +147,6 @@ export function normalizeTerminalTitle(title: string): string {
 const GEMINI_DISPLAY_LABEL = 'Gemini CLI'
 const QODER_DISPLAY_LABEL = 'Qoder CLI'
 const QODER_CN_DISPLAY_LABEL = 'Qoder CLI CN'
-const GROK_WORKING_TITLE = '\u280b Grok'
-const GROK_PERMISSION_TITLE = 'Grok - action required'
 const QODER_TITLE_GLYPHS = { working: GEMINI_WORKING, permission: '▲', idle: GEMINI_IDLE } as const
 const DESTRUCTIVE_TITLE_STAMPS: ReadonlySet<string> = new Set([
   ...[GEMINI_WORKING, GEMINI_PERMISSION, GEMINI_IDLE].map(
