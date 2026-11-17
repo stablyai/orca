@@ -52,6 +52,8 @@ import {
   startMainThreadChurnProbe
 } from '../diagnostics/main-thread-churn-probe'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { setBufferedProcessSpawner } from '@orca/process-host'
+import { spawnBufferedProcessOnWorker } from '../worker-thread-child-process/buffered-process-worker-spawner'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
@@ -217,6 +219,9 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
       e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
     })
     startEventLoopStallProbe()
+  }
+  if (process.platform === 'win32') {
+    setBufferedProcessSpawner(spawnBufferedProcessOnWorker)
   }
   // Session-long main-thread diagnostics (#7576) distinguish cold cache from unstable filesystem stamps via hit/miss/unprovable counts.
   if (isMainThreadDiagnosticsEnabled()) {

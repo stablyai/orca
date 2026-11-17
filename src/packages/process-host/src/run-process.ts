@@ -9,10 +9,24 @@ import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 import { spawnNativeProcess } from './native-process-spawn'
 
-import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
+import type {
+  BufferedProcessChild,
+  BufferedProcessSpawner,
+  PipedProcessSpec,
+  ProcessChild,
+  ProcessSpec,
+  ProcessResult
+} from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
+
+let bufferedProcessSpawner: BufferedProcessSpawner | null = null
+
+/** Host injection for buffered runs only; undefined from the spawner keeps the native path. */
+export function setBufferedProcessSpawner(spawner: BufferedProcessSpawner | null): void {
+  bufferedProcessSpawner = spawner
+}
 
 /** Callers own stream error handling; unhandled stream errors can crash the host process. */
 export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStreams
@@ -41,9 +55,11 @@ export function runProcess(
 
   return new Promise<ProcessResult>((resolve, reject) => {
     const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
-    let child: ChildProcess
+    let child: BufferedProcessChild
+    let hosted: ReturnType<BufferedProcessSpawner>
     try {
-      child = spawnProcess(spec)
+      hosted = bufferedProcessSpawner?.(spec)
+      child = hosted?.child ?? spawnProcess(spec)
     } catch (error) {
       terminationReporter.report()
       reject(error)
@@ -107,16 +123,34 @@ export function runProcess(
 
     let graceTimer: ReturnType<typeof setTimeout> | undefined
     let barrierDeadlineTimer: ReturnType<typeof setTimeout> | undefined
+    const withPid = (action: () => Promise<boolean>): Promise<boolean> => {
+      if (!hosted?.withPid) {
+        return action()
+      }
+      return hosted.withPid(() => {
+        const pending = action()
+        // PID delivery may outlive the caller's wait; keep observing the actual tree kill.
+        void inFlightWindowsTreeKill(child)?.then(
+          (verdict) => verdict === 'exited' && markBarrierTerminationVerified()
+        )
+        void pending.then((verified) => verified && markBarrierTerminationVerified())
+        return pending
+      })
+    }
     const signalBarrierTree = (signal?: NodeJS.Signals): Promise<boolean> =>
-      (typeof spec.terminationBarrier === 'object'
-        ? spec.terminationBarrier.signal(child, signal)
-        : signalProcessTree(child, signal)
-      ).catch(() => false)
+      withPid(() =>
+        (typeof spec.terminationBarrier === 'object'
+          ? spec.terminationBarrier.signal(child, signal)
+          : signalProcessTree(child, signal)
+        ).catch(() => false)
+      )
     const forceBarrierTree = (): Promise<boolean> =>
-      (typeof spec.terminationBarrier === 'object'
-        ? spec.terminationBarrier.force(child)
-        : forceTerminateProcessTree(child)
-      ).catch(() => false)
+      withPid(() =>
+        (typeof spec.terminationBarrier === 'object'
+          ? spec.terminationBarrier.force(child)
+          : forceTerminateProcessTree(child)
+        ).catch(() => false)
+      )
 
     const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       settle(() =>
@@ -149,9 +183,12 @@ export function runProcess(
     }
     // Let taskkill finish reading the tree before killing the root, or descendants may be orphaned.
     const killRootUnlessTreeKillInFlight = (): void => {
-      if (!inFlightWindowsTreeKill(child)) {
-        terminate(child, 'SIGKILL')
-      }
+      void withPid(() => {
+        if (!inFlightWindowsTreeKill(child)) {
+          terminate(child, 'SIGKILL')
+        }
+        return Promise.resolve(false)
+      })
     }
 
     const resolveBarrierIfSafe = (): void => {
@@ -188,7 +225,7 @@ export function runProcess(
       if (spec.terminationBarrier) {
         barrierStopping = true
         initialBarrierTermination ??= signalBarrierTree()
-        if (process.platform === 'win32') {
+        if (process.platform === 'win32' && !hosted?.withPid) {
           // The tracked taskkill outlives the caller's wait; a late success still verifies.
           void inFlightWindowsTreeKill(child)?.then(
             (verdict) => verdict === 'exited' && markBarrierTerminationVerified()
@@ -265,7 +302,15 @@ export function runProcess(
       onAbort()
     }
 
-    child.once('error', (error) => {
+    const onError = (error: Error): void => {
+      if (hosted?.isStdinWriteError?.(error)) {
+        return
+      }
+      if (hosted?.isAbandonedError?.(error)) {
+        terminationReporter.report()
+        settle(() => reject(error))
+        return
+      }
       terminationReporter.reportIf(!child.pid)
       if (barrierStopping) {
         deferredError = error
@@ -273,7 +318,12 @@ export function runProcess(
         return
       }
       settle(() => reject(error))
-    })
+    }
+    if (hosted) {
+      child.on('error', onError)
+    } else {
+      child.once('error', onError)
+    }
     child.once('exit', (code, signal) => {
       if (!barrierStopping) {
         rootExitedBeforeBarrier = true
@@ -307,7 +357,7 @@ export function runProcess(
 }
 
 // Best-effort root termination; tree termination is handled separately.
-function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
+function terminate(child: ProcessChild, signal?: NodeJS.Signals): void {
   try {
     child.kill(signal)
   } catch {

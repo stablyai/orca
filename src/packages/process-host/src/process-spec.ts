@@ -4,6 +4,28 @@ import type {
   SpawnOptions as NodeSpawnOptions,
   StdioOptions
 } from 'node:child_process'
+import type { EventEmitter } from 'node:events'
+
+/** The handle needed for termination, including children hosted outside this thread. */
+export type ProcessChild = EventEmitter &
+  Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode'> & {
+    kill(signal?: NodeJS.Signals): boolean
+  }
+
+export type BufferedProcessChild = ProcessChild & {
+  stdin: (EventEmitter & { end(data?: string | Uint8Array): unknown }) | null
+  stdout: EventEmitter | null
+  stderr: EventEmitter | null
+}
+
+export type BufferedProcessSpawn = {
+  child: BufferedProcessChild
+  withPid?: (action: () => Promise<boolean>) => Promise<boolean>
+  isAbandonedError?: (error: unknown) => boolean
+  isStdinWriteError?: (error: unknown) => boolean
+}
+
+export type BufferedProcessSpawner = (spec: ProcessSpec) => BufferedProcessSpawn | undefined
 
 export type ProcessSpec = {
   /** Prefer an absolute Windows path; stripped Electron PATHs may not resolve bare names. */
@@ -46,8 +68,8 @@ export type PipedProcessSpawner = (spec: PipedProcessSpec) => ChildProcessWithou
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void
-  signal: (child: ChildProcess, signal?: NodeJS.Signals) => Promise<boolean>
-  force: (child: ChildProcess) => Promise<boolean>
+  signal: (child: ProcessChild, signal?: NodeJS.Signals) => Promise<boolean>
+  force: (child: ProcessChild) => Promise<boolean>
 }
 
 export type ProcessResult = {
