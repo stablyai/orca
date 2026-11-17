@@ -170,7 +170,7 @@ index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece134763
      Terminal.prototype._parseEnv = function (env) {
          var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71ededb01f 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..3b40ca7b9c4021307416999227f407abfe920a17 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -245,29 +245,75 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
          // Writes are put in a queue and processed asynchronously in order to handle
          // backpressure from the kernel buffer.
          var buffer = typeof data === 'string'
-@@ -304,7 +332,8 @@ var CustomWriteStream = /** @class */ (function () {
+@@ -304,42 +332,38 @@ var CustomWriteStream = /** @class */ (function () {
      CustomWriteStream.prototype._processWriteQueue = function () {
          var _this = this;
          this._writeImmediate = undefined;
 -        if (this._writeQueue.length === 0) {
-+        // Orca: an in-flight fs.write can re-enter here after dispose().
-+        if (this._fd < 0 || this._writeQueue.length === 0) {
++        if (this._fd < 0) {
              return;
          }
-         var task = this._writeQueue[0];
-@@ -314,9 +343,9 @@ var CustomWriteStream = /** @class */ (function () {
-         fs.write(this._fd, task.buffer, task.offset, function (err, written) {
-             if (err) {
-                 if ('code' in err && err.code === 'EAGAIN') {
+-        var task = this._writeQueue[0];
+-        // Write to the underlying file descriptor and handle it directly, rather
+-        // than using the `net.Socket`/`tty.WriteStream` wrappers which swallow and
+-        // mask errors like EAGAIN and can cause the thread to block indefinitely.
+-        fs.write(this._fd, task.buffer, task.offset, function (err, written) {
+-            if (err) {
+-                if ('code' in err && err.code === 'EAGAIN') {
 -                    // `setImmediate` is used to yield to the event loop and re-attempt
 -                    // the write later.
 -                    _this._writeImmediate = setImmediate(function () { return _this._processWriteQueue(); });
-+                    // Paced, not `setImmediate`: a stalled reader keeps this branch EAGAIN-ing, and an
-+                    // immediate re-attempt turns the retry into a busy-loop on the daemon thread.
-+                    _this._writeImmediate = setTimeout(function () { return _this._processWriteQueue(); }, EAGAIN_RETRY_DELAY_MS);
++        var budget = 64 * 1024;
++        var attempts = 64;
++        while (this._writeQueue.length > 0 && budget > 0 && attempts-- > 0) {
++            var task = this._writeQueue[0];
++            try {
++                // The Unix master is O_NONBLOCK; bypass the shared libuv worker pool.
++                var written = fs.writeSync(this._fd, task.buffer, task.offset, Math.min(task.buffer.byteLength - task.offset, budget));
++                if (written === 0) {
++                    break;
                  }
-                 else {
-                     // Stop processing immediately on unexpected error and log
+-                else {
+-                    // Stop processing immediately on unexpected error and log
+-                    _this._writeQueue.length = 0;
+-                    console.error('Unhandled pty write error', err);
++                task.offset += written;
++                budget -= written;
++                if (task.offset >= task.buffer.byteLength) {
++                    this._writeQueue.shift();
+                 }
+-                return;
+             }
+-            task.offset += written;
+-            if (task.offset >= task.buffer.byteLength) {
+-                _this._writeQueue.shift();
++            catch (err) {
++                var code = err.code;
++                if (code === 'EAGAIN' || code === 'EWOULDBLOCK' || code === 'EINTR') {
++                    break;
++                }
++                this._writeQueue.length = 0;
++                console.error('Unhandled pty write error', code);
++                return;
+             }
+-            // Since there is more room in the kernel buffer, we can continue to write
+-            // until we hit EAGAIN or exhaust the queue.
+-            //
+-            // Note that old versions of bash, like v3.2 which ships in macOS, appears
+-            // to have a bug in its readline implementation that causes data
+-            // corruption when writes to the pty happens too quickly. Instead of
+-            // trying to workaround that we just accept it so that large pastes are as
+-            // fast as possible.
+-            // Context: https://github.com/microsoft/node-pty/issues/833
+-            _this._processWriteQueue();
+-        });
++        }
++        if (this._writeQueue.length > 0) {
++            this._writeImmediate = setTimeout(function () { return _this._processWriteQueue(); }, EAGAIN_RETRY_DELAY_MS);
++        }
+     };
+     return CustomWriteStream;
+ }());
 diff --git a/lib/utils.js b/lib/utils.js
 index af7918b6902a105a7c49813bc0bb4d687d87a7d4..3870bba49c32a3695d3ddbbf1bca9ecb56c7d700 100644
 --- a/lib/utils.js
@@ -1172,7 +1218,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  }
  
 diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
-index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650dad503ec6 100644
+index 98733dc0cd752b554bd94e45904ca341ad141bba..514b91b34f391c9e1dc42e5ca2c0a47ed25c32ad 100644
 --- a/src/unixTerminal.ts
 +++ b/src/unixTerminal.ts
 @@ -306,6 +306,14 @@ interface IWriteTask {
@@ -1222,29 +1268,79 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
      // Writes are put in a queue and processed asynchronously in order to handle
      // backpressure from the kernel buffer.
      const buffer = typeof data === 'string'
-@@ -345,7 +361,8 @@ class CustomWriteStream implements IDisposable {
+@@ -344,45 +360,38 @@ class CustomWriteStream implements IDisposable {
+
    private _processWriteQueue(): void {
      this._writeImmediate = undefined;
- 
+-
 -    if (this._writeQueue.length === 0) {
-+    // Orca: an in-flight fs.write can re-enter here after dispose().
-+    if (this._fd < 0 || this._writeQueue.length === 0) {
++    if (this._fd < 0) {
        return;
      }
  
-@@ -357,9 +374,9 @@ class CustomWriteStream implements IDisposable {
-     fs.write(this._fd, task.buffer, task.offset, (err, written) => {
-       if (err) {
-         if ('code' in err && err.code === 'EAGAIN') {
+-    const task = this._writeQueue[0];
+-
+-    // Write to the underlying file descriptor and handle it directly, rather
+-    // than using the `net.Socket`/`tty.WriteStream` wrappers which swallow and
+-    // mask errors like EAGAIN and can cause the thread to block indefinitely.
+-    fs.write(this._fd, task.buffer, task.offset, (err, written) => {
+-      if (err) {
+-        if ('code' in err && err.code === 'EAGAIN') {
 -          // `setImmediate` is used to yield to the event loop and re-attempt
 -          // the write later.
 -          this._writeImmediate = setImmediate(() => this._processWriteQueue());
-+          // Paced, not `setImmediate`: a stalled reader keeps this branch EAGAIN-ing, and an
-+          // immediate re-attempt turns the retry into a busy-loop on the daemon thread.
-+          this._writeImmediate = setTimeout(() => this._processWriteQueue(), EAGAIN_RETRY_DELAY_MS);
-         } else {
-           // Stop processing immediately on unexpected error and log
-           this._writeQueue.length = 0;
+-        } else {
+-          // Stop processing immediately on unexpected error and log
+-          this._writeQueue.length = 0;
+-          console.error('Unhandled pty write error', err);
++    let budget = 64 * 1024;
++    let attempts = 64;
++    while (this._writeQueue.length > 0 && budget > 0 && attempts-- > 0) {
++      const task = this._writeQueue[0];
++      try {
++        // The Unix master is O_NONBLOCK; bypass the shared libuv worker pool.
++        const written = fs.writeSync(this._fd, task.buffer, task.offset,
++          Math.min(task.buffer.byteLength - task.offset, budget));
++        if (written === 0) {
++          break;
++        }
++        task.offset += written;
++        budget -= written;
++        if (task.offset >= task.buffer.byteLength) {
++          this._writeQueue.shift();
+         }
++      } catch (err) {
++        const code = (err as NodeJS.ErrnoException).code;
++        if (code === 'EAGAIN' || code === 'EWOULDBLOCK' || code === 'EINTR') {
++          break;
++        }
++        this._writeQueue.length = 0;
++        console.error('Unhandled pty write error', code);
+         return;
+       }
+-
+-      task.offset += written;
+-      if (task.offset >= task.buffer.byteLength) {
+-        this._writeQueue.shift();
+-      }
+-
+-      // Since there is more room in the kernel buffer, we can continue to write
+-      // until we hit EAGAIN or exhaust the queue.
+-      //
+-      // Note that old versions of bash, like v3.2 which ships in macOS, appears
+-      // to have a bug in its readline implementation that causes data
+-      // corruption when writes to the pty happens too quickly. Instead of
+-      // trying to workaround that we just accept it so that large pastes are as
+-      // fast as possible.
+-      // Context: https://github.com/microsoft/node-pty/issues/833
+-      this._processWriteQueue();
+-    });
++    }
++    if (this._writeQueue.length > 0) {
++      this._writeImmediate = setTimeout(() => this._processWriteQueue(), EAGAIN_RETRY_DELAY_MS);
++    }
+   }
+ }
 diff --git a/src/utils.ts b/src/utils.ts
 index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..f23925ec12a9c36ed78bc82b263f3d588fdc2a3e 100644
 --- a/src/utils.ts
