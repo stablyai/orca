@@ -40,7 +40,9 @@ export function usePierreDiffFind({
   const [replacement, setReplacement] = useState('')
   const [replaceOpen, setReplaceOpen] = useState(false)
   const [revision, setRevision] = useState(0)
-  const [selection, setSelection] = useState<{ request: object; index: number }>()
+  const queryKey = useMemo(() => ({ query, side, open }), [query, side, open])
+  const [selection, setSelection] = useState<{ queryKey: object; index: number }>()
+  const selectedIntent = useRef<object | null>(null)
   const enabled = open && query.text.length > 0
   const [source, setSource] = useState<{
     fileDiff: FileDiffMetadata
@@ -75,20 +77,26 @@ export function usePierreDiffFind({
   )
   const result = usePierreDiffSearchResults(request)
   const matches = result?.matches
-  const index = selection?.request === request ? selection.index : 0
+  const index = Math.min(
+    selection?.queryKey === queryKey ? selection.index : 0,
+    Math.max(0, (matches?.length ?? 1) - 1)
+  )
+  const intent = selection?.queryKey === queryKey ? selection : queryKey
   const active = matches?.[index]
   const { onPostRender, selectActive } = usePierreDiffSearchView({
     fileDiff,
     side,
     matches,
-    active
+    active,
+    reveal: intent
   })
   const canReplace = isEditable && side === 'additions'
   useEffect(() => {
-    if (canReplace && active) {
+    if (canReplace && active && selectedIntent.current !== intent) {
+      selectedIntent.current = intent
       editorRef.current?.setSelections([{ ...active.range, direction: 'forward' }])
     }
-  }, [canReplace, active, editorRef])
+  }, [canReplace, active, editorRef, intent])
   const close = useCallback(() => {
     setOpen(false)
     if (isEditable && side === 'additions') {
@@ -104,9 +112,9 @@ export function usePierreDiffFind({
       if (!request || !matches?.length) {
         return
       }
-      setSelection({ request, index: (index + direction + matches.length) % matches.length })
+      setSelection({ queryKey, index: (index + direction + matches.length) % matches.length })
     },
-    [request, matches, index]
+    [request, matches, index, queryKey]
   )
   const replace = (all: boolean) => {
     const editor = editorRef.current
@@ -131,7 +139,14 @@ export function usePierreDiffFind({
   }
   const handleContainerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLElement>) => {
-      if (isImeCompositionKeyDown(event)) {
+      if (
+        isImeCompositionKeyDown(event) ||
+        event.nativeEvent
+          ?.composedPath()
+          .some(
+            (node) => node instanceof Element && node.matches('textarea, [data-diff-comment-id]')
+          )
+      ) {
         return
       }
       if (open && event.key === 'Escape') {

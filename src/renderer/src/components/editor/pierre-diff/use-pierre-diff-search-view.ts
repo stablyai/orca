@@ -15,17 +15,20 @@ export function usePierreDiffSearchView({
   fileDiff,
   side,
   matches,
-  active
+  active,
+  reveal
 }: {
   fileDiff: FileDiffMetadata
   side: DiffSearchSide
   matches?: DiffSearchMatch[]
   active?: DiffSearchMatch
+  reveal?: object
 }) {
   const viewRef = useRef<{ host: HTMLElement; instance: PierreDiffInstance } | null>(null)
   const owner = useRef(Symbol())
   const frame = useRef<number | null>(null)
   const pending = useRef(false)
+  const lastReveal = useRef<object | undefined>(undefined)
   const nativeRange = useRef<{ start: Range; end: Range } | null>(null)
   const schedule = useCallback(() => {
     if (frame.current !== null) {
@@ -76,7 +79,10 @@ export function usePierreDiffSearchView({
     })
   }, [matches, active, fileDiff, side])
   useLayoutEffect(() => {
-    pending.current = Boolean(active)
+    if (active && lastReveal.current !== reveal) {
+      lastReveal.current = reveal
+      pending.current = true
+    }
     schedule()
     const token = owner.current
     return () => {
@@ -87,7 +93,7 @@ export function usePierreDiffSearchView({
       nativeRange.current = null
       paintPierreSearchHighlights(token)
     }
-  }, [schedule, active])
+  }, [schedule, active, reveal])
   const onPostRender = useCallback(
     (host: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
       if (phase === 'unmount') {

@@ -166,20 +166,31 @@ it('moves between results with F3 and Shift+F3', () => {
   expect(result.current.searchBar?.status).toBe('1/2')
 })
 
-it('materializes source once per document revision rather than per search keystroke', () => {
-  results.mockReturnValue(null)
+it('preserves the user caret and active match when typing or changing replacement text', () => {
+  const first = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }
+  const second = { start: { line: 3, character: 0 }, end: { line: 3, character: 1 } }
+  results.mockReturnValue({ matches: [{ range: first }, { range: second }], truncated: false })
   const { result, editor, find } = setup(true)
   find()
-  expect(editor.getText).not.toHaveBeenCalled()
-  for (const text of ['m', 'mo', 'mod']) {
-    act(() =>
-      result.current.searchBar?.onQuery({ text, regex: false, wholeWord: false, matchCase: false })
-    )
-  }
-  act(() => result.current.searchBar?.onReplacement('replacement'))
-  expect(editor.getText).toHaveBeenCalledOnce()
+  act(() =>
+    result.current.searchBar?.onQuery({
+      text: 'm',
+      regex: false,
+      wholeWord: false,
+      matchCase: false
+    })
+  )
+  act(() => result.current.searchBar?.onNavigate(1))
+  act(() => result.current.searchBar?.onReplacement('new'))
+  expect(result.current.searchBar?.status).toBe('2/2')
+  const caret = { start: { line: 200, character: 2 }, end: { line: 200, character: 2 } }
+  editor.setSelections([caret])
   editor.getText.mockReturnValue('updated')
+  results.mockReturnValue({
+    matches: [{ range: first }, { range: { ...second } }],
+    truncated: false
+  })
   act(() => result.current.onEditChange())
-  expect(results.mock.lastCall?.[0].text).toBe('updated')
-  expect(editor.getText).toHaveBeenCalledTimes(2)
+  expect(editor.setSelections.mock.lastCall?.[0]).toEqual([caret])
+  expect(result.current.searchBar?.status).toBe('2/2')
 })
