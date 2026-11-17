@@ -942,7 +942,9 @@
           "moreProjects_one": "+{{count}} more",
           "moreProjects_other": "+{{count}} more",
           "removeContainedProjects_one": "Remove {{count}} contained project",
-          "removeContainedProjects_other": "Remove {{count}} contained projects"
+          "removeContainedProjects_other": "Remove {{count}} contained projects",
+          "subgroupsDeleted_one": "Its subgroup will also be deleted.",
+          "subgroupsDeleted_other": "Its {{count}} subgroups will also be deleted."
         },
         "RemoveFolderDialog": {
           "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
@@ -2067,7 +2069,6 @@
         "conversationCleared": "This conversation has been cleared.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
-        "savedInOtherFolder": "This conversation was saved in another folder.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "hostReconciling": "Orca is still checking on this chat after restarting.",
@@ -2104,6 +2105,7 @@
         "runClearWhenDone": "Run /clear when it's done.",
         "runCompactWhenDone": "Run /compact when it's done.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
+        "savedInOtherFolder": "This conversation was saved in another folder.",
         "sendOutcomeLost": "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
         "settleEarlierMessage": "Wait for your earlier message to go through, or retry it.",
         "shortenMessage": "Shorten or split it, then send it again.",
