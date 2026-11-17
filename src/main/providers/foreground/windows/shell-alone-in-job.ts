@@ -61,21 +61,21 @@ export async function isWindowsShellAloneInJob(
   return true
 }
 
-/** Fails closed when the table cannot show the shell; a child older than its parent carries a reused ppid. */
+/** Fails closed when the table cannot show the shell; a child older than the shell carries a reused ppid.
+ * One live direct child proves work, so the walk stops there. */
 function hasLiveDescendant(shellPid: number, rows: readonly WindowsProcessIdentityRow[]): boolean {
   const index = getProcessTableIndex(rows)
-  const shellName = index.byPid.get(shellPid)?.name.toLowerCase()
-  if (!shellName) {
+  const shell = index.byPid.get(shellPid)
+  const shellName = shell?.name.toLowerCase()
+  if (!shell || !shellName) {
     return true
   }
   // An idle wsl.exe always keeps its own helpers (inner wsl.exe, wslhost.exe, conhost.exe); the guest owns WSL work.
   if (shellName === WSL_IMAGE) {
     return false
   }
-  return (
-    collectDescendantsFromIndex(index, shellPid, (row) =>
-      startedBefore(row.creationTimeMs, index.byPid.get(row.ppid)?.creationTimeMs)
-    ).length > 0
+  return (index.childrenByPpid.get(shellPid) ?? []).some(
+    (child) => child.pid !== shellPid && !startedBefore(child.creationTimeMs, shell.creationTimeMs)
   )
 }
 
