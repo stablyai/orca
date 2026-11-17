@@ -11,7 +11,12 @@ import {
 } from '../../../shared/plugins/catalog/plugin-catalog'
 import { formatPluginSchemaIssues } from '../../../shared/plugins/manifest/plugin-schema-issues'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
-import { extractCatalogImages, type CatalogBlobReader } from './plugin-catalog-image-extraction'
+import {
+  createCatalogBufferMemo,
+  extractCatalogImages,
+  type CatalogBlobReader,
+  type CatalogBufferMemo
+} from './plugin-catalog-image-extraction'
 import { fillMonorepoReleaseImages } from './plugin-catalog-monorepo-images'
 import { readPluginGitCommit } from '../installation/plugin-git-repository'
 import { readPluginGitBatchBlobs, type PluginGitTreeEntry } from '../installation/plugin-git-tree'
@@ -87,8 +92,7 @@ async function readMarketplaceAtCommit(
     files: new Map(),
     listed: new Map(),
     failed: new Set(),
-    digests: new WeakMap(),
-    manifests: new WeakMap()
+    memo: createCatalogBufferMemo()
   }
   const batched = await extractBatchedMarketplaceImages(
     index,
@@ -100,7 +104,7 @@ async function readMarketplaceAtCommit(
   if (batched) {
     return batched
   }
-  const { files, failed, digests, manifests } = loaded
+  const { files, failed, memo } = loaded
   // Past the retained cap, read the rest one at a time, handing out each loaded file once so only what extraction keeps stays alive.
   // Failed Git reads are retried, as a fresh one-at-a-time reader would.
   const readBlob: CatalogBlobReader = async (path, maxBytes) => {
@@ -119,8 +123,8 @@ async function readMarketplaceAtCommit(
   return extractCatalogImages(
     index,
     readBlob,
-    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests, manifests),
-    digests
+    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, memo),
+    memo
   )
 }
 
@@ -129,8 +133,7 @@ type CatalogLoadState = {
   listed: Map<string, ListedBlob>
   /** Paths whose Git listing or read failed; batched passes treat them as absent. */
   failed: Set<string>
-  digests: WeakMap<Uint8Array, string>
-  manifests: WeakMap<Uint8Array, unknown>
+  memo: CatalogBufferMemo
 }
 
 async function extractBatchedMarketplaceImages(
@@ -154,9 +157,8 @@ async function extractBatchedMarketplaceImages(
     const extracted = await extractCatalogImages(
       index,
       readBlob,
-      (entry, read) =>
-        fillMonorepoReleaseImages(entry, catalogUrl, read, state.digests, state.manifests),
-      state.digests
+      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, state.memo),
+      state.memo
     )
     if (missing.size === 0) {
       return extracted

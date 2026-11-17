@@ -3,7 +3,12 @@ import {
   type PluginMarketplaceEntry
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { catalogImagesFromManifest } from '../../../shared/plugins/images/plugin-manifest-catalog-images'
-import { catalogImageDigest, type CatalogBlobReader } from './plugin-catalog-image-extraction'
+import {
+  catalogImageDigest,
+  catalogImageHeader,
+  type CatalogBlobReader,
+  type CatalogBufferMemo
+} from './plugin-catalog-image-extraction'
 
 const MANIFEST_MAX_BYTES = 256 * 1024
 
@@ -16,8 +21,7 @@ export async function fillMonorepoReleaseImages(
   entry: PluginMarketplaceEntry,
   catalogUrl: string,
   readBlob: CatalogBlobReader,
-  digests?: WeakMap<Uint8Array, string>,
-  manifests?: WeakMap<Uint8Array, unknown>
+  memo?: CatalogBufferMemo
 ): Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }> {
   const [newest, ...older] = entry.releases ?? []
   const prefix = entry.source.path
@@ -27,7 +31,7 @@ export async function fillMonorepoReleaseImages(
   const manifestBytes = await readBlob(`${prefix}/orca-plugin.json`, MANIFEST_MAX_BYTES).catch(
     () => null
   )
-  const manifest = manifestBytes ? parseManifest(manifestBytes, manifests) : null
+  const manifest = manifestBytes ? parseManifest(manifestBytes, memo?.manifests) : null
   const read = new Map<string, Buffer>()
   const images = await catalogImagesFromManifest({
     manifest,
@@ -39,7 +43,8 @@ export async function fillMonorepoReleaseImages(
       }
       return bytes
     },
-    sha256: (bytes) => catalogImageDigest(bytes, digests)
+    sha256: (bytes) => catalogImageDigest(bytes, memo),
+    readHeader: (bytes) => catalogImageHeader(bytes, memo)
   })
   if (!images) {
     return { entry, readBlob }
