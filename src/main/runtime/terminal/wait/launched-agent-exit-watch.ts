@@ -106,7 +106,10 @@ export function failOnLaunchedAgentExit<T>(
           for (const delayMs of SHELL_RETURN_READ_DELAYS_MS) {
             await new Promise<void>((next) => {
               const timer = setTimeout(next, delayMs)
-              cancelDelay = (): void => { clearTimeout(timer); next() }
+              cancelDelay = (): void => {
+                clearTimeout(timer)
+                next()
+              }
             })
             if (stop.signal.aborted || identified || mark !== marks) break
             const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
@@ -151,7 +154,8 @@ export function failOnLaunchedAgentExit<T>(
     unsubscribe = runtime.subscribeToTerminalData(ptyId, scanner.scan)
     if (stop.signal.aborted) cleanup()
     // The launch can have ended before this wait began.
-    const replay = command?.alreadySubmitted === false ? undefined : runtime.readRecentTerminalOutput(ptyId)
+    const replay =
+      command?.alreadySubmitted === false ? undefined : runtime.readRecentTerminalOutput(ptyId)
     if (replay) {
       scanner.scan(replay)
     }

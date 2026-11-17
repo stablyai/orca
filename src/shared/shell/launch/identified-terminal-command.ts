@@ -2,11 +2,18 @@ import { randomUUID } from 'node:crypto'
 
 /** Use the executing shell, never the desktop platform; unknown/unsupported shells keep their input unchanged.
  * Opt-in for Orca-built foreground invocations that do not read the previous interactive status. */
-export function identifyTerminalCommand(command: string, shell: string | undefined): {
+export function identifyTerminalCommand(
+  command: string,
+  shell: string | undefined
+): {
   command: string
   commandId?: string
 } {
-  const name = shell?.split(/[\\/]/).pop()?.toLowerCase().replace(/\.exe$/, '')
+  const name = shell
+    ?.split(/[\\/]/)
+    .pop()
+    ?.toLowerCase()
+    .replace(/\.exe$/, '')
   if (name !== 'bash' && name !== 'zsh' && name !== 'powershell' && name !== 'pwsh') {
     return { command }
   }

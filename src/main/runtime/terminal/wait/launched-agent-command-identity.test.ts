@@ -26,7 +26,10 @@ function watch(replay = '', alreadySubmitted = true, agent: 'claude' | null = 'c
     alreadySubmitted
   }).catch((error: unknown) => error)
   return {
-    runtime, result, wait, listeners,
+    runtime,
+    result,
+    wait,
+    listeners,
     signal: () => signal,
     emit(data: string) {
       recent += data
@@ -44,18 +47,24 @@ it('reports a shell command outcome without inventing an agent for foreground fa
   expect(launch.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
 })
 
-it.each([1_000, 10_000])('coalesces %i legacy finishes into one owned check and still observes the latest return', async (count) => {
-  vi.useFakeTimers()
-  const launch = watch()
-  vi.mocked(launch.runtime.readLaunchedAgentForeground).mockResolvedValue('shell')
-  launch.emit('\x1b]133;C\x07' + '\x1b]133;D;1\x07'.repeat(count))
-  await Promise.resolve()
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersByTimeAsync(350)
-  expect(await launch.result).toMatchObject({ message: "The agent's launch command exited before the agent was ready, without printing anything." })
-  expect(vi.getTimerCount()).toBe(0)
-  expect(launch.listeners.size).toBe(0)
-})
+it.each([1_000, 10_000])(
+  'coalesces %i legacy finishes into one owned check and still observes the latest return',
+  async (count) => {
+    vi.useFakeTimers()
+    const launch = watch()
+    vi.mocked(launch.runtime.readLaunchedAgentForeground).mockResolvedValue('shell')
+    launch.emit('\x1b]133;C\x07' + '\x1b]133;D;1\x07'.repeat(count))
+    await Promise.resolve()
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(350)
+    expect(await launch.result).toMatchObject({
+      message:
+        "The agent's launch command exited before the agent was ready, without printing anything."
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    expect(launch.listeners.size).toBe(0)
+  }
+)
 
 it('retires the original wait immediately while the successor keeps the same terminal', async () => {
   const launch = watch()
@@ -65,7 +74,9 @@ it('retires the original wait immediately while the successor keeps the same ter
   launch.emit(`${finish}\x1b]133;C\x07successor output`)
   expect(launch.signal()?.aborted).toBe(true)
   expect(await launch.result).toMatchObject({
-    name: 'TerminalCommandFinishedError', commandId, exitCode: 130
+    name: 'TerminalCommandFinishedError',
+    commandId,
+    exitCode: 130
   })
   launch.emit('still running')
   expect(successor).toHaveBeenLastCalledWith('still running')
@@ -103,7 +114,10 @@ it('retires even when a legacy foreground read is still outstanding', async () =
   const launch = watch()
   let answer: (value: 'shell') => void = () => {}
   vi.mocked(launch.runtime.readLaunchedAgentForeground).mockImplementation(
-    () => new Promise((resolve) => { answer = resolve })
+    () =>
+      new Promise((resolve) => {
+        answer = resolve
+      })
   )
   launch.emit('\x1b]133;C\x07\x1b]133;D;1\x07')
   await vi.advanceTimersByTimeAsync(350)
