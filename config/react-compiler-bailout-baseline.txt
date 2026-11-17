@@ -615,7 +615,6 @@
 31 src/renderer/src/components/task-page/use-task-page-repo-selection.ts
 13 src/renderer/src/components/task-page/use-task-page-runtime-hosts.ts
 7 src/renderer/src/components/task-page/use-task-page-search-actions.ts
-8 src/renderer/src/components/task-page/use-task-page-source-availability.ts
 3 src/renderer/src/components/task-page/use-task-page-source-summary.ts
 1 src/renderer/src/components/task-page/use-task-page-store-bindings.ts
 5 src/renderer/src/components/task-page/use-task-page-workspace-actions.ts

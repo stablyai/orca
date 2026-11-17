@@ -1,5 +1,5 @@
-import { test, expect } from './helpers/orca-app'
-import { worktreeRow } from './worktree-row-locators'
+import { test, expect } from './desktop/electron-fixtures/orca-app'
+import { worktreeRow } from './workspaces/sidebar/worktree-row-locators'
 
 test('a workspace shortcut releases focus restored to a sidebar create trigger', async ({
   orcaPage,

@@ -25,6 +25,14 @@ export function useMobileRegisteredAgent(
   offered: boolean,
   agent: string | null
 ): AgentSessionRegisteredAgent | undefined {
+  return useMobileRegisteredAgents(client, offered)?.find((row) => row.agent === agent)
+}
+
+/** Every agent the host can run as a chat; undefined until this connection's read answers. */
+export function useMobileRegisteredAgents(
+  client: RpcClient | null,
+  offered: boolean
+): readonly AgentSessionRegisteredAgent[] | undefined {
   const [agents, setAgents] = useState<{
     client: RpcClient
     generation: number | undefined
@@ -100,5 +108,5 @@ export function useMobileRegisteredAgent(
       }
     })
   }, [client, wanted, update])
-  return learned ? agents.rows.find((row) => row.agent === agent) : undefined
+  return learned ? agents.rows : undefined
 }

@@ -14,6 +14,7 @@ import {
   type OpenedControl
 } from './relay-control-failover'
 import { RelayObservedOpens } from './relay-observed-opens'
+import { openRacedControl, type ControlRaceLeg } from './relay-control-race'
 
 export class RelayControlOrigin {
   assignment: RelayAssignment
@@ -125,10 +126,17 @@ export class RelayControlOrigin {
     return count
   }
 
+  // A fresh connect (first dial after an assign, director recovery onto a new origin) races the
+  // primary against the first alternate; a control won on the alternate stays there until rotation.
   async open(): Promise<void> {
     await this.transport.start()
-    const { control, ack } = await this.openControl()
-    this.activate(control, ack)
+    const { control, ack, dialUrl } = await openRacedControl({
+      primaryUrl: this.cellUrl,
+      alternateUrl: this.alternateCellUrls[0],
+      isClosed: () => this.closed,
+      open: (url, leg) => this.openControl(undefined, url, leg)
+    })
+    this.activate(control, ack, dialUrl)
   }
 
   // Rotation and director recovery dial the primary: after a failover the host returns to it at most
@@ -199,12 +207,12 @@ export class RelayControlOrigin {
 
   private async openControl(
     overrides?: ControlResume,
-    dialUrl = this.cellUrl
+    dialUrl = this.cellUrl,
+    raceLeg?: ControlRaceLeg
   ): Promise<OpenedControl> {
-    let control!: RelayControlClient
     // Only a primary-path control watches for a stall; the alternate is kept until rotation.
     const watchStall = dialUrl === this.cellUrl && this.alternateCellUrls.length > 0
-    control = new RelayControlClient({
+    const control: RelayControlClient = new RelayControlClient({
       cellUrl: dialUrl,
       relayJwt: overrides?.relayJwt ?? this.options.relayJwt,
       relayHostId: this.options.relayHostId,
@@ -223,11 +231,8 @@ export class RelayControlOrigin {
       onPendingChanged: () => this.options.onPendingChanged?.(this),
       onClose: (code) => {
         this.controls.delete(control)
-        const timer = this.retiredControlTimers.get(control)
-        if (timer) {
-          clearTimeout(timer)
-          this.retiredControlTimers.delete(control)
-        }
+        clearTimeout(this.retiredControlTimers.get(control))
+        this.retiredControlTimers.delete(control)
         if (this.activeControl === control) {
           this.activeControl = null
           if (!this.failover.deferClose(code)) {
@@ -236,9 +241,11 @@ export class RelayControlOrigin {
         }
       },
       createSocket: this.options.createControlSocket,
-      ...(watchStall ? { onStall: () => this.failover.start(control) } : {})
+      ...(watchStall ? { onStall: () => this.failover.start(control) } : {}),
+      ...(raceLeg ? { claimChallenge: raceLeg.claim } : {})
     })
     this.controls.add(control)
+    raceLeg?.signal.addEventListener('abort', () => control.closeNow(), { once: true })
     try {
       return { control, ack: await control.connect() }
     } catch (error) {
