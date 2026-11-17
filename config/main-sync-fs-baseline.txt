@@ -271,7 +271,7 @@
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
 1 src/main/ipc/command-path/command-path-resolver.ts
 4 src/main/ipc/diagnostics.ts
-2 src/main/ipc/filesystem/access/filesystem-path-containment.ts
+2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 2 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-canary-directory.ts
 1 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
 4 src/main/ipc/filesystem/watcher-process/event-delivery/parcel-watcher-delivery-canary.ts
@@ -281,13 +281,13 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/floating-workspace-directory.ts
-1 src/main/ipc/macos-keyboard-layout-snapshot.ts
-1 src/main/ipc/notification-authorization-status.ts
-1 src/main/ipc/pty/spawn-pane-env.ts
+1 src/main/ipc/worktrees/floating-workspace-directory.ts
+1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
+1 src/main/ipc/notifications/notification-authorization-status.ts
+1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
-2 src/main/ipc/worktree-remote.ts
-2 src/main/ipc/wsl-guest-windows-drive-path.ts
+2 src/main/ipc/worktrees/worktree-remote.ts
+2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 7 src/main/jcode/hook-service.ts
 8 src/main/jira/site-credential-store.ts
 7 src/main/keybindings/keybinding-file-parser.ts
@@ -473,7 +473,7 @@
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 7 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
-1 src/main/runtime/agent-session/structured-agent-session-attachment-wiring.ts
+1 src/main/runtime/agent-session/installation/structured-agent-session-attachment-wiring.ts
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
 9 src/main/runtime/host-instance-identity.ts
 4 src/main/runtime/hosts/platform-probe/host-descriptor.ts
@@ -551,6 +551,8 @@
 1 src/main/windows/windows-process-table.ts
 1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
+# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
+3 src/main/worker-threads/worker-large-send-log.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts

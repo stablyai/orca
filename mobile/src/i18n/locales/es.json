@@ -116,11 +116,7 @@
       "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
-      "defaultText": "Predeterminado (100%)",
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
-      "largeText": "Grande (125%)",
-      "largerText": "Más grande (150%)",
-      "largestText": "Máximo (200%)",
       "leaveAppDescription": "Mientras usas un terminal en el teléfono, Orca lo reduce para ajustarlo a la pantalla. Al cerrar la aplicación o dejarla en segundo plano, este ajuste controla si el terminal mantiene el tamaño del teléfono (para que las herramientas CLI interactivas no redistribuyan su contenido) o recupera el tamaño del escritorio. Siempre puedes pulsar Restaurar en el banner del escritorio para cambiar el tamaño manualmente.",
       "leaveAppHeading": "AL SALIR DE LA APLICACIÓN",
       "noPairedDesktops": "Aún no hay escritorios emparejados. Empareja uno para controlar el comportamiento del terminal.",
@@ -131,12 +127,6 @@
       "restoreAfterSeconds_one": "Después de {{count}}s",
       "restoreAfterSeconds_other": "Después de {{count}}s",
       "restoreHost": "Restaurar {{name}}",
-      "smallerText": "Más pequeño (75%)",
-      "smallestText": "Mínimo (50%)",
-      "textSize": "Tamaño del texto",
-      "textSizeDescription": "Ajusta el tamaño del texto del terminal. Los tamaños pequeños permiten ver más columnas con márgenes laterales; los grandes muestran menos columnas. Arrastra hacia los lados para desplazarte. También puedes pellizcar la pantalla para hacer zoom en el propio terminal, lo que actualiza este ajuste. Solo afecta a la visualización en este dispositivo; no modifica el terminal del escritorio.",
-      "textSizeHeading": "TAMAÑO DEL TEXTO",
-      "textSizePickerTitle": "Tamaño del texto del terminal",
       "title": "Terminal"
     }
   },
@@ -950,7 +940,8 @@
       "copyCode": "Copiar código",
       "openImage": "Abrir imagen",
       "wrapLines": "Ajustar líneas",
-      "disableLineWrap": "Desactivar ajuste de línea"
+      "disableLineWrap": "Desactivar ajuste de línea",
+      "codeLabel": "Código"
     },
     "markdownCallout": {
       "note": "Nota",
@@ -1053,7 +1044,6 @@
       "clearSearch": "Borrar búsqueda"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "description": "El archivo orca.yaml de este repositorio se ejecuta antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio.",
       "dontRun": "No ejecutar",
       "newScriptLabel": "Nuevo script de configuración",
@@ -4011,28 +4001,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "creating": "Creando…",
       "directoriesLabel": "Directorios",
       "directories_many": "{{count}} directorios",
       "directories_one": "{{count}} directorio",
       "directories_other": "{{count}} directorios",
-      "dontRun": "No ejecutar",
       "editSparsePreset": "Editar preajuste de checkout disperso",
       "nameLabel": "Nombre",
       "namePlaceholder": "Interfaz del renderizador",
-      "newSetupScript": "Nuevo script de configuración",
       "newSparsePreset": "Nuevo preajuste de checkout disperso",
-      "runHooks": "Ejecutar hooks",
       "runSetupAndCreate": "Ejecutar configuración y crear",
-      "runSetupTitle": "¿Ejecutar la configuración de {{name}}?",
-      "setupChangedTitle": "El script de configuración de {{name}} ha cambiado",
-      "setupScript": "Script de configuración",
       "setupSubtitle": "{{name}} requiere que decidas si ejecutar la configuración antes de crear este espacio de trabajo.",
       "setupTitle": "¿Ejecutar script de configuración?",
       "skipSetupAndCreate": "Omitir configuración y crear",
-      "trustFailed": "No se pudo marcar el script de configuración como de confianza.",
-      "trustSubtitle": "El archivo orca.yaml de este repositorio se ejecuta en tu equipo antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio."
+      "trustFailed": "No se pudo marcar el script de configuración como de confianza."
     },
     "worktreeCreateRetry": {
       "createFailed": "No se pudo crear el espacio de trabajo"

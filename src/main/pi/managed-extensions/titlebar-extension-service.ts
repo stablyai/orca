@@ -119,10 +119,8 @@ export class PiTitlebarExtensionService {
     return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
   }
 
-  private installManagedExtensions(
-    sourceAgentDir: string,
-    kind: PiAgentKind
-  ): PiManagedExtensionEnv {
+  /** Refreshes Orca-owned extension files in a Pi agent dir; user-owned files with these names stay. */
+  installManagedExtensions(sourceAgentDir: string, kind: PiAgentKind): PiManagedExtensionEnv {
     const extensionsDir = join(sourceAgentDir, 'extensions')
     try {
       mkdirSync(extensionsDir, { recursive: true })

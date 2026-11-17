@@ -28,7 +28,17 @@ export const WSL_HOST_STATUS_DETAIL_COPY = {
   serviceUnconfirmed: 'The WSL service did not confirm whether the distro runs.',
   peerCheckFailed:
     'Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}',
-  removalUnrecorded: 'Orca couldn’t record what this Remove left running: {{detail}}'
+  removalUnrecorded: 'Orca couldn’t record what this Remove left running: {{detail}}',
+  installLockWait: {
+    one: 'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.',
+    other:
+      'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.'
+  },
+  installLockWaitGivesUp: {
+    one: 'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.',
+    other:
+      'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.'
+  }
 } as const
 
 export type WslHostStatusDetailCode = keyof typeof WSL_HOST_STATUS_DETAIL_COPY
@@ -81,6 +91,17 @@ export function wslHostStatusDetailText(
   const template = typeof entry === 'string' ? entry : params.count === 1 ? entry.one : entry.other
   const text = fillWslHostCopy(template, params)
   return { text, code, ...(Object.keys(params).length > 0 ? { params } : {}) }
+}
+
+/** What a connect waits for while another install holds the server's install lock. */
+export function wslHostInstallLockWaitText(wait: {
+  takeoverInMs: number | null
+  givesUpInMs: number
+}): WslHostCodedText {
+  const minutes = (ms: number) => Math.max(1, Math.ceil(ms / 60_000))
+  return wait.takeoverInMs === null
+    ? wslHostStatusDetailText('installLockWaitGivesUp', { count: minutes(wait.givesUpInMs) })
+    : wslHostStatusDetailText('installLockWait', { count: minutes(wait.takeoverInMs) })
 }
 
 /** A coded Remove stop reason: English `reason` for older readers, code and params to translate it. */

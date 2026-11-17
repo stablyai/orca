@@ -11,7 +11,7 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { NativeChatReasoningRow } from '../reasoning/NativeChatReasoningRow'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
-import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/native-chat-notice'
+import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'

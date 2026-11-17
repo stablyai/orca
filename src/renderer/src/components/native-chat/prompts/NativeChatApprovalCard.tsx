@@ -2,11 +2,11 @@ import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
 import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
+import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
-import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/agent-session-approval-blocked-path'
+import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject,
@@ -14,7 +14,7 @@ import {
   readApprovalUrl,
   URL_APPROVAL_DECLINE_OPTION_ID,
   URL_APPROVAL_OPEN_OPTION_ID
-} from '../../../../../shared/agent-session/agent-session-approval-subject'
+} from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'

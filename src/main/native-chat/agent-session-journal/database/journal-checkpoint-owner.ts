@@ -59,6 +59,7 @@ export class JournalCheckpointOwner {
       const worker = options.factory
         ? options.factory()
         : spawnWorkerThread(journalCheckpointWorkerSource, {
+            name: 'orca-journal-checkpoint',
             eval: true,
             workerData: {
               filename,

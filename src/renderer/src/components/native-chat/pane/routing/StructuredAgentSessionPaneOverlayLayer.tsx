@@ -7,7 +7,8 @@ import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
+import { ActivityPortalContainer } from '@/components/ui/activity-portal-container'
+import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
@@ -59,18 +60,20 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
         <NativeChatHostOutageOwner target={target}>
           <NativeChatComposerEditorOwner>
-            <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-              <NativeChatView
-                mode="structured"
-                tabId={tab.id}
-                groupId={groupId}
-                sessionId={tab.entityId}
-                agent={tab.agentSessionAgent}
-                isVisible={isActive}
-                isFocusedGroup={isFocusedGroup}
-                target={target}
-              />
-            </Activity>
+            <ActivityPortalContainer visible={isActive}>
+              <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
+                <NativeChatView
+                  mode="structured"
+                  tabId={tab.id}
+                  groupId={groupId}
+                  sessionId={tab.entityId}
+                  agent={tab.agentSessionAgent}
+                  isVisible={isActive}
+                  isFocusedGroup={isFocusedGroup}
+                  target={target}
+                />
+              </Activity>
+            </ActivityPortalContainer>
           </NativeChatComposerEditorOwner>
         </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>

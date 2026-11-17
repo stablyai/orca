@@ -5,7 +5,7 @@ import { agentSessionAttachmentStoreRoot } from '../../../../../native-chat/agen
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
-} from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { openStream } from './structured-agent-session-rpc.test-fixture'
 

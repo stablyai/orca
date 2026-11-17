@@ -7,7 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import * as inventoryModule from './use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -89,7 +89,7 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   show()
   const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
   const search = () =>
-    document.querySelector<HTMLInputElement>('input[placeholder="Search, e.g. Opus 5.5…"]')
+    document.querySelector<HTMLInputElement>('input[placeholder="Search Codex models…"]')
   fireEvent.keyDown(trigger, { key: 'c', metaKey: true })
   expect(search()).toBeNull()
   const user = userEvent.setup()
@@ -102,23 +102,21 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   expect(document.activeElement).toBe(search())
   expect(search()?.value).toBe('co')
   expect(search()?.selectionStart).toBe(2)
-  expect(document.querySelector('[aria-label="Configure Claude"]')).toBeNull()
   expect(launch).not.toHaveBeenCalled()
-  // The row Enter would pick reads as highlighted, like the project and host comboboxes.
-  expect(
-    getByRole(document.body, 'menuitem', { name: /^Codex/ }).hasAttribute('data-search-default')
-  ).toBe(true)
+  // A query naming an agent lists the agent first; Enter picks it without choosing a model.
+  expect(document.querySelector('[cmdk-item][data-selected="true"]')?.textContent).toBe('Codex')
   await user.keyboard('{Enter}')
   expect(launch).toHaveBeenCalledOnce()
   expect(launch.mock.calls[0][0]).toBe('codex')
+  expect(launch.mock.calls[0][1]).toBeUndefined()
   await waitFor(() => expect(document.activeElement).toBe(trigger))
   await user.click(trigger)
   expect(document.activeElement).toBe(search())
   expect(search()?.value).toBe('')
   await user.keyboard('{ArrowDown}')
-  expect(document.activeElement).toBe(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+  expect(document.activeElement).toBe(search())
   show(model, [...entries])
-  expect(document.activeElement).toBe(getByRole(document.body, 'menuitem', { name: /^Codex/ }))
+  expect(document.activeElement).toBe(search())
   show({ state: 'loading', placeholderCount: 2 })
   expect(search()).toBeNull()
   show()

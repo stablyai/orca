@@ -5,7 +5,7 @@ import {
   agentSessionConversationCommandFields,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../../../../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type {
   StructuredAgentSessionWrite,
   StructuredAgentSessionWriteOutcome
