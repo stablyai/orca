@@ -186,6 +186,7 @@ describe('Windows process creation off the calling loop', () => {
       expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'kill' }))
     )
     expect(treeKills.args).toEqual([])
+    expect(send).toHaveBeenCalledWith({ type: 'discard-output', id: 1 })
     child.receive({ type: 'close', id: 1, code: 0, signal: null })
     await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
   })

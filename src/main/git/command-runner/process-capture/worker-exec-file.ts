@@ -69,6 +69,10 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
       return
     }
     completed = true
+    // Output after completion has no reader; keep it on the worker while cleanup runs.
+    if (child instanceof WorkerThreadChildProcess) {
+      child.discardOutput()
+    }
     const output = captured ?? read()
     callback(error, output.stdout, output.stderr)
   }

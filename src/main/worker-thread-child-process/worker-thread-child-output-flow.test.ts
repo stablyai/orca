@@ -108,7 +108,9 @@ it('keeps output on the worker once the reader discards it', async () => {
     stdout,
     stderr: new PassThrough(),
     stdin: new PassThrough(),
-    kill: vi.fn()
+    kill: vi.fn(),
+    exitCode: null,
+    signalCode: null
   })
   spawn.mockReset().mockReturnValue(child)
   const events: WorkerThreadChildEvent[] = []
@@ -128,5 +130,6 @@ it('keeps output on the worker once the reader discards it', async () => {
     event.type === 'stdout' ? [Buffer.from(event.chunk).toString()] : []
   )
   expect(forwarded).toEqual(['read'])
-  expect(stdout.isPaused()).toBe(false)
+  expect(child.kill).not.toHaveBeenCalled()
+  expect(stdout.destroyed).toBe(false)
 })
