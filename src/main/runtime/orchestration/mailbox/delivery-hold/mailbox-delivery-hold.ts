@@ -16,6 +16,10 @@ export type MailboxDeliveryHold =
   | { kind: 'overlay' }
   /** The worker has not settled at its prompt (a permission request, a question, or output still arriving). */
   | { kind: 'unsettled' }
+  /** No live status shows an agent in this terminal that takes typed input, so no note is typed for now. */
+  | { kind: 'unverified'; terminal: string }
+  /** The terminal is open but does not read this mailbox, so no note is ever typed there. */
+  | { kind: 'unreachable'; terminal: string }
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
   /** The chat is detached from its agent, or not attached here; the mail waits for it. */
@@ -32,9 +36,8 @@ export type MailboxDeliveryHoldReaders = {
   /** The chat a mailbox's mail reaches, if a chat holds it. */
   chatSessionFor: (mailbox: string) => string | null
   readChatAdmit: (sessionId: string) => Promise<ChatMailAdmitFacts | null>
-  /** The terminal handle a mailbox's pointer is typed into, if a terminal holds it. */
-  terminalFor: (mailbox: string) => string | null
-  readTerminalHold: (terminalHandle: string) => MailboxDeliveryHold | null
+  /** The hold of the terminal a mailbox's pointer is typed into; null when none holds it or none would. */
+  readTerminalHold: (mailbox: string) => MailboxDeliveryHold | null
 }
 
 /** The chat pointer's own admission order: no fence or no attachment parks, a refusal parks, and an
@@ -59,8 +62,7 @@ export async function readMailboxDeliveryHold(
     const facts = await readers.readChatAdmit(sessionId)
     return facts ? chatMailHold(facts) : null
   }
-  const terminal = readers.terminalFor(mailbox)
-  return terminal ? readers.readTerminalHold(terminal) : null
+  return readers.readTerminalHold(mailbox)
 }
 
 export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
@@ -79,6 +81,10 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
       return `Queued. ${recipient}'s screen shows something that refuses typed input; delivery waits until it closes.`
     case 'unsettled':
       return `Queued. ${recipient} has not settled at its prompt (an open request or question, or output still arriving); delivery waits until it does.`
+    case 'unverified':
+      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. It can read the message with \`orca orchestration check --terminal ${hold.terminal}\`; Orca will notify it once it can verify the agent accepts input.`
+    case 'unreachable':
+      return `Queued for ${hold.terminal}, but Orca has no way to notify it; its agent must run \`orca orchestration check --terminal ${hold.terminal}\`.`
     case 'behind-prompt':
       return `Queued behind an open prompt; ${recipient} sees it after the prompt is answered.`
     case 'detached':
