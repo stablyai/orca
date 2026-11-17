@@ -39,13 +39,15 @@ function detectedMap(otherRepos: number): {
   for (let i = 0; i < otherRepos; i++) {
     const repoId = `repo-${i}`
     const result = makeDetectedResult(repoId, [row(`${repoId}::/work/w${i}`, repoId)])
-    map[repoId] = Object.defineProperty({ ...result }, 'worktrees', {
+    const bucket: DetectedWorktreeListResult = { ...result }
+    Object.defineProperty(bucket, 'worktrees', {
       enumerable: true,
       get: () => {
         reads++
         return result.worktrees
       }
-    }) as DetectedWorktreeListResult
+    })
+    map[repoId] = bucket
   }
   return { map, otherReads: () => reads }
 }

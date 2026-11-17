@@ -54,10 +54,12 @@ export function applyWorktreeRowUpdates<T extends Worktree>(
       next.displayName = automaticName || worktree.displayName
     }
   }
-  const keys = Object.keys(next) as (keyof T)[]
+  const fields = Object.entries(next)
   const unchanged =
-    keys.length === Object.keys(worktree).length &&
-    keys.every((key) => Object.hasOwn(worktree, key) && next[key] === worktree[key])
+    fields.length === Object.keys(worktree).length &&
+    fields.every(
+      ([key, value]) => Object.hasOwn(worktree, key) && Reflect.get(worktree, key) === value
+    )
   return unchanged ? worktree : next
 }
 
