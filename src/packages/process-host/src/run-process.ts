@@ -257,16 +257,21 @@ export function runProcess(
         clearDeadline()
         clearTimeout(graceTimer)
         clearTimeout(barrierDeadlineTimer)
-        // A tree already proven gone, or one whose walk is in flight, gets no second PID walk.
+        // A tree already proven gone gets no second PID walk; one whose walk is in flight is retried only if that walk failed.
+        const killAbandonedTree = (): Promise<void> =>
+          hosted.killAbandonedTree?.() ?? Promise.resolve()
+        const inFlight = inFlightWindowsTreeKill(child)
         const cleanup = barrierTerminationVerified
           ? Promise.resolve()
-          : (inFlightWindowsTreeKill(child) ?? hosted.killAbandonedTree?.() ?? Promise.resolve())
+          : inFlight
+            ? inFlight.then((verdict) => (verdict === 'exited' ? undefined : killAbandonedTree()))
+            : killAbandonedTree()
         let cleanupTimer: ReturnType<typeof setTimeout> | undefined
         const capped = new Promise<void>((done) => {
           cleanupTimer = setTimeout(done, ABANDONED_TREE_CLEANUP_WAIT_MS)
           cleanupTimer.unref?.()
         })
-        void Promise.race([cleanup, capped]).then(() => {
+        void Promise.race([cleanup.catch(() => {}), capped]).then(() => {
           clearTimeout(cleanupTimer)
           terminationReporter.report()
           settle(() => reject(error))
