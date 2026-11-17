@@ -207,7 +207,7 @@ export function LocalWorkspacePortsPanel({
         mode: 'add',
         defaults: {
           remotePort: port.port,
-          remoteHost: portForwardRemoteHost(port.bindHost),
+          remoteHost: portForwardRemoteHost(port.connectHost),
           label: port.processName,
           targetId: sshForwardTargetId
         }
@@ -216,7 +216,7 @@ export function LocalWorkspacePortsPanel({
     [sshForwardTargetId]
   )
   const isPortForwarded = useCallback(
-    (port: WorkspacePort) => forwardedKeys.has(portForwardKey(port.bindHost, port.port)),
+    (port: WorkspacePort) => forwardedKeys.has(portForwardKey(port.connectHost, port.port)),
     [forwardedKeys]
   )
   const onForwardPort = canForward ? handleForwardPort : undefined
@@ -349,13 +349,12 @@ export function LocalWorkspacePortsPanel({
         )}
 
       <LocalPortDetailsDialog port={detailsPort} onClose={() => setDetailsPort(null)} />
-      {sshForwardTargetId && (
-        <SshPortForwardDialog
-          state={forwardDialog}
-          activeConnectionId={sshForwardTargetId}
-          onClose={() => setForwardDialog({ mode: 'closed' })}
-        />
-      )}
+      {/* Stays mounted across workspace switches; the open dialog keeps its pinned target. */}
+      <SshPortForwardDialog
+        state={forwardDialog}
+        activeConnectionId={sshForwardTargetId}
+        onClose={() => setForwardDialog({ mode: 'closed' })}
+      />
     </div>
   )
 }

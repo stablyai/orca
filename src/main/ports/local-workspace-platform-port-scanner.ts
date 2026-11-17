@@ -74,12 +74,16 @@ export function parseNetstatListeningOutput(output: string): RawListeningPort[] 
 
 type ProcNetListener = { host: string; port: number; inode: number }
 
-// Login accounts get uids in [UID_MIN, nobody); root, system services and Docker's port proxy sit below.
+// Login accounts (local or directory) get uids from UID_MIN up; root and system services sit below.
 const FIRST_LOGIN_UID = 1000
+const SYSTEMD_DYNAMIC_UIDS = { first: 61184, last: 65519 }
 const NOBODY_UID = 65534
 
 function isAnotherLoginUsersListener(uid: number, ownUid: number | undefined): boolean {
-  return ownUid !== undefined && uid !== ownUid && uid >= FIRST_LOGIN_UID && uid < NOBODY_UID
+  if (ownUid === undefined || uid === ownUid || uid < FIRST_LOGIN_UID || uid === NOBODY_UID) {
+    return false
+  }
+  return uid < SYSTEMD_DYNAMIC_UIDS.first || uid > SYSTEMD_DYNAMIC_UIDS.last
 }
 
 /** Shared hosts list every user's sockets in /proc/net; keep ours and system services', like non-root lsof on macOS. */
