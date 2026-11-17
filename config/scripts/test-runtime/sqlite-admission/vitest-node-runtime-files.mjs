@@ -33,7 +33,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
 
-  'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
   'src/main/acp/session/acp-structured-session-adapter.test.ts',
