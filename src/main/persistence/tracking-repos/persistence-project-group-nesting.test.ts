@@ -153,6 +153,28 @@ describe('project group nesting persistence', () => {
     expect(store.updateProjectGroup(c.id, { parentGroupId: null })?.parentGroupId).toBeNull()
   })
 
+  it('ranks a group by root order only while it is top-level', () => {
+    const store = createStore()
+    const [a, b] = ['A', 'B'].map((name) =>
+      store.createProjectGroup({ name, createdFrom: 'manual' })
+    )
+    store.updateProjectGroups([
+      { groupId: a.id, updates: { rootProjectOrder: 0 } },
+      { groupId: b.id, updates: { rootProjectOrder: 1000 } }
+    ])
+    const child = store.createProjectGroup({
+      name: 'Child',
+      parentGroupId: a.id,
+      createdFrom: 'manual'
+    })
+
+    // Why: an unordered top-level group would rank before every root entry.
+    expect(store.updateProjectGroup(child.id, { parentGroupId: null })?.rootProjectOrder).toBe(2000)
+    expect(store.updateProjectGroup(b.id, { parentGroupId: a.id })?.rootProjectOrder).toBe(
+      undefined
+    )
+  })
+
   it('rejects an invalid move without applying the rest of the update', () => {
     const store = createStore()
     const [root, child] = createChain(store, 2, 'manual')

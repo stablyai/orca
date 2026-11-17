@@ -125,16 +125,13 @@ export async function persistProjectGroupUpdates(
   })
 }
 
-export async function initializeNewRootProjectGroupOrder(
-  target: RuntimeClientTarget,
-  group: ProjectGroup,
+/** Last top-level slot across every host's catalog; undefined while root order is still legacy. */
+export function getNextRootProjectGroupPlacement(
   state: Pick<RepoSlice, 'repos' | 'projectGroups'>
-): Promise<ProjectGroup> {
-  const rootProjectOrder = !group.parentGroupId
-    ? getNextRootProjectOrder(state.repos, state.projectGroups)
-    : undefined
+): { rootProjectOrder: number; tabOrder: number } | undefined {
+  const rootProjectOrder = getNextRootProjectOrder(state.repos, state.projectGroups)
   if (rootProjectOrder === undefined) {
-    return group
+    return undefined
   }
   const groupIds = new Set(state.projectGroups.map((entry) => entry.id))
   let tabOrder = -1000
@@ -143,11 +140,20 @@ export async function initializeNewRootProjectGroupOrder(
       tabOrder = Math.max(tabOrder, existing.tabOrder)
     }
   }
+  return { rootProjectOrder, tabOrder: tabOrder + 1000 }
+}
+
+export async function initializeNewRootProjectGroupOrder(
+  target: RuntimeClientTarget,
+  group: ProjectGroup,
+  state: Pick<RepoSlice, 'repos' | 'projectGroups'>
+): Promise<ProjectGroup> {
+  const placement = !group.parentGroupId ? getNextRootProjectGroupPlacement(state) : undefined
+  if (!placement) {
+    return group
+  }
   return (
-    (await persistProjectGroupUpdate(target, group.id, {
-      rootProjectOrder,
-      tabOrder: tabOrder + 1000
-    }).catch((err) => {
+    (await persistProjectGroupUpdate(target, group.id, placement).catch((err) => {
       console.error('Failed to initialize project group order:', err)
       return null
     })) ?? group

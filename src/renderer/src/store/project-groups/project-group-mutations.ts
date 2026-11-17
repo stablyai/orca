@@ -1,3 +1,4 @@
+import { getNextRootProjectGroupPlacement } from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -103,8 +104,25 @@ export function createProjectGroupMutationActions(
     updateProjectGroup: (groupId, updates, options) =>
       get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
 
-    moveProjectGroup: (groupId, parentGroupId, options) =>
-      get().updateProjectGroups([{ groupId, updates: { parentGroupId }, hostId: options?.hostId }]),
+    moveProjectGroup: async (groupId, parentGroupId, options) => {
+      const state = get()
+      const group = findIndexedProjectGroupOwner(state.projectGroups, groupId, options?.hostId)
+      if (group && (group.parentGroupId ?? null) === parentGroupId) {
+        return true
+      }
+      // Why: top-level rows rank across every host, so only the renderer knows the last root slot.
+      // Under a parent the host appends the group after its new siblings.
+      const placement =
+        parentGroupId === null
+          ? getNextRootProjectGroupPlacement({
+              repos: state.repos,
+              projectGroups: state.projectGroups.filter((entry) => entry !== group)
+            })
+          : undefined
+      return state.updateProjectGroups([
+        { groupId, hostId: options?.hostId, updates: { parentGroupId, ...placement } }
+      ])
+    },
 
     deleteProjectGroup: async (groupId, options) => {
       try {

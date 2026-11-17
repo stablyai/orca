@@ -187,6 +187,17 @@ export class ProjectGroupPersistenceOperations {
   private placeMovedGroup(group: ProjectGroup, parentGroupId: string | null): void {
     group.parentGroupId = parentGroupId
     group.tabOrder = this.nextProjectGroupTabOrder()
+    // Why: only top-level entries rank by rootProjectOrder; a stale one would restore the old slot.
+    delete group.rootProjectOrder
+    if (parentGroupId === null) {
+      const rootProjectOrder = getNextRootProjectOrder(
+        this.state.repos,
+        this.state.projectGroups ?? []
+      )
+      if (rootProjectOrder !== undefined) {
+        group.rootProjectOrder = rootProjectOrder
+      }
+    }
   }
 
   deleteProjectGroup(groupId: string): boolean {

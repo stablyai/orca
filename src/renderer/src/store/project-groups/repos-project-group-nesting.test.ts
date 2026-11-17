@@ -139,6 +139,23 @@ describe('moveProjectGroup', () => {
     expect(store.getState().folderWorkspacePathStatuses).toEqual({})
   })
 
+  it('places a group moved to the top level after the last top-level entry', async () => {
+    // Why: top-level rows rank across hosts, so the client sends the slot it sees as last.
+    const groups = [
+      { ...parentGroup, rootProjectOrder: 0 },
+      { ...childGroup, parentGroupId: 'parent' }
+    ]
+    const placement = { rootProjectOrder: 1000, tabOrder: 1000 }
+    projectGroupsUpdate.mockResolvedValue({ ...childGroup, parentGroupId: null, ...placement })
+    const store = createStoreWith(groups, null)
+
+    await expect(store.getState().moveProjectGroup('child', null)).resolves.toBe(true)
+
+    expect(projectGroupsUpdate.mock.calls).toStrictEqual([
+      [{ groupId: 'child', updates: { parentGroupId: null, ...placement } }]
+    ])
+  })
+
   it('moves a runtime-owned group to the top level through its owner host', async () => {
     const runtimeChild = {
       ...childGroup,
