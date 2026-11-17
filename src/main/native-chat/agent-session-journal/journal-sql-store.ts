@@ -3,7 +3,7 @@ import type { JournalForkStageBegin, JournalForkInstall } from './journal-fork-s
 import type { JournalSqlForkCopy } from './journal-sql-fork-copy'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
 import { writeJournalAutomaticSubmission } from './journal-sql-automatic-submission'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'

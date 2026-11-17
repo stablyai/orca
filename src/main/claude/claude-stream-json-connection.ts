@@ -1,8 +1,6 @@
-import type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
-export type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
 import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { claudeStartupAnswerObservation } from './child-process/claude-startup-answer-observation'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../provider-process/provider-process-spawn'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
@@ -15,6 +13,7 @@ import {
 } from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
 import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
@@ -26,6 +25,7 @@ import { withProviderSpawnAbsence } from '../provider-process/provider-executabl
 import { claudeStreamJsonExitError } from './sdk-transport/claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
+import { withLostProviderOutcome } from '../provider-process/provider-process-exit-status'
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -54,15 +54,7 @@ export type ClaudeStreamJsonLaunch = {
   envToDelete?: readonly string[]
 }
 
-function withoutKeys(env: Record<string, string>, keys: readonly string[]): Record<string, string> {
-  for (const key of keys) {
-    delete env[key]
-  }
-  return env
-}
-
 export type ClaudeStreamJsonConnectionHandlers = {
-  onConnection?: (connection: ClaudeStreamJsonConnection) => void
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
@@ -70,14 +62,24 @@ export type ClaudeStreamJsonConnectionHandlers = {
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
   onUserDialog?: OnUserDialog
-  /** A transport/process fault; proven root death arrives marked observed and is followed by onExit. */
+  /** A transport/process fault; a physical root exit arrives marked observed and is followed by onExit. */
   onFault?: (error: Error) => void
   /** Report observed root exit once; expected stays true even after an unproven close attempt. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
 }
 
+/** Root proof comes from our child handle or processless settlement; tree proof is independently verified. */
+export type ClaudeChildExitVerdict = {
+  root: DescendantTreeVerdict
+  tree: DescendantTreeVerdict
+  processless?: boolean
+  killDelivered?: true
+}
+
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   readonly pid: number | undefined
+  /** Settles once the CLI starts or its launch fails. */
+  readonly spawned?: Promise<void>
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
@@ -94,7 +96,7 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
 export async function openClaudeStreamJsonConnection(
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess,
+  spawnImpl: ProviderProcessSpawner = spawnProcess,
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
@@ -102,12 +104,10 @@ export async function openClaudeStreamJsonConnection(
   const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
-    withoutKeys(
-      buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
-      }),
-      launch.envToDelete ?? []
-    )
+    buildClaudeChildProcessEnv(launch.env, {
+      inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+      envToDelete: launch.envToDelete
+    })
   )
   const inbox = createClaudeUserMessageQueue()
   const session = (queryImpl ?? query)({
@@ -173,13 +173,18 @@ export async function openClaudeStreamJsonConnection(
     armTreeOnOutput()
   }
 
-  const handleUnexpectedEnd = (cause?: Error): void => {
+  const handleUnexpectedEnd = (cause?: Error, settled = false): void => {
     resumeReading()
     if (!terminalError) {
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
       terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
-    // Proven root death reaches both callbacks; mark it first so onFault cannot treat it as live-root.
+    withLostProviderOutcome(terminalError, child)
+    // Drained EOF can reach the SDK before the same child's exit/close publishes its proof.
+    if (child.outcomeLost && !managed.exitStatus && !settled) {
+      return
+    }
+    // One physical exit reaches both callbacks; mark it first so onFault cannot treat it as live-root.
     if (managed.rootExitObserved && !closing) {
       withObservedProviderExit(terminalError)
     }
@@ -188,11 +193,20 @@ export async function openClaudeStreamJsonConnection(
       faultReported = true
       handlers.onFault?.(terminalError)
     }
-    if (managed.rootExitObserved && !exitReported) {
+    if (managed.rootVerdict === 'exited' && !managed.processless && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
       exited.resolve(terminalError)
     }
+  }
+
+  const handleTransportFailure = async (error: Error): Promise<void> => {
+    if (!closing && managed.rootVerdict !== 'exited') {
+      await tree.reap()
+    }
+    // A broken pipe can precede the same child's spawn failure or drained exit diagnostic.
+    await withTimeout(managed.exitPromise, CLAUDE_READER_DRAIN_AFTER_EXIT_MS, undefined)
+    handleUnexpectedEnd(error)
   }
 
   const readerDone = (async () => {
@@ -219,11 +233,7 @@ export async function openClaudeStreamJsonConnection(
         }
       }
     } catch (error: unknown) {
-      // Transport failure can leave the child alive, requiring a tree reap.
-      if (!closing && managed.rootVerdict !== 'exited') {
-        void tree.reap()
-      }
-      handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
+      await handleTransportFailure(error instanceof Error ? error : new Error(String(error)))
     }
   })()
 
@@ -235,12 +245,11 @@ export async function openClaudeStreamJsonConnection(
     handleUnexpectedEnd(error)
   })
   child.on('close', () => {
-    handleUnexpectedEnd()
+    handleUnexpectedEnd(undefined, true)
   })
   child.stdin.on('error', (error) => {
     if (!closing) {
-      void tree.reap()
-      handleUnexpectedEnd(error)
+      void handleTransportFailure(error)
     }
   })
 
@@ -299,10 +308,11 @@ export async function openClaudeStreamJsonConnection(
   }
 
   const controls = createClaudeControlSurface(session)
-  const connection: ClaudeStreamJsonConnection = {
+  return {
     ...controls,
     startupFailure: startup.failure,
     exited: exited.promise,
+    spawned: spawner.spawned,
     get pid() {
       return spawner.pid
     },
@@ -327,10 +337,4 @@ export async function openClaudeStreamJsonConnection(
     send,
     close
   }
-  handlers.onConnection?.(connection)
-  await child.ready?.catch(async (error: unknown) => {
-    await close()
-    throw error
-  })
-  return connection
 }

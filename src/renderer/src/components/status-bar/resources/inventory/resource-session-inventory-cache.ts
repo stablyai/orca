@@ -3,7 +3,7 @@ import {
   type PtyListedSession,
   type PtySessionLifecycle
 } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
-import { isResourceViewInactive } from '../../../../../../shared/resource-view-admission'
+import { isResourceViewInactive } from '../../../../../../shared/diagnostics/resource-view-admission'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   type DaemonSessionInventory,

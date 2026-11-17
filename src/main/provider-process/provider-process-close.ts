@@ -1,5 +1,4 @@
-import type { ChildProcess } from 'node:child_process'
-import { signalProviderRoot, type ProviderChild } from './provider-child'
+import type { ProviderChild } from './provider-child'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
 import {
@@ -27,7 +26,7 @@ export type ProviderProcessClosePolicy = {
 }
 
 export type ProviderProcessCloseInput = {
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'stdin'> & Pick<ProviderChild, 'signalRoot'>
+  child: Pick<ProviderChild, 'pid' | 'kill'> & { stdin?: ProviderChild['stdin'] | null }
   exitPromise: Promise<void>
   rootVerdict: () => DescendantTreeVerdict
   supervised?: boolean
@@ -80,7 +79,7 @@ async function waitForGracefulExit(
     return
   }
   // The supervisor still owns the reap: asked now, it SIGKILLs its group instead of waiting out the grace.
-  await signalProviderRoot(input.child, PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)
+  input.child.kill(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)
   await waitForProcessExitUntil(input.exitPromise, gracefulExitMs - briefMs)
 }
 
@@ -89,9 +88,6 @@ export async function closeProviderProcess(
   input: ProviderProcessCloseInput
 ): Promise<ProviderProcessCloseResult> {
   const { child, policy, tree } = input
-  if (!child.pid && child.signalRoot) {
-    await signalProviderRoot(child, 'SIGTERM')
-  }
   if (tree) {
     await tree.capture()
   }
@@ -105,7 +101,7 @@ export async function closeProviderProcess(
     policy.signalSupervisorOnClose === true &&
     input.rootVerdict() !== 'exited'
   if (signalled) {
-    await signalProviderRoot(child, 'SIGTERM')
+    child.kill('SIGTERM')
   }
   let reaped = false
   let fallbackTree: DescendantTreeVerdict | null = null

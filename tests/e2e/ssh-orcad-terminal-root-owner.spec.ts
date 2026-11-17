@@ -11,7 +11,7 @@ import {
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { openFileExplorer } from './helpers/file-explorer'
 import { openTerminalWorkspaceRootLink } from './helpers/terminal-workspace-root-link'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../src/shared/execution-host/execution-host'
 import { getWorktreeHostIdentity } from '../../src/shared/worktree/host-qualified-identity'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 

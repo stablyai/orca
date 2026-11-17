@@ -1,7 +1,9 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-delivery'
+import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { Readable, Writable } from 'node:stream'
 import type { EventEmitter } from 'node:events'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 
-/** A provider can be pending or hosted elsewhere; it is not necessarily a local ChildProcess. */
 export type ProviderChild = Pick<
   ChildProcessWithoutNullStreams,
   | 'pid'
@@ -15,49 +17,43 @@ export type ProviderChild = Pick<
   | 'kill'
 > &
   EventEmitter & {
-    rootAbsent?: boolean
-    spawnAbsenceKnown?: boolean
-    /** Resolves with a real root PID; startup rejection alone is not proof of exit. */
+    /** Actual CLI writer, which differs from the root on the compatibility path. */
+    readonly writerPid?: number
     ready?: Promise<void>
-    /** Hosted roots are signalled by their owner's held child handle, never by a saved PID. */
-    signalRoot?: (signal: NodeJS.Signals) => Promise<boolean>
+    /** Group observation is independent of the real leader's outcome. */
+    readonly groupVerdict?: DescendantTreeVerdict
+    /** The CLI ran, but its real exit code or signal could not be recovered. */
+    readonly outcomeLost?: boolean
+    /** Proven root absence; group cleanup alone supplies no CLI wait status. */
+    readonly leaderExited?: boolean
+    /** Lost outcome or retirement revokes unvalidated numeric signals without proving exit. */
+    readonly numericIdentityRetired?: boolean
   }
 
-export async function signalProviderRoot(
-  child: Pick<ProviderChild, 'kill' | 'signalRoot'>,
-  signal: NodeJS.Signals
-): Promise<boolean> {
-  return child.signalRoot ? child.signalRoot(signal) : child.kill(signal)
-}
+/** The native owner process: a direct child, or one whose launch completes asynchronously. */
+export type ProviderOwnerProcess = Pick<ChildProcess, 'pid' | 'stdout' | 'stderr'> &
+  EventEmitter & { readonly stdio?: readonly (Readable | Writable | null | undefined)[] }
 
-export async function awaitProviderChildSpawn(child: ProviderChild): Promise<void> {
-  if (child.ready) {
-    await child.ready
-    return
-  }
-  if (child.pid !== undefined) {
-    return
-  }
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = (): void => {
-      child.off('spawn', onSpawn)
-      child.off('error', onError)
-    }
-    const onSpawn = (): void => {
-      cleanup()
-      resolve()
-    }
-    const onError = (error: Error): void => {
-      cleanup()
-      reject(error)
-    }
-    child.once('spawn', onSpawn)
-    child.once('error', onError)
+/** A hosted launch reports its PID later; a failed spawn reports only its error. */
+export function providerOwnerLaunched(raw: ProviderOwnerProcess): Promise<Error | null> {
+  return new Promise((resolve) => {
+    raw.once('spawn', () => resolve(null))
+    raw.once('error', resolve)
   })
 }
 
-export function providerSpawnAbsenceKnown(
-  child: Pick<ProviderChild, 'pid' | 'spawnAbsenceKnown'>
-): boolean {
-  return child.spawnAbsenceKnown ?? child.pid === undefined
+/** Native children expose `pid` only once the CLI runs; a failed launch leaves it unset. */
+export async function awaitProviderChildSpawn(child: ProviderChild): Promise<void> {
+  await child.ready?.catch(() => {})
 }
+
+export function notifyProviderChild(child: EventEmitter, event: string, ...args: unknown[]): void {
+  notifyRuntimeListeners(
+    child.rawListeners(event),
+    (listener) => listener.apply(child, args),
+    `provider ${event}`
+  )
+}
+
+/** Late transport errors must not retain a launch's closure scope. */
+export function ignoreProviderTransportError(): void {}

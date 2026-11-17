@@ -1,20 +1,19 @@
 import { spawnProcess } from '@orca/process-host'
-import { randomBytes } from 'node:crypto'
-import { setTimeout as delay } from 'node:timers/promises'
-import { z } from 'zod'
-import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
+import { randomBytes } from 'node:crypto'
+import { setTimeout as delay } from 'node:timers/promises'
+import { z } from 'zod'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../../shared/network/fetch-response-body'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { ProviderChild } from '../../provider-process/provider-child'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
 import { stopSupervisedChildProcess } from '../../provider-process/supervised-child-process-stop'
-import { guardSupervisedProviderGroup } from '../../provider-process/provider-group-orphan-guard'
+import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 
 const OPENCODE_PREFLIGHT_KILL_SITE = 'opencode-launch-model-preflight'
 const SUPERVISOR_PIPE_CLOSE_MS = 1_000
@@ -81,10 +80,6 @@ export async function probeOpenCodeLaunchModelContext(options: {
       })
     : null
   const child = unsupervisedChild ?? spawnProviderProcess(spawnSpec)
-  guardSupervisedProviderGroup(child, {
-    site: OPENCODE_PREFLIGHT_KILL_SITE,
-    supervised: spawnSpec.supervised
-  })
   const output = createOutputSink(4096)
   let childClosed = false
   let rootExited = false
@@ -173,24 +168,18 @@ export async function probeOpenCodeLaunchModelContext(options: {
   return stopped ? context : null
 }
 
-/** Only the supervisor’s normal stop/relayed exit proves its detached server group is gone.
- * Forced supervisor teardown and failed group reap (exit 1) prove nothing. */
+/** Group cleanup evidence is independent of the CLI exit status. */
 async function stopSupervisedPreflight(
   child: ProviderChild,
   closed: Promise<boolean>
 ): Promise<boolean> {
-  if (!child.pid && child.ready) {
-    child.kill('SIGTERM')
-  }
   if (!child.pid && !child.ready) {
     return true
   }
-  const { root, tree } = await stopSupervisedChildProcess(child, {
+  const { root } = await stopSupervisedChildProcess(child, {
     site: OPENCODE_PREFLIGHT_KILL_SITE
   })
-  const forced = tree !== null || child.signalCode === 'SIGKILL'
-  const failedReap = child.signalCode === null && child.exitCode === 1
-  if (root !== 'exited' || forced || failedReap) {
+  if (root !== 'exited' || child.groupVerdict !== 'exited') {
     return false
   }
   return withTimeout(closed, SUPERVISOR_PIPE_CLOSE_MS, false)

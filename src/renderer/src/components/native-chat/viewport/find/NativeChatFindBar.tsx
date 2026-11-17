@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import './native-chat-find.css'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,12 @@ export function NativeChatFindBar({
     revealMatch
   })
 
+  const opened = useRef(false)
   useEffect(() => {
+    if (opened.current) {
+      return
+    }
+    opened.current = true
     inputRef.current?.focus()
     inputRef.current?.select()
   }, [inputRef])

@@ -24,7 +24,6 @@ import {
 } from './daemon-client-ndjson-readers'
 import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
-import { DaemonProviderObservers } from './daemon-provider-observers'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
@@ -58,7 +57,6 @@ export class DaemonClient {
 
   private pendingRequests = new DaemonPendingRequests()
   private eventListeners = new DaemonClientListeners<(event: unknown) => void>()
-  private readonly providerObservers = new DaemonProviderObservers()
   private disconnectedListeners = new DaemonClientListeners<() => void>()
   private requestCounter = 0
   private cleanupSocketListeners: (() => void) | null = null
@@ -147,8 +145,7 @@ export class DaemonClient {
         attachControlResponseReader(
           this.controlSocket,
           (response) => this.pendingRequests.settle(response),
-          controlHello.remainder,
-          (event) => this.providerObservers.observe(event)
+          controlHello.remainder
         )
       )
 
@@ -183,7 +180,6 @@ export class DaemonClient {
         )
       )
       this.cleanupSocketListeners = cleanupPendingListeners
-      this.providerObservers.reconnected()
     } catch (error) {
       cleanupPendingListeners()
       this.controlSocket?.destroy()
@@ -269,11 +265,13 @@ export class DaemonClient {
     })
   }
 
-  onEvent = this.eventListeners.add.bind(this.eventListeners)
+  onEvent(listener: (event: unknown) => void): () => void {
+    return this.eventListeners.add(listener)
+  }
 
-  onProviderExit = this.providerObservers.add.bind(this.providerObservers)
-
-  onDisconnected = this.disconnectedListeners.add.bind(this.disconnectedListeners)
+  onDisconnected(listener: () => void): () => void {
+    return this.disconnectedListeners.add(listener)
+  }
 
   disconnect(): void {
     this.connectionAttemptGeneration++

@@ -2,7 +2,7 @@ import { clearSuccessor } from './agent-session-sender-identity-revision'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
-import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
+import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationDecision,
@@ -29,7 +29,7 @@ import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-sessi
 import type {
   AgentSessionFailedAcquisitionSettlement,
   AgentSessionFailedPostAcquisitionAttachmentSettlement
-} from '../agent-session-acquisition-failure-settlement'
+} from '../ownership/agent-session-acquisition-failure-settlement'
 import type { AgentSessionLeaseRenewal } from '../ownership/agent-session-lease-renewal'
 import {
   collectAgentSessionRestartProbes,
@@ -48,10 +48,10 @@ import {
   heldAgentSessionIds,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import { AgentSessionRecordTabs } from '../agent-session-tab-table'
+import { AgentSessionRecordTabs } from './agent-session-tab-table'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
-import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
+import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
@@ -250,6 +250,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
     this.updateRecord(id, { kind: 'cancel-continue', cut })
+
+  skipAsyncQuestions = (id: string, itemId: string) =>
+    this.updateRecord(id, { kind: 'skip-async-questions', itemId })
 
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {

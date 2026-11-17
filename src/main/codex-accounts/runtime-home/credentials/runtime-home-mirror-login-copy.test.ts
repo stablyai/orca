@@ -13,7 +13,7 @@ import {
   testState
 } from '../runtime-home-service-test-harness'
 import type { CodexRuntimeHomeService } from '../../runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 vi.mock(
   '../../../codex/configuration/shared-server/codex-daemon-socket-path-guard',

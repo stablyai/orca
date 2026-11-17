@@ -26,7 +26,7 @@ export type StructuredAgentSessionOptionsArgs = {
   launch?: StructuredAgentSessionLaunchView
 }
 
-import type { AgentSessionConversationCommand } from '../../../../../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionRewindSupport } from '../../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 

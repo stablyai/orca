@@ -1,5 +1,5 @@
-import { getDefaultRepoHookSettings } from '../../constants'
-import { normalizeExecutionHostId } from '../../execution-host'
+import { getDefaultRepoHookSettings } from '../../orca-profiles/constants'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
 import type { Repo } from '../../repository/repo-types'
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'

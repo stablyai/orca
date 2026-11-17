@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './navigation/reveal-dashboard-agent'
 import { AgentKanbanBoard } from './board/AgentKanbanBoard'
 import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
-import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss

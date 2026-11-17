@@ -1,4 +1,3 @@
-import { providerSpawnAbsenceKnown } from '../../provider-process/provider-child'
 import { isMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
@@ -13,7 +12,6 @@ import {
 } from '../../../shared/text-generation/launch/claude-background-run-isolation'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../../codex-cli/codex-home-process-lock'
-import { supervisedProviderSpawnFailure } from '../../provider-process/provider-spawn-failure-report'
 import {
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
@@ -24,7 +22,10 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from '../execution/source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from '../execution/source-control-local-generation'
-import { formatAgentCliFailureMessage } from '../failures/source-control-agent-failure'
+import {
+  agentHostFailure,
+  formatAgentCliFailureMessage
+} from '../failures/source-control-agent-failure'
 import {
   settleCodexModelListing,
   startCodexModelListDiscovery,
@@ -198,7 +199,7 @@ async function discoverModelsOnce(
           : onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
-        if (providerSpawnAbsenceKnown(child)) {
+        if (!child.pid) {
           markProcessClosed()
         }
         finish({
@@ -215,16 +216,8 @@ async function discoverModelsOnce(
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
         listing?.fail(new Error(`${spec.label} app-server exited`))
-        const spawnFailure = outputLimitExceeded
-          ? null
-          : supervisedProviderSpawnFailure(code, stderr)
-        if (spawnFailure?.thrown) {
-          console.error('[commit-message] Failed to spawn model discovery:', spawnFailure.error)
-          finish(startFailure(spawnFailure.error))
-          return
-        }
-        if (spawnFailure) {
-          onError(spawnFailure.error)
+        if (child.outcomeLost) {
+          finish({ success: false, ...agentHostFailure(spec.label) })
           return
         }
         if (!settled && !outputLimitExceeded) {

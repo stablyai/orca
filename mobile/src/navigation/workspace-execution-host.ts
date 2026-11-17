@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { RouterHref } from './route-href'
 
 // Keep context separate from WorkspaceRoute so readers need not import Expo.

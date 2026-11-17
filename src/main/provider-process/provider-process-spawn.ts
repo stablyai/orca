@@ -1,62 +1,93 @@
 import { spawnProcess } from '@orca/process-host'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
-import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import { HostedProviderChild } from './hosted-provider-child'
+import type { ChildProcess } from 'node:child_process'
+import type { PipedProcessSpec, ProcessSpec } from '@orca/process-host/process-spec'
 import type { ProviderChild } from './provider-child'
-import type { createProviderSpawnSpec } from './provider-process-supervisor'
-import type { HostedCwdReporter } from './hosted-provider-launch'
+import { supervisedPosixLaunch, type ProviderSpawnSpec } from './provider-process-supervisor'
+import { DirectProviderChild } from './direct-provider-child'
+import { LegacyProviderChild } from './legacy-provider-child'
+import { providerOwnershipBootId } from './provider-ownership-journal'
+import { DeferredProviderOwner } from './deferred-provider-owner'
+import {
+  launchProviderOwner,
+  type HostedCwdReporter,
+  type ProviderHostRoute
+} from './hosted-provider-launch'
 
-let hostRoute: {
-  getClient: () => Promise<DaemonClient | null>
-  reportCwd: HostedCwdReporter
-} | null = null
+export type ProviderProcessSpawner = (spec: ProcessSpec) => ChildProcess
+
+let hostRoute: ProviderHostRoute | null = null
 
 /** Only desktop composition installs this route; server and remote launchers keep direct spawn. */
 export function installProviderProcessHost(
-  getClient: () => Promise<DaemonClient | null>,
+  getClient: ProviderHostRoute['getClient'],
   reportCwd: HostedCwdReporter = () => {}
 ): void {
   hostRoute = { getClient, reportCwd }
 }
 
+/** Shared launch seam; native owners may start under the host, but this runtime owns them. */
 export function spawnProviderProcess(
-  spec: ReturnType<typeof createProviderSpawnSpec>,
-  spawnImpl: PipedProcessSpawner = spawnProcess,
+  spec: ProviderSpawnSpec,
+  spawnImpl: ProviderProcessSpawner = spawnProcess,
   allowHost = true
 ): ProviderChild {
-  const direct = (): ReturnType<PipedProcessSpawner> =>
-    spawnImpl({
-      program: spec.program,
-      args: spec.args,
-      cwd: spec.cwd,
-      env: spec.env,
-      detached: spec.detached,
-      stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-    })
-  const route = hostRoute
-  if (!route || !spec.supervised || !allowHost) {
-    return direct()
+  const bootId = spec.supervised ? providerOwnershipBootId() : null
+  if (bootId !== null) {
+    const spawnOwner = (): ChildProcess =>
+      spawnImpl({
+        program: spec.program,
+        args: spec.args,
+        cwd: spec.cwd,
+        env: spec.env,
+        detached: spec.detached,
+        stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+      })
+    const route = allowHost ? hostRoute : null
+    if (!route) {
+      return new DirectProviderChild(spawnOwner(), spec, bootId)
+    }
+    const owner = new DeferredProviderOwner()
+    const child = new DirectProviderChild(owner, spec, bootId)
+    void launchProviderOwner(owner, spec, route, spawnOwner)
+    return child
   }
-  return new HostedProviderChild(
-    spec,
-    async () => {
-      try {
-        const client = await route.getClient()
-        if (!client) {
-          return null
+  const raw = spawnImpl(
+    spec.supervised
+      ? createLegacyProviderSpawnSpec(spec)
+      : {
+          program: spec.program,
+          args: spec.args,
+          cwd: spec.cwd,
+          env: spec.env,
+          detached: spec.detached,
+          stdio: ['pipe', 'pipe', 'pipe']
         }
-        await client.ensureConnectedWithin(1_000)
-        if (!client.getDaemonIdentity()?.providerSpawn) {
-          return null
-        }
-        // No spawn has been sent yet, so a hung host can safely use the direct launch path.
-        await client.request('ping', undefined, 1_000)
-        return client
-      } catch {
-        return null
-      }
-    },
-    direct,
-    route.reportCwd
   )
+  if (spec.supervised) {
+    return new LegacyProviderChild(raw, spec)
+  }
+  const { stdin, stdout, stderr } = raw
+  if (!stdin || !stdout || !stderr) {
+    raw.kill('SIGKILL')
+    throw new Error('Provider launch did not create its required pipes')
+  }
+  const child = Object.assign(raw, { stdin, stdout, stderr })
+  return child
+}
+
+/** The returned child is the legacy supervisor, including its PID and signal semantics. */
+function createLegacyProviderSpawnSpec(spec: ProviderSpawnSpec): PipedProcessSpec {
+  const legacy = supervisedPosixLaunch(
+    { command: spec.command, args: spec.args.slice(7), cwd: spec.cwd },
+    spec.env,
+    spec
+  )
+  return {
+    program: legacy.command,
+    args: legacy.args,
+    env: legacy.env,
+    cwd: spec.cwd,
+    detached: true,
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+  }
 }

@@ -24,6 +24,7 @@ import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
+import { WorktreeCardsIntroNotice } from './WorktreeCardsIntroNotice'
 import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
@@ -214,6 +215,7 @@ function Sidebar({
                   <LocalGitToolchainScanBanner />
                   <StartupWorktreeRefreshStatus />
                   <WorktreeCardsUpdateNotice />
+                  <WorktreeCardsIntroNotice />
                   <WorktreeList
                     scrollOffsetRef={worktreeScrollOffsetRef}
                     scrollAnchorRef={worktreeScrollAnchorRef}

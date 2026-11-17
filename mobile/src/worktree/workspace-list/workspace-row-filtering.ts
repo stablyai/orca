@@ -1,5 +1,8 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import { NO_HIDDEN_PROJECTS, type HiddenProjects } from '../../../../src/shared/hidden-projects'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import {
+  NO_HIDDEN_PROJECTS,
+  type HiddenProjects
+} from '../../../../src/shared/project/catalog/hidden-projects'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader

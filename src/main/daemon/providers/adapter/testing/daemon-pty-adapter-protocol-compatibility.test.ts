@@ -69,7 +69,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it.each([57, 58])(
+  it.each([58, 59])(
     'preserves v%i terminals and only gives corrected hosts new provider work',
     async (protocolVersion) => {
       const harness = await startDaemonAdapterHarness(() => createMockSubprocess(), {
@@ -78,7 +78,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       try {
         const terminal = await harness.adapter.spawn({ cols: 80, rows: 24 })
         expect(await harness.adapter.probePtyLiveness(terminal.id)).toBe(true)
-        expect(harness.adapter.getProviderProcessClient() !== null).toBe(protocolVersion === 58)
+        expect(harness.adapter.getProviderProcessClient() !== null).toBe(protocolVersion === 59)
       } finally {
         harness.adapter.dispose()
         await harness.server.shutdown()

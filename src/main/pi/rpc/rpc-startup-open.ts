@@ -1,5 +1,5 @@
-import type { PiRpcConnection, PiRpcSession } from './rpc-session'
-import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import type { AgentSessionProcessIdentity } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
@@ -8,6 +8,7 @@ import type { AgentSessionStartEndings } from '../../native-chat/agent-session-w
 import type { StructuredAgentSessionProviderOpenInput } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { JsonlRpcAgentExitError } from '../../jsonl-rpc/agent-connection'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
+import type { PiRpcSession } from './rpc-session'
 import { piStartFailure } from './rpc-startup-outcome'
 
 /** Takes this child's own exit when first seen, so a start settling meanwhile cannot miss it; the
@@ -66,12 +67,17 @@ export async function openPiStart(
   }
 }
 
-export async function waitForPiSpawn(
-  connection: PiRpcConnection,
-  signal: AbortSignal
-): Promise<void> {
-  const spawned = connection.spawned
-  if (spawned) {
-    await waitForPromiseWithSignal(spawned, signal)
+/** Wait for the actual CLI before publishing its pre-handshake recovery identity. */
+export async function capturePiProcessIdentity(
+  session: PiRpcSession,
+  input: StructuredAgentSessionAcquireInput,
+  readStartTime?: (pid: number) => Promise<number | null>
+): Promise<AgentSessionProcessIdentity> {
+  await session.connection.spawned
+  const spawned = providerSpawnedProcessIdentity(input, 'Pi RPC', readStartTime)
+  const pid = session.connection.pid
+  if (pid !== undefined) {
+    await spawned.onSpawned(pid)
   }
+  return spawned.read(pid)
 }

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
-} from '../../../shared/agent-session/agent-session-question-answer'
+} from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentJournalQuestion } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { pendingAcpResolution, type AcpRequestPresentation } from '../acp-dialects/acp-dialect'

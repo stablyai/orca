@@ -1,5 +1,5 @@
 // Send/wait/read on an unstarted restored pane shares main's starter, then acts on its terminal.
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../wait/terminal-interactive-wait'
 import { startedMainTerminalSurfaces } from './main-terminal-surfaces'
 import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from '../view/terminal-surface-deadlines'

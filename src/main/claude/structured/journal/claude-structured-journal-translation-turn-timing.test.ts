@@ -7,7 +7,7 @@ import type {
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
 type Append = {
   identity: AgentJournalItemIdentity

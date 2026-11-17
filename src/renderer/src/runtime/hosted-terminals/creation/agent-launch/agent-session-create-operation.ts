@@ -1,4 +1,4 @@
-import type { RuntimeCreateAgentSessionRequest } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import type { RuntimeCreateAgentSessionRequest } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { createAgentSessionOperationId } from './agent-session-operation-id'
 import { RuntimeRpcCallError } from '../../../rpc/calls/runtime-rpc-result'
 

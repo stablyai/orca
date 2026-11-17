@@ -1,5 +1,8 @@
+import type { ChildProcess } from 'node:child_process'
 import type { HostedProviderSpawn } from '../daemon/protocol/daemon-provider-process-protocol'
-import type { createProviderSpawnSpec } from './provider-process-supervisor'
+import type { ProviderSpawnSpec } from './provider-process-supervisor'
+import type { DeferredProviderOwner } from './deferred-provider-owner'
+import { ProviderOwnerListener } from './provider-owner-channels'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
 import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
@@ -75,27 +78,104 @@ export async function inspectHostedIdentity(
   return outcome === 'ok' ? identity : null
 }
 
-export function createHostedLaunch(
-  spec: ReturnType<typeof createProviderSpawnSpec>,
-  ownerPid: number,
-  channel: { path: string; nonce: string }
-): HostedProviderSpawn {
+export type ProviderHostRoute = {
+  getClient: () => Promise<DaemonClient | null>
+  reportCwd: HostedCwdReporter
+}
+
+const START_TIMEOUT_MS = 10_000
+
+async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | null> {
+  try {
+    const client = await route.getClient()
+    if (!client) {
+      return null
+    }
+    await client.ensureConnectedWithin(1_000)
+    if (!client.getDaemonIdentity()?.providerSpawn) {
+      return null
+    }
+    // No spawn has been sent yet, so a hung host can safely use the direct launch path.
+    await client.request('ping', undefined, 1_000)
+    return client
+  } catch {
+    return null
+  }
+}
+
+function hostedLaunch(spec: ProviderSpawnSpec, path: string, nonce: string): HostedProviderSpawn {
   const env = Object.fromEntries(
     Object.entries(spec.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   )
-  const supervisor = JSON.parse(
-    Buffer.from(env.ORCA_PROVIDER_SUPERVISOR_SPEC, 'base64').toString('utf8')
-  )
-  env.ORCA_PROVIDER_SUPERVISOR_SPEC = Buffer.from(
-    JSON.stringify({ ...supervisor, ownerPid })
-  ).toString('base64')
-  env.ORCA_PROVIDER_OWNER_CHANNEL = JSON.stringify(channel)
-  return {
-    nonce: channel.nonce,
-    source: spec.args[1],
-    args: spec.args.slice(3),
-    cwd: spec.cwd,
-    env
+  return { nonce, path, program: spec.program, args: spec.args, cwd: spec.cwd, env }
+}
+
+function launchHere(owner: DeferredProviderOwner, spawn: () => ChildProcess): void {
+  let child: ChildProcess
+  try {
+    child = spawn()
+  } catch (error) {
+    owner.fail(error instanceof Error ? error : new Error(String(error)))
+    return
+  }
+  if (child.pid === undefined) {
+    child.once('error', (error) => owner.fail(error))
+    return
+  }
+  owner.attach(child.pid, new Map(child.stdio.map((stream, fd) => [fd, stream])))
+}
+
+/** Starts the native owner under the host when the host can read the chat's folder; otherwise
+ * here. Either way this app holds every owner pipe, so ownership is the same as a direct launch. */
+export async function launchProviderOwner(
+  owner: DeferredProviderOwner,
+  spec: ProviderSpawnSpec,
+  route: ProviderHostRoute,
+  spawnHere: () => ChildProcess
+): Promise<void> {
+  const client = await connectedHost(route)
+  const identity =
+    client && !owner.canceled
+      ? await inspectHostedIdentity(client, spec.cwd, () => owner.canceled, route.reportCwd)
+      : null
+  if (owner.canceled) {
+    owner.fail(new Error('Provider launch canceled'))
+    return
+  }
+  if (!client || !isCurrentHostedIdentity(client, identity)) {
+    launchHere(owner, spawnHere)
+    return
+  }
+  const listener = new ProviderOwnerListener()
+  let dispatched = false
+  try {
+    const path = await listener.listen()
+    if (owner.canceled) {
+      throw new Error('Provider launch canceled')
+    }
+    // From here a lost reply may still have started an owner, so this app never launches another.
+    dispatched = true
+    const { pid } = await client.request<{ pid: number }>(
+      'spawnProvider',
+      hostedLaunch(spec, path, listener.nonce),
+      START_TIMEOUT_MS
+    )
+    if (!Number.isSafeInteger(pid) || pid <= 1) {
+      throw new Error('Provider host returned no process')
+    }
+    owner.attach(pid, await withProviderStartDeadline(listener.ready, START_TIMEOUT_MS))
+  } catch (error) {
+    // Closing every pipe makes an owner started by an unanswered request cancel at its gate.
+    void listener.ready.then(
+      (pipes) => pipes.forEach((pipe) => pipe.destroy()),
+      () => {}
+    )
+    await listener.close()
+    if (dispatched || owner.canceled) {
+      owner.fail(error instanceof Error ? error : new Error('Provider could not start'))
+    } else {
+      launchHere(owner, spawnHere)
+    }
   }
 }
 

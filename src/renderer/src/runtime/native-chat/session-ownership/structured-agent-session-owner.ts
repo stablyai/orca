@@ -8,8 +8,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { Tab } from '../../../../../shared/tab-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {

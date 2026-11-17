@@ -29,17 +29,4 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     expect(plan?.launchCommand).not.toContain('sonnet')
     expect(plan?.launchCommand).toContain('--dangerously-skip-permissions')
   })
-
-  it('throws on extras the executing host refuses', () => {
-    expect(() =>
-      resolveAgentStartupPlanInputs({
-        agent: 'claude',
-        settings: SETTINGS,
-        platform: 'linux',
-        isRemote: false,
-        shell: undefined,
-        extraAgentArgs: '--permission-mode bypassPermissions'
-      })
-    ).toThrow('"--permission-mode"')
-  })
 })

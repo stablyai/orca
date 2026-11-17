@@ -12,19 +12,9 @@ import {
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../structured/launch/claude-structured-launch-resolution'
-import { ClaudeStructuredSessionAdapter } from '../structured/claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-state'
-import { DaemonServer } from '../../daemon/server/daemon-server'
-import { DaemonClient } from '../../daemon/transport/client/daemon-client'
-import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
-import * as identityProbe from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
-
-vi.mock('../../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
-  inspectMacProcessCodeIdentity: vi.fn(async () => ({
-    identity: 'resolved',
-    executablePath: '/fake/Orca Agents'
-  }))
-}))
+import { providerStartupFailureFact } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import * as providerSpawn from '../../provider-process/provider-process-spawn'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '../__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -53,6 +43,7 @@ afterEach(async () => {
   }
   spawned.splice(0)
   spawnedChildren.splice(0)
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
 
@@ -107,185 +98,66 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
-  it('hands acquisition the actual connection before a pending startup can reject', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    const ready = Promise.withResolvers<void>()
-    const retained = Promise.withResolvers<ClaudeStreamJsonConnection>()
-    const opening = openClaudeStreamJsonConnection(
-      launchFor(scenario),
-      {
-        onConnection: (connection) => retained.resolve(connection)
-      },
-      (spec) => {
-        const child = spawnProcess(spec)
-        spawnedChildren.push(child)
-        childClosures.push(new Promise<void>((resolve) => child.once('close', () => resolve())))
-        return Object.assign(child, { ready: ready.promise })
+  it.each(['cliMissing', 'fullAccessAsRoot'] as const)(
+    'keeps %s when an input pipe fails before the child reports its ending',
+    async (kind) => {
+      const child = createFakeSpawnedChild(9_999_999)
+      const scenario = scriptScenario([])
+      const launch = launchFor(scenario)
+      if (kind === 'cliMissing') {
+        Object.defineProperty(child, 'pid', { value: undefined })
+        launch.pathToClaudeCodeExecutable = join(scenario.cwd, 'missing-claude')
       }
-    )
-    const rejected = expect(opening).rejects.toThrow('pending startup failed')
-    const connection = await retained.promise
-    openConnections.push(connection)
-    ready.reject(new Error('pending startup failed'))
-    await rejected
-    await expect(connection.close()).resolves.toBe(true)
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'retires hosted active and idle sessions after proven root absence and permits a fresh send',
-    async () => {
-      const scenario = scriptScenario([
-        { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init' } },
-        { awaitUserMessage: true },
-        {
-          emit: {
-            type: 'user',
-            session_id: SESSION_ID,
-            uuid: 'echo',
-            parent_tool_use_id: null,
-            message: { role: 'user', content: [{ type: 'text', text: 'first' }] }
-          }
-        },
-        { delayMs: 60_000 }
-      ])
-      const server = new DaemonServer({
-        socketPath: join(scenario.cwd, 'daemon.sock'),
-        tokenPath: join(scenario.cwd, 'token'),
-        providerSpawn: true,
-        spawnSubprocess: () => {
-          throw new Error('No PTY in hosted Claude fixture')
-        }
-      })
-      const client = new DaemonClient({
-        socketPath: join(scenario.cwd, 'daemon.sock'),
-        tokenPath: join(scenario.cwd, 'token')
-      })
-      const nonces: string[] = []
-      let liveObserved = false
-      const disconnected = new Set<() => void>()
-      vi.spyOn(client, 'onDisconnected').mockImplementation((listener) => {
-        disconnected.add(listener)
-        return () => disconnected.delete(listener)
-      })
-      const events: ClaudeStructuredSessionEvent[] = []
-      const probe = identityProbe.probeAgentSessionProcessIdentity
-      vi.spyOn(identityProbe, 'probeAgentSessionProcessIdentity').mockImplementation(
-        async (input) => {
-          const proof = await probe(input)
-          if (proof.outcome !== 'pid-absent') {
-            liveObserved = true
-          }
-          return proof
-        }
-      )
-      const request = client.request.bind(client)
-      const querySpy = vi.spyOn(client, 'request').mockImplementation(function <T>(
-        ...args: Parameters<typeof request>
-      ): Promise<T> {
-        // A restarted host has no retained outcome; use a real unknown-nonce query while keeping held signal authority.
-        return args[0] === 'queryProvider'
-          ? request<T>('queryProvider', { nonce: 'f'.repeat(64) })
-          : request<T>(...args)
-      })
-      const exitSpy = vi.spyOn(client, 'onProviderExit').mockImplementation((nonce) => {
-        nonces.push(nonce)
-        return () => {}
-      })
-      const adapter = new ClaudeStructuredSessionAdapter({
-        resolveLaunch: async () => ({
-          ...launchFor(scenario, { ORCA_SDK_CONTRACT_TIMEOUT_MS: '60000' }),
-          claudeConfigDir: scenario.cwd,
-          providerSessionId: SESSION_ID,
-          resumeLeafUuid: null,
-          resumesTranscript: false,
-          continuesChain: false,
-          cliFlag: async () => 'supported'
-        }),
-        onEvent: (event) => {
-          events.push(event)
-        }
-      })
-      const acquire = (sessionId: string, fence = 1) =>
-        adapter.acquire({
-          identity: {
-            sessionId,
-            workspaceId: 'hosted-fixture',
-            hostId: 'local',
-            agent: 'claude',
-            providerHandle: null
-          },
-          fence,
-          spawnToken: `spawn-${sessionId}-${fence}`
-        })
-      const dispatch = (sessionId: string, clientMessageId: string, fence = 1) =>
-        adapter.dispatch({
-          sessionId,
-          clientMessageId,
-          fence,
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }
-        })
-      try {
-        await server.start()
-        await client.ensureConnected()
-        installProviderProcessHost(async () => client)
-        await acquire('active')
-        await acquire('idle')
-        await dispatch('active', 'before-loss')
-        client.disconnect()
-        for (const listener of disconnected) {
-          listener()
-        }
-        await vi.waitFor(() => expect(liveObserved).toBe(true), { timeout: 5_000 })
-        expect(events.filter((event) => event.type === 'ended')).toEqual([])
-        await client.ensureConnected()
-        for (const nonce of nonces) {
-          await expect(
-            client.request('signalProvider', { nonce, signal: 'SIGTERM' })
-          ).resolves.toEqual({
-            delivered: true
+      vi.spyOn(providerSpawn, 'spawnProviderProcess').mockReturnValue(child)
+      const fault = Promise.withResolvers<Error>()
+      const connection = await open(launch, { onFault: fault.resolve })
+      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+      if (kind === 'cliMissing') {
+        child.emit(
+          'error',
+          Object.assign(new Error('spawn missing-claude ENOENT'), {
+            code: 'ENOENT',
+            path: launch.pathToClaudeCodeExecutable
           })
-        }
-        await vi.waitFor(
-          () => expect(events.filter((event) => event.type === 'ended')).toHaveLength(2),
-          { timeout: 5_000 }
         )
-        await adapter.drainObservedExits()
-        expect(
-          events
-            .filter((event) => event.type === 'ended')
-            .map((event) => event.sessionId)
-            .sort()
-        ).toEqual(['active', 'idle'])
-        querySpy.mockRestore()
-        exitSpy.mockRestore()
-        events.length = 0
-        await acquire('active', 2)
-        await expect(dispatch('active', 'after-loss', 2)).resolves.toMatchObject({
-          state: 'admitted'
-        })
-        await vi.waitFor(
-          () =>
-            expect(events).toContainEqual(
-              expect.objectContaining({
-                type: 'message',
-                sessionId: 'active',
-                message: expect.objectContaining({ type: 'user', uuid: 'echo' })
-              })
-            ),
-          { timeout: 5_000 }
-        )
-      } finally {
-        querySpy.mockRestore()
-        exitSpy.mockRestore()
-        try {
-          await adapter.closeAll()
-        } finally {
-          installProviderProcessHost(async () => null)
-          await server.shutdown()
-          client.disconnect()
-          vi.restoreAllMocks()
-        }
+      } else {
+        child.stderr.write('--dangerously-skip-permissions cannot be used with root\n')
+        child.emit('exit', 1, null)
       }
+      child.stdout.end()
+      child.stderr.end()
+      child.emit('close', 1, null)
+      expect(providerStartupFailureFact(await fault.promise)).toMatchObject({ kind })
+      await connection.close()
+    }
+  )
+
+  it.runIf(process.platform !== 'win32')(
+    'reports lost parent outcome once through the real SDK',
+    async () => {
+      const faults: Error[] = []
+      const exits: Error[] = []
+      const rootsAtFault: string[] = []
+      const scenario = scriptScenario([HOLD_OPEN])
+      const connection = await open(launchFor(scenario), {
+        onFault: (error) => {
+          faults.push(error)
+          rootsAtFault.push(connection.exitVerdict.root)
+        },
+        onExit: (error) => exits.push(error)
+      })
+      await connection.initializationResult()
+      const parent = spawnedChildren[0]
+      if (!parent) {
+        throw new Error('Missing native parent')
+      }
+      parent.kill('SIGKILL')
+      const error = await connection.exited
+      expect(faults).toEqual([error])
+      expect(rootsAtFault).toEqual(['exited'])
+      expect(exits).toEqual([error])
+      expect(providerStartupFailureFact(error)).toEqual({ kind: 'hostFault' })
+      await connection.close()
     }
   )
 

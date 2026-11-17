@@ -1,12 +1,10 @@
-import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 import {
   pathEnvRelativeTo,
   withCliRuntimeOnPath
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { resolveGuestNativeAgentCommand } from '../../codex-cli/command'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
-import { guardSupervisedProviderGroup } from '../../provider-process/provider-group-orphan-guard'
-import { SOURCE_CONTROL_KILL_SITE } from './source-control-agent-termination'
+import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 import { guestNativeSpawnEnv } from '../../ipc/wsl-guest-windows-drive-path'
 import type {
   SourceControlAgentSpawnInput,
@@ -35,9 +33,5 @@ export function spawnSupervisedAgent(
     { lifetime: 'one-shot' }
   )
   const child = spawnProviderProcess(spec)
-  guardSupervisedProviderGroup(child, {
-    site: SOURCE_CONTROL_KILL_SITE,
-    supervised: spec.supervised
-  })
   return Object.assign(child, { supervised: spec.supervised })
 }
