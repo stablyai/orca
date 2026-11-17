@@ -87,7 +87,8 @@ async function readMarketplaceAtCommit(
     files: new Map(),
     listed: new Map(),
     failed: new Set(),
-    digests: new WeakMap()
+    digests: new WeakMap(),
+    manifests: new WeakMap()
   }
   const batched = await extractBatchedMarketplaceImages(
     index,
@@ -99,7 +100,7 @@ async function readMarketplaceAtCommit(
   if (batched) {
     return batched
   }
-  const { files, listed, failed, digests } = loaded
+  const { files, failed, digests, manifests } = loaded
   // Past the retained cap, read the rest one at a time, handing out each loaded file once so only what extraction keeps stays alive.
   // Failed Git reads are retried, as a fresh one-at-a-time reader would.
   const readBlob: CatalogBlobReader = async (path, maxBytes) => {
@@ -111,14 +112,14 @@ async function readMarketplaceAtCommit(
     if (file?.bytes) {
       return file.bytes
     }
-    const single: CatalogLoadState = { files: new Map(), listed, failed: new Set(), digests }
+    const single: CatalogLoadState = { ...loaded, files: new Map(), failed: new Set() }
     await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), single)
     return single.files.get(path)?.bytes ?? null
   }
   return extractCatalogImages(
     index,
     readBlob,
-    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests),
+    (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests, manifests),
     digests
   )
 }
@@ -129,6 +130,7 @@ type CatalogLoadState = {
   /** Paths whose Git listing or read failed; batched passes treat them as absent. */
   failed: Set<string>
   digests: WeakMap<Uint8Array, string>
+  manifests: WeakMap<Uint8Array, unknown>
 }
 
 async function extractBatchedMarketplaceImages(
@@ -152,7 +154,8 @@ async function extractBatchedMarketplaceImages(
     const extracted = await extractCatalogImages(
       index,
       readBlob,
-      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, state.digests),
+      (entry, read) =>
+        fillMonorepoReleaseImages(entry, catalogUrl, read, state.digests, state.manifests),
       state.digests
     )
     if (missing.size === 0) {

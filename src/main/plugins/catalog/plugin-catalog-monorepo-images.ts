@@ -16,7 +16,8 @@ export async function fillMonorepoReleaseImages(
   entry: PluginMarketplaceEntry,
   catalogUrl: string,
   readBlob: CatalogBlobReader,
-  digests?: WeakMap<Uint8Array, string>
+  digests?: WeakMap<Uint8Array, string>,
+  manifests?: WeakMap<Uint8Array, unknown>
 ): Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }> {
   const [newest, ...older] = entry.releases ?? []
   const prefix = entry.source.path
@@ -26,12 +27,7 @@ export async function fillMonorepoReleaseImages(
   const manifestBytes = await readBlob(`${prefix}/orca-plugin.json`, MANIFEST_MAX_BYTES).catch(
     () => null
   )
-  let manifest: unknown = null
-  try {
-    manifest = manifestBytes ? JSON.parse(manifestBytes.toString('utf8')) : null
-  } catch {
-    manifest = null
-  }
+  const manifest = manifestBytes ? parseManifest(manifestBytes, manifests) : null
   const read = new Map<string, Buffer>()
   const images = await catalogImagesFromManifest({
     manifest,
@@ -56,4 +52,19 @@ export async function fillMonorepoReleaseImages(
       return bytes ? (bytes.byteLength <= maxBytes ? bytes : null) : readBlob(path, maxBytes)
     }
   }
+}
+
+/** Batched catalog reads rerun extraction over the same buffers; parse each manifest once. */
+function parseManifest(bytes: Buffer, manifests?: WeakMap<Uint8Array, unknown>): unknown {
+  if (manifests?.has(bytes)) {
+    return manifests.get(bytes)
+  }
+  let manifest: unknown = null
+  try {
+    manifest = JSON.parse(bytes.toString('utf8'))
+  } catch {
+    manifest = null
+  }
+  manifests?.set(bytes, manifest)
+  return manifest
 }
