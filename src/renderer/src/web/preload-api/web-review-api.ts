@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { createFallbackProxy } from './web-fallback-api'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 import { mapRepoPathArg } from '@/runtime/source-control/forge/runtime-repo-selector-params'
 import { repoHooksCheckWakeParams } from '../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 

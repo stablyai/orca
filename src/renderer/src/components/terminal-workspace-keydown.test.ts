@@ -90,7 +90,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
-vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+vi.mock('./terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))

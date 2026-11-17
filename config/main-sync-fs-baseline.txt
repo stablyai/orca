@@ -551,6 +551,8 @@
 1 src/main/windows/windows-process-table.ts
 1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
+# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
+3 src/main/worker-threads/worker-large-send-log.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts

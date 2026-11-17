@@ -65,6 +65,7 @@ export function TabBarCreateRowIcons({
                   type="button"
                   tabIndex={-1}
                   aria-label={item.label}
+                  data-create-row-item={item.id}
                   className={cn(
                     'flex h-7 w-9 shrink-0 items-center justify-center rounded-[7px] text-muted-foreground outline-hidden',
                     highlighted && CREATE_ROW_HIGHLIGHT_CLASS

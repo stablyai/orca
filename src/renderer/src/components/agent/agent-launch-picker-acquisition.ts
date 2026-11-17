@@ -1,6 +1,7 @@
 import {
   agentPickerCatalogJobs,
   agentPickerCatalogFailure,
+  AgentPickerCatalogRetries,
   updateAgentPickerCatalog,
   type AgentPickerCatalogJob
 } from './agent-picker-catalog-jobs'
@@ -36,6 +37,7 @@ class AgentPickerAcquisition {
   private defaults: AgentPickerEntry[]
   private stopInvalidation?: () => void
   private physicalCatalogs = 0
+  private retries = new AgentPickerCatalogRetries()
 
   constructor(
     readonly key: string,
@@ -120,6 +122,7 @@ class AgentPickerAcquisition {
       this.observers.delete(observer)
       if (!this.observers.size) {
         this.demand?.abort()
+        this.retries.cancel()
         this.stopInvalidation?.()
         this.stopInvalidation = undefined
         this.queued.refresh.clear()
@@ -228,8 +231,18 @@ class AgentPickerAcquisition {
         kind !== 'support'
           ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
               if (job === this.jobs[index] && !signal.aborted) {
+                const failure = agentPickerCatalogFailure(error)
+                const retrying =
+                  failure === 'retry' &&
+                  this.observers.size > 0 &&
+                  this.retries.schedule(job, () => {
+                    if (job === this.jobs[index] && !signal.aborted && this.observers.size) {
+                      this.queued.catalog.add(index)
+                      this.admit('catalog')
+                    }
+                  })
                 this.entries = updateAgentPickerCatalog(this.entries, job, {
-                  catalogRead: agentPickerCatalogFailure(error)
+                  catalogRead: retrying ? 'pending' : failure === 'retry' ? 'failed' : failure
                 })
               }
             })

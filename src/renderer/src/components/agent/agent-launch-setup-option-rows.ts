@@ -6,6 +6,7 @@ import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnEffort
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
+import { withLaunchEffortDefault } from './agent-launch-setup-default-effort'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type {
@@ -187,7 +188,7 @@ export function agentLaunchSetupOptionRows(
           }
     )
   }
-  return rows
+  return withLaunchEffortDefault(rows, entry, draft, t)
 }
 
 export function agentLaunchSetupCatalogState(
