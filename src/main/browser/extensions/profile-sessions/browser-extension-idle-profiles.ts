@@ -90,6 +90,10 @@ function scheduleIdleCheck(profileId: string, sess: Electron.Session): void {
           observePage(contents)
         }
       }
+      // A page that asked and already closed scheduled no check while the profile was detached.
+      if (!reopened) {
+        scheduleIdleCheck(profileId, sess)
+      }
     })
   }, IDLE_PROFILE_UNLOAD_DELAY_MS)
   timer.unref?.()
