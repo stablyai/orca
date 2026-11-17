@@ -1,17 +1,15 @@
-import type { AppState } from '@/store'
-import type { ExecutionHostOwnerRow } from '../../../shared/worktree-execution-host-resolution'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import type { AppState } from '@/store/types'
+import type { ExecutionHostOwnerRow } from '../../../shared/execution-host/worktree-execution-host-resolution'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/qualified-worktree-execution-owner'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  resolveQualifiedIndexedFolderWorkspace,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '../../../shared/execution-host/execution-host'
+import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WatchTargetRowState = Pick<
   AppState,

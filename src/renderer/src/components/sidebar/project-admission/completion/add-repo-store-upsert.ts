@@ -1,11 +1,11 @@
-import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '@/store/index'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 
 type AddedRepoOwner = {
   runtimeEnvironmentId?: string | null

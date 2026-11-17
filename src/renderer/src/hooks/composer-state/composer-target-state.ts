@@ -1,15 +1,19 @@
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerTargetState } from './composer-target-state-contract'
-import type { ComposerStateInput } from './composer-target-store'
-import { useComposerTargetStore } from './composer-target-store'
-import { useComposerInitialTargetState } from './initial-target-state'
-import { useComposerRuntimeTargetSelection } from './runtime-target-selection'
-import { useComposerSourceContextState } from './source-context-state'
-import { useWorkspaceIdentityState } from './workspace-identity-state'
+
+import {
+  type ComposerStateInput,
+  useComposerTargetStore
+} from './workspace-target/composer-target-store'
+import { useComposerInitialTargetState } from './workspace-target/initial-target-state'
+import { useComposerRuntimeTargetSelection } from './workspace-target/runtime-target-selection'
+import { useComposerSourceContextState } from './linked-work-items/source-context-state'
+import { useWorkspaceIdentityState } from './workspace-identity/workspace-identity-state'
 import { useComposerAsyncState } from './async-composer-state'
-import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
+import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
-import { useDraftTargetSync } from './draft-target-sync'
+import { useDraftTargetSync } from './workspace-target/draft-target-sync'
+import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -66,6 +70,7 @@ export function useComposerTargetState(
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     initialName: composerTargetStore.initialName,
     initialPrompt: composerTargetStore.initialPrompt,
+    initialNote: composerTargetStore.initialNote,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
     isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
@@ -135,6 +140,8 @@ export function useComposerTargetState(
     updateRepo: composerTargetStore.updateRepo
   })
   const derivedComposerState = useDerivedComposerState({
+    selectedProjectGroup: initialTargetState.selectedProjectGroup,
+    isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     agentPrompt: sourceContextState.agentPrompt,
     checkedHooksContextKey: asyncComposerState.checkedHooksContextKey,
     enableIssueAutomation: composerTargetStore.enableIssueAutomation,
@@ -193,7 +200,17 @@ export function useComposerTargetState(
   return {
     composerTargetStore,
     initialTargetState,
-    runtimeTargetSelection,
+    runtimeTargetSelection: {
+      ...runtimeTargetSelection,
+      // Keep the active project selected; Create waits for a visible host (#38669).
+      selectedTargetNeedsVisibleHost:
+        !runtimeTargetSelection.isProjectGroupTarget &&
+        needsVisibleRunTargetHost(
+          runtimeTargetSelection.selectedWorkspaceTarget,
+          composerTargetStore.hostOptions,
+          runtimeTargetSelection.selectedEphemeralVmRecipeId
+        )
+    },
     sourceContextState,
     workspaceIdentityState,
     asyncComposerState,

@@ -1,5 +1,5 @@
 import { BrowserWindow, powerMonitor } from 'electron'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { publishSystemResume, publishSystemSuspend } from './system-power-lifecycle'
 
 export const SYSTEM_RESUMED_CHANNEL = 'system:resumed'

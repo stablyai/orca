@@ -1,8 +1,8 @@
 import {
   resolveAgentStatusBinding,
   type AgentStatusRuntimeEnrichment
-} from '../../ipc/agent-status-ipc-boundary'
-import type { AgentStatusObservedPaneIdentities } from '../../runtime/agent-status-observed-pane-identity'
+} from '../../ipc/agent-hooks/agent-status-ipc-boundary'
+import type { AgentStatusObservedPaneIdentities } from '../../runtime/terminal/identity/agent-status-observed-pane-identity'
 import {
   isSameAgentProcess,
   type AgentProcessIdentity,

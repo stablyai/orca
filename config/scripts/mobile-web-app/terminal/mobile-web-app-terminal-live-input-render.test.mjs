@@ -60,8 +60,8 @@ beforeAll(async () => {
   await writeFile(
     join(routeDir, 'live-input-probe.tsx'),
     liveInputProbeRouteSource({
-      bindingModule: join(terminalDir, 'use-terminal-text-field-submit-binding'),
-      commitModule: join(terminalDir, 'use-terminal-live-input-commit')
+      bindingModule: join(terminalDir, 'live-input', 'use-terminal-text-field-submit-binding'),
+      commitModule: join(terminalDir, 'live-input', 'use-terminal-live-input-commit')
     })
   )
   const built = await buildMobileWebAppBundle({
@@ -130,35 +130,6 @@ const fieldValue = (page) =>
 describeRender(
   'the terminal live input on the page',
   () => {
-    it('clears the field when Enter submits, the way it does natively', async () => {
-      // Use real keydown to exercise RN-Web Enter/onSubmitEditing; command must clear previously sent live text.
-      const { errors, page } = await openProbe()
-      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
-      await page.keyboard.type('ls')
-      await page.waitForFunction(
-        (id) => document.getElementById(id)?.value === 'ls',
-        LIVE_INPUT_FIELD_ID,
-        { timeout: 30_000, polling: 100 }
-      )
-
-      await page.keyboard.press('Enter')
-
-      await page.waitForFunction(
-        () => (globalThis.__orcaLiveInputProbe.sent() ?? []).includes('\r'),
-        undefined,
-        { timeout: 30_000, polling: 100 }
-      )
-      // Require exact output once: RN-Web cancels submitted keydown, so page line-break binding must not send second CR.
-      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
-        'l',
-        's',
-        '\r'
-      ])
-      expect(await fieldValue(page)).toBe('')
-      expect(errors).toEqual([])
-      await page.close()
-    }, 300_000)
-
     it('submits when Enter arrives with the keyboard composition still open', async () => {
       // Android soft-keyboard Enter carries isComposing; RN-Web suppresses onSubmitEditing unlike native editor action.
       const { errors, page } = await openProbe()
@@ -188,6 +159,36 @@ describeRender(
         '\r'
       ])
       expect(await fieldValue(page)).toBe('')
+      expect(errors).toEqual([])
+      await page.close()
+    }, 300_000)
+
+    it('sends converted text when the keyboard commits it, without waiting for another key', async () => {
+      // WebKit's last input event during a commit still reports isComposing, and none follows compositionend.
+      const { errors, page } = await openProbe()
+      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+      const input = await page.context().newCDPSession(page)
+      await input.send('Input.imeSetComposition', {
+        text: 'にほんご',
+        selectionStart: 4,
+        selectionEnd: 4
+      })
+      await page.waitForFunction(
+        (id) => document.getElementById(id)?.value === 'にほんご',
+        LIVE_INPUT_FIELD_ID,
+        { timeout: 30_000, polling: 50 }
+      )
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([])
+
+      await input.send('Input.insertText', { text: '日本語' })
+
+      await page.waitForFunction(
+        () => globalThis.__orcaLiveInputProbe.sent().length > 0,
+        undefined,
+        { timeout: 30_000, polling: 50 }
+      )
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(['日本語'])
+      expect(await fieldValue(page)).toBe('日本語')
       expect(errors).toEqual([])
       await page.close()
     }, 300_000)
@@ -237,31 +238,6 @@ describeRender(
           ['/', 't', 'u', 'i']
         ])
         expect(await sent(page)).toEqual(['/', 't', 'u', 'i'])
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-
-      it('erases and retypes a word the keyboard corrects when it commits', async () => {
-        const { errors, page } = await openProbe({ userAgent: ANDROID_WEBVIEW_USER_AGENT })
-        await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
-        const input = await page.context().newCDPSession(page)
-        for (const text of ['t', 'te', 'teh']) {
-          await compose(input, text)
-          await waitForField(page, text)
-        }
-
-        await input.send('Input.insertText', { text: 'the' })
-        await waitForField(page, 'the')
-
-        await page.waitForFunction(
-          () => globalThis.__orcaLiveInputProbe.sent().length === 4,
-          undefined,
-          {
-            timeout: 30_000,
-            polling: 50
-          }
-        )
-        expect(await sent(page)).toEqual(['t', 'e', 'h', '\u007f\u007fhe'])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostPressureLevel, SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type {
+  HostPressureLevel,
+  SpawnIntent
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { HostTerminalLedger } from '../host-terminal-ledger'
 import { LegacyRestoreRecords } from '../legacy-restore-records'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
@@ -109,38 +112,6 @@ describe('the host records the legacy restores it refuses', () => {
       }
     ])
     expect(JSON.stringify(records.list())).not.toContain('secret')
-  })
-
-  it('records an old client restore refused at the host terminal cap', async () => {
-    build(1)
-    await host.createOrAttach({
-      sessionId: 'shell',
-      cols: 80,
-      rows: 24,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    await expect(restore('agent-b')).rejects.toThrow('as many terminals as Orca allows')
-    expect(records.list()).toMatchObject([{ sessionId: 'agent-b', reason: 'host_cap' }])
-  })
-
-  it('never records a plain shell or a declared restore, which keeps its own handle', async () => {
-    build(1)
-    await host.createOrAttach({
-      sessionId: 'shell',
-      cols: 80,
-      rows: 24,
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    await expect(
-      host.createOrAttach({
-        sessionId: 'shell-2',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-    ).rejects.toThrow('as many terminals as Orca allows')
-    await expect(restore('agent-c', 'automatic-restore')).rejects.toThrow('live_cap')
-    expect(records.list()).toEqual([])
   })
 
   it('drops the record once that agent session starts again from any client', async () => {

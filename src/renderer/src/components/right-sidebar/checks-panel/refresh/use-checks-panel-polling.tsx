@@ -1,9 +1,9 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
 import {
   ChecksDetailPollingPolicy,
   nextChecksPollBackoffMs
-} from '../../../../../../shared/github/checks-detail-polling-policy'
+} from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   gitLabPipelineJobsToPRChecks,
@@ -13,16 +13,16 @@ import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
 } from './checks-panel-async-result-key'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
 import {
   fetchGitLabMRDetailsForChecks,
   gitLabMRCommentsToPRComments
-} from '../gitlab-review-client'
-import { checksPanelLoadErrorMessage } from '../checks-panel-forge-owner'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
-import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
+} from '../review-data/gitlab-review-client'
+import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<
@@ -77,12 +77,15 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     async ({
       force = false,
       prNumberOverride,
-      wakeWslDistro = false
+      wakeWslDistro = false,
+      background = false
     }: {
       force?: boolean
       prNumberOverride?: number | null
       /** Opening the panel or tab: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      /** The panel's own timer: a paired host may answer from its last read at its cadence. */
+      background?: boolean
     } = {}) => {
       const {
         repo,
@@ -122,7 +125,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
             throwOnError: true,
             repoId: repo.id,
             repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-            ...(wakeWslDistro ? { wakeWslDistro: true } : {})
+            ...(wakeWslDistro ? { wakeWslDistro: true } : {}),
+            ...(background ? { background: true } : {})
           }
         )
         if (!isCurrentAsyncResult(requestKey)) {
@@ -244,7 +248,8 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         const pipelineCheck = details.pipeline
           ? gitLabPipelineToPRCheck(
               details.pipeline,
-              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline'),
+              details.headSha
             )
           : null
         setChecks(result, pipelineCheck)

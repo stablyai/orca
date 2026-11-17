@@ -1,18 +1,20 @@
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type {
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
-} from '../../client-session-tab-selection-projection'
+} from '../../client/navigation/client-session-tab-selection-projection'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
@@ -90,12 +92,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   }
 
   /** Select a newly created tab for one client; false if absent. Unlike a tap, this never wakes or respawns a pending pane. */
-  selectCreatedMobileSessionTabForClient(
+  async selectCreatedMobileSessionTabForClient(
     worktreeId: string,
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
-  ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+  ): Promise<boolean> {
+    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find((candidate) =>
@@ -112,12 +114,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
-  reopenMobileSessionTabForClient(
+  async reopenMobileSessionTabForClient(
     worktreeId: string,
     sessionId: string,
     clientNavigationId: string
-  ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+  ): Promise<boolean> {
+    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
       includeAgentSenders: false
     })
     const tab = snapshot.tabs.find(
@@ -155,7 +157,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     if (snapshot.publicationEpoch.includes(':headless-merge:')) {
       return false
     }
-    if (this.authoritativeWindowId !== null && this.graphStatus === 'ready') {
+    if (
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphStatus === 'ready'
+    ) {
       return false
     }
     return this.shouldMaterializeHeadlessMobileSessionTab(snapshot, tab)
@@ -170,28 +176,36 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       ...candidate,
       isActive: candidate.id === activeTab.id
     }))
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: activeTab.id,
-      activeTabType: 'terminal',
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        tabs,
-        activeTab,
-        snapshot.tabGroups
-      ),
-      tabs
-    }
-    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
+    const tabGroups = buildHeadlessMobileSessionTabGroups(
+      worktreeId,
+      tabs,
+      activeTab,
+      snapshot.tabGroups
+    )
+    const nextSnapshot = selectMobileSessionTab(
+      {
+        ...snapshot,
+        activeGroupId:
+          tabGroups.find((group) => group.tabOrder.includes(activeTab.parentTabId))?.id ??
+          snapshot.activeGroupId,
+        publicationEpoch: `headless:${Date.now().toString(36)}`,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        activeTabId: activeTab.id,
+        activeTabType: 'terminal',
+        tabGroups,
+        tabs
+      },
+      activeTab
+    )
+    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   protected persistHeadlessTerminalActiveLeaf(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -214,6 +228,26 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         ...session.activeTabIdByWorktree,
         [worktreeId]: tab.parentTabId
       },
+      ...(session.tabGroups?.[worktreeId]
+        ? {
+            tabGroups: {
+              ...session.tabGroups,
+              [worktreeId]: session.tabGroups[worktreeId].map((group) =>
+                group.id === snapshot.activeGroupId
+                  ? { ...group, activeTabId: tab.parentTabId }
+                  : group
+              )
+            }
+          }
+        : {}),
+      ...(snapshot.activeGroupId
+        ? {
+            activeGroupIdByWorktree: {
+              ...session.activeGroupIdByWorktree,
+              [worktreeId]: snapshot.activeGroupId
+            }
+          }
+        : {}),
       terminalLayoutsByTabId: nextLayouts
     })
   }

@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 
 // Families whose `Login Data` Orca can read; Firefox and Safari keep passwords elsewhere.
@@ -26,6 +26,7 @@ export function BrowserPasswordImportMenu({
   onImportCsv: () => void
   onImportBrowser: (source: BrowserPasswordImportSource) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const detectedBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
@@ -39,13 +40,13 @@ export function BrowserPasswordImportMenu({
     <DropdownMenu onOpenChange={(open) => open && void fetchDetectedBrowsers()}>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="outline" size="xs" disabled={disabled}>
-          {translate('settings.browser.passwords.import', 'Import')}
+          {t('settings.browser.passwords.import', 'Import')}
           <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuItem onSelect={onImportCsv}>
-          {translate('settings.browser.passwords.importCsv', 'From a CSV file…')}
+          {t('settings.browser.passwords.importCsv', 'From a CSV file…')}
         </DropdownMenuItem>
         {importableBrowsers.map((browser) => (
           <Fragment key={browser.family}>

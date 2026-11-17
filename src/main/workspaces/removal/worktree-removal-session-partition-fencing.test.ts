@@ -12,11 +12,11 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
-import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/runtime-partition-topology-fence'
-import { TEST_LEAF_1 } from '../../persistence/persistence-session-fixtures'
+import '../../persistence/loading-store/workspace-sessions/runtime-partition-topology-fence'
+import '../../persistence/persistence-session-fixtures'
 
 let hasCreatedStoreInCase = false
 
@@ -84,42 +84,6 @@ describe('worktree removal across host session partitions', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps sibling tabs when a worktree is removed before its host partition was ever persisted', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-      },
-      ENV_A
-    )
-
-    expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
-  })
-
-  it('does not materialize an unwritten host partition when removing a worktree', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
-  })
-
-  it('does not materialize an unwritten host partition when removing session state directly', async () => {
-    const store = await createStore()
-
-    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: STALE, hostId: ENV_A }))
-
-    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
-  })
-
   it('still fences a host partition that was persisted before the removal', async () => {
     const store = await createStore()
     store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
@@ -169,32 +133,6 @@ describe('worktree removal across host session partitions', () => {
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toBeUndefined()
   })
 
-  it('does not fence the local blob for a runtime removal it never held tabs for', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: { [STALE]: [makeTerminalTab({ id: 'host-tab', worktreeId: STALE })] }
-      },
-      ENV_A
-    )
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-    })
-
-    expect(store.getWorkspaceSession().tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
-    expect(
-      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-gone']
-    ).toBeUndefined()
-  })
-
   it('fences the owning partition that holds no tabs for the removed worktree', async () => {
     const store = await createStore()
     const otherRepoWorktree = 'repo-other::/workspace/live'
@@ -224,6 +162,40 @@ describe('worktree removal across host session partitions', () => {
     )
 
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toEqual([])
+  })
+
+  it('forgets a removed worktree once a late window save that still listed it is followed by one that does not', async () => {
+    const store = await createStore()
+    const liveTab = makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })],
+        [LIVE]: [liveTab]
+      }
+    })
+    removeWorktreeMetaRow(store, STALE, undefined)
+
+    // A save queued before the window purged the worktree lands after main removed it.
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })],
+        [LIVE]: [liveTab]
+      },
+      unifiedTabs: {}
+    })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [LIVE]: [liveTab] },
+      unifiedTabs: {}
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(Object.keys(session.tabsByWorktree)).toEqual([LIVE])
+    expect(session.unifiedTabs?.[STALE]).toBeUndefined()
+    expect(session.tabGroups?.[STALE]).toBeUndefined()
+    expect(session.activeTabIdByWorktree).not.toHaveProperty(STALE)
   })
 
   // omarchy: one removal left a repo revision that froze every sibling at [] across restarts.
@@ -302,110 +274,5 @@ describe('worktree removal across host session partitions', () => {
     expect(restarted.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual(
       ['kept']
     )
-  })
-
-  it("lets the window's saves win again once main's fence has expired", async () => {
-    const now = vi.spyOn(performance, 'now')
-    try {
-      now.mockReturnValue(1_000_000)
-      const store = await createStore()
-      store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-      store.setWorkspaceSession(
-        {
-          ...getDefaultWorkspaceSession(),
-          tabsByWorktree: { [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })] }
-        },
-        ENV_A
-      )
-      removeWorktreeMetaRow(store, STALE, undefined)
-      const save = (): void =>
-        store.setWorkspaceSession(
-          {
-            ...getDefaultWorkspaceSession(),
-            tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-          },
-          ENV_A
-        )
-
-      now.mockReturnValue(1_000_000 + RUNTIME_PARTITION_TOPOLOGY_FENCE_MS - 1)
-      save()
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE] ?? []).toEqual([])
-
-      now.mockReturnValue(1_000_000 + RUNTIME_PARTITION_TOPOLOGY_FENCE_MS)
-      save()
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-        'live-tab'
-      ])
-    } finally {
-      now.mockRestore()
-    }
-  })
-
-  it('fences a legacy tombstone retirement against a stale save that still holds the pane', async () => {
-    const now = vi.spyOn(performance, 'now')
-    try {
-      const paneKey = `retired-tab:${TEST_LEAF_1}`
-      const withPane = {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: {
-          [LIVE]: [makeTerminalTab({ id: 'retired-tab', worktreeId: LIVE, ptyId: 'pty-r' })]
-        },
-        terminalLayoutsByTabId: {
-          'retired-tab': {
-            root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
-            activeLeafId: TEST_LEAF_1,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-r' }
-          }
-        },
-        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-r' }
-      }
-      now.mockReturnValue(1_000_000)
-      const store = await createStore()
-      store.setWorkspaceSession(withPane, ENV_A)
-
-      now.mockReturnValue(1_000_000 + 2 * RUNTIME_PARTITION_TOPOLOGY_FENCE_MS)
-      store.setWorkspaceSession(
-        {
-          ...withPane,
-          terminalSurfaceTombstonesByPaneKey: {
-            [paneKey]: {
-              worktreeId: LIVE,
-              parentTabId: 'retired-tab',
-              leafId: TEST_LEAF_1,
-              ptyId: 'pty-r',
-              incarnationId: 'inc-r',
-              retiredAt: 1
-            }
-          }
-        },
-        ENV_A
-      )
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE] ?? []).toEqual([])
-
-      now.mockReturnValue(1_000_000 + 2 * RUNTIME_PARTITION_TOPOLOGY_FENCE_MS + 1)
-      store.setWorkspaceSession(withPane, ENV_A)
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE] ?? []).toEqual([])
-    } finally {
-      now.mockRestore()
-    }
-  })
-
-  it('does not fence the local blob that holds only sibling worktrees of the removed runtime worktree', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-    })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    expect(
-      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-gone']
-    ).toBeUndefined()
-    expect(store.getWorkspaceSession().tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
   })
 })

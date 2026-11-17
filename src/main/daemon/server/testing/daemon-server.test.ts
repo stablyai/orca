@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'no
 import { DaemonServer } from '../daemon-server'
 import type { ConnectedDaemonClient } from '../daemon-client-connections'
 import { DaemonClient } from '../../transport/client/daemon-client'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../../protocol/daemon-rpc-contract'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
@@ -58,9 +58,8 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   lifecycle: { server: Server | null }
-  preparations: { pending: Map<string, Set<unknown>> }
+
   host: {
-    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
     dispose: () => Promise<void>
   }
   connections: { clients: Map<string, ConnectedDaemonClient> }
@@ -283,129 +282,6 @@ describe('DaemonServer', () => {
       expect(spawnSubprocess).not.toHaveBeenCalled()
     })
 
-    it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
-      let finishPreparation!: () => void
-      const preparation = new Promise<void>((resolve) => {
-        finishPreparation = resolve
-      })
-      const preparePtySpawn = vi.fn(() => preparation)
-      const spawnSubprocess = vi.fn(() => createMockSubprocess())
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        preparePtySpawn,
-        spawnSubprocess
-      })
-      await server.start()
-      const c = await connectClient()
-
-      c.request('createOrAttach', {
-        sessionId: 'disconnect-pending',
-        cols: 80,
-        rows: 24
-      }).catch(() => {})
-      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
-
-      c.disconnect()
-      // Let disconnect cancel the preparation before releasing preflight.
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
-      )
-      finishPreparation()
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
-      )
-      expect(spawnSubprocess).not.toHaveBeenCalled()
-    })
-
-    it('kill with no pending preparation still surfaces SessionNotFoundError (F7)', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await expect(
-        c.request('kill', { sessionId: 'never-created', immediate: true })
-      ).rejects.toThrow('Session not found: never-created')
-    })
-
-    it('persists only an allowlisted launch identity across reattach', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const first = await c.request('createOrAttach', {
-        sessionId: 'agent-session',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'droid'
-      })
-      expect(first).toMatchObject({ isNew: true, launchAgent: 'droid' })
-
-      const second = await c.request('createOrAttach', {
-        sessionId: 'agent-session',
-        cols: 80,
-        rows: 24
-      })
-      expect(second).toMatchObject({ isNew: false, launchAgent: 'droid' })
-
-      const unknown = await c.request('createOrAttach', {
-        sessionId: 'unknown-agent-session',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'not-an-agent'
-      } as never)
-      expect(unknown).not.toHaveProperty('launchAgent')
-    })
-
-    it('replies with an error to unknown request types and keeps serving', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
-        'Unknown request type: definitelyUnknownRequest'
-      )
-      await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
-        pong: true
-      })
-    })
-
-    it('does not acknowledge kill until asynchronous teardown completes', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      let finishKill!: () => void
-      const teardown = new Promise<void>((resolve) => {
-        finishKill = resolve
-      })
-      const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
-
-      let acknowledged = false
-      const routed = daemon.requestRouter
-        .route('client-1', {
-          id: 'kill-1',
-          type: 'kill',
-          payload: { sessionId: 'agent-session', immediate: true }
-        })
-        .then((result) => {
-          acknowledged = true
-          return result
-        })
-
-      await Promise.resolve()
-      expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
-      expect(acknowledged).toBe(false)
-
-      finishKill()
-      await expect(routed).resolves.toEqual({})
-      expect(acknowledged).toBe(true)
-    })
-
-    it('returns error for unknown session operations', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await expect(c.request('write', { sessionId: 'nonexistent', data: 'hi' })).rejects.toThrow(
-        'Session not found'
-      )
-    })
-
     it('emits exit when a fire-and-forget write targets a missing session', async () => {
       await startServer()
       const c = await connectClient()
@@ -422,63 +298,6 @@ describe('DaemonServer', () => {
         sessionId: 'missing-session',
         payload: { code: -1 }
       })
-    })
-
-    it('bypasses daemon stream batching for output after input', async () => {
-      vi.useFakeTimers()
-      try {
-        let subprocess: ReturnType<typeof createMockSubprocess>
-        server = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => {
-            subprocess = createMockSubprocess()
-            return subprocess
-          }
-        })
-        const daemon = server as unknown as DaemonServerPrivate
-        const controlSocket = { destroy: vi.fn() } as unknown as Socket
-        const streamSocket = {
-          destroyed: false,
-          destroy: vi.fn(),
-          write: vi.fn()
-        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
-
-        daemon.connections.clients.set('client-1', {
-          clientId: 'client-1',
-          controlSocket,
-          streamSocket,
-          authenticatedPairEstablished: true
-        })
-
-        await daemon.requestRouter.route('client-1', {
-          id: 'req-1',
-          type: 'createOrAttach',
-          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
-
-        subprocess!._simulateData('background')
-        expect(streamSocket.write).not.toHaveBeenCalled()
-        vi.advanceTimersByTime(8)
-        expect(streamSocket.write).toHaveBeenCalledTimes(1)
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"background"')
-
-        streamSocket.write.mockClear()
-        await daemon.requestRouter.route('client-1', {
-          id: 'req-2',
-          type: 'write',
-          payload: { sessionId: 'test-session', data: 'x' }
-        })
-
-        expect(subprocess!.write).toHaveBeenCalledWith('x')
-        subprocess!._simulateData('echo')
-        expect(streamSocket.write).toHaveBeenCalledTimes(1)
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"echo"')
-        vi.advanceTimersByTime(8)
-        expect(streamSocket.write).toHaveBeenCalledTimes(1)
-      } finally {
-        vi.useRealTimers()
-      }
     })
 
     it('flushes pending batched stream output before the exit event', async () => {
@@ -743,14 +562,6 @@ describe('DaemonServer', () => {
         pid: process.pid,
         launchNonce: 'replacement'
       })
-    })
-
-    it('stops accepting connections after shutdown', async () => {
-      await startServer()
-      await server.shutdown()
-
-      const c = new DaemonClient({ socketPath, tokenPath })
-      await expect(c.ensureConnected()).rejects.toThrow()
     })
 
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {

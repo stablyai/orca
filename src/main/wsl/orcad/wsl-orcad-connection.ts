@@ -9,22 +9,20 @@ import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
-import type { WslHostConnectIntent } from '../../../shared/wsl-host-types'
-import { errorMessage } from '../../../shared/error-message'
+import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   wslConnectFailedStatus,
+  wslConnectingStatus,
   type WslOrcadConnectionStatus
 } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
-import {
-  defaultWslOrcadEnvironmentId,
-  deployAndLaunchWslOrcad,
-  type WslOrcadLaunch
-} from './wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId, deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
@@ -114,10 +112,10 @@ export class WslOrcadConnectionManager {
   }
 
   /** Prefer persisted enrollment; only unrecorded hosts fall back to their live connection offer. */
-  private enrolledOffer(key: string, environmentId: string): PairingOffer | null {
+  private async enrolledOffer(key: string, environmentId: string): Promise<PairingOffer | null> {
     const current = this.active.get(key)?.connection
     return (
-      this.dependencies.getPairingOffer?.(environmentId) ??
+      (await this.dependencies.getPairingOffer?.(environmentId)) ??
       (current?.environmentId === environmentId ? parsePairingCode(current.pairingOffer) : null)
     )
   }
@@ -202,8 +200,14 @@ export class WslOrcadConnectionManager {
       environmentId,
       label,
       intent: options.intent,
-      pairedOffer: this.enrolledOffer(key, environmentId),
+      pairedOffer: await this.enrolledOffer(key, environmentId),
       signal: options.signal,
+      // Only a connect that showed "Connecting" says what it waits for; null (lock taken) clears it.
+      onInstallLockWait: (wait) => {
+        if (!options.status && !options.requireRunning && !this.active.has(key) && stillCurrent()) {
+          this.dependencies.onChange?.(distro, null, wslConnectingStatus(wait))
+        }
+      },
       ...spawns.options
     }).finally(spawns.dispose)
     if (launch.outcome === 'deferred') {
@@ -213,8 +217,8 @@ export class WslOrcadConnectionManager {
       throw new WslOrcadConnectionSupersededError(distro)
     }
     const current = this.active.get(key)
-    const persisted = this.dependencies.getPairingOffer?.(environmentId) ?? null
-    const paired = persisted ?? this.enrolledOffer(key, environmentId)
+    const persisted = (await this.dependencies.getPairingOffer?.(environmentId)) ?? null
+    const paired = persisted ?? (await this.enrolledOffer(key, environmentId))
     // Repair only persisted enrollment; an in-progress Add has no stored record to repair.
     const recovery =
       persisted && this.dependencies.pairingRecovery
@@ -251,7 +255,7 @@ export class WslOrcadConnectionManager {
     const preferredLocalPort =
       current?.connection.localPort ??
       options.localPort ??
-      this.dependencies.recordedLocalPort?.(environmentId) ??
+      (await this.dependencies.recordedLocalPort?.(environmentId)) ??
       0
     if (current) {
       await this.drop(key, current)

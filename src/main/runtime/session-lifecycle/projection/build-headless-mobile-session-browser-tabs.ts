@@ -1,19 +1,19 @@
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
-import {
-  projectHeadlessClientBrowserTab,
-  projectHeadlessServerBrowserTab
-} from './headless-browser-tab-projection'
+import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
+import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-retirement/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
-import type { Tab } from '../../../../shared/tab-types'
+import { holdAgentSessionInventory } from '../../session-tabs/inventory/structured-agent-session-inventory-hold'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   captureTerminalCloseRequest,
   resolveTerminalCloseTarget,
@@ -24,10 +24,10 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
@@ -57,18 +57,36 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
-    const publishedServerTabs = serverTabs.map((tab) =>
-      projectHeadlessServerBrowserTab(
-        tab,
-        this.getPersistedUnifiedSessionTabProps(
-          worktreeId,
-          this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
-        )
+    const publishedServerTabs = serverTabs.map((tab) => {
+      const navigation = this.agentBrowserBridge?.getPageNavigationState(tab.browserPageId)
+      const persistedProps = this.getPersistedUnifiedSessionTabProps(
+        worktreeId,
+        this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
       )
+      return {
+        type: 'browser' as const,
+        // Offscreen pages lack separate workspace identity; use page id like the server browserWorkspaceId fallback.
+        id: tab.browserPageId,
+        title: tab.title || tab.url || 'Browser',
+        browserWorkspaceId: tab.browserPageId,
+        browserPageId: tab.browserPageId,
+        browserProfileId: tab.profileId ?? undefined,
+        url: tab.url || 'about:blank',
+        loading: navigation?.loading ?? false,
+        canGoBack: navigation?.canGoBack ?? false,
+        canGoForward: navigation?.canGoForward ?? false,
+        faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
+        loadError: tab.loadError ?? undefined,
+        certificateFailure: tab.certificateFailure ?? undefined,
+        ...(persistedProps ? { color: persistedProps.color } : {}),
+        ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        isActive: tab.active === true
+      }
+    })
+    const publishedClientTabs = buildRuntimeClientBrowserTabs(
+      getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+      getBrowserHostLeaseRegistry(this)
     )
-    const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .map(projectHeadlessClientBrowserTab)
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 

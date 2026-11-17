@@ -1,0 +1,312 @@
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
+import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from '../remote-runtime-memory-limits'
+
+const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
+const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
+const REMOTE_RUNTIME_BULK_READ_CONCURRENCY = 2
+export const RUNTIME_RPC_MAX_QUEUED_CALLS_PER_SELECTOR = 256
+export const RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL = 2_048
+export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
+
+export class RuntimeRpcCallQueueOverloadError extends Error {
+  readonly code = RUNTIME_RPC_QUEUE_OVERLOAD_CODE
+
+  constructor(readonly scope: 'selector' | 'global' | 'memory') {
+    super('Remote runtime call queue is full; retry after current calls finish.')
+    this.name = 'RuntimeRpcCallQueueOverloadError'
+  }
+}
+
+type QueuedRuntimeCall<T> = {
+  background: boolean
+  retainedBytes: number
+  run: () => Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+  started: boolean
+  signal?: AbortSignal
+  onAbort?: () => void
+}
+
+type RuntimeCallQueue = {
+  concurrency: number
+  active: number
+  backgroundActive: number
+  foreground: (QueuedRuntimeCall<unknown> | undefined)[]
+  foregroundHead: number
+  background: (QueuedRuntimeCall<unknown> | undefined)[]
+  backgroundHead: number
+}
+
+export function isBackgroundRuntimeMethod(method: string): boolean {
+  return (
+    method === 'hostedReview.forBranch' ||
+    method === 'github.prForBranch' ||
+    method === 'github.listWorkItems' ||
+    method === 'github.countWorkItems' ||
+    method === 'git.status' ||
+    method === 'git.history' ||
+    method === 'git.conflictOperation' ||
+    method === 'git.branchCompare' ||
+    method === 'git.upstreamStatus' ||
+    method === 'worktree.prefetchCreateBase'
+  )
+}
+
+export function isTimedPRRead(method: string, params: unknown): boolean {
+  return (
+    method === 'github.prForBranch' &&
+    typeof params === 'object' &&
+    params !== null &&
+    'reason' in params &&
+    params.reason === 'swr' &&
+    !('userRefresh' in params && params.userRefresh === true)
+  )
+}
+
+// Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
+// background slots belong to status.
+function isLongWaitRuntimeMethod(method: string): boolean {
+  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+}
+
+// Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.
+function isBulkReadRuntimeMethod(method: string): boolean {
+  return (
+    method === 'files.readChunk' ||
+    method === 'files.readDocPreviewChunk' ||
+    method === 'files.readTerminalArtifactChunk'
+  )
+}
+
+export class RuntimeRpcCallQueuePool {
+  private readonly queues = new Map<string, RuntimeCallQueue>()
+  private queuedCallCount = 0
+  private retainedCallBytes = 0
+
+  constructor(
+    private readonly concurrency = DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY,
+    private readonly backgroundConcurrency = DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY,
+    private readonly maxQueuedPerSelector = RUNTIME_RPC_MAX_QUEUED_CALLS_PER_SELECTOR,
+    private readonly maxQueuedTotal = RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL,
+    private readonly maxRetainedBytes = REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES
+  ) {}
+
+  enqueue<T>(
+    selector: string,
+    method: string,
+    run: () => Promise<T>,
+    retainedBytes = 0,
+    signal?: AbortSignal,
+    params?: unknown
+  ): Promise<T> {
+    if (signal?.aborted) {
+      return Promise.reject(abortSignalReason(signal))
+    }
+    // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
+    const bulkRead = isBulkReadRuntimeMethod(method)
+    const timedPR = isTimedPRRead(method, params)
+    const timedKey = `${selector}\u0000timed-pr`
+    const queueKey = isLongWaitRuntimeMethod(method)
+      ? `${selector}\u0000long-wait`
+      : bulkRead
+        ? `${selector}\u0000bulk-read`
+        : timedPR
+          ? timedKey
+          : selector
+    if (this.queuedCallCount >= this.maxQueuedTotal) {
+      return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
+    }
+    const existingQueue = this.queues.get(queueKey)
+    const pending = (key: string): number => {
+      const queue = this.queues.get(key)
+      return queue ? this.queuedCount(queue) : 0
+    }
+    const queued =
+      queueKey === selector || timedPR
+        ? pending(selector) + pending(timedKey)
+        : existingQueue
+          ? this.queuedCount(existingQueue)
+          : 0
+    if (queued >= this.maxQueuedPerSelector) {
+      return Promise.reject(new RuntimeRpcCallQueueOverloadError('selector'))
+    }
+    if (
+      !Number.isSafeInteger(retainedBytes) ||
+      retainedBytes < 0 ||
+      this.retainedCallBytes + retainedBytes > this.maxRetainedBytes
+    ) {
+      return Promise.reject(new RuntimeRpcCallQueueOverloadError('memory'))
+    }
+
+    const queue = this.getQueue(
+      queueKey,
+      timedPR
+        ? Math.min(this.concurrency, 2)
+        : bulkRead
+          ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY)
+          : this.concurrency
+    )
+    return new Promise<T>((resolve, reject) => {
+      const call: QueuedRuntimeCall<T> = {
+        background: !timedPR && isBackgroundRuntimeMethod(method),
+        retainedBytes,
+        run,
+        resolve,
+        reject,
+        started: false,
+        signal
+      }
+      const targetQueue = call.background ? queue.background : queue.foreground
+      targetQueue.push(call as QueuedRuntimeCall<unknown>)
+      this.queuedCallCount += 1
+      this.retainedCallBytes += retainedBytes
+      if (signal) {
+        call.onAbort = () => this.cancelQueuedCall(queueKey, queue, call)
+        signal.addEventListener('abort', call.onAbort, { once: true })
+      }
+      this.pump(queueKey, queue)
+    })
+  }
+
+  private getQueue(selector: string, concurrency: number): RuntimeCallQueue {
+    let queue = this.queues.get(selector)
+    if (!queue) {
+      queue = {
+        concurrency,
+        active: 0,
+        backgroundActive: 0,
+        foreground: [],
+        foregroundHead: 0,
+        background: [],
+        backgroundHead: 0
+      }
+      this.queues.set(selector, queue)
+    }
+    return queue
+  }
+
+  private pump(selector: string, queue: RuntimeCallQueue): void {
+    while (queue.active < queue.concurrency) {
+      let call = this.takeForeground(queue)
+      if (!call && queue.backgroundActive < this.backgroundConcurrency) {
+        call = this.takeBackground(queue)
+      }
+      if (!call) {
+        break
+      }
+
+      call.started = true
+      if (call.signal && call.onAbort) {
+        call.signal.removeEventListener('abort', call.onAbort)
+      }
+
+      queue.active += 1
+      if (call.background) {
+        queue.backgroundActive += 1
+      }
+      // Decorative status refreshes must not stampede capacity shared with streams and workspace actions.
+      let runPromise: Promise<unknown>
+      try {
+        runPromise = call.run()
+      } catch (error) {
+        // Start queued work immediately but route synchronous validation failures through cleanup.
+        runPromise = Promise.reject(error)
+      }
+      void runPromise.then(call.resolve, call.reject).finally(() => {
+        this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
+        queue.active = Math.max(0, queue.active - 1)
+        if (call.background) {
+          queue.backgroundActive = Math.max(0, queue.backgroundActive - 1)
+        }
+        if (queue.active === 0 && this.isEmpty(queue)) {
+          this.queues.delete(selector)
+          return
+        }
+        this.pump(selector, queue)
+      })
+    }
+  }
+
+  private cancelQueuedCall<T>(
+    selector: string,
+    queue: RuntimeCallQueue,
+    call: QueuedRuntimeCall<T>
+  ): void {
+    if (call.started || !call.signal) {
+      return
+    }
+    const targetQueue = call.background ? queue.background : queue.foreground
+    const head = call.background ? queue.backgroundHead : queue.foregroundHead
+    const index = targetQueue.indexOf(call as QueuedRuntimeCall<unknown>, head)
+    if (index === -1) {
+      return
+    }
+    targetQueue.splice(index, 1)
+    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+    this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
+    call.reject(abortSignalReason(call.signal))
+    if (queue.active === 0 && this.isEmpty(queue)) {
+      this.queues.delete(selector)
+      return
+    }
+    this.pump(selector, queue)
+  }
+
+  private takeForeground(queue: RuntimeCallQueue): QueuedRuntimeCall<unknown> | undefined {
+    if (queue.foregroundHead >= queue.foreground.length) {
+      return undefined
+    }
+    const call = queue.foreground[queue.foregroundHead]
+    queue.foreground[queue.foregroundHead] = undefined
+    queue.foregroundHead += 1
+    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+    this.compactForeground(queue)
+    return call
+  }
+
+  private takeBackground(queue: RuntimeCallQueue): QueuedRuntimeCall<unknown> | undefined {
+    if (queue.backgroundHead >= queue.background.length) {
+      return undefined
+    }
+    const call = queue.background[queue.backgroundHead]
+    queue.background[queue.backgroundHead] = undefined
+    queue.backgroundHead += 1
+    this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
+    this.compactBackground(queue)
+    return call
+  }
+
+  private compactForeground(queue: RuntimeCallQueue): void {
+    if (queue.foregroundHead <= 32 || queue.foregroundHead * 2 < queue.foreground.length) {
+      return
+    }
+    // Head indexes avoid repeated shifts; compaction bounds the consumed prefix.
+    queue.foreground.splice(0, queue.foregroundHead)
+    queue.foregroundHead = 0
+  }
+
+  private compactBackground(queue: RuntimeCallQueue): void {
+    if (queue.backgroundHead <= 32 || queue.backgroundHead * 2 < queue.background.length) {
+      return
+    }
+    queue.background.splice(0, queue.backgroundHead)
+    queue.backgroundHead = 0
+  }
+
+  private isEmpty(queue: RuntimeCallQueue): boolean {
+    return (
+      queue.foregroundHead >= queue.foreground.length &&
+      queue.backgroundHead >= queue.background.length
+    )
+  }
+
+  private queuedCount(queue: RuntimeCallQueue): number {
+    return (
+      queue.foreground.length -
+      queue.foregroundHead +
+      queue.background.length -
+      queue.backgroundHead
+    )
+  }
+}

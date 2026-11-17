@@ -1,5 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { AgentStatusPaneRoutingIndex } from './agent-status-pane-routing-index'
 
 export type PendingAgentStatusEvent = {
@@ -33,4 +33,10 @@ export type AgentStatusApplyOptions = {
   replay?: boolean
   retry?: boolean
   batch?: AgentStatusBatchContext
+}
+
+export type AgentStatusEventApplicatorArgs = {
+  pendingAgentStatusEvents: PendingAgentStatusEvent[]
+  transientClearWatermarkByConnectionId: Map<string, number>
+  enqueuePendingAgentStatus: (data: AgentStatusIpcPayload, options?: { replay?: boolean }) => void
 }

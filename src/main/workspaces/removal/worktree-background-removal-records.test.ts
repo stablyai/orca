@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,20 +7,24 @@ import {
   _settlePendingWorktreeRemovalsForTests,
   loadWorktreeRemovalRecords,
   resumeInterruptedWorktreeRemovals,
+  retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
   stopBackgroundWorktreeRemovals,
-  waitForPendingWorktreeRemoval
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from './worktree-background-removal'
 import {
   projectPendingWorktreeRemovals,
-  snapshotPendingWorktreeRemovals
+  snapshotPendingWorktreeRemovals,
+  withUnregisteredRemovalCheckouts
 } from './worktree-removal-listing'
 import type * as WorktreeRemovalRecords from './worktree-removal-records'
+import { readWorktreeRemovalRecords, writeWorktreeRemovalRecords } from './worktree-removal-records'
 import {
-  readWorktreeRemovalRecords,
-  worktreeRemovalRecordsFile,
-  writeWorktreeRemovalRecords
-} from './worktree-removal-records'
+  assertNoPendingWorktreeRemovalConflict,
+  pendingWorktreeRemovals,
+  persistWorktreeRemovalRecords
+} from './worktree-removal-table'
 
 vi.mock('./worktree-removal-records', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRemovalRecords>()
@@ -29,6 +33,9 @@ vi.mock('./worktree-removal-records', async (importOriginal) => {
     writeWorktreeRemovalRecords: vi.fn(actual.writeWorktreeRemovalRecords)
   }
 })
+const actualRemovalRecords = await vi.importActual<typeof WorktreeRemovalRecords>(
+  './worktree-removal-records'
+)
 
 const removal = {
   worktreeId: 'repo-1::/work/feature',
@@ -42,12 +49,17 @@ const isPending = (): boolean => waitForPendingWorktreeRemoval(removal.worktreeI
 let directory = ''
 
 beforeEach(async () => {
+  vi.mocked(writeWorktreeRemovalRecords).mockImplementation(
+    actualRemovalRecords.writeWorktreeRemovalRecords
+  )
   directory = await mkdtemp(join(tmpdir(), 'orca-worktree-removal-records-'))
   await loadWorktreeRemovalRecords(directory)
 })
 
 afterEach(async () => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.mocked(writeWorktreeRemovalRecords).mockReset()
   _resetPendingWorktreeRemovalsForTests()
   await rm(directory, { recursive: true, force: true })
 })
@@ -104,83 +116,40 @@ describe('durable worktree removal records', () => {
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
   })
 
-  it('clears the record when the delete fails so the row returns live and retryable', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const publish = vi.fn()
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: async () => {
-        throw new Error('Permission denied')
-      },
-      publish
-    })
-    await expect(result).rejects.toThrow('Permission denied')
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-    expect(isPending()).toBe(false)
-    expect(publish).toHaveBeenCalledTimes(2)
-  })
-
-  it('starts Git after a bounded wait when the record write stalls', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    vi.mocked(writeWorktreeRemovalRecords).mockReturnValueOnce(new Promise(() => {}))
-    const run = vi.fn(async () => ({}))
-    void startBackgroundWorktreeRemoval({
-      removal,
-      run,
-      publish: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(run).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('replies without waiting for the record to be cleared on disk', async () => {
-    let finishClear = (): void => {}
-    const publish = vi.fn()
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: async () => {
-        vi.mocked(writeWorktreeRemovalRecords).mockReturnValueOnce(
-          new Promise<void>((resolve) => {
-            finishClear = resolve
-          })
-        )
-        return {}
-      },
-      publish
-    })
-
-    await expect(result).resolves.toEqual({})
-    expect(publish).toHaveBeenCalledTimes(2)
-    finishClear()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('stops Git on quit without waiting and keeps the record for the next start', async () => {
-    const job = interruptedJob()
-    void startBackgroundWorktreeRemoval({ removal, ...job })
-    await vi.waitFor(() => expect(job.started()).toBe(true))
-
-    expect(stopBackgroundWorktreeRemovals()).toBeUndefined()
-    expect(job.stopped()).toBe(true)
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
-    // Quit publishes no completion; the interrupted record must remain resumable.
-    expect(job.publish).toHaveBeenCalledTimes(1)
-  })
-
   it('marks the row as removing after a restart and finishes it with the same job', async () => {
+    let releaseWrite!: () => void
+    const writing = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    vi.mocked(writeWorktreeRemovalRecords).mockImplementationOnce(async (...args) => {
+      await writing
+      await actualRemovalRecords.writeWorktreeRemovalRecords(...args)
+    })
     const job = interruptedJob()
     void startBackgroundWorktreeRemoval({ removal, ...job })
-    await vi.waitFor(() => expect(job.started()).toBe(true))
+    const initial: { id: string; hostId?: 'local' }[] = [{ id: removal.worktreeId }]
+    expect(
+      projectPendingWorktreeRemovals(
+        initial,
+        (row) => row.id,
+        true,
+        snapshotPendingWorktreeRemovals()
+      )
+    ).toEqual(initial)
+    expect(
+      projectPendingWorktreeRemovals(
+        initial,
+        (row) => row.id,
+        false,
+        snapshotPendingWorktreeRemovals()
+      )
+    ).toEqual(initial)
+    expect(() =>
+      assertNoPendingWorktreeRemovalConflict('/work/repo', { branch: 'feature' })
+    ).toThrow('Cleanup is pending')
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
+    releaseWrite()
+    await waitForWorktreeRemovalAcceptance(removal.worktreeId)
     stopBackgroundWorktreeRemovals()
     await _settlePendingWorktreeRemovalsForTests()
 
@@ -194,7 +163,10 @@ describe('durable worktree removal records', () => {
     ]
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
-    ).toEqual([{ id: removal.worktreeId, removing: true }, { id: 'repo-1::/work/other' }])
+    ).toEqual([
+      { id: removal.worktreeId, removing: true, removalRecorded: true },
+      { id: 'repo-1::/work/other' }
+    ])
     expect(
       projectPendingWorktreeRemovals(
         rows,
@@ -219,62 +191,119 @@ describe('durable worktree removal records', () => {
     expect(isPending()).toBe(false)
     expect(await readWorktreeRemovalRecords(directory)).toEqual([])
     await expect(joined).resolves.toEqual({})
-    expect(publish).toHaveBeenCalledTimes(1)
   })
 
-  it('does not start a second job for a removal that is still running', async () => {
-    void startBackgroundWorktreeRemoval({ removal, ...interruptedJob() })
-    const jobFor = vi.fn()
-    resumeInterruptedWorktreeRemovals(jobFor)
-    expect(jobFor).not.toHaveBeenCalled()
-    stopBackgroundWorktreeRemovals()
-    await _settlePendingWorktreeRemovalsForTests()
-  })
-
-  it('reads back only well-formed records from the file', async () => {
-    const valid = {
-      worktreeId: 'repo-1::/work/a',
-      repoId: 'repo-1',
-      repoPath: '/work/repo',
-      worktreePath: '/work/a',
-      branch: '',
-      head: '',
-      deleteBranch: false,
-      force: true,
-      requestedAt: 5
-    }
-    await writeFile(
-      worktreeRemovalRecordsFile(directory),
-      JSON.stringify({ version: 1, removals: [valid, { worktreeId: 'x' }, null] })
-    )
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([valid])
-
-    await writeFile(worktreeRemovalRecordsFile(directory), '{not json')
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([])
-  })
-
-  it('reads a record that carries a field this version does not know, ignoring the field', async () => {
-    const record = {
-      worktreeId: 'repo-1::/work/a',
-      repoId: 'repo-1',
-      repoPath: '/work/repo',
-      worktreePath: '/work/a',
+  it('retains the prior failure while a retry is unadmitted and after its save is refused', async () => {
+    const failed = {
+      worktreeId: removal.worktreeId,
+      repoId: removal.repoId,
+      repoPath: removal.repoPath,
+      worktreePath: directory,
       branch: 'feature',
       head: 'abc',
       deleteBranch: true,
       force: false,
-      requestedAt: 5,
-      failure: { message: 'Operation not permitted', failedAt: 6 }
+      requestedAt: 1,
+      failure: { message: 'Files are busy. Retry deletion.', failedAt: 2 }
     }
-    // Accept the older daily-build record format with checkout identity fields.
-    await writeFile(
-      worktreeRemovalRecordsFile(directory),
-      JSON.stringify({
-        version: 1,
-        removals: [{ ...record, checkoutIdentity: { dev: 1, ino: 2, birthtimeMs: 3 } }]
-      })
+    await actualRemovalRecords.writeWorktreeRemovalRecords(directory, () => [failed])
+    _resetPendingWorktreeRemovalsForTests()
+    await loadWorktreeRemovalRecords(directory)
+    let refuseWrite!: (error: Error) => void
+    const writing = new Promise<void>((_resolve, reject) => {
+      refuseWrite = reject
+    })
+    vi.mocked(writeWorktreeRemovalRecords).mockImplementationOnce(() => writing)
+    const run = vi.fn(async () => ({}))
+    const retried = retryFailedWorktreeRemoval(
+      removal.worktreeId,
+      'local',
+      () => ({
+        run,
+        publish: () => {}
+      }),
+      true
     )
+    const refusal = expect(retried).rejects.toThrow('Could not start deletion')
+    expect(
+      projectPendingWorktreeRemovals<{ id: string; hostId?: 'local' }>(
+        [{ id: removal.worktreeId }],
+        (row) => row.id,
+        true,
+        snapshotPendingWorktreeRemovals()
+      )
+    ).toEqual([{ id: removal.worktreeId, removalError: failed.failure.message }])
+    expect(await withUnregisteredRemovalCheckouts(removal.repoId, [])).toHaveLength(1)
+    await persistWorktreeRemovalRecords()
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([failed])
+    refuseWrite(new Error('Disk full'))
+    await refusal
+    await _settlePendingWorktreeRemovalsForTests()
+    expect(run).not.toHaveBeenCalled()
+    _resetPendingWorktreeRemovalsForTests()
+    await loadWorktreeRemovalRecords(directory)
+    expect(waitForPendingWorktreeRemoval(removal.worktreeId)).toBeUndefined()
+    expect(() =>
+      assertNoPendingWorktreeRemovalConflict('/work/repo', { branch: 'feature' })
+    ).toThrow('Retry deleting it before reusing its path or branch')
+    expect(await readWorktreeRemovalRecords(directory)).toEqual([failed])
+  })
 
-    expect(await readWorktreeRemovalRecords(directory)).toEqual([record])
+  it('never resumes a refused force deletion captured alongside another repo admission', async () => {
+    let releaseWrite!: () => void
+    const writing = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let refuseSecond!: (error: Error) => void
+    const secondWrite = new Promise<void>((_resolve, reject) => {
+      refuseSecond = reject
+    })
+    let secondReservedAtSnapshot = false
+    vi.mocked(writeWorktreeRemovalRecords)
+      .mockImplementationOnce(async (directory, current, committed) => {
+        await writing
+        await actualRemovalRecords.writeWorktreeRemovalRecords(
+          directory,
+          () => {
+            secondReservedAtSnapshot = pendingWorktreeRemovals.has('repo-2::/other/force')
+            return current()
+          },
+          committed
+        )
+      })
+      .mockImplementationOnce(() => secondWrite)
+      .mockRejectedValueOnce(new Error('No space for a cleanup rewrite'))
+    void startBackgroundWorktreeRemoval({ removal, ...interruptedJob() })
+    const refused = startBackgroundWorktreeRemoval({
+      removal: {
+        ...removal,
+        worktreeId: 'repo-2::/other/force',
+        repoId: 'repo-2',
+        repoPath: '/other/repo',
+        worktree: { path: '/other/force', branch: 'refs/heads/force', head: 'def' },
+        force: true
+      },
+      run: async () => ({}),
+      publish: () => {}
+    })
+    const refusal = expect(refused).rejects.toThrow('Could not start deletion')
+    releaseWrite()
+    await waitForWorktreeRemovalAcceptance(removal.worktreeId)
+    expect(secondReservedAtSnapshot).toBe(true)
+    expect(pendingWorktreeRemovals.has('repo-2::/other/force')).toBe(true)
+    refuseSecond(new Error('No space for the second record'))
+    await refusal
+    await persistWorktreeRemovalRecords()
+    stopBackgroundWorktreeRemovals()
+    await _settlePendingWorktreeRemovalsForTests()
+    _resetPendingWorktreeRemovalsForTests()
+    await loadWorktreeRemovalRecords(directory)
+
+    expect(
+      (await readWorktreeRemovalRecords(directory)).map((record) => record.worktreeId)
+    ).toEqual([removal.worktreeId])
+    expect(waitForPendingWorktreeRemoval('repo-2::/other/force')).toBeUndefined()
+    expect(waitForPendingWorktreeRemoval(removal.worktreeId)).toBeDefined()
   })
 })

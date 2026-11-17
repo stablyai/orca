@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
   const windowsPath = isWindowsAbsolutePathLike(parentPath)

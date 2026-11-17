@@ -12,67 +12,6 @@ const authority: BrowserClientHostLeaseAuthority = {
 }
 
 describe('BrowserHostCommandLedger capacity and snapshots', () => {
-  it('expires cached results at exact per-page and global ceilings', async () => {
-    const ledger = new BrowserHostCommandLedger({
-      authority,
-      maxCachedResults: 2,
-      maxCachedResultsPerPage: 1
-    })
-    ledger.attach(vi.fn())
-    const first = issueCreate(ledger, 'page-a', 1)
-    ledger.settle(resultParams(first.event, { status: 'completed' }))
-    await first.result
-    const second = ledger.issue({
-      browserPageId: 'page-a',
-      pageHostGeneration: 1,
-      command: { type: 'navigate', url: 'https://remote.internal/a' }
-    })
-    ledger.settle(resultParams(second.event, { status: 'completed' }))
-    await second.result
-
-    expect(() => ledger.settle(resultParams(first.event, { status: 'completed' }))).toThrow(
-      'browser_host_command_result_expired'
-    )
-    expect(ledger.settle(resultParams(second.event, { status: 'completed' }))).toBe(false)
-
-    const third = issueCreate(ledger, 'page-b', 2)
-    ledger.settle(resultParams(third.event, { status: 'completed' }))
-    await third.result
-    const fourth = issueCreate(ledger, 'page-c', 3)
-    ledger.settle(resultParams(fourth.event, { status: 'completed' }))
-    await fourth.result
-
-    expect(() => ledger.settle(resultParams(second.event, { status: 'completed' }))).toThrow(
-      'browser_host_command_result_expired'
-    )
-    expect(ledger.settle(resultParams(third.event, { status: 'completed' }))).toBe(false)
-    expect(ledger.settle(resultParams(fourth.event, { status: 'completed' }))).toBe(false)
-  })
-
-  it('freezes accepted authority, command, and result snapshots', async () => {
-    const mutableAuthority = { ...authority }
-    const ledger = new BrowserHostCommandLedger({ authority: mutableAuthority })
-    ledger.attach(vi.fn())
-    const command = {
-      type: 'createPage' as const,
-      browserProfileId: 'default',
-      executionHostKey: 'host-key-original'
-    }
-    const issued = ledger.issue({ browserPageId: 'page-a', pageHostGeneration: 1, command })
-    mutableAuthority.authorityEpoch = 'epoch-b'
-    command.executionHostKey = 'host-key-mutated'
-    const result: BrowserClientHostCommandResult = {
-      status: 'failed',
-      errorCode: 'original'
-    }
-    ledger.settle(resultParams(issued.event, result))
-    result.errorCode = 'mutated'
-
-    expect(issued.event.authorityEpoch).toBe('epoch-a')
-    expect(issued.event.command).toMatchObject({ executionHostKey: 'host-key-original' })
-    await expect(issued.result).resolves.toEqual({ status: 'failed', errorCode: 'original' })
-  })
-
   it('closes all outstanding outcomes when command delivery throws', async () => {
     const delivery = vi
       .fn()

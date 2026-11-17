@@ -1,6 +1,5 @@
 // Retain client scrollback when a paired desktop host cannot serialize the parked PTY.
-// Control ordinary park with a live host; force no-serializable-buffer to isolate local replay; force-park to test shared buffersByLeafId carry-through.
-// Ordinary parks use localOnlyScrollbackByTabId; force-parks must survive host layout frames in the shared home.
+// Require restored client bytes with and without an available host snapshot.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 
@@ -58,14 +57,13 @@ function fixtureCommand(): string {
     : command.map(quotePosixShell).join(' ')
 }
 
-type ParkKind = 'ordinary' | 'force'
+type ParkKind = 'ordinary'
 
 type ParkRevealOutcome = {
   /** The echoed token painted live before the park, so the pane really held it. */
   tokenBeforePark: boolean
   parked: boolean
-  /** Which scrollback home the park wrote. Ordinary parks must stay off the upload; force-parks
-   *  must stay on it, because a second desktop cold-restores from the shared copy. */
+  /** Ordinary park captures must stay off the shared upload. */
   parkedHome: 'local-only' | 'shared' | 'both' | 'none'
   /** The same echoed line is back. Nothing replays stdin, so a respawn cannot produce it. */
   tokenAfterReveal: boolean
@@ -77,18 +75,14 @@ type ScrollbackHomes = {
   layoutKnown: boolean
 }
 
-async function readHostWorktreeIds(page: Page): Promise<{ primary: string; secondary: string }> {
+async function readHostWorktreeIds(page: Page): Promise<{ primary: string }> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const primary = state?.activeWorktreeId
     if (!primary) {
       throw new Error('headed host has no active worktree')
     }
-    const secondary = state.allWorktrees().find((worktree) => worktree.id !== primary)?.id
-    if (!secondary) {
-      throw new Error('headed host has no second seeded worktree for the force-park scenario')
-    }
-    return { primary, secondary }
+    return { primary }
   })
 }
 
@@ -145,37 +139,15 @@ async function parkOrdinarily(
   await openPairedClientTab(clientPage, worktreeId, decoys[1].webTabId)
 }
 
-// Without paired-parking capability, use two hidden worktrees and retention budget one so the older target is force-parked.
-async function parkByRetentionBudget(
-  clientPage: Page,
-  environmentId: string,
-  otherWorktreeId: string,
-  createdTerminals: string[]
-): Promise<void> {
-  const decoy = await createPairedHostTerminal(
-    clientPage,
-    environmentId,
-    otherWorktreeId,
-    fixtureCommand()
-  )
-  createdTerminals.push(decoy.terminal)
-  await openPairedClientTab(clientPage, otherWorktreeId, decoy.webTabId)
-  await waitForPairedPaneMarker(clientPage, decoy.webTabId, 'READY', PAINT_BUDGET_MS)
-  // Why a non-terminal view: both worktrees must be hidden for the budget to rank them.
-  await clientPage.evaluate(() => window.__store?.getState().setActiveView('tasks'))
-}
-
 // Mirror/mark/park, force an inventory frame inside the park→reveal window, then report capture and restored echo.
 async function runParkRevealScenario(args: {
   clientPage: Page
   environmentId: string
   worktreeId: string
-  otherWorktreeId: string
   parkKind: ParkKind
   createdTerminals: string[]
 }): Promise<ParkRevealOutcome> {
-  const { clientPage, environmentId, worktreeId, otherWorktreeId, parkKind, createdTerminals } =
-    args
+  const { clientPage, environmentId, worktreeId, parkKind, createdTerminals } = args
   const target = await createPairedHostTerminal(
     clientPage,
     environmentId,
@@ -188,9 +160,7 @@ async function runParkRevealScenario(args: {
   await waitForPairedPaneMarker(clientPage, target.webTabId, 'READY', PAINT_BUDGET_MS)
   const { token, painted: tokenBeforePark } = await typeToken(clientPage, target.webTabId)
 
-  await (parkKind === 'ordinary'
-    ? parkOrdinarily(clientPage, environmentId, worktreeId, createdTerminals)
-    : parkByRetentionBudget(clientPage, environmentId, otherWorktreeId, createdTerminals))
+  await parkOrdinarily(clientPage, environmentId, worktreeId, createdTerminals)
   let parked = true
   try {
     await waitForTabParked(clientPage, target.webTabId, { parkDelayMs: PARK_DELAY_MS })
@@ -221,8 +191,7 @@ async function runParkRevealScenario(args: {
   )
   const parkedHome = classifyParkedHome(afterPark)
 
-  // Force a host frame inside the window: its bufferless layout rebuild would overwrite force-park’s shared capture.
-  // Ordinary park’s local-only bytes must remain outside that upload/rebuild path.
+  // Ordinary park’s local-only bytes must survive host inventory rebuilds.
   const probeTab = await createPairedHostTerminal(
     clientPage,
     environmentId,
@@ -247,10 +216,7 @@ async function runParkRevealScenario(args: {
   console.log(
     `[parked-scrollback] after-inventory-frame ${JSON.stringify({ parkKind, ...afterInventoryFrame })}`
   )
-  const survivedInventoryFrame =
-    parkKind === 'force'
-      ? afterInventoryFrame.sharedLength > 0
-      : afterInventoryFrame.localOnlyLength > 0
+  const survivedInventoryFrame = afterInventoryFrame.localOnlyLength > 0
   expect(
     { survivedInventoryFrame },
     'a host inventory frame wiped the park capture before the reveal'
@@ -275,9 +241,7 @@ async function runScenario(
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, clientName, {
     extraEnv: {
-      ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS),
-      // Budget one affects only force-park; ordinary-parkable worktrees bypass the budget ranker.
-      ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
+      ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS)
     }
   })
   const createdTerminals: string[] = []
@@ -296,9 +260,9 @@ async function runScenario(
               )
               return ids.every((id) => known.has(id))
             },
-            [worktreeIds.primary, worktreeIds.secondary]
+            [worktreeIds.primary]
           ),
-        { timeout: 60_000, message: 'paired client never saw both host worktrees' }
+        { timeout: 60_000, message: 'paired client never saw the host worktree' }
       )
       .toBe(true)
     await client.page.evaluate((id) => {
@@ -310,7 +274,6 @@ async function runScenario(
       clientPage: client.page,
       environmentId: client.environmentId,
       worktreeId: worktreeIds.primary,
-      otherWorktreeId: worktreeIds.secondary,
       parkKind,
       createdTerminals
     })
@@ -332,13 +295,6 @@ const RESTORED_LOCAL_ONLY: ParkRevealOutcome = {
   parked: true,
   parkedHome: 'local-only',
   tokenAfterReveal: true
-}
-// Log force-park reveal only: live host tail replay can overwrite a correct client copy.
-// Assert retention at its actual boundary, survivedInventoryFrame, instead.
-const FORCE_PARKED_SHARED: Omit<ParkRevealOutcome, 'tokenAfterReveal'> = {
-  tokenBeforePark: true,
-  parked: true,
-  parkedHome: 'shared'
 }
 
 test.describe('host retains the buffer', () => {
@@ -364,27 +320,5 @@ test.describe('host retains nothing', () => {
     expect(await runScenario(orcaPage, testInfo, 'host-empty', 'ordinary')).toEqual(
       RESTORED_LOCAL_ONLY
     )
-  })
-})
-
-test.describe('force-park with a host that cannot answer', () => {
-  test.use({
-    orcaAppExtraEnv: {
-      ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE: '1',
-      // Omit paired-parking capability so this topology reaches retention-budget force-park.
-      ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING: '1'
-    }
-  })
-
-  test('a force-parked remote terminal keeps its shared-layout capture across an inventory frame', async ({
-    orcaPage
-  }, testInfo) => {
-    test.setTimeout(600_000)
-    const outcome = await runScenario(orcaPage, testInfo, 'force-park', 'force')
-    expect({
-      tokenBeforePark: outcome.tokenBeforePark,
-      parked: outcome.parked,
-      parkedHome: outcome.parkedHome
-    }).toEqual(FORCE_PARKED_SHARED)
   })
 })

@@ -13,7 +13,9 @@ const NON_TEST_FILES = new Set([
   'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
   'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs',
-  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs'
+  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs',
+  'src/main/runtime/agent-session/launch/agent-session-launch-directory.test.ts',
+  'src/main/runtime/session-tabs/chat/agent-session-tab-layout.test.ts'
 ])
 
 const DESKTOP_SUITE_PREFIXES = [
@@ -21,17 +23,8 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/packages/process-host/',
   'src/main/agent-launch/',
   'src/main/runtime/rpc/',
-  'src/main/runtime/agent-session-',
+  'src/main/runtime/agent-session/ownership/agent-session-',
   'src/main/runtime/agent-session/records/agent-session-',
-  'src/main/runtime/agent-session/agent-session-account-',
-  'src/main/runtime/agent-session/agent-session-acquisition-',
-  'src/main/runtime/agent-session/agent-session-conversation-',
-  'src/main/runtime/agent-session/agent-session-death-',
-  'src/main/runtime/agent-session/agent-session-launch-',
-  'src/main/runtime/agent-session/agent-session-operation-',
-  'src/main/runtime/agent-session/agent-session-rewind-',
-  'src/main/runtime/agent-session/agent-session-runtime-',
-  'src/main/runtime/agent-session/agent-session-unsaved-',
   'src/main/native-chat/agent-session-wire/'
 ]
 

@@ -35,6 +35,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Secret scan
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,6 +85,7 @@ jobs:
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -112,6 +114,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Container security (${{ matrix.app }})
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -170,6 +173,7 @@ jobs:
   test:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:16-alpine

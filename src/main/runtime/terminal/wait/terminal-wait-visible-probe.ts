@@ -2,7 +2,7 @@ import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-ag
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalWaiter } from './terminal-waiter'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
@@ -13,13 +13,13 @@ import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-pro
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
 } from './terminal-wait-results'
 import { outputClockOf } from './tui-idle-evidence-source'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
+import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 

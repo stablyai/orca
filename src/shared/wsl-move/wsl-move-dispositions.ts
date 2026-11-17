@@ -1,6 +1,6 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
-import type { PersistedState } from '../persisted-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =
@@ -63,6 +63,9 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   },
   worktreeLineageById: moveDisposition(16),
   workspaceLineageByChildKey: moveDisposition(17),
+  crossStoreLineageByChildKey: moveDisposition(17, {
+    note: 'Moves with its child; the parent names another store and is never rewritten.'
+  }),
   settings: notApplicableDisposition(62, 'Desktop-global; see SETTINGS_KEYS_NAMING_A_PATH.'),
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),

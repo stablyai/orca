@@ -1,9 +1,9 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
-import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
+import type { Project, ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
-import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace/status/workspace-statuses'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AppState } from '@/store/types'
 import {
   GOLDEN_NOW,

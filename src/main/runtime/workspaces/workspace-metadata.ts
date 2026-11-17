@@ -2,7 +2,7 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
-import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
+import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
@@ -10,6 +10,7 @@ import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from './metadata/runtime-managed-worktree-metadata'
+import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
 
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
@@ -61,6 +62,8 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        matchFolderWorkspaces?: boolean
+        crossStoreParent?: CrossStoreParentRef
         noParent?: boolean
       }
     }
@@ -74,7 +77,9 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
+        resolveParent: (selector, options) => this.worktreeLineage.resolveParent(selector, options),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
+        readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),

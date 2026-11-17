@@ -2,22 +2,22 @@ import { z } from 'zod'
 import {
   CONNECTOR_SOURCES,
   type ExternalConversationLink
-} from '../../shared/external-conversation-link'
+} from '../../shared/connectors/external-conversation-link'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import {
   readWorkspaceRecord,
   writeWorkspaceRecord,
   type WorkspaceRecordStore
-} from '../runtime/sidebar-inputs/sort-stamp-records'
+} from '../runtime/workspaces/metadata/workspace-activity-records'
 import { CONNECTOR_AGENTS } from './connector-agents'
 import type { ConversationKey } from './external-conversation-types'
 

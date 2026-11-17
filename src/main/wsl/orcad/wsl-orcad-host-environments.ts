@@ -1,5 +1,5 @@
 /** Map currently connected runtime IDs to WSL distros for desktop account shims; connection manager removes entries on close. */
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const distrosByEnvironment = new Map<string, string>()
 /** The capabilities the connected orcad last reported; dropped on every (re)connect. */

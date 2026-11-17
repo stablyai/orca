@@ -1,9 +1,9 @@
 import type { RuntimeBrowserClientPage } from '../client-pages/runtime-browser-page-registry'
-import type { BrowserTabListResult } from '../../../../shared/runtime-browser-contracts'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
+import type { BrowserTabListResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { mergeBrowserTabListing } from './browser-tab-listing'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -53,8 +53,19 @@ export class RuntimeBrowserTabCatalog {
       }
     })
     // Why no window check: headless snapshots list saved pages not yet started, which load on switch too.
-    const tabBar = bridge ? (this.host.readBrowserTabBar?.(worktreeId) ?? []) : []
-    return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs })
+    const tabBar = bridge
+      ? (this.host.readBrowserTabBar?.(worktreeId) ?? []).map((entry) => ({
+          ...entry,
+          profileLabel: entry.profileId
+            ? (browserSessionRegistry.getProfile(entry.profileId)?.label ?? null)
+            : null
+        }))
+      : []
+    const routedPageId =
+      !clientPageActive && bridge && typeof bridge.getRoutedPageId === 'function'
+        ? bridge.getRoutedPageId(worktreeId)
+        : null
+    return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs, routedPageId })
   }
 
   async assertClientPageWorkspace(

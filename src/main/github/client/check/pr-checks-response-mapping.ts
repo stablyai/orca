@@ -1,12 +1,13 @@
-import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { githubRepositoryWebHost, type GitHubApiRepository } from '../../github-api-repository'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { githubRepositoryWebHost } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
   mapCommitStatusRESTStatus,
   mapCommitStatusRESTConclusion
-} from '../../mappers'
+} from '../../api/github-read-response'
 import type {
   GraphQLPRChecksResponse,
   GraphQLCheckRunContext,
@@ -17,6 +18,10 @@ import type {
   RestCommitStatus
 } from './pr-checks-graphql-query'
 import { nullableString, nullableNumber, parseActionsRunId } from './check-detail-field-mapping'
+import {
+  checkRunTimes,
+  commitStatusTimes
+} from '../../../../shared/source-control/checks/pr-check-time'
 export function isGraphQLCheckRunContext(
   context: GraphQLStatusCheckContext
 ): context is GraphQLCheckRunContext {
@@ -43,6 +48,7 @@ export function mapGraphQLCheckRunContext(context: GraphQLCheckRunContext): PRCh
     status: mapCheckRunRESTStatus(context.status ?? ''),
     conclusion: mapCheckRunRESTConclusion(context.status ?? '', context.conclusion ?? null),
     url,
+    ...checkRunTimes(context.startedAt, context.completedAt),
     ...(checkRunId !== null ? { checkRunId } : {}),
     ...(typeof workflowRunId === 'number' ? { workflowRunId } : {})
   }
@@ -55,11 +61,13 @@ export function mapGraphQLStatusContext(context: GraphQLStatusContext): PRCheckD
   }
   const url = nullableString(context.targetUrl)
   const workflowRunId = parseActionsRunId(url)
+  const status = mapCommitStatusRESTStatus(context.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(context.state ?? ''),
+    status,
     conclusion: mapCommitStatusRESTConclusion(context.state ?? ''),
     url,
+    ...commitStatusTimes(status, context.createdAt),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }
@@ -70,6 +78,7 @@ export function mapRestCheckRun(checkRun: RestCheckRun): PRCheckDetail {
     status: mapCheckRunRESTStatus(checkRun.status),
     conclusion: mapCheckRunRESTConclusion(checkRun.status, checkRun.conclusion),
     url: checkRun.details_url || checkRun.html_url || null,
+    ...checkRunTimes(checkRun.started_at, checkRun.completed_at),
     ...(typeof checkRun.id === 'number' ? { checkRunId: checkRun.id } : {}),
     workflowRunId: parseActionsRunId(checkRun.details_url || checkRun.html_url || null)
   }
@@ -82,11 +91,13 @@ export function mapRestCommitStatus(status: RestCommitStatus): PRCheckDetail | n
   }
   const url = nullableString(status.target_url)
   const workflowRunId = parseActionsRunId(url)
+  const checkStatus = mapCommitStatusRESTStatus(status.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(status.state ?? ''),
+    status: checkStatus,
     conclusion: mapCommitStatusRESTConclusion(status.state ?? ''),
     url,
+    ...commitStatusTimes(checkStatus, status.created_at),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }

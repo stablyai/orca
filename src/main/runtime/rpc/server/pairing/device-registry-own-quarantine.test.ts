@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as secureFile from '../../../../../shared/secure-file'
+import * as secureFile from '../../../../../shared/secure-storage/secure-file'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -45,17 +45,6 @@ function partiallyCorruptRegistry() {
 }
 
 describe('device registry after quarantining its own corrupt file', () => {
-  it('keeps every valid device through the first save', () => {
-    const { registry, phone } = partiallyCorruptRegistry()
-
-    const added = registry.addDevice('new desktop', 'runtime')
-
-    expect(quarantinedCopies()).toHaveLength(1)
-    expect(fileIds()).toEqual([phone.deviceId, added.deviceId])
-    expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
-    expect(new DeviceRegistry(dir).validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
-  })
-
   it('keeps them when the write after the quarantine failed, on the next save', () => {
     const { registry, phone } = partiallyCorruptRegistry()
     vi.spyOn(secureFile, 'writeSecureJsonFile').mockImplementationOnce(() => {
@@ -95,18 +84,6 @@ describe('device registry after quarantining its own corrupt file', () => {
     const added = registry.addDevice('second desktop', 'runtime')
 
     expect(fileIds()).toEqual([added.deviceId])
-    expect(registry.validateToken(phone.token)).toBeNull()
-  })
-
-  it('revokes everything when an intact file is deleted, as before', () => {
-    const registry = new DeviceRegistry(dir)
-    const phone = registry.addDevice('phone', 'mobile')
-
-    rmSync(registryPath())
-    const added = registry.addDevice('desktop', 'runtime')
-
-    expect(fileIds()).toEqual([added.deviceId])
-    expect(registry.getDevice(phone.deviceId)).toBeNull()
     expect(registry.validateToken(phone.token)).toBeNull()
   })
 

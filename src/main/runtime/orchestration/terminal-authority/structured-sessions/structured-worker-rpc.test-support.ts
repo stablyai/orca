@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../rpc/core'
 
 type Db = InstanceType<typeof OrchestrationDb>

@@ -2,6 +2,7 @@
 
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentLaunchSurface } from './agent-launch-surface'
+import type { SetupTrustMismatch } from '../../worktree/create-types'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -112,6 +113,8 @@ export type AgentLaunchResult = {
   worktreeId: string
   /** Keep partial workspace/surface failures in one top-level warning for both launch modes; callers must surface incomplete creation. */
   warning?: string
+  /** The create skipped setup because the created branch's commands differ from the approved ones. */
+  setupTrustMismatch?: SetupTrustMismatch
   /** Why the outcome is what it is — always populated, so a downgrade is never silent. */
   receipt: AgentLaunchModeReceipt
   prompt?: AgentLaunchPromptReceipt
@@ -137,6 +140,7 @@ export type AgentLaunchModeReason =
   | 'structured_support_unknown'
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
+  | 'chat_unavailable_on_windows'
   | 'structured_unsupported_on_host'
   | 'chat_runtime_not_installed'
 
@@ -150,6 +154,15 @@ export type AgentLaunchModeReceipt = {
   reason: AgentLaunchModeReason
   /** One sentence, always present, so a fallback is never silent. */
   detail: string
+}
+
+/** A chat the user preferred that could not run; an agent with no chat at all is not a fallback. */
+export function isAgentLaunchChatFallback(receipt: AgentLaunchModeReceipt): boolean {
+  return (
+    receipt.mode === 'terminal' &&
+    receipt.preferred === 'structured' &&
+    receipt.reason !== 'agent_without_structured_session'
+  )
 }
 
 /** Validate durable replay fields beside their types; absent optional fields remain compatible with older stored rows. */
@@ -224,7 +237,7 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
         (outcome.tabId === undefined || typeof outcome.tabId === 'string')
 }
 
-function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {
+export function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {
   if (typeof value !== 'object' || value === null) {
     return false
   }

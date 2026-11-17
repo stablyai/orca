@@ -4,16 +4,18 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { randomUUID } from 'node:crypto'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import type { IpcMainEvent } from 'electron'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
 } from '../view/terminal-surface-deadlines'
 import { isClientDisconnectedError } from '../../client/runtime-client-disconnect'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
-import { requestMobileRendererTerminalTabCreate } from './mobile-terminal-renderer-ipc-request'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
@@ -115,6 +117,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           ...(effectiveTitle ? { title: effectiveTitle } : {}),
           ...(opts.resumeProviderSession
@@ -148,6 +151,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
@@ -172,19 +176,60 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       ? rendererPublicationThrottle.acquire(rendererWebContents)
       : () => {}
     try {
-      const reply = await requestMobileRendererTerminalTabCreate({
-        win,
-        worktreeId,
-        afterDesktopTabId,
-        targetGroupId: opts.targetGroupId,
-        shellOverride: opts.shellOverride,
-        cwd,
-        effectiveTitle,
-        startupCommand,
-        resumeProviderSession: opts.resumeProviderSession,
-        viewMode: opts.viewMode,
-        activate: opts.activate,
-        signal: opts.signal
+      const requestId = randomUUID()
+      const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+          opts.signal?.removeEventListener('abort', onAbort)
+          reject(new Error('Terminal creation timed out'))
+        }, 10_000)
+        // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
+        const onAbort = (): void => {
+          clearTimeout(timer)
+          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+          reject(new Error('client_disconnected'))
+        }
+
+        const handler = (
+          event: IpcMainEvent,
+          r: { requestId: string; tabId?: string; title?: string; error?: string }
+        ): void => {
+          if (event.sender !== rendererWebContents || r.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+          opts.signal?.removeEventListener('abort', onAbort)
+          if (r.error) {
+            reject(new Error(r.error))
+          } else {
+            resolve({ tabId: r.tabId!, title: r.title ?? '' })
+          }
+        }
+        opts.signal?.addEventListener('abort', onAbort, { once: true })
+        getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
+        rendererWebContents.send('terminal:requestTabCreate', {
+          requestId,
+          worktreeId,
+          afterTabId: afterDesktopTabId,
+          targetGroupId: opts.targetGroupId,
+          command: startupCommand.command,
+          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
+          cwd,
+          ...(effectiveTitle ? { title: effectiveTitle } : {}),
+          ...(startupCommand.env ? { env: startupCommand.env } : {}),
+          ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
+          ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+          ...(opts.resumeProviderSession
+            ? { resumeProviderSession: opts.resumeProviderSession }
+            : {}),
+          ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
+          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+          startupCommandDelivery: startupCommand.startupCommandDelivery,
+          source: 'runtime-session',
+          activate: opts.activate
+        })
       })
 
       if (effectiveTitle) {
@@ -252,6 +297,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
+            ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

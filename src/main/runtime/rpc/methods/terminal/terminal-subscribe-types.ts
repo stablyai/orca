@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import type { TerminalOutputChunk } from './terminal-stream-types'
-import type { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import type { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type { TerminalSubscriptionRegistration } from './terminal-subscription-registration'
@@ -19,9 +19,14 @@ export type TerminalSubscriptionArgs = {
   emit: TerminalSubscriptionEmit
   ptyId: string
   clientId: string | undefined
+  // The authenticated device, whose departure ends this view; request ids are client-declared.
+  viewerDeviceId: string | undefined
+  pairedDeviceId: string | undefined
   isMobile: boolean
   supportsDesktopViewportClaims: boolean
   supportsWriteUnavailable: boolean
+  /** The stream's snapshot reached the client and it is now live. */
+  onEstablished?: () => void
   missingHeadlessStateBeforeMobileFit: boolean
   rendererMountRequestedBeforePty: boolean
   serializerGenerationBeforeMobileFit: number

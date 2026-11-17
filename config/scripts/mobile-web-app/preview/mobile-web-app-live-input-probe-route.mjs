@@ -27,6 +27,7 @@ export default function LiveInputProbeRoute() {
   const {
     clearPendingLiveInputCommit,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   } = useTerminalLiveInputCommit({
@@ -42,7 +43,12 @@ export default function LiveInputProbeRoute() {
   const onSubmitEditing = useCallback(() => {
     void handleLiveInputSubmit()
   }, [handleLiveInputSubmit])
-  const bindLiveInputField = useTerminalTextFieldSubmitBinding(liveInputRef, onSubmitEditing)
+  const bindLiveInputField = useTerminalTextFieldSubmitBinding(
+    liveInputRef,
+    onSubmitEditing,
+    undefined,
+    handleLiveInputCompositionEnd
+  )
 
   // What use-mobile-session-startup.ts does on every session mount, in the same place.
   useEffect(() => {

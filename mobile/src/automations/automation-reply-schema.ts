@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
-import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import * as z from 'zod'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/validation/zod-salvage'
 
 const hostId = z.string().transform((value, ctx) => {
   const parsed = normalizeExecutionHostId(value)
@@ -146,7 +146,8 @@ export const sshInventorySchema = z.object({
     z.object({
       id: z.string(),
       label: z.string(),
-      generation: z.number().int().positive().optional()
+      generation: z.number().int().positive().optional(),
+      managedServer: z.literal(true).optional().catch(undefined)
     })
   )
 })

@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function getPtyIdForPaneKey(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -25,7 +26,7 @@ export function getPtyIdForPaneKey(paneKey: string): string | null {
       return tabPtyIds[0] ?? null
     }
     // After unmount clears leaf binding, use tab liveness only for leaves still present in layout.
-    return collectLeafIdsInOrder(layout.root).includes(parsed.leafId)
+    return collectLayoutLeafIdsInOrder(layout.root).includes(parsed.leafId)
       ? (tabPtyIds[0] ?? null)
       : null
   }

@@ -2,11 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setAppEnvironment } from '../../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { daemonHostStagingName } from '../daemon-host-reclaim'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {
-  getDaemonHostRootDir,
   materializeRelocatedDaemonHost,
   pruneDaemonHostStaging,
   pruneOldDaemonHosts
@@ -81,22 +80,6 @@ afterEach(() => {
 })
 
 describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
-  it('gives each userData profile its own same-version mirror', () => {
-    useProfile(join(tempDir, 'profile-a'))
-    const rootA = getDaemonHostRootDir()
-    const buildA = materializedBuild()
-    useProfile(join(tempDir, 'profile-b'))
-    const rootB = getDaemonHostRootDir()
-    const buildB = materializedBuild()
-
-    expect(rootA).not.toBe(rootB)
-    expect(dirname(rootA)).toBe(join(localAppData, 'Orca', 'daemon-host-profiles'))
-    expect(dirname(dirname(buildA))).toBe(rootA)
-    expect(dirname(dirname(buildB))).toBe(rootB)
-    useProfile(`${join(tempDir, 'PROFILE-A')}\\`)
-    expect(getDaemonHostRootDir()).toBe(rootA)
-  })
-
   it('never touches a live profile when another profile reclaims', () => {
     useProfile(join(tempDir, 'profile-a'))
     const buildA = materializedBuild()

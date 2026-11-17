@@ -2,11 +2,11 @@ import {
   PROJECT_MOVE_PAUSE_PROTOCOL,
   type ProjectMovePauseRequest,
   type ProjectMovePauseResponse
-} from '../../../../shared/project-move-pause'
-import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
+} from '../../../../shared/project/move/project-move-pause'
+import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { useAppStore } from '@/store'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { workspaceSleepTarget } from './workspace-actions/sleep/workspace-sleep-target'
 import { followWorkspaceSleep } from './workspace-actions/sleep/workspace-sleep-follower'
 

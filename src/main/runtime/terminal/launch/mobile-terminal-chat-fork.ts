@@ -5,8 +5,8 @@ import {
   type AgentLaunchRuntime,
   agentLaunchQuotingShell
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -16,8 +16,7 @@ import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
   buildAiVaultLocalResumeStartup,
-  getAiVaultResumeCodexHome,
-  resolveAiVaultCopiedSessionAgentArgs
+  getAiVaultResumeCodexHome
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
@@ -61,14 +60,7 @@ export function buildMobileTerminalChatFork(args: {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
   }
   const startup = prepared.forkedSession
-    ? buildAiVaultLocalResumeStartup({
-        ...startupArgs,
-        agentArgs: resolveAiVaultCopiedSessionAgentArgs({
-          ...startupArgs,
-          sourceAgent: source.sourceAgent
-        }),
-        embedCwd: false
-      })
+    ? buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false })
     : buildAiVaultForkStartup(startupArgs)
   if (!startup) {
     throw new Error('chat_fork_source_unavailable')

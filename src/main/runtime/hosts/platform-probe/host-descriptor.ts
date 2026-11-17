@@ -5,9 +5,9 @@ import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
 } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
-import type { RuntimeSourceStamp } from '../../../../shared/runtime-source-env'
+import type { RuntimeSourceStamp } from '../../../../shared/remote-runtime/host-catalog/runtime-source-env'
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'
 const MAX_INSTALLATION_FILE_BYTES = 4 * 1024
@@ -43,6 +43,16 @@ function readInstallation(filePath: string): InstallationRead {
       : { kind: 'malformed' }
   } catch {
     return { kind: 'malformed' }
+  }
+}
+
+/** The profile's existing identity, never created or repaired; undefined when absent or unreadable. */
+export function readExistingHostInstallationId(userDataPath: string): string | undefined {
+  try {
+    const current = readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
+    return current.kind === 'valid' ? current.installationId : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -117,6 +127,36 @@ export function publishHostDescriptor(
 
 export function getPublishedHostDescriptor(runtimeId: string): RuntimeHostDescriptor | null {
   return publishedByRuntimeId.get(runtimeId) ?? null
+}
+
+/** The installationId a caller's parent ref names; desktops without a paired transport publish no
+ * descriptor, so the file is read, never created. */
+export function readCallerStoreInstallationId(
+  runtimeId: string,
+  userDataPath: string
+): string | undefined {
+  return (
+    getPublishedHostDescriptor(runtimeId)?.installationId ??
+    readExistingHostInstallationId(userDataPath)
+  )
+}
+
+/** This store's lineage identity: the published descriptor's installationId, else the profile's own file. */
+export async function readStoreInstallationId(
+  runtimeId: string | null,
+  userDataPath: string
+): Promise<string | undefined> {
+  const published = runtimeId ? getPublishedHostDescriptor(runtimeId)?.installationId : undefined
+  if (published) {
+    return published
+  }
+  try {
+    return await loadOrCreateHostInstallationId(userDataPath)
+  } catch (error) {
+    // Unknown identity leaves every cross-store child standalone.
+    console.warn('[runtime] Store installation id unavailable:', error)
+    return undefined
+  }
 }
 
 /** Null until this runtime publishes a descriptor; unstamped processes keep the unfenced CLI path. */

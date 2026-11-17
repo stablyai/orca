@@ -4,22 +4,22 @@ import {
   getRepoExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../shared/worktree-execution-host-resolution'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
 import {
   visibleFolderWorkspaces,
   visibleProjectGroups,
   visibleProjectHostSetups,
   visibleRepos
-} from '../../../ssh/orcad-retained-source'
-import type { RuntimeStore } from '../../runtime-store-contract'
+} from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<
   RuntimeStore,

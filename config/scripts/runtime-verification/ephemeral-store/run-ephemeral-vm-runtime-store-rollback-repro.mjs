@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
+import { copyScriptWithLocalModules } from '../../test-fixtures/script-copy-closure/script-module-dependencies.mjs'
 
 const BASELINE_COMMIT = 'bf0c77d5bc800e19117084c27fd1441eda9134ad'
 const AFFECTED_MAIN_COMMIT = '25abb9368d98ad84a174f530e02f4228d2269062'
@@ -17,7 +18,7 @@ try {
   const baselineRoot = extractSource(BASELINE_COMMIT, 'baseline')
   const affectedRoot = extractSource(AFFECTED_MAIN_COMMIT, 'affected-main')
   const revertedRoot = extractSource('HEAD', 'candidate-reverted')
-  restoreAffectedStoreFiles(revertedRoot)
+  restoreAffectedStoreFiles(revertedRoot, affectedRoot)
 
   const baselineData = makeDataDir('baseline-data')
   runOracle('baseline write', baselineRoot, 'write-legacy', baselineData)
@@ -42,7 +43,9 @@ try {
   runOracle('candidate re-upgrade', root, 'read-after-downgrade', candidateData)
 
   const revertedData = makeDataDir('reverted-data')
-  runOracle('reverted write', revertedRoot, 'write-mixed', revertedData)
+  runOracle('reverted write', revertedRoot, 'write-mixed', revertedData, {
+    storeSource: 'src/shared/ephemeral-vm-runtime-store.ts'
+  })
   runOracle('reverted rollback read', baselineRoot, 'read', revertedData, {
     expectFailure: 'file is invalid'
   })
@@ -70,15 +73,12 @@ function extractSource(commit, name) {
   return destination
 }
 
-function restoreAffectedStoreFiles(destination) {
-  for (const relativePath of [
-    'src/shared/ephemeral-vm-runtime-store.ts',
-    'src/shared/ephemeral-vm-runtimes.ts'
-  ]) {
-    const result = run('git', ['show', `${AFFECTED_MAIN_COMMIT}:${relativePath}`], {
-      encoding: 'utf8'
-    })
-    writeFileSync(join(destination, relativePath), result.stdout)
+function restoreAffectedStoreFiles(destination, affectedRoot) {
+  for (const name of ['ephemeral-vm-runtime-store.ts', 'ephemeral-vm-runtimes.ts']) {
+    copyScriptWithLocalModules(
+      join(affectedRoot, 'src/shared', name),
+      join(destination, 'src/shared')
+    )
   }
 }
 
@@ -96,6 +96,7 @@ function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
     env: {
       ...process.env,
       STA_4274_TARGET_ROOT: resolve(targetRoot),
+      STA_4274_STORE_SOURCE: options.storeSource,
       STA_4274_OPERATION: operation,
       STA_4274_USER_DATA_PATH: userDataPath
     }

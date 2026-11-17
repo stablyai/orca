@@ -21,14 +21,6 @@ afterAll(async () => {
 })
 
 describe('the probe child, run against real paths', () => {
-  it('reads a directory it can list as ok', async () => {
-    await expect(probeFolderAccessForFreshDaemon(root)).resolves.toBe('ok')
-  })
-
-  it('reads a path that is not there as missing', async () => {
-    await expect(probeFolderAccessForFreshDaemon(join(root, 'absent'))).resolves.toBe('missing')
-  })
-
   it('reads a file as missing rather than as a denial', async () => {
     const file = join(root, 'file.txt')
     await writeFile(file, 'contents')

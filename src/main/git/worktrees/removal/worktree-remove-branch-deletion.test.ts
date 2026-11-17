@@ -18,7 +18,7 @@ vi.mock('../../command-runner/git-exec-file-sync', async (importOriginal) => ({
   gitExecFileSync: gitExecFileSyncMock
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: translateWslOutputPathsMock
 }))

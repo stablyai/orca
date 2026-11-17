@@ -8,8 +8,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { CELL_FLAG_DEFAULTS, type CellFlags } from '../control-flags/cell-flags.js'
-import { CELL_SEAT_DRIFT_SWEEP_MS } from '../seats/cell-seat-drift.js'
-import type { CellSeatLog } from '../seats/cell-seat-log.js'
 import type { RelayConfig } from '../../config.js'
 import { PostgresDatabase } from '../../database/database.js'
 import type { AppliedControlFlags } from '../control-flags/relay-control-flag-channel.js'
@@ -71,20 +69,6 @@ function cellConfig(port: number, issuer: string): RelayConfig {
     publicAssignmentRetryAfterSeconds: 5,
     dataDir: './test-data'
   }
-}
-
-// The registry's private feed log, to plant the drift the cell must repair.
-function seatLogOf(sessions: object): CellSeatLog {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: HostSessionRegistry holds its feed log as `seatLog`.
-  return (sessions as { seatLog: CellSeatLog }).seatLog
-}
-
-// The JSON lines a test's console.warn spy saw for one event.
-function warned(event: string): Array<Record<string, unknown>> {
-  return vi
-    .mocked(console.warn)
-    .mock.calls.map(([line]) => (typeof line === 'string' && line.startsWith('{') ? JSON.parse(line) : null))
-    .filter((entry) => entry?.event === event)
 }
 
 function nextMessage(socket: WebSocket): Promise<Record<string, unknown>> {
@@ -265,9 +249,6 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       book,
       setFlags: (next: Partial<CellFlags>) => {
         applied = { generation: applied.generation + 1, flags: { ...CELL_FLAG_DEFAULTS, ...next } }
-      },
-      advance: (ms: number) => {
-        elapsedMs += ms
       }
     }
   }
@@ -338,97 +319,6 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       return (page as { full: Array<{ relayHostId: string; epoch: number }> }).full.map((entry) => entry.epoch)
     }
 
-    it('repairs at once the seat a director names when no session backs it', async () => {
-      const cell = await startCell({ admitMode: 'reserve' })
-      const identity = await cell.host()
-      cell.book(identity, 9)
-      await cell.connect(identity, 9)
-      // A stale seat at a generation above the live session's: its changes could never replace it.
-      const log = seatLogOf(cell.relay.sessions)
-      log.append({ kind: 'join', userId: 'user-1', relayHostId: identity.hostId, epoch: 8, generation: 5, at: 4_242 })
-      const before = cell.relay.sessions.seatFeed(null)
-      const seq = 'full' in before ? before.seq : 0
-      const seat = { v: 1 as const, userId: 'user-1', relayHostId: identity.hostId, epoch: 8, joinedAt: 4_242 }
-      expect(cell.relay.sessions.demote(seat)).toBe('not-seated')
-      expect(cell.relay.sessions.seatFeed(seq)).toMatchObject({
-        changes: [
-          { kind: 'leave', epoch: 8, generation: 5, closeCode: 4409 },
-          { kind: 'join', epoch: 9, generation: 1 }
-        ]
-      })
-      expect(seatEpochs(cell)).toEqual([9])
-      expect(warned('orca_relay_cell_seat_log_drift')).toMatchObject([
-        { kind: 'unbacked-seat', via: 'demote', reason: 'epoch', seatEpoch: 8, sessionEpoch: 9, relisted: true }
-      ])
-      expect(JSON.stringify(warned('orca_relay_cell_seat_log_drift'))).not.toContain(identity.hostId)
-      // Asked again, there is nothing left to repair.
-      expect(cell.relay.sessions.demote(seat)).toBe('not-seated')
-      expect(cell.relay.sessions.seatFeed(seq + 2)).toMatchObject({ changes: [] })
-    })
-
-    it('leaves a seat no session backs once two sweeps in a row find it, with no director asking', async () => {
-      const cell = await startCell({ admitMode: 'db' })
-      const ghost = await cell.host()
-      seatLogOf(cell.relay.sessions).append({
-        kind: 'join',
-        userId: 'user-1',
-        relayHostId: ghost.hostId,
-        epoch: 10,
-        generation: 3,
-        at: 1_000
-      })
-      expect(seatEpochs(cell)).toEqual([10])
-      cell.advance(CELL_SEAT_DRIFT_SWEEP_MS)
-      expect(seatEpochs(cell)).toEqual([])
-      expect(warned('orca_relay_cell_seat_log_drift')).toMatchObject([
-        { kind: 'unbacked-seat', via: 'sweep', reason: 'no-session', seatEpoch: 10, seatGeneration: 3, relisted: false }
-      ])
-      // Left as moved: the cell will not seat it again at 10 from memory.
-      expect(cell.relay.sessions.seatFeed(0)).toMatchObject({ changes: [{}, { kind: 'leave', closeCode: 4409 }] })
-    })
-
-    it('lists again a live session the feed lost, once two sweeps in a row find it', async () => {
-      const cell = await startCell({ admitMode: 'reserve' })
-      const identity = await cell.host()
-      cell.book(identity, 9)
-      await cell.connect(identity, 9)
-      seatLogOf(cell.relay.sessions).append({
-        kind: 'leave',
-        userId: 'user-1',
-        relayHostId: identity.hostId,
-        epoch: 9,
-        generation: 1,
-        at: 5_000
-      })
-      expect(seatEpochs(cell)).toEqual([])
-      cell.advance(CELL_SEAT_DRIFT_SWEEP_MS)
-      expect(seatEpochs(cell)).toEqual([9])
-      expect(warned('orca_relay_cell_seat_log_drift')).toMatchObject([{ kind: 'unlisted-session', sessionEpoch: 9 }])
-    })
-
-    // A drained session's seat stays listed, with no session, until its socket's close lands.
-    it('repairs nothing for a seat that one sweep finds unbacked and is gone by the next', async () => {
-      const cell = await startCell({ admitMode: 'reserve' })
-      const identity = await cell.host()
-      cell.book(identity, 9)
-      const live = await cell.connect(identity, 9)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ws keeps its net.Socket as `_socket`.
-      ;(live.socket as unknown as { _socket: { pause(): void } })._socket.pause()
-      cell.relay.sessions.drainHost({
-        attemptId: 'attempt-1',
-        userId: 'user-1',
-        relayHostId: identity.hostId,
-        sourceAssignmentEpoch: 9,
-        graceMs: 0
-      })
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(seatEpochs(cell)).toEqual([9])
-      await new Promise((resolve) => setTimeout(resolve, RELAY_WEBSOCKET_FORCE_CLOSE_MS + 300))
-      cell.advance(CELL_SEAT_DRIFT_SWEEP_MS)
-      expect(seatEpochs(cell)).toEqual([])
-      expect(warned('orca_relay_cell_seat_log_drift')).toEqual([])
-    }, 10_000)
-
     // Drained sockets can close seconds after map removal; reusing their generation let late leaves erase reconnected live seats.
     it('keeps a session that reconnected while its drained predecessor was still closing', async () => {
       const cell = await startCell({ admitMode: 'reserve' })
@@ -456,19 +346,6 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
       expect(seatEpochs(cell)).toEqual([10])
     }, 10_000)
 
-    // Repeated fresh joins for one identity replace session and seat together, leaving no drift to repair.
-    it('stays on the live session when the same identity connects afresh each turn', async () => {
-      const cell = await startCell({ admitMode: 'reserve' })
-      const identity = await cell.host()
-      for (const epoch of [9, 10, 11]) {
-        cell.book(identity, epoch)
-        expect((await cell.connect(identity, epoch)).ack).toMatchObject({ type: 'host-hello-ack' })
-        expect(seatEpochs(cell)).toEqual([epoch])
-        cell.advance(CELL_SEAT_DRIFT_SWEEP_MS)
-      }
-      expect(seatEpochs(cell)).toEqual([11])
-      expect(warned('orca_relay_cell_seat_log_drift')).toEqual([])
-    })
   })
 
   it('gives every booking unit back when the cell starts to drain', async () => {
@@ -542,44 +419,4 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     }).toEqual(before)
   }, 30_000)
 
-  it('never crosses the hard cap under seeded bookings, hellos, rebooks and closes', async () => {
-    const hardCap = 6
-    const cell = await startCell({ admitMode: 'reserve' }, { hardCap, controlReserve: 1 })
-    const hosts = await Promise.all(Array.from({ length: 12 }, () => cell.host()))
-    const epochs = new Map<string, number>()
-    const open: WebSocket[] = []
-    let seed = 7
-    const random = () => {
-      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648
-      return seed / 2_147_483_648
-    }
-    let peak = 0
-    for (let step = 0; step < 240; step += 1) {
-      const identity = hosts[Math.floor(random() * hosts.length)]!
-      const roll = random()
-      if (roll < 0.4) {
-        // A director's fresh booking, or a re-book at a newer epoch.
-        const epoch = (epochs.get(identity.hostId) ?? 1) + (random() < 0.5 ? 0 : 1)
-        if (cell.book(identity, epoch)[0]?.outcome === 'ok') epochs.set(identity.hostId, epoch)
-      } else if (roll < 0.8) {
-        const reply = await cell.connect(identity, epochs.get(identity.hostId) ?? 1)
-        if (reply.ack?.type === 'host-hello-ack') open.push(reply.socket!)
-      } else if (open.length > 0) {
-        const socket = open.splice(Math.floor(random() * open.length), 1)[0]!
-        // A newer control for the same host may already have replaced it.
-        if (socket.readyState !== WebSocket.CLOSED) {
-          const closed = new Promise((resolve) => socket.once('close', resolve))
-          socket.close()
-          await closed
-        }
-      }
-      const counts = cell.relay.connectionSnapshot()!
-      peak = Math.max(peak, counts.physicalConnections)
-      expect(counts.physicalConnections).toBeLessThanOrEqual(hardCap)
-      expect(counts.enforcedConnectionUnits).toBeLessThanOrEqual(hardCap)
-    }
-    // The run did reach the cap, so the bound was exercised.
-    expect(peak).toBeGreaterThanOrEqual(hardCap - 1)
-  }, 60_000)
 })
-

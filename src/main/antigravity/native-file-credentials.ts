@@ -1,19 +1,49 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
-import { readPrivateWindowsFile } from '../../shared/secure-path-windows-acl'
+import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
 import type { AntigravityCredentialBackend } from './native-account-service'
 
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
-export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv, kernelRelease = ''): boolean {
+// Mirrors agy's Linux dbus detector: no session bus address and no per-user bus socket.
+function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
+  if (!['', 'none:', 'disabled:'].includes(env.DBUS_SESSION_BUS_ADDRESS ?? '')) {
+    return false
+  }
+  try {
+    return !statSync(`/run/user/${process.getuid?.()}/bus`).isSocket()
+  } catch {
+    return true
+  }
+}
+
+export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv): boolean {
   return (
     ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some((name) =>
       Boolean(env[name])
-    ) || /microsoft|wsl/i.test(kernelRelease)
+    ) ||
+    (process.platform === 'linux' && lacksAntigravitySessionBus(env))
   )
+}
+
+export function isAntigravityContainerOrWslHost(): boolean {
+  if (existsSync('/.dockerenv')) {
+    return true
+  }
+  for (const [path, pattern] of [
+    ['/proc/1/cgroup', /docker|containerd|kubepods/],
+    ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
+  ] as const) {
+    try {
+      if (pattern.test(readFileSync(path, 'utf8'))) {
+        return true
+      }
+    } catch {}
+  }
+  return false
 }
 
 export function readAntigravityCredentialFile(path: string): string | null {

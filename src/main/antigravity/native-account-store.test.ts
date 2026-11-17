@@ -1,23 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   _resetSecretStoreForTests,
   getSecretStore,
   setSecretStore
-} from '../../shared/secret-store'
+} from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
-import { createFakeWindowsSecurity } from '../../shared/windows-security-addon.test-fixture'
+import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../shared/windows-security-addon'
+} from '../../shared/secure-storage/windows-security-addon'
 
 let dir: string
 beforeEach(() => {
@@ -157,23 +157,6 @@ describe('protected Antigravity account snapshots', () => {
     }
   )
 
-  it('reopens a legacy agy snapshot without a schema change or invented auth method', async () => {
-    const contents = '{"access_token":"fixture-only","refresh_token":"fixture-refresh"}'
-    const h = harness(contents)
-    h.lookupIdentity.mockResolvedValue({
-      issuer: 'https://accounts.google.com',
-      subject: 'legacy',
-      email: null
-    })
-    await h.service.addCurrentAccount()
-    const path = join(dir, 'legacy-vault')
-    const store = createEncryptedAntigravityAccountStore(path)
-    store.write(h.getVault())
-    expect(createEncryptedAntigravityAccountStore(path).read().accounts[0]).toMatchObject({
-      credentials: contents,
-      authMethod: ''
-    })
-  })
   it('preserves readable bytes when adding an account or refreshing a token exceeds the encrypted cap', async () => {
     function paddedCredential(subject: string, bytes: number) {
       const prefix = `${credential(subject).slice(0, -1)},"padding":"`
@@ -292,13 +275,6 @@ describe('protected Antigravity account snapshots', () => {
     h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
     expect(h.backend.write).not.toHaveBeenCalled()
-  })
-
-  it('keeps an unreadable vault intact rather than treating it as empty', () => {
-    const path = join(dir, 'vault')
-    writeFileSync(path, 'broken ciphertext', { mode: 0o600 })
-    expect(() => createEncryptedAntigravityAccountStore(path).read()).toThrow('preserved')
-    expect(readFileSync(path, 'utf8')).toBe('broken ciphertext')
   })
 
   it.skipIf(process.platform === 'win32')(

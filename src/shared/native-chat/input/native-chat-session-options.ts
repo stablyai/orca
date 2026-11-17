@@ -5,9 +5,13 @@ export type SessionOptionValue = string | boolean
 export type SessionOptionSelectChoice = {
   value: string
   label: string
+  /** Text for a compact segment; `label` stays its accessible name. */
+  shortLabel?: string
   description?: string
-  /** An alias of a listed versioned row: listed only for a matching search. */
-  searchOnly?: true
+  /** Folded under More models; a matching search still lists it. */
+  legacy?: true
+  /** Listed only by a matching search; never set on the current choice. */
+  hidden?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -32,6 +36,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -39,12 +45,12 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Model-pill display only; currentValue remains the accepted selection. */
-  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
+  /** Active value when a saved selection intentionally waits for a later input. */
+  activeValue?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
@@ -110,6 +116,8 @@ export type NativeChatSessionOptionSettingsMutation =
 
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Live local admission for a structured action, before consuming its composer trigger. */
+  admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>

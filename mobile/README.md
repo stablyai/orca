@@ -186,14 +186,57 @@ Run `pnpm sync:mobile-localization` from the repo root to add new keys to `src/i
 other catalogs may lag and fall back to English. `pnpm verify:mobile-localization` and
 `pnpm verify:mobile-localization-coverage` run in CI. iOS permission prompts live in `locales/<lang>.json`.
 
+## Android Release Signing
+
+`plugins/android-release-signing.js` adds a `release` signing config to the generated
+`android/app/build.gradle`. It reads `ORCA_ANDROID_KEYSTORE_PATH`, `ORCA_ANDROID_KEYSTORE_PASSWORD`,
+`ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
+project. Without them, local release builds keep Expo's debug key.
+
+The keystore in these secrets is the Play **upload key**. Google re-signs every upload with its own
+Play app signing key (SHA-256 `A0:A6:67:69:…:DA:07`), which no one outside Google holds. The
+workflow fails before building if any of these is missing:
+
+| Name                             | Kind   | Value                                                   |
+| -------------------------------- | ------ | ------------------------------------------------------- |
+| `ORCA_ANDROID_KEYSTORE_BASE64`   | secret | the upload keystore, base64-encoded                     |
+| `ORCA_ANDROID_KEYSTORE_PASSWORD` | secret | keystore password                                       |
+| `ORCA_ANDROID_KEY_ALIAS`         | secret | key alias                                               |
+| `ORCA_ANDROID_KEY_PASSWORD`      | secret | key password (same as the keystore password for PKCS12) |
+| `ORCA_PLAY_SERVICE_ACCOUNT_JSON` | secret | JSON key of a service account with release access       |
+
+## Android Release
+
+Android ships as `dev.orca.app` (iOS keeps `com.stably.orca.mobile`). Pushing an `android-v<version>`
+tag, or running `.github/workflows/mobile-android-release.yml` by hand, does this:
+
+- builds the AAB with the upload key and uploads it to Play's internal testing track
+- downloads Google's signed universal APK for that versionCode (`fastlane android download_signed_apk`)
+  and fails unless its `V3.0 Signer` is Google's app signing key. It also fails if the APK carries
+  Play's automatic-protection code (any `com.pairip` class, such as its license check): that check closes the app
+  wherever Google Play is disabled or unreachable, such as mainland China. Keep **automatic
+  protection off** in Play Console (Test and release > App integrity).
+- publishes that APK and its `.sha256` as the `android-v<version>` GitHub pre-release
+
+Play and GitHub installs are the same signed app, so either can update the other. Promotion to
+production is manual in Play Console. A manual run with `publish_github_release` off only builds the
+AAB and validates it with Play (`validate_only`); nothing is released.
+
+Play rejects a versionCode it has seen, so bump `expo.android.versionCode` for every release. The
+upload fails before anything is published when the bump is missing.
+
+The app checks who installed it at runtime (`modules/orca-play-store-presence`). Installed by the
+Play Store, it shows no GitHub update card and no "Check for updates" row. Otherwise it checks
+GitHub for `android-v` releases. The retired `com.stably.orca.mobile` app checks `mobile-android-v`.
+
 ## Protocol Version Compatibility
 
 Mobile and desktop talk over a versioned protocol. Because mobile updates lag desktop by 24-48h via the App Store, both sides exchange version numbers on `status.get` so a genuinely incompatible combo can hard-block instead of silently misbehaving.
 
 Constants live in two files (Metro can't resolve outside `mobile/`):
 
-- `src/shared/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
-- `mobile/src/transport/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
+- `src/shared/remote-runtime/protocol/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
+- `mobile/src/transport/connection/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
 
 Today all four are set so `evaluateCompat` always returns `{ kind: 'ok' }` — nothing blocks. The wire format is in place to flip a switch when needed.
 
@@ -213,9 +256,9 @@ Do **not** bump for additive changes:
 
 Set `MIN_COMPATIBLE_MOBILE_VERSION` (kill-switch) when desktop ships a change that requires a minimum mobile version to function safely. Same for `MIN_COMPATIBLE_DESKTOP_VERSION` from the mobile side.
 
-When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS) or GitHub Releases (Android). When desktop is too old it opens GitHub Releases.
+When a verdict is `blocked`, `mobile/src/components/host-connection/ProtocolBlockScreen.tsx` renders a screen pointing the user at the update that clears it. When mobile is too old it opens the newest release if the installed app's update check knows one, otherwise the App Store (iOS), Google Play (Play installs) or GitHub Releases (other Android installs). When desktop is too old it opens GitHub Releases.
 
-To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
+To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/connection/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
 ## Mock Server
 
@@ -230,6 +273,7 @@ Connect from the app using endpoint `ws://localhost:6768` and token `mock-device
 ### Environment variables
 
 - `MOCK_NATIVE_CHAT=1` — serve the native-chat scenario (one live agent tab, empty transcript, image upload) instead of the default terminal fixtures.
+- `MOCK_FORKED_CHATS=1` — serve one workspace whose native chats include a fork, a fork of a fork, an unnamed fork and an older-build `… fork` name, across chat tabs, agent rows, Session History and the naming feed (for the fork mark).
 - `MOCK_CHAT_AGENT=omp` — with `MOCK_NATIVE_CHAT=1`, present an OMP tab and four decoded transcript messages, including a tool call and result, instead of the default Claude scenario. It deliberately omits `transcriptPath` to exercise legacy-hook readability discovery; current OMP hooks may report a path.
 - `MOCK_SERVER_KEY_FILE` — persist the server keypair across restarts so a paired device keeps its public-key pin. A missing or invalid file is re-keyed with a warning, which forces a re-pair.
 

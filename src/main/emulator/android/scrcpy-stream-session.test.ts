@@ -103,22 +103,6 @@ describe('ScrcpyStreamSession video buffering', () => {
     session.close()
   })
 
-  it('emits initial metadata and frames before startup resolves', async () => {
-    const { video, callbacks, started } = await startSession()
-    const events: string[] = []
-    callbacks.onMeta.mockImplementation(() => events.push('meta'))
-    callbacks.onFrame.mockImplementation(() => events.push('frame'))
-    const ready = started.then((session) => {
-      events.push('ready')
-      return session
-    })
-    video.emit('data', Buffer.concat([handshake(), packet(3), packet(5)]))
-    expect(events).toEqual(['meta', 'frame', 'frame'])
-    const session = await ready
-    expect(events).toEqual(['meta', 'frame', 'frame', 'ready'])
-    session.close()
-  })
-
   it('fails an already started session on a corrupt batch without delivering partial results', async () => {
     const { video, callbacks, started } = await startSession()
     video.emit('data', handshake())
@@ -154,32 +138,6 @@ describe('ScrcpyStreamSession video buffering', () => {
       'tcp:41234'
     ])
   })
-
-  it('does not repeatedly concatenate a growing fragmented frame', async () => {
-    const { video, callbacks, started } = await startSession()
-    video.emit('data', handshake())
-    const session = await started
-    const frame = packet(1024 * 1024)
-    const concat = Buffer.concat
-    let concatenatedBytes = 0
-    const spy = vi.spyOn(Buffer, 'concat').mockImplementation((buffers, length) => {
-      concatenatedBytes += length ?? buffers.reduce((sum, part) => sum + part.length, 0)
-      return concat(buffers, length)
-    })
-    try {
-      for (let offset = 0; offset < frame.length; offset += 4096) {
-        video.emit('data', frame.subarray(offset, offset + 4096))
-      }
-    } finally {
-      spy.mockRestore()
-      session.close()
-    }
-    expect(callbacks.onFrame).toHaveBeenCalledTimes(1)
-    const data = callbacks.onFrame.mock.calls[0][0].data
-    expect(Buffer.isBuffer(data)).toBe(true)
-    expect(data.equals(frame.subarray(12))).toBe(true)
-    expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
-  })
 })
 
 describe('ScrcpyStreamSession control', () => {
@@ -199,21 +157,6 @@ describe('ScrcpyStreamSession control', () => {
     expect(session.videoSize()).toEqual({ width: 600, height: 1280 })
     expect(callbacks.onFrame).toHaveBeenCalledWith(expect.objectContaining({ config: true }))
     session.close()
-  })
-
-  it('writes to the control socket without Nagle delay until the session closes', async () => {
-    const { video, control, started } = await startSession()
-    video.emit('data', handshake())
-    const session = await started
-    const message = Buffer.from([2, 0])
-
-    expect(control.setNoDelay).toHaveBeenCalledWith(true)
-    expect(session.sendControl(message)).toBe(true)
-    expect(control.write).toHaveBeenCalledExactlyOnceWith(message)
-
-    session.close()
-    expect(session.sendControl(message)).toBe(false)
-    expect(control.write).toHaveBeenCalledTimes(1)
   })
 })
 

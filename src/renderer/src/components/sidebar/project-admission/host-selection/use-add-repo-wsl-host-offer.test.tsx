@@ -1,132 +1,257 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+
+import { isValidElement } from 'react'
+import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type * as WslHostOfferModule from '../../wsl-host-offer'
-import type { DroppedHostPath } from './add-repo-wsl-host-folder-picker'
-
-const UBUNTU_HOST = {
-  id: 'wsl-ubuntu',
-  orcadDeployment: { kind: 'wsl' as const, distro: 'Ubuntu', localPort: 4100, remotePort: 4200 }
-}
-const mocks = vi.hoisted(() => ({
-  gateOpen: true,
-  state: {
-    settings: { experimentalWslHosts: true },
-    runtimeEnvironments: new Array<{
-      id: string
-      orcadDeployment: { kind: 'wsl'; distro: string; localPort: number; remotePort: number }
-    }>()
-  }
-}))
-vi.mock('@/store/index', () => {
-  const useAppStore = (selector: (state: typeof mocks.state) => unknown): unknown =>
-    selector(mocks.state)
-  useAppStore.getState = () => mocks.state
-  return { useAppStore }
-})
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
-  browseRuntimeServerDirectory: vi.fn()
-}))
-// Only the run-as-host gate is faked; saved hosts come from the store state above.
-vi.mock('../../wsl-host-offer', async (importOriginal) => {
-  const actual = await importOriginal<typeof WslHostOfferModule>()
-  return {
-    ...actual,
-    readWslHostOfferGate: () => ({ gateOpen: mocks.gateOpen, settingOn: false, dismissed: false })
-  }
-})
-
+} from '../../../../../../shared/execution-host/execution-host'
 import { useAddRepoWslHostOffer } from './use-add-repo-wsl-host-offer'
-import { useAddRepoWslHostPaths } from './use-add-repo-wsl-host-paths'
 
-const HOST: ExecutionHostId = 'runtime:wsl-ubuntu'
-const LOCAL: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
-const PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
-
-type HookProps = { selectedHostId: ExecutionHostId; droppedHostPath?: DroppedHostPath | null }
-
-function setup(selectable: boolean, connects = true) {
-  const initialProps: HookProps = { selectedHostId: LOCAL }
-  const selectHost = vi.fn(async () => selectable)
-  const connectHost = vi.fn(async () => connects)
-  const addLocalPath = vi.fn(async () => {})
-  const setServerPath = vi.fn()
-  const setStep = vi.fn()
-  // Wired as AddRepoDialog wires them: the offer's host path feeds the host-path prefill.
-  const view = renderHook(
-    ({ selectedHostId, droppedHostPath = null }: HookProps) => {
-      const offer = useAddRepoWslHostOffer(
-        true,
-        {
-          selectedHostId,
-          handleSelectAddProjectHost: selectHost,
-          handleConnectAddProjectHost: connectHost
-        },
-        droppedHostPath
-      )
-      useAddRepoWslHostPaths({
-        isOpen: true,
-        droppedHostPath: offer.hostPath,
-        selectedHostId,
-        setServerPath,
-        setStep,
-        onWindowsDriveRefusal: vi.fn()
-      })
-      return offer
-    },
-    { initialProps }
-  )
-  const showNotice = () => render(<>{view.result.current.notice(addLocalPath)}</>)
-  const clickAddOnHost = () =>
-    act(async () => fireEvent.click(screen.getByRole('button', { name: 'Add on host' })))
-  return { view, selectHost, connectHost, addLocalPath, setServerPath, showNotice, clickAddOnHost }
+const UBUNTU_HOST: PublicKnownRuntimeEnvironment = {
+  id: 'wsl-ubuntu',
+  name: 'Ubuntu',
+  source: 'manual',
+  createdAt: 1,
+  updatedAt: 1,
+  lastUsedAt: null,
+  runtimeId: null,
+  preferredEndpointId: 'default',
+  endpoints: [],
+  orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 4100, remotePort: 4200 }
 }
 
-describe('useAddRepoWslHostOffer', () => {
-  beforeEach(() => {
-    mocks.gateOpen = true
-    mocks.state.settings = { experimentalWslHosts: true }
-    mocks.state.runtimeEnvironments = [UBUNTU_HOST]
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
-    vi.stubGlobal('api', { runtimeEnvironments: { wslHosts: {} } })
-  })
-  afterEach(() => {
-    cleanup()
-    vi.unstubAllGlobals()
-  })
+const initialState = useAppStore.getState()
+const originalApi = window.api
+const resolveMappedDrivePath = vi.fn<(path: string) => Promise<string | null>>()
 
-  it('offers the existing host instead of adding the distro path on Windows', () => {
-    const { view, showNotice, addLocalPath } = setup(true)
+function setOfferState(overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}): void {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/test'), experimentalWslHosts: false },
+    wslHostsAcceptNewWork: true,
+    wslHostServerFiles: 'present',
+    runtimeEnvironments: [],
+    ...overrides
+  })
+}
+
+function renderOffer() {
+  return renderHook(() =>
+    useAddRepoWslHostOffer(
+      true,
+      {
+        selectedHostId: LOCAL_EXECUTION_HOST_ID,
+        handleSelectAddProjectHost: vi.fn(async () => true),
+        handleConnectAddProjectHost: vi.fn(async () => true)
+      },
+      null
+    )
+  )
+}
+
+beforeEach(() => {
+  resolveMappedDrivePath.mockReset()
+  resolveMappedDrivePath.mockImplementation(async (path) =>
+    /^W:/i.test(path) ? path.replace(/^W:/i, '\\\\wsl.localhost\\Ubuntu') : null
+  )
+  vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Windows')
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...originalApi,
+      wsl: { ...originalApi?.wsl, resolveMappedDrivePath },
+      runtimeEnvironments: { ...originalApi?.runtimeEnvironments, wslHosts: {} }
+    }
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
+  useAppStore.setState(initialState, true)
+})
+
+describe('useAddRepoWslHostOffer on a drive mapped to a distro share', () => {
+  it('offers the distro as a host for a mapped-drive folder', async () => {
+    setOfferState()
+    const { result } = renderOffer()
     let held = false
-    act(() => {
-      held = view.result.current.offer(PATH, 'local_folder_picker')
+    await act(async () => {
+      held = await result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
     })
     expect(held).toBe(true)
-    showNotice()
-    expect(screen.getByText('Add on the Ubuntu host (recommended)')).toBeTruthy()
-    expect(screen.queryByText('Run Ubuntu as a host (recommended)')).toBeNull()
-    expect(addLocalPath).not.toHaveBeenCalled()
+    expect(resolveMappedDrivePath).toHaveBeenCalledWith('W:\\home\\u\\repo')
   })
 
-  it('keeps the offer when the host fails to start, so the user can still add it here', async () => {
-    const { view, showNotice, addLocalPath, clickAddOnHost } = setup(false, false)
-    act(() => void view.result.current.offer(PATH, 'local_folder_picker'))
-    showNotice()
-    await clickAddOnHost()
-    expect(view.result.current.hostPath).toBeNull()
-    cleanup()
-    showNotice()
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Add on this computer' })))
-    expect(addLocalPath).toHaveBeenCalledWith(PATH, 'local_folder_picker')
+  it('offers the saved host of the mapped distro with its Linux path', async () => {
+    setOfferState({
+      settings: { ...getDefaultSettings('/home/test'), experimentalWslHosts: true },
+      runtimeEnvironments: [UBUNTU_HOST]
+    })
+    const select = vi.fn(async () => true)
+    const { result } = renderHook(() =>
+      useAddRepoWslHostOffer(
+        true,
+        {
+          selectedHostId: LOCAL_EXECUTION_HOST_ID,
+          handleSelectAddProjectHost: select,
+          handleConnectAddProjectHost: vi.fn(async () => false)
+        },
+        null
+      )
+    )
+    let held = false
+    await act(async () => {
+      held = await result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    expect(held).toBe(true)
+    const notice = result.current.notice(async () => undefined)
+    expect(isValidElement<{ distro: string; onAddOnHost: () => void }>(notice)).toBe(true)
+    if (!isValidElement<{ distro: string; onAddOnHost: () => void }>(notice)) {
+      return
+    }
+    expect(notice.props.distro).toBe('Ubuntu')
+    await act(async () => {
+      notice.props.onAddOnHost()
+    })
+    const hostId = toRuntimeExecutionHostId(UBUNTU_HOST.id)
+    expect(select).toHaveBeenCalledWith(hostId)
+    expect(result.current.hostPath).toEqual({ hostId, path: '/home/u/repo' })
   })
 
-  it('holds nothing while another host is selected', () => {
-    const { view } = setup(true)
-    view.rerender({ selectedHostId: HOST })
-    expect(view.result.current.offer(PATH, 'local_folder_picker')).toBe(false)
+  it('adds an ordinary drive as before', async () => {
+    setOfferState()
+    const { result } = renderOffer()
+    let held = true
+    await act(async () => {
+      held = await result.current.offer('C:\\src\\repo', 'local_folder_picker')
+    })
+    expect(held).toBe(false)
+  })
+
+  it('does not ask main when no offer could apply', async () => {
+    setOfferState({ wslHostsAcceptNewWork: false })
+    const { result } = renderOffer()
+    let held = true
+    await act(async () => {
+      held = await result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    expect(held).toBe(false)
+    expect(resolveMappedDrivePath).not.toHaveBeenCalled()
+  })
+
+  it('skips the offer when the drive path is already a saved project', async () => {
+    setOfferState({
+      repos: [
+        {
+          id: 'repo-w',
+          path: 'W:\\home\\u\\repo',
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 1
+        }
+      ]
+    })
+    const { result } = renderOffer()
+    let held = true
+    await act(async () => {
+      held = await result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    // Not held: the ordinary add finds the saved project instead of adding a UNC copy.
+    expect(held).toBe(false)
+    expect(result.current.notice(async () => undefined)).toBeNull()
+  })
+
+  it('shows no offer for an add closed or superseded while the drive resolved', async () => {
+    setOfferState()
+    let finish: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { result } = renderOffer()
+    let current = true
+    let pending: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      pending = result.current.offer('W:\\home\\u\\old', 'local_folder_picker', () => current)
+    })
+    // Closed and reopened: the caller's generation moved on.
+    current = false
+    let held = false
+    await act(async () => {
+      finish('\\\\wsl.localhost\\Ubuntu\\home\\u\\old')
+      held = await pending
+    })
+    expect(held).toBe(true)
+    expect(result.current.notice(async () => undefined)).toBeNull()
+  })
+
+  it('lets a newer add win over a slower older lookup', async () => {
+    setOfferState()
+    let finishOld: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve
+        })
+    )
+    const { result } = renderOffer()
+    let older: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      older = result.current.offer('W:\\home\\u\\old', 'local_folder_picker')
+    })
+    await act(async () => {
+      await result.current.offer('W:\\home\\u\\new', 'local_folder_picker')
+    })
+    await act(async () => {
+      finishOld('\\\\wsl.localhost\\Ubuntu\\home\\u\\old')
+      await older
+    })
+    const notice = result.current.notice(async () => undefined)
+    expect(isValidElement(notice) ? notice.key : null).toBe('W:\\home\\u\\new')
+  })
+
+  it('shows no offer once the selected host changed mid-lookup', async () => {
+    setOfferState()
+    let finish: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { result, rerender } = renderHook(
+      ({ hostId }: { hostId: ExecutionHostId }) =>
+        useAddRepoWslHostOffer(
+          true,
+          {
+            selectedHostId: hostId,
+            handleSelectAddProjectHost: vi.fn(async () => true),
+            handleConnectAddProjectHost: vi.fn(async () => true)
+          },
+          null
+        ),
+      { initialProps: { hostId: LOCAL_EXECUTION_HOST_ID } }
+    )
+    let pending: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      pending = result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    rerender({ hostId: 'runtime:other' })
+    rerender({ hostId: LOCAL_EXECUTION_HOST_ID })
+    let held = false
+    await act(async () => {
+      finish('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo')
+      held = await pending
+    })
+    expect(held).toBe(true)
+    expect(result.current.notice(async () => undefined)).toBeNull()
   })
 })

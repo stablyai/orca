@@ -1,6 +1,7 @@
 import { Info, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,
@@ -49,13 +50,14 @@ export function MoreButton({
   name: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.PluginSettingsRow.moreActions',
             'More actions for {{value0}}',
             { value0: name }
@@ -73,10 +75,11 @@ export function MoreButton({
 }
 
 export function DetailsItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuItem onSelect={onSelect}>
       <Info />
-      {translate('auto.components.settings.PluginManagerRows.details', 'Details')}
+      {t('auto.components.settings.PluginManagerRows.details', 'Details')}
     </DropdownMenuItem>
   )
 }

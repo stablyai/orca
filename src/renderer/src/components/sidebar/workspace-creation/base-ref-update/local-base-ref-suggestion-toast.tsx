@@ -1,13 +1,14 @@
 import { toast } from 'sonner'
 import { Trans } from 'react-i18next'
 import type { AppState } from '@/store/types'
-import type { LocalBaseRefUpdateSuggestion } from '../../../../../../shared/worktree/base-ref-drift-types'
+import type { LocalBaseRefUpdateSuggestion } from '../../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { Button } from '../../../ui/button'
 import {
   KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
   getKeepLocalMainUpToDateTitle
 } from '../../../settings/source-control/keep-local-main-up-to-date-setting'
 import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SuggestionToastDeps = {
   updateSettings: AppState['updateSettings']
@@ -30,8 +31,9 @@ function SuggestionToastBody({
   suggestion: LocalBaseRefUpdateSuggestion
   deps: SuggestionToastDeps
 }): React.JSX.Element {
+  const t = useTranslate()
   const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
-  const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
+  const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
 
   const turnOn = (): void => {
     void Promise.resolve(updateSettings({ refreshLocalBaseRefOnWorktreeCreate: true }))
@@ -41,7 +43,7 @@ function SuggestionToastBody({
         }
         toast.dismiss(toastId(suggestion))
         toast.success(
-          translate(
+          t(
             'auto.components.sidebar.local.base.ref.suggestion.toast.670864ab52',
             'Keeping local {{value0}} up to date',
             { value0: suggestion.localBranch }
@@ -50,13 +52,13 @@ function SuggestionToastBody({
       })
       .catch(() => {
         toast.error(
-          translate(
+          t(
             'auto.components.sidebar.local.base.ref.suggestion.toast.84c62e4d7f',
             'Could not turn on {{value0}}',
             { value0: keepLocalMainUpToDateTitle }
           ),
           {
-            description: translate(
+            description: t(
               'auto.components.sidebar.local.base.ref.suggestion.toast.442552c656',
               'Open Settings and try again.'
             )
@@ -83,7 +85,7 @@ function SuggestionToastBody({
       <p className="text-sm leading-5 text-popover-foreground/80">
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'auto.components.sidebar.local.base.ref.suggestion.toast.staleLocalBranch',
             'Your new worktree is current, but local {{branch}} is {{count}} commits behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in <settings>Settings › {{setting}}</settings>',
             {
@@ -110,7 +112,7 @@ function SuggestionToastBody({
       <div className="flex justify-end">
         {/* Sonner’s close button already persists decline; no additional dismiss action is needed. */}
         <Button size="sm" onClick={turnOn}>
-          {translate(
+          {t(
             'auto.components.sidebar.local.base.ref.suggestion.toast.34a03a6565',
             'Keep {{value0}} up to date',
             { value0: suggestion.localBranch }

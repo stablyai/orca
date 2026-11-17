@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isDnrRegexSupported } from '../declarative-net-request/regex-filter'
+import { isDnrRegexSupported } from '../declarative-net-request/regex/regex-filter'
 import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {
   DnrApiError,

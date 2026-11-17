@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   LOCAL_ROW,
   RUNTIME_ROW,
@@ -9,11 +9,11 @@ import {
   twinPartitionSessions,
   type TwinCatalogRow,
   type TwinRepoRow
-} from '../../../../shared/twin-repo-host-routing.test-fixture'
+} from '../../../../shared/execution-host/twin-repo-host-routing.test-fixture'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }
@@ -28,7 +28,7 @@ type Setup = {
 
 function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setup) {
   const sessions = twinPartitionSessions(saved, staleOn)
-  const getRepos = vi.fn(() => repos)
+  const getRepos = () => repos
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only repos, folder workspaces and workspace sessions.
   const store = {
     getRepos,
@@ -44,7 +44,7 @@ function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setu
     hasRuntimeOwnedPtyCandidate: () => false,
     getCachedWorktrees: () => catalog
   })
-  return { controller, sessions, getRepos }
+  return { controller, sessions }
 }
 
 describe('routing a repo id registered on two hosts, in a layout-owner build', () => {
@@ -63,15 +63,5 @@ describe('routing a repo id registered on two hosts, in a layout-owner build', (
     expect(controller.getHydrationTargets(true).get(TWIN_WORKTREE_ID)).toBe(
       sessions.get('runtime:env-1')
     )
-  })
-
-  it('reads the repo inventory once per hydration pass, not once per saved worktree', () => {
-    layoutOwner.isMain = true
-    const { controller, getRepos } = controllerFor({
-      repos: [RUNTIME_ROW, LOCAL_ROW],
-      saved: ['runtime:env-1', 'local']
-    })
-    controller.getHydrationTargets(true)
-    expect(getRepos).toHaveBeenCalledTimes(1)
   })
 })

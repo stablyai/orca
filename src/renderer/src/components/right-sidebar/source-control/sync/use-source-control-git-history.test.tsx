@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-status-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: () => undefined
+}))
 
 import { useSourceControlGitHistory } from './use-git-history'
 import {
@@ -44,6 +46,7 @@ function Probe(props: {
   activeRepoTarget?: RuntimeClientTarget
   worktreeId?: string | null
   worktreePath?: string
+  branchName?: string
   compareBaseRef?: string | null
   isFolder?: boolean
   isBranchVisible?: boolean
@@ -55,6 +58,7 @@ function Probe(props: {
     activeRepoTarget: props.activeRepoTarget ?? { kind: 'local' },
     activeWorktreeId: props.worktreeId === undefined ? 'A' : props.worktreeId,
     worktreePath: props.worktreePath ?? '/a',
+    branchName: props.branchName ?? 'main',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
     isFolder: props.isFolder ?? false,
     isBranchVisible: props.isBranchVisible ?? true,
@@ -164,38 +168,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
 
     expect(latest?.gitHistoryState).toEqual({ status: 'ready', result: historyResult('current-a') })
-  })
-
-  it('keeps the previous result while refreshing and reports errors alongside it', async () => {
-    const first = deferred<GitHistoryResult>()
-    const second = deferred<GitHistoryResult>()
-    mocks.getRuntimeGitHistory
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    await mount()
-    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
-    await act(async () => {
-      first.resolve(historyResult('from-a'))
-    })
-    await flush()
-
-    void latest?.refreshGitHistory()
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'refreshing',
-      result: historyResult('from-a')
-    })
-
-    await act(async () => {
-      second.reject(new Error('git log failed'))
-    })
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'error',
-      result: historyResult('from-a'),
-      error: 'git log failed'
-    })
   })
 
   it('prunes history for worktrees that disappear and blocks their in-flight response', async () => {

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { RuntimeTerminalFileGrants } from './file-grants'
 import { MOBILE_FILE_READ_MAX_BYTES } from '../../files/file-preview-budget'
 import { isMobileBinaryPath } from '../../files/mobile-file-kind'
-import { isBinaryBuffer } from '../../../../shared/binary-buffer'
+import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import { openLocalTerminalArtifactGrant } from './local-artifact-read'
 import {
   assertTerminalArtifactContentUnchanged,
@@ -13,7 +13,7 @@ import {
   terminalFileStatIdentity
 } from './artifact-integrity'
 import { statLocalTerminalArtifact } from './artifact-stat'
-import { runSerializedLocalFileWrite } from '../../../ipc/filesystem/local-disk-write-precondition'
+import { runSerializedLocalFileWrite } from '../../../filesystem/local-file-io/local-disk-write-precondition'
 
 export async function writeTerminalArtifactFile(
   grants: Pick<RuntimeTerminalFileGrants, 'requireTerminalFileGrant' | 'refreshTerminalFileGrant'>,
@@ -82,6 +82,7 @@ export async function writeTerminalArtifactFile(
         const committed = await statLocalTerminalArtifact(grant.absolutePath)
         grant.statIdentity = terminalFileStatIdentity(committed.stats)
         grant.contentDigest = committed.contentDigest
+        grant.contentBlocks = committed.contentBlocks
         grants.refreshTerminalFileGrant(grant)
         return { ok: true }
       } finally {

@@ -5,7 +5,7 @@ import type { AppState } from '@/store/types'
 import type {
   AgentProgramStatusUpdate,
   AgentProviderSessionUpdate
-} from '@/store/slices/agent-status/agent-status-contract'
+} from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type {
   AgentStatusApplyResult,
   AgentStatusBatchContext,
@@ -60,7 +60,13 @@ export function applyProviderSessionOnlyUpdate(args: {
     providerSession: data.providerSession,
     timing: { updatedAt: data.receivedAt },
     routing,
-    metadata: data.launchToken ? { launchToken: data.launchToken } : undefined
+    metadata:
+      data.launchToken || data.launchConfig !== undefined
+        ? {
+            ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+            ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {})
+          }
+        : undefined
   }
   if (batch) {
     return batch.transaction.apply(update) ? 'applied' : 'dropped'

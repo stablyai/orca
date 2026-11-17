@@ -1,13 +1,14 @@
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../src/shared/onboarding-defaults'
-import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-interactions'
-import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
+} from '../../../src/shared/onboarding/onboarding-defaults'
+import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-education/interactions/feature-interaction-catalog'
+import { FEATURE_TIP_IDS } from '../../../src/shared/feature-education/feature-tips'
 
 const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'browser',
+  'browser-extensions',
   'tasks',
   'automations',
   'workspace-creation'
@@ -41,6 +42,7 @@ export function getE2ECompletedOnboardingProfile() {
       contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
       contextualToursAutoEligible: false,
       projectOrderManualDefaultNoticeDismissed: true,
+      worktreeCardsIntroNoticeSeen: true,
       // Keep the browser import hint out of split-test pointer paths.
       browserImportHintHidden: true,
       // Suppress the usage-display toast in completed-user fixtures.

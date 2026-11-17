@@ -6,6 +6,9 @@ import type {
   ForeignSqliteReaderRequest,
   ForeignSqliteReaderResponse
 } from './foreign-sqlite-reader-protocol'
+import { installWorkerSendLedger } from '../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-foreign-sqlite-reader')
 
 // Keep OpenCode dispatch separate because SSH/WSL relays bundle it without the other readers.
 
@@ -22,7 +25,8 @@ function isOpenCodeRequest(request: ReaderRequest): request is OpenCodeSqliteWor
     request.kind === 'parse' ||
     request.kind === 'capture' ||
     request.kind === 'native-page' ||
-    request.kind === 'native-signal'
+    request.kind === 'native-signal' ||
+    request.kind === 'fork-coverage'
   )
 }
 

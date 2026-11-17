@@ -15,45 +15,16 @@ function featureRoute(id, specs, prefixes) {
 
 // Feature areas whose specs the nightly suite alone used to select (gap audit, Oct 2026).
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
-  featureRoute(
-    'feature.automations-ui',
-    ['automation-prompt-disclosure'],
-    [`${COMPONENTS}automations/`]
-  ),
-  featureRoute(
-    'feature.sparse-checkout',
-    ['sparse-explorer-proof', 'sparse-preset-proof'],
-    [`${COMPONENTS}sparse/`]
-  ),
-  featureRoute(
-    'feature.onboarding',
-    ['onboarding', 'onboarding-language-catalog-retry'],
-    [`${COMPONENTS}onboarding/`]
-  ),
+  featureRoute('feature.sparse-checkout', ['sparse-explorer-proof'], [`${COMPONENTS}sparse/`]),
   featureRoute(
     'feature.diff-notes',
-    [
-      'diff-note-delete',
-      'diff-note-draft',
-      'diff-note-edit',
-      'diff-note-layout',
-      'diff-note-line-range'
-    ],
+    ['diff-note-delete', 'diff-note-draft', 'diff-note-edit', 'diff-note-line-range'],
     [`${COMPONENTS}diff-comments/`]
   ),
   featureRoute(
     'feature.floating-terminal',
-    [
-      'floating-terminal-switch-reveal',
-      'floating-terminal-tab-rename-focus',
-      'floating-workspace-pane-height'
-    ],
+    ['floating-terminal-switch-reveal', 'floating-terminal-tab-rename-focus'],
     [`${COMPONENTS}floating-terminal/`]
-  ),
-  featureRoute(
-    'feature.dictation',
-    ['voice-microphone-selection'],
-    [`${COMPONENTS}dictation/`, 'src/main/speech/']
   ),
   featureRoute(
     'feature.ai-vault',
@@ -85,12 +56,30 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/shared/linear/'
     ]
   ),
-  featureRoute(
-    'feature.jira',
-    ['jira-panel-layout'],
-    [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
-  ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
+  featureRoute(
+    'feature.agent-descendant-kill',
+    ['agent-descendant-process-kill'],
+    [
+      'src/main/pty/process-retirement/pty-descendant-',
+      'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+      'src/main/daemon/terminal-host/terminal-session-teardown.ts',
+      'src/main/providers/local-pty/local-pty-termination.ts',
+      // Claude launch flags shift the stand-in agent's argv.
+      'src/main/claude/agent-view/'
+    ]
+  ),
+  featureRoute(
+    'feature.agent-permission-settings',
+    ['agent-auto-permissions'],
+    [
+      `${COMPONENTS}settings/agents/permissions/`,
+      `${COMPONENTS}agent/launch-settings/AgentPermission`,
+      'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts',
+      'src/shared/agent-launch/permissions/tui-agent-permission-lift.ts',
+      'src/shared/agent-launch/choices/agent-launch-permission-updates.ts'
+    ]
+  ),
   featureRoute(
     'feature.project-groups',
     ['project-group-creation-visibility', 'project-group-manual-sort'],
@@ -104,5 +93,29 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'new-workspace-linked-item-project-switch'
     ],
     [`${COMPONENTS}new-workspace/`]
+  ),
+  featureRoute(
+    'feature.runtime-host-status',
+    ['runtime-host-status-recovery'],
+    [
+      'src/main/ipc/runtime-environments/status/runtime-environment-status-',
+      'src/renderer/src/store/slices/runtime-status/views/runtime-status-subscriptions.ts',
+      'src/renderer/src/store/slices/runtime-status/',
+      'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
+      'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
+      `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
+    ]
+  ),
+  featureRoute(
+    'feature.startup-exec-readiness',
+    ['paired-startup-exec-readiness'],
+    [
+      'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+      'src/main/daemon/shell-readiness/',
+      'src/main/pty/shell-startup/shell-prompt-readiness-probe.ts',
+      'src/main/pty/shell-startup/shell-startup-output-scanner.ts',
+      'src/main/pty/shell-startup/shell-templates.ts',
+      'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
+    ]
   )
 ]

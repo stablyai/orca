@@ -7,8 +7,8 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   ConnectorConversation,
   type ConnectorEvent
-} from '../../shared/connector-cloud-contract'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+} from '../../shared/connectors/connector-cloud-contract'
+import { writeSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import type {
   ConversationEvent,
   ConversationSnapshot

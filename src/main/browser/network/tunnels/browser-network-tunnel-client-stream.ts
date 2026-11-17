@@ -30,6 +30,7 @@ type BrowserNetworkTunnelClientStreamCallbacks = {
 
 export function createBrowserNetworkTunnelClientStream(
   id: number,
+  windowBytes: number,
   callbacks: BrowserNetworkTunnelClientStreamCallbacks
 ): { stream: BrowserNetworkTunnelClientStream; opening: Promise<BrowserNetworkTunnelDuplex> } {
   let resolveOpen = (_socket: BrowserNetworkTunnelDuplex): void => {}
@@ -42,6 +43,8 @@ export function createBrowserNetworkTunnelClientStream(
   const stream: BrowserNetworkTunnelClientStream = {
     id,
     socket,
+    windowBytes,
+    receiveWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     opened: false,
     closed: false,
     localEnded: false,

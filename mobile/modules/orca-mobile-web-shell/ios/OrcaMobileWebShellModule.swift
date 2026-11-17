@@ -1,11 +1,64 @@
 import ExpoModulesCore
 import QuickLook
+import UIKit
 
 public class OrcaMobileWebShellModule: Module {
   private var pdfPreview: MobileWebShellPdfPreview?
+  private var memoryWarningObserver: NSObjectProtocol?
 
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
+
+    OnCreate {
+      memoryWarningObserver = NotificationCenter.default.addObserver(
+        forName: UIApplication.didReceiveMemoryWarningNotification,
+        object: nil,
+        queue: .main
+      ) { _ in
+        MobileWebShellSparePool.shared.didReceiveMemoryWarning()
+      }
+    }
+
+    OnDestroy {
+      if let memoryWarningObserver {
+        NotificationCenter.default.removeObserver(memoryWarningObserver)
+      }
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    // Home boots the next one after its next foreground idle.
+    OnAppEntersBackground {
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    AsyncFunction("prepareSpareDocument") { (directory: String, sessionId: String) -> Bool in
+      MobileWebShellSparePool.shared.prepare(directory: directory, sessionId: sessionId)
+    }.runOnQueue(.main)
+
+    AsyncFunction("claimSpareDocument") { (directory: String) -> String? in
+      MobileWebShellSparePool.shared.claim(directory: directory)
+    }.runOnQueue(.main)
+
+    AsyncFunction("discardSpareDocument") {
+      MobileWebShellSparePool.shared.discardAll()
+    }.runOnQueue(.main)
+
+    // The generation store's root as a file URL, created and excluded from backups.
+    Function("generationStoreDirectory") { (name: String) throws -> String in
+      try MobileWebShellGenerationStoreDirectory.prepare(name: name)
+    }
+
+    // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
+    Function("warmUp") {
+      // A second's delay keeps the warm-up off the launch's first frames.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MobileWebShellWarmUp.start()
+      }
+    }
 
     AsyncFunction("presentPdf") { (url: URL) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
