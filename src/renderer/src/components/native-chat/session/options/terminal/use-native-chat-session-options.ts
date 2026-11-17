@@ -78,7 +78,7 @@ export function useNativeChatSessionOptions(args: {
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
-  const surface = useMemo(() => {
+  const built = useMemo(() => {
     // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
       return null
@@ -94,7 +94,7 @@ export function useNativeChatSessionOptions(args: {
             discoveredModels ?? undefined
           )
         : null
-    return createNativeChatPtySessionOptions({
+    const surface = createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -114,6 +114,7 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
+    return { surface, builtWithListing: discoveredModels !== null }
   }, [
     agent,
     canSwitchOmpModel,
@@ -124,6 +125,8 @@ export function useNativeChatSessionOptions(args: {
     targetPtyId,
     terminalTabId
   ])
+  const surface = built?.surface ?? null
+  const builtWithListing = built?.builtWithListing ?? false
 
   useEffect(() => {
     if (!surface || agent !== 'claude') {
@@ -252,8 +255,10 @@ export function useNativeChatSessionOptions(args: {
       discoveryContext.hostKey,
       applyModels
     )
-    // A listing that settled after the surface was built is never notified again.
-    const settled = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+    // A listing that settled after the surface was built is never notified again; one present at build is already applied.
+    const settled = builtWithListing
+      ? null
+      : readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
     if (settled) {
       applyModels(settled)
     }
@@ -277,7 +282,7 @@ export function useNativeChatSessionOptions(args: {
       active = false
       unsubscribe()
     }
-  }, [agent, discoveryContext, surface])
+  }, [agent, builtWithListing, discoveryContext, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,

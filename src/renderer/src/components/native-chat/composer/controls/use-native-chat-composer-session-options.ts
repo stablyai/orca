@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useNativeChatSessionOptionCommand } from '../../session/options/terminal/use-native-chat-session-option-command'
 import { useNativeChatSessionOptions } from '../../session/options/terminal/use-native-chat-session-options'
 import { newestClaudeResponse } from '../../session/options/terminal/claude-terminal-session-options'
@@ -6,7 +6,6 @@ import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { useCallback } from 'react'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface

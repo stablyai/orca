@@ -3,6 +3,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
+import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 
 import { clearNativeChatModelEnrichmentForTests } from '../catalog/native-chat-session-option-enrichment'
 
@@ -35,10 +36,9 @@ const RESPONSE_MODELS: CatalogModel[] = [
   { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', options: [EFFORT] }
 ]
 
-function modelDescriptor(snapshot: { id: string; kind: unknown }[]): { currentValue?: string } {
-  return snapshot.find((descriptor) => descriptor.id === 'model')?.kind as {
-    currentValue?: string
-  }
+function shownModel(snapshot: SessionOptionDescriptor[]): string | undefined {
+  const kind = snapshot.find((descriptor) => descriptor.id === 'model')?.kind
+  return kind?.type === 'select' ? kind.currentValue : undefined
 }
 
 function pendingDiscovery(): (models: CatalogModel[]) => void {
@@ -74,18 +74,17 @@ describe('useNativeChatSessionOptions Claude response model', () => {
         }),
       { initialProps: { response: { model: 'claude-opus-5-5', effort: 'high' } } }
     )
-    await waitFor(() =>
-      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-opus-5-5')
-    )
+    await waitFor(() => expect(shownModel(result.current.snapshot)).toBe('claude-opus-5-5'))
 
     result.current.surface!.recordOutgoingCommand('/model claude-sonnet-5-5')
     rerender({ response: { model: 'claude-opus-5-5', effort: 'low' } })
     await Promise.resolve()
-    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-sonnet-5-5')
+    expect(shownModel(result.current.snapshot)).toBe('claude-sonnet-5-5')
   })
 
   it('names a response model by the listed alias that discovery reports later', async () => {
     const resolveDiscovery = pendingDiscovery()
+    // Fresh callbacks each render rebuild the surface, as an unmemoized caller would; a settled listing must not republish per rebuild.
     const { result } = renderHook(() =>
       useNativeChatSessionOptions({
         agent: 'claude',
@@ -102,7 +101,7 @@ describe('useNativeChatSessionOptions Claude response model', () => {
       { id: 'haiku', label: 'Haiku', options: [] }
     ])
 
-    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+    await waitFor(() => expect(shownModel(result.current.snapshot)).toBe('opus'))
     const effort = result.current.snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort?.kind).toMatchObject({ currentValue: 'low' })
   })
@@ -120,13 +119,12 @@ describe('useNativeChatSessionOptions Claude response model', () => {
       })
     )
 
-    await waitFor(() =>
-      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-opus-5-5')
-    )
+    await waitFor(() => expect(shownModel(result.current.snapshot)).toBe('claude-opus-5-5'))
   })
 
   it('waits for Claude discovery after a Codex session on the same host listed nothing', async () => {
     const resolveDiscovery = pendingDiscovery()
+    const initialProps: { agent: 'codex' | 'claude' } = { agent: 'codex' }
     const { result, rerender } = renderHook(
       ({ agent }: { agent: 'codex' | 'claude' }) =>
         useNativeChatSessionOptions({
@@ -137,7 +135,7 @@ describe('useNativeChatSessionOptions Claude response model', () => {
           readTerminalScreen: () => null,
           claudeResponse: { model: 'claude-opus-5-5', effort: 'low' }
         }),
-      { initialProps: { agent: 'codex' as 'codex' | 'claude' } }
+      { initialProps }
     )
     await Promise.resolve()
 
@@ -146,6 +144,6 @@ describe('useNativeChatSessionOptions Claude response model', () => {
       { id: 'opus', label: 'Opus', resolvedModel: 'claude-opus-5-5', options: [EFFORT] }
     ])
 
-    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+    await waitFor(() => expect(shownModel(result.current.snapshot)).toBe('opus'))
   })
 })
