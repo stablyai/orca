@@ -162,9 +162,7 @@ export class Session extends SessionProcessInspection {
   }
 
   holdStartupCommandFallback(build: () => string): void {
-    if (this._state !== 'exited' && !this._disposed) {
-      this.shellReady.holdStartupCommandFallback(build)
-    }
+    this.shellReady.holdStartupCommandFallback(build)
   }
 
   resize(cols: number, rows: number): void {
