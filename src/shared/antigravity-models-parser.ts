@@ -1,7 +1,5 @@
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from './agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from './agent-session/options/model-catalog/agent-session-model-option'
+import type { AgentSessionOptionChoice } from './agent-session/agent-session-wire'
 import { stripAnsiEscapeSequences } from './terminal/protocol/escape/ansi-escape-sequences'
 import type {
   CommitMessageModel,
