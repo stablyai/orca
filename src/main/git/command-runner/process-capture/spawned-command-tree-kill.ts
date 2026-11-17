@@ -1,9 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
-import {
-  runOnceWorkerReportsPid,
-  WorkerThreadChildProcess
-} from '../../../worker-thread-child-process/worker-thread-child-process'
+import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { runOnceWorkerReportsPid } from '../../../worker-thread-child-process/worker-child-pid-wait'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 
