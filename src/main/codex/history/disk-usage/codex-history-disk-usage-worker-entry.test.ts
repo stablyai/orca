@@ -71,9 +71,8 @@ describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', ()
     for (const name of ['a', 'b', 'c']) {
       write(join(root, 'sessions', `rollout-${name}.jsonl`), 10)
     }
-    expect(
-      (measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32')).complete
-    ).toBe(false)
+    const cut = measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32')
+    expect(cut.complete).toBe(false)
 
     // Root reads through permission bits.
     if (process.getuid?.() === 0) {
@@ -81,7 +80,7 @@ describe.skipIf(process.platform === 'win32')('measureCodexHistoryDiskUsage', ()
     }
     chmodSync(join(root, 'sessions'), 0o000)
     try {
-      expect((measureCodexHistoryDiskUsage([root], open, 'win32')).complete).toBe(false)
+      expect(measureCodexHistoryDiskUsage([root], open, 'win32').complete).toBe(false)
     } finally {
       chmodSync(join(root, 'sessions'), 0o700)
     }

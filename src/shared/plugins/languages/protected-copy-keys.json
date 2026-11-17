@@ -827,6 +827,8 @@
     "components.settings.workspaceCleanup.change.apply",
     "components.settings.workspaceCleanup.change.description",
     "components.settings.workspaceCleanup.change.title",
+    "components.settings.workspaceCleanup.chatHistory.codexDiskUsage",
+    "components.settings.workspaceCleanup.chatHistory.codexDiskUsageAtLeast",
     "components.settings.workspaceCleanup.chatHistory.confirmDescription",
     "components.settings.workspaceCleanup.chatHistory.confirmTitle",
     "components.settings.workspaceCleanup.chatHistory.deleteWithWorkspace",
