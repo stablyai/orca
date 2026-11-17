@@ -233,12 +233,13 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       }
     }
     guest.on('before-mouse-event', reportPress)
+    const guestId = guest.id
     const handleDestroyed = (): void => {
-      this.cleanupGuestPolicyAttachment(guest.id)
+      this.cleanupGuestPolicyAttachment(guestId)
     }
     guest.on('destroyed', handleDestroyed)
     guest.on('will-prevent-unload', allowPageUnload)
-    this.policyCleanupByGuestId.set(guest.id, () => {
+    this.policyCleanupByGuestId.set(guestId, () => {
       disposeDocPolicy()
       disposeDiscardProtection()
       disposeEscapeForwarding()

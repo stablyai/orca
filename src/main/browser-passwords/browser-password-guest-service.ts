@@ -110,10 +110,11 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
   guest.on('did-navigate', (_event, _url, httpResponseCode) => {
     state.tracker.navigated(httpResponseCode)
   })
+  const guestId = guest.id
   guest.once('destroyed', () => {
     state.tracker.dispose()
-    guests.delete(guest.id)
-    closeBrowserPasswordSavePromptsForGuest(guest.id)
+    guests.delete(guestId)
+    closeBrowserPasswordSavePromptsForGuest(guestId)
   })
 }
 

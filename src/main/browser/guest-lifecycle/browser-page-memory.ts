@@ -224,7 +224,8 @@ export async function acknowledgeBrowserPageRemoval(
   rendererId: number
 ): Promise<boolean> {
   const page = pages.get(pageId)
-  const retired = retiredGuests.get(guest.id)
+  const guestId = guest.id
+  const retired = retiredGuests.get(guestId)
   if (
     !retired ||
     retired.pageId !== pageId ||
@@ -239,11 +240,12 @@ export async function acknowledgeBrowserPageRemoval(
       guest.close({ waitForBeforeUnload: false })
     })
   }
-  if (page?.retired.delete(guest.id)) {
+  // Past this point every WebContents accessor throws "Object has been destroyed".
+  if (page?.retired.delete(guestId)) {
     page.invalidation?.notify()
   }
-  retiredGuests.delete(guest.id)
-  getBrowserPageIdleDiscard().destroyed(pageId, guest.id)
+  retiredGuests.delete(guestId)
+  getBrowserPageIdleDiscard().destroyed(pageId, guestId)
   return true
 }
 

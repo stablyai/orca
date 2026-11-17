@@ -4,6 +4,8 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 type SenderState = {
   connectionId: string
   sender: WebContents
+  /** Captured eagerly: a destroyed sender's .id getter throws. */
+  senderId: number
   subscriptions: Map<string, AbortController>
 }
 
@@ -39,6 +41,7 @@ export class DesktopRuntimeSenderLifecycle {
     const state: SenderState = {
       connectionId: this.mintConnectionId(sender.id),
       sender,
+      senderId: sender.id,
       subscriptions: new Map()
     }
     this.senders.set(sender.id, state)
@@ -50,14 +53,14 @@ export class DesktopRuntimeSenderLifecycle {
   }
 
   private retire(state: SenderState, destroyed: boolean): void {
-    if (this.senders.get(state.sender.id) !== state) {
+    if (this.senders.get(state.senderId) !== state) {
       return
     }
     const retiredConnectionId = state.connectionId
     if (destroyed) {
-      this.senders.delete(state.sender.id)
+      this.senders.delete(state.senderId)
     } else {
-      state.connectionId = this.mintConnectionId(state.sender.id)
+      state.connectionId = this.mintConnectionId(state.senderId)
     }
     for (const controller of state.subscriptions.values()) {
       controller.abort()

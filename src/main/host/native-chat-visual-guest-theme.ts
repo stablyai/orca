@@ -85,9 +85,10 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
           browserSiteDisplayController.onMainFrameNavigationCommitted(guest.id)
         }
       })
+      const guestId = guest.id
       guest.once('destroyed', () => {
-        browserSiteDisplayController.onGuestRetired(guest.id)
-        guests.delete(guest.id)
+        browserSiteDisplayController.onGuestRetired(guestId)
+        guests.delete(guestId)
       })
     }
     event.returnValue = theme

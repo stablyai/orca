@@ -37,7 +37,8 @@ function framesOf(guest: WebContents): Map<number, WebFrameMain> {
       }
     }
   )
-  guest.once('destroyed', () => pendingFramesByGuest.delete(guest.id))
+  const guestId = guest.id
+  guest.once('destroyed', () => pendingFramesByGuest.delete(guestId))
   return frames
 }
 

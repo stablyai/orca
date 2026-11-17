@@ -117,12 +117,13 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   attach.page.releaseThrottle = null
   attach.page.guest = guest
   renewHeldThrottle(attach.page)
+  const guestId = guest.id
   guest.once('destroyed', () => {
-    getBrowserPageIdleDiscard().destroyed(attach.pageId, guest.id)
-    if (attach.page.retired.delete(guest.id)) {
+    getBrowserPageIdleDiscard().destroyed(attach.pageId, guestId)
+    if (attach.page.retired.delete(guestId)) {
       attach.page.invalidation?.notify()
     }
-    retiredGuests.delete(guest.id)
+    retiredGuests.delete(guestId)
     if (attach.page.guest === guest) {
       attach.page.releaseThrottle?.()
       attach.page.releaseThrottle = null
