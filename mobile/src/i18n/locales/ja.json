@@ -3471,15 +3471,7 @@
       "confirmGitHubRebase": "PR #{{number}} をリベースしてマージしますか？",
       "confirmGitLabMerge": "マージリクエスト #{{number}} をマージしますか？",
       "confirmGitLabSquash": "マージリクエスト #{{number}} のコミットをまとめてマージしますか？",
-      "confirmGitLabRebase": "マージリクエスト #{{number}} をリベースしてマージしますか？",
-      "merged": "マージ済み",
-      "closed": "クローズ済み",
-      "conflicts": "競合あり",
-      "behind": "遅れあり",
-      "blocked": "ブロック中",
-      "checksPending": "チェック待ち",
-      "ableToMerge": "マージ可能",
-      "unknown": "不明"
+      "confirmGitLabRebase": "マージリクエスト #{{number}} をリベースしてマージしますか？"
     },
     "itemActions": {
       "changeStatus": "ステータスを変更",
@@ -3804,7 +3796,6 @@
       "title": "タスク"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL（例：project = ABC AND statusCategory != Done）",
       "projectPlaceholder": "プロジェクトビューを検索…",
       "providerPlaceholder": "{{provider}} のタスクを検索…"
     },
@@ -4243,6 +4234,60 @@
               "280ccd2701": "毎日 {{time}}",
               "3f1422adc1": "平日 {{time}}",
               "cc71e252ba": "毎週{{day}} {{time}}"
+            }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "キャンセル済み"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "マージ済み",
+              "4f976d3450": "クローズ",
+              "1f8eb81c0e": "承認が必要です",
+              "c606463dc2": "変更要求",
+              "7e8bbe3cd7": "競合",
+              "b169f943e1": "準備ができたらマージ",
+              "autoMergeOn": "自動マージ有効",
+              "039c072f94": "遅れ",
+              "bf5e4c6c92": "ブロック中",
+              "87fa36ac83": "チェックに失敗しました",
+              "4e2507176b": "保留中のチェック",
+              "def355ff38": "マージ可能",
+              "f958920f3a": "確認中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "マージ済み",
+                  "88d044c42f": "クローズ",
+                  "96b05e374c": "競合",
+                  "5105b0e584": "承認が必要です",
+                  "893a999c8c": "変更要求",
+                  "01ab632a21": "未解決のスレッド",
+                  "bf628700f6": "チェックに合格する必要があります",
+                  "65c847ad1e": "保留中のチェック",
+                  "382c70faeb": "遅れ",
+                  "195917574e": "確認中",
+                  "4ecc0d90ee": "ブロック中",
+                  "49ac4fec10": "チェックに失敗しました",
+                  "04a3015a12": "マージ可能"
+                }
+              }
             }
           }
         }

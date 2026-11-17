@@ -3395,15 +3395,7 @@
       "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
       "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
       "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
-      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
-      "merged": "Zusammengeführt",
-      "closed": "Geschlossen",
-      "conflicts": "Konflikte",
-      "behind": "Nicht aktuell",
-      "blocked": "Blockiert",
-      "checksPending": "Prüfungen ausstehend",
-      "ableToMerge": "Zusammenführen möglich",
-      "unknown": "Unbekannt"
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?"
     },
     "pagination": {
       "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
@@ -3808,7 +3800,6 @@
       "title": "Aufgaben"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, z. B. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Projektansicht durchsuchen…",
       "providerPlaceholder": "{{provider}}-Aufgaben suchen…"
     },
@@ -4247,6 +4238,60 @@
               "280ccd2701": "Täglich um {{time}}",
               "3f1422adc1": "Montags bis freitags um {{time}}",
               "cc71e252ba": "Jeden {{day}} um {{time}}"
+            }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Abgebrochen"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Gemergt",
+              "4f976d3450": "Geschlossen",
+              "1f8eb81c0e": "Genehmigung erforderlich",
+              "c606463dc2": "Änderungen angefordert",
+              "7e8bbe3cd7": "Konflikte",
+              "b169f943e1": "Mergen, sobald möglich",
+              "autoMergeOn": "Auto-Merge aktiviert",
+              "039c072f94": "Im Rückstand",
+              "bf5e4c6c92": "Blockiert",
+              "87fa36ac83": "Checks fehlgeschlagen",
+              "4e2507176b": "Checks ausstehend",
+              "def355ff38": "Merge möglich",
+              "f958920f3a": "Wird geprüft"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Gemergt",
+                  "88d044c42f": "Geschlossen",
+                  "96b05e374c": "Konflikte",
+                  "5105b0e584": "Genehmigung erforderlich",
+                  "893a999c8c": "Änderungen angefordert",
+                  "01ab632a21": "Ungelöste Diskussionen",
+                  "bf628700f6": "Checks müssen erfolgreich sein",
+                  "65c847ad1e": "Checks ausstehend",
+                  "382c70faeb": "Im Rückstand",
+                  "195917574e": "Wird geprüft",
+                  "4ecc0d90ee": "Blockiert",
+                  "49ac4fec10": "Checks fehlgeschlagen",
+                  "04a3015a12": "Merge möglich"
+                }
+              }
             }
           }
         }

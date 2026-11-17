@@ -4148,15 +4148,7 @@
       "confirmGitHubRebase": "变基并合并 PR #{{number}}？",
       "confirmGitLabMerge": "要将合并请求 #{{number}} 合并吗？",
       "confirmGitLabSquash": "要将合并请求 #{{number}} 的提交压缩后合并吗？",
-      "confirmGitLabRebase": "要将合并请求 #{{number}} 变基后合并吗？",
-      "merged": "已合并",
-      "closed": "已关闭",
-      "conflicts": "有冲突",
-      "behind": "落后",
-      "blocked": "已阻止",
-      "checksPending": "检查待完成",
-      "ableToMerge": "可以合并",
-      "unknown": "未知"
+      "confirmGitLabRebase": "要将合并请求 #{{number}} 变基后合并吗？"
     },
     "itemActions": {
       "changeStatus": "更改状态",
@@ -4537,7 +4529,6 @@
       "title": "任务"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL，例如 project = ABC AND statusCategory != Done",
       "projectPlaceholder": "搜索项目视图…",
       "providerPlaceholder": "搜索 {{provider}} 任务…"
     },
@@ -4987,6 +4978,60 @@
               "280ccd2701": "每天 {{time}}",
               "3f1422adc1": "工作日 {{time}}",
               "cc71e252ba": "每{{day}} {{time}}"
+            }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "搜索议题或输入 JQL，例如 project = ABC"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "已取消"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "已合并",
+              "4f976d3450": "已关闭",
+              "1f8eb81c0e": "需要批准",
+              "c606463dc2": "要求更改",
+              "7e8bbe3cd7": "冲突",
+              "b169f943e1": "准备好后合并",
+              "autoMergeOn": "自动合并已开启",
+              "039c072f94": "在后面",
+              "bf5e4c6c92": "已阻塞",
+              "87fa36ac83": "检查失败",
+              "4e2507176b": "检查待处理",
+              "def355ff38": "可以合并",
+              "f958920f3a": "检查中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "合并",
+                  "88d044c42f": "已关闭",
+                  "96b05e374c": "冲突",
+                  "5105b0e584": "需要批准",
+                  "893a999c8c": "已请求更改",
+                  "01ab632a21": "未解决的讨论串",
+                  "bf628700f6": "检查必须通过",
+                  "65c847ad1e": "检查待处理",
+                  "382c70faeb": "落后",
+                  "195917574e": "检查中",
+                  "4ecc0d90ee": "已阻止",
+                  "49ac4fec10": "检查失败",
+                  "04a3015a12": "可以合并"
+                }
+              }
             }
           }
         }

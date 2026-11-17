@@ -1,29 +1,54 @@
-import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
-import {
-  buildJiraTextMatchJql,
-  mayBeJql
-} from '../../../../../../shared/jira/jira-search-input-jql'
-import { searchJiraIssuesByKeyOrText } from './jira-key-or-text-search'
-import { getJiraBadRequestReason } from './task-page-jira-load-state'
+import type { JiraIssue } from './jira-types'
+import { buildJiraIssueKeyJql, buildJiraTextMatchJql, mayBeJql } from './jira-search-input-jql'
+import { parseJiraStatusError } from './jira-status-error'
 
-export type TaskPageJiraJqlRejection = {
+export type JiraJqlRejection = {
   /** Jira's reason; '' when it gave none. */
   reason: string
   /** The input was written as JQL, so the reason matters more than the text matches. */
   likelyTypo: boolean
 }
 
-export type TaskPageJiraSearchResult = {
+export type JiraInputSearchResult = {
   issues: JiraIssue[]
   /** Set when Jira rejected the input as JQL and text matches are shown instead. */
-  jqlRejection: TaskPageJiraJqlRejection | null
+  jqlRejection: JiraJqlRejection | null
 }
 
-export async function searchTaskPageJiraIssues(
+/** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
+export function getJiraBadRequestReason(error: unknown): string | null {
+  const status = error instanceof Error ? parseJiraStatusError(error.message) : null
+  return status?.code === 400 ? status.details : null
+}
+
+export async function searchJiraIssuesByKeyOrText(
+  input: string,
+  search: (jql: string) => Promise<JiraIssue[]>
+): Promise<JiraIssue[]> {
+  const keyJql = buildJiraIssueKeyJql(input)
+  if (keyJql) {
+    // Key-shaped text such as utf-8 can yield an empty result or 400; neither rules out a text match.
+    const issues = await search(keyJql).catch((error: unknown) => {
+      if (getJiraBadRequestReason(error) === null) {
+        throw error
+      }
+      return []
+    })
+    if (issues.length > 0) {
+      return issues
+    }
+  }
+  const textJql = buildJiraTextMatchJql(input)
+  // Why: the runtime RPC rejects empty JQL.
+  return textJql ? search(textJql) : []
+}
+
+/** Search what a user typed: a key or text, or JQL that falls back to text when Jira rejects it. */
+export async function searchJiraIssuesByInput(
   query: string,
   search: (jql: string) => Promise<JiraIssue[]>,
   mode: 'input' | 'jql' = 'input'
-): Promise<TaskPageJiraSearchResult> {
+): Promise<JiraInputSearchResult> {
   const trimmed = query.trim()
   if (mode === 'jql') {
     return { issues: await search(trimmed), jqlRejection: null }

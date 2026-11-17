@@ -3391,15 +3391,7 @@
       "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
       "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
       "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
-      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
-      "merged": "已合併",
-      "closed": "已關閉",
-      "conflicts": "有衝突",
-      "behind": "落後",
-      "blocked": "已封鎖",
-      "checksPending": "等待檢查",
-      "ableToMerge": "可以合併",
-      "unknown": "未知"
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？"
     },
     "pagination": {
       "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
@@ -3804,7 +3796,6 @@
       "title": "任務"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL，例如 project = ABC AND statusCategory != Done",
       "projectPlaceholder": "在專案檢視中搜尋…",
       "providerPlaceholder": "搜尋 {{provider}} 任務…"
     },
@@ -4243,6 +4234,60 @@
               "280ccd2701": "每日 {{time}}",
               "3f1422adc1": "工作日 {{time}}",
               "cc71e252ba": "每{{day}} {{time}}"
+            }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "已取消"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "已合併",
+              "4f976d3450": "已關閉",
+              "1f8eb81c0e": "需要核准",
+              "c606463dc2": "要求變更",
+              "7e8bbe3cd7": "衝突",
+              "b169f943e1": "準備好後合併",
+              "autoMergeOn": "自動合併已開啟",
+              "039c072f94": "落後",
+              "bf5e4c6c92": "已阻塞",
+              "87fa36ac83": "檢查失敗",
+              "4e2507176b": "檢查待處理",
+              "def355ff38": "可以合併",
+              "f958920f3a": "檢查中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "已合併",
+                  "88d044c42f": "已關閉",
+                  "96b05e374c": "衝突",
+                  "5105b0e584": "需要核准",
+                  "893a999c8c": "要求變更",
+                  "01ab632a21": "未解決的討論串",
+                  "bf628700f6": "檢查必須通過",
+                  "65c847ad1e": "檢查待處理",
+                  "382c70faeb": "落後",
+                  "195917574e": "檢查中",
+                  "4ecc0d90ee": "已阻塞",
+                  "49ac4fec10": "檢查失敗",
+                  "04a3015a12": "可以合併"
+                }
+              }
             }
           }
         }

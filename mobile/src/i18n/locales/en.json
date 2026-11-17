@@ -4611,7 +4611,6 @@
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
-      "jiraPlaceholder": "Jira JQL, e.g. project = ABC AND statusCategory != Done",
       "providerPlaceholder": "Search {{provider}} tasks..."
     },
     "workspaceCreateDrawer": {
@@ -4745,15 +4744,7 @@
       "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
       "confirmGitLabMerge": "Merge merge request #{{number}}?",
       "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
-      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
-      "merged": "Merged",
-      "closed": "Closed",
-      "conflicts": "Conflicts",
-      "behind": "Behind",
-      "blocked": "Blocked",
-      "checksPending": "Checks pending",
-      "ableToMerge": "Able to merge",
-      "unknown": "Unknown"
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?"
     },
     "pagination": {
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
@@ -5062,6 +5053,60 @@
               "280ccd2701": "Daily at {{time}}",
               "3f1422adc1": "Weekdays at {{time}}",
               "cc71e252ba": "{{day}}s at {{time}}"
+            }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "Search issues or enter JQL, e.g. project = ABC"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Cancelled"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Merged",
+              "4f976d3450": "Closed",
+              "1f8eb81c0e": "Approval required",
+              "c606463dc2": "Changes requested",
+              "7e8bbe3cd7": "Conflicts",
+              "b169f943e1": "Merge when ready",
+              "autoMergeOn": "Auto-merge on",
+              "039c072f94": "Behind",
+              "bf5e4c6c92": "Blocked",
+              "87fa36ac83": "Checks failed",
+              "4e2507176b": "Checks pending",
+              "def355ff38": "Able to merge",
+              "f958920f3a": "Checking"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Merged",
+                  "88d044c42f": "Closed",
+                  "96b05e374c": "Conflicts",
+                  "5105b0e584": "Approval required",
+                  "893a999c8c": "Changes requested",
+                  "01ab632a21": "Unresolved threads",
+                  "bf628700f6": "Checks must pass",
+                  "65c847ad1e": "Checks pending",
+                  "382c70faeb": "Behind",
+                  "195917574e": "Checking",
+                  "4ecc0d90ee": "Blocked",
+                  "49ac4fec10": "Checks failed",
+                  "04a3015a12": "Able to merge"
+                }
+              }
             }
           }
         }

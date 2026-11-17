@@ -50,7 +50,7 @@ export async function readTaskListRows(
   const live = () => !signal.aborted
   if (provider === 'jira') {
     const issues = await fetchJiraTaskIssues(client, {
-      jql: appliedQuery,
+      query: appliedQuery,
       filter: input.jiraFilter,
       siteId: input.jiraConnection.selection
     })

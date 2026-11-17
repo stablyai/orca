@@ -5,7 +5,7 @@ import {
 } from './github-project-repo-match'
 import { githubProjectHost } from '../../../../src/shared/github/projects/project-identity'
 import { hasSettledHostRepoList } from '../repositories/host-repo-list'
-import { isHostedTaskRepo } from '../repositories/hosted-repo-selection'
+import { listTaskSourceRepos } from '../repositories/hosted-repo-selection'
 import { useCallback, useMemo } from 'react'
 import {
   groupRows,
@@ -70,7 +70,10 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
   const activeGitHubProjectHost = githubProjectHost(
     githubProjectTable?.project.host ?? activeGitHubProject?.host
   )
-  const hostedRepos = useMemo(() => repos.filter(isHostedTaskRepo), [repos])
+  const hostedRepos = useMemo(
+    () => listTaskSourceRepos(repos, effectiveRepoIds),
+    [effectiveRepoIds, repos]
+  )
   const workspaceRepos = useMemo(() => repos.filter((repo) => repo.kind !== 'folder'), [repos])
   const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const selectedHostedRepos = useMemo(

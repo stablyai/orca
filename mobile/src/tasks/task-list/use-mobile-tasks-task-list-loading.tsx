@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { linearIssueReadFailureMessage } from '../../../../src/shared/secure-storage/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
-import { isHostedTaskRepo } from '../repositories/hosted-repo-selection'
+import { listTaskSourceRepos } from '../repositories/hosted-repo-selection'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { readTaskListRows } from './task-list-read'
 import { readTaskList, taskListParams } from '../screen-state/task-queries'
@@ -84,9 +84,9 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         void repoListRequest.catch(() => {})
         const hosted = provider === 'github' || provider === 'gitlab'
         const repos = hosted
-          ? (await repoListRequest)
-              .filter(isHostedTaskRepo)
-              .filter((repo) => effectiveRepoIds.size === 0 || effectiveRepoIds.has(repo.id))
+          ? listTaskSourceRepos(await repoListRequest, effectiveRepoIds).filter(
+              (repo) => effectiveRepoIds.size === 0 || effectiveRepoIds.has(repo.id)
+            )
           : []
         if (!isCurrent()) {
           return
