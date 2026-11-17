@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { NOTIFICATIONS_PUSH_COVERAGE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/mobile-runtime-capabilities'
-import type { PushCoverageResolver } from '../runtime/push/push-dispatcher'
+import { NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS } from '../../shared/rpc-contract/notifications/notifications-params'
+import type { ExecutionHostPushCoverage } from '../runtime/push/push-burst-slots'
 import { listCapableSharedControlSockets } from './desktop-presence-reporter'
 
 // The alert waits on this answer; a slow host costs a duplicate, never the alert.
@@ -13,22 +14,40 @@ const PushCoverageResponseSchema = z.object({
 })
 
 /** Older hosts, other host kinds and unreachable ones cover nothing, so this desktop pushes as before. */
-export const requestExecutionHostPushCoverage: PushCoverageResolver = async (
-  executionHost,
-  request
-) => {
+function executionHostSocket(executionHost: string) {
   const host = parseExecutionHostId(executionHost)
-  const target =
-    host?.kind === 'runtime'
-      ? listCapableSharedControlSockets(NOTIFICATIONS_PUSH_COVERAGE_RUNTIME_CAPABILITY).find(
-          (candidate) => candidate.environmentId === host.environmentId
+  return host?.kind === 'runtime'
+    ? listCapableSharedControlSockets(NOTIFICATIONS_PUSH_COVERAGE_RUNTIME_CAPABILITY).find(
+        (candidate) => candidate.environmentId === host.environmentId
+      )
+    : undefined
+}
+
+export const executionHostPushCoverage: ExecutionHostPushCoverage = {
+  ask: async (executionHost, request) => {
+    const target = executionHostSocket(executionHost)
+    if (!target) {
+      return new Set()
+    }
+    const response = PushCoverageResponseSchema.safeParse(
+      await target.request('notifications.pushCoverage', request, PUSH_COVERAGE_TIMEOUT_MS)
+    )
+    return new Set(response.success ? response.data.result.coveredTokenDigests : [])
+  },
+  tell: (executionHost, subject, pushedTokenDigests) => {
+    void pushedTokenDigests
+      .then(async (pushed) => {
+        const tokenDigests = pushed.flatMap((digest) => digest ?? [])
+        const target = tokenDigests.length > 0 ? executionHostSocket(executionHost) : undefined
+        await target?.request(
+          'notifications.recordMirrorPush',
+          { tokenDigests: tokenDigests.slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS), subject },
+          PUSH_COVERAGE_TIMEOUT_MS
         )
-      : undefined
-  if (!target) {
-    return new Set()
+      })
+      .catch((error: unknown) => {
+        // Unheard, the host may push its own copy too: a duplicate, never a lost alert.
+        console.warn('[push] Could not tell the execution host which phones were pushed:', error)
+      })
   }
-  const response = PushCoverageResponseSchema.safeParse(
-    await target.request('notifications.pushCoverage', request, PUSH_COVERAGE_TIMEOUT_MS)
-  )
-  return new Set(response.success ? response.data.result.coveredTokenDigests : [])
 }

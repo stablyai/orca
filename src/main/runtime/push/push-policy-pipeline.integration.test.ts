@@ -7,7 +7,11 @@ import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { RuntimeMobileNotificationController } from './notifications/runtime-mobile-notification-controller'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import { pushCoverage, reportDesktopPresence } from '../rpc/methods/notifications/notifications'
+import {
+  pushCoverage,
+  recordMirrorPush,
+  reportDesktopPresence
+} from '../rpc/methods/notifications/notifications'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
@@ -187,23 +191,22 @@ it('expires persisted registration at seven days despite host activity and renew
   expect(h.client.send).toHaveBeenCalledTimes(2)
 })
 
-it('answers a mirroring desktop from the phones this host pushed, and holds the rest for it', async () => {
+it('answers a mirroring desktop from the phones this host pushed, and holds back for its pushes', async () => {
   const h = await pipeline()
   const digest = new DeviceRegistry(h.path).getDevice(h.device.deviceId)?.pushRegistration
     ?.tokenDigest
-  const ask = async (subject: string, clientKind: 'runtime' | 'mobile' = 'runtime') =>
-    (
-      await pushCoverage(
-        { tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'], subject },
-        {
-          clientKind,
-          runtime: {
-            coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
-          }
-        }
-      )
-    ).coveredTokenDigests
-  const finish = (worktreeId: string) =>
+  const context = (clientKind: 'runtime' | 'mobile' = 'runtime') => ({
+    clientKind,
+    runtime: {
+      coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller),
+      recordMobileMirrorPush: h.controller.recordMirrorPush.bind(h.controller)
+    }
+  })
+  const request = (subject: string) => ({
+    tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'],
+    subject
+  })
+  const finish = async (worktreeId: string) => {
     h.controller.dispatch({
       type: 'notification',
       emittedAt: Date.now(),
@@ -213,15 +216,24 @@ it('answers a mirroring desktop from the phones this host pushed, and holds the 
       title: 'Finished',
       body: 'Finished'
     })
+    await flush()
+  }
 
-  finish('repo::pushed')
-  await flush()
+  await finish('repo::pushed')
   expect(h.client.send).toHaveBeenCalledTimes(1)
-  expect(await ask('repo::pushed', 'mobile')).toEqual([])
-  expect(await ask('repo::pushed')).toEqual([digest])
-  // Asked first, the mirror pushes this one, so the host's own copy skips the phone.
-  expect(await ask('repo::asked-first')).toEqual([])
-  finish('repo::asked-first')
-  await flush()
+  expect(await pushCoverage(request('repo::pushed'), context('mobile'))).toEqual({
+    coveredTokenDigests: []
+  })
+  expect(await pushCoverage(request('repo::pushed'), context())).toEqual({
+    coveredTokenDigests: [digest]
+  })
+  expect(await pushCoverage(request('repo::mirror-pushed'), context())).toEqual({
+    coveredTokenDigests: []
+  })
+  expect(recordMirrorPush(request('repo::mirror-pushed'), context('mobile'))).toEqual({
+    recorded: false
+  })
+  recordMirrorPush(request('repo::mirror-pushed'), context())
+  await finish('repo::mirror-pushed')
   expect(h.client.send).toHaveBeenCalledTimes(1)
 })

@@ -1,6 +1,6 @@
 import { getOrcaPushGatewayUrl } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { DesktopPushService } from '../../runtime/push/desktop-push-service'
-import { requestExecutionHostPushCoverage } from '../../notifications/execution-host-push-coverage'
+import { executionHostPushCoverage } from '../../notifications/execution-host-push-coverage'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { mainProcessState as state } from '../main-process-state'
@@ -17,7 +17,7 @@ export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void 
       runtime,
       runtimeRpc,
       gatewayUrl: getOrcaPushGatewayUrl(),
-      resolveCoverage: requestExecutionHostPushCoverage
+      coverage: executionHostPushCoverage
     })
     pushService?.start()
     state.core.desktopPushService = pushService

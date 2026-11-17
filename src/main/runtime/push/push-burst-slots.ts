@@ -1,4 +1,8 @@
-import { reserveNotificationCooldown } from '../../../shared/notifications/notification-burst-cooldown'
+import {
+  NOTIFICATION_COOLDOWN_MS,
+  reserveNotificationCooldown
+} from '../../../shared/notifications/notification-burst-cooldown'
+import type { NotificationPushCoverageRequest } from '../../../shared/rpc-contract/notifications/notifications-params'
 
 // Keyed news is announced once by its producer, so only its own repeat may collapse it.
 export function pushBurstSubject(event: { attentionKey?: string; worktreeId?: string }): string {
@@ -9,37 +13,86 @@ function slotKey(deviceId: string, subject: string): string {
   return JSON.stringify([deviceId, subject])
 }
 
-/** One push per phone and subject per cooldown, shared with a mirroring host that asks about it. */
+/** How a mirroring host and a mirrored session's execution host share each phone's burst slot. */
+export type ExecutionHostPushCoverage = {
+  /** Token digests of phones the execution host already pushed; empty when it can't say. */
+  ask: (
+    executionHost: string,
+    request: NotificationPushCoverageRequest
+  ) => Promise<ReadonlySet<string>>
+  /** Tells the execution host which phones the gateway took this host's copy for. */
+  tell: (
+    executionHost: string,
+    subject: string,
+    pushedTokenDigests: Promise<readonly (string | undefined)[]>
+  ) => void
+}
+
+type SlotDevice = { deviceId: string; pushRegistration?: { tokenDigest?: string } }
+
+function askedDevices(
+  devices: readonly SlotDevice[],
+  request: NotificationPushCoverageRequest
+): { deviceId: string; digest: string }[] {
+  const asked = new Set(request.tokenDigests)
+  return devices.flatMap(({ deviceId, pushRegistration }) => {
+    const digest = pushRegistration?.tokenDigest
+    return digest && asked.has(digest) ? [{ deviceId, digest }] : []
+  })
+}
+
+/** One push per phone and subject per cooldown, whichever host's push the gateway took first. */
 export class PushBurstSlots {
   private readonly reservedAt = new Map<string, number>()
-  // Per slot this host pushed itself: whether the gateway took it.
+  // Per held slot: whether the gateway took the push that holds it.
   private readonly deliveries = new Map<string, Promise<boolean>>()
 
   /** The slot this push holds, or null while an earlier push holds it. */
   reserve(deviceId: string, subject: string, at: number): string | null {
     const slot = slotKey(deviceId, subject)
-    return reserveNotificationCooldown(this.reservedAt, slot, at) ? slot : null
-  }
-
-  recordDelivery(slot: string, delivered: Promise<boolean>): void {
+    if (!reserveNotificationCooldown(this.reservedAt, slot, at)) {
+      return null
+    }
     this.deliveries.delete(slot)
-    this.deliveries.set(slot, delivered)
     // Bounded by the cooldown map, which forgets expired slots.
     for (const key of this.deliveries.keys()) {
       if (!this.reservedAt.has(key)) {
         this.deliveries.delete(key)
       }
     }
+    return slot
   }
 
-  /** Whether the phone got this subject's push from here; a free slot is the asking host's instead. */
-  async coveredForMirror(deviceId: string, subject: string, now: number): Promise<boolean> {
-    const slot = this.reserve(deviceId, subject, now)
-    if (slot) {
-      this.deliveries.delete(slot)
-      return false
+  recordDelivery(slot: string, delivered: Promise<boolean>): void {
+    this.deliveries.set(slot, delivered)
+  }
+
+  /** Of the asked phones, those a push the gateway took holds the subject's slot for. */
+  async coveredDigests(
+    devices: readonly SlotDevice[],
+    request: NotificationPushCoverageRequest,
+    now: number
+  ): Promise<string[]> {
+    const answers = askedDevices(devices, request).map(async ({ deviceId, digest }) => {
+      const slot = slotKey(deviceId, request.subject)
+      const at = this.reservedAt.get(slot)
+      const held = at !== undefined && now - at < NOTIFICATION_COOLDOWN_MS
+      return held && (await this.deliveries.get(slot)) ? [digest] : []
+    })
+    return (await Promise.all(answers)).flat()
+  }
+
+  /** Another host's push the gateway took holds these phones' free slots, so this host's copy stays back. */
+  recordPushedElsewhere(
+    devices: readonly SlotDevice[],
+    request: NotificationPushCoverageRequest,
+    now: number
+  ): void {
+    for (const { deviceId } of askedDevices(devices, request)) {
+      const slot = this.reserve(deviceId, request.subject, now)
+      if (slot) {
+        this.recordDelivery(slot, Promise.resolve(true))
+      }
     }
-    // A slot without a delivery of ours was taken for another host, which pushed it.
-    return (await this.deliveries.get(slotKey(deviceId, subject))) ?? true
   }
 }

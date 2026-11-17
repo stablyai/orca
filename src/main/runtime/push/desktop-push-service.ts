@@ -9,11 +9,8 @@ import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-s
 import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
-import {
-  PushDispatcher,
-  type PushCoverageRequest,
-  type PushCoverageResolver
-} from './push-dispatcher'
+import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
+import type { ExecutionHostPushCoverage } from './push-burst-slots'
 import { mobilePushTokenDigest } from './push-token-digest'
 import { pushTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
@@ -40,7 +37,7 @@ type DesktopPushServiceOptions = {
   /** Inject the per-device registration bucket for tests. */
   registerThrottle?: PushRegisterThrottle
   /** Asks a mirrored session's execution host which of this host's phones it pushes itself. */
-  resolveCoverage?: PushCoverageResolver
+  coverage?: ExecutionHostPushCoverage
 }
 
 export class DesktopPushService {
@@ -76,7 +73,7 @@ export class DesktopPushService {
       client,
       registry,
       deliveryMode: this.deliveryMode,
-      resolveCoverage: options.resolveCoverage
+      coverage: options.coverage
     })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
@@ -205,6 +202,10 @@ export class DesktopPushService {
 
   coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
     return this.dispatcher.coveredTokenDigests(request)
+  }
+
+  recordMirrorPush(request: PushCoverageRequest): void {
+    this.dispatcher.recordMirrorPush(request)
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {

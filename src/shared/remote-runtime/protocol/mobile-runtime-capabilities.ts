@@ -4,7 +4,7 @@ import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from '../relay/mobile-desktop-relay
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
-// Hosts without this capability have no notifications.pushCoverage RPC, so a mirroring desktop pushes its phones itself.
+// Hosts without this capability have no notifications.pushCoverage or recordMirrorPush RPC, so a mirroring desktop pushes its phones itself.
 export const NOTIFICATIONS_PUSH_COVERAGE_RUNTIME_CAPABILITY =
   'notifications.push-coverage.v1' as const
 

@@ -2,11 +2,8 @@ import { vi } from 'vitest'
 import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendResult } from './push-gateway-client'
-import {
-  PushDispatcher,
-  type PushCoverageResolver,
-  type PushDispatcherRegistry
-} from './push-dispatcher'
+import type { ExecutionHostPushCoverage } from './push-burst-slots'
+import { PushDispatcher, type PushDispatcherRegistry } from './push-dispatcher'
 
 export function registration(
   overrides: Partial<MobilePushRegistration> = {}
@@ -25,7 +22,7 @@ export function createHarness(options: {
   devices: { deviceId: string; pushRegistration?: MobilePushRegistration }[]
   results?: PushSendResult[]
   sendImpl?: () => Promise<never>
-  resolveCoverage?: PushCoverageResolver
+  coverage?: ExecutionHostPushCoverage
 }): {
   dispatcher: PushDispatcher
   sends: SendCall[]
@@ -63,7 +60,7 @@ export function createHarness(options: {
     dispatcher: new PushDispatcher({
       client,
       registry,
-      resolveCoverage: options.resolveCoverage,
+      coverage: options.coverage,
       scheduleRetry: (run) => {
         retry = run
       }
