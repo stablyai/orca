@@ -180,11 +180,13 @@ function foldJournalTextTails(
 ): void {
   const items = (
     turn
-      ? db
-          .prepare(`SELECT DISTINCT tail.session_id,tail.epoch,tail.item_id FROM journal_text_tail tail
-            JOIN journal_items item ON item.session_id=tail.session_id AND item.epoch=tail.epoch
-              AND item.item_id=tail.item_id
-            WHERE tail.session_id=? AND tail.epoch=? AND item.turn_item_id=?`)
+      ? // Through the turn's own items, so tails that outlive other turns are never visited.
+        db
+          .prepare(`SELECT item.session_id,item.epoch,item.item_id FROM journal_items item
+            INDEXED BY journal_items_stop_turn
+            WHERE item.session_id=? AND item.epoch=? AND item.turn_item_id=? AND item.hidden=0
+              AND EXISTS(SELECT 1 FROM journal_text_tail tail WHERE tail.session_id=item.session_id
+                AND tail.epoch=item.epoch AND tail.item_id=item.item_id)`)
           .all(turn.sessionId, turn.epoch, turn.turnItemId)
       : db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
   ).map((row) => ({
