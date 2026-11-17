@@ -1,6 +1,6 @@
 import { hasModifier } from './parser'
 import { isLatinShortcutKey } from './input'
-import { keybindingRunsInTextField } from './matching'
+import { keybindingMatchesAction, keybindingRunsInTextField } from './matching'
 import type { KeybindingActionId, KeybindingInput } from './types'
 
 export type TextShortcutInput = KeybindingInput & {
@@ -53,6 +53,10 @@ export function nativeChatPromptClaimsShortcut(
     return true
   }
   if (actionId && keybindingRunsInTextField(actionId, input, platform)) {
+    return false
+  }
+  // Why: agent chat focus sits in the prompt; its delete shortcut targets the open workspace.
+  if (actionId === 'workspace.delete' && keybindingMatchesAction(actionId, input, platform)) {
     return false
   }
   if (

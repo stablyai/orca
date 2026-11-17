@@ -20,6 +20,8 @@ export type WorktreeDeleteOptions = {
   expectedHostId?: ExecutionHostId
   /** Caller already confirmed (press-again shortcut); lineage children still get the dialog. */
   confirmed?: boolean
+  /** Open the dialog even when "Ask before deleting" is off (shortcut fired with no visible prompt). */
+  alwaysAsk?: boolean
 }
 
 export type WorktreeDeleteWithToastOptions = {
