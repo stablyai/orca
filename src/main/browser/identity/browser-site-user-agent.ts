@@ -1,6 +1,7 @@
 import {
   cleanElectronUserAgent,
-  getBrowserProcessUserAgentIdentity
+  getBrowserProcessUserAgentIdentity,
+  stripElectronToken
 } from './browser-process-user-agent'
 
 // Restrict the Electron identity to sign-in hosts; post-auth apps retain the profile identity.
@@ -57,8 +58,10 @@ export function chromeShapedSiteUserAgent(): string {
 
 /** Teams decides on the request header alone, so only the header drops the Electron token. */
 export function teamsRequestUserAgent(rawUrl: string, userAgent: string): string {
+  // Cleaned already omits the token; a Google sign-in UA there must keep it.
+  if (getBrowserProcessUserAgentIdentity().mode !== 'native') {
+    return userAgent
+  }
   const hostname = hostnameOf(rawUrl)
-  return hostname !== null && TEAMS_HOSTS.has(hostname)
-    ? userAgent.replace(/\s+Electron\/\S+/, '')
-    : userAgent
+  return hostname !== null && TEAMS_HOSTS.has(hostname) ? stripElectronToken(userAgent) : userAgent
 }
