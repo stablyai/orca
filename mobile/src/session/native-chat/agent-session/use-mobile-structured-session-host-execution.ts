@@ -32,6 +32,20 @@ export function useMobileStructuredSessionHostStopping(args: HostExecutionArgs):
   )
 }
 
+/** The running Claude child's Remote Control link; the summary keeps one object per publication. */
+export function useMobileStructuredSessionProviderRemoteControl(
+  args: HostExecutionArgs
+): AgentSessionStatusSummary['providerRemoteControl'] {
+  return useHostSummaryValue(args, (summary) => summary?.providerRemoteControl)
+}
+
+/** The chat's saved Remote Control choice; absent follows the host's setting. */
+export function useMobileStructuredSessionProviderRemoteControlChoice(
+  args: HostExecutionArgs
+): AgentSessionStatusSummary['providerRemoteControlChoice'] {
+  return useHostSummaryValue(args, (summary) => summary?.providerRemoteControlChoice)
+}
+
 export function useMobileStructuredSessionHostExecutionPhase(
   args: HostExecutionArgs
 ): AgentSessionStatusSummary['hostExecutionPhase'] {

@@ -1,3 +1,4 @@
+import type { MobileStructuredRemoteControl } from '../remote-control/use-mobile-structured-remote-control'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -78,6 +79,8 @@ export type StructuredMobileSession = Omit<
     threadGoal: MobileStructuredThreadGoal | null
     /** Null unless the host manages this agent's MCP servers. */
     mcpPanel: MobileStructuredMcpPanel | null
+    /** Null where the host or route cannot save the choice. */
+    remoteControl: MobileStructuredRemoteControl | null
     /** "Rewind to here" for the chat's own turn openers; absent where the chat cannot rewind. */
     rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null

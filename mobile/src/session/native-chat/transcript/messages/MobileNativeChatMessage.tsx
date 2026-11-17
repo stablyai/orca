@@ -19,6 +19,7 @@ import {
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
+import { MobileNativeChatSentViaRemoteControl } from '../../remote-control/MobileNativeChatSentViaRemoteControl'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
 import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
@@ -386,6 +387,10 @@ function MobileNativeChatMessageImpl({
             />
           ) : null}
         </Content>
+        {/* Under the bubble, as the desktop places it: the bubble stays the person's words alone. */}
+        {isUser && message.sentFrom === 'provider-remote-control' ? (
+          <MobileNativeChatSentViaRemoteControl />
+        ) : null}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {/* Always shown, so the row never shifts when copy appears. */}
         {isChatTurn && !agentFrom ? (

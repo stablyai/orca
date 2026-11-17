@@ -1,3 +1,4 @@
+import { useMobileStructuredRemoteControl } from '../remote-control/use-mobile-structured-remote-control'
 import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
@@ -8,10 +9,7 @@ import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext
 } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
-import {
-  actionableStructuredApproval,
-  actionableStructuredQuestion
-} from '../input/prompts/mobile-structured-actionable-prompt'
+import { useMobileStructuredActionablePrompts } from '../input/prompts/use-mobile-structured-actionable-prompts'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -174,6 +172,7 @@ export function useMobileStructuredAgentSession(
     commands: useMobileStructuredCommandController(options)
   })
   const mcp = useMobileStructuredMcpPanel(args, sessionKey, goal.commands)
+  const remote = useMobileStructuredRemoteControl(args, mcp.commands)
   const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -188,26 +187,16 @@ export function useMobileStructuredAgentSession(
     commandPending: commandPendingRef,
     onClearSent: transcript.onClearSent,
     sendsOut,
-    controller: mcp.commands,
+    controller: remote.commands,
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const { items, currentRequests, actionablePromptIds, status, epoch } = state
-  // Prefer host actionability: ended-agent prompts must receive no answer.
-  const [approvalPrompt, questionPrompt] = useMemo(() => {
-    const prompts = { items, currentRequests, actionablePromptIds }
-    return [actionableStructuredApproval(prompts), actionableStructuredQuestion(prompts)] as const
-  }, [items, currentRequests, actionablePromptIds])
-  const commandRefusalCauses = useMemo(
-    () => ({
-      working: turnId !== null || queueSendsNext,
-      prompt: approvalPrompt !== null || questionPrompt !== null
-    }),
-    [approvalPrompt, questionPrompt, queueSendsNext, turnId]
-  )
+  const { status, epoch } = state
+  const { approvalPrompt, questionPrompt, commandRefusalCauses } =
+    useMobileStructuredActionablePrompts(state, turnId, queueSendsNext)
   const { rewind, sendWithOutcome } = useMobileStructuredAgentRewind({
     ...args,
     state,
@@ -304,6 +293,7 @@ export function useMobileStructuredAgentSession(
     ),
     threadGoal: goal.threadGoal,
     mcpPanel: mcp.mcpPanel,
+    remoteControl: remote.remoteControl,
     rewind,
     usageLimit
   }

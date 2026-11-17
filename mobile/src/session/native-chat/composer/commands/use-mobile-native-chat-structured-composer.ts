@@ -1,3 +1,4 @@
+import type { MobileStructuredRemoteControl } from '../../remote-control/use-mobile-structured-remote-control'
 import { useMemo } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
@@ -18,8 +19,10 @@ export function useMobileNativeChatStructuredComposer(args: {
   files: MobileNativeChatFileAttachments
   threadGoal: MobileStructuredThreadGoal | null
   mcpPanel: MobileStructuredMcpPanel | null
+  remoteControl: MobileStructuredRemoteControl | null
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal, mcpPanel } = args
+  const { remoteControl } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
@@ -49,12 +52,14 @@ export function useMobileNativeChatStructuredComposer(args: {
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id]),
             threadGoal,
-            mcpPanel
+            mcpPanel,
+            remoteControl
           }
         : null,
     [
       threadGoal,
       mcpPanel,
+      remoteControl,
       acceptsFiles,
       attachFiles,
       attachPastedText,

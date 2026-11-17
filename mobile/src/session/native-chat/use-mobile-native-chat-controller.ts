@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
-import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileNativeChatTab } from './conversation/mobile-native-chat-eligibility'
@@ -15,7 +15,7 @@ import type { MobileNativeChatController } from './mobile-native-chat-controller
 import { useMobileBridgeChatPromptWrites } from './input/prompts/use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './conversation/use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-native-chat-prompt-controller'
-import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
+import { useMobileNativeChatTerminalPendingSends } from './transcript/sending/use-mobile-native-chat-terminal-pending-sends'
 import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
 
@@ -167,21 +167,10 @@ export function useMobileNativeChatController(args: {
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
   const nativeChatAgentWorking = activeTurn.isWorking
-  const workingEpoch = terminalTurn.workingEpoch
-  const placedChatPending = useMemo(
-    () =>
-      chatPending.map((entry) => ({
-        ...entry,
-        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
-      })),
-    [chatPending, workingEpoch]
-  )
-  const captureTerminalSendOrigin = useCallback(
-    (text: string, sentAt?: number) => {
-      const origin = captureSendOrigin(text, sentAt)
-      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
-    },
-    [captureSendOrigin, workingEpoch]
+  const { placedChatPending, captureTerminalSendOrigin } = useMobileNativeChatTerminalPendingSends(
+    chatPending,
+    captureSendOrigin,
+    terminalTurn.workingEpoch
   )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
@@ -302,6 +291,7 @@ export function useMobileNativeChatController(args: {
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
+    nativeChatRemoteControl: activeChatStructured ? structuredNativeChat.remoteControl : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured

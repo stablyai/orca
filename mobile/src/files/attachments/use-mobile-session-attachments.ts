@@ -118,7 +118,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
     files: nativeChatFiles,
     threadGoal: nativeChatController.nativeChatThreadGoal,
-    mcpPanel: nativeChatController.nativeChatMcpPanel
+    mcpPanel: nativeChatController.nativeChatMcpPanel,
+    remoteControl: nativeChatController.nativeChatRemoteControl
   })
 
   useEffect(() => {
