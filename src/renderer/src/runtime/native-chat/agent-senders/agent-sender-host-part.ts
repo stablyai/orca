@@ -15,12 +15,14 @@ export type HostPart = {
   /** Home principals named by any of the host's publications, with how many name each. */
   principals: ReadonlyMap<string, number>
   /** The rows it runs for each home principal that attached them. */
-  attachments: ReadonlyMap<string, OverlayMap<string, Located>>
+  attachments: OverlayMap<string, OverlayMap<string, Located>>
   panes: OverlayMap<string, readonly string[]>
   attachedPanes: OverlayMap<string, readonly (readonly [principal: string, identity: string])[]>
   /** Every kept row behind each merged answer, so one scope can leave without a rebuild. */
   claimRows: OverlayMap<string, readonly Row[]>
-  attachmentRows: ReadonlyMap<string, OverlayMap<string, readonly Row[]>>
+  attachmentRows: OverlayMap<string, OverlayMap<string, readonly Row[]>>
+  /** Kept attachment rows per home principal; a principal leaves both maps at zero. */
+  attachmentCounts: OverlayMap<string, number>
 }
 
 const wholeHostRowsByWorktree = new WeakMap<LocatedRows, Map<string, LocatedRows>>()
@@ -123,7 +125,8 @@ const attachedPaneKey = ([principal, identity]: readonly [string, string]) =>
  *  list it does not touch, then re-merges only the identities whose rows moved. */
 export class HostPartDraft {
   private readonly claimRows: DraftLists<string, Row>
-  private readonly attachmentRows: Map<string, OverlayMap<string, readonly Row[]>>
+  private readonly attachmentRows: OverlayMapDraft<string, OverlayMap<string, readonly Row[]>>
+  private readonly attachmentCounts: OverlayMapDraft<string, number>
   private readonly attachmentBuckets = new Map<string, DraftLists<string, Row>>()
   private readonly principals: Map<string, number>
   private readonly panes: DraftLists<string, string>
@@ -136,7 +139,8 @@ export class HostPartDraft {
     private readonly onRow: () => void
   ) {
     this.claimRows = new DraftLists(base?.claimRows ?? OverlayMap.empty())
-    this.attachmentRows = new Map(base?.attachmentRows)
+    this.attachmentRows = (base?.attachmentRows ?? OverlayMap.empty()).edit()
+    this.attachmentCounts = (base?.attachmentCounts ?? OverlayMap.empty()).edit()
     this.principals = new Map(base?.principals)
     this.panes = new DraftLists(base?.panes ?? OverlayMap.empty())
     this.attachedPanes = new DraftLists(base?.attachedPanes ?? OverlayMap.empty(), attachedPaneKey)
@@ -162,6 +166,7 @@ export class HostPartDraft {
         const touched = this.touchedAttachments.get(principal) ?? new Set<string>()
         this.touchedAttachments.set(principal, touched.add(row.identity))
         const bucket = this.attachmentBucket(principal)
+        this.attachmentCounts.set(principal, (this.attachmentCounts.get(principal) ?? 0) + sign)
         if (sign > 0) {
           bucket.add(row.identity, row)
           this.attachedPanes.add(paneId(row), [principal, row.identity])
@@ -196,9 +201,15 @@ export class HostPartDraft {
         identities.set(identity, value)
       }
     }
-    const attachments = new Map(this.base?.attachments)
+    const attachments = (this.base?.attachments ?? OverlayMap.empty()).edit()
     for (const [principal, touched] of this.touchedAttachments) {
       const rows = this.attachmentBuckets.get(principal)!
+      if (!this.attachmentCounts.get(principal)) {
+        this.attachmentCounts.delete(principal)
+        this.attachmentRows.delete(principal)
+        attachments.delete(principal)
+        continue
+      }
       rows.settle()
       const bucket = (attachments.get(principal) ?? OverlayMap.empty<string, Located>()).edit()
       for (const identity of touched) {
@@ -215,11 +226,12 @@ export class HostPartDraft {
     return {
       identities: identities.finish(),
       principals: this.principals,
-      attachments,
+      attachments: attachments.finish(),
       panes: this.panes.finish(),
       attachedPanes: this.attachedPanes.finish(),
       claimRows: this.claimRows.finish(),
-      attachmentRows: this.attachmentRows
+      attachmentRows: this.attachmentRows.finish(),
+      attachmentCounts: this.attachmentCounts.finish()
     }
   }
 
