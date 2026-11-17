@@ -25,8 +25,8 @@ export function buildPosixHookMetadataCacheLines(): string[] {
     '}',
     'orca_hook_cache_write() {',
     '  [ -d "${1%/*}" ] || mkdir -m 700 "${1%/*}" 2>/dev/null || return 0',
-    // Rename so a concurrent event never reads half a line.
-    `  printf '%s\\n' "$2" 2>/dev/null > "$1.$$" && mv -f "$1.$$" "$1" 2>/dev/null`,
+    // Rename so a concurrent event never reads half a line; a failed write must not leave the old line.
+    `  printf '%s\\n' "$2" 2>/dev/null > "$1.$$" && mv -f "$1.$$" "$1" 2>/dev/null || : 2>/dev/null > "$1"`,
     '}',
     'orca_hook_pack_metadata() {',
     // Length prefixes keep different inputs from forming the same key.

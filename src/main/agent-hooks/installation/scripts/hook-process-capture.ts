@@ -30,13 +30,13 @@ export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean }
         '      orca_agent_cache=$orca_hook_cache_path',
         '      IFS= read -r orca_agent_cached 2>/dev/null < "$orca_agent_cache"',
         '    fi',
-        // Only tool-scoped payloads have this key. Bytes, not the locale: UTF-8 matching decodes all of it.
-        '    orca_agent_lc=${LC_ALL+1} orca_agent_lc_all=${LC_ALL-} orca_agent_tool=',
-        '    LC_ALL=C',
-        `    case "$payload" in *'"tool_name"'*) orca_agent_tool=1 ;; esac`,
-        '    if [ -n "$orca_agent_lc" ]; then LC_ALL=$orca_agent_lc_all; else unset LC_ALL; fi',
-        '    case "$orca_agent_tool" in 1)',
-        '      case "$orca_agent_cached" in "$orca_agent_key {\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\""?*\'"}\') orca_agent_process=${orca_agent_cached#"$orca_agent_key "} ;; esac ;;',
+        '    case "$orca_agent_cached" in "$orca_agent_key {\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\""?*\'"}\')',
+        // A key, as only a key is followed by a colon, and only tool-scoped payloads have it. Bytes, not the
+        // locale: UTF-8 matching decodes the whole payload.
+        '      orca_agent_lc=${LC_ALL+1} orca_agent_lc_all=${LC_ALL-}',
+        '      LC_ALL=C',
+        `      case "$payload" in *'"tool_name":'*) orca_agent_process=\${orca_agent_cached#"$orca_agent_key "} ;; esac`,
+        '      if [ -n "$orca_agent_lc" ]; then LC_ALL=$orca_agent_lc_all; else unset LC_ALL; fi ;;',
         '    esac',
         '    if [ -z "$orca_agent_process" ]; then',
         ...DARWIN_PS_CAPTURE.map((line) => `  ${line}`),

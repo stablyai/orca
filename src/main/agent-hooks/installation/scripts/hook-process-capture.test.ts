@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -105,7 +105,7 @@ describe('Claude outer hook process capture', () => {
         const toolEvent = '{"hook_event_name": "PostToolUse", "tool_name": "Bash"}'
         await seed('launch-1')
         expect(await run(toolEvent)).toBe('cached')
-        const fresh = await run('{"hook_event_name":"SessionStart","source":"startup"}')
+        const fresh = await run('{"hook_event_name":"SessionStart","agent_type":"tool_name"}')
         expect(fresh).not.toBe('cached')
         expect(
           await probeAgentProcessPresence({
@@ -122,6 +122,13 @@ describe('Claude outer hook process capture', () => {
 
         await seed('launch-0')
         expect(await run(toolEvent)).toBe(fresh)
+
+        // A refresh that cannot replace the record must not leave the old one reusable.
+        await seed('launch-1')
+        await chmod(join(home, 'hook-metadata'), 0o500)
+        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
+        expect(await run(toolEvent)).toBe(fresh)
+        await chmod(join(home, 'hook-metadata'), 0o700)
       } finally {
         await rm(home, { recursive: true, force: true })
       }
