@@ -238,7 +238,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         kind: 'unavailable',
         message: t(
           'sourceControl.loaders.updateDesktop',
-          'Update Orca desktop to use Source Control on mobile.'
+          'Update Orca on this host to use Source Control on mobile.'
         )
       }
     }
@@ -256,7 +256,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         kind: 'error',
         message:
           connState === 'connected'
-            ? t('sourceControl.loaders.connectingToDesktop', 'Connecting to desktop...')
+            ? t('common.connectingToHost', 'Connecting to host…')
             : t('common.waitingForHost', 'Waiting for host…')
       }
     }

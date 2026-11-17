@@ -767,7 +767,8 @@
     "save": "Сохранить",
     "settings": "Настройки",
     "unknown": "Неизвестно",
-    "waitingForHost": "Ожидание сервера…"
+    "waitingForHost": "Ожидание сервера…",
+    "connectingToHost": "Подключение к серверу…"
   },
   "components": {
     "accountsSnapshot": {
@@ -978,7 +979,7 @@
       "connectHint": "Добавьте сайт Jira в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
       "connectOnDesktop": "Подключите Jira на компьютере",
       "credentialUnreadable": "Не удалось прочитать сохранённые данные Jira: {{credentialError}}",
-      "updateDesktop": "Обновите Orca на компьютере"
+      "updateDesktop": "Обновите Orca на этом сервере"
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
@@ -1477,7 +1478,6 @@
     "fileExplorerPanel": {
       "backToSession": "Вернуться к сессии",
       "closeFiles": "Закрыть файлы",
-      "connecting": "Подключение к компьютеру…",
       "emptyState": "Файлы не найдены",
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
@@ -1782,13 +1782,13 @@
       "localWindows": "Локальный ПК с Windows",
       "projectOrder": "Порядок проектов",
       "projects": "Проекты",
-      "savingToDesktop": "Сохранение на компьютере",
+      "savingToDesktop": "Сохранение на сервере",
       "show": "Показать",
       "showProperties": "Показывать свойства",
       "sortBy": "Сортировать по",
       "syncedAcrossDevices": "Синхронизация между вашими устройствами",
       "thisComputer": "Этот компьютер",
-      "waitingForDesktop": "Всё ещё ждём ответа компьютера",
+      "waitingForDesktop": "Всё ещё ждём ответа сервера",
       "workspaceOptions": "Параметры рабочих пространств"
     },
     "workspaceRenameSheet": {
@@ -2226,7 +2226,7 @@
       "committedChangesFailed": "Не удалось загрузить изменения в коммитах",
       "committedChangesUnavailable": "Изменения в коммитах недоступны",
       "committedDiffUnavailable": "Сравнение изменений в коммитах недоступно",
-      "desktopUpdateRequired": "Обновите Orca на компьютере, чтобы проверять изменения на мобильном устройстве.",
+      "desktopUpdateRequired": "Обновите Orca на этом сервере, чтобы проверять изменения на мобильном устройстве.",
       "diffLoadFailed": "Не удалось загрузить сравнение",
       "reviewNotesLoadFailed": "Не удалось загрузить заметки к проверке"
     },
@@ -2998,7 +2998,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Не удалось загрузить настройки доставки уведомлений. Откройте этот экран заново, чтобы повторить попытку.",
       "saveFailed": "Не удалось сохранить настройки доставки уведомлений. Повторите попытку.",
-      "updateDesktopHint": "Чтобы получать уведомления на этом телефоне, обновите Orca на сопряжённых серверах."
+      "updateDesktopHint": "Чтобы получать уведомления на этом телефоне, выполните сопряжение с сервером, на котором установлена обновлённая версия Orca."
     },
     "notificationDisplayTest": {
       "accepted": "Служба push-уведомлений Orca приняла запрос. Проверьте, пришло ли уведомление.",
@@ -3345,9 +3345,8 @@
       "changes": "Изменения"
     },
     "loaders": {
-      "connectingToDesktop": "Подключение к компьютеру…",
       "loadFailed": "Не удалось загрузить данные управления версиями",
-      "updateDesktop": "Обновите Orca на компьютере, чтобы использовать управление версиями на мобильном устройстве."
+      "updateDesktop": "Обновите Orca на этом сервере, чтобы использовать управление версиями на мобильном устройстве."
     },
     "modals": {
       "currentBranch": "текущая",
@@ -3749,8 +3748,8 @@
       "connectLinearMessage": "Просматривайте назначенные вам задачи Linear и начинайте работу над ними прямо в разделе «Задачи».",
       "connectLinearTitle": "Подключите учётную запись Linear",
       "jiraStatusFailed": "Не удалось получить статус Jira",
-      "updateDesktopMessage": "Для раздела «Задачи» в мобильном приложении нужна более новая версия Orca на компьютере.",
-      "updateDesktopTitle": "Обновите Orca на компьютере"
+      "updateDesktopMessage": "Для раздела «Задачи» в мобильном приложении нужна более новая версия Orca на этом сервере.",
+      "updateDesktopTitle": "Обновите Orca на этом сервере"
     },
     "options": {
       "all": "Все",

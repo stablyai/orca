@@ -96,7 +96,7 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         <SettingsNote>
           {t(
             'settings.nativeNotificationDeliverySettings.updateDesktopHint',
-            'Update Orca on your paired hosts to receive notifications on this phone.'
+            'Pair an updated host to receive notifications on this phone.'
           )}
         </SettingsNote>
       ) : null}

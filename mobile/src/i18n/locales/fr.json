@@ -732,7 +732,8 @@
     "save": "Enregistrer",
     "settings": "Paramètres",
     "unknown": "Inconnu",
-    "waitingForHost": "En attente de l'hôte…"
+    "waitingForHost": "En attente de l'hôte…",
+    "connectingToHost": "Connexion à l'hôte…"
   },
   "components": {
     "accountsSnapshot": {
@@ -940,7 +941,7 @@
       "connectHint": "Ajoutez votre site Jira dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
       "connectOnDesktop": "Connecter Jira sur votre ordinateur",
       "credentialUnreadable": "Les identifiants Jira sont enregistrés mais illisibles : {{credentialError}}",
-      "updateDesktop": "Mettre à jour Orca sur votre ordinateur"
+      "updateDesktop": "Mettre à jour Orca sur cet hôte"
     },
     "markdownBlocks": {
       "copyCode": "Copier le code",
@@ -1436,7 +1437,6 @@
     "fileExplorerPanel": {
       "backToSession": "Retour à la session",
       "closeFiles": "Fermer les fichiers",
-      "connecting": "Connexion à l'ordinateur…",
       "emptyState": "Aucun fichier trouvé",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
@@ -1741,13 +1741,13 @@
       "localWindows": "Windows local",
       "projectOrder": "Ordre des projets",
       "projects": "Projets",
-      "savingToDesktop": "Enregistrement sur l'ordinateur",
+      "savingToDesktop": "Enregistrement sur l'hôte",
       "show": "Afficher",
       "showProperties": "Afficher les propriétés",
       "sortBy": "Trier par",
       "syncedAcrossDevices": "Synchronisées sur vos appareils",
       "thisComputer": "Cet ordinateur",
-      "waitingForDesktop": "Toujours en attente de l'ordinateur",
+      "waitingForDesktop": "Toujours en attente de l'hôte",
       "workspaceOptions": "Options des espaces de travail"
     },
     "workspaceRenameSheet": {
@@ -2158,7 +2158,7 @@
       "committedChangesFailed": "Échec du chargement des modifications committées",
       "committedChangesUnavailable": "Modifications committées indisponibles",
       "committedDiffUnavailable": "Le diff des modifications committées est indisponible",
-      "desktopUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour examiner les modifications sur mobile.",
+      "desktopUpdateRequired": "Mettez à jour Orca sur cet hôte pour examiner les modifications sur mobile.",
       "diffLoadFailed": "Impossible de charger le diff",
       "reviewNotesLoadFailed": "Impossible de charger les notes de revue"
     },
@@ -2925,7 +2925,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Impossible de charger les paramètres de réception. Rouvrez cet écran pour réessayer.",
       "saveFailed": "Impossible d'enregistrer les paramètres de réception. Réessayez.",
-      "updateDesktopHint": "Mettez Orca à jour sur vos hôtes appairés pour recevoir des notifications sur ce téléphone."
+      "updateDesktopHint": "Appairez un hôte sur lequel Orca est à jour pour recevoir des notifications sur ce téléphone."
     },
     "notificationDisplayTest": {
       "accepted": "Test accepté par le service de notifications push d'Orca. Vérifiez si vous avez reçu la notification.",
@@ -3257,9 +3257,8 @@
       "changes": "Modifications"
     },
     "loaders": {
-      "connectingToDesktop": "Connexion à l'ordinateur…",
       "loadFailed": "Impossible de charger le contrôle de code source",
-      "updateDesktop": "Mettez à jour Orca sur votre ordinateur pour utiliser le contrôle de code source sur mobile."
+      "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
       "currentBranch": "actuelle",
@@ -3657,8 +3656,8 @@
       "connectLinearMessage": "Parcourez les issues Linear qui vous sont assignées et commencez à y travailler directement depuis Tâches.",
       "connectLinearTitle": "Connectez votre compte Linear",
       "jiraStatusFailed": "Impossible de lire le statut Jira",
-      "updateDesktopMessage": "Cette vue Tâches sur mobile nécessite une version plus récente d'Orca Desktop.",
-      "updateDesktopTitle": "Mettre à jour Orca Desktop"
+      "updateDesktopMessage": "Cette vue Tâches sur mobile nécessite une version plus récente d'Orca sur cet hôte.",
+      "updateDesktopTitle": "Mettre à jour Orca sur cet hôte"
     },
     "options": {
       "all": "Tous",

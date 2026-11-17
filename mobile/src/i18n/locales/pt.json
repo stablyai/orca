@@ -765,14 +765,15 @@
     "offline": {
       "waitingFor": "Esperando por {{host}}",
       "waiting": "Aguardando host",
-      "message": "Verifique se o seu computador está ativado e se o Orca está em execução.",
+      "message": "Verifique se o host está ativado e se o Orca está em execução.",
       "reconnect": "Reconectar"
     },
     "noMatch": {
       "title": "Nenhuma correspondência",
       "clearSearch": "Limpar busca"
     },
-    "waitingForHost": "Aguardando host…"
+    "waitingForHost": "Aguardando host…",
+    "connectingToHost": "Conectando ao host…"
   },
   "components": {
     "accountsSnapshot": {
@@ -1013,7 +1014,7 @@
       "connectHint": "Adicione seu site do Jira no Orca para desktop em Configurações → Integrações e verifique novamente.",
       "connectOnDesktop": "Conecte o Jira no seu desktop",
       "credentialUnreadable": "Não foi possível ler as credenciais salvas do Jira: {{credentialError}}",
-      "updateDesktop": "Atualize o Orca no desktop"
+      "updateDesktop": "Atualize o Orca neste host"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -1557,7 +1558,6 @@
     "fileExplorerPanel": {
       "backToSession": "Voltar à sessão",
       "closeFiles": "Fechar arquivos",
-      "connecting": "Conectando ao desktop…",
       "emptyState": "Nenhum arquivo encontrado",
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
@@ -1885,13 +1885,13 @@
       "localWindows": "Windows local",
       "projectOrder": "Ordem do projeto",
       "projects": "Projetos",
-      "savingToDesktop": "Salvando no desktop",
+      "savingToDesktop": "Salvando no host",
       "show": "Mostrar",
       "showProperties": "Mostrar propriedades",
       "sortBy": "Ordenar por",
       "syncedAcrossDevices": "Sincronizadas entre seus dispositivos",
       "thisComputer": "Este computador",
-      "waitingForDesktop": "Ainda aguardando o desktop",
+      "waitingForDesktop": "Ainda aguardando o host",
       "workspaceOptions": "Opções do espaço de trabalho",
       "done": "Concluído",
       "reset": "Restaurar"
@@ -2511,7 +2511,7 @@
       "committedChangesFailed": "Falha ao carregar alterações commitadas",
       "committedChangesUnavailable": "Alterações commitadas indisponíveis",
       "committedDiffUnavailable": "Diff de alterações commitadas indisponível",
-      "desktopUpdateRequired": "Atualize o Orca no desktop para revisar alterações no celular.",
+      "desktopUpdateRequired": "Atualize o Orca neste host para revisar alterações no celular.",
       "diffLoadFailed": "Não foi possível carregar o diff",
       "reviewNotesLoadFailed": "Não foi possível carregar as notas de revisão",
       "commitLoadFailed": "Não foi possível carregar este commit",
@@ -3332,7 +3332,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Não foi possível carregar as configurações de entrega. Reabra esta tela para tentar novamente.",
       "saveFailed": "Não foi possível salvar as configurações de entrega. Tente novamente.",
-      "updateDesktopHint": "Atualize o Orca nos hosts pareados para receber notificações neste celular."
+      "updateDesktopHint": "Pareie um host atualizado para receber notificações neste celular."
     },
     "notificationDisplayTest": {
       "accepted": "O serviço de notificações push do Orca aceitou o teste. Verifique se a notificação chegou.",
@@ -3672,9 +3672,8 @@
       "pullRequest": "Pull request"
     },
     "loaders": {
-      "connectingToDesktop": "Conectando ao desktop…",
       "loadFailed": "Não foi possível carregar o controle de versão",
-      "updateDesktop": "Atualize o Orca no desktop para usar o controle de versão no celular."
+      "updateDesktop": "Atualize o Orca neste host para usar o controle de versão no celular."
     },
     "modals": {
       "currentBranch": "atual",
@@ -4166,8 +4165,8 @@
       "connectLinearMessage": "Veja as issues do Linear atribuídas a você e comece a trabalhar nelas diretamente em Tarefas.",
       "connectLinearTitle": "Conecte sua conta do Linear",
       "jiraStatusFailed": "Falha ao ler o status do Jira",
-      "updateDesktopMessage": "Esta visualização de Tarefas no celular requer uma versão mais recente do Orca no desktop.",
-      "updateDesktopTitle": "Atualize o Orca no desktop"
+      "updateDesktopMessage": "Esta visualização de Tarefas no celular requer uma versão mais recente do Orca neste host.",
+      "updateDesktopTitle": "Atualize o Orca neste host"
     },
     "options": {
       "all": "Todos",

@@ -693,7 +693,8 @@
     "save": "저장",
     "settings": "설정",
     "unknown": "알 수 없음",
-    "waitingForHost": "호스트 대기 중…"
+    "waitingForHost": "호스트 대기 중…",
+    "connectingToHost": "호스트에 연결 중…"
   },
   "components": {
     "accountsSnapshot": {
@@ -898,7 +899,7 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "Orca 데스크톱 업데이트"
+      "updateDesktop": "이 호스트의 Orca 업데이트"
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
@@ -1391,7 +1392,6 @@
     "fileExplorerPanel": {
       "backToSession": "세션으로 돌아가기",
       "closeFiles": "파일 닫기",
-      "connecting": "데스크톱에 연결 중…",
       "emptyState": "찾은 파일이 없습니다.",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
@@ -1696,13 +1696,13 @@
       "localWindows": "로컬 Windows",
       "projectOrder": "프로젝트 순서",
       "projects": "프로젝트",
-      "savingToDesktop": "데스크톱에 저장 중",
+      "savingToDesktop": "호스트에 저장 중",
       "show": "표시",
       "showProperties": "속성 표시",
       "sortBy": "정렬 기준",
       "syncedAcrossDevices": "기기 간 동기화됨",
       "thisComputer": "이 컴퓨터",
-      "waitingForDesktop": "아직 데스크톱 응답을 기다리는 중",
+      "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
     },
     "workspaceRenameSheet": {
@@ -2086,7 +2086,7 @@
       "committedChangesFailed": "커밋된 변경 사항을 불러오지 못했습니다.",
       "committedChangesUnavailable": "커밋된 변경 사항을 사용할 수 없습니다.",
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
-      "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 데스크톱의 Orca를 업데이트하세요.",
+      "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 이 호스트의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
@@ -2848,7 +2848,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "알림 전송 설정을 불러오지 못했습니다. 다시 시도하려면 이 화면을 다시 여세요.",
       "saveFailed": "알림 전송 설정을 저장하지 못했습니다. 다시 시도하세요.",
-      "updateDesktopHint": "이 휴대폰에서 알림을 받으려면 페어링된 호스트의 Orca를 업데이트하세요."
+      "updateDesktopHint": "이 휴대폰에서 알림을 받으려면 업데이트된 호스트를 페어링하세요."
     },
     "notificationDisplayTest": {
       "accepted": "Orca 푸시 서비스에서 요청을 접수했습니다. 알림이 도착했는지 확인하세요.",
@@ -3165,9 +3165,8 @@
       "changes": "변경 사항"
     },
     "loaders": {
-      "connectingToDesktop": "데스크톱에 연결 중…",
       "loadFailed": "소스 제어를 로드할 수 없습니다.",
-      "updateDesktop": "모바일에서 소스 제어를 사용하려면 Orca 데스크톱 앱을 업데이트하세요."
+      "updateDesktop": "모바일에서 소스 제어를 사용하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "modals": {
       "currentBranch": "현재",
@@ -3561,8 +3560,8 @@
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
       "connectLinearTitle": "Linear 계정 연결",
       "jiraStatusFailed": "Jira 상태를 읽지 못했습니다.",
-      "updateDesktopMessage": "모바일 작업 화면을 사용하려면 더 최신 버전의 데스크톱 런타임이 필요합니다.",
-      "updateDesktopTitle": "Orca 데스크톱 업데이트"
+      "updateDesktopMessage": "모바일 작업 화면을 사용하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다.",
+      "updateDesktopTitle": "이 호스트의 Orca 업데이트"
     },
     "options": {
       "all": "모두",

@@ -786,7 +786,7 @@
     "offline": {
       "waitingFor": "正在等待 {{host}}",
       "waiting": "正在等待主机",
-      "message": "请确认你的电脑处于唤醒状态，且 Orca 正在运行",
+      "message": "请确认主机处于唤醒状态，且 Orca 正在运行",
       "reconnect": "重新连接"
     },
     "noMatch": {
@@ -812,7 +812,8 @@
     "save": "保存",
     "settings": "设置",
     "unknown": "未知",
-    "waitingForHost": "正在等待主机…"
+    "waitingForHost": "正在等待主机…",
+    "connectingToHost": "正在连接主机…"
   },
   "components": {
     "accountsSnapshot": {
@@ -1046,7 +1047,7 @@
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加 Jira 站点，然后再次检查",
       "connectOnDesktop": "在桌面端连接 Jira",
       "credentialUnreadable": "Jira 凭据已保存，但无法读取：{{credentialError}}",
-      "updateDesktop": "更新 Orca 桌面端"
+      "updateDesktop": "更新此主机上的 Orca"
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
@@ -1601,7 +1602,6 @@
     "fileExplorerPanel": {
       "backToSession": "返回会话",
       "closeFiles": "关闭文件",
-      "connecting": "正在连接桌面…",
       "emptyState": "未找到文件",
       "filterPlaceholder": "筛选文件",
       "noMatchesHint": "只会搜索你已打开过的文件夹",
@@ -1934,7 +1934,7 @@
       "localWindows": "本地 Windows",
       "projectOrder": "项目排序",
       "projects": "项目",
-      "savingToDesktop": "正在保存到桌面",
+      "savingToDesktop": "正在保存到主机",
       "show": "显示",
       "showProperties": "显示属性",
       "sortBy": "排序方式",
@@ -1942,7 +1942,7 @@
       "done": "完成",
       "reset": "重置",
       "thisComputer": "本机",
-      "waitingForDesktop": "仍在等待桌面响应",
+      "waitingForDesktop": "仍在等待主机响应",
       "workspaceOptions": "工作区选项"
     },
     "hostBottomBar": {
@@ -2523,7 +2523,7 @@
       "committedDiffUnavailable": "已提交的差异不可用",
       "commitLoadFailed": "无法加载此提交",
       "commitDiffUnavailable": "提交差异不可用",
-      "desktopUpdateRequired": "请更新 Orca 桌面端，以便在手机上评审更改",
+      "desktopUpdateRequired": "请更新此主机上的 Orca，以便在手机上评审更改",
       "diffLoadFailed": "无法加载差异",
       "reviewNotesLoadFailed": "无法加载评审笔记"
     },
@@ -3387,7 +3387,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "无法加载通知投递设置。请重新打开此页面重试",
       "saveFailed": "无法保存通知投递设置。请重试",
-      "updateDesktopHint": "更新已配对主机上的 Orca，即可在此手机上接收通知"
+      "updateDesktopHint": "配对已更新的主机，即可在此手机上接收通知"
     },
     "notificationDisplayTest": {
       "accepted": "Orca 推送服务已接受请求。请查看通知",
@@ -3717,9 +3717,8 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "connectingToDesktop": "正在连接桌面…",
       "loadFailed": "无法加载源代码控制",
-      "updateDesktop": "请更新 Orca 桌面端，以在手机上使用源代码控制"
+      "updateDesktop": "请更新此主机上的 Orca，以在手机上使用源代码控制"
     },
     "modals": {
       "currentBranch": "当前",
@@ -4241,8 +4240,8 @@
       "connectLinearMessage": "直接在“任务”中浏览并开始处理分配给您的 Linear 议题",
       "connectLinearTitle": "连接您的 Linear 账户",
       "jiraStatusFailed": "读取 Jira 状态失败",
-      "updateDesktopMessage": "此移动端“任务”视图需要更高版本的桌面端运行时",
-      "updateDesktopTitle": "更新 Orca 桌面端"
+      "updateDesktopMessage": "此移动端“任务”视图需要此主机上更高版本的 Orca",
+      "updateDesktopTitle": "更新此主机上的 Orca"
     },
     "options": {
       "all": "全部",

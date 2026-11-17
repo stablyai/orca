@@ -732,7 +732,8 @@
     "save": "Guardar",
     "settings": "Ajustes",
     "unknown": "Desconocido",
-    "waitingForHost": "Esperando al host…"
+    "waitingForHost": "Esperando al host…",
+    "connectingToHost": "Conectando con el host…"
   },
   "components": {
     "accountsSnapshot": {
@@ -940,7 +941,7 @@
       "connectHint": "Añade tu sitio de Jira en Ajustes → Integraciones de Orca de escritorio y verifica de nuevo.",
       "connectOnDesktop": "Conecta Jira en tu escritorio",
       "credentialUnreadable": "La conexión de Jira está guardada, pero no se puede leer: {{credentialError}}",
-      "updateDesktop": "Actualiza Orca de escritorio"
+      "updateDesktop": "Actualiza Orca en este host"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -1436,7 +1437,6 @@
     "fileExplorerPanel": {
       "backToSession": "Volver a la sesión",
       "closeFiles": "Cerrar archivos",
-      "connecting": "Conectando con el escritorio…",
       "emptyState": "No se encontraron archivos",
       "loadFailed": "No se pudieron cargar los archivos",
       "title": "Archivos",
@@ -1741,13 +1741,13 @@
       "localWindows": "Windows local",
       "projectOrder": "Orden del proyecto",
       "projects": "Proyectos",
-      "savingToDesktop": "Guardando en el escritorio",
+      "savingToDesktop": "Guardando en el host",
       "show": "Mostrar",
       "showProperties": "Mostrar propiedades",
       "sortBy": "Ordenar por",
       "syncedAcrossDevices": "Sincronizadas entre tus dispositivos",
       "thisComputer": "Este equipo",
-      "waitingForDesktop": "Aún esperando respuesta del escritorio",
+      "waitingForDesktop": "Aún esperando respuesta del host",
       "workspaceOptions": "Opciones de espacio de trabajo"
     },
     "workspaceRenameSheet": {
@@ -2158,7 +2158,7 @@
       "committedChangesFailed": "No se pudieron cargar los cambios confirmados",
       "committedChangesUnavailable": "Cambios confirmados no disponibles",
       "committedDiffUnavailable": "El diff de los commits no está disponible",
-      "desktopUpdateRequired": "Actualiza Orca en el escritorio para revisar los cambios en el móvil.",
+      "desktopUpdateRequired": "Actualiza Orca en este host para revisar los cambios en el móvil.",
       "diffLoadFailed": "No se pudo cargar el diff",
       "reviewNotesLoadFailed": "No se pudieron cargar las notas de revisión"
     },
@@ -2925,7 +2925,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "No se pudo cargar la configuración de entrega. Vuelve a abrir esta pantalla para reintentarlo.",
       "saveFailed": "No se pudo guardar la configuración de entrega. Vuelve a intentarlo.",
-      "updateDesktopHint": "Actualiza Orca en tus hosts emparejados para recibir notificaciones en este teléfono."
+      "updateDesktopHint": "Empareja un host actualizado para recibir notificaciones en este teléfono."
     },
     "notificationDisplayTest": {
       "accepted": "Prueba aceptada por el servicio de notificaciones push de Orca. Comprueba si recibes la notificación.",
@@ -3257,9 +3257,8 @@
       "changes": "Cambios"
     },
     "loaders": {
-      "connectingToDesktop": "Conectando con el escritorio…",
       "loadFailed": "No se pudo cargar el control de código fuente",
-      "updateDesktop": "Actualiza Orca en el escritorio para usar el control de código fuente en el móvil."
+      "updateDesktop": "Actualiza Orca en este host para usar el control de código fuente en el móvil."
     },
     "modals": {
       "currentBranch": "actual",
@@ -3657,8 +3656,8 @@
       "connectLinearMessage": "Consulta los issues de Linear que tienes asignados y empieza a trabajar en ellos directamente desde Tareas.",
       "connectLinearTitle": "Conecta tu cuenta Linear",
       "jiraStatusFailed": "No se pudo leer el estado de Jira",
-      "updateDesktopMessage": "Esta vista móvil de Tareas necesita un entorno de ejecución de escritorio más reciente.",
-      "updateDesktopTitle": "Actualiza Orca en el escritorio"
+      "updateDesktopMessage": "Esta vista móvil de Tareas necesita una versión más reciente de Orca en este host.",
+      "updateDesktopTitle": "Actualiza Orca en este host"
     },
     "options": {
       "all": "Todo",

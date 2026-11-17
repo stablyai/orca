@@ -693,7 +693,8 @@
     "save": "保存",
     "settings": "設定",
     "unknown": "不明",
-    "waitingForHost": "ホストの接続待ち…"
+    "waitingForHost": "ホストの接続待ち…",
+    "connectingToHost": "ホストに接続中…"
   },
   "components": {
     "accountsSnapshot": {
@@ -898,7 +899,7 @@
       "connectHint": "デスクトップの Orca で「設定 → 連携」から Jira サイトを追加し、再確認してください。",
       "connectOnDesktop": "デスクトップで Jira に接続",
       "credentialUnreadable": "Jira の認証情報は保存されていますが、読み取れません：{{credentialError}}",
-      "updateDesktop": "デスクトップの Orca を更新"
+      "updateDesktop": "このホストの Orca を更新"
     },
     "markdownBlocks": {
       "copyCode": "コードをコピーする",
@@ -1391,7 +1392,6 @@
     "fileExplorerPanel": {
       "backToSession": "セッションに戻る",
       "closeFiles": "ファイル一覧を閉じる",
-      "connecting": "デスクトップに接続中…",
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
@@ -1696,13 +1696,13 @@
       "localWindows": "ローカル Windows",
       "projectOrder": "プロジェクトの順序",
       "projects": "プロジェクト",
-      "savingToDesktop": "デスクトップに保存中",
+      "savingToDesktop": "ホストに保存中",
       "show": "表示",
       "showProperties": "プロパティを表示する",
       "sortBy": "並べ替え",
       "syncedAcrossDevices": "デバイス間で同期されます",
       "thisComputer": "このコンピュータ",
-      "waitingForDesktop": "まだデスクトップの応答を待っています",
+      "waitingForDesktop": "まだホストの応答を待っています",
       "workspaceOptions": "ワークスペースのオプション"
     },
     "workspaceRenameSheet": {
@@ -2086,7 +2086,7 @@
       "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
       "committedChangesUnavailable": "コミット済みの変更は利用できません。",
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
-      "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
+      "desktopUpdateRequired": "モバイルで変更をレビューするには、このホストの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
@@ -2848,7 +2848,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "通知の配信設定を読み込めませんでした。再試行するには、この画面を開き直してください。",
       "saveFailed": "通知の配信設定を保存できませんでした。再試行してください。",
-      "updateDesktopHint": "このスマートフォンで通知を受け取るには、ペアリング済みのホストの Orca を更新してください。"
+      "updateDesktopHint": "このスマートフォンで通知を受け取るには、更新済みのホストとペアリングしてください。"
     },
     "notificationDisplayTest": {
       "accepted": "Orca のプッシュサービスが通知を受け付けました。通知が届いているか確認してください。",
@@ -3165,9 +3165,8 @@
       "changes": "変更点"
     },
     "loaders": {
-      "connectingToDesktop": "デスクトップに接続中…",
       "loadFailed": "ソース管理を読み込めませんでした。",
-      "updateDesktop": "モバイルでソース管理を使うには、デスクトップ版 Orca を更新してください。"
+      "updateDesktop": "モバイルでソース管理を使うには、このホストの Orca を更新してください。"
     },
     "modals": {
       "currentBranch": "現在",
@@ -3556,8 +3555,8 @@
       "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
       "connectLinearTitle": "Linear アカウントを接続する",
       "jiraStatusFailed": "Jira の状態の読み取りに失敗しました。",
-      "updateDesktopMessage": "モバイルの「タスク」画面には、新しいバージョンのデスクトップランタイムが必要です。",
-      "updateDesktopTitle": "Orca デスクトップを更新"
+      "updateDesktopMessage": "モバイルの「タスク」画面には、このホストに新しいバージョンの Orca が必要です。",
+      "updateDesktopTitle": "このホストの Orca を更新"
     },
     "options": {
       "all": "全て",

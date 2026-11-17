@@ -98,7 +98,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",
-      "updateDesktopHint": "Update Orca on your paired hosts to receive notifications on this phone."
+      "updateDesktopHint": "Pair an updated host to receive notifications on this phone."
     },
     "notificationDisplayTest": {
       "loadFailed": "Could not load paired desktops.",
@@ -219,14 +219,15 @@
     "offline": {
       "waitingFor": "Waiting for {{host}}",
       "waiting": "Waiting for host",
-      "message": "Check that your computer is awake and Orca is running.",
+      "message": "Check that the host is awake and Orca is running.",
       "reconnect": "Reconnect"
     },
     "noMatch": {
       "title": "No matches",
       "clearSearch": "Clear search"
     },
-    "waitingForHost": "Waiting for host…"
+    "waitingForHost": "Waiting for host…",
+    "connectingToHost": "Connecting to host…"
   },
   "host": {
     "edit": {
@@ -864,8 +865,8 @@
       "localWindows": "Local Windows",
       "localLinux": "Local Linux",
       "thisComputer": "This computer",
-      "waitingForDesktop": "Still waiting for the desktop",
-      "savingToDesktop": "Saving to the desktop",
+      "waitingForDesktop": "Still waiting for the host",
+      "savingToDesktop": "Saving to the host",
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
@@ -1115,7 +1116,7 @@
       "dismissNotice": "Dismiss notice"
     },
     "jiraConnectPrompt": {
-      "updateDesktop": "Update Orca desktop",
+      "updateDesktop": "Update Orca on this host",
       "connectOnDesktop": "Connect Jira on your desktop",
       "credentialUnreadable": "Jira is saved but unreadable: {{credentialError}}",
       "connectHint": "Add your Jira site in Orca desktop under Settings → Integrations, then check again.",
@@ -1976,7 +1977,6 @@
   },
   "files": {
     "fileExplorerPanel": {
-      "connecting": "Connecting to desktop...",
       "loadFailed": "Unable to load files",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
@@ -2420,7 +2420,7 @@
     "diffReviewLoaders": {
       "committedChangesUnavailable": "Committed changes unavailable",
       "committedChangesFailed": "Committed changes failed",
-      "desktopUpdateRequired": "Update Orca desktop to review changes on mobile.",
+      "desktopUpdateRequired": "Update Orca on this host to review changes on mobile.",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
       "committedDiffUnavailable": "Committed diff is unavailable",
@@ -3988,8 +3988,7 @@
       "actionFailed": "Source control action failed"
     },
     "loaders": {
-      "connectingToDesktop": "Connecting to desktop...",
-      "updateDesktop": "Update Orca desktop to use Source Control on mobile.",
+      "updateDesktop": "Update Orca on this host to use Source Control on mobile.",
       "loadFailed": "Unable to load source control"
     },
     "runners": {
@@ -4398,8 +4397,8 @@
       "displayPropertiesTitle": "Display Properties"
     },
     "listSurface": {
-      "updateDesktopTitle": "Update Orca desktop",
-      "updateDesktopMessage": "This mobile Tasks view needs a newer desktop runtime.",
+      "updateDesktopTitle": "Update Orca on this host",
+      "updateDesktopMessage": "This mobile Tasks view needs a newer Orca on this host.",
       "jiraStatusFailed": "Failed to read Jira status",
       "connectLinearTitle": "Connect your Linear account",
       "connectLinearMessage": "Browse and start work on your assigned Linear issues directly from Tasks.",

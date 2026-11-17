@@ -129,7 +129,7 @@ function folderState(read: FolderRead, connState: ConnectionState): DirectorySta
         entries: [],
         error:
           connState === 'connected'
-            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
+            ? translate('common.connectingToHost', 'Connecting to host…')
             : translate('common.waitingForHost', 'Waiting for host…')
       }
   }

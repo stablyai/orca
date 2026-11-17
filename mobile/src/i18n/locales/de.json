@@ -697,7 +697,8 @@
     "save": "Speichern",
     "settings": "Einstellungen",
     "unknown": "Unbekannt",
-    "waitingForHost": "Warten auf Host…"
+    "waitingForHost": "Warten auf Host…",
+    "connectingToHost": "Verbindung zum Host wird hergestellt…"
   },
   "components": {
     "accountsSnapshot": {
@@ -902,7 +903,7 @@
       "connectHint": "Die Jira-Site in Orca auf dem Computer unter Einstellungen → Integrationen hinzufügen und anschließend erneut prüfen.",
       "connectOnDesktop": "Jira auf dem Computer verbinden",
       "credentialUnreadable": "Die Jira-Zugangsdaten sind gespeichert, können aber nicht gelesen werden: {{credentialError}}",
-      "updateDesktop": "Orca auf dem Computer aktualisieren"
+      "updateDesktop": "Orca auf diesem Host aktualisieren"
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
@@ -1395,7 +1396,6 @@
     "fileExplorerPanel": {
       "backToSession": "Zurück zur Sitzung",
       "closeFiles": "Dateien schließen",
-      "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
@@ -1700,13 +1700,13 @@
       "localWindows": "Lokales Windows",
       "projectOrder": "Projektreihenfolge",
       "projects": "Projekte",
-      "savingToDesktop": "Wird in der Desktop-App gespeichert",
+      "savingToDesktop": "Wird auf dem Host gespeichert",
       "show": "Anzeigen",
       "showProperties": "Eigenschaften anzeigen",
       "sortBy": "Sortieren nach",
       "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "thisComputer": "Dieser Computer",
-      "waitingForDesktop": "Es wird noch auf den Desktop gewartet",
+      "waitingForDesktop": "Es wird noch auf den Host gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
     "workspaceRenameSheet": {
@@ -2090,7 +2090,7 @@
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
-      "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
+      "desktopUpdateRequired": "Orca auf diesem Host aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
@@ -2852,7 +2852,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Zustellungseinstellungen konnten nicht geladen werden. Für einen neuen Versuch diese Ansicht erneut öffnen.",
       "saveFailed": "Zustellungseinstellungen konnten nicht gespeichert werden. Erneut versuchen.",
-      "updateDesktopHint": "Orca auf den gekoppelten Hosts aktualisieren, um auf diesem Smartphone Benachrichtigungen zu erhalten."
+      "updateDesktopHint": "Einen Host mit aktueller Orca-Version koppeln, um auf diesem Smartphone Benachrichtigungen zu erhalten."
     },
     "notificationDisplayTest": {
       "accepted": "Vom Push-Dienst von Orca angenommen. Prüfen, ob die Benachrichtigung angekommen ist.",
@@ -3169,9 +3169,8 @@
       "changes": "Änderungen"
     },
     "loaders": {
-      "connectingToDesktop": "Verbindung zum Desktop wird hergestellt…",
       "loadFailed": "Quellcodeverwaltung konnte nicht geladen werden.",
-      "updateDesktop": "Orca auf dem Desktop aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
+      "updateDesktop": "Orca auf diesem Host aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
     },
     "modals": {
       "currentBranch": "aktuell",
@@ -3565,8 +3564,8 @@
       "connectLinearMessage": "Dir zugewiesene Linear-Issues direkt unter „Aufgaben“ durchsuchen und die Arbeit daran starten.",
       "connectLinearTitle": "Linear-Konto verbinden",
       "jiraStatusFailed": "Jira-Status konnte nicht gelesen werden.",
-      "updateDesktopMessage": "Diese mobile Aufgabenansicht benötigt eine neuere Version von Orca auf dem Desktop.",
-      "updateDesktopTitle": "Orca-Desktop-App aktualisieren"
+      "updateDesktopMessage": "Diese mobile Aufgabenansicht benötigt eine neuere Version von Orca auf diesem Host.",
+      "updateDesktopTitle": "Orca auf diesem Host aktualisieren"
     },
     "options": {
       "all": "Alle",

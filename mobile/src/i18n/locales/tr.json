@@ -697,7 +697,8 @@
     "save": "Kaydet",
     "settings": "Ayarlar",
     "unknown": "Bilinmiyor",
-    "waitingForHost": "Sunucu bekleniyor…"
+    "waitingForHost": "Sunucu bekleniyor…",
+    "connectingToHost": "Sunucuya bağlanılıyor…"
   },
   "components": {
     "accountsSnapshot": {
@@ -902,7 +903,7 @@
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne Jira sitenizi ekleyin, ardından yeniden kontrol edin.",
       "connectOnDesktop": "Bilgisayarınızda Jira'yı bağlayın",
       "credentialUnreadable": "Jira bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
-      "updateDesktop": "Bilgisayarınızdaki Orca'yı güncelleyin"
+      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin"
     },
     "markdownBlocks": {
       "copyCode": "Kodu kopyala",
@@ -1395,7 +1396,6 @@
     "fileExplorerPanel": {
       "backToSession": "Oturuma dön",
       "closeFiles": "Dosyaları kapat",
-      "connecting": "Masaüstüne bağlanılıyor…",
       "emptyState": "Dosya bulunamadı",
       "loadFailed": "Dosyalar yüklenemedi",
       "title": "Dosyalar",
@@ -1700,13 +1700,13 @@
       "localWindows": "Yerel Windows",
       "projectOrder": "Proje sırası",
       "projects": "Projeler",
-      "savingToDesktop": "Bilgisayara kaydediliyor",
+      "savingToDesktop": "Sunucuya kaydediliyor",
       "show": "Göster",
       "showProperties": "Özellikleri göster",
       "sortBy": "Sıralama ölçütü",
       "syncedAcrossDevices": "Cihazlarınız arasında eşitlenir",
       "thisComputer": "Bu bilgisayar",
-      "waitingForDesktop": "Bilgisayardan hâlâ yanıt bekleniyor",
+      "waitingForDesktop": "Sunucudan hâlâ yanıt bekleniyor",
       "workspaceOptions": "Çalışma alanı seçenekleri"
     },
     "workspaceRenameSheet": {
@@ -2090,7 +2090,7 @@
       "committedChangesFailed": "Commit'lenmiş değişiklikler yüklenemedi",
       "committedChangesUnavailable": "Commit'lenmiş değişiklikler kullanılamıyor",
       "committedDiffUnavailable": "Commit'lenmiş diff kullanılamıyor",
-      "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için Orca masaüstü uygulamasını güncelleyin.",
+      "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için bu sunucudaki Orca'yı güncelleyin.",
       "diffLoadFailed": "Diff yüklenemedi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi"
     },
@@ -2852,7 +2852,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "İletim ayarları yüklenemedi. Yeniden denemek için bu ekranı tekrar açın.",
       "saveFailed": "İletim ayarları kaydedilemedi. Yeniden deneyin.",
-      "updateDesktopHint": "Bu telefonda bildirim almak için eşleştirilmiş sunuculardaki Orca'yı güncelleyin."
+      "updateDesktopHint": "Bu telefonda bildirim almak için güncel bir sunucuyla eşleştirin."
     },
     "notificationDisplayTest": {
       "accepted": "Orca'nın anlık bildirim hizmeti tarafından kabul edildi. Bildirimin gelip gelmediğini kontrol edin.",
@@ -3169,9 +3169,8 @@
       "changes": "Değişiklikler"
     },
     "loaders": {
-      "connectingToDesktop": "Masaüstüne bağlanılıyor…",
       "loadFailed": "Kaynak kontrolü yüklenemedi",
-      "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için Orca masaüstü uygulamasını güncelleyin."
+      "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için bu sunucudaki Orca'yı güncelleyin."
     },
     "modals": {
       "currentBranch": "geçerli",
@@ -3565,8 +3564,8 @@
       "connectLinearMessage": "Doğrudan Görevler bölümünden size atanan Linear sorunlarına göz atın ve üzerlerinde çalışmaya başlayın.",
       "connectLinearTitle": "Linear hesabınızı bağlayın",
       "jiraStatusFailed": "Jira durumu okunamadı",
-      "updateDesktopMessage": "Bu mobil Görevler görünümü için masaüstü çalışma zamanının daha yeni bir sürümü gerekiyor.",
-      "updateDesktopTitle": "Orca masaüstü uygulamasını güncelleyin"
+      "updateDesktopMessage": "Bu mobil Görevler görünümü için bu sunucuda Orca'nın daha yeni bir sürümü gerekiyor.",
+      "updateDesktopTitle": "Bu sunucudaki Orca'yı güncelleyin"
     },
     "options": {
       "all": "Tümü",
