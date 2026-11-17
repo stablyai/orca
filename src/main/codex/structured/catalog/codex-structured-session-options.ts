@@ -96,6 +96,9 @@ function applyValidatedCodexStructuredSessionOption(
         )
       : requestedValue
   session.options.set(key, value)
+  if (key === 'effort') {
+    delete session.omitEffort
+  }
   return Object.fromEntries(session.options)
 }
 

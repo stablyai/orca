@@ -53,6 +53,7 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       options,
+      omitEffort,
       chatOptions,
       sessionId: requested,
       tabId,
@@ -95,6 +96,7 @@ export function agentLaunchSurfaceFactory(
         agent,
         ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
         ...(seeded ? { options: seeded } : {}),
+        ...(omitEffort ? { omitEffort } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),
@@ -126,6 +128,7 @@ export function agentLaunchSurfaceFactory(
       agent,
       startupPrompt,
       agentArgs,
+      omitEffort,
       cwd,
       launchSource,
       paneKey,
@@ -157,6 +160,7 @@ export function agentLaunchSurfaceFactory(
             }
           : {}),
         ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(omitEffort ? { omitEffort } : {}),
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
         ...(launchPreferences ? { launchPreferences } : {}),

@@ -24,6 +24,8 @@ export type FolderWorkspaceCreateInput = {
   startupDraft?: string
   startupAgentArgs?: string | null
   startupSessionOptions?: Record<string, string>
+  /** Explicit Default effort: the host drops inherited effort when it composes the agent. */
+  startupOmitEffort?: true
   startupLaunchPreferences?: AgentLaunchPreferences
   launchSource?: string
 } & Pick<CreateWorktreeArgs, 'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'>

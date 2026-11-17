@@ -41,3 +41,29 @@ it('replaces a chat-created thread only when the chat never exchanged a turn on 
   expect(saved).toMatchObject({ resumeThreadId: 'thread-created' })
   expect(saved).not.toHaveProperty('supersedeIfUnsaved')
 })
+
+it('omits inherited effort while rereading unrelated Arguments for every start', async () => {
+  const record: AgentSessionRecord = {
+    ...agentSessionRecordFixture(),
+    provider: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/account' },
+    providerHandleChain: [],
+    options: { model: 'saved-model', serviceTier: 'flex' },
+    omitEffort: true
+  }
+  let args = ['-c', 'model_reasoning_effort=high', '--no-daemon']
+  const resolve = createCodexStructuredLaunchResolver({
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
+    resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
+    resolveEnvironment: async () => ({}),
+    resolveLaunchArgs: () => args,
+    resolveWorkspacePath: async () => '/folder'
+  })
+  const first = await resolve({ identity: identityFor(record.sessionId) })
+  expect(first.args).toEqual(['--no-daemon', 'app-server'])
+  expect(first.model).toBe('saved-model')
+  args = ['-c', 'model_reasoning_effort=low', '--search']
+  const restarted = await resolve({ identity: identityFor(record.sessionId) })
+  expect(restarted.args).toEqual(['--search', 'app-server'])
+  expect(restarted.model).toBe('saved-model')
+})

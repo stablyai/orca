@@ -53,6 +53,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   sessionOptionsOverrideAgentArgs?: boolean
+  omitEffort?: true
   agentEnv?: Record<string, string>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
@@ -63,6 +64,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
     agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
     sessionOptions: args.sessionOptions,
+    omitEffort: args.omitEffort,
     platform: args.platform,
     shell: args.shell,
     isRemote: args.isRemote

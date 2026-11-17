@@ -1,5 +1,5 @@
 import { PERMISSION_LAUNCH_GRAMMARS } from '../permissions/agent-permission-args'
-import type { AgentStartupShell } from '../startup/tui-agent-startup-shell'
+import { tokenizeStartupCommand, type AgentStartupShell } from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { analyzeChoiceArgs, type ChoiceOccurrence } from './agent-choice-args-analysis'
 import {
@@ -72,4 +72,25 @@ export function analyzeAgentChoiceArgs(
     occurrences,
     publishedKeys: new Set(emitted.map((entry) => entry.key))
   }
+}
+
+/** Omission must remove every carrier without changing the meaning of unrelated arguments. */
+export function withoutAgentEffortArgs(agent: TuiAgent, text: string): string | null {
+  if (PERMISSION_LAUNCH_GRAMMARS.some((shell) => !tokenizeStartupCommand(text, shell).ok)) {
+    return null
+  }
+  const analysis = analyzeAgentChoiceArgs(agent, text)
+  const effort = analysis.occurrences.filter((entry) => entry.key === 'effort')
+  if (analysis.opaqueKeys.has('effort') || effort.some((entry) => !entry.source)) {
+    return null
+  }
+  const cleared = analysis.cut(effort)
+  if (cleared === null) {
+    return null
+  }
+  const remaining = analyzeAgentChoiceArgs(agent, cleared)
+  return remaining.opaqueKeys.has('effort') ||
+    remaining.occurrences.some((entry) => entry.key === 'effort')
+    ? null
+    : cleared
 }

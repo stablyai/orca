@@ -9,6 +9,7 @@ import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { CodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 
 export type CodexTurnHost = {
+  omitEffort?: true
   account?: AgentSessionAccountKind
   skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
   connection: Pick<CodexAppServerConnection, 'request'>

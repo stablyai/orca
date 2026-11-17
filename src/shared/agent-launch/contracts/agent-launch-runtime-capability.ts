@@ -77,7 +77,11 @@ export const AGENT_LAUNCH_PLAIN_SESSION_ID_RUNTIME_CAPABILITY =
 export const AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY =
   'agent.launch.setup-trust-mismatch.v1' as const
 
+// Host consumes explicit Default effort at final argument composition on every launch surface.
+export const AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY = 'agent.launch.omit-effort' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_CHOICES_CAPABILITY,

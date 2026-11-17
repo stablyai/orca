@@ -52,6 +52,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
+  omitEffort?: true
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
 }): string {
@@ -68,7 +69,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
       tabId: input.tabId,
       firstMessage: input.firstMessage,
       optionsMode: input.optionsMode,
-      options: input.options
+      options: input.options,
+      omitEffort: input.omitEffort
     }
   })
 }

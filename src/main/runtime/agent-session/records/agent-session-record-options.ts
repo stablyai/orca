@@ -13,9 +13,16 @@ export function replaceAgentSessionRecordOptions(
   if (lease.runtimeFence !== replacement.fence || (lease.claimStatus !== 'live' && !atRest)) {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
-  return 'options' in replacement
-    ? { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
-    : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
+  if (!('options' in replacement)) {
+    return { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
+  }
+  const { omitEffort, ...rest } = record
+  return {
+    ...rest,
+    ...(omitEffort && replacement.options.effort === undefined ? { omitEffort } : {}),
+    options: { ...replacement.options },
+    updatedAt: replacement.now
+  }
 }
 
 /** Saved catalog only; missing model evidence permits options without starting discovery. */
@@ -45,6 +52,7 @@ export type AgentSessionRanOptions = {
   sessionId: string
   fence: number
   model: string
+  authoredEffort?: string
   options: Readonly<Record<string, string>>
   models: AgentSessionAdmissionModels
   now: number
@@ -52,7 +60,7 @@ export type AgentSessionRanOptions = {
 
 export function recordAgentSessionRanOptions(
   record: AgentSessionRecord,
-  { model, options, models: _models, ...at }: AgentSessionRanOptions
+  { model, options, authoredEffort, models: _models, ...at }: AgentSessionRanOptions
 ): AgentSessionRecord {
   const saved = record.options ?? {}
   // These run options cannot follow a concurrent model change.
@@ -60,8 +68,14 @@ export function recordAgentSessionRanOptions(
     return record
   }
   const added = Object.entries({ ...options, model }).filter(
-    ([key]) => key !== 'interactionMode' && saved[key] === undefined
+    ([key]) =>
+      key !== 'interactionMode' &&
+      saved[key] === undefined &&
+      !(record.omitEffort && key === 'effort')
   )
+  if (record.omitEffort && authoredEffort !== undefined) {
+    added.push(['effort', authoredEffort])
+  }
   return added.length === 0
     ? record
     : replaceAgentSessionRecordOptions(record, {

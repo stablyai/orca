@@ -119,6 +119,7 @@ export function buildManagedWorktreeCreateArgs(
     ...(params.startupSessionOptions
       ? { startupSessionOptions: params.startupSessionOptions }
       : {}),
+    ...(params.startupOmitEffort ? { startupOmitEffort: params.startupOmitEffort } : {}),
     ...(params.startupLaunchPreferences
       ? { startupLaunchPreferences: params.startupLaunchPreferences }
       : {}),

@@ -519,3 +519,33 @@ it('compiles copied live steering inputs with exact sparse defaults and tier sem
   expect(structuredMessageSteeringOptionsDiffer({ kind: 'codex-unavailable' }, {})).toBe(false)
   expect(structuredMessageSteeringOptionsDiffer({ kind: 'other' }, { effort: 'high' })).toBe(false)
 })
+
+it('leaves Default effort to the agent in both turn fields until an explicit choice', async () => {
+  const request = vi.fn(async (_method: string, _params: unknown) => ({ turn: { id: 'turn-1' } }))
+  const session = optionSession(request)
+  session.omitEffort = true
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'go' }]
+  }
+  await startCodexTurn(session, {
+    clientMessageId: 'default-first',
+    body,
+    turnOptions: { model: 'saved-model' }
+  })
+  expect(request.mock.calls[0]?.[1]).toMatchObject({
+    model: 'saved-model',
+    collaborationMode: { settings: { model: 'saved-model', reasoning_effort: null } }
+  })
+  expect(request.mock.calls[0]?.[1]).not.toHaveProperty('effort')
+  await startCodexTurn(session, {
+    clientMessageId: 'concrete-next',
+    body,
+    turnOptions: { model: 'saved-model', effort: 'high' }
+  })
+  expect(request.mock.calls[1]?.[1]).toMatchObject({
+    effort: 'high',
+    collaborationMode: { settings: { reasoning_effort: 'high' } }
+  })
+})

@@ -62,6 +62,7 @@ export type AgentSessionAttachParams = {
   options?: Readonly<Record<string, string>>
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
+  omitEffort?: true
   launchArgs?: string[]
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
@@ -97,6 +98,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    omitEffort: params.omitEffort,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -218,6 +220,7 @@ export function reserveRequestFor(input: {
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
+    ...(params.omitEffort ? { omitEffort: params.omitEffort } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt

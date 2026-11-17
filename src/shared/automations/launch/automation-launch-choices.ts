@@ -49,12 +49,10 @@ export function automationArgumentChoices(
 export function automationLaunchInputs(agent: TuiAgent, setup: AutomationLaunchSetup) {
   const choices = automationLaunchChoices(setup)
   const result = automationArgumentChoices(agent, setup.agentArgs ?? '', choices)
-  const views = projectAgentLaunchInputViews(
-    agent,
-    choices,
-    result,
-    setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}
-  )
+  const views = projectAgentLaunchInputViews(agent, choices, result, {
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
+    ...(setup.launchPreferences?.options?.effort === null ? { omitEffort: true as const } : {})
+  })
   const chatSessionOptions = { ...views.sessionOptions, ...views.chatSessionOptions }
   return {
     ...views,

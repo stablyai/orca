@@ -44,6 +44,7 @@ export type LaunchWorkItemDirectArgs = {
   agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  omitEffort?: true
   actionAgentArgs?: string
   /** The saved choice for `agentOverride`; a chat seeds it and a terminal applies it as flags. */
   sessionOptions?: Readonly<Record<string, string>>

@@ -10,7 +10,10 @@ import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/c
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { agentSessionCreateCapabilities } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
+import {
+  AgentLaunchOmitEffortUnsupportedError,
+  agentSessionCreateCapabilities
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -46,6 +49,8 @@ export async function launchAgentInWebHostTab(args: {
   cwd?: string | null
   trustWorktreeId?: string
   buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
+  /** Explicit Default effort; only a host advertising its composition receives it. */
+  omitEffort?: true
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -140,6 +145,7 @@ export async function launchAgentInWebHostTab(args: {
       legacyAgentLaunch: async () => {
         if (
           !Object.keys(args.sessionOptions ?? {}).length &&
+          !args.omitEffort &&
           args.actionAgentArgs === undefined &&
           agentArgs === undefined &&
           (!hasPrompt || promptDelivery === 'auto-submit')
@@ -201,6 +207,7 @@ export async function launchAgentInWebHostTab(args: {
                 settings: hostSettings,
                 agentArgs: authoredArgs,
                 sessionOptions: args.sessionOptions,
+                omitEffort: args.omitEffort,
                 platform,
                 shell,
                 isRemote: true
@@ -240,13 +247,15 @@ export async function launchAgentInWebHostTab(args: {
     }
   } catch (error) {
     const cancelled = error instanceof Error && error.name === 'AbortError'
+    const message =
+      error instanceof AgentLaunchOmitEffortUnsupportedError ? error.message : failureMessage
     if (!cancelled) {
-      toast.error(failureMessage)
+      toast.error(message)
     }
     return {
       delivered: false,
       failureNotified: true,
-      outcome: { status: 'failed', message: cancelled ? '' : failureMessage }
+      outcome: { status: 'failed', message: cancelled ? '' : message }
     }
   }
 

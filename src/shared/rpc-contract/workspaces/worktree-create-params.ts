@@ -143,6 +143,8 @@ export const WorktreeCreate = z
     startupPrompt: OptionalString,
     startupAgentArgs: AgentArgs.optional(),
     startupSessionOptions: z.record(z.string(), z.string()).optional(),
+    // Explicit Default effort: drop inherited effort when composing the startup agent.
+    startupOmitEffort: z.literal(true).optional(),
     startupLaunchPreferences: LaunchPreferences.optional(),
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),

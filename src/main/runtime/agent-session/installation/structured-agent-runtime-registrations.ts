@@ -72,7 +72,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         CODEX_STRUCTURED_AGENT,
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
-          resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          resolveLaunchArgs: (omitEffort) => deps.resolveLaunchArgs('codex', omitEffort),
           savedSession: savedProviderTurns(context),
           ...(deps.prepareLaunchAccountHome
             ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
@@ -128,7 +128,7 @@ function createClaudeAdapter(
       CLAUDE_STRUCTURED_AGENT,
       structuredAgentLaunchSources(context),
       claudeStructuredLaunchPart({
-        resolveLaunchArgs: () => deps.resolveLaunchArgs('claude'),
+        resolveLaunchArgs: (omitEffort) => deps.resolveLaunchArgs('claude', omitEffort),
         ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
         resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
         attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),

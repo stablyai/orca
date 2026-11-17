@@ -123,6 +123,7 @@ export const CreateIntentParams = z
       .strict()
       .optional(),
     options: AgentSessionOptions.optional(),
+    omitEffort: z.literal(true).optional(),
     optionsMode: z.literal('replace-model-selection').optional()
   })
   .strict()

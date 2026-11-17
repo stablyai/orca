@@ -51,6 +51,7 @@ export function resolveAgentStartupPlanInputs(args: {
   shell: AgentStartupShell | undefined
   sessionOptions?: Readonly<Record<string, SessionOptionValue>> | undefined
   sessionOptionsYieldToAgentArgs?: boolean
+  omitEffort?: true
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
@@ -69,6 +70,7 @@ export function resolveAgentStartupPlanInputs(args: {
     agentArgs: args.agentArgs,
     sessionOptions,
     yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    omitEffort: args.omitEffort,
     command: settings.agentCmdOverrides?.[agent],
     extraAgentArgs: args.extraAgentArgs,
     shell: resolveStartupShell(platform, shell)

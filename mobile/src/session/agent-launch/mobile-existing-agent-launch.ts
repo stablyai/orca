@@ -2,6 +2,7 @@
 
 import {
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type {
@@ -64,6 +65,7 @@ export async function launchAgentInExistingWorkspace(args: {
   worktreeId: string
   agent: TuiAgent
   agentArgs?: string
+  omitEffort?: true
   surface?: 'chat' | 'terminal'
   /** The phone user's chat preference; the host still opens a chat only where one can run. */
   nativeChatDefault?: boolean
@@ -79,9 +81,16 @@ export async function launchAgentInExistingWorkspace(args: {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
     return { kind: 'unsupported' }
   }
+  if (
+    args.omitEffort &&
+    !args.hostCapabilities?.includes(AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY)
+  ) {
+    return { kind: 'unsupported' }
+  }
   const params = agentLaunchExistingParams({
     agent: args.agent,
     agentArgs: args.agentArgs,
+    ...(args.omitEffort ? { omitEffort: args.omitEffort } : {}),
     ...(args.surface && args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
       ? { surface: args.surface }
       : {}),

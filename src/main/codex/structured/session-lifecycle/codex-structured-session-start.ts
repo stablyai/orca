@@ -166,6 +166,7 @@ export async function openCodexStructuredSession(
     events: input.events,
     account: start.account,
     codexHome: launch.codexHome,
+    ...(launch.omitEffort ? { omitEffort: launch.omitEffort } : {}),
     connection,
     ...codexSessionLifecycle(input.fence, generation),
     threadId: opened.threadId,

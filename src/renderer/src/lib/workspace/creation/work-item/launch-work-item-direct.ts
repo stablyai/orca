@@ -24,7 +24,8 @@ import {
   prepareDirectLaunchContext,
   planDirectWorkItemLaunch,
   resolveDirectProspectiveAgent,
-  captureDirectWorkItemLaunchArgs
+  captureDirectWorkItemLaunchArgs,
+  captureDirectWorkItemLaunchInputs
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-preflight'
 import type { LaunchWorkItemDirectArgs } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
 import * as routing from './launch-work-item-direct-agent-routing'
@@ -127,11 +128,13 @@ export async function launchWorkItemDirect(
     if (args.signal?.aborted) {
       return 'cancelled'
     }
-    const preflightInputs =
-      prospectiveAgent && args.resolveLaunchInputs
-        ? structuredClone(args.resolveLaunchInputs(prospectiveAgent))
-        : undefined
+    const preflightInputs = await captureDirectWorkItemLaunchInputs(
+      context.target,
+      prospectiveAgent,
+      args
+    )
     const preflightPlan = await planDirectWorkItemLaunch({
+      ...args,
       requestId,
       prospectiveAgent,
       projectContext,
@@ -139,11 +142,7 @@ export async function launchWorkItemDirect(
       repoOwnerHostId: context.executionHostId,
       draftContent,
       promptDelivery,
-      resolveSessionOptions: args.resolveSessionOptions,
-      sessionOptions: args.sessionOptions,
-      chatSessionOptions: args.chatSessionOptions,
-      ...(preflightInputs ? { launchInputs: preflightInputs } : {}),
-      launchChoice: args.launchChoice
+      ...(preflightInputs ? { launchInputs: preflightInputs } : {})
     })
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -204,6 +203,7 @@ export async function launchWorkItemDirect(
       agentOverride,
       agentLaunchPreferences: args.agentLaunchPreferences,
       agentArgs: args.agentArgs,
+      omitEffort: args.omitEffort,
       actionAgentArgs: args.actionAgentArgs,
       ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
       resolveLaunchInputs: args.resolveLaunchInputs,

@@ -147,7 +147,8 @@ export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPi
     ...(authorized && draft.arguments !== undefined ? { agentArgs: draft.arguments } : {}),
     modelContext: entry?.terminal.model,
     sourceKeys: current?.context.literalKeys,
-    permissionContext: entry?.terminal.permissionMode
+    permissionContext: entry?.terminal.permissionMode,
+    ...(draft.delegated?.includes('effort') ? { omitEffort: true as const } : {})
   })
 }
 
@@ -161,7 +162,7 @@ export function agentPickerFreshLaunchInputs(
     parseExecutionHostId(destination.executionHostId)?.kind === 'runtime' &&
     draft.acceptedEdits?.arguments === undefined
   ) {
-    // Why: choosing a control can materialize settings text without authoring Arguments.
+    // Resolve inherited Arguments on the executing host.
     return agentPickerLaunchInputs({ ...draft, arguments: undefined })
   }
   return agentPickerLaunchInputs(draft, entry)

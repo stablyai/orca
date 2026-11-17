@@ -24,6 +24,7 @@ export type AgentLaunchSurfaceFactory = {
     worktreeId: string
     agent: StructuredAgentId
     chatOptions?: Readonly<Record<string, string>>
+    omitEffort?: true
     options?: Readonly<Record<string, unknown>>
     /** Caller-minted ID; reject with AgentLaunchSessionAlreadyExistsError if taken. */
     sessionId?: string
@@ -37,6 +38,7 @@ export type AgentLaunchSurfaceFactory = {
   createTerminalAgent(args: {
     worktreeId: string
     agent: TuiAgent
+    omitEffort?: true
     options?: Readonly<Record<string, unknown>>
     /** Offer on argv; promptRodeLaunchCommand confirms whether the typed line carried it. */
     startupPrompt?: string
@@ -107,6 +109,7 @@ export type AgentLaunchWorkspaceFactory = {
     cwd?: string
     launchSource?: string
     paneKey?: string
+    omitEffort?: true
     options?: Readonly<Record<string, unknown>>
     /** Account routing overrides merged over the startup agent environment. */
     accountEnv?: Readonly<Record<string, string>>
@@ -152,6 +155,7 @@ export function terminalLaunchInputs(intent: AgentLaunchIntent) {
   return {
     // Projected for this agent by each terminal builder, which keeps only what has a flag.
     options: terminalLaunchOptions(intent),
+    ...(intent.omitEffort ? { omitEffort: intent.omitEffort } : {}),
     // `null` is a value the caller meant, so this tests for absence rather than falsiness.
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
     ...(intent.cwd ? { cwd: intent.cwd } : {}),

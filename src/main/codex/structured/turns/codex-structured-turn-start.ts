@@ -102,7 +102,10 @@ export async function startCodexTurn(
       settings: {
         model: nativeOptions.model ?? previousApplied?.model ?? host.reportedOptions?.model,
         reasoning_effort:
-          nativeOptions.effort ?? previousApplied?.effort ?? host.reportedOptions?.effort ?? null,
+          nativeOptions.effort ??
+          (host.omitEffort
+            ? null
+            : (previousApplied?.effort ?? host.reportedOptions?.effort ?? null)),
         developer_instructions: null
       }
     }
@@ -200,6 +203,9 @@ export async function startCodexTurn(
       }
     }
     throw error
+  }
+  if (requested.effort !== undefined) {
+    delete host.omitEffort
   }
   host.appliedTurnOptions = { ...previousApplied, ...requested }
   host.appliedTurnInputOptions = codexMessageInputOptions(

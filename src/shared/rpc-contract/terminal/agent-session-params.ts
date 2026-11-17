@@ -188,6 +188,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       .optional(),
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
+    omitEffort: z.literal(true).optional(),
     sessionOptions: z.record(z.string(), z.string()).optional(),
     extraAgentArgs: z.string().optional(),
     launchPreferences: LaunchPreferences.optional(),

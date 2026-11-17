@@ -75,6 +75,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onWorkspaceCreated?: (worktreeId: string) => void
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
+  startupOmitEffort?: true
   startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string

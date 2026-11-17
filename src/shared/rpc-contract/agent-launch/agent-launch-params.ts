@@ -65,6 +65,7 @@ export const AgentLaunch = z.object({
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
+  omitEffort: z.literal(true).optional(),
   /** Terminal-only cwd; structured launches downgrade rather than silently ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),
   launchSource: LaunchSourceParam.optional(),

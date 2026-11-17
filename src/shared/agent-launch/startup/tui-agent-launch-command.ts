@@ -1,4 +1,4 @@
-import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
+import { analyzeAgentChoiceArgs, withoutAgentEffortArgs } from '../choices/agent-choice-args'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
@@ -220,6 +220,7 @@ export function terminalSessionOptionInputs(args: {
   settings?: AgentLaunchProfileSettings | null
   sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined
   yieldToAgentArgs?: boolean
+  omitEffort?: true
   agentArgs: string | null | undefined
   shell: AgentStartupShell
   command?: string
@@ -257,6 +258,16 @@ export function terminalSessionOptionInputs(args: {
     }
     raw = merged.agentArgs
   }
+  if (args.omitEffort) {
+    const cleared = withoutAgentEffortArgs(args.agent, raw ?? '')
+    const command = withoutAgentEffortArgs(args.agent, args.command ?? '')
+    if (cleared === null || command === null || command !== (args.command ?? '')) {
+      throw new Error(
+        'Default effort cannot safely remove effort from the configured arguments or command.'
+      )
+    }
+    raw = cleared || null
+  }
   const authored = args.settings?.agentLaunchChoices?.[args.agent]
   let defaultValues = {
     ...authored?.options,
@@ -291,10 +302,13 @@ export function terminalSessionOptionInputs(args: {
     launchPreferencesYieldToAgentArgs: args.yieldToAgentArgs,
     shell: args.shell
   })
-  const sessionOptions = {
+  const sessionOptions: Record<string, SessionOptionValue> = {
     ...choices.options,
     ...(choices.model ? { model: choices.model } : {}),
     ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {})
+  }
+  if (args.omitEffort) {
+    delete sessionOptions.effort
   }
   return {
     agentArgs: raw,

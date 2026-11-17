@@ -12,6 +12,10 @@ export function adoptPairedHostSeed(
   if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
     seedOptions = undefined
   }
+  if (state.intent.params.omitEffort && seedOptions) {
+    const { effort: _effort, ...kept } = seedOptions
+    seedOptions = kept
+  }
   const { seedPending, ...selection } = state.selection
   if (!seedPending && JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
     return

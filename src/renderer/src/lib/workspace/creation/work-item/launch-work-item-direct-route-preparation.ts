@@ -35,6 +35,7 @@ export type DirectWorkItemAgentLaunchPreparation = {
   agentArgs?: string | null
   freshLaunchInputs?: {
     agentArgs?: string | null
+    omitEffort?: true
     actionAgentArgs?: string
     sessionOptions?: Readonly<Record<string, string>>
   }
@@ -95,6 +96,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   agentLaunchPreferences?: LaunchWorkItemDirectArgs['agentLaunchPreferences']
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  omitEffort?: true
   actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
@@ -170,6 +172,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         : args.sessionOptions
       : undefined
   const chatSessionOptions = inputs ? inputs.chatSessionOptions : args.chatSessionOptions
+  const omitEffort = inputs ? inputs.omitEffort : args.omitEffort
   const plan =
     effectiveAgent === null
       ? null
@@ -178,6 +181,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         : args.planLaunch(latestStore, {
             requestId: args.requestId,
             agent: effectiveAgent,
+            omitEffort,
             workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
             prompt: args.draftContent,
             promptDelivery: args.promptDelivery,
@@ -200,6 +204,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     : buildDirectWorkItemStartup({
         agent: effectiveAgent,
         agentArgs,
+        omitEffort,
         sessionOptions,
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         draftContent: args.draftContent,
@@ -225,7 +230,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
       ...(inputs?.actionAgentArgs !== undefined || args.actionAgentArgs !== undefined
         ? { actionAgentArgs: inputs?.actionAgentArgs ?? args.actionAgentArgs }
         : { agentArgs }),
-      sessionOptions
+      sessionOptions,
+      ...(omitEffort ? { omitEffort } : {})
     },
     startupPlan,
     draftLaunchedNatively,

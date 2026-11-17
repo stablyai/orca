@@ -77,6 +77,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             ? null
             : Object.entries(request.sessionOptions).sort(),
           request.extraAgentArgs ?? null,
+          request.omitEffort ?? null,
           request.startupCwd ?? null,
           ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
           request.presentation ?? null,
@@ -148,6 +149,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
               ? null
               : Object.entries(request.sessionOptions).sort(),
             request.extraAgentArgs ?? null,
+            request.omitEffort ?? null,
             startupCwd ?? null,
             ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
             request.presentation ?? null,
@@ -200,6 +202,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             ? { extraAgentArgs: request.extraAgentArgs }
             : {}),
           launchPreferences: request.launchPreferences,
+          ...(request.omitEffort ? { omitEffort: request.omitEffort } : {}),
           // Account env is re-prepared per attempt; exclude from fingerprints and let first spawn win.
           accountEnv: request.accountEnv,
           terminalImageViewerSupported: caller.terminalImageViewerSupported,

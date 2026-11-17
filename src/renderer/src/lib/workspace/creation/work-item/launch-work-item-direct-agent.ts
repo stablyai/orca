@@ -23,6 +23,7 @@ import { translate } from '@/i18n/i18n'
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  omitEffort?: true
   sessionOptions?: Readonly<Record<string, string>>
   sessionOptionsYieldToAgentArgs?: true
   draftContent: string
@@ -50,6 +51,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     agent: args.agent,
     settings: args.settings ?? {},
     agentArgs: args.agentArgs,
+    omitEffort: args.omitEffort,
     sessionOptions: args.sessionOptions,
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     platform: args.launchPlatform,

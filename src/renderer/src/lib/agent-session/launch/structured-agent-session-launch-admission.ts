@@ -1,3 +1,5 @@
+import { AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -74,6 +76,7 @@ const NOT_DELIVERED_NOTIFIED: StructuredPromptDeliveryResult = {
 export type DeclinedStructuredLaunchTerminalOptions = Pick<
   LaunchAgentInNewTabArgs,
   | 'agentArgs'
+  | 'omitEffort'
   | 'sessionOptionsYieldToAgentArgs'
   | 'launchPlatform'
   | 'launchSource'
@@ -99,6 +102,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
       worktreeId: args.worktreeId,
       // The saved choice the chat would have seeded applies to its terminal as flags.
       ...(args.plan.launchOptions ? { sessionOptions: args.plan.launchOptions } : {}),
+      ...(args.plan.omitEffort ? { omitEffort: args.plan.omitEffort } : {}),
       ...(args.targetGroupId ? { groupId: args.targetGroupId } : {}),
       ...(args.terminal?.activate !== false && args.plan.prompt
         ? { prompt: args.plan.prompt }
@@ -188,6 +192,20 @@ export function beginHostAdmittedStructuredLaunch(args: {
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(args.worktreeId)
   const settlement = (async (): Promise<StructuredAgentLaunchSettlement> => {
     try {
+      if (
+        plan.omitEffort &&
+        !(await structuredAgentSessionHostSupports(
+          args.target,
+          AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY
+        ))
+      ) {
+        return failBeforeSurface(
+          new StructuredAgentSessionCreateRefusalError(
+            'This host cannot launch a chat with Default effort.',
+            'structured_agent_session_unsupported'
+          )
+        )
+      }
       const asked = await admitStructuredLaunchOnHost(
         args.target,
         toRuntimeWorktreeSelector(args.worktreeId),

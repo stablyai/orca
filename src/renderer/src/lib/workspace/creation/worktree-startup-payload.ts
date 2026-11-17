@@ -14,6 +14,8 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 
 export type FreshWorkspaceAgentLaunch = {
   agentArgs?: string | null
+  /** Explicit Default effort, composed by the host that launches the agent. */
+  omitEffort?: true
   actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string

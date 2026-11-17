@@ -38,6 +38,7 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  omitEffort?: true
   prefixArgs?: readonly string[]
   command: string
   args: string[]
@@ -133,6 +134,7 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  omitEffort?: true
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
   /** CODEX_HOME this app-server launched under. */

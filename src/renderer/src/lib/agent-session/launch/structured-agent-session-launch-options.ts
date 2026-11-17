@@ -52,7 +52,11 @@ export function initialStructuredLaunchSelection(
     return {}
   }
   return {
-    seed: intent.seedOptions,
+    seed: intent.params.omitEffort
+      ? Object.fromEntries(
+          Object.entries(intent.seedOptions ?? {}).filter(([key]) => key !== 'effort')
+        )
+      : intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
     ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
   }

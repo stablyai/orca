@@ -14,6 +14,7 @@ export type AgentLaunchFingerprintInput = {
   sessionOptions?: Readonly<Record<string, string>>
   chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
+  omitEffort?: true
   /** Arguments change operation identity; null explicitly clears defaults and differs from absence. */
   agentArgs?: string | null
   /** cwd changes both execution location and structured-to-terminal routing. */
@@ -43,6 +44,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     chatOptions: input.chatOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
+    omitEffort: input.omitEffort,
     cwd: input.cwd,
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,

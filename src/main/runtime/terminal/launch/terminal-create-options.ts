@@ -42,6 +42,8 @@ export type TerminalCreateOptions = {
   startupPromptCarry?: 'force-line'
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Explicit Default effort: drop inherited effort when composing `startupAgent`. */
+  omitEffort?: true
   /** Override Settings arguments for this agent (null means none); plan input is not a caller-supplied command and does not take launch ownership. */
   agentArgs?: string | null
   extraAgentArgs?: string

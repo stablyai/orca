@@ -48,7 +48,10 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** This host's preference for agents' suggested next prompts, read when a chat starts one. */
   nativeChatPromptSuggestions?: () => boolean
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
-  resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
+  resolveLaunchArgs: (
+    provider: AgentSessionRecord['provider'],
+    omitEffort?: true
+  ) => Promise<string[]> | string[]
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']

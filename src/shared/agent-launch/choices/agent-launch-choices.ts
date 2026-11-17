@@ -99,6 +99,7 @@ export function normalizeAgentLaunchChoices(value: unknown): AgentLaunchChoices 
 }
 
 export type AgentLaunchInputViews = {
+  omitEffort?: true
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>

@@ -48,6 +48,7 @@ export function agentLaunchWorkspaceFactory(
       onWorkspaceCreated,
       startupPrompt,
       agentArgs,
+      omitEffort,
       cwd,
       launchSource,
       paneKey,
@@ -98,6 +99,7 @@ export function agentLaunchWorkspaceFactory(
             context
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(omitEffort ? { startupOmitEffort: omitEffort } : {}),
           ...(startupPrompt
             ? {
                 onStartupPromptCarry: (carried: boolean) => {

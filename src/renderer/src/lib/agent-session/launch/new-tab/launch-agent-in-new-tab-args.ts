@@ -22,6 +22,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   prompt?: string
   /** A surface the user already sees for this launch presents a preparation refusal, not a toast. */
   presentsRefusal?: true
+  /** Explicit Default effort: the composing host drops inherited effort. */
+  omitEffort?: true
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
   /** Raw action Arguments replace configured Arguments while inheriting host permission. */

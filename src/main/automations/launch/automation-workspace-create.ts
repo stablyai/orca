@@ -52,6 +52,7 @@ export function buildAutomationWorktreeCreateArgs({
     ...(setup.extraAgentArgs ? { startupExtraAgentArgs: setup.extraAgentArgs } : {}),
     ...(setup.agentArgs !== undefined ? { startupAgentArgs: setup.agentArgs } : {}),
     ...(setup.sessionOptions ? { startupSessionOptions: setup.sessionOptions } : {}),
+    ...(setup.omitEffort ? { startupOmitEffort: setup.omitEffort } : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

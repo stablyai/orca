@@ -33,6 +33,7 @@ export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
+  omitEffort?: true
   /** Explicit encoded action input, captured durably before any asynchronous preparation. */
   launchOptions?: Readonly<Record<string, string>>
   /** Final admission of a source-bound action, immediately before its first create is sent. */

@@ -18,6 +18,8 @@ export type HostAgentLaunchArgs = {
   groupId?: string
   /** Kept by the window: a pane whose agent could not start offers to copy it. */
   prompt: string
+  /** Explicit Default effort: the composing host drops inherited effort. */
+  omitEffort?: true
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
   cwd?: string
@@ -46,6 +48,7 @@ function launchParams(args: HostAgentLaunchArgs) {
     agent: args.agent,
     target: { kind: 'existing' as const, worktree: `id:${args.worktreeId}` },
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
+    ...(args.omitEffort ? { omitEffort: args.omitEffort } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...stringSessionOptions(args.sessionOptions),
     ...(args.launchSource ? { launchSource: args.launchSource } : {})

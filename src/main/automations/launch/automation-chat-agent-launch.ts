@@ -68,6 +68,7 @@ async function launchChat(
         agent: automation.agentId,
         operationId,
         surface: 'chat',
+        ...(views.omitEffort ? { omitEffort: views.omitEffort } : {}),
         ...(views.chatSessionOptions !== undefined
           ? { sessionOptions: {}, chatOptions: views.chatSessionOptions }
           : {}),

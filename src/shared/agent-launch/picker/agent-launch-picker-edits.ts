@@ -1,4 +1,4 @@
-import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
+import { analyzeAgentChoiceArgs, withoutAgentEffortArgs } from '../choices/agent-choice-args'
 import { reconcileAgentChoiceArgsDetailed } from '../choices/agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
@@ -200,9 +200,7 @@ export function applyAgentPickerEdit(
   const analysis = analyzeAgentChoiceArgs(entry.agent, source)
   const defaultEffort =
     edit.kind === 'choice' && edit.patch.options?.effort === TEXT_ACTION_DEFAULT_MODEL
-  const clearedEffort = defaultEffort
-    ? analysis.cut(analysis.occurrences.filter((item) => item.key === 'effort' && item.source))
-    : null
+  const clearedEffort = defaultEffort ? withoutAgentEffortArgs(entry.agent, source) : null
   const visible = agentPickerPanelArguments(entry, draft)
   draft = { ...draft, literalKeys: visible.context.literalKeys }
   const catalog = getAgentSessionOptionLaunchCatalog(entry.agent)
@@ -244,23 +242,12 @@ export function applyAgentPickerEdit(
             visible.choices.model ?? edit.model
           )
         : undefined
-  const accepted = publishAccepted(
+  return publishAccepted(
     entry,
     draft,
     result,
     result.effects,
     false,
-    domain
-      ? domain.arguments
-      : draft.arguments !== undefined || defaultEffort
-        ? result.userArgs || null
-        : undefined
+    domain ? domain.arguments : draft.arguments !== undefined ? result.userArgs || null : undefined
   )
-  // Default must carry the cleared source through fresh launches and saved launch setups.
-  return defaultEffort
-    ? {
-        ...accepted,
-        acceptedEdits: { ...accepted.acceptedEdits!, arguments: result.userArgs || null }
-      }
-    : accepted
 }

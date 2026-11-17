@@ -127,6 +127,7 @@ export function projectAgentLaunchInputViews(
   result: ReturnType<typeof reconcileAgentChoiceArgsDetailed>,
   input: {
     agentArgs?: string | null
+    omitEffort?: true
     modelContext?: string
     sourceKeys?: readonly string[]
     permissionContext?: AgentPermissionChoice
@@ -135,7 +136,14 @@ export function projectAgentLaunchInputViews(
   const terminalChoices = terminalAgentChoices(agent, choices)
   const terminal = { ...terminalChoices, options: { ...terminalChoices.options } }
   const chat = { ...choices, options: { ...choices.options } }
+  if (input.omitEffort) {
+    delete terminal.options.effort
+    delete chat.options.effort
+  }
   for (const entry of input.agentArgs !== undefined ? result.recognized : []) {
+    if (input.omitEffort && entry.key === 'effort') {
+      continue
+    }
     if (input.sourceKeys === undefined || input.sourceKeys.includes(entry.key)) {
       if (entry.key === 'model') {
         chat.model = entry.value
@@ -177,6 +185,7 @@ export function projectAgentLaunchInputViews(
     sessionOptions.model = String(profile.launch.appliedValues.model)
   }
   return {
+    ...(input.omitEffort ? { omitEffort: input.omitEffort } : {}),
     ...(input.agentArgs !== undefined
       ? {
           agentArgs:

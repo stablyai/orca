@@ -68,6 +68,7 @@ export function agentLaunchExistingParams(args: {
   operationId: string
   prompt?: AgentLaunchPrompt
   agentArgs?: string
+  omitEffort?: true
   surface?: 'chat' | 'terminal'
   nativeChatDefault?: boolean
   launchSource?: string
@@ -79,6 +80,7 @@ export function agentLaunchExistingParams(args: {
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
+    ...(args.omitEffort ? { omitEffort: args.omitEffort } : {}),
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.surface ? { surface: args.surface } : {}),
     ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),

@@ -1,4 +1,7 @@
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  AGENT_LAUNCH_CHOICES_CAPABILITY,
+  AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY
+} from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY
@@ -14,6 +17,7 @@ import {
   runtimeEnvironmentSupportsCapabilities
 } from '../../../rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
+import { translate } from '@/i18n/i18n'
 
 export async function agentSessionCreateCapabilities(environmentId: string) {
   const [complete, choices] = await runtimeEnvironmentSupportsCapabilities(environmentId, [
@@ -23,10 +27,43 @@ export async function agentSessionCreateCapabilities(environmentId: string) {
   return { complete, capable: complete || choices }
 }
 
+/** A host that cannot drop inherited effort would launch it, so Default refuses rather than lies. */
+export class AgentLaunchOmitEffortUnsupportedError extends Error {
+  constructor() {
+    super(
+      translate(
+        'agentLaunch.updateServer',
+        'Update Orca on this workspace’s server, then try again.'
+      )
+    )
+    this.name = 'AgentLaunchOmitEffortUnsupportedError'
+  }
+}
+
+/** Default effort reaches only a host that consumes it at final argument composition. */
+export async function requireAgentLaunchOmitEffort(
+  environmentId: string,
+  omitEffort: true | undefined
+): Promise<{ omitEffort?: true }> {
+  if (!omitEffort) {
+    return {}
+  }
+  if (
+    !(await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY
+    ))
+  ) {
+    throw new AgentLaunchOmitEffortUnsupportedError()
+  }
+  return { omitEffort }
+}
+
 export function agentSessionCreateRequest(args: {
   worktreeId: string
   agent: TuiAgent
   agentArgs?: string | null
+  omitEffort?: true
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string
   prompt?: string
@@ -37,6 +74,7 @@ export function agentSessionCreateRequest(args: {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
     agent: args.agent,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
+    ...(args.omitEffort ? { omitEffort: args.omitEffort } : {}),
     ...(args.sessionOptions !== undefined
       ? {
           sessionOptions: Object.fromEntries(

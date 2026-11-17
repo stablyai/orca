@@ -43,11 +43,7 @@ export function sourceControlActionLaunchOptions(
     | 'resolvedChoiceSources'
   >,
   agent: TuiAgent
-): {
-  sessionOptions?: Readonly<Record<string, string>>
-  chatSessionOptions?: Readonly<Record<string, string>>
-  sessionOptionsYieldToAgentArgs?: true
-} {
+): Omit<AgentLaunchInputViews, 'agentArgs'> {
   const { agentArgs: _args, ...views } = selectedActionInputViews(
     sourceControlActionRecipeEntry(recipe),
     agent
@@ -132,8 +128,10 @@ function selectedActionInputViews(
       })
     )
   })
+  const effort = recipe.resolvedChoiceSources.model?.options?.effort
   return projectAgentLaunchInputViews(agent, choices, result, {
-    agentArgs: withSettings ? selectedActionAgentArgs(recipe, agent, settings) : source
+    agentArgs: withSettings ? selectedActionAgentArgs(recipe, agent, settings) : source,
+    ...(effort?.agentId === agent && effort.value === null ? { omitEffort: true as const } : {})
   })
 }
 

@@ -46,6 +46,8 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
+  /** Explicit Default effort: the composing host drops inherited effort. */
+  omitEffort?: true
   /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
   launchOptions?: Readonly<Record<string, string>>
   chatLaunchOptions?: Readonly<Record<string, string>>
@@ -69,6 +71,7 @@ export type AgentSessionLaunchVerdict = Pick<
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
   draftFromScope?: string
+  omitEffort?: true
   launchOptions?: Readonly<Record<string, string>>
   chatLaunchOptions?: Readonly<Record<string, string>>
 }
@@ -102,6 +105,7 @@ export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
 function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): StructuredAgentLaunchOptions {
   return {
     requestId: verdict.requestId,
+    ...(verdict.omitEffort ? { omitEffort: verdict.omitEffort } : {}),
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptAttachments?.length ? { promptAttachments: verdict.promptAttachments } : {}),
     ...(verdict.promptSkills?.length ? { promptSkills: verdict.promptSkills } : {}),
@@ -301,6 +305,7 @@ export function planAgentSessionLaunch(
     route,
     ...(request.requestedSurface ? { requestedSurface: request.requestedSurface } : {}),
     requestId: request.requestId,
+    ...(request.omitEffort ? { omitEffort: request.omitEffort } : {}),
     agent: request.agent,
     ...(executionHostId ? { executionHostId } : {}),
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),

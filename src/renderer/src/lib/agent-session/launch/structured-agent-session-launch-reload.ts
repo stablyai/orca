@@ -45,6 +45,7 @@ export function restorePersistedStructuredLaunchState(
       ...(record.forkFrom ? { forkFrom: record.forkFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
+      ...(record.omitEffort ? { omitEffort: record.omitEffort } : {}),
       ...(record.optionsMode ? { optionsMode: record.optionsMode } : {}),
       ...(record.options ? { options: record.options } : {}),
       ...(record.explicitLaunchOptions

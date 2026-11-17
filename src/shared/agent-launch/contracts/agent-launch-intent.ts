@@ -43,6 +43,7 @@ export type AgentLaunchIntent = {
   sessionOptions?: Readonly<Record<string, unknown>>
   chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: AgentLaunchReusedTerminal
+  omitEffort?: true
   /** Tri-state arguments: absent uses defaults, null explicitly clears them. Overrides remain terminal-only; structured chat uses host settings and reports a warning. */
   agentArgs?: string | null
   /** An outside-workspace cwd forces a terminal via tui_launch_command; structured sessions cannot start in another directory. */

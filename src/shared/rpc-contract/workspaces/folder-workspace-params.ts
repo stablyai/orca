@@ -25,6 +25,7 @@ export const FolderWorkspaceHookCreateShape = {
   startupDraft: OptionalString,
   startupAgentArgs: AgentArgs.optional(),
   startupSessionOptions: z.record(z.string(), z.string()).optional(),
+  startupOmitEffort: z.literal(true).optional(),
   startupLaunchPreferences: LaunchPreferences.optional(),
   launchSource: LaunchSourceParam.optional()
 }

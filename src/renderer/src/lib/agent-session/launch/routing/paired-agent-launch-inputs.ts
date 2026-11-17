@@ -27,8 +27,27 @@ import {
 import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
+import { requireAgentLaunchOmitEffort } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 
-export async function pairedAgentLaunchInputs(args: {
+type PairedAgentLaunchInputsArgs = Parameters<typeof composePairedAgentLaunchInputs>[0] & {
+  omitEffort?: true
+}
+
+/** Default effort rides every host-composed return; a host that cannot compose it refuses. */
+export async function pairedAgentLaunchInputs(args: PairedAgentLaunchInputsArgs) {
+  const omission = await requireAgentLaunchOmitEffort(args.environmentId, args.omitEffort)
+  const inputs = await composePairedAgentLaunchInputs(args)
+  if (!omission.omitEffort) {
+    return inputs
+  }
+  if ('preparedAgentCommand' in inputs) {
+    // A client-prepared command would leave restart to Settings Arguments the host still reads.
+    throw new Error('Default effort cannot be prepared for this host.')
+  }
+  return { ...inputs, ...omission }
+}
+
+async function composePairedAgentLaunchInputs(args: {
   environmentId: string
   agent: TuiAgent
   complete: boolean

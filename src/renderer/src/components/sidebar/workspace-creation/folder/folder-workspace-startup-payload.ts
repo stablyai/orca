@@ -35,6 +35,7 @@ export function buildFolderWorkspaceStartupPayload({
         freshAgentLaunch: {
           agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
           sessionOptions,
+          ...(launchInputs?.omitEffort ? { omitEffort: launchInputs.omitEffort } : {}),
           prompt: launchDraftPrompt ?? note,
           promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
           legacy: () => ({
@@ -60,6 +61,7 @@ export function buildFolderWorkspaceHostStartupPayload({
   quickAgent,
   agentArgs,
   sessionOptions,
+  omitEffort,
   launchSource,
   note,
   launchDraftPrompt
@@ -67,6 +69,7 @@ export function buildFolderWorkspaceHostStartupPayload({
   SubmitFolderWorkspaceCreateParams,
   'quickAgent' | 'agentArgs' | 'sessionOptions' | 'note'
 > & {
+  omitEffort?: true
   launchSource: NonNullable<SubmitFolderWorkspaceCreateParams['launchSource']>
   launchDraftPrompt: string | null
 }): Partial<FolderWorkspaceCreateInput> {
@@ -75,6 +78,7 @@ export function buildFolderWorkspaceHostStartupPayload({
     startupAgent: quickAgent ?? undefined,
     startupAgentArgs: agentArgs,
     startupSessionOptions: sessionOptions,
+    ...(omitEffort ? { startupOmitEffort: omitEffort } : {}),
     startupLaunchPreferences: quickAgent
       ? toAgentLaunchPreferences(sessionOptions, quickAgent)
       : undefined,

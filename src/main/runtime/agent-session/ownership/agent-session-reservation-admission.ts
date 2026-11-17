@@ -58,6 +58,7 @@ export type AgentSessionReserveRequest = {
   provider: StructuredAgentId
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
+  omitEffort?: true
   launchArgs?: AgentSessionLaunchArgs
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv

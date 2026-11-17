@@ -124,8 +124,12 @@ export function automationWithLaunchSetup(automation: Automation): Automation {
 
 export function automationTerminalLaunchInputs(automation: Automation) {
   const setup = automationCanonicalLaunchSetup(automation)
-  const { agentArgs, sessionOptions } = automationLaunchInputs(automation.agentId, setup)
+  const { agentArgs, sessionOptions, omitEffort } = automationLaunchInputs(
+    automation.agentId,
+    setup
+  )
   return {
+    ...(omitEffort ? { omitEffort } : {}),
     ...(agentArgs !== undefined ? { agentArgs } : {}),
     ...(sessionOptions ? { sessionOptions } : {}),
     ...(setup.extraAgentArgs ? { extraAgentArgs: setup.extraAgentArgs } : {})

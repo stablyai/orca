@@ -93,6 +93,7 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
               ? { permissionMode: replay.record.permissionMode }
               : {})
           },
+          ...(replay.record.omitEffort ? { omitEffort: replay.record.omitEffort } : {}),
           ...(replay.record.launchArgs ? { launchArgs: replay.record.launchArgs } : {})
         }
       : input.options

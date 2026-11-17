@@ -6,7 +6,10 @@ import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
-import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import {
+  createStructuredAgentSessionOperationId,
+  structuredAgentSessionCreateFingerprint
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store/index'
@@ -168,16 +171,30 @@ export function retryStructuredAgentSessionLaunchIntent(
       }
     }
   }
+  const retried = buildStructuredAgentSessionLaunchIntent(
+    intent.worktreeId,
+    intent,
+    intent.agent,
+    intent.sessionId,
+    fresh ? undefined : intent.params.resumeFrom,
+    intent.seedOptions,
+    intent.params.forkFrom
+  )
+  if (intent.params.omitEffort) {
+    const params = { ...retried.params, omitEffort: true as const }
+    retried.params = {
+      ...params,
+      envelope: {
+        ...params.envelope,
+        payloadFingerprint: structuredAgentSessionCreateFingerprint({
+          sessionId: intent.sessionId,
+          ...params
+        })
+      }
+    }
+  }
   return {
-    ...buildStructuredAgentSessionLaunchIntent(
-      intent.worktreeId,
-      intent,
-      intent.agent,
-      intent.sessionId,
-      fresh ? undefined : intent.params.resumeFrom,
-      intent.seedOptions,
-      intent.params.forkFrom
-    ),
+    ...retried,
     forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
@@ -197,6 +214,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
+  omitEffort?: true
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   sendSelectionSupport?: boolean
@@ -223,6 +241,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
+      ...(args.omitEffort ? { omitEffort: args.omitEffort } : {}),
       ...(args.options ? { options: args.options } : {})
     },
     ...(args.createMessageSupport === undefined

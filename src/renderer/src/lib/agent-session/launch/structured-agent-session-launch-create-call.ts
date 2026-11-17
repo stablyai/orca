@@ -1,3 +1,4 @@
+import { AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
@@ -130,6 +131,25 @@ export async function launchStructuredAgentSession(
   /** A chat closed while its host was being asked issues no create. */
   isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
+  if (
+    intent.params.omitEffort &&
+    !(await structuredAgentSessionHostSupports(
+      intent.target,
+      AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY
+    ))
+  ) {
+    if (priorCreateOutcomeUnknown) {
+      throw new StructuredAgentSessionCreateUnknownOutcomeError(
+        'This host cannot confirm the pending Default effort launch.',
+        'agent_session_operation_unknown'
+      )
+    }
+    abandonStructuredAgentSessionLaunchIntent(intent)
+    throw new StructuredAgentSessionCreateRefusalError(
+      'This host cannot launch a chat with Default effort.',
+      'structured_agent_session_unsupported'
+    )
+  }
   // Gates only the intent it was set on, once; a user Retry builds a new intent without it.
   if (intent.createAfter) {
     const go = await intent.createAfter

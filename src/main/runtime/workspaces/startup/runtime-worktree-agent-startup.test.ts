@@ -28,7 +28,8 @@ vi.mock('../../../opencode/model-launch/opencode-launch-model-context', () => ({
 
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft
+  buildWorktreeStartupForDraft,
+  resolveWorktreeCreateAgentStartup
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -84,6 +85,29 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
     expect(result.startup.command).not.toContain('summarize')
     expect(result.followup).toBeUndefined()
     expect(onPromptCarry).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('workspace create with Default effort', () => {
+  it('drops the Settings effort and keeps every other Settings argument', async () => {
+    const result = await resolveWorktreeCreateAgentStartup(
+      { startupAgent: 'claude', startupOmitEffort: true },
+      (agent, prompt, launchPreferences, inputs) =>
+        buildWorktreeStartupForAgent({
+          ...inputs,
+          repo: makeRepo({}),
+          settings: { ...settings, agentDefaultArgs: { claude: '--effort high --add-dir docs' } },
+          agent,
+          ...(prompt !== undefined ? { prompt } : {}),
+          ...(launchPreferences ? { launchPreferences } : {}),
+          getLaunchRuntime: () => LINUX,
+          toSessionOptions: () => undefined
+        })
+    )
+
+    expect(result?.startup.command).toBe(
+      "claude '--dangerously-skip-permissions' '--add-dir' 'docs'"
+    )
   })
 })
 

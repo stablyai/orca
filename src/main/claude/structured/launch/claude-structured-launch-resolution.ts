@@ -1,17 +1,21 @@
+import {
+  claudeStructuredPermissionOptions,
+  type ClaudePermissionOptions
+} from './claude-structured-permission-options'
+export { claudeStructuredPermissionOptions } from './claude-structured-permission-options'
+import { withClaudeArtifactDefault } from './claude-artifact-env'
+export { withClaudeArtifactDefault } from './claude-artifact-env'
+import {
+  assertStructuredAgentEffortPrefix,
+  withoutStructuredAgentEffortArgs
+} from '../../../native-chat/agent-launch/structured-agent-configured-args'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { prepareClaudeLaunchAccount } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type {
-  Options as ClaudeAgentSdkOptions,
-  PermissionMode
-} from '@anthropic-ai/claude-agent-sdk'
-import type {
-  AgentChatPermissionChoice,
-  AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
@@ -44,23 +48,6 @@ import {
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
-const CLAUDE_ARTIFACT_ENV = 'CLAUDE_CODE_ARTIFACT'
-
-// SDK entrypoints hide Claude's Artifact tools unless this is set; a user value still wins,
-// matched case-insensitively on Windows, where claude_code_artifact=0 is the same opt-out.
-export function withClaudeArtifactDefault(
-  env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform
-): Record<string, string> {
-  const chosen = Object.keys(env).some(
-    (key) =>
-      key === CLAUDE_ARTIFACT_ENV ||
-      (platform === 'win32' && key.toUpperCase() === CLAUDE_ARTIFACT_ENV)
-  )
-  return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
-}
-
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -91,26 +78,6 @@ export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   extraArgs: { 'replay-user-messages': null }
 }
 
-const CLAUDE_PERMISSION_MODES = {
-  // Override settings defaultMode so the chat runs with its selected permission mode.
-  ask: 'default',
-  'accept-edits': 'acceptEdits',
-  auto: 'auto'
-} as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
-
-/** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
-export function claudeStructuredPermissionOptions(
-  mode: AgentChatPermissionChoice
-): ClaudePermissionOptions {
-  if (mode === 'own') {
-    // An omitted mode lets the CLI apply the user's settings defaultMode.
-    return {}
-  }
-  return mode === 'full-access'
-    ? { extraArgs: { 'dangerously-skip-permissions': null } }
-    : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
-}
-
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
@@ -136,7 +103,7 @@ export type ClaudeStructuredLaunch = {
 }
 
 export type ClaudeStructuredLaunchPartDeps = {
-  resolveLaunchArgs: () => Promise<string[]> | string[]
+  resolveLaunchArgs: (omitEffort?: true) => Promise<string[]> | string[]
   resolveCommand?: ClaudeEnvDeps['resolveCommand']
   /** Explicit policy identifies the account for sign-in errors; use claudeStructuredAuthPolicyForSettings. */
   resolveAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
@@ -219,7 +186,11 @@ export function claudeStructuredLaunchPart(
       resolveWorkingDirectory: () => cwd,
       resolveAuthPolicy: deps.resolveAuthPolicy
     }
+    const omitEffort = record.omitEffort && record.options?.effort === undefined ? true : undefined
     const sources = await resolveClaudeChildEnvSources(envDeps)
+    if (omitEffort) {
+      assertStructuredAgentEffortPrefix('claude', sources.prefixArgs)
+    }
     // Overlap the version probe with remaining launch preparation.
     const probeLaunch = {
       command: sources.command,
@@ -232,7 +203,10 @@ export function claudeStructuredLaunchPart(
       record.sessionId,
       probeLaunch
     )
-    const launchArgs = await deps.resolveLaunchArgs()
+    const resolvedArgs = await deps.resolveLaunchArgs(omitEffort)
+    const launchArgs = omitEffort
+      ? withoutStructuredAgentEffortArgs('claude', resolvedArgs)
+      : resolvedArgs
     const configured = claudeStructuredLaunchArgs(launchArgs)
     const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
     const additionalDirectories = [

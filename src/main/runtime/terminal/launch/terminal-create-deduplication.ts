@@ -188,6 +188,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       prompt: string
       title?: string
       agentArgs?: string | null
+      omitEffort?: true
       sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
@@ -216,6 +217,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         startupAgent: opts.agent,
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
         ...(opts.sessionOptions !== undefined ? { sessionOptions: opts.sessionOptions } : {}),
+        ...(opts.omitEffort ? { omitEffort: opts.omitEffort } : {}),
         ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         ...(prompt && commandPrompt ? { startupPrompt: prompt } : {}),
         startupPromptCarry: 'force-line',

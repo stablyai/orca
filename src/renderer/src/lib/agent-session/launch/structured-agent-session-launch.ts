@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
 import {
   createStructuredAgentSessionLaunchIntent,
@@ -193,6 +194,21 @@ function structuredAgentLaunchState(
   // A fork inherits its source's options.
   intent.explicitLaunchOptions =
     !options.forkFrom && options.launchOptions ? { ...options.launchOptions } : undefined
+  if (options.omitEffort && !options.forkFrom) {
+    const params = { ...intent.params, omitEffort: options.omitEffort }
+    intent.params = {
+      ...params,
+      envelope: {
+        ...params.envelope,
+        payloadFingerprint: structuredAgentSessionCreateFingerprint({
+          sessionId: intent.sessionId,
+          ...params
+        })
+      }
+    }
+    const { effort: _effort, ...seed } = intent.seedOptions ?? {}
+    intent.seedOptions = seed
+  }
   intent.forkRequiresInheritedOriginal = options.forkRequiresInheritedOriginal
   intent.beforeCreate = options.beforeCreate
   intent.createAfter = options.createAfter

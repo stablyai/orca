@@ -37,6 +37,7 @@ type LaunchAgentSessionContinuationArgs = {
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   agentArgs?: string | null
+  omitEffort?: true
 }
 
 /** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
@@ -108,7 +109,8 @@ export async function launchAgentSessionContinuation({
   signal,
   sessionOptions,
   chatSessionOptions,
-  agentArgs
+  agentArgs,
+  omitEffort
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
   // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
@@ -119,6 +121,7 @@ export async function launchAgentSessionContinuation({
     ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {}),
     ...(chatSessionOptions !== undefined ? { chatSessionOptions: { ...chatSessionOptions } } : {}),
     ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(omitEffort ? { omitEffort } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
     promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),

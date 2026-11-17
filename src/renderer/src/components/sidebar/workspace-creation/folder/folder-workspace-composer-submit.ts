@@ -39,6 +39,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
+import { requireAgentLaunchOmitEffort } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 
 export async function submitFolderWorkspaceCreate({
   projectGroup,
@@ -70,6 +71,7 @@ export async function submitFolderWorkspaceCreate({
   const legacyInputs = legacyLaunchInputs ?? launchInputs
   const agentArgs = legacyInputs ? legacyInputs.agentArgs : requestedAgentArgs
   const sessionOptions = launchInputs ? launchInputs.sessionOptions : requestedSessionOptions
+  const omitEffort = launchInputs?.omitEffort
   const chatSessionOptions = launchInputs
     ? launchInputs.chatSessionOptions
     : requestedChatSessionOptions
@@ -110,6 +112,7 @@ export async function submitFolderWorkspaceCreate({
           agentCmdOverrides,
           agentArgs,
           sessionOptions,
+          omitEffort,
           agentEnv,
           platform: launchPlatform,
           shell: launchShell,
@@ -122,6 +125,7 @@ export async function submitFolderWorkspaceCreate({
               settings: effectiveSettings ?? { agentCmdOverrides },
               agentArgs: settings ? agentArgs : (agentArgs ?? null),
               sessionOptions,
+              omitEffort,
               platform: launchPlatform,
               shell: launchShell,
               isRemote: launchIsRemote
@@ -140,6 +144,7 @@ export async function submitFolderWorkspaceCreate({
         agent: quickAgent,
         ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
         ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
+        ...(omitEffort ? { omitEffort } : {}),
         workspace: {
           kind: 'folder' as const,
           runtimeEnvironmentId,
@@ -162,6 +167,10 @@ export async function submitFolderWorkspaceCreate({
   const structuredLaunch = plan?.route === 'structured-native-chat'
   const hostStartsTerminal =
     setupSupported && Boolean(runtimeEnvironmentId) && Boolean(quickAgent) && !structuredLaunch
+  if (quickAgent && runtimeEnvironmentId && !structuredLaunch) {
+    // Why: refuse before creating; a paired host older than Default effort would launch its Settings effort.
+    await requireAgentLaunchOmitEffort(runtimeEnvironmentId, omitEffort)
+  }
   if (quickAgent && !hostStartsTerminal && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)
   }
@@ -196,6 +205,7 @@ export async function submitFolderWorkspaceCreate({
             launchDraftPrompt,
             agentArgs,
             sessionOptions,
+            omitEffort,
             launchSource
           })
         }

@@ -113,6 +113,7 @@ export async function launchAgentWithPrompt(args: {
     agent: resolved.agent,
     ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
     agentArgs: projection.agentArgs,
+    ...(projection.omitEffort ? { omitEffort: projection.omitEffort } : {}),
     surface: projection.requestedSurface,
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource

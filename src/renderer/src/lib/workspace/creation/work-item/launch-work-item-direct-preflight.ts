@@ -1,3 +1,5 @@
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
 import { planAgentCliArgsSuffix } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -89,6 +91,7 @@ export async function planDirectWorkItemLaunch(args: {
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
+  omitEffort?: true
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   launchInputs?: DirectWorkItemLaunchInputs
@@ -109,6 +112,7 @@ export async function planDirectWorkItemLaunch(args: {
   const request: AgentSessionLaunchRequest = {
     requestId: args.requestId,
     agent: prospectiveAgent,
+    omitEffort: args.launchInputs?.omitEffort ?? args.omitEffort,
     workspace: {
       kind: projectContext?.workspaceKind ?? 'git-worktree',
       repoId: args.repoId,
@@ -253,4 +257,20 @@ export function loadDirectWorkItemProjectPreflight(target: RuntimeClientTarget, 
     (context) => ({ context }),
     () => null
   )
+}
+
+export async function captureDirectWorkItemLaunchInputs(
+  target: RuntimeClientTarget,
+  agent: TuiAgent | null,
+  args: LaunchWorkItemDirectArgs
+) {
+  const inputs =
+    agent && args.resolveLaunchInputs ? structuredClone(args.resolveLaunchInputs(agent)) : undefined
+  if (
+    (inputs?.omitEffort ?? args.omitEffort) &&
+    !(await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY))
+  ) {
+    throw new Error('Update Orca on the workspace host to launch with Default effort.')
+  }
+  return inputs
 }

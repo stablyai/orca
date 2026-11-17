@@ -48,8 +48,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
         resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
       resolveCodexCommand: (options) =>
         resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
-      resolveLaunchArgs: (agent) =>
-        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
+      resolveLaunchArgs: (agent, omitEffort) =>
+        structuredAgentConfiguredArgs(
+          agent,
+          this.requireStore().getSettings(),
+          process.platform,
+          omitEffort
+        ),
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>

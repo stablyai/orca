@@ -171,6 +171,7 @@ export async function recordStructuredAgentSessionRanOptions(
         sessionId,
         fence: child.fence,
         model,
+        ...(message?.effort ? { authoredEffort: message.effort } : {}),
         options: ran,
         models: undefined,
         now: context.now()

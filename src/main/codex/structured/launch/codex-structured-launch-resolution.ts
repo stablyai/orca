@@ -1,3 +1,7 @@
+import {
+  assertStructuredAgentEffortPrefix,
+  withoutStructuredAgentEffortArgs
+} from '../../../native-chat/agent-launch/structured-agent-configured-args'
 import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
@@ -42,7 +46,7 @@ import {
 } from '../../../native-chat/agent-session-journal/journal-provider-turn-saved'
 
 export type CodexStructuredLaunchPartDeps = {
-  resolveLaunchArgs: () => Promise<string[]> | string[]
+  resolveLaunchArgs: (omitEffort?: true) => Promise<string[]> | string[]
   savedSession: SavedProviderTurnReads
   /** The selected account's home, prepared for this start in `launchDirectory`; null keeps the record's. */
   prepareLaunchAccountHome?: (
@@ -133,6 +137,7 @@ export function codexStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
   return async (basis) => {
     const { record } = basis
+    const omitEffort = record.omitEffort && record.options?.effort === undefined ? true : undefined
     const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
@@ -141,7 +146,13 @@ export function codexStructuredLaunchPart(
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
-    const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    if (omitEffort) {
+      assertStructuredAgentEffortPrefix('codex', prefixArgs)
+    }
+    const resolvedArgs = await deps.resolveLaunchArgs(omitEffort)
+    const args = codexStructuredLaunchArgs(
+      omitEffort ? withoutStructuredAgentEffortArgs('codex', resolvedArgs) : resolvedArgs
+    )
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.nativeId ?? null
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
@@ -188,6 +199,7 @@ export function codexStructuredLaunchPart(
           'app-server'
         ],
         codexHome: accountHome.path,
+        ...(omitEffort ? { omitEffort } : {}),
         resumeThreadId,
         ...(supersedeIfUnsaved ? { supersedeIfUnsaved } : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.

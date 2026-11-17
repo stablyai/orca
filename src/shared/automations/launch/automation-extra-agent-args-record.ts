@@ -34,9 +34,10 @@ export function assertAutomationExtraAgentArgs(
   const setup = automationCanonicalLaunchSetup(automation)
   const views = automationLaunchInputs(automation.agentId, setup)
   const consumed =
-    setup.surface === 'chat'
+    views.omitEffort ||
+    (setup.surface === 'chat'
       ? Object.keys(views.chatSessionOptions ?? {}).length > 0
-      : setup.agentArgs !== undefined || Object.keys(views.sessionOptions ?? {}).length > 0
+      : setup.agentArgs !== undefined || Object.keys(views.sessionOptions ?? {}).length > 0)
   if (automation.reuseSession && consumed) {
     throw new Error('Agent launch settings require a fresh session for every run.')
   }

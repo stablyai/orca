@@ -147,6 +147,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       createdWithAgent?: TuiAgent
       startupAgentArgs?: string | null
       startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
+      startupOmitEffort?: true
       startupLaunchPreferences?: AgentLaunchPreferences
     }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
@@ -158,6 +159,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       draft,
       originalAgent: inputs?.createdWithAgent ?? requestedAgent,
       agentArgs: inputs?.startupAgentArgs,
+      ...(inputs?.startupOmitEffort ? { omitEffort: inputs.startupOmitEffort } : {}),
       sessionOptions:
         inputs?.startupSessionOptions ??
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
@@ -175,6 +177,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     launchPreferences?: AgentLaunchPreferences,
     launchInputs?: {
       agentArgs?: string | null
+      omitEffort?: true
       sessionOptions?: Parameters<typeof buildWorktreeStartupForAgent>[0]['sessionOptions']
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
@@ -194,6 +197,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
       ...(launchInputs?.sessionOptions ? { sessionOptions: launchInputs.sessionOptions } : {}),
+      ...(launchInputs?.omitEffort ? { omitEffort: launchInputs.omitEffort } : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),

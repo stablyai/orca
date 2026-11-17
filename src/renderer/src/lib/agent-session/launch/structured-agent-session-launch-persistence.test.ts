@@ -10,7 +10,8 @@ import {
   writeStructuredAgentLaunchRecord,
   markStructuredAgentLaunchCancelledPersisted
 } from './structured-agent-session-launch-persistence'
-import './structured-agent-session-launch-record'
+import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 const SERVER = 'runtime:server-1'
 function reload(): void {
@@ -112,5 +113,35 @@ describe('structured agent launch persistence', () => {
     ).toEqual(['local_session'])
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('local_session')).toBe(false)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('remote_session')).toBe(true)
+  })
+})
+
+it('retains Default omission in an uncertain launch across reload', () => {
+  const intent: StructuredAgentSessionLaunchIntent = {
+    sessionId: 'default_session',
+    worktreeId: 'workspace-1',
+    executionHostId: 'local',
+    target: { kind: 'local' },
+    agent: 'claude',
+    params: {
+      envelope: {
+        sessionId: 'default_session',
+        clientOperationId: 'operation-default',
+        expectedRuntimeFence: null,
+        payloadFingerprint: 'default-fingerprint'
+      },
+      worktree: 'id:workspace-1',
+      agent: 'claude',
+      omitEffort: true,
+      options: { model: 'opus' }
+    }
+  }
+  writeStructuredAgentLaunchRecord(structuredAgentLaunchRecordFor(intent, 'pending'))
+  reload()
+  expect(readStructuredAgentLaunchRecord('default_session')).toMatchObject({
+    lifecycle: 'visibility-unknown',
+    omitEffort: true,
+    options: { model: 'opus' },
+    payloadFingerprint: 'default-fingerprint'
   })
 })

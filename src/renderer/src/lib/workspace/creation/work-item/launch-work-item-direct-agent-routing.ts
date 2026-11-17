@@ -35,6 +35,7 @@ import {
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  omitEffort?: true
   sessionOptions?: Readonly<Record<string, string>>
   sessionOptionsYieldToAgentArgs?: true
   draftContent: string
@@ -50,6 +51,7 @@ export function buildDirectWorkItemStartup(args: {
   return buildDirectWorkItemAgentStartupPlan({
     agent: args.agent,
     agentArgs: args.agentArgs,
+    omitEffort: args.omitEffort,
     sessionOptions: args.sessionOptions,
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     draftContent: args.draftContent,

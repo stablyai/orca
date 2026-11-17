@@ -188,6 +188,9 @@ export function buildRuntimeWorktreeCreateParams(
           ...(creationAgentLaunch.inputs?.sessionOptions
             ? { startupSessionOptions: creationAgentLaunch.inputs.sessionOptions }
             : {}),
+          ...(creationAgentLaunch.inputs?.omitEffort
+            ? { startupOmitEffort: creationAgentLaunch.inputs.omitEffort }
+            : {}),
           ...(toAgentLaunchPreferences(
             creationAgentLaunch.inputs?.sessionOptions,
             creationAgentLaunch.agent

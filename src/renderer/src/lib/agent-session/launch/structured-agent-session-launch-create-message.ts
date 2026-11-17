@@ -70,9 +70,26 @@ export function prepareStructuredLaunchCreateMessage(
     intent.beforeCreate = () =>
       beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
   }
-  const { options: requested, selection } = structuredLaunchCreateOptions(state)
+  const launchChoices = structuredLaunchCreateOptions(state)
+  if (intent.params.omitEffort) {
+    const explicitEffort =
+      structuredLaunchOptionOverlay(state).effort ?? state.selection.explicit?.effort
+    if (explicitEffort !== undefined) {
+      delete intent.params.omitEffort
+    } else {
+      if (launchChoices.options) {
+        const { effort: _effort, ...kept } = launchChoices.options
+        launchChoices.options = kept
+      }
+      if (launchChoices.selection) {
+        const { effort: _effort, ...kept } = launchChoices.selection
+        launchChoices.selection = kept
+      }
+    }
+  }
+  const { options: requested, selection } = launchChoices
   const options =
-    requested && state.selection.explicit && !optionsMode
+    requested && state.selection.explicit && !optionsMode && !intent.params.omitEffort
       ? structuredLaunchCompatibleOptions(intent.agent, requested)
       : requested
   const params = {

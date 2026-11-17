@@ -22,6 +22,7 @@ import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { requireAgentLaunchOmitEffort } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
 export type QuickComposerStartupInput = {
@@ -56,6 +57,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           settings: settings ?? {},
           agentArgs: input.launchInputs?.agentArgs,
           sessionOptions: input.launchInputs?.sessionOptions,
+          omitEffort: input.launchInputs?.omitEffort,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
@@ -148,6 +150,10 @@ export async function prepareQuickComposerStartup(
       launchInputs: input.legacyLaunchInputs ?? input.launchInputs
     })
   const host = parseExecutionHostId(input.executionHostId)
+  if (input.agent && host?.kind === 'runtime' && !input.ephemeralVm) {
+    // Why: a paired host older than Default effort would relaunch its Settings effort.
+    await requireAgentLaunchOmitEffort(host.environmentId, input.launchInputs?.omitEffort)
+  }
   const hostComposes =
     (input.launchInputs !== undefined || Boolean(draftPrompt)) &&
     !input.ephemeralVm &&
@@ -165,6 +171,7 @@ export async function prepareQuickComposerStartup(
           settings: { agentLaunchChoices: settings?.agentLaunchChoices },
           agentArgs: input.launchInputs?.agentArgs,
           sessionOptions: input.launchInputs?.sessionOptions,
+          omitEffort: input.launchInputs?.omitEffort,
           shell: resolveStartupShell(
             requireExecutionHostPlatform(input.launchHost),
             input.shell ?? undefined

@@ -48,6 +48,9 @@ export async function spawnIpcPty(
           prompt: transportOptions.agentPrompt,
           promptDelivery: transportOptions.agentPromptDelivery,
           agentArgs: transportOptions.agentArgsOverride,
+          ...(transportOptions.freshAgentLaunch?.omitEffort
+            ? { omitEffort: transportOptions.freshAgentLaunch.omitEffort }
+            : {}),
           launchPreferences: transportOptions.agentLaunchPreferences,
           startupCwd: transportOptions.cwd,
           ...(transportOptions.trustWorktreeId

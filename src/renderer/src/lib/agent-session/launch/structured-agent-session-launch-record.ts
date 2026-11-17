@@ -58,6 +58,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   forkFrom?: StructuredAgentSessionForkSource
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>
+  omitEffort?: true
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   createMessageSupport?: boolean
@@ -71,7 +72,8 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, forkFrom, firstMessage, optionsMode, options } = intent.params
+  const { envelope, resumeFrom, forkFrom, firstMessage, omitEffort, optionsMode, options } =
+    intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -86,6 +88,7 @@ export function structuredAgentLaunchRecordFor(
     ...(resumeFrom ? { resumeFrom } : {}),
     ...(forkFrom ? { forkFrom } : {}),
     ...(firstMessage ? { firstMessage } : {}),
+    ...(omitEffort ? { omitEffort } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
     ...(intent.explicitLaunchOptions
@@ -146,6 +149,7 @@ export function validRecord(value: unknown): value is Omit<
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
     (failedAt === undefined || Number.isFinite(failedAt)) &&
     (firstMessage === undefined || validFirstMessage(firstMessage)) &&
+    (!('omitEffort' in value) || value.omitEffort === undefined || value.omitEffort === true) &&
     (optionsMode === undefined || optionsMode === 'replace-model-selection') &&
     (options === undefined || isAgentSessionOptions(options)) &&
     (!('explicitLaunchOptions' in value) ||

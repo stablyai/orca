@@ -40,6 +40,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
+  /** Explicit Default effort: the host drops inherited effort when it composes the launch. */
+  omitEffort?: true
   launchPreferences?: AgentLaunchPreferences
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string

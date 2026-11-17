@@ -1,3 +1,4 @@
+import { assertStructuredAgentEffortCommand } from '../../../native-chat/agent-launch/structured-agent-configured-args'
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -158,7 +159,13 @@ async function composedPart<L>(
     launchEnv,
     environment: () => environments.agent(),
     visuals: once(async () => (await sources.prepareVisuals?.(record.sessionId)) ?? null),
-    commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
+    commandSettings: once(() => {
+      const settings = sources.resolveCommandSettings?.() ?? {}
+      if (record.omitEffort && record.options?.effort === undefined) {
+        assertStructuredAgentEffortCommand(definition.agent, settings)
+      }
+      return settings
+    }),
     ...(refresh
       ? {
           refreshAfterMissingProgram: async (askedAt) => {

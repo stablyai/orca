@@ -48,6 +48,7 @@ async function agentLaunchIntent(
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
     ...(params.chatOptions ? { chatOptions: params.chatOptions } : {}),
+    ...(params.omitEffort ? { omitEffort: params.omitEffort } : {}),
     ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
     // `null` means "no arguments" and must survive; only absence falls back to the settings default.
     ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),

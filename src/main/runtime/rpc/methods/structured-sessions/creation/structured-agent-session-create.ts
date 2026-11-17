@@ -1,12 +1,15 @@
-import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
-import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { commitStructuredAgentSessionCreate } from './structured-agent-session-create-commit'
+export { commitStructuredAgentSessionCreate } from './structured-agent-session-create-commit'
+import {
+  assertStructuredAgentEffortCommand,
+  structuredAgentConfiguredArgs
+} from '../../../../../native-chat/agent-launch/structured-agent-configured-args'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
 import { assertAgentPromptRequestActive } from '../../../../terminal/input/agent-prompt-signals'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
-  refuse,
   agentSessionRefusalError,
   AgentSessionRefusalError
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -36,9 +39,6 @@ import {
 } from '../../../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
-import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
-import type { ChatTabPlacement } from '../../../../session-tabs/chat/agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -60,6 +60,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
+  omitEffort?: true
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
 }): string {
@@ -74,7 +75,8 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
       tabId: params.tabId,
       firstMessage: params.firstMessage,
       optionsMode: params.optionsMode,
-      options: params.options
+      options: params.options,
+      omitEffort: params.omitEffort
     }
   })
 }
@@ -91,6 +93,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  omitEffort?: true
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
@@ -100,7 +103,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
   const fork = args.forkFrom
-  if (fork && (args.resumeFrom || args.options || args.optionsMode || args.atRest !== true)) {
+  if (
+    fork &&
+    (args.resumeFrom || args.options || args.omitEffort || args.optionsMode || args.atRest !== true)
+  ) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
     })
@@ -125,16 +131,31 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
     ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
   })
+  const omitEffort =
+    (args.omitEffort ?? resolved.omitEffort) && args.options?.effort === undefined
+      ? true
+      : undefined
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
+    fields: attachFingerprintFields({
+      ...resolved,
+      ...(omitEffort ? { omitEffort } : {}),
+      envelope: args.envelope
+    })
   })
   host ??= await args.ensureHost()
   const priorOperation =
     args.atRest === undefined
       ? null
       : host.deps.store.getOperationRow(args.caller.callerKey, args.envelope.clientOperationId)
+  if (omitEffort && priorOperation?.outcome.status !== 'succeeded') {
+    const settings = args.runtime.requireStore().getSettings()
+    assertStructuredAgentEffortCommand(args.agent, settings)
+    if (args.agent === 'claude' || args.agent === 'codex') {
+      structuredAgentConfiguredArgs(args.agent, settings, process.platform, true)
+    }
+  }
   // A capability update cannot change the contract of an already-recorded create.
   const legacyReplay =
     args.firstMessage === undefined &&
@@ -155,7 +176,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       throw new AgentSessionRefusalError(refusal)
     }
   }
-  const { agent: _agent, provider: _provider, hostLaunchDirectory, ...resolvedAttach } = resolved
+  const {
+    agent: _agent,
+    provider: _provider,
+    omitEffort: _resolvedOmitEffort,
+    hostLaunchDirectory,
+    ...resolvedAttach
+  } = resolved
   // Fingerprint explicit picks, never replay-varying defaults; explicit options replace saved seeds, while permission default stays chat-owned.
   const overlays = atRest
     ? args.optionsMode !== 'replace-model-selection'
@@ -165,123 +192,44 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       ? { ...resolved.options, ...args.options }
       : { ...seededPermissionMode(resolved.options), ...args.options }
     : resolved.options
+  const options = { ...picked }
+  if (omitEffort) {
+    delete options.effort
+  }
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      ...(picked ? { options: picked } : {}),
+      ...(picked ? { options } : {}),
+      ...(omitEffort ? { omitEffort } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
-    ...(atRest ? { atRest: args.firstMessage ? { firstMessage: args.firstMessage } : {} } : {}),
+    ...(atRest
+      ? {
+          atRest: args.firstMessage
+            ? {
+                firstMessage: {
+                  ...args.firstMessage,
+                  ...(omitEffort && args.firstMessage.selection
+                    ? {
+                        selection: Object.fromEntries(
+                          Object.entries(args.firstMessage.selection).filter(
+                            ([key]) => key !== 'effort'
+                          )
+                        )
+                      }
+                    : {})
+                }
+              }
+            : {}
+        }
+      : {}),
     tab: { workspaceId: resolved.location.workspaceId, agent: resolved.agent }
   }
-}
-
-/** The commit half. Past `attach`, a failure no longer proves the session does not exist. */
-export async function commitStructuredAgentSessionCreate(args: {
-  runtime: OrcaRuntimeService
-  caller: StructuredAgentSessionCaller
-  prepared: PreparedStructuredAgentSessionCreate
-  activate: boolean
-  capture?: (surface: StructuredSessionSurface) => void
-  /** This machine's window made the create and opens the chat's tab where it reserved it. */
-  placedByWindow?: boolean
-  /** Where the creating client opens the chat, in this host's ids. */
-  tabPlacement?: ChatTabPlacement
-}): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  const { prepared } = args
-  const tab = prepared.tab
-  const tabPlace = {
-    ...(args.capture ? { capture: args.capture } : {}),
-    ...(args.placedByWindow ? { placedByWindow: true } : {}),
-    ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
-  }
-  if (prepared.atRest) {
-    return prepared.host.create(args.caller, prepared.attachParams, {
-      ...prepared.atRest,
-      ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
-      ...(prepared.hostLaunchDirectory
-        ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
-        : {}),
-      ...(tab
-        ? {
-            // A chat closed while it was being made gets no tab to show before main closes it.
-            publishTab: () => {
-              const sessionId = prepared.attachParams.envelope.sessionId
-              const tableId =
-                prepared.attachParams.surfaceTabId ?? structuredAgentSessionTabId(sessionId)
-              args.capture?.({ tableId, presentation: { raw: null, saved: [] } })
-              if (
-                ORCA_LAYOUT_OWNER_IS_MAIN &&
-                structuredAgentSessionClosedBeforeCreate(sessionId)
-              ) {
-                return Promise.resolve()
-              }
-              return args.runtime.publishStructuredAgentSessionTab({
-                workspaceId: tab.workspaceId,
-                sessionId,
-                agent: tab.agent,
-                activate: args.activate,
-                ...tabPlace,
-                ...(prepared.attachParams.surfaceTabId
-                  ? { tabId: prepared.attachParams.surfaceTabId }
-                  : {})
-              })
-            }
-          }
-        : {})
-    })
-  }
-  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
-    ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
-    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {})
-  })
-  if (!result.ok || !prepared.tab) {
-    return result
-  }
-  const surfaceTabId =
-    result.value.tabId ??
-    prepared.attachParams.surfaceTabId ??
-    structuredAgentSessionTabId(result.value.sessionId)
-  args.capture?.({ tableId: surfaceTabId, presentation: { raw: null, saved: [] } })
-  // A chat closed while it was being made gets no tab to show before main closes it.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
-  ) {
-    return result
-  }
-  try {
-    await args.runtime.publishStructuredAgentSessionTab({
-      workspaceId: prepared.tab.workspaceId,
-      sessionId: result.value.sessionId,
-      agent: prepared.tab.agent,
-      activate: args.activate,
-      ...tabPlace,
-      ...(surfaceTabId ? { tabId: surfaceTabId } : {})
-    })
-  } catch (error) {
-    prepared.host.deps.logger.warn('publishing the tab of a created chat failed', {
-      scope: 'create-tab-publication',
-      sessionId: result.value.sessionId,
-      error
-    })
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_unknown',
-        { reason: 'tabUnconfirmed' },
-        'The chat may have been created, but its tab could not be confirmed.'
-      )
-    }
-  }
-  // Read after publishing, which is what gives the chat its tab.
-  const tabId = prepared.host.getSessionTabId?.(result.value.sessionId)
-  return tabId ? { ...result, value: { ...result.value, tabId } } : result
 }
 
 export async function createStructuredAgentSessionForWorktree(args: {
@@ -292,6 +240,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   activate: boolean
+  omitEffort?: true
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   tabId?: string

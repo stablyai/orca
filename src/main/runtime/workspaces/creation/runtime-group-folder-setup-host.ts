@@ -71,6 +71,7 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
             requestedAgent,
             originalAgent: inputs?.createdWithAgent ?? requestedAgent,
             agentArgs: inputs?.startupAgentArgs,
+            ...(inputs?.startupOmitEffort ? { omitEffort: inputs.startupOmitEffort } : {}),
             sessionOptions:
               inputs?.startupSessionOptions ??
               this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
