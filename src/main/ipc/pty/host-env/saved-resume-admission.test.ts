@@ -12,6 +12,7 @@ await import('../../../runtime/orca-runtime-tests/runtime-test-module-registrati
 await import('../../../runtime/orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { OrcaRuntimeService } = await import('../../../runtime/orca-runtime')
 const { AgentHookServer } = await import('../../../agent-hooks/server/agent-hook-server')
+const { postHookEvent } = await import('../../../agent-hooks/server/testing/server.test-fixtures')
 const { retireRestoredStatusesWithDeadTerminals } =
   await import('../../../agent-hooks/observations/restored-status-dead-terminal-sweep')
 const { makeRuntimeStoreWithWorkspaceSession } =
@@ -232,6 +233,99 @@ describe('automatic saved provider-session resume admission', () => {
     })
     expect(resumed.spawnOptions.command).toBeUndefined()
   })
+
+  it('does not revive dropped background work when a Stop hook follows confirmed exit', async () => {
+    const server = new AgentHookServer()
+    servers.push(server)
+    await server.start({ env: 'production' })
+    server.ingestRemote(
+      {
+        paneKey: LIVE_PANE,
+        worktreeId: 'folder-workspace',
+        claudeRunningNonAgentTask: true,
+        payload: { state: 'working', prompt: 'background work', agentType: 'claude' }
+      },
+      null
+    )
+    expect(server.getStatusSnapshotForPane(LIVE_PANE)).toMatchObject([
+      {
+        state: 'working',
+        receivedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000
+      }
+    ])
+    expect(server.getStatusSnapshotForPane(LIVE_PANE)[0]?.providerSession).toBeUndefined()
+    server.dropStatusEntry(LIVE_PANE)
+    expect(server.getStatusSnapshotForPane(LIVE_PANE)).toEqual([])
+
+    server.reconcileEndedProcessForPaneKeys([LIVE_PANE], {
+      preserveResumeIdentity: true,
+      processExitConfirmed: true,
+      expectedStatus: {
+        paneKey: LIVE_PANE,
+        receivedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000
+      }
+    })
+
+    vi.setSystemTime(1_800_000_001_000)
+    const response = await postHookEvent(server, {
+      paneKey: LIVE_PANE,
+      worktreeId: 'folder-workspace',
+      env: 'production',
+      payload: { hook_event_name: 'Stop' }
+    })
+    expect(response.status).toBe(204)
+    expect(server.getStatusSnapshotForPane(LIVE_PANE)).toMatchObject([
+      { paneKey: LIVE_PANE, state: 'done', mainAgent: { state: 'done' } }
+    ])
+  })
+
+  it.each([true, false])(
+    'preserves a newer active hook row on stale confirmed exit (preserveResumeIdentity=%s)',
+    async (preserveResumeIdentity) => {
+      const f = fixture()
+      vi.setSystemTime(1_800_000_001_000)
+      f.server.ingestRemote(
+        {
+          paneKey: LIVE_PANE,
+          worktreeId: 'folder-workspace',
+          providerSession: { key: 'session_id', id: 'conversation-new' },
+          payload: { state: 'working', prompt: 'new turn', agentType: 'claude' }
+        },
+        null
+      )
+      f.server.reconcileEndedProcessForPaneKeys([LIVE_PANE], {
+        preserveResumeIdentity,
+        processExitConfirmed: true,
+        expectedStatus: {
+          paneKey: LIVE_PANE,
+          receivedAt: 1_800_000_000_000,
+          stateStartedAt: 1_800_000_000_000
+        }
+      })
+      expect(f.server.getStatusSnapshotForPane(LIVE_PANE)).toMatchObject([
+        {
+          paneKey: LIVE_PANE,
+          providerSession: { key: 'session_id', id: 'conversation-new' },
+          state: 'working',
+          prompt: 'new turn',
+          receivedAt: 1_800_000_001_000,
+          stateStartedAt: 1_800_000_001_000
+        }
+      ])
+      expect(f.server.getStatusSnapshotForPane(LIVE_PANE)[0]?.providerSessionOnly).toBeUndefined()
+      const resumed = await f.attempt({
+        resumeProviderSession: { key: 'session_id', id: 'conversation-new' },
+        command: 'claude --resume conversation-new'
+      })
+      expect(savedResumeResult(resumed.admission)).toMatchObject({
+        agentResumeUnavailable: true,
+        agentResumeRefused: 'unverifiable'
+      })
+      expect(resumed.spawnOptions.command).toBeUndefined()
+    }
+  )
 
   it('keeps ownership unverifiable without a liveness probe even when hasPty returns false', async () => {
     const f = fixture()

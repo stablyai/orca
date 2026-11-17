@@ -32,11 +32,8 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null {
-    if (
-      !entry?.providerSession ||
-      !entry.payload.agentType ||
-      entry.payload.agentType === 'unknown'
-    ) {
+    const agentType = entry?.payload.agentType
+    if (!entry?.providerSession || !agentType || agentType === 'unknown') {
       return null
     }
     const { launchToken: _launchToken, paneSleep: _paneSleep, ...resumeIdentity } = entry
@@ -118,7 +115,19 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      if (this.preservesStoppingDone(resolvedPaneKey)) {
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      const canonical = previous ?? this.getTmuxSelectedStatus(resolvedPaneKey)
+      if (
+        this.preservesStoppingDone(resolvedPaneKey) ||
+        (options?.expectedStatus &&
+          canonical &&
+          !matchesAgentStatusCacheIdentity(canonical, {
+            ...options.expectedStatus,
+            paneKey: this.resolvePaneKeyAlias(options.expectedStatus.paneKey)
+          }))
+      ) {
         untouched.push(resolvedPaneKey)
         continue
       }
@@ -137,20 +146,10 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
       const retained = options?.preserveResumeIdentity
         ? this.toRetainedProviderSessionRow(previous)
         : null
-      const processExitConfirmed =
-        options?.processExitConfirmed === true &&
-        (!options.expectedStatus ||
-          matchesAgentStatusCacheIdentity(retained, {
-            ...options.expectedStatus,
-            paneKey: this.resolvePaneKeyAlias(options.expectedStatus.paneKey)
-          }))
-      if (retained && (options?.endedPresence || processExitConfirmed)) {
+      if (retained && (options?.endedPresence || options?.processExitConfirmed === true)) {
         const presence = options?.endedPresence ?? retained.agentPresence
         retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
       }
