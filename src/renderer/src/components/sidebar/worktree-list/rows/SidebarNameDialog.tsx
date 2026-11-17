@@ -12,25 +12,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 
-type ProjectGroupNameDialogProps = {
+type SidebarNameDialogProps = {
   open: boolean
   title: string
   description: string
+  label?: string
   initialName: string
   confirmLabel: string
   onOpenChange: (open: boolean) => void
   onSubmit: (name: string) => Promise<void> | void
 }
 
-export function ProjectGroupNameDialog({
+export function SidebarNameDialog({
   open,
   title,
   description,
+  label,
   initialName,
   confirmLabel,
   onOpenChange,
   onSubmit
-}: ProjectGroupNameDialogProps): React.JSX.Element {
+}: SidebarNameDialogProps): React.JSX.Element {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
@@ -72,7 +74,7 @@ export function ProjectGroupNameDialog({
           onOpenChange(false)
         }
       } catch (error) {
-        console.error('Failed to save project group name:', error)
+        console.error('Failed to save sidebar name:', error)
         if (mountedRef.current) {
           setSubmitting(false)
         }
@@ -99,7 +101,8 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+              {label ??
+                t('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}

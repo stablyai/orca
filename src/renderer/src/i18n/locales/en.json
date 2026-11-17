@@ -7907,7 +7907,10 @@
           "hostVmSetupFailed": "Setup failed",
           "hostVmSuspended": "Suspended",
           "hostVmWaking": "Waking…",
-          "hostVmProvisioning": "Provisioning…"
+          "hostVmProvisioning": "Provisioning…",
+          "projectRenameAction": "Rename Project",
+          "projectRenameFailed": "Failed to rename project",
+          "projectRenameFailedDesc": "Orca could not confirm the new name with the project's host. Recheck the project after reconnecting."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -8659,6 +8662,11 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "ProjectRenameDialog": {
+          "title": "Rename Project",
+          "description": "Update the project name shown in the sidebar.",
+          "label": "Project name"
         }
       },
       "shared": {

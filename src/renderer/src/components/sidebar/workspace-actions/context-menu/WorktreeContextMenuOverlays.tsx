@@ -1,4 +1,4 @@
-import { ProjectGroupNameDialog } from '../../worktree-list/rows/ProjectGroupNameDialog'
+import { SidebarNameDialog } from '../../worktree-list/rows/SidebarNameDialog'
 import { WorktreeParentPickerPopover } from '../parenting/WorktreeParentPickerPopover'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
@@ -7,7 +7,7 @@ export function WorktreeContextMenuOverlays({ model }: { model: WorktreeContextM
   const t = useTranslate()
   return (
     <>
-      <ProjectGroupNameDialog
+      <SidebarNameDialog
         open={model.createGroupDialogOpen}
         title={t('auto.components.sidebar.WorktreeContextMenu.6664418e98', 'New Project Group')}
         description={t(
