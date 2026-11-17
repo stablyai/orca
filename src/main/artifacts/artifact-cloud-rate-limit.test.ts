@@ -2,11 +2,24 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as SecureFile from '../../shared/secure-storage/secure-file'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+// Rate-limit timing runs on fake timers; durable artifact writes skip the real async disk wait.
+vi.mock('../../shared/secure-storage/secure-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof SecureFile>()
+  return {
+    ...actual,
+    writeDurableSecureFile: async (
+      ...[path, contents, options]: Parameters<typeof actual.writeDurableSecureFile>
+    ) => actual.writeSecureFile(path, contents, { ...options, durable: true }),
+    bestEffortFsyncDirectory: async (directory: string) =>
+      actual.bestEffortFsyncDirectorySync(directory)
+  }
+})
 
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-cloud-index'
