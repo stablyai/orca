@@ -38,6 +38,8 @@ import {
 } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { getUsageOwnerHostScope } from './usage/use-owner-usage-rate-limits'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { GitBlameStatusSegment } from './GitBlameStatusSegment'
@@ -96,7 +98,6 @@ export function StatusBarSurface({
     isRefreshing,
     overflowing,
     ownerUsage,
-    ownerUsageKey,
     petEnabled,
     remoteOwner,
     rosterProviders,
@@ -259,7 +260,9 @@ export function StatusBarSurface({
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
-                            key={ownerUsageKey}
+                            key={getProviderAccountsOwnerKey(
+                              getUsageOwnerHostScope(ownerUsage.remoteOwner)
+                            )}
                             codex={p}
                             ownerUsage={ownerUsage}
                             compact={compact}

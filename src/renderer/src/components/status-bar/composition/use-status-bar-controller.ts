@@ -20,7 +20,6 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
-import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -303,7 +302,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     menuPoint,
     overflowing,
     ownerUsage,
-    ownerUsageKey: getProviderAccountsOwnerKey(hostScope),
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
