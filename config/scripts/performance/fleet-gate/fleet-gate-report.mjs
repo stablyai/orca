@@ -80,6 +80,52 @@ export function compareRuns(runs, scenarios) {
   return rows
 }
 
+/** Launch bursts are absolute: any NEW chat that doesn't start fails, whatever OLD did (OLD is shown for contrast). */
+export function burstRows(bursts) {
+  const byArm = Object.fromEntries(bursts.map((burst) => [burst.arm, burst]))
+  const metrics = [
+    {
+      label: 'mid-turn chats quit',
+      read: (burst) => burst.midTurnLaunched,
+      bad: (burst) => burst.midTurnLaunched < (burst.midTurn?.requested ?? 0)
+    },
+    {
+      label: 'restart offers',
+      read: (burst) => burst.continuation?.offered,
+      bad: (burst) => (burst.continuation?.offered ?? 0) === 0
+    },
+    {
+      label: 'continuations started',
+      read: (burst) => burst.continuationLaunched,
+      bad: (burst) =>
+        burst.continuationLaunched < (burst.continuation?.offered ?? 0) ||
+        (burst.continuation?.problems?.length ?? 0) > 0
+    },
+    {
+      label: 'cold launches started',
+      read: (burst) => burst.coldLaunched,
+      bad: (burst) =>
+        burst.coldLaunched < (burst.cold?.requested ?? 0) || (burst.cold?.refused?.length ?? 0) > 0
+    },
+    {
+      label: 'ownership refusals',
+      read: (burst) => burst.ownershipRefusals,
+      bad: (burst) => burst.ownershipRefusals > 0
+    }
+  ]
+  return metrics.map((metric) => {
+    const oldBurst = byArm.old
+    const newBurst = byArm.new
+    return {
+      scenario: 'burst',
+      metric: { label: metric.label },
+      old: oldBurst ? (metric.read(oldBurst) ?? '—') : null,
+      new: newBurst ? (metric.read(newBurst) ?? '—') : null,
+      verdict: !newBurst ? 'n/a' : metric.bad(newBurst) ? 'FAIL' : 'ok'
+    }
+  })
+}
+
 export function formatTable({ rows, header, notes }) {
   const lines = [header]
   const widths = [10, 22, 10, 10]

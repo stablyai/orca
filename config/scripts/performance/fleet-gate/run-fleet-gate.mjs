@@ -10,7 +10,18 @@ import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-ben
 import { hotPathChanges } from './fleet-gate-hot-paths.mjs'
 import { installMainProbeIn, resetMainProbe, snapshotMainProbe } from './fleet-gate-main-probe.mjs'
 import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
-import { compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
+import { burstRows, compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
+import {
+  BURST_CHATS,
+  continueAfterRestart,
+  countLaunches,
+  countOwnershipRefusals,
+  createChatBurst,
+  startCpuLoad,
+  pointClaudeAtStub,
+  waitForLaunches,
+  writeClaudeStub
+} from './fleet-gate-launch-burst.mjs'
 import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
@@ -34,7 +45,7 @@ function parseArgs(argv) {
     settleMs: 120_000,
     windowMs: 30_000,
     idleWindowMs: 60_000,
-    scenarios: Object.keys(SCENARIOS),
+    scenarios: [...Object.keys(SCENARIOS), 'burst'],
     force: false,
     pathsOnly: false,
     out: null
@@ -68,7 +79,7 @@ function parseArgs(argv) {
     setters[arg]()
   }
   for (const name of options.scenarios) {
-    if (!SCENARIOS[name]) {
+    if (!SCENARIOS[name] && name !== 'burst') {
       throw new Error(`unknown scenario ${name}; known: ${Object.keys(SCENARIOS).join(', ')}`)
     }
   }
@@ -322,19 +333,24 @@ async function waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
 }
 
 /** Launches one hidden copy on userDataDir; close() quits it (gracefully first) and is safe to call twice. */
-async function launchCopy({ buildDir, runDir, userDataDir, label, outDir }) {
+async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraEnv = {} }) {
   const executablePath = createRequire(path.join(buildDir, 'package.json'))('electron')
   const app = await electron.launch({
     executablePath,
     args: launchArgs(buildDir),
-    env: isolatedEnv(runDir, userDataDir),
+    env: { ...isolatedEnv(runDir, userDataDir), ...extraEnv },
     timeout: 180_000
   })
   // Captured now: app.process() throws once the app object is closed.
   const child = app.process()
   const stderrTail = []
+  let ownershipText = ''
   child.stderr?.on('data', (chunk) => {
-    stderrTail.push(...String(chunk).split('\n').filter(Boolean))
+    const text = String(chunk)
+    if (/provider process ownership/i.test(text)) {
+      ownershipText += text
+    }
+    stderrTail.push(...text.split('\n').filter(Boolean))
     stderrTail.splice(0, Math.max(0, stderrTail.length - 40))
   })
   let closed = false
@@ -353,11 +369,66 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir }) {
   }
   try {
     const page = await waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
-    return { app, page, close }
+    return { app, page, close, ownershipText: () => ownershipText }
   } catch (error) {
     await close()
     throw error
   }
+}
+
+/** Quit with chats mid-turn, restart under load and continue them all, then a cold burst: every launch must start. */
+async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot }) {
+  const userDataDir = path.join(runDir, 'user-data')
+  fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  const stub = writeClaudeStub(path.join(runDir, 'stub'), repoRoot)
+  const extraEnv = {
+    PATH: [path.dirname(stub.command), process.env.PATH ?? ''].join(path.delimiter)
+  }
+  const label = `burst-${arm}-${sha.slice(0, 11)}`
+  const copy = (suffix) =>
+    launchCopy({ buildDir, runDir, userDataDir, label: `${label}-${suffix}`, outDir, extraEnv })
+  const result = { arm, sha }
+  let stderrOwnership = ''
+  const first = await copy('mid-turn')
+  try {
+    await pointClaudeAtStub(first.page, stub.command)
+    // The stub keeps a prompt containing "slow" running until interrupted, so these chats quit mid-turn.
+    result.midTurn = await createChatBurst(first.page, BURST_CHATS, 0, 'slow fleet gate turn')
+    result.midTurnLaunched = await waitForLaunches(stub.launchLog, BURST_CHATS)
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+  } finally {
+    stderrOwnership += first.ownershipText()
+    await first.close()
+  }
+  const stopLoad = startCpuLoad(repoRoot)
+  try {
+    const second = await copy('restart')
+    try {
+      const before = countLaunches(stub.launchLog)
+      result.continuation = await continueAfterRestart(second.page)
+      const expected = result.continuation.offered || BURST_CHATS
+      result.continuationLaunched =
+        (await waitForLaunches(stub.launchLog, before + expected)) - before
+      const coldBefore = countLaunches(stub.launchLog)
+      result.cold = await createChatBurst(
+        second.page,
+        BURST_CHATS,
+        BURST_CHATS,
+        'fleet gate cold turn'
+      )
+      result.coldLaunched =
+        (await waitForLaunches(stub.launchLog, coldBefore + BURST_CHATS)) - coldBefore
+    } finally {
+      stderrOwnership += second.ownershipText()
+      await second.close()
+    }
+  } finally {
+    stopLoad()
+  }
+  result.ownershipRefusals = countOwnershipRefusals(stderrOwnership, userDataDir)
+  fs.rmSync(runDir, { recursive: true, force: true })
+  console.log(`[fleet-gate] ${label}: ${JSON.stringify(result)}`)
+  return result
 }
 
 /** A seed made by the OLD build, so NEW only ever opens it forward, as an upgrade would. */
@@ -477,6 +548,8 @@ async function main() {
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
   const runsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-fleet-gate-'))
+  const windowScenarios = options.scenarios.filter((name) => name !== 'burst')
+  const bursts = []
   try {
     for (const pair of schedule) {
       for (const arm of pair) {
@@ -486,9 +559,24 @@ async function main() {
             sha: shas[arm],
             buildDir: builds[arm],
             seedDir: seed.seedDir,
-            options,
+            options: { ...options, scenarios: windowScenarios },
             outDir,
             runDir: path.join(runsRoot, `${arm}-${runs.length}`)
+          })
+        )
+      }
+    }
+    if (options.scenarios.includes('burst')) {
+      for (const arm of ['old', 'new']) {
+        bursts.push(
+          await burstOnce({
+            arm,
+            sha: shas[arm],
+            buildDir: builds[arm],
+            seedDir: seed.seedDir,
+            outDir,
+            repoRoot,
+            runDir: path.join(runsRoot, `burst-${arm}`)
           })
         )
       }
@@ -497,9 +585,9 @@ async function main() {
     fs.rmSync(runsRoot, { recursive: true, force: true })
   }
   const census = runs.find((entry) => entry.census)?.census
-  const rows = compareRuns(runs, options.scenarios)
+  const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]
   const notes = [...new Set(runs.flatMap((entry) => entry.notes))]
-  for (const name of options.scenarios) {
+  for (const name of windowScenarios) {
     const drivenNotes = [
       ...new Set(runs.map((entry) => entry.windows[name]?.driven?.note).filter(Boolean))
     ]
@@ -517,7 +605,7 @@ async function main() {
   )
   fs.writeFileSync(
     `${stem}.json`,
-    `${JSON.stringify({ oldSha, newSha, hot, census, runs, rows }, null, 2)}\n`
+    `${JSON.stringify({ oldSha, newSha, hot, census, runs, bursts, rows }, null, 2)}\n`
   )
   fs.writeFileSync(`${stem}.txt`, `${text}\n`)
   console.log('=== FLEET GATE TABLE ===')

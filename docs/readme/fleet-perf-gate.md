@@ -13,7 +13,8 @@ It is a no-op unless the change touches a hot path (main process, preload/IPC, s
 1. Builds OLD and NEW in e2e mode, each in its own shared clone under `~/.cache/orca-fleet-gate/builds/<sha>` (cached by commit; the newest four are kept).
 2. Seeds a synthetic fleet once per OLD commit (below). For each run, clones the seed into a throwaway user-data dir and home, launches the copy hidden, waits for the session to load, and lets it settle (`--settle-ms`, 120 s).
 3. Measures four windows: `idle` (60 s, no input), `typing` (10 keys/s into the first visible input), `streaming` (20 agent hook events/s across 10 workspaces, through the real hook endpoint) and `switch` (click between two workspace cards once a second).
-4. Runs OLD and NEW alternately (`--runs` pairs, counterbalanced) so drift on the machine hits both.
+4. Runs a launch burst once per build (`burst`). It quits with 25 native chats mid-turn, then restarts with every core loaded and continues them all in one call, the way the restart dialog's Continue does. Then it starts 25 new chats at once. Each chat runs the repo's stream-json Claude stub (`tests/e2e/fixtures/structured-claude-stub.cjs`) through the real native-chat launch path, provider ownership included, so no model is called. NEW fails if any chat doesn't start, any continuation is refused, or any `Cannot establish provider process ownership` refusal is logged, whatever OLD did.
+5. Runs OLD and NEW alternately (`--runs` pairs, counterbalanced) so drift on the machine hits both.
 
 ## What it counts
 
