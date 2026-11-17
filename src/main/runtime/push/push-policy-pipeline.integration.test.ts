@@ -8,7 +8,6 @@ import { RuntimeMobileNotificationController } from './notifications/runtime-mob
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
 import { pushCoverage, reportDesktopPresence } from '../rpc/methods/notifications/notifications'
-import { getDefaultNotificationSettings } from '../../../shared/notifications/notification-settings-defaults'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
@@ -37,7 +36,10 @@ async function pipeline() {
   const client = {
     registerDevice: vi.fn(async () => ({ ok: true, registrationId: 'policy-registration' })),
     deleteDevice: vi.fn(async () => true),
-    send: vi.fn(async () => ({ ok: true, results: [] }))
+    send: vi.fn(async () => ({
+      ok: true,
+      results: [{ registrationId: 'policy-registration', status: 'queued' }]
+    }))
   }
   const service = DesktopPushService.create({
     runtime: {
@@ -185,41 +187,41 @@ it('expires persisted registration at seven days despite host activity and renew
   expect(h.client.send).toHaveBeenCalledTimes(2)
 })
 
-it('tells a mirroring desktop which of its phones this host pushes, for alerts its settings allow', async () => {
+it('answers a mirroring desktop from the phones this host pushed, and holds the rest for it', async () => {
   const h = await pipeline()
   const digest = new DeviceRegistry(h.path).getDevice(h.device.deviceId)?.pushRegistration
     ?.tokenDigest
-  expect(digest).toEqual(expect.any(String))
-  const ask = (agentTaskComplete: boolean, clientKind: 'runtime' | 'mobile' = 'runtime') =>
-    pushCoverage(
-      {
-        tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'],
-        source: 'agent-task-complete',
-        agentState: 'done'
-      },
-      {
-        clientKind,
-        runtime: {
-          requireStore: () => ({
-            getSettings: () => ({
-              notifications: { ...getDefaultNotificationSettings(), agentTaskComplete }
-            })
-          }),
-          coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller),
-          pushesOwnPhoneAlert: () => true
+  const ask = async (subject: string, clientKind: 'runtime' | 'mobile' = 'runtime') =>
+    (
+      await pushCoverage(
+        { tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'], subject },
+        {
+          clientKind,
+          runtime: {
+            coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
+          }
         }
-      }
+      )
     ).coveredTokenDigests
-  expect(ask(true)).toEqual([digest])
-  // Finishes are off on this host, so its phones get none and the mirror must push them.
-  expect(ask(false)).toEqual([])
-  expect(ask(true, 'mobile')).toEqual([])
-  // The phone's preferences here still refuse finishes, so this host would not push it one.
-  await h.controller.registerPushDevice({
-    deviceId: h.device.deviceId,
-    platform: 'ios',
-    token: 'test-token',
-    filter: { onlyWhenAgentNeedsInput: true }
-  })
-  expect(ask(true)).toEqual([])
+  const finish = (worktreeId: string) =>
+    h.controller.dispatch({
+      type: 'notification',
+      emittedAt: Date.now(),
+      source: 'agent-task-complete',
+      agentState: 'done',
+      worktreeId,
+      title: 'Finished',
+      body: 'Finished'
+    })
+
+  finish('repo::pushed')
+  await flush()
+  expect(h.client.send).toHaveBeenCalledTimes(1)
+  expect(await ask('repo::pushed', 'mobile')).toEqual([])
+  expect(await ask('repo::pushed')).toEqual([digest])
+  // Asked first, the mirror pushes this one, so the host's own copy skips the phone.
+  expect(await ask('repo::asked-first')).toEqual([])
+  finish('repo::asked-first')
+  await flush()
+  expect(h.client.send).toHaveBeenCalledTimes(1)
 })

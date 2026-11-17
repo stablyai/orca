@@ -1,12 +1,11 @@
-import { reserveNotificationCooldown } from '../../../shared/notifications/notification-burst-cooldown'
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
 import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import {
-  allowsMobilePushAlertKind,
   allowsMobilePushDelivery,
   mobilePushAlertContent
 } from '../../../shared/notifications/mobile-push-alert'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
+import { PushBurstSlots, pushBurstSubject } from './push-burst-slots'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
 import {
@@ -42,11 +41,17 @@ export type PushCoverageResolver = (
 ) => Promise<ReadonlySet<string>>
 
 const NO_COVERAGE: ReadonlySet<string> = new Set()
+const NOTHING_QUEUED: ReadonlySet<string> = new Set()
 
-type PushTarget = { deviceId: string; registration: MobilePushRegistration }
+type PushTarget = {
+  deviceId: string
+  registration: MobilePushRegistration
+  /** The burst slot this push holds, so a mirroring host can learn whether it went out. */
+  slot?: string
+}
 
 export class PushDispatcher {
-  private readonly recentNotifications = new Map<string, number>()
+  private readonly slots = new PushBurstSlots()
   private readonly outcomes = new PushOutcomeCounters()
   private stopped = false
   private readonly client: PushGatewayClient
@@ -81,91 +86,93 @@ export class PushDispatcher {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
-    if (!this.resolveCoverage || event.type !== 'notification' || !event.executionHost) {
-      this.send(event, NO_COVERAGE)
-      return
-    }
-    const tokenDigests = this.liveTokenDigests((registration) =>
-      allowsMobilePushDelivery(registration.filter, event)
-    )
-    if (tokenDigests.length === 0) {
-      this.send(event, NO_COVERAGE)
-      return
-    }
-    // A mirrored session's own host already pushes the phones it has; this copy is for the rest.
-    void this.resolveCoverage(event.executionHost, {
-      // Phones past the cap are not asked about, so they keep this desktop's copy.
-      tokenDigests: tokenDigests.slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
-      source: event.source,
-      ...(event.agentState ? { agentState: event.agentState } : {}),
-      ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-      ...(event.structuredOrigin ? { structured: true } : {})
-    })
-      .catch((error: unknown) => {
-        console.warn('[push] Could not ask the execution host which phones it pushes:', error)
-        return NO_COVERAGE
-      })
-      .then((covered) => {
-        if (!this.stopped) {
-          this.send(event, covered)
-        }
-      })
-  }
-
-  /** The subset of these phones this host pushes; a mirroring host leaves them to it. */
-  coveredTokenDigests(request: PushCoverageRequest): string[] {
-    if (this.stopped || this.deliveryMode === 'disabled') {
-      return []
-    }
-    const asked = new Set(request.tokenDigests)
-    // A phone whose preferences here refuse this kind of alert is still the mirror's to push.
-    return this.liveTokenDigests(
-      (registration, digest) =>
-        asked.has(digest) &&
-        allowsMobilePushAlertKind(registration.filter, request.source, request.agentState)
-    )
-  }
-
-  private liveTokenDigests(
-    include: (registration: MobilePushRegistration, digest: string) => boolean
-  ): string[] {
-    return this.registry
-      .listDevices()
-      .flatMap(({ pushRegistration: registration }) =>
-        registration?.tokenDigest &&
-        registration.expiresAt > Date.now() &&
-        include(registration, registration.tokenDigest)
-          ? [registration.tokenDigest]
-          : []
-      )
-  }
-
-  private send(event: MobileNotificationEvent, covered: ReadonlySet<string>): void {
     try {
-      const plan = this.planSend(event, covered)
+      const plan = this.planSend(event)
       if (!plan) {
         return
       }
-      for (const sound of [true, false]) {
-        const targets = plan.targets.filter(
-          (target) => (target.registration.filter.sound !== false) === sound
-        )
-        for (let start = 0; start < targets.length; start += MAX_REGISTRATIONS_PER_SEND) {
-          void this.deliver(
-            targets.slice(start, start + MAX_REGISTRATIONS_PER_SEND),
-            { ...plan.notification, ...(!sound ? { sound: false } : {}) },
-            0
-          )
-        }
+      const asked = plan.targets.flatMap((target) => target.registration.tokenDigest ?? [])
+      if (
+        !this.resolveCoverage ||
+        event.type !== 'notification' ||
+        !event.executionHost ||
+        asked.length === 0
+      ) {
+        this.deliverPlan(plan.targets, plan.notification)
+        return
       }
+      // A mirrored session's own host already pushes the phones it has; this copy is for the rest.
+      void this.resolveCoverage(event.executionHost, {
+        // Phones past the cap are not asked about, so they keep this desktop's copy.
+        tokenDigests: asked.slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
+        subject: pushBurstSubject(event)
+      })
+        .catch((error: unknown) => {
+          console.warn('[push] Could not ask the execution host which phones it pushes:', error)
+          return NO_COVERAGE
+        })
+        .then((covered) =>
+          this.deliverPlan(
+            plan.targets.filter(
+              (target) =>
+                target.registration.tokenDigest === undefined ||
+                !covered.has(target.registration.tokenDigest)
+            ),
+            plan.notification
+          )
+        )
     } catch (error) {
       console.warn('[push] Failed to prepare a push notification:', error)
     }
   }
 
+  /** Of these phones, the ones this host pushed for the subject; it leaves the rest to the mirror. */
+  async coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
+    if (this.stopped || this.deliveryMode === 'disabled') {
+      return []
+    }
+    const asked = new Set(request.tokenDigests)
+    const now = Date.now()
+    const answers = this.registry.listDevices().map(async ({ deviceId, pushRegistration }) => {
+      const digest = pushRegistration?.tokenDigest
+      return digest &&
+        asked.has(digest) &&
+        (await this.slots.coveredForMirror(deviceId, request.subject, now))
+        ? [digest]
+        : []
+    })
+    return (await Promise.all(answers)).flat()
+  }
+
+  private deliverPlan(targets: readonly PushTarget[], notification: PushSendNotification): void {
+    if (this.stopped) {
+      return
+    }
+    for (const sound of [true, false]) {
+      const withSound = targets.filter(
+        (target) => (target.registration.filter.sound !== false) === sound
+      )
+      for (let start = 0; start < withSound.length; start += MAX_REGISTRATIONS_PER_SEND) {
+        const batch = withSound.slice(start, start + MAX_REGISTRATIONS_PER_SEND)
+        const queued = this.deliver(
+          batch,
+          { ...notification, ...(!sound ? { sound: false } : {}) },
+          0
+        )
+        for (const target of batch) {
+          if (target.slot) {
+            this.slots.recordDelivery(
+              target.slot,
+              queued.then((ids) => ids.has(target.registration.registrationId))
+            )
+          }
+        }
+      }
+    }
+  }
+
   private planSend(
-    event: MobileNotificationEvent,
-    covered: ReadonlySet<string>
+    event: MobileNotificationEvent
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
     if (event.type === 'dismiss') {
       const target = event.dismissedDelivery ?? event
@@ -202,23 +209,15 @@ export class PushDispatcher {
       if (
         !registration ||
         registration.expiresAt <= Date.now() ||
-        !allowsMobilePushDelivery(registration.filter, event) ||
-        (registration.tokenDigest !== undefined && covered.has(registration.tokenDigest))
+        !allowsMobilePushDelivery(registration.filter, event)
       ) {
         return []
       }
-      if (
-        event.emittedAt !== undefined &&
-        !reserveNotificationCooldown(
-          this.recentNotifications,
-          // Keyed news is announced once by its producer, so only its own repeat may collapse it.
-          JSON.stringify([device.deviceId, event.attentionKey ?? event.worktreeId ?? 'global']),
-          event.emittedAt
-        )
-      ) {
-        return []
+      if (event.emittedAt === undefined) {
+        return [{ deviceId: device.deviceId, registration }]
       }
-      return [{ deviceId: device.deviceId, registration }]
+      const slot = this.slots.reserve(device.deviceId, pushBurstSubject(event), event.emittedAt)
+      return slot ? [{ deviceId: device.deviceId, registration, slot }] : []
     })
     if (targets.length === 0) {
       return null
@@ -240,9 +239,9 @@ export class PushDispatcher {
     targets: readonly PushTarget[],
     notification: PushSendNotification,
     attempt: number
-  ): Promise<void> {
+  ): Promise<ReadonlySet<string>> {
     if (this.stopped) {
-      return
+      return NOTHING_QUEUED
     }
     const currentTargets = targets.filter((target) =>
       this.registry
@@ -255,7 +254,7 @@ export class PushDispatcher {
         )
     )
     if (!currentTargets.length) {
-      return
+      return NOTHING_QUEUED
     }
     try {
       const result = await this.client.send({
@@ -263,7 +262,7 @@ export class PushDispatcher {
         notification
       })
       if (this.stopped) {
-        return
+        return NOTHING_QUEUED
       }
       if (result.ok) {
         for (const entry of result.results) {
@@ -272,7 +271,11 @@ export class PushDispatcher {
           }
         }
         this.dropDeadRegistrations(targets, result.results)
-        return
+        return new Set(
+          result.results.flatMap((entry) =>
+            entry.status === 'queued' ? [entry.registrationId] : []
+          )
+        )
       }
       this.outcomes.record(result.reason)
       // Retry transport misses once; an identical refused payload will be refused again.
@@ -284,6 +287,7 @@ export class PushDispatcher {
     } catch (error) {
       console.warn('[push] Push send failed:', error)
     }
+    return NOTHING_QUEUED
   }
 
   private dropDeadRegistrations(

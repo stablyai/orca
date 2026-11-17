@@ -58,17 +58,12 @@ export const NotificationReportDesktopPresenceParams = z.object({ away: z.boolea
 
 export const NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS = 64
 
-// The alert's kind lets the owning host answer only for alerts it pushes its own phones itself.
 export const NotificationPushCoverageParams = z.object({
   tokenDigests: z
     .array(z.string().min(1).max(MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS))
     .max(NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
-  source: z.string().min(1).max(64),
-  agentState: z.string().min(1).max(64).optional(),
-  /** The host's own pane key for a terminal alert. */
-  paneKey: z.string().min(1).max(1024).optional(),
-  /** A native chat's attention, which host main always pushes. */
-  structured: z.boolean().optional()
+  /** The alert's burst-cooldown subject on the host: its attention key, else its workspace id. */
+  subject: z.string().min(1).max(4096)
 })
 
 export type NotificationPushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>

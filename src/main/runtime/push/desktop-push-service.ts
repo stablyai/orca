@@ -203,7 +203,7 @@ export class DesktopPushService {
       : { registered: true, registrationId: result.registrationId }
   }
 
-  coveredTokenDigests(request: PushCoverageRequest): string[] {
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
     return this.dispatcher.coveredTokenDigests(request)
   }
 

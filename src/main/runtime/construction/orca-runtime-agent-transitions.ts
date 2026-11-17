@@ -47,7 +47,6 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
-import type { PushCoverageRequest } from '../push/push-dispatcher'
 
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -64,7 +63,10 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   })
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
     // Pending desktop windows seed missed state without announcing it; do not duplicate their phone pushes.
-    hasWindow: () => this.hasPhonePushingWindow(),
+    hasWindow: () =>
+      this.authoritativeWindowId === null
+        ? this.rendererGraphEpoch === 0
+        : this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID,
     readNotificationSettings: () => this.store?.getSettings().notifications,
     readWorkspaceLabels: (worktreeId, paneKey) =>
       this.readTerminalAgentWorkspaceLabels(worktreeId, paneKey),
@@ -126,28 +128,6 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? null
     : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
-
-  private hasPhonePushingWindow(): boolean {
-    return this.authoritativeWindowId === null
-      ? this.rendererGraphEpoch === 0
-      : this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID
-  }
-
-  /** Whether this host pushes the alert to its own phones, so a mirroring desktop can leave them to it. */
-  pushesOwnPhoneAlert(
-    alert: Pick<PushCoverageRequest, 'source' | 'agentState' | 'paneKey' | 'structured'>
-  ): boolean {
-    // Host main pushes native chats; a window pushes every terminal alert it raises.
-    if (alert.structured === true || this.hasPhonePushingWindow()) {
-      return true
-    }
-    // Without a window only hook-reported turns reach phones, never bells or title-only turns.
-    return (
-      alert.source === 'agent-task-complete' &&
-      alert.paneKey !== undefined &&
-      this.terminalAgentPhonePush.pushesHookTurn(alert.paneKey, alert.agentState)
-    )
-  }
 
   protected onTitleAgentStatusChanged(): void {
     this.worktreeRowsChanges?.changed()
