@@ -31,7 +31,10 @@ function mount(counts: { bulk: number; selectedBulk: number; selectedDisplayed: 
       />
     )
   )
-  const box = container.querySelector('[role="checkbox"]') as HTMLElement
+  const box = container.querySelector<HTMLElement>('[role="checkbox"]')
+  if (box === null) {
+    throw new Error('select-all checkbox did not render')
+  }
   return { box, onToggleSelectAll }
 }
 

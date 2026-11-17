@@ -20,19 +20,21 @@ afterEach(() => {
 const row = (identity: string, rev = 0): Row => ({ identity, rev })
 const ids = (rows: readonly Row[]): string[] => rows.map((r) => r.identity)
 
+type HookResult = {
+  rows: readonly Row[]
+  resetOrder: () => void
+  releaseRows: (identities: readonly string[]) => void
+}
+
 function mount(initial: Props): {
-  result: {
-    rows: readonly Row[]
-    resetOrder: () => void
-    releaseRows: (identities: readonly string[]) => void
-  }
+  result: HookResult
   update: (patch: Partial<Props>) => void
 } {
   const state = { props: initial }
-  const result = {
-    rows: [] as readonly Row[],
+  const result: HookResult = {
+    rows: [],
     resetOrder: () => {},
-    releaseRows: (_identities: readonly string[]) => {}
+    releaseRows: () => {}
   }
   function Probe(): null {
     const out = useWorkspaceCleanupHeldRows(state.props)
@@ -166,6 +168,14 @@ describe('useWorkspaceCleanupHeldRows', () => {
     // Restored: it matches again and appends after the others instead of re-sorting them.
     update(props([row('a'), row('b'), row('c')]))
     expect(ids(result.rows)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('gives a released row that still matches its end slot at release, so a late row cannot move it', () => {
+    const { result, update } = mount(props([row('a'), row('b'), row('c')]))
+    act(() => result.releaseRows(['b']))
+    expect(ids(result.rows)).toEqual(['a', 'c', 'b'])
+    update(props([row('d'), row('a'), row('b'), row('c')]))
+    expect(ids(result.rows)).toEqual(['a', 'c', 'b', 'd'])
   })
 
   it('re-sorts when git checking finishes under the settle rule', () => {

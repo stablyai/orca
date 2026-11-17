@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import type { WorkspaceCleanupReviewInfo } from '../candidate-evidence/workspace-cleanup-review-lookup'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 
 vi.mock('@/store', () => ({ useAppStore: () => undefined }))
@@ -25,6 +26,13 @@ function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTM
     blockers: overrides.dirty ? ['dirty-files'] : []
   })
   const noop = (): void => {}
+  const noReview: WorkspaceCleanupReviewInfo = {
+    hasReview: false,
+    label: null,
+    state: null,
+    provider: null,
+    title: null
+  }
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -38,7 +46,7 @@ function render(overrides: { gitEvidencePending: boolean; dirty: boolean }): HTM
           gitEvidencePending={overrides.gitEvidencePending}
           last={false}
           lastActivityLabel="1d ago"
-          reviewInfo={{ hasReview: false, label: null, state: null, provider: null } as never}
+          reviewInfo={noReview}
           repo={null}
           showHostLabel={false}
           showSizeColumn
