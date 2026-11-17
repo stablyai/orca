@@ -78,7 +78,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -260,6 +261,7 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}

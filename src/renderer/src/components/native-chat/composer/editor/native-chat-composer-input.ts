@@ -21,6 +21,8 @@ export type NativeChatComposerInput = Pick<
   insertSkill?: (from: number, to: number, token: string, path?: string) => void
   /** Replaces `from`..`to` with a picked mention's token and a space, a bot's token as its pill. */
   insertMention?: (from: number, to: number, token: string) => void
+  /** Shows a draft-leading `/btw ` or `/side ` as the side-chat pill; its text stays the same. */
+  pillSideChatCommand?: () => void
   /** Deletes every chip of one image, as when its thumbnail goes. */
   removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
@@ -44,6 +46,8 @@ export type NativeChatPromptEditorProps = Omit<
   initialValue: string
   disabled: boolean
   placeholder: string
+  /** This chat opens side chats: `/btw ` and `/side ` become the side-chat pill. */
+  sideChat?: boolean
   onChange: (input: NativeChatComposerInput) => void
   onSelect: (input: NativeChatComposerInput) => void
 }
