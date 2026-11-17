@@ -245,6 +245,7 @@ export class HostRelay extends HostRelayDirector {
       const sweepAt = await this.ctx.storage.get<number>(SWEEP_AT_KEY)
       if (sweepAt !== undefined && sweepAt <= now && (await this.sweep(now)) === 'wiped') { return }
     }
+    await this.flushUserIndex(now)
     await this.reschedule()
   }
 
