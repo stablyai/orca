@@ -4712,7 +4712,9 @@
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
             "footerDetailAria": "Détail du pied de page d'utilisation",
             "notChecked": "Non vérifié",
-            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}"
+            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}",
+            "resetsIn": "Réinitialisation dans {{duration}}",
+            "resetsNow": "Réinitialisation maintenant"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",

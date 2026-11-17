@@ -4939,7 +4939,9 @@
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
             "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
             "notChecked": "Nicht geprüft",
-            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}"
+            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}",
+            "resetsIn": "Zurücksetzung in {{duration}}",
+            "resetsNow": "Zurücksetzung jetzt"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
