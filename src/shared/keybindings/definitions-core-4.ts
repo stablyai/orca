@@ -5,6 +5,32 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'chat.openModelPicker',
+    title: 'Open model picker',
+    group: 'Chat',
+    scope: 'chat',
+    conflictGroups: ['global', 'tabs', 'chat'],
+    searchKeywords: ['shortcut', 'chat', 'model', 'effort', 'picker'],
+    defaultBindings: {
+      darwin: ['Ctrl+Shift+M'],
+      linux: ['Mod+Alt+M'],
+      win32: ['Mod+Alt+M']
+    }
+  },
+  ...([1, 2, 3] as const).map((slot): KeybindingDefinition => ({
+    id: `chat.modelPreset${slot}`,
+    title: `Use model preset ${slot}`,
+    group: 'Chat',
+    scope: 'chat',
+    conflictGroups: ['global', 'tabs', 'chat'],
+    searchKeywords: ['shortcut', 'chat', 'model', 'effort', 'preset', String(slot)],
+    defaultBindings: {
+      darwin: [`Alt+${slot}`],
+      linux: [`Mod+Alt+${slot}`],
+      win32: [`Mod+Alt+${slot}`]
+    }
+  })),
+  {
     id: 'terminal.expandPane',
     title: 'Expand / collapse pane',
     group: 'Terminal Panes',

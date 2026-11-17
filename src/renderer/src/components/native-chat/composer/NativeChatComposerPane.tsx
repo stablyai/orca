@@ -399,6 +399,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onSteerPreview={steerChord.runPreview}
           onStop={interrupt}
           sessionOptionsSurface={sessionOptions.surface}
+          modelPresetScope={editSession ? undefined : sessionOptions.presetScope}
           sessionOptionsSnapshot={sessionOptions.snapshot}
           contextUsage={contextUsageSummary}
           sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}

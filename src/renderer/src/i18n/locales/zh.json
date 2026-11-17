@@ -20695,6 +20695,27 @@
         "openAgain": "重新打开",
         "finished": "登录已完成",
         "finishedWith": "登录已完成 · {{message}}"
+      },
+      "modelPresets": {
+        "slot": "Slot {{slot}}",
+        "saveSlot": "将当前配置保存为档位 {{slot}}",
+        "clearSlot": "清除档位 {{slot}}",
+        "saveFailed": "无法保存模型档位",
+        "modelUnavailable": "当前会话无法使用此档位的模型。",
+        "effortUnavailable": "模型已切换，但已保存的推理强度不可用。请在模型选择器中选择推理强度。",
+        "title": "快捷档位",
+        "applySlot": "使用档位 {{slot}}",
+        "save": "使用当前配置",
+        "clear": "清空",
+        "editHintMac": "按住 Option 点击设定",
+        "editHintCtrl": "按住 Ctrl 点击设定",
+        "empty": "未设定",
+        "unconfiguredSlot": "档位 {{slot}} 尚未绑定模型",
+        "assignTitle": "设定档位",
+        "speedUnavailable": "模型已切换，但已保存的速度不可用。请在模型选择器中选择速度。",
+        "fastOn": "Fast 开启",
+        "fastOff": "Fast 关闭",
+        "ctrl": "Ctrl"
       }
     },
     "tab": {
@@ -24474,7 +24495,11 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "chatOpenModelPicker": "打开模型选择器",
+      "chatModelPreset1": "使用模型档位 1",
+      "chatModelPreset2": "使用模型档位 2",
+      "chatModelPreset3": "使用模型档位 3"
     },
     "group": {
       "global": "全局",

@@ -41,6 +41,7 @@ export function useNativeChatSessionOptions(args: {
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
+  hostKey: string | null
 } {
   const {
     agent,
@@ -217,5 +218,5 @@ export function useNativeChatSessionOptions(args: {
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
   )
-  return { surface, snapshot }
+  return { surface, snapshot, hostKey: discoveryContext?.hostKey ?? null }
 }
