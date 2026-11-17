@@ -12,10 +12,13 @@ type MockAppState = {
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
-const mocks = vi.hoisted(() => ({
-  store: null as null | { setState: (state: Partial<MockAppState>) => void },
-  mounts: [] as string[]
-}))
+const mocks = vi.hoisted(() => {
+  const state: {
+    store: null | { setState: (state: Partial<MockAppState>) => void }
+    mounts: string[]
+  } = { store: null, mounts: [] }
+  return state
+})
 
 vi.mock('@/store', async () => {
   const { create } = await import('zustand')
@@ -35,12 +38,11 @@ vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 }))
 
 vi.mock('../../NativeChatView', async () => {
-  const { useLayoutEffect } = await import('react')
+  const { useState } = await import('react')
   return {
     default: function MockNativeChatView({ tabId }: { tabId: string }) {
-      useLayoutEffect(() => {
-        mocks.mounts.push(tabId)
-      }, [tabId])
+      // Hidden Activity re-runs effects on reveal; a state initializer runs once per real mount.
+      useState(() => mocks.mounts.push(tabId))
       return <span data-chat-tab-id={tabId} />
     }
   }
