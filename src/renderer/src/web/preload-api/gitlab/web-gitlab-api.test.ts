@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/source-control/runtime/source-control-runtime-capabilities'
+import { GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 
 const { callRuntimeResult, getRemoteRuntimeStatus } = vi.hoisted(() => ({
   callRuntimeResult: vi.fn(),
   getRemoteRuntimeStatus: vi.fn()
 }))
 
-vi.mock('./web-runtime-calls', () => ({ callRuntimeResult, getRemoteRuntimeStatus }))
+vi.mock('../../runtime/client/web-runtime-calls', () => ({
+  assertEnvironmentPairing: vi.fn(),
+  callEnvironmentEnvelope: vi.fn(),
+  callRuntimeResult,
+  getRemoteRuntimeStatus
+}))
 
 import { createGitLabApi } from './web-gitlab-api'
 

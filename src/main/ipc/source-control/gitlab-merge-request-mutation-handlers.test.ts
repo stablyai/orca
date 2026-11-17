@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type * as RepoAccess from './gitlab-repo-access'
 
 const { ipcHandlers, updateMRMock, invalidateMock } = vi.hoisted(() => ({
