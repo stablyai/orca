@@ -293,12 +293,10 @@ export function MobileNativeChatComposer({
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
             >
               <MobileNativeChatComposerAttachButton
-                onAttachImage={onAttachImage}
+                {...{ onAttachImage, isAttaching, menu }}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
-                isAttaching={isAttaching}
                 disabled={disabled || offline}
-                menu={menu}
               />
               {roomReplies}
               {sessionOptions ? (
