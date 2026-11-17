@@ -105,4 +105,16 @@ describeZsh('typing while an agent tab starts', () => {
     await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 10_000 })
     expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
   }, 15_000)
+
+  // A real shell re-execs itself, so the host types the launch after a shortened readiness timeout.
+  it('clears keys typed into a shell that never reached the wrapper before typing the launch', async () => {
+    const tab = await start(
+      'if [[ -z "${ORCA_TEST_REEXEC:-}" ]]; then export ORCA_TEST_REEXEC=1; exec /bin/zsh -l -i; fi\n',
+      COMMAND,
+      1_500
+    )
+    tab.host.write(SESSION_ID, 'early')
+    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 8_000 })
+    expect(tab.output()).not.toContain('command not found')
+  }, 15_000)
 })

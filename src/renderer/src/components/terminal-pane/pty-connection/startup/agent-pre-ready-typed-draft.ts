@@ -13,6 +13,9 @@ import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { paneHasStartupWork } from '../pane-transport-options'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { appendTypedDraftText } from '../../input/draft/typed-draft-text'
+import { TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from '../../../../../../shared/agent-launch/startup/startup-line-prompt-carry'
+
+const encoder = new TextEncoder()
 
 type DraftPhase = 'capturing' | 'delivering' | 'closed'
 
@@ -123,6 +126,22 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return
     }
     liveInputSinceBind = false
+    if (
+      freshSpawn &&
+      session.spawnShellWrapperLaunch === true &&
+      !(session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted) &&
+      encoder.encode(draft).byteLength <= TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+    ) {
+      // The shell wrapper runs the launch, so keys written at bind reach the agent ahead of later typing.
+      const text = draft
+      draft = ''
+      phase = 'closed'
+      if (!session.transport.sendInput(text, 'driving')) {
+        draft = text
+        dropDraft(draftAgent)
+      }
+      return
+    }
     phase = 'delivering'
     if (!freshSpawn) {
       // An attached pane may still be at the shell; pasting now would prefix its pending launch command.

@@ -121,7 +121,8 @@ export async function spawnAndPublishSession(
           claim: () => takeShellWrapperStartupClaim(wrapperStartup.claimPath),
           build: () => {
             discardStagedStartupCommand(wrapperStartup.staging)
-            return buildSubmission(wrapperCommand)
+            // Ctrl-U first: keys sent ahead for the wrapper's launch must not prefix the typed one.
+            return `\x15${buildSubmission(wrapperCommand)}`
           }
         }
       : undefined
@@ -259,6 +260,7 @@ export async function spawnAndPublishSession(
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
     ...(isSessionInputClosed(session) ? { inputClosed: true as const } : {}),
+    ...(startupCommandByWrapper ? { shellWrapperLaunch: true as const } : {}),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }

@@ -62,4 +62,6 @@ export type CreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY master. */
   inputClosed?: true
+  /** Orca's shell wrapper runs the launch, so keys written now reach the agent; older hosts omit it. */
+  shellWrapperLaunch?: true
 }
