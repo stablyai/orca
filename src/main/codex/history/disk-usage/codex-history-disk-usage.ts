@@ -60,7 +60,7 @@ async function measure(
     (id) => ({
       id,
       homes,
-      budget: { maxEntries: MAX_ENTRIES, deadline: Date.now() + WALK_BUDGET_MS }
+      budget: { maxEntries: MAX_ENTRIES, timeMs: WALK_BUDGET_MS }
     }),
     WORKER_TIMEOUT_MS
   )

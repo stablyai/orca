@@ -1,5 +1,7 @@
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
-import type { CodexHistoryDiskUsageBudget } from './codex-history-disk-usage-walk'
+
+/** `timeMs` starts when the worker picks the request up, not while it waits behind another walk. */
+export type CodexHistoryDiskUsageBudget = { maxEntries: number; timeMs: number }
 
 export type CodexHistoryDiskUsageWorkerRequest = {
   id: number
