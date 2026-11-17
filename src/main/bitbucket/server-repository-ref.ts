@@ -40,6 +40,10 @@ function refFromSegments(
   return projectKey && repoSlug ? { baseUrl, projectKey, repoSlug } : null
 }
 
+function effectiveHttpPort(url: URL): string {
+  return url.port || (url.protocol === 'https:' ? '443' : '80')
+}
+
 function splitPath(path: string): string[] {
   return path.split('/').filter(Boolean)
 }
@@ -80,6 +84,9 @@ export function parseBitbucketServerRepoRef(
     return refFromSegments(baseUrl, splitPath(url.pathname))
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return null
+  }
+  if (effectiveHttpPort(url) !== effectiveHttpPort(base)) {
     return null
   }
   // Why: Server serves HTTP clones only under <context path>/scm/<project>/<repo>.

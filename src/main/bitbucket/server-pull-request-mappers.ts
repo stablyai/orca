@@ -9,6 +9,7 @@ export type RawBitbucketServerRef = {
   id?: string
   displayId?: string
   latestCommit?: string
+  repository?: { slug?: string; project?: { key?: string } }
 }
 
 export type RawBitbucketServerReviewer = {

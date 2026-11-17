@@ -38,6 +38,10 @@ async function verifyToken(baseUrl: string, accessToken: string): Promise<Verify
   if (!response.ok) {
     return { ok: false, rejected: response.status === 401 || response.status === 403 }
   }
+  // A proxy or SSO login page can answer 200 with HTML; only the REST JSON proves the token.
+  if (!response.headers.get('Content-Type')?.toLowerCase().includes('application/json')) {
+    return { ok: false, rejected: false }
+  }
   return { ok: true, account: response.headers.get('X-AUSERNAME') }
 }
 

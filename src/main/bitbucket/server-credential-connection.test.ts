@@ -25,7 +25,10 @@ async function loadModule() {
 function userResponse(account: string | null, status = 200): Response {
   return new Response(JSON.stringify({ size: 0, values: [] }), {
     status,
-    headers: account ? { 'X-AUSERNAME': account } : {}
+    headers: {
+      'Content-Type': 'application/json;charset=UTF-8',
+      ...(account ? { 'X-AUSERNAME': account } : {})
+    }
   })
 }
 
@@ -95,6 +98,22 @@ describe('Bitbucket Server credential connection', () => {
       ok: false,
       error: 'Bitbucket Server rejected this token. Check the token, then try again.'
     })
+    expect((await conn.getBitbucketServerConnectionStatus()).configured).toBe(false)
+  })
+
+  it('does not store a token answered by an HTML login page', async () => {
+    const conn = await loadModule()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<html>Log in</html>', { headers: { 'Content-Type': 'text/html' } })
+      )
+    )
+
+    await expect(
+      conn.connectBitbucketServer({ baseUrl: 'https://bitbucket.example.com', accessToken: 't0k' })
+    ).resolves.toMatchObject({ ok: false })
     expect((await conn.getBitbucketServerConnectionStatus()).configured).toBe(false)
   })
 

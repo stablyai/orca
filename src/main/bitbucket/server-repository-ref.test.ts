@@ -29,6 +29,19 @@ describe('parseBitbucketServerRepoRef', () => {
     expect(parseBitbucketServerRepoRef(remote, BASE)).toBeNull()
   })
 
+  it('matches the HTTP port of the registered server', () => {
+    const base = 'https://bitbucket.example.com:8443'
+    expect(
+      parseBitbucketServerRepoRef('https://bitbucket.example.com:8443/scm/prj/repo.git', base)
+    ).toMatchObject({ projectKey: 'prj' })
+    expect(
+      parseBitbucketServerRepoRef('https://bitbucket.example.com:9443/scm/prj/repo.git', base)
+    ).toBeNull()
+    expect(
+      parseBitbucketServerRepoRef('https://bitbucket.example.com:443/scm/prj/repo.git', BASE)
+    ).toMatchObject({ projectKey: 'prj' })
+  })
+
   it('ignores every remote when no server is registered', () => {
     expect(
       parseBitbucketServerRepoRef('https://bitbucket.example.com/scm/prj/repo.git', null)

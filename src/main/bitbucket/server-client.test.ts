@@ -95,6 +95,44 @@ describe('Bitbucket Server client', () => {
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer t0k' })
   })
 
+  it('asks the target repository for the merge check of a PR from a fork', async () => {
+    const pr = {
+      ...serverPr(),
+      toRef: {
+        id: 'refs/heads/main',
+        displayId: 'main',
+        repository: { slug: 'upstream', project: { key: 'UP' } }
+      }
+    }
+    const fetchMock = routeFetch({
+      [`${REPO_API}/pull-requests?`]: () => Response.json({ size: 1, values: [pr] }),
+      [`${BASE}/rest/api/1.0/projects/UP/repos/upstream/pull-requests/12/merge`]: () =>
+        Response.json({ canMerge: true, conflicted: false, outcome: 'CLEAN', vetoes: [] }),
+      [`${BASE}/rest/build-status/1.0/commits/stats/abc123`]: () =>
+        Response.json({ successful: 1, inProgress: 0, failed: 0 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketServerPullRequestForBranch('/repo', 'refs/heads/feat')
+    ).resolves.toMatchObject({ number: 12, mergeable: 'MERGEABLE' })
+  })
+
+  it('does not query a server other than the one that resolved the repo', async () => {
+    baseUrlMock.mockReturnValue('https://other.example.com')
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://other.example.com/scm/prj/repo.git\n',
+      stderr: ''
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketServerPullRequestForBranch('/repo', 'refs/heads/feat')
+    ).resolves.toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns null when the branch has no PR', async () => {
     vi.stubGlobal(
       'fetch',

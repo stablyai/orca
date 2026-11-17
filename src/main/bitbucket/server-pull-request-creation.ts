@@ -219,15 +219,6 @@ export async function createBitbucketServerPullRequest(
 
   // The REST calls run on this client; only the git reads under them are routed.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
-  const config = await resolveBitbucketServerAuthConfig()
-  if (!config.accessToken) {
-    return {
-      ok: false,
-      code: 'auth_required',
-      error:
-        'Create PR failed: Bitbucket Server is not connected. Next step: connect Bitbucket Data Center in Settings > Integrations.'
-    }
-  }
   const repo = await getBitbucketServerRepoRef(
     repoPath,
     connectionId,
@@ -238,6 +229,16 @@ export async function createBitbucketServerPullRequest(
       ok: false,
       code: 'unsupported_provider',
       error: 'Creating pull requests requires a Bitbucket Server remote.'
+    }
+  }
+  const config = await resolveBitbucketServerAuthConfig()
+  // The token is sealed to config.baseUrl; it must never go to a repo resolved against another server.
+  if (!config.accessToken || config.baseUrl !== repo.baseUrl) {
+    return {
+      ok: false,
+      code: 'auth_required',
+      error:
+        'Create PR failed: Bitbucket Server is not connected. Next step: connect Bitbucket Data Center in Settings > Integrations.'
     }
   }
 

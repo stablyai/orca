@@ -120,6 +120,21 @@ describe('Bitbucket Server pull request creation', () => {
     })
   })
 
+  it('does not send the token to a server other than the one it was saved for', async () => {
+    baseUrlMock.mockReturnValue('https://other.example.com')
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://other.example.com/scm/prj/repo.git\n',
+      stderr: ''
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      createBitbucketServerPullRequest('/repo', CREATE_INPUT, 'local')
+    ).resolves.toMatchObject({ ok: false, code: 'auth_required' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('still creates the PR when the default-reviewer lookup fails', async () => {
     let postBody: { reviewers?: unknown } = {}
     vi.stubGlobal(

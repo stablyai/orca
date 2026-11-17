@@ -28,9 +28,14 @@ type RequestOptions = {
   notFoundIsNull?: boolean
 }
 
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
+async function requestJson<T>(
+  repo: BitbucketServerRepoRef,
+  path: string,
+  options: RequestOptions = {}
+): Promise<T | null> {
   const config = await resolveBitbucketServerAuthConfig()
-  if (!config.baseUrl || !config.accessToken) {
+  // A connection change after the repo was resolved must not send its path to another server.
+  if (!config.baseUrl || !config.accessToken || config.baseUrl !== repo.baseUrl) {
     if (options.throwOnFailure) {
       throw new Error('Bitbucket Server request failed: no usable credential')
     }
@@ -65,8 +70,21 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
   }
 }
 
-export function bitbucketServerRepoApiPath(repo: BitbucketServerRepoRef): string {
+export function bitbucketServerRepoApiPath(repo: { projectKey: string; repoSlug: string }): string {
   return `/rest/api/1.0/projects/${encodeURIComponent(repo.projectKey)}/repos/${encodeURIComponent(repo.repoSlug)}`
+}
+
+// An OUTGOING match from a fork targets another repository, which owns the PR id.
+function targetRepoApiPath(
+  repo: BitbucketServerRepoRef,
+  raw: RawBitbucketServerPullRequest
+): string {
+  const target = raw.toRef?.repository
+  const projectKey = target?.project?.key
+  const repoSlug = target?.slug
+  return projectKey && repoSlug
+    ? bitbucketServerRepoApiPath({ projectKey, repoSlug })
+    : bitbucketServerRepoApiPath(repo)
 }
 
 async function normalizePullRequest(
@@ -78,13 +96,15 @@ async function normalizePullRequest(
   const [stats, merge] = await Promise.all([
     headSha
       ? requestJson<RawBitbucketServerBuildStats>(
+          repo,
           `/rest/build-status/1.0/commits/stats/${encodeURIComponent(headSha)}`
         )
       : null,
     // Why: merge checks are only meaningful, and only worth a request, for open PRs.
     isOpen && typeof raw.id === 'number'
       ? requestJson<RawBitbucketServerMerge>(
-          `${bitbucketServerRepoApiPath(repo)}/pull-requests/${raw.id}/merge`
+          repo,
+          `${targetRepoApiPath(repo, raw)}/pull-requests/${raw.id}/merge`
         )
       : null
   ])
@@ -114,6 +134,7 @@ export async function getBitbucketServerPullRequest(
     return null
   }
   const raw = await requestJson<RawBitbucketServerPullRequest>(
+    repo,
     `${bitbucketServerRepoApiPath(repo)}/pull-requests/${encodeURIComponent(String(prNumber))}`
   )
   return raw ? normalizePullRequest(repo, raw) : null
@@ -138,6 +159,7 @@ export async function getBitbucketServerPullRequestForBranch(
 
   if (typeof linkedPRNumber === 'number') {
     const raw = await requestJson<RawBitbucketServerPullRequest>(
+      repo,
       `${bitbucketServerRepoApiPath(repo)}/pull-requests/${encodeURIComponent(String(linkedPRNumber))}`,
       { throwOnFailure, notFoundIsNull: true }
     )
@@ -150,6 +172,7 @@ export async function getBitbucketServerPullRequestForBranch(
   }
 
   const list = await requestJson<{ values?: RawBitbucketServerPullRequest[] }>(
+    repo,
     `${bitbucketServerRepoApiPath(repo)}/pull-requests`,
     {
       searchParams: {
