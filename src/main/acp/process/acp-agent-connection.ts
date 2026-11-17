@@ -260,7 +260,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return (
       tail.length < STDERR_TAIL_MAX_CHARS
         ? redactString(tail)
-        : redactTextTail(tail, this.managed.stderrInKeyBlock())
+        : redactTextTail(tail, (laterMarkers) => this.managed.stderrInKeyBlockBefore(laterMarkers))
     ).trim()
   }
 

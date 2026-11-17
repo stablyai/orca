@@ -174,6 +174,18 @@ describe('ACP process-owning connection', () => {
     }
   )
 
+  it('drops the body of a cut key block when a second unfinished block follows it', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${`${'K9'.repeat(32)}\n`.repeat(140)}`)
+    child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${'Z8'.repeat(32)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    const tail = connection.stderrTail()
+    expect(tail).not.toContain('K9K9')
+    expect(tail).not.toContain('Z8Z8')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))

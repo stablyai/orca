@@ -75,8 +75,8 @@ export type ManagedProviderProcess = {
   readonly spawnAbsence: ProviderSpawnAbsence | null
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
-  /** Stderr so far ends inside a private key block: a BEGIN marker with no END after it. */
-  stderrInKeyBlock(): boolean
+  /** Whether stderr was inside a private key block before its last `laterMarkers` BEGIN/END markers. */
+  stderrInKeyBlockBefore(laterMarkers: number): boolean
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
   /** A close joining one already in flight shares that close's grace. */
@@ -269,7 +269,7 @@ export function spawnManagedProviderProcess(
       return spawnAbsence()
     },
     stderrTail: () => stderrTail,
-    stderrInKeyBlock: keyBlock.open,
+    stderrInKeyBlockBefore: keyBlock.inBlockBefore,
     get lastCloseResult() {
       return lastCloseResult
     },
