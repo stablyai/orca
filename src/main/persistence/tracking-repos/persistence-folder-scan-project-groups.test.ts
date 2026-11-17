@@ -229,4 +229,47 @@ describe('Flat folder-scan project groups adaptation', () => {
     expect(reloaded.getProjectGroups()).toEqual(groups)
     expect(reloaded.getRepos()).toEqual(store.getRepos())
   })
+
+  it('reparents groups, blocks cycles/cross-host moves, and inherits parent connectionId', () => {
+    const store = createStore()
+    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })
+    const child = store.createProjectGroup({
+      name: 'Child',
+      parentGroupId: root.id,
+      createdFrom: 'manual'
+    })
+    const other = store.createProjectGroup({ name: 'Other', createdFrom: 'manual' })
+    const sshParent = store.createProjectGroup({
+      name: 'SSH Parent',
+      connectionId: 'ssh-box-1',
+      createdFrom: 'manual'
+    })
+    const sshSub = store.createProjectGroup({
+      name: 'SSH Sub',
+      connectionId: null,
+      parentGroupId: sshParent.id,
+      createdFrom: 'manual'
+    })
+
+    expect(sshSub.connectionId).toBe('ssh-box-1')
+    expect(
+      store.updateProjectGroup(other.id, { parentGroupId: child.id, tabOrder: 5 })
+    ).toMatchObject({ parentGroupId: child.id, tabOrder: 5 })
+    expect(store.updateProjectGroup(root.id, { parentGroupId: root.id, tabOrder: 99 })).toBeNull()
+    expect(store.updateProjectGroup(root.id, { parentGroupId: other.id, tabOrder: 99 })).toBeNull()
+    expect(
+      store.updateProjectGroup(root.id, { parentGroupId: 'missing-id', tabOrder: 99 })
+    ).toBeNull()
+    expect(
+      store.updateProjectGroup(root.id, { parentGroupId: sshParent.id, tabOrder: 5 })
+    ).toBeNull()
+    expect(store.updateProjectGroup(sshSub.id, { parentGroupId: root.id, tabOrder: 5 })).toBeNull()
+    expect(() =>
+      store.createProjectGroup({
+        name: 'Orphan',
+        parentGroupId: 'missing-parent',
+        createdFrom: 'manual'
+      })
+    ).toThrow('project_group_parent_not_found')
+  })
 })

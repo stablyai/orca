@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
@@ -47,6 +48,7 @@ describe('repos-project-groups-owner-routing', () => {
     updatedAt: 1
   }
 
+  const projectGroupsCreate = vi.fn()
   const projectGroupsUpdate = vi.fn()
   const projectGroupsDelete = vi.fn()
   const runtimeEnvironmentCall = vi.fn()
@@ -55,6 +57,7 @@ describe('repos-project-groups-owner-routing', () => {
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    projectGroupsCreate.mockResolvedValue(null)
     projectGroupsUpdate.mockResolvedValue(null)
     projectGroupsDelete.mockResolvedValue(false)
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -63,7 +66,11 @@ describe('repos-project-groups-owner-routing', () => {
     vi.stubGlobal('window', {
       api: {
         repos: {},
-        projectGroups: { update: projectGroupsUpdate, delete: projectGroupsDelete },
+        projectGroups: {
+          create: projectGroupsCreate,
+          update: projectGroupsUpdate,
+          delete: projectGroupsDelete
+        },
         runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
       }
     })
@@ -182,6 +189,256 @@ describe('repos-project-groups-owner-routing', () => {
         removedProjectIds: ['local-repo']
       })
       expect(store.getState().repos.map((repo) => repo.id)).toEqual(['remote-repo'])
+    })
+  })
+
+  describe('createProjectGroup subgroup routing', () => {
+    it('forwards parentGroupId to the owning runtime host RPC and adopts the subgroup', async () => {
+      runtimeEnvironmentCall.mockResolvedValue({
+        ok: true,
+        result: {
+          group: {
+            ...folderScanGroup,
+            id: 'sub-1',
+            name: 'Subgroup',
+            parentPath: null,
+            parentGroupId: 'group-1',
+            createdFrom: 'manual'
+          }
+        }
+      })
+      const store = createTestStore()
+
+      await store
+        .getState()
+        .createProjectGroup('Subgroup', 'runtime:env-1', { parentGroupId: 'group-1' })
+
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'projectGroup.create',
+          params: { name: 'Subgroup', createdFrom: 'manual', parentGroupId: 'group-1' }
+        })
+      )
+      expect(store.getState().projectGroups).toMatchObject([
+        { id: 'sub-1', parentGroupId: 'group-1', executionHostId: 'runtime:env-1' }
+      ])
+    })
+
+    it('forwards parentGroupId to local projectGroups.create IPC when creating a local subgroup', async () => {
+      projectGroupsCreate.mockResolvedValue({
+        ...folderScanGroup,
+        id: 'local-sub',
+        name: 'Local Subgroup',
+        parentPath: null,
+        parentGroupId: 'group-1',
+        createdFrom: 'manual'
+      })
+      const store = createTestStore()
+
+      await store
+        .getState()
+        .createProjectGroup('Local Subgroup', 'local', { parentGroupId: 'group-1' })
+
+      expect(projectGroupsCreate).toHaveBeenCalledWith({
+        name: 'Local Subgroup',
+        createdFrom: 'manual',
+        parentGroupId: 'group-1'
+      })
+      expect(store.getState().projectGroups).toMatchObject([
+        { id: 'local-sub', parentGroupId: 'group-1', executionHostId: 'local' }
+      ])
+    })
+
+    it('omits parentGroupId on wire when creating a root group with null or omitted parentGroupId', async () => {
+      projectGroupsCreate.mockResolvedValue({
+        ...folderScanGroup,
+        id: 'local-root',
+        name: 'Root Group',
+        parentPath: null,
+        parentGroupId: null,
+        createdFrom: 'manual'
+      })
+      const store = createTestStore()
+
+      await store.getState().createProjectGroup('Root Group', 'local', { parentGroupId: null })
+
+      expect(projectGroupsCreate).toHaveBeenCalledWith({
+        name: 'Root Group',
+        createdFrom: 'manual'
+      })
+    })
+
+    it('rejects subgroup creation and cleans up stray root group (including raced catalog pushes) when an older remote host drops parentGroupId', async () => {
+      const store = createTestStore()
+      const onParentMoveRejected = vi.fn()
+      runtimeEnvironmentCall
+        .mockResolvedValueOnce({
+          ok: true,
+          result: {
+            group: {
+              ...folderScanGroup,
+              id: 'stray-root',
+              name: 'Subgroup',
+              parentPath: null,
+              parentGroupId: null,
+              createdFrom: 'manual'
+            }
+          }
+        })
+        .mockImplementationOnce(async () => {
+          store.setState({
+            projectGroups: [
+              {
+                ...folderScanGroup,
+                id: 'stray-root',
+                name: 'Subgroup',
+                parentPath: null,
+                parentGroupId: null,
+                createdFrom: 'manual',
+                executionHostId: 'runtime:env-1'
+              }
+            ]
+          })
+          return { ok: true, result: { deleted: true } }
+        })
+
+      const created = await store.getState().createProjectGroup('Subgroup', 'runtime:env-1', {
+        parentGroupId: 'group-1',
+        onParentMoveRejected
+      })
+
+      expect(created).toBeNull()
+      expect(onParentMoveRejected).toHaveBeenCalledTimes(1)
+      expect(store.getState().projectGroups).toEqual([])
+      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+      expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'projectGroup.delete',
+          params: { groupId: 'stray-root' }
+        })
+      )
+    })
+
+    it('forwards SSH connectionId when creating a group or subgroup on an ssh:<target> host', async () => {
+      projectGroupsCreate.mockResolvedValue({
+        ...folderScanGroup,
+        id: 'ssh-sub',
+        name: 'SSH Subgroup',
+        connectionId: 'box-1',
+        parentPath: null,
+        parentGroupId: 'ssh-parent',
+        createdFrom: 'manual'
+      })
+      const store = createTestStore()
+
+      const created = await store
+        .getState()
+        .createProjectGroup('SSH Subgroup', 'ssh:box-1', { parentGroupId: 'ssh-parent' })
+
+      expect(projectGroupsCreate).toHaveBeenCalledWith({
+        name: 'SSH Subgroup',
+        createdFrom: 'manual',
+        connectionId: 'box-1',
+        parentGroupId: 'ssh-parent'
+      })
+      expect(created?.executionHostId).toBe('ssh:box-1')
+      expect(store.getState().projectGroups).toMatchObject([
+        { id: 'ssh-sub', connectionId: 'box-1', executionHostId: 'ssh:box-1' }
+      ])
+    })
+
+    it('retains the stray root group and surfaces a distinct cleanup-failed toast when older remote host drops parentGroupId and cleanup returns deleted: false or throws', async () => {
+      const toastErrorSpy = vi.spyOn(toast, 'error')
+      try {
+        const store = createTestStore()
+        runtimeEnvironmentCall
+          .mockResolvedValueOnce({
+            ok: true,
+            result: {
+              group: {
+                ...folderScanGroup,
+                id: 'stray-cleaned',
+                name: 'Subgroup Cleaned',
+                parentPath: null,
+                parentGroupId: null,
+                createdFrom: 'manual'
+              }
+            }
+          })
+          .mockResolvedValueOnce({ ok: true, result: { deleted: true } })
+
+        await store
+          .getState()
+          .createProjectGroup('Subgroup Cleaned', 'runtime:env-1', { parentGroupId: 'group-1' })
+        expect(toastErrorSpy).toHaveBeenCalledTimes(1)
+        const cleanedUpDescription = toastErrorSpy.mock.calls[0]?.[1]?.description
+        expect(cleanedUpDescription).toEqual(expect.any(String))
+
+        toastErrorSpy.mockClear()
+        runtimeEnvironmentCall
+          .mockResolvedValueOnce({
+            ok: true,
+            result: {
+              group: {
+                ...folderScanGroup,
+                id: 'stray-kept',
+                name: 'Subgroup',
+                parentPath: null,
+                parentGroupId: null,
+                createdFrom: 'manual'
+              }
+            }
+          })
+          .mockResolvedValueOnce({ ok: true, result: { deleted: false } })
+
+        const created = await store
+          .getState()
+          .createProjectGroup('Subgroup', 'runtime:env-1', { parentGroupId: 'group-1' })
+
+        expect(created).toBeNull()
+        expect(store.getState().projectGroups).toMatchObject([
+          { id: 'stray-kept', parentGroupId: null, executionHostId: 'runtime:env-1' }
+        ])
+        expect(toastErrorSpy).toHaveBeenCalledTimes(1)
+        const falseCleanupDescription = toastErrorSpy.mock.calls[0]?.[1]?.description
+        expect(falseCleanupDescription).toEqual(expect.any(String))
+        expect(falseCleanupDescription).not.toBe(cleanedUpDescription)
+
+        toastErrorSpy.mockClear()
+        runtimeEnvironmentCall
+          .mockResolvedValueOnce({
+            ok: true,
+            result: {
+              group: {
+                ...folderScanGroup,
+                id: 'stray-rejected-cleanup',
+                name: 'Subgroup 2',
+                parentPath: null,
+                parentGroupId: null,
+                createdFrom: 'manual'
+              }
+            }
+          })
+          .mockRejectedValueOnce(new Error('delete rpc failed'))
+
+        const createdAfterRejectedCleanup = await store
+          .getState()
+          .createProjectGroup('Subgroup 2', 'runtime:env-1', { parentGroupId: 'group-1' })
+
+        expect(createdAfterRejectedCleanup).toBeNull()
+        expect(store.getState().projectGroups.map((entry) => entry.id)).toEqual([
+          'stray-kept',
+          'stray-rejected-cleanup'
+        ])
+        expect(toastErrorSpy).toHaveBeenCalledTimes(1)
+        const rejectedCleanupDescription = toastErrorSpy.mock.calls[0]?.[1]?.description
+        expect(rejectedCleanupDescription).toBe(falseCleanupDescription)
+      } finally {
+        toastErrorSpy.mockRestore()
+      }
     })
   })
 })

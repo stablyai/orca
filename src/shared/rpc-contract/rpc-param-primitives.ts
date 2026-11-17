@@ -54,6 +54,22 @@ export const TriStateLinkedIssue = z
   .pipe(z.union([z.number(), z.null(), z.undefined()]))
   .optional()
 
+// Preserve three update meanings: undefined leaves unchanged, null or empty string clears, non-empty string sets.
+export const TriStateNullableString = z
+  .unknown()
+  .transform((value) => {
+    if (value === null) {
+      return null
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      return trimmed.length > 0 ? trimmed : null
+    }
+    return undefined
+  })
+  .pipe(z.union([z.string(), z.null(), z.undefined()]))
+  .optional()
+
 // Legacy browser targeting permits empty worktree (“any worktree”) but requires a nonempty page; preserve that asymmetry.
 export const BrowserTarget = z.object({
   worktree: OptionalPlainString,

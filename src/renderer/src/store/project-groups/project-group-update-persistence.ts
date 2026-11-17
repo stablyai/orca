@@ -11,33 +11,21 @@ import {
 } from '../../../../shared/project/groups/project-group-order-capability'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  finalizeSequencedResult,
+  splitRemoteParentGroupUpdate,
+  verifyProjectGroupMatchesUpdate,
+  type PersistProjectGroupUpdateOptions,
+  type SequencedProjectGroupResult
+} from './project-group-update-verification'
 
-function groupOrderMatchesUpdate(
-  group: ProjectGroup,
-  updates: ProjectGroupMutation['updates']
-): boolean {
-  return (
-    (updates.rootProjectOrder === undefined ||
-      (group.rootProjectOrder ?? null) === updates.rootProjectOrder) &&
-    (updates.tabOrder === undefined || group.tabOrder === updates.tabOrder)
-  )
-}
-
-export async function persistProjectGroupUpdate(
+async function persistSingleProjectGroupUpdate(
   target: RuntimeClientTarget,
   groupId: string,
-  updates: Parameters<RepoSlice['updateProjectGroup']>[1]
-): Promise<ProjectGroup | null> {
-  if (
-    updates.rootProjectOrder !== undefined &&
-    target.kind === 'environment' &&
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-    ))
-  ) {
-    return null
-  }
+  updates: Parameters<RepoSlice['updateProjectGroup']>[1],
+  options?: PersistProjectGroupUpdateOptions
+): Promise<SequencedProjectGroupResult> {
+  const commitSeq = options?.allocateCommitSeq?.() ?? 0
   const updated =
     target.kind === 'local'
       ? await window.api.projectGroups.update({ groupId, updates })
@@ -49,19 +37,70 @@ export async function persistProjectGroupUpdate(
             { timeoutMs: 15_000 }
           )
         ).group
-  if (!updated || !groupOrderMatchesUpdate(updated, updates)) {
-    return null
+  if (!updated || !verifyProjectGroupMatchesUpdate(updated, updates, options)) {
+    return { row: null, commitSeq }
   }
-  return updated
+  return { row: updated, commitSeq }
 }
 
-export async function persistProjectGroupUpdates(
+async function persistProjectGroupUpdateSequenced(
   target: RuntimeClientTarget,
-  mutations: readonly ProjectGroupMutation[]
-): Promise<(ProjectGroup | null)[]> {
-  if (mutations.length === 0) {
-    return []
+  groupId: string,
+  updates: Parameters<RepoSlice['updateProjectGroup']>[1],
+  options?: PersistProjectGroupUpdateOptions
+): Promise<SequencedProjectGroupResult> {
+  if (
+    updates.rootProjectOrder !== undefined &&
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
+    ))
+  ) {
+    if (updates.parentGroupId !== undefined) {
+      options?.onParentGroupMoveRejected?.()
+    }
+    return { row: null, commitSeq: 0 }
   }
+  if (target.kind === 'environment') {
+    const { parentOnly, remaining } = splitRemoteParentGroupUpdate(updates)
+    if (parentOnly && remaining) {
+      const parentUpdated = await persistSingleProjectGroupUpdate(
+        target,
+        groupId,
+        parentOnly,
+        options
+      )
+      if (!parentUpdated.row) {
+        return { row: null, commitSeq: parentUpdated.commitSeq }
+      }
+      if (options?.onStageCommitted?.(parentUpdated.row, parentUpdated.commitSeq) === false) {
+        return { row: null, commitSeq: parentUpdated.commitSeq }
+      }
+      return persistSingleProjectGroupUpdate(target, groupId, remaining, options)
+    }
+  }
+  return persistSingleProjectGroupUpdate(target, groupId, updates, options)
+}
+
+export async function persistProjectGroupUpdate(
+  target: RuntimeClientTarget,
+  groupId: string,
+  updates: Parameters<RepoSlice['updateProjectGroup']>[1],
+  options?: PersistProjectGroupUpdateOptions
+): Promise<ProjectGroup | null> {
+  const result = await persistProjectGroupUpdateSequenced(target, groupId, updates, options)
+  if (result.row) {
+    options?.onFinalCommitSeq?.(groupId, result.commitSeq)
+  }
+  return result.row
+}
+
+async function persistProjectGroupUpdatesBatch(
+  target: RuntimeClientTarget,
+  mutations: readonly ProjectGroupMutation[],
+  options?: PersistProjectGroupUpdateOptions
+): Promise<SequencedProjectGroupResult[]> {
   if (
     mutations.length === 1 ||
     (target.kind === 'environment' &&
@@ -72,23 +111,14 @@ export async function persistProjectGroupUpdates(
   ) {
     return Promise.all(
       mutations.map(({ groupId, updates }) =>
-        persistProjectGroupUpdate(target, groupId, updates).catch((err) => {
+        persistProjectGroupUpdateSequenced(target, groupId, updates, options).catch((err) => {
           console.error('Failed to update project group:', err)
-          return null
+          return { row: null, commitSeq: 0 }
         })
       )
     )
   }
-  if (
-    target.kind === 'environment' &&
-    mutations.some(({ updates }) => updates.rootProjectOrder !== undefined) &&
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-    ))
-  ) {
-    return mutations.map(() => null)
-  }
+  const commitSeq = options?.allocateCommitSeq?.() ?? 0
   const updated =
     target.kind === 'local'
       ? await window.api.projectGroups.updateMany({ mutations })
@@ -103,7 +133,101 @@ export async function persistProjectGroupUpdates(
   const byId = new Map(updated?.map((group) => [group.id, group]))
   return mutations.map(({ groupId, updates }) => {
     const group = byId.get(groupId)
-    return group && groupOrderMatchesUpdate(group, updates) ? group : null
+    return {
+      row: group && verifyProjectGroupMatchesUpdate(group, updates, options) ? group : null,
+      commitSeq
+    }
+  })
+}
+
+export async function persistProjectGroupUpdates(
+  target: RuntimeClientTarget,
+  mutations: readonly ProjectGroupMutation[],
+  options?: PersistProjectGroupUpdateOptions
+): Promise<(ProjectGroup | null)[]> {
+  if (mutations.length === 0) {
+    return []
+  }
+  let notifiedParentMoveRejected = false
+  const dedupedOptions: PersistProjectGroupUpdateOptions | undefined = options && {
+    ...options,
+    onParentGroupMoveRejected: options.onParentGroupMoveRejected
+      ? () => {
+          if (!notifiedParentMoveRejected) {
+            notifiedParentMoveRejected = true
+            options.onParentGroupMoveRejected?.()
+          }
+        }
+      : undefined
+  }
+  if (
+    target.kind === 'environment' &&
+    mutations.some(({ updates }) => updates.rootProjectOrder !== undefined) &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
+    ))
+  ) {
+    if (mutations.some(({ updates }) => updates.parentGroupId !== undefined)) {
+      dedupedOptions?.onParentGroupMoveRejected?.()
+    }
+    return mutations.map(() => null)
+  }
+  const shouldStageRemoteParentFirst =
+    target.kind === 'environment' &&
+    mutations.some(({ updates }) => updates.parentGroupId !== undefined) &&
+    mutations.some(({ updates }) =>
+      updates.parentGroupId !== undefined ? Object.keys(updates).length > 1 : true
+    )
+  if (!shouldStageRemoteParentFirst) {
+    const batchResults = await persistProjectGroupUpdatesBatch(target, mutations, dedupedOptions)
+    return batchResults.map((result, index) =>
+      finalizeSequencedResult(result, mutations[index].groupId, dedupedOptions)
+    )
+  }
+  const parentMutations = mutations.flatMap(({ groupId, updates }) => {
+    const { parentOnly } = splitRemoteParentGroupUpdate(updates)
+    return parentOnly ? [{ groupId, updates: parentOnly }] : []
+  })
+  const parentResults = await persistProjectGroupUpdatesBatch(
+    target,
+    parentMutations,
+    dedupedOptions
+  )
+  let stageSuperseded = false
+  for (const result of parentResults) {
+    if (result.row && dedupedOptions?.onStageCommitted?.(result.row, result.commitSeq) === false) {
+      stageSuperseded = true
+    }
+  }
+  if (stageSuperseded || parentResults.some((result) => result.row === null)) {
+    return mutations.map(() => null)
+  }
+  const parentById = new Map(
+    parentResults
+      .filter((r): r is { row: ProjectGroup; commitSeq: number } => r.row !== null)
+      .map((r) => [r.row.id, r])
+  )
+  const remainingMutations = mutations.flatMap(({ groupId, updates }) => {
+    const { remaining } = splitRemoteParentGroupUpdate(updates)
+    return remaining ? [{ groupId, updates: remaining }] : []
+  })
+  if (remainingMutations.length === 0) {
+    return mutations.map(({ groupId }) =>
+      finalizeSequencedResult(parentById.get(groupId), groupId, dedupedOptions)
+    )
+  }
+  const remainingResults = await persistProjectGroupUpdatesBatch(
+    target,
+    remainingMutations,
+    dedupedOptions
+  )
+  let remainingIndex = 0
+  return mutations.map(({ groupId, updates }) => {
+    if (!splitRemoteParentGroupUpdate(updates).remaining) {
+      return finalizeSequencedResult(parentById.get(groupId), groupId, dedupedOptions)
+    }
+    return finalizeSequencedResult(remainingResults[remainingIndex++], groupId, dedupedOptions)
   })
 }
 

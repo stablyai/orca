@@ -61,6 +61,11 @@ export type VirtualizedWorktreeViewportProps = {
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   handleRemoveProject: (repo: Repo) => void
   handleCreateGroupFromRepo: (repo: Repo) => void
+  handleCreateProjectSubgroup?: (
+    groupId: string,
+    groupName: string,
+    hostId?: ExecutionHostId
+  ) => void
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
