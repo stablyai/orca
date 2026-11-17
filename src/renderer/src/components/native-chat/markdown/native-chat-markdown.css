@@ -90,3 +90,17 @@
     }
   }
 }
+
+/* Right-to-left text (Arabic, Hebrew, Persian, Urdu). Every block takes its direction from its own
+   first strong character, so an Arabic reply that mentions English names (a product, a file, an
+   event) keeps its word order and aligns to the right, while English blocks are unchanged.
+   `start` follows each block's resolved direction under plaintext. */
+.native-chat-markdown :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dd, dt, summary) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* Inline code inside right-to-left text stays one left-to-right unit (event names, paths, flags). */
+.native-chat-markdown code {
+  unicode-bidi: isolate;
+}
