@@ -968,6 +968,29 @@ body[data-modal-overlay-open]
   background-color: color-mix(in srgb, var(--foreground, #171717) 36%, transparent);
 }
 
+/* A horizontal rail's 4px bar, clear until hovered, so an overflowing rail reads as scrollable.
+   Why webkit-only: standard scrollbar-width/color would override the 4px size in Chromium. */
+.hover-scrollbar-x::-webkit-scrollbar {
+  height: 4px;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hover-scrollbar-x::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+}
+
+.hover-scrollbar-x:hover::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent);
+}
+
 [data-slot='popover-content'] {
   max-height: var(--radix-popover-content-available-height);
 }

@@ -204,6 +204,26 @@ export const dropdownWithBlankTerminal = defineFixture({
   interact: openDropdown
 })
 
+/** The form holds Blank Terminal: its rail tile is the selected tab. */
+export const dropdownBlankTerminalCurrent = defineFixture({
+  width: 460,
+  render: () => (
+    <div className="min-h-[200px] bg-background p-4">
+      <div className="w-[420px]">
+        <AgentLaunchPicker
+          model={MODEL}
+          entries={ENTRIES}
+          agent={null}
+          emptyLabel="Blank Terminal"
+          onSelectBlankTerminal={() => {}}
+          onPick={() => {}}
+        />
+      </div>
+    </div>
+  ),
+  interact: openDropdown
+})
+
 /** The + menu: hovering an agent row opens the same card, without tabs, over the prompt and Launch. */
 function NewTabMenu(): React.JSX.Element {
   return (

@@ -1,11 +1,9 @@
 import { useState, type Ref } from 'react'
-import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
-import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
+import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPickerAgentRail'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
@@ -53,19 +51,19 @@ type AgentLaunchPickerDropdownProps = {
   onClose: () => void
   /** Rows under the card that are not agents. */
   choices?: readonly AgentPickerChoice[]
+  /** A tile ahead of the agent tabs, also listed by search; current when the form holds no agent. */
+  blankTerminal?: AgentPickerChoice
 }
-
-const focusSearch = (from: Element) =>
-  from
-    .closest('[data-agent-launch-picker]')
-    ?.querySelector<HTMLInputElement>('[cmdk-input]')
-    ?.focus({ preventScroll: true })
 
 /** A form's agent dropdown: agent tabs over the shared setup card, then where the agent opens. */
 export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps) {
-  const { entries, agent, draftScope, onPaneChange } = props
+  const { entries, agent, draftScope, onPaneChange, blankTerminal } = props
   useRetiredAgentPickerDrafts(entries, draftScope, 'select')
   const [paneAgent, setPaneAgent] = useState(agent)
+  // A typed-in query opens on an agent's search instead.
+  const [terminalPane, setTerminalPane] = useState(
+    () => Boolean(blankTerminal) && agent === null && !props.initialQuery
+  )
   // A typed-in query seeds only the first pane; switching agents starts a clean search.
   const [switched, setSwitched] = useState(false)
   const pane =
@@ -91,7 +89,7 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
           event.key === 'Tab' &&
           event.shiftKey &&
           event.target instanceof HTMLElement &&
-          event.target.matches('[cmdk-input]')
+          event.target.matches('[cmdk-input], [data-agent-picker-blank-terminal]')
         ) {
           event.preventDefault()
           event.stopPropagation()
@@ -103,110 +101,31 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
     >
       <AgentPickerAgentTabs
         entries={entries}
-        pane={pane.agent}
+        pane={terminalPane ? null : pane.agent}
+        blankTerminal={blankTerminal}
         defaultAgent={props.defaultAgent}
         onSetDefault={props.onSetDefault}
         onSelect={(next) => {
-          setPaneAgent(next)
-          setSwitched(true)
-          onPaneChange(next)
+          setTerminalPane(false)
+          showPane(next)
         }}
       />
-      {/* Why keyed: each agent's pane owns its own kept setup and search. */}
-      <AgentLaunchPickerPane
-        key={pane.agent}
-        {...props}
-        initialQuery={switched ? '' : props.initialQuery}
-        entry={pane}
-        onShowAgent={showPane}
-      />
-    </div>
-  )
-}
-
-function AgentPickerAgentTabs({
-  entries,
-  pane,
-  defaultAgent,
-  onSetDefault,
-  onSelect
-}: {
-  entries: AgentPickerEntry[]
-  pane: Agent
-  defaultAgent?: Agent | 'blank' | null
-  onSetDefault?: (agent: Agent) => void
-  onSelect: (agent: Agent) => void
-}) {
-  const t = useTranslate()
-  return (
-    <div
-      role="tablist"
-      aria-label={t('agentPicker.agents', 'Agents')}
-      className="flex shrink-0 items-center overflow-x-auto border-b border-border px-1.5 scrollbar-none"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          return
-        }
-        // The menu would read these keys as typeahead and item moves.
-        event.stopPropagation()
-        const tabs = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')]
-        const index = event.target instanceof HTMLElement ? tabs.indexOf(event.target) : -1
-        const move = (next: number) => {
-          event.preventDefault()
-          tabs[(next + tabs.length) % tabs.length]?.focus()
-        }
-        if (event.key === 'ArrowRight') {
-          move(index + 1)
-        } else if (event.key === 'ArrowLeft') {
-          move(index - 1)
-        } else if (event.key === 'Home') {
-          move(0)
-        } else if (event.key === 'End') {
-          move(tabs.length - 1)
-        } else if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown') {
-          event.preventDefault()
-          focusSearch(event.currentTarget)
-        }
-      }}
-    >
-      {entries.map((entry) => {
-        const missing = entry.surfaces.length === 0
-        const selected = entry.agent === pane
-        return (
-          <AgentDefaultContextMenu
-            key={entry.agent}
-            isDefault={defaultAgent === entry.agent}
-            onSetDefault={onSetDefault && !missing ? () => onSetDefault(entry.agent) : undefined}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  role="tab"
-                  tabIndex={selected ? 0 : -1}
-                  aria-selected={selected}
-                  aria-label={entry.label}
-                  // Why: a click keeps focus, and typing, in the search field.
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onSelect(entry.agent)}
-                  className={cn(
-                    'grid h-9 w-[34px] shrink-0 place-items-center border-b-2 outline-none transition-[color,opacity] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
-                    selected
-                      ? 'border-foreground text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                    missing && (selected ? 'opacity-60' : 'opacity-40 hover:opacity-70')
-                  )}
-                >
-                  <AgentVariantIcon agent={entry.agent} size={16} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {entry.label}
-              </TooltipContent>
-            </Tooltip>
-          </AgentDefaultContextMenu>
-        )
-      })}
+      {terminalPane && blankTerminal ? (
+        <AgentPickerBlankTerminalPane
+          label={blankTerminal.label}
+          disabled={props.disabled}
+          onClose={props.onClose}
+        />
+      ) : (
+        // Why keyed: each agent's pane owns its own kept setup and search.
+        <AgentLaunchPickerPane
+          key={pane.agent}
+          {...props}
+          initialQuery={switched ? '' : props.initialQuery}
+          entry={pane}
+          onShowAgent={showPane}
+        />
+      )}
     </div>
   )
 }
@@ -222,6 +141,7 @@ function AgentLaunchPickerPane({
   initialQuery,
   searchInputRef,
   choices,
+  blankTerminal,
   onPick,
   onClose,
   onShowAgent
@@ -330,7 +250,8 @@ function AgentLaunchPickerPane({
         current: agent ? { agent, model: currentModel } : undefined,
         onPick: pickSearchResult,
         onPickAgent: pickAgent,
-        choices
+        choices,
+        searchChoices: blankTerminal ? [blankTerminal] : undefined
       }}
       onDraftChange={(draft, edit) => {
         setup.change(draft)

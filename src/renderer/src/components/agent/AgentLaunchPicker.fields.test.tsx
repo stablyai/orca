@@ -137,17 +137,17 @@ it('removes a chip from the Arguments text being typed, not the saved text', asy
   expect(picks.mock.lastCall?.[1]?.arguments).toContain('--verbose')
 })
 
-it('reaches the rows under the card from search and from the keyboard', async () => {
+it('picks Blank Terminal from search and from its rail tile', async () => {
   const user = userEvent.setup()
   await open()
   await user.keyboard('blank')
   await user.keyboard('{Enter}')
   expect(blank).toHaveBeenCalledOnce()
   await open()
-  await user.keyboard('{ArrowDown}{ArrowDown}')
-  expect(document.activeElement?.textContent).toBe('Blank Terminal')
-  await user.keyboard('{ArrowUp}')
-  expect(document.activeElement).toBe(search())
+  await user.keyboard('{Shift>}{Tab}{/Shift}{ArrowLeft}')
+  expect(document.activeElement).toBe(getByRole(document.body, 'tab', { name: 'Blank Terminal' }))
+  await user.keyboard('{Enter}')
+  expect(blank).toHaveBeenCalledTimes(2)
 })
 
 it('moves between the agent tabs with the keyboard', async () => {
