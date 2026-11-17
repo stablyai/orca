@@ -1,5 +1,5 @@
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'

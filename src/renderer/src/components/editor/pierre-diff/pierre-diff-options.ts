@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { DEFAULT_VIRTUAL_FILE_METRICS, type FileDiffOptions, type ThemesType } from '@pierre/diffs'
 import type { CreatePatchOptionsNonabortable } from 'diff'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   resolveEditorTypography,
   type EditorTypography
