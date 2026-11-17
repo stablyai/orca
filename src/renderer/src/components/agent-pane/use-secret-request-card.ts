@@ -14,7 +14,8 @@ import {
   setSecretRequestTouched,
   type SecretRequestEntry
 } from '@/lib/secret-requests/secret-request-store'
-import { useAgentHostPanelOpener } from '@/lib/agent-host-panel/agent-host-panel-opener'
+import { openAgentHostPanel } from '@/components/agent-host-panel/agent-host-panel-store'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
   restartableSecretRequestAgent,
   secretRequestAgentName
@@ -102,7 +103,6 @@ export function useSecretRequestCard(args: {
   const [sharedWorkspace, setSharedWorkspace] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const repoKey = useWorkspaceRepoKey(event.worktreeId ?? worktreeId)
-  const openPanel = useAgentHostPanelOpener()
   const local = entry.local
 
   useEffect(() => {
@@ -303,9 +303,12 @@ export function useSecretRequestCard(args: {
       onDismiss: () => dismissSecretRequest(environmentId, requestId),
       onToggleCollapsed: () => setCollapsed((current) => !current),
       onCollapse: () => setCollapsed(true),
-      onDetails: openPanel
-        ? () => openPanel({ hostId: environmentId, focus: { secret: event.name } })
-        : undefined,
+      // The app's one panel is always mounted; its store opens it (the old opener registry had no caller).
+      onDetails: () =>
+        openAgentHostPanel({
+          hostId: toRuntimeExecutionHostId(environmentId),
+          focus: { secret: event.name }
+        }),
       onFocusChange: setFocused
     }
   }
