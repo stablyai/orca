@@ -14,5 +14,13 @@ export type SetupWorkspaceAttempt = {
   publication?: AbortController
   writerToken?: string
   reservations: Set<symbol>
-  writers: Set<object>
+  writers: Set<SetupTerminalWriter>
+}
+
+export type SetupTerminalWriter = {
+  handle: string
+  scan: (data: string) => void
+  completion: Promise<{ exitCode: number | null }>
+  finish: (exitCode: number | null) => void
+  refuse?: () => void
 }

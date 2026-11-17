@@ -301,6 +301,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     startupTerminalHandle,
     startupTerminalTabId: startupTerminal?.tabId ?? null,
     startupTerminalPaneKey: startupTerminal?.paneKey ?? null,
-    startupTerminalPtyId
+    startupTerminalPtyId: startupTerminal?.ptyId ?? null
   }
 }

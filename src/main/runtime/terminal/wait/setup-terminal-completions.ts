@@ -1,4 +1,7 @@
-import type { SetupWorkspaceAttempt as WorkspaceAttempt } from './setup-workspace-attempt'
+import type {
+  SetupWorkspaceAttempt as WorkspaceAttempt,
+  SetupTerminalWriter as Attempt
+} from './setup-workspace-attempt'
 import { SetupTerminalDependents } from './setup-terminal-dependents'
 import type { TerminalSetupVerdict } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { SetupAttemptRecipe } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
@@ -8,14 +11,6 @@ import { DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS } from '../../../../shared/agent-lau
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 
 type SetupCompletion = { exitCode: number | null }
-
-type Attempt = {
-  handle: string
-  scan: (data: string) => void
-  completion: Promise<SetupCompletion>
-  finish: (exitCode: number | null) => void
-  refuse?: () => void
-}
 
 export class SetupTerminalCompletions extends SetupTerminalDependents {
   private readonly attempts = new Map<string, Attempt>()
@@ -101,13 +96,14 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       const captured = workspace
       captured.writers.add(attempt)
       attempt.refuse = () => {
+        captured.writers.delete(attempt)
         const { cancelled, result, recipe, publication } = captured
         if (
           cancelled ||
           result?.exitCode != null ||
           !recipe ||
           publication ||
-          captured.writers.size > 1 ||
+          captured.writers.size > 0 ||
           captured.reservations.size > 0
         ) {
           return
@@ -119,8 +115,11 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
           .finally(() => this.retireWorkspaceAttempt(workspaceId, captured))
       }
       finishWorkspace = (exitCode) => {
-        captured.writers.delete(attempt)
-        if (exitCode !== null || (!captured.writers.size && !captured.reservations.size)) {
+        if (exitCode !== null) {
+          captured.writers.delete(attempt)
+        }
+        const otherWriters = captured.writers.size - Number(captured.writers.has(attempt))
+        if (exitCode !== null || (otherWriters === 0 && !captured.reservations.size)) {
           captured.finish(exitCode)
         }
       }
@@ -198,6 +197,8 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       cancel: () => {
         workspace.cancelled = true
         workspace.publication?.abort()
+        workspace.writers.clear()
+        workspace.reservations.clear()
         clearTimeout(timer)
       },
       finish: (exitCode) => {

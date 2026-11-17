@@ -214,3 +214,45 @@ it('keeps a surviving same-nonce writer when another capture is abandoned', asyn
   await expect(completion.forWorkspace('workspace')).resolves.toEqual({ exitCode: 0 })
   completion.forgetWorkspace('workspace')
 })
+
+it('keeps a live Setup writer after another writer receives late exit confirmation', async () => {
+  const failures: string[] = []
+  const completion = new SetupTerminalCompletions(undefined, async (recipe) => {
+    failures.push(recipe.nonce)
+  })
+  completion.bindRecipe('workspace', {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix',
+    nonce: 'same',
+    deadline: Number.MAX_SAFE_INTEGER
+  })
+  completion.begin('first-pty', 'first-handle', 'same', 'workspace')
+  completion.begin('live-pty', 'live-handle', 'same', 'workspace')
+  completion.exit('first-pty')
+  completion.exit('first-pty', true)
+  completion.observe('live-pty', '__ORCA_SETUP_COMPLETE__:same:0\n')
+  await expect(completion.forWorkspace('workspace')).resolves.toEqual({ exitCode: 0 })
+  expect(failures).toEqual([])
+  completion.forgetWorkspace('workspace')
+})
+
+it('refuses a captured writer dispatched after workspace removal', async () => {
+  const completion = new SetupTerminalCompletions()
+  completion.bindRecipe('workspace', {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix',
+    nonce: 'removed',
+    deadline: Number.MAX_SAFE_INTEGER
+  })
+  const writer = completion.capture('workspace', 'late-handle', {
+    setupCompletionToken: 'removed',
+    setupRequired: true,
+    sessionId: 'late-pty'
+  })
+  completion.forgetWorkspace('workspace')
+  expect(() => writer?.begin()).toThrow()
+  writer?.finish(false)
+  completion.observe('late-pty', '__ORCA_SETUP_COMPLETE__:removed:0\n')
+  expect(completion.forWorkspace('workspace')).toBeUndefined()
+  expect(completion.forHandle('late-handle')).toBeUndefined()
+})
