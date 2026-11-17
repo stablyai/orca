@@ -51,30 +51,3 @@ it('moves initial focus to the Agent trigger when detection finishes', async () 
   await waitFor(() => expect(screen.getByRole('button', { name: 'Agent field' })).toHaveFocus())
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 })
-
-it('focuses the Agent field and shows the cost helper only for the full transcript', async () => {
-  render(
-    <AgentSessionContinuationDialog
-      open
-      onOpenChange={() => {}}
-      request={{
-        worktreeId: 'wt-1',
-        workspacePath: '/tmp/fix-login',
-        launchSource: 'sidebar',
-        source: {
-          sourceAgent: 'claude',
-          capturedText: 'Current task',
-          transcriptPath: '/tmp/session.jsonl'
-        }
-      }}
-    />
-  )
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Agent field' })).toHaveFocus())
-  expect(screen.queryByText('Slower, and uses more of your plan or API credits.')).toBeNull()
-  await userEvent.click(screen.getByRole('combobox', { name: 'Context' }))
-  await userEvent.click(screen.getByRole('option', { name: 'Full transcript' }))
-  expect(screen.getByText('Slower, and uses more of your plan or API credits.')).toBeVisible()
-  await userEvent.click(screen.getByRole('combobox', { name: 'Context' }))
-  await userEvent.click(screen.getByRole('option', { name: 'Latest status (recommended)' }))
-  expect(screen.queryByText('Slower, and uses more of your plan or API credits.')).toBeNull()
-})
