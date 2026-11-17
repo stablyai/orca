@@ -97,12 +97,12 @@ export function WorkspaceCleanupChatHistorySetting({
                     {diskUsage.complete
                       ? t(
                           'components.settings.workspaceCleanup.chatHistory.codexDiskUsage',
-                          'Codex chats on {{host}} use {{size}}.',
+                          'All Codex chat history on {{host}} takes {{size}}.',
                           { host: hostLabel, size: formatBytes(diskUsage.bytes) }
                         )
                       : t(
                           'components.settings.workspaceCleanup.chatHistory.codexDiskUsageAtLeast',
-                          'Codex chats on {{host}} use at least {{size}}.',
+                          'All Codex chat history on {{host}} takes at least {{size}}.',
                           { host: hostLabel, size: formatBytes(diskUsage.bytes) }
                         )}
                   </span>

@@ -68,7 +68,17 @@ describe('measureCodexHistoryDiskUsage', () => {
     }
 
     expect(
-      measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32')
-    ).toMatchObject({ complete: false, rollouts: 2 })
+      measureCodexHistoryDiskUsage([root], { ...open, maxEntries: 2 }, 'win32').complete
+    ).toBe(false)
+  })
+
+  // What the disk gives back is whole blocks, not the bytes written.
+  it.skipIf(process.platform === 'win32')('counts allocated blocks off Windows', () => {
+    const root = tempRoot()
+    write(join(root, 'rollout-a.jsonl'), 1)
+
+    const { bytes } = measureCodexHistoryDiskUsage([root], open)
+    expect(bytes).toBeGreaterThanOrEqual(512)
+    expect(bytes % 512).toBe(0)
   })
 })

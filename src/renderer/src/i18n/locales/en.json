@@ -22727,8 +22727,8 @@
           "confirmTitle": "Delete chat history from deleted workspaces?",
           "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
-          "codexDiskUsage": "Codex chats on {{host}} use {{size}}.",
-          "codexDiskUsageAtLeast": "Codex chats on {{host}} use at least {{size}}.",
+          "codexDiskUsage": "All Codex chat history on {{host}} takes {{size}}.",
+          "codexDiskUsageAtLeast": "All Codex chat history on {{host}} takes at least {{size}}.",
           "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         },
         "manual": {

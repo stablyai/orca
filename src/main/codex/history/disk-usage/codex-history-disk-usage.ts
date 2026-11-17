@@ -15,10 +15,12 @@ import type {
   CodexHistoryDiskUsageWorkerRequest,
   CodexHistoryDiskUsageWorkerResponse
 } from './codex-history-disk-usage-worker-protocol'
+import { createCodexHistoryDiskUsageReader } from './codex-history-disk-usage-reader'
 
 const WORKER_FILENAME = 'codex-history-disk-usage-worker-entry.js'
 // A walk past these reports a lower bound rather than holding a disk busy.
-const MAX_ENTRIES = 1_000_000
+// Counts every hard-linked name: a 400k-rollout history linked into four homes is 1.6M.
+const MAX_ENTRIES = 4_000_000
 const WALK_BUDGET_MS = 60_000
 const WORKER_TIMEOUT_MS = WALK_BUDGET_MS + 30_000
 const IDLE_TEARDOWN_MS = 30_000
@@ -63,23 +65,16 @@ function getQueue(): NonNullable<typeof queue> {
   return queue
 }
 
-let inFlight: Promise<CodexHistoryDiskUsage> | null = null
-let last: { usage: CodexHistoryDiskUsage; at: number } | null = null
-// Bumped by deletions so a walk that started before one never refills the reuse slot.
-let generation = 0
-
-/** Orca deleted rollouts: the next read walks again. */
-export function forgetCodexHistoryDiskUsage(): void {
-  generation += 1
-  last = null
-}
-
 async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<CodexHistoryDiskUsage> {
   const roots = codexHistoryFolders(await listHostCodexRolloutHomes(settings))
   const response = await getQueue().dispatch(
-    (id) => ({ id, roots, budget: { maxEntries: MAX_ENTRIES, deadline: Date.now() + WALK_BUDGET_MS } }),
+    (id) => ({
+      id,
+      roots,
+      budget: { maxEntries: MAX_ENTRIES, deadline: Date.now() + WALK_BUDGET_MS }
+    }),
     WORKER_TIMEOUT_MS
   )
   if (!response.ok) {
@@ -88,29 +83,16 @@ async function measure(
   return response.usage
 }
 
+const reader = createCodexHistoryDiskUsageReader(REUSE_MS)
+
+/** Orca deleted rollouts: the next read walks again. */
+export function forgetCodexHistoryDiskUsage(): void {
+  reader.forget()
+}
+
 /** Read-only and off the main thread; callers asking during a walk share it. */
 export function getCodexHistoryDiskUsage(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
-  now = Date.now()
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<CodexHistoryDiskUsage> {
-  if (last && now - last.at < REUSE_MS) {
-    return Promise.resolve(last.usage)
-  }
-  if (!inFlight) {
-    const startedIn = generation
-    const walk = measure(settings)
-      .then((usage) => {
-        if (startedIn === generation) {
-          last = { usage, at: Date.now() }
-        }
-        return usage
-      })
-      .finally(() => {
-        if (inFlight === walk) {
-          inFlight = null
-        }
-      })
-    inFlight = walk
-  }
-  return inFlight
+  return reader.read(() => measure(settings))
 }
