@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeProjectGroups } from './project-groups'
+import { breakProjectGroupParentCycles, normalizeProjectGroups } from './project-groups'
 
 function normalizedParents(value: unknown[]): Record<string, string | null> {
   return Object.fromEntries(
@@ -33,5 +33,18 @@ describe('normalizeProjectGroups parent cycles', () => {
         { id: 'b', name: 'B', tabOrder: 2, parentGroupId: 'a' }
       ])
     ).toEqual({ tail: 'a', a: null, b: 'a' })
+  })
+
+  it('cuts a long parent cycle once without re-walking the chain', () => {
+    const length = 50_000
+    const groups = Array.from({ length }, (_, index) => ({
+      id: `g${index}`,
+      parentGroupId: `g${(index + 1) % length}`
+    }))
+
+    breakProjectGroupParentCycles(groups)
+
+    expect(groups[0].parentGroupId).toBeNull()
+    expect(groups.filter((group) => group.parentGroupId === null)).toHaveLength(1)
   })
 })
