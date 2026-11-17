@@ -1,3 +1,4 @@
+import { refreshSchemaObjects } from '../schema/schema-object-refresh'
 import type Database from '../../../../sqlite/sync-database'
 import { REMOTE_OWNED_WIRE_VERSION } from '../../../../../shared/orchestration/remote-owned-wire'
 
@@ -40,7 +41,6 @@ CREATE TABLE IF NOT EXISTS message_dispatch_provenance (
 
 /** A peer-Run Dispatch as a `worker_state` item carries it, with its Task and Run. */
 const PEER_RUN_DISPATCH_STATE_VIEW_SQL = `
-DROP VIEW IF EXISTS peer_run_dispatch_state;
 CREATE VIEW peer_run_dispatch_state AS
 SELECT d.id AS dispatch_id, pr.conversation_id, pr.home_run_id, pr.run_id AS peer_run_id,
   json_object(
@@ -129,47 +129,33 @@ const trigger = (statements: [string, string]) => `BEGIN ${statements.join(';\n'
 
 /**
  * Every final message of a peer Run's mailbox and every lifecycle change of its Dispatches, their
- * workers and their Tasks queue home in the transaction that made them. Rebuilt on every open.
+ * workers and their Tasks queue home in the transaction that made them. Rebuilt on open when changed.
  * The report owner's unobserved-prompt correction queues once, flagged, after all its writes.
  */
 export function createPeerRunQueueTriggers(db: Database.Database): void {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    db.exec(`
-      ${PEER_RUN_DISPATCH_STATE_VIEW_SQL}
-      DROP TRIGGER IF EXISTS trg_peer_run_mail_insert;
-      DROP TRIGGER IF EXISTS trg_peer_run_mail_reroute;
-      DROP TRIGGER IF EXISTS trg_peer_run_dispatch_insert;
-      DROP TRIGGER IF EXISTS trg_peer_run_dispatch_status;
-      DROP TRIGGER IF EXISTS trg_peer_run_worker_state;
-      DROP TRIGGER IF EXISTS trg_peer_run_task_status;
-      DROP TRIGGER IF EXISTS trg_peer_run_correction;
-      CREATE TRIGGER trg_peer_run_mail_insert AFTER INSERT ON messages
+  refreshSchemaObjects(db, [
+    PEER_RUN_DISPATCH_STATE_VIEW_SQL,
+    `CREATE TRIGGER trg_peer_run_mail_insert AFTER INSERT ON messages
       WHEN NEW.to_handle LIKE 'run:%' AND NEW.type <> 'heartbeat'
-      ${trigger(peerRunMailStatements('NEW'))}
-      CREATE TRIGGER trg_peer_run_mail_reroute AFTER UPDATE OF to_handle ON messages
+      ${trigger(peerRunMailStatements('NEW'))}`,
+    `CREATE TRIGGER trg_peer_run_mail_reroute AFTER UPDATE OF to_handle ON messages
       WHEN NEW.to_handle LIKE 'run:%' AND NEW.to_handle <> OLD.to_handle AND NEW.type <> 'heartbeat'
-      ${trigger(peerRunMailStatements('NEW'))}
-      CREATE TRIGGER trg_peer_run_dispatch_insert AFTER INSERT ON dispatch_contexts
-      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}
-      CREATE TRIGGER trg_peer_run_dispatch_status AFTER UPDATE OF status ON dispatch_contexts
+      ${trigger(peerRunMailStatements('NEW'))}`,
+    `CREATE TRIGGER trg_peer_run_dispatch_insert AFTER INSERT ON dispatch_contexts
+      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}`,
+    `CREATE TRIGGER trg_peer_run_dispatch_status AFTER UPDATE OF status ON dispatch_contexts
       WHEN NEW.status <> OLD.status AND ${NOT_CORRECTING('NEW.id')}
-      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}
-      CREATE TRIGGER trg_peer_run_worker_state AFTER UPDATE OF state ON worker_dispatches
+      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}`,
+    `CREATE TRIGGER trg_peer_run_worker_state AFTER UPDATE OF state ON worker_dispatches
       WHEN NEW.state <> OLD.state AND ${NOT_CORRECTING('NEW.dispatch_id')}
-      ${trigger(peerRunDispatchStateStatements('NEW.dispatch_id', false, 'NULL'))}
-      CREATE TRIGGER trg_peer_run_task_status AFTER UPDATE OF status ON tasks
+      ${trigger(peerRunDispatchStateStatements('NEW.dispatch_id', false, 'NULL'))}`,
+    `CREATE TRIGGER trg_peer_run_task_status AFTER UPDATE OF status ON tasks
       WHEN NEW.status <> OLD.status AND NOT EXISTS (
         SELECT 1 FROM peer_run_corrections c JOIN dispatch_contexts d ON d.id = c.dispatch_id
         WHERE d.task_id = NEW.id
       )
-      ${trigger(peerRunDispatchStateStatements(LATEST_TASK_DISPATCH('NEW.id'), false, 'NULL'))}
-      CREATE TRIGGER trg_peer_run_correction AFTER DELETE ON peer_run_corrections
-      ${trigger(peerRunDispatchStateStatements('OLD.dispatch_id', true, 'NULL'))}
-    `)
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+      ${trigger(peerRunDispatchStateStatements(LATEST_TASK_DISPATCH('NEW.id'), false, 'NULL'))}`,
+    `CREATE TRIGGER trg_peer_run_correction AFTER DELETE ON peer_run_corrections
+      ${trigger(peerRunDispatchStateStatements('OLD.dispatch_id', true, 'NULL'))}`
+  ])
 }
