@@ -22,13 +22,13 @@ vi.mock('../../store', () => ({
     selector({ usagePercentageDisplay: 'used' })
 }))
 
-// NS-03 (Neil): "Refresh failed" and "⚠ Sign-in expired" sat in the status bar for good. A failed
+// "Refresh failed" and "⚠ Sign-in expired" sat in the status bar for good. A failed
 // usage read now shows a quiet "--" with the reason as its label; the usage card explains it.
 describe('ProviderSegment calm error', () => {
   it.each([
     ['cursor', 'stale-token', 'Sign-in expired'],
     ['gemini', 'unknown', 'Refresh failed'],
-    // design-squad P3: "⚠ Usage unavailable" twice (Claude + Codex) in a cloud workspace.
+    // "⚠ Usage unavailable" twice (Claude + Codex) in a cloud workspace.
     ['claude', 'usage-unavailable', 'Usage unavailable']
   ] as const)(
     '%s %s renders "--", no warning icon, label kept for a11y',

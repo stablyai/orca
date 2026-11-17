@@ -1,4 +1,4 @@
-// Account menu row while the team is on its one-time trial (spec T1): "Trial · 1.4 sandbox hours
+// Account menu row while the team is on its one-time trial: "Trial · 1.4 sandbox hours
 // left", visible to every member; owners and admins can pick it to choose a plan. It disappears
 // once a plan starts, because the entitlement no longer carries a trial.
 import { Cloud } from 'lucide-react'
@@ -41,7 +41,7 @@ export function AccountMenuTrialRow({
           })}
         >
           <Cloud className="size-3.5 self-start mt-0.5" />
-          {/* Two lines in the 240px menu: the hours never truncate (spec T1). */}
+          {/* Two lines in the 240px menu: the hours never truncate. */}
           <span className="flex min-w-0 flex-col gap-0.5">
             {label}
             <span className="text-xs text-muted-foreground">

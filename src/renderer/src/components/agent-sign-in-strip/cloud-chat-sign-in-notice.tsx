@@ -1,4 +1,4 @@
-// CHAT-BANNERS B2: in a structured chat on Orca Cloud, a 401 from the agent ("not signed in") is the
+// In a structured chat on Orca Cloud, a 401 from the agent ("not signed in") is the
 // Orca-account sign-in, which the strip above renews. The generic card's advice (run the CLI's login,
 // a Sign in button that opens a terminal on the host) points at the wrong fix there; this replaces it.
 import { createContext, useContext, type ReactNode } from 'react'

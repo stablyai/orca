@@ -11,7 +11,7 @@ import {
 import { useCloudSshMenuState, type CloudSshWorktree } from '../cloud-ssh/use-cloud-ssh-status'
 
 /**
- * A9: before deleting a running Orca Cloud sandbox the control plane runs each agent's sign-out.
+ * Before deleting a running Orca Cloud sandbox the control plane runs each agent's sign-out.
  * Only a CLI login saved on the sandbox (the kill-switch fallback) has anything to sign out; the
  * usual Orca-account placeholders report as API keys, so the line stays hidden for them.
  */

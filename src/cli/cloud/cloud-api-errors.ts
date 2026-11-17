@@ -4,12 +4,12 @@
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { CloudCredentials } from './cloud-credentials'
 
-export type CloudApiErrorBody = { error?: unknown; reason?: unknown }
+type CloudApiErrorBody = { error?: unknown; reason?: unknown }
 
 /** What the failed request was doing; create-time copy never says "Your files are safe". */
 export type CloudRequestIntent = 'create' | 'existing'
 
-export type CloudApiErrorContext = {
+type CloudApiErrorContext = {
   credentials: Pick<CloudCredentials, 'source' | 'token' | 'path'>
   retryAfter?: string | null
   intent?: CloudRequestIntent
@@ -23,7 +23,7 @@ const BUSY_409 =
   'This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.'
 
 /** "Try again in 12 seconds." (one second is singular). */
-export function tryAgainIn(seconds: number): string {
+function tryAgainIn(seconds: number): string {
   return `Try again in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`
 }
 
@@ -106,6 +106,7 @@ export function cloudApiError(
     ...(nextSteps.length > 0 ? { nextSteps } : {})
   })
   const creating = context.intent === 'create'
+  const safety = creating ? NOTHING_CREATED : FILES_SAFE
   const inVm = context.credentials.token.startsWith('orca_ws_')
   if (status === 401) {
     return new RuntimeClientError(
@@ -142,7 +143,6 @@ export function cloudApiError(
       data(['Pick another workspace.'])
     )
   }
-  const safety = creating ? NOTHING_CREATED : FILES_SAFE
   // Out of hours or at the spend cap, billing puts the team's running sandboxes to sleep (never deletes).
   const GO_TO_SLEEP = "Running sandboxes go to sleep and new ones can't start."
   if (
@@ -193,13 +193,13 @@ export function cloudApiError(
     if (reason === 'trial_unavailable') {
       return new RuntimeClientError(
         'cloud_plan_required',
-        `This account or team already used its trial. ${creating ? NOTHING_CREATED : FILES_SAFE}`,
+        `This account or team already used its trial. ${safety}`,
         data(['Ask an owner or admin to choose a plan in Orca → Settings → Plan & billing.'])
       )
     }
     return new RuntimeClientError(
       'cloud_plan_required',
-      `Orca Cloud needs a Team plan. ${creating ? NOTHING_CREATED : FILES_SAFE}`,
+      `Orca Cloud needs a Team plan. ${safety}`,
       data(['Ask an owner or admin to start a Team plan in Orca → Settings → Plan & billing.'])
     )
   }

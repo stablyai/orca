@@ -1,4 +1,4 @@
-// P0 "Set up once": the strip (terminal pane and chat UI) takes the code Claude's sign-in page shows.
+// "Set up once": the strip (terminal pane and chat UI) takes the code Claude's sign-in page shows.
 import { describe, expect, it } from 'vitest'
 import type { Translate } from '@/i18n/use-translate'
 import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'

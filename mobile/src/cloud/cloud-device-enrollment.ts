@@ -19,7 +19,7 @@ const enrollDevice = bindDeferredRpcOperation(
   })
 )
 
-export type CloudEnrollmentFailure = 'signed-out' | 'not-offered' | 'unreachable'
+type CloudEnrollmentFailure = 'signed-out' | 'not-offered' | 'unreachable'
 
 export class CloudEnrollmentError extends Error {
   constructor(readonly failure: CloudEnrollmentFailure) {

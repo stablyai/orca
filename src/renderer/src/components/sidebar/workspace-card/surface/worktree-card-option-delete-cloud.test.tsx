@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// OPTION-TRASH-CLOUD: holding Option shows the trash on a cloud workspace's own row (owned or
+// Holding Option shows the trash on a cloud workspace's own row (owned or
 // paired), the live card's DeleteQuickAction, and it opens the cloud delete (sandbox), never the
 // local "Remove Project". A local repo's primary checkout still gets no trash.
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -66,7 +66,7 @@ afterEach(() => {
   mocks.cloudDelete.mockReset()
 })
 
-describe('Option shows the trash on cloud rows (OPTION-TRASH-CLOUD)', () => {
+describe('Option shows the trash on cloud rows', () => {
   it('the gate: a cloud primary is deletable, a local primary is not', () => {
     const held = { deleteModifierPressed: true, isDeleting: false }
     expect(canShowWorkspaceDeleteQuickAction({ ...held, isMainWorktree: true })).toBe(false)

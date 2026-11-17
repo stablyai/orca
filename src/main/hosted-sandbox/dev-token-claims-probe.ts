@@ -1,4 +1,4 @@
-// GH-LIST-MISSING diagnostics, dev builds only: which org the Orca Cloud token in use claims, next
+// Diagnostics for an empty GitHub repository list, dev builds only: which org the Orca Cloud token in use claims, next
 // to the team the app shows. A token minted for another team (or none) explains an empty GitHub
 // list after an owner → member → owner switch. Never the token itself, and never in packaged builds.
 

@@ -1,4 +1,4 @@
-// WAKE-SCROLLBACK: a real xterm after Sleep → Wake. Each fixture writes the pre-sleep output, runs
+// A real xterm after Sleep → Wake. Each fixture writes the pre-sleep output, runs
 // the actual capture, the woken terminal's snapshot (it clears the pane) and the restore after it,
 // so what shows is what the pane shows.
 import React, { useEffect, useRef } from 'react'

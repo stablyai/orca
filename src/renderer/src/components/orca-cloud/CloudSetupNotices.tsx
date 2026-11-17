@@ -59,7 +59,7 @@ export function cloudSetupNoticeLine(
         ...(handlers.restart ? { restart: handlers.restart } : {})
       })
     case 'fetch':
-      // ENV-ORIGIN-TOAST: shown only after a confirming check also failed. GH-FETCH-REASON: the
+      // Shown only after a confirming check also failed. The
       // words and the action follow why (no app access, needs a restart, or the network).
       return cloudFetchNoticeLine(notice.check, record.repoUrl, t, {
         access: handlers.push.access,
@@ -73,7 +73,7 @@ export function cloudSetupNoticeLine(
         ...(handlers.checkingFetch ? { checking: true } : {})
       })
     case 'environmentHeld':
-      // ENV-BUILD-CHURN (d): started without the environment's setup while it updates for a security fix.
+      // Started without the environment's setup while it updates for a security fix.
       return {
         text: t(
           'orcaCloud.setupNotices.environmentHeld',
@@ -162,7 +162,7 @@ function useFetchRecheck(
       }
       busy.current = true
       setChecking(true)
-      // LIVE-GIT-ACCESS: an install since the start reaches this workspace first (a no-op otherwise).
+      // An install since the start reaches this workspace first (a no-op otherwise).
       void applyLiveGitAccess(workspaceId)
         .then(() => recheckCloudFetch(environmentId, runVmEnvironmentCheck))
         .finally(() => {
@@ -232,7 +232,7 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   const snapshot = useCloudSetupNoticesSnapshot()
   const record = environmentId ? snapshot.records[environmentId] : undefined
   const notices = visibleCloudSetupNotices(snapshot, environmentId)
-  // The fetch line asks the same question (GH-FETCH-REASON): can Orca's GitHub app see the repo?
+  // The fetch line asks the same question: can Orca's GitHub app see the repo?
   const push = useCloudPushNotice(
     environmentId,
     record?.repoUrl ?? null,
@@ -266,7 +266,7 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
         checkingFetch: fetch.checking,
         restart
       }),
-      // N-03: only over its own workspace; never over Settings or another workspace.
+      // Only over its own workspace; never over Settings or another workspace.
       { scope: { workspaceId } }
     )
   })

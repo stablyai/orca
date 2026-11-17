@@ -1,4 +1,4 @@
-// COPY-LINK-FIRST-CLICK: the link of a browser trip that hasn't started yet (Orca's first "Sign in",
+// The link of a browser trip that hasn't started yet (Orca's first "Sign in",
 // the setup page's first "Continue in browser"). Copying starts the same flow a click would, without
 // the browser, and copies its link: the sign-in's loopback link once main publishes it, or the
 // setup session's link when the person is already signed in. A private window on this computer

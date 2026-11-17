@@ -29,7 +29,7 @@ describe('OrcaCloudQueuedPromptView heading (DS-e)', () => {
     )
   })
 
-  it('says it waits for the agent while the agent isn’t set up (PC-3b hold)', () => {
+  it('says it waits for the agent while the agent isn’t set up (held launch)', () => {
     expect(heading({ editable: true, held: true })).toBe(
       'First prompt for Claude · Sends once Claude is set up'
     )
@@ -45,7 +45,7 @@ describe('OrcaCloudQueuedPromptView heading (DS-e)', () => {
   })
 })
 
-describe('OrcaCloudQueuedPromptView editing hint (N-04)', () => {
+describe('OrcaCloudQueuedPromptView editing hint', () => {
   function hint(held: boolean): string {
     const { container } = render(
       <OrcaCloudQueuedPromptView
@@ -70,7 +70,7 @@ describe('OrcaCloudQueuedPromptView editing hint (N-04)', () => {
   })
 })
 
-describe('OrcaCloudQueuedPrompt held copy from the first frame (N-04)', () => {
+describe('OrcaCloudQueuedPrompt held copy from the first frame', () => {
   it('reads the account state synchronously, so the first render already says it waits for setup', () => {
     setOrcaCloudAgentAccountsStateForTest({
       load: {

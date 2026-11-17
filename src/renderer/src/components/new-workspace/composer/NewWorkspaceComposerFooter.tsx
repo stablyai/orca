@@ -35,8 +35,8 @@ export function NewWorkspaceComposerFooter({
   cloudStart = null
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
-  // RR-c1: why Create waits (a folder project on Orca Cloud), on hover and for screen readers.
-  // RR-c1: set only after a Create stopped for it; the button stays enabled and points at the error.
+  // Why Create waits (a folder project on Orca Cloud), on hover and for screen readers.
+  // Set only after a Create stopped for it; the button stays enabled and points at the error.
   const needsRepo = Boolean(cloudStart?.needsGitHubRepo)
   return (
     <>

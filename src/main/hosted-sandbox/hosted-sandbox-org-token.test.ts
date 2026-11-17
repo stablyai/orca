@@ -1,4 +1,4 @@
-// ORG-TOKEN-STALE: sandbox tokens are minted for the team the desktop shows, verified against the
+// Sandbox tokens are minted for the team the desktop shows, verified against the
 // token's org claim, dropped on team/role changes, and re-minted once when the control plane refuses.
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

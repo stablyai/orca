@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// V3-01: a held Orca Cloud launch survives a quit. Its placeholder is remembered (per profile), and
+// A held Orca Cloud launch survives a quit. Its placeholder is remembered (per profile), and
 // on the next start the hold is put back once the placeholder tab returns: the strip's key and the
 // original prompt come back, Start launches it, Cancel forgets it, and nothing launches unasked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -233,7 +233,7 @@ describe('after a restart', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it("V3-01-DOUBLE-SHELL: released while the account still isn't set up, it holds again in the SAME placeholder", async () => {
+  it("released while the account still isn't set up, it holds again in the SAME placeholder", async () => {
     mocks.load = 'loading'
     remember()
     setTabs([TAB])
@@ -318,7 +318,7 @@ describe('after a restart', () => {
 })
 
 describe('in session (not restored)', () => {
-  it('CHAT-RENEW-INPLACE (B): in session, a renewed hold waits for Start: no create until Start', async () => {
+  it('in session, a renewed hold waits for Start: no create until Start', async () => {
     mocks.coverage = 'expired'
     setTabs([TAB])
     const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
@@ -366,7 +366,7 @@ describe('in session (not restored)', () => {
     expect(create).toHaveBeenCalledTimes(1)
   })
 
-  it('a paused (kill switch) agent never starts the expired hold; a real renewal waits for Start (B)', async () => {
+  it('a paused (kill switch) agent never starts the expired hold; a real renewal waits for Start', async () => {
     mocks.coverage = 'expired'
     setTabs([TAB])
     const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>

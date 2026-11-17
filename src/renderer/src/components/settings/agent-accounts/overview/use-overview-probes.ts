@@ -1,4 +1,4 @@
-// S3 probing (§7 "Scaling"): on open, awake and connected hosts only, at most four at once; each host
+// "Sign-ins by host" probing (§7 "Scaling"): on open, awake and connected hosts only, at most four at once; each host
 // answers from its own 60 s cache. No polling. Hosts that are stopped, suspended, disconnected or
 // unreachable are never asked: their last cached verdict shows with its date.
 import { useCallback, useEffect, useRef, useState } from 'react'

@@ -1,6 +1,6 @@
 // This device's pairings with cloud workspaces it does not own (the "<name> (cloud)" servers made
 // by Open), the file that binds them to their sandboxes, and the prune that drops a pairing once its
-// sandbox is gone (LC-1). Split from cloud-workspaces.ts, which registers the IPC handlers.
+// sandbox is gone. Split from cloud-workspaces.ts, which registers the IPC handlers.
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { app } from 'electron'
 import { z } from 'zod'
@@ -44,7 +44,7 @@ export type CloudWorkspacesPairings = {
   updateBindings: (
     change: (current: Record<string, Binding>) => Record<string, Binding>
   ) => Promise<void>
-  /** The sandbox was deleted from here: its pairing and this desktop's own record go now (LC-2). */
+  /** The sandbox was deleted from here: its pairing and this desktop's own record go now. */
   settleDeleted: (sandboxId: string) => Promise<void>
 }
 
@@ -52,7 +52,7 @@ const RETIRED_STATUSES = new Set(['cleaned', 'cleanup_pending'])
 
 /**
  * This desktop's own record of a sandbox deleted from Home or the API: retired the way the
- * sidebar's Delete retires it, so its row never lingers as "Orca Cloud · Couldn't start" (LC-2).
+ * sidebar's Delete retires it, so its row never lingers as "Orca Cloud · Couldn't start".
  */
 async function retireOwnedRecords(
   sandboxId: string,
@@ -101,7 +101,7 @@ async function readBindings(): Promise<Record<string, Binding>> {
   }
 }
 
-/** Keeps the catalog's paired-server mark current (PAIRED-AWARE); republishes it when it changes. */
+/** Keeps the catalog's paired-server mark current; republishes it when it changes. */
 function notePaired(bindings: Record<string, Binding>): Record<string, Binding> {
   if (noteCloudPairingBindings(bindings)) {
     publishRuntimeEnvironmentCatalogChanged()
@@ -131,7 +131,7 @@ function updateBindings(
 
 let pairings: CloudWorkspacesPairings | null = null
 
-/** EP-8: a paired workspace was re-granted for this computer; its binding names the new grant. */
+/** A paired workspace was re-granted for this computer; its binding names the new grant. */
 export async function rebindCloudPairingGrant(sandboxId: string, grantId: string): Promise<void> {
   await updateBindings((current) =>
     current[sandboxId] ? { ...current, [sandboxId]: { ...current[sandboxId], grantId } } : current
@@ -143,7 +143,7 @@ function activeAccountId(): string | null {
   return orcaCloudAccountId(ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud)
 }
 
-/** The bindings a window may resolve: the active account's, plus unstamped ones (PAIRED-ACCOUNT-FILTER). */
+/** The bindings a window may resolve: the active account's, plus unstamped ones. */
 export async function readActiveAccountBindings(): Promise<Record<string, Binding>> {
   const bindings = await readBindings()
   return Object.fromEntries(
@@ -175,9 +175,9 @@ export function createCloudWorkspacesPairings(
   if (pairings) {
     return pairings
   }
-  // Load the paired-server mark for the runtime catalog now, not at the first prune (PAIRED-AWARE).
+  // Load the paired-server mark for the runtime catalog now, not at the first prune.
   void readBindings()
-  // Only the active account's pairings resolve to a sandbox (PAIRED-ACCOUNT-FILTER).
+  // Only the active account's pairings resolve to a sandbox.
   setCloudPairingActiveAccountReader(activeAccountId)
   const prune = createCloudPairingPrune({
     activeAccountId,

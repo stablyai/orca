@@ -1,4 +1,4 @@
-// The move (Neil): Orca Cloud's sign-ins as their own page in the Orca Cloud group, and the one
+// Orca Cloud's sign-ins as their own page in the Orca Cloud group, and the one
 // row Agent accounts keeps. settings/agent-accounts/CloudAgentSignInsPage:<state>.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudAgentAccountsLoad } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'

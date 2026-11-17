@@ -1,4 +1,4 @@
-// JA-04: every "Set up once" / "Renew" for Orca Cloud opens one focused sheet (Claude and Codex
+// Every "Set up once" / "Renew" for Orca Cloud opens one focused sheet (Claude and Codex
 // only) instead of Settings, so nobody scrolls past this computer's provider accounts to reach it.
 import { useSyncExternalStore } from 'react'
 

@@ -50,7 +50,7 @@ const { freshIfResumeFoundNothing, resumeRemotePaneAgent, stopRemotePaneTerminal
   await import('./cloud-pane-restart-stop')
 const { waitForResumedTerminalReady } = await import('./cloud-resumed-terminal-ready')
 
-describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
+describe('stopRemotePaneTerminalForRestart (paired pane)', () => {
   beforeEach(() => {
     calls.length = 0
     showPtyId = 'host-pty-7'
@@ -94,7 +94,7 @@ const RESUME_ARGS = {
   providerSession: { key: 'session_id' as const, id: 'sess-1' }
 }
 
-describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
+describe('resumeRemotePaneAgent (paired pane)', () => {
   beforeEach(() => {
     calls.length = 0
     ensureAnswers = []
@@ -141,7 +141,7 @@ describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
     warn.mockRestore()
   })
 
-  it('RA-11d: carries the pane’s own launch args (model, effort, flags), never the host defaults', async () => {
+  it('carries the pane’s own launch args (model, effort, flags), never the host defaults', async () => {
     await resumeRemotePaneAgent({
       ptyId: 'remote:env-1@@term_a',
       worktreeId: 'wt-1',
@@ -195,7 +195,7 @@ describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
   })
 })
 
-describe('waitForResumedTerminalReady (RA-11 resume race)', () => {
+describe('waitForResumedTerminalReady (resume race)', () => {
   const sleep = () => Promise.resolve()
   let clock = 0
   const now = () => (clock += 300)
@@ -232,7 +232,7 @@ describe('waitForResumedTerminalReady (RA-11 resume race)', () => {
   })
 })
 
-describe('freshIfResumeFoundNothing (RA-11e)', () => {
+describe('freshIfResumeFoundNothing', () => {
   const sleep = () => Promise.resolve()
   let clock = 0
   const now = () => (clock += 1_000)

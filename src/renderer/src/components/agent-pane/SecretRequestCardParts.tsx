@@ -158,7 +158,7 @@ export function secretRequestDoneTitle(
     : t('secretRequest.done', '{{name}} added to your personal secrets.', { name: args.name })
 }
 
-/** Saved: when the value reaches new shells, whether the agent was told, and Restart {{agent}} (Q5). */
+/** Saved: when the value reaches new shells, whether the agent was told, and Restart {{agent}}. */
 export function SecretRequestDone({
   agent,
   name,

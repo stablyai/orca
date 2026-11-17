@@ -75,7 +75,7 @@ describe('triageCloudEnvironmentChecks', () => {
     expect(notices).toEqual([])
   })
 
-  it('a failed reach of origin is its own notice, never a bare check line (ENV-ORIGIN-TOAST)', () => {
+  it('a failed reach of origin is its own notice, never a bare check line', () => {
     const { fatal, notices } = triageCloudEnvironmentChecks(
       [c('git.fetch', 'fail', 'git'), disk('diskLow')],
       { setupRunsOnCreate: true }
@@ -87,7 +87,7 @@ describe('triageCloudEnvironmentChecks', () => {
     ])
   })
 
-  it('gives low disk and a missing tool their own kinds (ENV-NOTICE-ACTIONS)', () => {
+  it('gives low disk and a missing tool their own kinds', () => {
     expect(
       kinds([
         disk('diskVeryLow'),
@@ -120,7 +120,7 @@ describe('triageCloudEnvironmentChecks', () => {
   })
 })
 
-describe('environmentHeldNotice (ENV-BUILD-CHURN)', () => {
+describe('environmentHeldNotice', () => {
   it('reads the held environment from the create log', () => {
     expect(
       environmentHeldNotice('[orca-cloud] booting\n[orca-cloud] environment-held env_0123abcd\n')

@@ -46,7 +46,7 @@ export type CloudToastView = {
   label?: string
 }
 
-/** A toast about one workspace shows only while that workspace is on screen (N-03). */
+/** A toast about one workspace shows only while that workspace is on screen. */
 type CloudToastScope = { workspaceId: string }
 
 /** What decides visibility: the app's view and its active workspace. */
@@ -88,7 +88,7 @@ function emit(): void {
   }
 }
 
-/** Never over Settings or any other page; a scoped toast only in its own workspace (N-03). */
+/** Never over Settings or any other page; a scoped toast only in its own workspace. */
 function isVisible(entry: Entry): boolean {
   if (context.activeView !== 'terminal') {
     return false
@@ -350,7 +350,7 @@ export function CloudToastCard({
       aria-hidden={quiet || undefined}
       aria-label={!single ? view.label : undefined}
       role={single ? undefined : 'group'}
-      // GA-P3t: the severity look, so a notice never blends into a white pane under it.
+      // The severity look, so a notice never blends into a white pane under it.
       className={cn(
         'w-[var(--width,356px)] max-w-full rounded-lg border font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]',
         BANNER_TONE[warning ? 'warning' : 'info'].surface,

@@ -1,4 +1,4 @@
-// Drives one S4-b card: the typed value lives only here, is sent once to Orca Cloud (PUT
+// Drives one secret request card: the typed value lives only here, is sent once to Orca Cloud (PUT
 // /v1/secrets/:scope/:NAME through main), then orcad is told the outcome. The value never goes to orcad.
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,7 +36,7 @@ import type {
   SecretRequestCardPhase
 } from './SecretRequestCard'
 
-/** D3: while the card has focus or a typed value, keep the request alive, at most once a minute. */
+/** While the card has focus or a typed value, keep the request alive, at most once a minute. */
 export const SECRET_REQUEST_TOUCH_INTERVAL_MS = 60_000
 const RPC_TIMEOUT_MS = 15_000
 
@@ -97,7 +97,7 @@ export function useSecretRequestCard(args: {
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [focused, setFocused] = useState(false)
   const [repoWritable, setRepoWritable] = useState(false)
-  // SEC-5: a shared workspace gets no Personal secrets, so a Personal save would never reach it.
+  // A shared workspace gets no Personal secrets, so a Personal save would never reach it.
   // Unknown until read: Personal stays offered meanwhile, as before this check existed.
   const [sharedWorkspace, setSharedWorkspace] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -149,7 +149,7 @@ export function useSecretRequestCard(args: {
     return () => window.clearTimeout(timer)
   }, [environmentId, requestId, event.expiresAt, local])
 
-  // D3 hold: touch now (if a minute has passed) and every minute while focused or holding a value.
+  // Keep-alive: touch now (if a minute has passed) and every minute while focused or holding a value.
   const holding = (focused || value.length > 0) && local === null
   useEffect(() => {
     if (!holding) {

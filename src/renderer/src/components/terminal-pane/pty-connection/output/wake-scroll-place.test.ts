@@ -26,7 +26,7 @@ async function terminalWith(
   return { headless, terminal: headless as unknown as Terminal }
 }
 
-describe('keepWakeScrollPlace (WAKE-SCROLLBACK-SCROLL)', () => {
+describe('keepWakeScrollPlace', () => {
   it("waits for the replay's own rebuild, then puts the person back and pins it; once more after a fit moves it", async () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>

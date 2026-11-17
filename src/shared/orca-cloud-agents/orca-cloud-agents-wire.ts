@@ -1,4 +1,4 @@
-// Orca Cloud agent accounts (agent-accounts spec §5 S0, contract D11): wire shapes of
+// Orca Cloud agent accounts: wire shapes of
 // /v1/agent-credentials and /v1/agent-sources, and the states main reports to the renderer.
 // Nothing here carries a credential: responses and IPC replies are states, labels and codes only.
 import { z } from 'zod'
@@ -39,7 +39,7 @@ export const AgentCredentialsResponseSchema = z.object({
   /** false: the provider's Orca-account path is unusable (flag off or kill switch; see providerState). */
   providerEnabled: z.object({ claude: z.boolean(), codex: z.boolean() }),
   /**
-   * Why: `off` = never offered on this server (flag S1/S2 off), `disabled` = the kill switch (spec §5c).
+   * Why: `off` = never offered on this server (its flag off), `disabled` = the kill switch (spec §5c).
    * Older servers omit it; read it through `orcaCloudProviderState`.
    */
   providerState: z.object({ claude: ProviderState, codex: ProviderState }).optional()
@@ -116,7 +116,7 @@ export type CodexBrokerStatus = z.infer<typeof CodexBrokerStatusResponseSchema>
 /** Which kind of key covers an agent, for "using the team key" / "using your API key". */
 export type AgentKeyKind = 'team' | 'repository' | 'personal'
 
-/** One read for S0 and the composer's Agent row. */
+/** One read for the agent setup and the composer's Agent row. */
 export type OrcaCloudAgentsStatus = {
   credentials: AgentCredentialsView
   sources: AgentSourcesView
@@ -135,7 +135,7 @@ export const ORCA_CLOUD_AGENTS_ERROR_CODES = [
   'broker_in_progress',
   'rate_limited',
   'broker_unavailable',
-  /** RS-3: the ChatGPT account has device-code sign-in turned off (the Codex broker can't print a code). */
+  /** The ChatGPT account has device-code sign-in turned off (the Codex broker can't print a code). */
   'device_auth_disabled',
   'no_golden_image',
   'timeout',

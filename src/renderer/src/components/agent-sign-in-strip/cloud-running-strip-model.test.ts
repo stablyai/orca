@@ -4,7 +4,7 @@ import { cloudRestartAttemptModel, cloudRestartFreshModel } from './cloud-runnin
 
 const attempt = { agent: 'claude' as const, resumable: true, ptyId: 'p', launchedAt: null }
 
-describe('RA-11 Restart feedback copy', () => {
+describe('Restart feedback copy', () => {
   it('restarting: spinner and words only, no button and nothing to close', () => {
     const model = cloudRestartAttemptModel({ ...attempt, phase: 'restarting' }, translate)
     expect(model).toMatchObject({
@@ -41,7 +41,7 @@ describe('RA-11 Restart feedback copy', () => {
   })
 })
 
-describe('RA-11e fresh-start copy', () => {
+describe('fresh-start copy', () => {
   it('says a new conversation started, with nothing to click', () => {
     expect(cloudRestartFreshModel('claude', translate)).toMatchObject({
       status: 'done',

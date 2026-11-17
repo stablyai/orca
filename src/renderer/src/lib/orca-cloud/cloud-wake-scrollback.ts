@@ -1,4 +1,4 @@
-// WAKE-SCROLLBACK: a cloud terminal pane keeps its pre-sleep output across a wake. Sleep reboots the
+// A cloud terminal pane keeps its pre-sleep output across a wake. Sleep reboots the
 // VM and the woken pane attaches to a new terminal whose snapshot replay erases scrollback; the
 // output the pane showed before the sleep is written back above a "Slept 14:02–14:31 · processes
 // stopped" divider, client-side only (nothing reaches the PTY), as rendered text + SGR.
@@ -28,7 +28,7 @@ type PendingHistory = {
   ptyId: string | null
   /** The line the person had scrolled up to (kept across the wake's remount), or null at the bottom. */
   scrolledTo: number | null
-  /** That line's text (REG-13: the restore can shift rows, so its text finds it again). */
+  /** That line's text (the restore can shift rows, so its text finds it again). */
   scrolledText: string | null
 }
 
@@ -143,7 +143,7 @@ export function captureWakeScrollback(
 }
 
 /**
- * The divider, dim, between the restored output and the woken terminal (WAKE-DIVIDER-WIDTH). It
+ * The divider, dim, between the restored output and the woken terminal. It
  * never wraps: the longest form that fits the pane's columns when it is written, decided once —
  * "── Slept 2:02–2:31 PM · processes stopped ──", then "── Slept 2:02–2:31 PM ──", then
  * "── Slept ──", then a bare rule the pane's width. No ellipsis; the time range is never split.
@@ -218,7 +218,7 @@ export function noteBeforeCloudReplay(
     return null
   }
   const normal = terminal.buffer?.normal
-  // Any scrollback: a pane woken from sleep can hold output the host never had (V3-02), at any depth.
+  // Any scrollback: a pane woken from sleep can hold output the host never had, at any depth.
   if (!normal || normal.baseY <= 0) {
     return null
   }
@@ -229,7 +229,7 @@ export function noteBeforeCloudReplay(
   })()
 }
 
-/** N-02: what the pane held just before a clearing replay of this same terminal, or null. */
+/** What the pane held just before a clearing replay of this same terminal, or null. */
 export function preReplayCopy(leafId: string, ptyId: string, maxAgeMs = 60_000): string | null {
   const before = preReplay.get(leafId)
   if (!before || before.ptyId !== ptyId || Date.now() - before.at > maxAgeMs) {
@@ -263,7 +263,7 @@ export function noteWakeViewport(
 
 type WokenTerminal = {
   rows: number
-  /** The divider is fitted to these (WAKE-DIVIDER-WIDTH). */
+  /** The divider is fitted to these. */
   cols?: number
   buffer: {
     active: RestoreBuffer & {
@@ -285,7 +285,7 @@ export type WakeScrollbackRestore = {
   block: string
   /** Where a person who had scrolled up was, or null when pinned to the bottom. */
   scrolledTo: number | null
-  /** That line's text, so the rewrite (which can shift rows) finds it again (REG-13). */
+  /** That line's text, so the rewrite (which can shift rows) finds it again. */
   anchor: string | null
 }
 

@@ -1,5 +1,5 @@
-// JA-04: the focused Orca Cloud sign-in sheet. Only Claude and Codex, each with its one action and
-// status (S0's rows), so "Set up once" never lands on this computer's provider accounts.
+// The focused Orca Cloud sign-in sheet. Only Claude and Codex, each with its one action and
+// status (the Cloud agent sign-ins rows), so "Set up once" never lands on this computer's provider accounts.
 import React from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -27,7 +27,7 @@ function openCloudAgentSignInsSettings(): void {
 function OrcaCloudSignInSheetView({
   body
 }: {
-  /** S0's rows; fixtures pass a fixed view. */
+  /** The Cloud agent sign-ins rows; fixtures pass a fixed view. */
   body: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()

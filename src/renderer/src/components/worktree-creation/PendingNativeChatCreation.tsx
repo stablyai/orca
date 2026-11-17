@@ -85,7 +85,7 @@ export default function PendingNativeChatCreation({
   const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
-  // Glossary: cloud copy says workspace, never worktree (JA-25).
+  // Glossary: cloud copy says workspace, never worktree.
   const cloud = entry ? isOrcaCloudBuild(entry) : false
   // Like t3code, progress shows only in the steps card after a send, never above the composer.
   const now = useWorktreeCreationClock(status === 'creating' && held)

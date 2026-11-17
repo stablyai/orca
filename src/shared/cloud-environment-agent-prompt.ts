@@ -91,7 +91,7 @@ export function buildCloudEnvironmentAgentPrompt(args: {
 const MAX_SCRIPT_CHARS = 8_000
 
 /**
- * DS-40 "Fix with agent": the prompt a cloud workspace's agent gets after an environment build
+ * "Fix with agent": the prompt a cloud workspace's agent gets after an environment build
  * failed. `lead` is the user-facing sentence (localized by the caller). The workspace boots from the
  * last good build, but `orca cloud env` only works on the desktop, so the agent hands the fixed
  * script back instead of saving it.

@@ -1,4 +1,4 @@
-// Which sandbox hours a start spends (O4): the start toast and the build sheet chip. Hours only,
+// Which sandbox hours a start spends: the start toast and the build sheet chip. Hours only,
 // never dollars; during a trial they say so.
 import type { Translate } from '@/i18n/use-translate'
 import {
@@ -37,7 +37,7 @@ export function getOrcaCloudHoursChip(
       })
 }
 
-/** T1: under half an hour of trial left, the hint turns to a warning with the fix. */
+/** Under half an hour of trial left, the hint turns to a warning with the fix. */
 export const ORCA_CLOUD_TRIAL_LOW_SECONDS = 30 * 60
 
 export function isOrcaCloudTrialLow(access: OrcaCloudRunTargetAccess): boolean {

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS B2: on an Orca Cloud chat, the agent's "not signed in" card points at the strip's
+// On an Orca Cloud chat, the agent's "not signed in" card points at the strip's
 // Renew, not at the CLI's login and its terminal Sign in button. Elsewhere the card is unchanged.
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'

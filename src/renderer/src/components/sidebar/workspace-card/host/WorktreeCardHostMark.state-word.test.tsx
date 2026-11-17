@@ -59,7 +59,7 @@ describe('the sidebar row state word', () => {
     expect(word(container)?.textContent).toBe('Asleep')
   })
 
-  it('SLEEP-IN-PROGRESS: keeps saying it is saving after the sleep returns, until the copy is read', () => {
+  it('keeps saying it is saving after the sleep returns, until the copy is read', () => {
     const { container, rerender } = render(<WorktreeCardHostStateWord worktreeId="ws" />)
     view.state = 'sleeping'
     act(() => markSleepCopySaving('ws', 1_000))

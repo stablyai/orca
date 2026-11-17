@@ -5,7 +5,7 @@ import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspac
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import WorktreeCard from './WorktreeCard'
 
-// OPTION-TRASH-CLOUD: the sidebar while Option is held, each card as if hovered. A cloud workspace's
+// The sidebar while Option is held, each card as if hovered. A cloud workspace's
 // own row (created here, or paired from Home) shows the trash like a local worktree; a local repo's
 // primary checkout still doesn't (Git can't delete it).
 const repo = { ...makeRepo(), displayName: 'orca' }

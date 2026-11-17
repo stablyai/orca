@@ -1,4 +1,4 @@
-// WAKE-SCROLLBACK-SCROLL: hear a person scrolling a cloud pane while it sleeps or wakes, so the
+// Hear a person scrolling a cloud pane while it sleeps or wakes, so the
 // restore after the wake's remount can put them back on that line.
 import { noteWakeViewport } from './cloud-wake-scrollback'
 

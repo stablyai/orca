@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ForwardUseMeter } from './runtime-port-forward-use-meter'
 
-// Client-to-VM chunks ([ms, bytes]) recorded through a real forward (W3 perf, 2026-11-10): one
+// Client-to-VM chunks ([ms, bytes]) recorded through a real forward (2026-11-10): one
 // minute of an idle openvscode-server 1.109 window over `ssh -L`, nobody touching it. 2.3 KB/min,
 // above the old 2 KiB/min bar that kept such a VM awake.
 const VSCODE_IDLE_MINUTE: [number, number][] = [

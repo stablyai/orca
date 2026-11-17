@@ -24,7 +24,7 @@ export type CloudHandlerDeps = {
 }
 
 export const CLOUD_AGENTS = ['claude', 'codex'] as const
-export type CloudAgent = (typeof CLOUD_AGENTS)[number]
+type CloudAgent = (typeof CLOUD_AGENTS)[number]
 
 export function isCloudAgent(value: string): value is CloudAgent {
   return CLOUD_AGENTS.some((agent) => agent === value)
@@ -33,7 +33,7 @@ const WORKSPACE_ID = /^sbx_[A-Za-z0-9]+$/
 const PROJECT_ID = /^prj_[A-Za-z0-9]+$/
 const SESSION_HANDLE = /^term_[A-Za-z0-9-]{1,80}$/
 /** A create waits for the sandbox to boot; the control plane bounds that, this only stops a hang. */
-export const CREATE_TIMEOUT_MS = 6 * 60_000
+const CREATE_TIMEOUT_MS = 6 * 60_000
 export const MUTATE_TIMEOUT_MS = 3 * 60_000
 const MESSAGE_POLL_MS = 1500
 export const DEFAULT_MESSAGE_WAIT_S = 180
@@ -69,9 +69,7 @@ export function cloudClient(deps: CloudHandlerDeps): CloudApiClient {
   )
 }
 
-export function getAgentFlag(
-  flags: Map<string, string | boolean>
-): (typeof CLOUD_AGENTS)[number] | undefined {
+export function getAgentFlag(flags: Map<string, string | boolean>): CloudAgent | undefined {
   const agent = getOptionalStringFlag(flags, 'agent')
   if (agent === undefined) {
     return undefined
@@ -80,9 +78,7 @@ export function getAgentFlag(
     throw new RuntimeClientError(
       'invalid_argument',
       `--agent must be one of: ${CLOUD_AGENTS.join(', ')}`,
-      {
-        field: 'agent'
-      }
+      { field: 'agent' }
     )
   }
   return agent
@@ -111,9 +107,7 @@ export async function resolveCloudWorkspaceId(
   const { workspaces } = await api.request<{ workspaces: CloudWorkspace[] }>(
     'GET',
     '/v1/workspaces',
-    {
-      query: { include: 'archived' }
-    }
+    { query: { include: 'archived' } }
   )
   const matches = workspaces.filter((w) => w.name === selector)
   if (matches.length === 1) {
@@ -155,7 +149,7 @@ export type CloudWorkspaceCreateInput = {
   /** Team environment: `env_…` (its active build) or a build `bld_…`. */
   environment?: string
   region?: string
-  message?: { text: string; agent?: (typeof CLOUD_AGENTS)[number] }
+  message?: { text: string; agent?: CloudAgent }
 }
 
 export async function createCloudWorkspace(
@@ -179,15 +173,8 @@ export function normalizeCloudRepoUrl(raw: string): string {
   const candidate = scp
     ? `https://${scp[1]}/${scp[2]}`
     : value.replace(/^ssh:\/\/[\w.-]+@/, 'https://')
-  let url: URL
-  try {
-    url = new URL(candidate)
-  } catch {
-    throw new RuntimeClientError('invalid_argument', `--repo must be an https:// git URL: ${raw}`, {
-      field: 'repo'
-    })
-  }
-  if (url.protocol !== 'https:') {
+  const url = URL.canParse(candidate) ? new URL(candidate) : null
+  if (url?.protocol !== 'https:') {
     throw new RuntimeClientError('invalid_argument', `--repo must be an https:// git URL: ${raw}`, {
       field: 'repo'
     })
@@ -236,7 +223,7 @@ export async function waitForCloudMessage(
     current = (
       await api.request<{ message: CloudMessage }>(
         'GET',
-        `/v1/workspaces/${encodeURIComponent(current.workspaceId)}/messages/${encodeURIComponent(current.id)}`
+        workspacePath(current.workspaceId, `/messages/${encodeURIComponent(current.id)}`)
       )
     ).message
   }

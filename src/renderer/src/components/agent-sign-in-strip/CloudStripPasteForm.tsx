@@ -1,4 +1,4 @@
-// The strip's paste input: a claude.ai code (RA-11), a setup-token (PC-3b), or the code Claude's
+// The strip's paste input: a claude.ai code, a setup-token, or the code Claude's
 // sign-in page shows for the waiting setup-token (Set up once). Secrets are masked; a setup code is
 // cleared as soon as it's sent and goes on its own when a whole one is pasted.
 import React, { useEffect, useRef, useState } from 'react'

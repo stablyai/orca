@@ -1,6 +1,6 @@
 import type { CloudEnrollment } from '../cloud/cloud-device-identity'
 
-export type HomeFeedLayout = 'loading' | 'pair-desktop' | 'feed'
+type HomeFeedLayout = 'loading' | 'pair-desktop' | 'feed'
 
 /**
  * The pairing empty state is only for a phone with nothing to show. A phone enrolled in Orca Cloud

@@ -53,7 +53,7 @@ export function NewWorkspaceComposerAgentSection({
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">
-            {/* Optional is implied by the Blank terminal default (PC-9). */}
+            {/* Optional is implied by the Blank terminal default. */}
             {t('components.newWorkspace.agentLabel', 'Agent')}
           </label>
           <Tooltip>
@@ -85,7 +85,7 @@ export function NewWorkspaceComposerAgentSection({
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
           // The field is always full width here, so its menu is too: a 256 px menu under it reads as
-          // broken (AGENT-PICKER-WIDTH: "~" folder or GitHub-only repo with Orca Cloud fell back to it).
+          // broken (a "~" folder or GitHub-only repo with Orca Cloud fell back to it).
           matchTriggerWidth
           onOpenAgentSettings={onOpenAgentSettings}
           onTriggerEnter={createDisabled ? undefined : onCreate}

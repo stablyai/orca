@@ -1,4 +1,4 @@
-// GIT-SETUP copy (design-squad): the teammates' git identities couldn't be installed after create
+// Copy for when the teammates' git identities couldn't be installed after create
 // (#468), so the VM refuses commits and pushes. One strip per workspace, in the sign-in strip's
 // shape. Restart is the retry: the boot installs the identities again and clears the flag.
 import type { Translate } from '@/i18n/use-translate'

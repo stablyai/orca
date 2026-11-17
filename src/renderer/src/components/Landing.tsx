@@ -293,7 +293,7 @@ export default function Landing(): React.JSX.Element {
             </button>
           </div>
 
-          {/* V3-08: signed out, the team's cloud workspaces can't be opened; say so here. */}
+          {/* Signed out, the team's cloud workspaces can't be opened; say so here. */}
           {hasProjects && signedOutOfCloud ? (
             <LandingCloudSignInCard reconnect={reconnectRequired} />
           ) : hasProjects ? (

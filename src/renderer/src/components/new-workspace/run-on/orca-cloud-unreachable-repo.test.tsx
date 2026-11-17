@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// UNREACHABLE-REPO-NO-ROUTE: Orca Cloud on a GitHub project cloned only on a remote server, whose
+// Orca Cloud on a GitHub project cloned only on a remote server, whose
 // repository the team's GitHub access doesn't cover. Create waits, and the line under Project says
 // why (not the folder wording) with More access; the Project picker lists repositories to pick.
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'

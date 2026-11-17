@@ -70,7 +70,7 @@ export function beginOrcaCloudPkceFlow(
     /** Extra authorize parameters (cloud setup: setup=1, device, setup_steps). */
     authorizeParams?: Record<string, string>
     /**
-     * COPY-LINK-FIRST-CLICK: false starts the same flow without opening the browser (the person
+     * `false` starts the same flow without opening the browser (the person
      * copied the link to paste into a private window). The listener and its timeout are unchanged,
      * so an unused link ends like an unanswered click.
      */
@@ -229,7 +229,7 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge', createCodeChallenge(codeVerifier))
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
-      // A plain sign-in asks auth for its branded "Sign in to Orca" page (V3-04); servers
+      // A plain sign-in asks auth for its branded "Sign in to Orca" page; servers
       // that don't know the flag ignore it. Cloud setup passes its own parameters.
       for (const [key, value] of Object.entries(options.authorizeParams ?? { signin_page: '1' })) {
         authorizeUrl.searchParams.set(key, value)
@@ -255,7 +255,7 @@ export function beginOrcaCloudPkceFlow(
   })
 }
 
-/** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+/** `openBrowser: false` starts sign-in without opening the browser. */
 export type ConnectCurrentArgs = { openBrowser?: boolean }
 
 /** The renderer's connect args: only an explicit `openBrowser: false` suppresses the browser. */
@@ -269,7 +269,7 @@ export function connectCurrentArgsFromUnknown(args: unknown): ConnectCurrentArgs
 
 /**
  * The PKCE options a sign-in passes: cloud setup's parameters, or a plain sign-in that
- * may skip the browser (COPY-LINK-FIRST-CLICK; setup asks for that on its own `connect` args).
+ * may skip the browser (setup asks for that on its own `connect` args).
  */
 export function pkceSignInOptions(
   setup: ({ authorizeParams?: Record<string, string> } & ConnectCurrentArgs) | undefined

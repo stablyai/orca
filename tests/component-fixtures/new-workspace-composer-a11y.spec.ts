@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// DS-22 (composer a11y): Tab focus never opens a picker, focus is drawn with the shared --focus-ring
+// Composer a11y: Tab focus never opens a picker, focus is drawn with the shared --focus-ring
 // token, and no option in the Project or Run on lists nests an interactive control (axe's
 // nested-interactive rule, checked here directly: the repo has no axe dependency).
 
@@ -85,7 +85,7 @@ for (const theme of THEMES) {
         await expect(page.locator('[role="listbox"]')).toHaveCount(0)
         await expect(page.locator('[role="combobox"][aria-expanded="true"]')).toHaveCount(0)
         const focused = await focusPaint(page)
-        // DS-22's controls: the comboboxes, fields and the create-multiple switch.
+        // The composer's controls: the comboboxes, fields and the create-multiple switch.
         if (!focused || !focused.inScope || seen.has(focused.tag)) {
           continue
         }

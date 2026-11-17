@@ -4,7 +4,7 @@ import { clearCloudReadState } from '../../cloud-workspaces/cloud-read-state'
 export { revokeCloudReaderKeyBestEffort } from '../../cloud-workspaces/cloud-read-state'
 
 /**
- * Cloud setup sign-in: the authorize page shows the setup account step (A2), and once signed in
+ * Cloud setup sign-in: the authorize page shows the setup account step, and once signed in
  * the same browser tab continues to whatever `afterSignIn` returns (the setup session's URL).
  */
 export type OrcaCloudSetupSignIn = {

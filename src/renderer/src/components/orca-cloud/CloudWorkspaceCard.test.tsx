@@ -81,7 +81,7 @@ describe('calm cloud workspace card', () => {
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toContain('Wake')
   })
 
-  it('PAIRED-CHROME: an asleep paired row (no Wake yet) says opening it wakes it', () => {
+  it('an asleep paired row (no Wake yet) says opening it wakes it', () => {
     const { container } = render(card('sleeping', { actions: { onSleep: noop } }))
     expect([...container.querySelectorAll('button')].map((b) => b.textContent)).not.toContain(
       'Wake'
@@ -91,7 +91,7 @@ describe('calm cloud workspace card', () => {
     )
   })
 
-  it('ARCHIVED-DEAD-ACTIONS: a paired card has no "On this computer" row; an owned one does', () => {
+  it('a paired card has no "On this computer" row; an owned one does', () => {
     seedCloudWorkspaceSnapshot({ paired: { ws: 'env-paired' }, idsLoaded: true })
     expect(
       render(card('running')).container.querySelector('[data-cloud-card-on-computer]')

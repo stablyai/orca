@@ -114,7 +114,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             return
           }
           scrollRestore.started = true
-          // N-02: a capped (shallower) rebuild of a cloud pane must not shrink what it shows.
+          // A capped (shallower) rebuild of a cloud pane must not shrink what it shows.
           const paneCopy = restorePtyId
             ? noteBeforeCloudReplay(session.pane.leafId, session.pane.terminal, restorePtyId)
             : null

@@ -183,7 +183,7 @@ describe('Orca Cloud list reconcile', () => {
     expect(onListed).toHaveBeenCalledTimes(2)
   })
 
-  it('a forced run lists now, so a sandbox deleted elsewhere is pruned without waiting (LC-2)', async () => {
+  it('a forced run lists now, so a sandbox deleted elsewhere is pruned without waiting', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-gone-force-'))
     dirs.push(userDataPath)
     upsertEphemeralVmRuntime(userDataPath, record('lumpfish'))

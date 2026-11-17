@@ -1,4 +1,4 @@
-// CHAT-RENEW-INPLACE: every expired strip renews in place, with design-squad's per-step copy.
+// Every expired strip renews in place, with its own copy per step.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { CloudStripActions } from './CloudAgentSignInStrip'
@@ -39,7 +39,7 @@ const EXPIRED: CloudStripModel = {
 const model = (setup: OrcaCloudAgentSetup) =>
   cloudRenewInPlaceModel({ agent: 'claude', expired: EXPIRED, setup, t })
 
-describe('cloudRenewInPlaceModel (design-squad per-step copy)', () => {
+describe('cloudRenewInPlaceModel per-step copy', () => {
   it("1 expired: the surface's own strip, [Renew], no Settings link", () => {
     expect(model({ phase: 'idle' })).toBe(EXPIRED)
   })

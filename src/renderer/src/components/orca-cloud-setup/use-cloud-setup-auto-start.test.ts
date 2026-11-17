@@ -16,7 +16,7 @@ function setup(initial: { done: boolean; visible: boolean }) {
   })
 }
 
-describe('setup page auto-start (RR-b)', () => {
+describe('setup page auto-start', () => {
   it('visible page: "All set" holds about 1.5 s, then the workspace starts', () => {
     const { result, rerender } = setup({ done: false, visible: true })
     rerender({ done: true, visible: true })

@@ -1,4 +1,4 @@
-// The A5 sync ledger: per Orca account, which variables this computer wrote (and from which vault
+// The Agent API key sync ledger: per Orca account, which variables this computer wrote (and from which vault
 // key) plus saves still waiting to reach the account. Names, ids and timestamps only; never values.
 import { readFile } from 'node:fs/promises'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'

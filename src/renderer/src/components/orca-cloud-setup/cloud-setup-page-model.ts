@@ -1,4 +1,4 @@
-// The full-page Orca Cloud setup (composer-redo): which step is current, what its one action is,
+// The full-page Orca Cloud setup: which step is current, what its one action is,
 // and when the saved prompt can start. Pure, so every state is unit-tested here.
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 
@@ -12,7 +12,7 @@ type CloudSetupPageAction =
   | 'choose-plan'
   /** Hours, spend cap or payment, fixed in billing settings or the portal. */
   | 'fix-billing'
-  /** Personal account while a team has the plan: switch in place (B2). */
+  /** Personal account while a team has the plan: switch in place. */
   | 'switch-team'
   /** Install the GitHub App on this repository: one browser hop. */
   | 'github-install'
@@ -83,14 +83,14 @@ export function actionForStep(
       }
       return 'github-install'
     case 'agent':
-      // Never a page step (PC-1): agent sign-in is offered after create.
+      // Never a page step: agent sign-in is offered after create.
       return 'done'
   }
 }
 
 /**
  * The page's state from the setup rows. Steps come in walk order (account, team, plan, GitHub); the
- * first unfinished one is current. The agent row is never a step (PC-1): it never gates a start, and
+ * first unfinished one is current. The agent row is never a step: it never gates a start, and
  * its sign-in is offered after create. A signed-out plan row is "pending" until sign-in, so account
  * stays current until then.
  */
@@ -114,7 +114,7 @@ const WEB_STEP_ORDER = ['account', 'team', 'plan', 'github'] as const
  * The stepper never changes its count (DS-b, as on the web): Account · Team · Plan · GitHub from
  * the first page. A step the desktop can't judge yet (GitHub before sign-in, Plan while a team
  * switch is pending) shows as a neutral pending step; it is display only, never the current step,
- * so it can't hold a start. No account row (D3: no GitHub repository) keeps its single step.
+ * so it can't hold a start. No account row (no GitHub repository) keeps its single step.
  */
 function withAllWebSteps(steps: readonly CloudSetupStep[]): readonly CloudSetupStep[] {
   if (!steps.some((step) => step.id === 'account')) {
@@ -150,7 +150,7 @@ export function sessionNeedsFrom(steps: readonly CloudSetupStep[]): CloudSetupSt
 
 /**
  * Pressing Start opens the setup page only when the account, team, plan or GitHub is missing. The
- * agent never holds a start (PC-1): without an Orca Cloud account it starts as a plain terminal and
+ * agent never holds a start: without an Orca Cloud account it starts as a plain terminal and
  * the post-create prompt offers the sign-in.
  */
 export function cloudSetupRequired(

@@ -27,7 +27,7 @@ export function captureWorkspaceEmptiedReaction(
 function leaveWorktreeIfEmpty(worktreeId: string): void {
   const state = useAppStore.getState()
   // A cloud workspace put to sleep on screen stays, read-only, even with no tab left (its chat
-  // asleep, its terminal gone): the asleep view covers the workspace (SLEEP-HOME-REGRESSION).
+  // asleep, its terminal gone): the asleep view covers the workspace.
   if (state.activeWorktreeId !== worktreeId || isWorktreeSleepViewHeld(worktreeId)) {
     return
   }

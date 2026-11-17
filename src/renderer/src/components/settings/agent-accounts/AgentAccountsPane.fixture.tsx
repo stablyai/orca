@@ -90,7 +90,7 @@ export const overview = defineFixture({
   )
 })
 
-/** RA-5: the Needs attention filter with nothing in it says so instead of an empty table. */
+/** The Needs attention filter with nothing in it says so instead of an empty table. */
 export const nothingNeedsAttention = defineFixture({
   width: 860,
   render: () => (

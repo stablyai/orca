@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudDropReason } from '@/hooks/useEphemeralVmRecipeOptions'
 
 /**
- * RUNON-STICKY: a picked Orca Cloud stays picked across project changes. Only when the newly picked
+ * A picked Orca Cloud stays picked across project changes. Only when the newly picked
  * project can't run on it does Run on fall back to this project's own target, and this line says why
  * instead of the switch happening silently. It goes away with the next pick.
  */

@@ -1,4 +1,4 @@
-// WAKE-SCROLLBACK: a pane's pre-sleep output as rendered text and attributes only. Built from the
+// A pane's pre-sleep output as rendered text and attributes only. Built from the
 // xterm buffer's cells (never its escape stream), so it carries text and SGR (`CSI … m`) and
 // nothing else: no OSC (52 clipboard, 0 title), no modes, no cursor moves. `sanitizeRestoredText`
 // enforces that again on whatever is written back, including the plain-text read-only copy.

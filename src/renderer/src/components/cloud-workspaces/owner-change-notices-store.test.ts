@@ -31,7 +31,7 @@ function identity(overrides: Partial<CloudWorkspaceIdentity>): CloudWorkspaceIde
   }
 }
 
-describe('newOwnerWorkspaces (OWNER-TRANSFER)', () => {
+describe('newOwnerWorkspaces', () => {
   it('names a workspace handed to you, once', () => {
     const storage = memoryStorage()
     const rows = new Map([['sbx_a', identity({})]])
@@ -78,7 +78,7 @@ describe('newOwnerWorkspaces (OWNER-TRANSFER)', () => {
   })
 })
 
-describe('noticesForThisDevice (TRANSFER-TOAST-OTHER-DEVICE)', () => {
+describe('noticesForThisDevice', () => {
   const notice = (id: string, actor: string, sandboxId: string): OwnerChangeNotice => ({
     id,
     kind: 'workspace_owner_changed',

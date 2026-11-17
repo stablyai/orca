@@ -15,7 +15,7 @@ const PENDING_VM_HOST_ID = 'runtime:pending-ephemeral-vm'
 
 /**
  * The composer create's chat-or-terminal route, stored on the request and never re-derived.
- * CLOUD-HELD-SURFACE: for a VM create the agent menu has no host to ask (the VM doesn't exist yet),
+ * For a VM create the agent menu has no host to ask (the VM doesn't exist yet),
  * so its choice says "terminal" whatever the person prefers. Unless the person picked a surface, a
  * VM create's route is decided here instead; an Orca Cloud VM's image capabilities stand in for the
  * unverified pending host.

@@ -1,4 +1,4 @@
-// Classic SSH code sign-in (spec §4 annotation 5, Q8): Claude's paste-code login and Codex's device
+// Classic SSH code sign-in: Claude's paste-code login and Codex's device
 // code, each run over the host's existing SSH remote exec. No callback, no port forward. The pasted
 // code goes to the CLI's stdin, never argv; codes, tokens and CLI output are never logged or sent to
 // the renderer (only the sign-in page link and Codex's one-time device code, which the person needs).

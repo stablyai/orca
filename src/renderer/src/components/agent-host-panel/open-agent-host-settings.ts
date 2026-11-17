@@ -12,7 +12,7 @@ const TARGET = {
   agentApiKeys: { pane: 'agent-api-keys' },
   cloudSecrets: { pane: 'cloud-secrets' },
   customEnvironments: { pane: 'servers' },
-  // S3 (Settings › Agent accounts) is the overview across hosts.
+  // Settings › Agent accounts is the overview across hosts.
   allHosts: { pane: 'accounts', sectionId: 'accounts-hosts' }
 } as const satisfies Record<AgentHostFooterLink, { pane: string; sectionId?: string }>
 

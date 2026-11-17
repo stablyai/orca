@@ -1,12 +1,12 @@
 // "Starting <agent>…" while a launched agent's pane is still blank. A cloud agent starts behind
 // a shell whose echo is erased, so between the pane attaching and the agent's first frame there is
-// only a cursor; this says what is happening instead (Neil, n70: a blank cursor for ~10 s).
+// only a cursor; this says what is happening instead (a blank cursor could last ~10 s).
 
 /** Below this, the agent usually draws first: no status flashes by. */
 export const AGENT_STARTING_DELAY_MS = 600
 /** Past this, the status says it's taking longer than usual. */
 export const AGENT_STARTING_SLOW_MS = 20_000
-/** Past this the title says "Still starting": a first launch can sit on its own setup (n73: OpenCode's plugin install). */
+/** Past this the title says "Still starting": a first launch can sit on its own setup (e.g. OpenCode's plugin install). */
 export const AGENT_STARTING_STILL_MS = 10_000
 
 export type AgentStartingPhase = 'starting' | 'still' | 'slow'

@@ -7,7 +7,7 @@ import {
 } from '@/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 
 /**
- * CLOUD-CHAT-FIRST-TAB: a create on a paired host (an Orca Cloud VM) whose first agent opens as a
+ * A create on a paired host (an Orca Cloud VM) whose first agent opens as a
  * chat claims the workspace's initial-terminal bootstrap while that chat launches, like the
  * after-wake first agent does. Without it the mirror's first empty frame seeds a plain shell,
  * activated, in front of the chat. Released once the launch has answered: by then the chat tab

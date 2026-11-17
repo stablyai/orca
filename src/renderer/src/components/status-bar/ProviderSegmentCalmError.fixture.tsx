@@ -1,4 +1,4 @@
-// NS-03: failed usage reads show a quiet "--" (reason on hover), never a permanent warning.
+// Failed usage reads show a quiet "--" (reason on hover), never a permanent warning.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ProviderSegment } from './usage/StatusBarProviderSegment'

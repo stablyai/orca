@@ -27,7 +27,7 @@ function overview(rows: readonly OverviewRow[]): void {
   )
 }
 
-describe('AgentAccountsOverview (RA-5)', () => {
+describe('AgentAccountsOverview', () => {
   afterEach(cleanup)
 
   it('says nothing needs attention instead of an empty table', () => {
@@ -37,14 +37,14 @@ describe('AgentAccountsOverview (RA-5)', () => {
     expect(screen.queryByRole('table')).toBeNull()
   })
 
-  it('never truncates the host name or its detail: they stack (RA-5, JA-23)', () => {
+  it('never truncates the host name or its detail: they stack', () => {
     overview([CLOUD])
     const name = screen.getByText('Orca Cloud', { selector: 'span' })
     expect(name.className).not.toContain('truncate')
     expect(screen.getByText('all your cloud workspaces').className).not.toContain('truncate')
   })
 
-  it('has no "Signed in means…" footnote (JA-23)', () => {
+  it('has no "Signed in means…" footnote', () => {
     overview([CLOUD])
     expect(screen.queryByText(/confirmed it in the last minute/)).toBeNull()
   })

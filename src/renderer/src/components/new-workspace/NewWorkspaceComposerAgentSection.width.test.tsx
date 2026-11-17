@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// AGENT-PICKER-WIDTH: the composer's Agent menu takes its field's width in every state, including a
+// The composer's Agent menu takes its field's width in every state, including a
 // folder project ("~") with Orca Cloud, which used to get the compact 256 px menu.
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'

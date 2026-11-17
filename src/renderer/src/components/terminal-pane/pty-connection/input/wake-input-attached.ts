@@ -1,6 +1,6 @@
 // When a pane's held wake typing may go in (wake-input-buffer): the pane is attached to the woken
 // terminal. "Connected" alone is not enough: a transport whose PTY is not attached yet, or whose
-// connect is still pending, could take the keys and lose them (PAIRED-WAKE-TYPE-THROUGH).
+// connect is still pending, could take the keys and lose them.
 
 export type WakeInputTransport = {
   isConnected: () => boolean

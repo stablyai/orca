@@ -21,11 +21,11 @@ export type CloudPanelSectionsData = {
   repoKey: string | null
   /** Asleep: show what the control plane knows and say changes land on wake. Never wake to check. */
   asleep: boolean
-  /** Shared with teammates (D13), and whose workspace it is; null when unknown. */
+  /** Shared with teammates, and whose workspace it is; null when unknown. */
   sharing: CloudWorkspaceSharing | null
   /**
    * Personal values are left out: a shared workspace gets nobody's Personal secrets, not even its
-   * owner's (SEC-5), and one whose sharing couldn't be read fails closed the same way (D13).
+   * owner's, and one whose sharing couldn't be read fails closed the same way.
    */
   withoutPersonal: boolean
 }
@@ -88,7 +88,7 @@ export function useCloudPanelSections(args: {
       const sharing = runtimeEnvironmentId
         ? await secrets.workspaceSharing({ runtimeEnvironmentId }).catch(() => null)
         : null
-      // SEC-5: a shared workspace (or one whose sharing can't be read) gets no Personal values, so ask
+      // A shared workspace (or one whose sharing can't be read) gets no Personal values, so ask
       // the control plane for exactly what such a workspace receives.
       const shared = runtimeEnvironmentId !== null && !(sharing?.ok && !sharing.value.shared)
       const [effective, list] = await Promise.all([
@@ -117,7 +117,7 @@ export function useCloudPanelSections(args: {
           repoKey,
           asleep,
           sharing: sharing?.ok ? sharing.value : null,
-          // A sandbox whose sharing couldn't be read fails closed (D13).
+          // A sandbox whose sharing couldn't be read fails closed.
           sharingUnknown: runtimeEnvironmentId !== null && !sharing?.ok
         })
       })

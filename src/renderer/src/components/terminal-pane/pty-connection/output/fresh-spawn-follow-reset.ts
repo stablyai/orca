@@ -190,7 +190,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    // WAKE-SCROLLBACK: a woken cloud pane keeps showing its pre-sleep output (render held) until its
+    // A woken cloud pane keeps showing its pre-sleep output (render held) until its
     // restore rewrites the whole pane; blanking here is the blank frame before it.
     if (hasPendingWakeScrollback(session.pane.leafId)) {
       session.writeReplayData(HOLD_RENDER_UNTIL_RESTORED)

@@ -127,10 +127,10 @@ function cards(views: readonly CloudToastView[]) {
   })
 }
 
-/** The push-access case Neil hit: public repo, App installed only on his personal account. */
+/** Push access: a public repo, with the App installed only on a personal account. */
 export const pushOnly = cards([notices([PUSH])])
 export const pushWaitingForGitHub = cards([notices([PUSH], { installing: true })])
-/** ENV-NOTICE-ACTIONS: someone else's public repository: no Install, a request to copy for an owner. */
+/** Someone else's public repository: no Install, a request to copy for an owner. */
 export const pushNotInstallable = cards([
   notices([PUSH], {
     access: 'cantInstall',
@@ -146,12 +146,12 @@ export const toolMissing = cards([notices([TOOL_MISSING])])
 export const setupOnly = cards([notices([SETUP])])
 /** One family (DS-q): the action-required prompt and the warning, same chrome. */
 export const agentAndPush = cards([AGENT, notices([PUSH, SETUP])])
-/** ENV-ORIGIN-TOAST: origin still unreachable after two confirming checks; Check again re-runs it. */
+/** Origin still unreachable after two confirming checks; Check again re-runs it. */
 export const fetchFailed = cards([notices([fetchWith('remoteUnreachable')], { access: 'granted' })])
 export const fetchChecking = cards([
   notices([fetchWith('remoteUnreachable')], { access: 'granted', checkingFetch: true })
 ])
-/** GH-FETCH-REASON: Orca's GitHub app can't see the repository; this person can install it. */
+/** Orca's GitHub app can't see the repository; this person can install it. */
 export const fetchNoAccess = cards([
   notices([fetchWith('remoteDenied')], {
     access: 'install',
@@ -172,5 +172,5 @@ export const fetchNeedsRestart = cards([
     repoUrl: 'https://github.com/stablyai/orca-plugins'
   })
 ])
-/** ENV-BUILD-CHURN: started without the environment's setup while it updates for a security fix. */
+/** Started without the environment's setup while it updates for a security fix. */
 export const environmentHeld = cards([notices([HELD])])

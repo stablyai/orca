@@ -220,7 +220,7 @@ describe('recipe workspace removal on the provisioning host', () => {
   })
 })
 
-describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept" (REG-12)', () => {
+describe('Orca Cloud: Delete destroys the sandbox or fails visibly, never "kept"', () => {
   const cloud: Partial<EphemeralVmRuntimeRecord> = {
     recipe: { id: 'cloud', name: 'Orca Cloud', create: 'orca-cloud create', provider: 'orca-cloud' }
   }

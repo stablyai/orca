@@ -37,7 +37,7 @@ function orcaCloudNeedsSetup(availability: OrcaCloudAvailability | undefined): b
 /**
  * Main lists the Orca Cloud recipe only once the account can use it. Until then the composer still
  * offers it, so a signed-out or not-yet-entitled user can pick Orca Cloud and reach "Set up and
- * start" (spec A1/B1); the setup panel runs instead of a create, so this entry never starts a VM.
+ * start"; the setup panel runs instead of a create, so this entry never starts a VM.
  */
 const ORCA_CLOUD_SETUP_RECIPE: OrcaVmRecipe = {
   id: ORCA_CLOUD_RECIPE_ID,
@@ -53,7 +53,7 @@ function isOrcaCloudOption(recipe: OrcaVmRecipe): boolean {
 export function withOrcaCloudSetupRecipe(
   recipes: OrcaVmRecipe[],
   availability: OrcaCloudAvailability | undefined,
-  /** A plain folder: main lists no recipes for it, but Orca Cloud is still offered (D3). */
+  /** A plain folder: main lists no recipes for it, but Orca Cloud is still offered. */
   folder = false
 ): OrcaVmRecipe[] {
   const offeredForFolder = folder && availability === 'offered'
@@ -67,7 +67,7 @@ export function withOrcaCloudSetupRecipe(
 }
 
 /**
- * RUNON-STICKY: why a picked Orca Cloud didn't carry over to a newly picked project. `elsewhere`:
+ * Why a picked Orca Cloud didn't carry over to a newly picked project. `elsewhere`:
  * the project lives on another machine (SSH or a remote server's own target) or is a project group;
  * `unreachable`: Orca Cloud didn't answer; `unavailable`: it isn't offered for this project.
  */
@@ -88,7 +88,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const [recipes, setRecipes] = useState<OrcaVmRecipe[]>([])
   const [selectedRecipeId, setSelectedRecipeIdState] = useState<string | null>(null)
   const [orcaCloudDropped, setOrcaCloudDropped] = useState<OrcaCloudDropReason | null>(null)
-  // The pick as of the last render: a project change carries Orca Cloud over (RUNON-STICKY).
+  // The pick as of the last render: a project change carries Orca Cloud over.
   const selectedRef = useRef<string | null>(null)
   // Declared before the load effect, so a project change's load sees the pick it replaces.
   useEffect(() => {
@@ -103,9 +103,9 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const [orcaCloud, setOrcaCloud] = useState<OrcaCloudAvailability>('unavailable')
   const requestGeneration = useRef(0)
   // A plain folder still loads: it offers Orca Cloud only, and the setup panel then says the
-  // project needs a GitHub repository (D3/D4) instead of the option vanishing.
-  // RUNON-NO-NEW-SANDBOX: a project cloned only on a remote Orca server (a paired cloud workspace's)
-  // still offers Orca Cloud; like a folder it has no recipes here and starts from GitHub (D4).
+  // project needs a GitHub repository instead of the option vanishing.
+  // A project cloned only on a remote Orca server (a paired cloud workspace's) still offers
+  // Orca Cloud; like a folder it has no recipes here and starts from GitHub.
   const remoteServer =
     !args.repoConnectionId && parseExecutionHostId(args.repoExecutionHostId)?.kind === 'runtime'
   const canLoad =
@@ -118,7 +118,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const load = useCallback(
     (resetSelection: boolean): void => {
       const generation = ++requestGeneration.current
-      // RUNON-STICKY: Orca Cloud isn't tied to a project, so a project change keeps it picked while
+      // Orca Cloud isn't tied to a project, so a project change keeps it picked while
       // the new project's options load, and only drops it (saying why) when that project can't use it.
       const carryCloud = resetSelection && selectedRef.current === ORCA_CLOUD_RECIPE_ID
       if (resetSelection) {

@@ -103,7 +103,7 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   if (billingReturn) {
     state.mainWindow?.webContents.send(ORCA_BILLING_RETURN_CHANNEL, billingReturn)
   }
-  // Back from the one-trip setup (N9): focus Orca and let the tracker re-read the session now.
+  // Back from the one-trip setup: focus Orca and let the tracker re-read the session now.
   const setupReturn = findOrcaCloudSetupReturnLink(argv)
   if (setupReturn) {
     state.mainWindow?.webContents.send(ORCA_CLOUD_SETUP_RETURN_CHANNEL, setupReturn)

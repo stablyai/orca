@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
 /**
- * DS-40: on the latest failed build, Try again rebuilds. Fix with agent opens a cloud workspace on
+ * On the latest failed build, Try again rebuilds. Fix with agent opens a cloud workspace on
  * the last good build with the log attached; Give access opens GitHub when the clone was refused.
  */
 export function BuildFailureActions({

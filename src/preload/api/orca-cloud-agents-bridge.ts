@@ -38,7 +38,7 @@ export type OrcaCloudAgentsApi = {
   workspaceSources: (request: {
     runtimeEnvironmentId: string
   }) => Promise<OrcaCloudAgentsResult<AgentSourcesView>>
-  /** The per-workspace override (S1-b); the reply describes that workspace. */
+  /** The per-workspace override; the reply describes that workspace. */
   setWorkspaceSource: (request: {
     agent: OrcaCloudAccountAgent
     source: AgentSource

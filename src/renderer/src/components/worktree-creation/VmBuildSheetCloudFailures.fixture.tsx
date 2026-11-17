@@ -41,7 +41,7 @@ export const cloudPlanRequired = cloudFailure(
   ''
 )
 
-// EP-11: the plan blocker's body follows billing's reason; only a plan that existed has "ended".
+// The plan blocker's body follows billing's reason; only a plan that existed has "ended".
 export const cloudPlanRequiredNeverPaid = cloudFailure(
   'cloudPlanRequired',
   'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
@@ -238,7 +238,7 @@ export const cloudPaymentDue = cloudFailure(
 
 export const cloudNetwork = cloudFailure(undefined, 'fetch failed', CLOUD_LOG)
 
-// JA-21: an owner fixing payment in the browser; the card waits with Check again.
+// An owner fixing payment in the browser; the card waits with Check again.
 export const cloudPaymentFinishInBrowser = defineFixture({
   ...cloudPaymentDue,
   setup: () => {

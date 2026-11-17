@@ -146,7 +146,7 @@ export function nativeChatPaneHeader(
   colorScheme: React.CSSProperties['colorScheme'],
   handOff?: NativeChatHandOff
 ): React.JSX.Element {
-  // CHAT-BANNERS: the chat's Orca Cloud strip sits under the header, whether or not it shows.
+  // The chat's Orca Cloud strip sits under the header, whether or not it shows.
   const banners = (
     <CloudStructuredChatBanners
       tabId={view.tabId}

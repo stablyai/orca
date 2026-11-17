@@ -24,7 +24,7 @@ type CloudPushNoticeState = {
   recheck: () => void
   rechecking: boolean
   /**
-   * LIVE-GIT-ACCESS: the App reaches the repository, the live refresh ran and the sandbox still can't
+   * The App reaches the repository, the live refresh ran and the sandbox still can't
    * push or reach origin. The line says Restart instead of offering Check again forever.
    */
   needsRestart: boolean
@@ -165,7 +165,7 @@ export function useCloudPushNotice(
       }
       recheckBusy.current = true
       setRechecking(true)
-      // LIVE-GIT-ACCESS: the running workspace takes the App's access first, then the check runs again.
+      // The running workspace takes the App's access first, then the check runs again.
       // A push that works now drops the line; a refusal after that says Restart, not Check again again.
       void recheckCloudPushAccess(environmentId, { workspaceId })
         .then((result) => {

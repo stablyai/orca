@@ -24,7 +24,7 @@ import {
   type CloudWorkspaceCreateInput
 } from './cloud-operations'
 
-export const CLOUD_ON_TARGET = 'cloud'
+const CLOUD_ON_TARGET = 'cloud'
 
 /** Flags `worktree create` accepts that mean something for a cloud workspace. */
 const SUPPORTED = new Set([
@@ -59,7 +59,7 @@ function gitOriginUrl(dir: string): string | null {
   }
 }
 
-export const defaultCloudOnDeps = (): CloudOnDeps => ({
+const defaultCloudOnDeps = (): CloudOnDeps => ({
   ...defaultCloudHandlerDeps(),
   originUrl: gitOriginUrl
 })
@@ -82,9 +82,7 @@ export function readCloudOnTarget(
       throw new RuntimeClientError(
         'invalid_argument',
         '--on cloud:<project> needs a project id or name.',
-        {
-          field: 'on'
-        }
+        { field: 'on' }
       )
     }
     return { project }
@@ -161,9 +159,7 @@ export async function createWorktreeOnCloud(
     throw new RuntimeClientError(
       'invalid_argument',
       '--base-branch needs a repo (--repo or a checkout as cwd).',
-      {
-        field: 'base-branch'
-      }
+      { field: 'base-branch' }
     )
   }
   const api = cloudClient(deps)

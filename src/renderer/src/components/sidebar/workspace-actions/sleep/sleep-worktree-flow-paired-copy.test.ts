@@ -1,4 +1,4 @@
-// SLEEP-IN-PROGRESS (2/2): Sleep on a PAIRED cloud workspace marks its read-only copy saving from the
+// Sleep on a PAIRED cloud workspace marks its read-only copy saving from the
 // press (like an owned one), and clears it when the control plane left its sandbox running.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -76,7 +76,7 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
     expect(sleepCopySave(LOCAL)).toBeNull()
   })
 
-  it('stays going to sleep until the paired sandbox slept, so no reconnect banner shows (SLEEP-RECONNECT-BANNER)', async () => {
+  it('stays going to sleep until the paired sandbox slept, so no reconnect banner shows', async () => {
     let finishPairedSleep: (outcome: { stillRunning: string[]; refused: string[] }) => void = () =>
       undefined
     let goingDuringPairedSleep: { paired: boolean; local: boolean } | null = null
@@ -105,7 +105,7 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
     expect(sleepCopySave(PAIRED)).toBeNull()
   })
 
-  it('a refused member sleep clears the saving copy and says who can sleep it (SHARED-MEMBER-SLEEP-HANG)', async () => {
+  it('a refused member sleep clears the saving copy and says who can sleep it', async () => {
     mocks.sleepPairedCloudSandboxes.mockResolvedValue({ stillRunning: [PAIRED], refused: [PAIRED] })
     await runSleepWorktrees([PAIRED])
     expect(sleepCopySave(PAIRED)).toBeNull()
@@ -113,7 +113,7 @@ describe('runSleepWorktrees on a paired cloud workspace', () => {
   })
 })
 
-describe('a paired host-side Sleep that never finishes (PAIRED-ARCHIVE-STALL, n40b)', () => {
+describe('a paired host-side Sleep that never finishes', () => {
   function hangHostSleep(): void {
     window.api.worktrees.sleep = () => new Promise<never>(() => undefined)
   }

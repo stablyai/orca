@@ -26,7 +26,7 @@ export function landsOnEmptiedWorktree(
 ): boolean {
   return (
     current.activeWorktreeId === worktreeId &&
-    // SLEEP-HOME-REGRESSION: a cloud workspace put to sleep on screen stays selected, read-only,
+    // A cloud workspace put to sleep on screen stays selected, read-only,
     // when its sleep closes its last tab (the host stops its terminals; the asleep view covers it).
     !isWorktreeSleepViewHeld(worktreeId) &&
     remainingTabs === 0 &&

@@ -24,7 +24,7 @@ import { cloudWorkspaceScreenStyles as screen } from './cloud-workspace-screen-s
 
 const GIT_PATHS_SHOWN = 5
 
-export function formatReadSnapshotAbsolute(at: number): string {
+function formatReadSnapshotAbsolute(at: number): string {
   try {
     return new Intl.DateTimeFormat(getUiIntlLocale(), {
       dateStyle: 'medium',

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {
@@ -81,7 +84,7 @@ function hostRunBrowserTab(id: string) {
   return { workspace, page, unified }
 }
 
-describe('host snapshot after Sleep (LC2-P1)', () => {
+describe('host snapshot after Sleep', () => {
   beforeEach(() => {
     resetWebSessionTabsSyncTestState()
     resetReopenAfterSleepForTest()

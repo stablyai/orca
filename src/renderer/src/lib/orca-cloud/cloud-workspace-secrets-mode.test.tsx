@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// SECRETS-EFFECTIVE-SHARED: workspace-scoped secrets views ask for exactly what a shared workspace gets
-// (no Personal values, SEC-5): the agent host panel's Environment section and the missing-secrets ask.
+// Workspace-scoped secrets views ask for exactly what a shared workspace gets
+// (no Personal values): the agent host panel's Environment section and the missing-secrets ask.
 // The secret request card is covered in use-secret-request-card.test.tsx.
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

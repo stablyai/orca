@@ -132,7 +132,7 @@ export class SecretRequestStore {
     }
   }
 
-  /** D3: the card is in use, so keep the agent waiting: now + 15 min, capped at 60 min after the request. */
+  /** The card is in use, so keep the agent waiting: now + 15 min, capped at 60 min after the request. */
   touch(requestId: string): SecretsTouchRequestResult {
     const record = this.require(requestId)
     const now = this.now()

@@ -1,4 +1,4 @@
-// REG-13: a scroll made while a cloud pane wakes is kept by the top row's text, not its index. The
+// A scroll made while a cloud pane wakes is kept by the top row's text, not its index. The
 // restore rewrites the pane (history, divider, woken screen) and the rows above that line can
 // differ in count from the preview the person scrolled, so the same index can land lines away.
 import type { RestoreBuffer } from './cloud-wake-scrollback-render'

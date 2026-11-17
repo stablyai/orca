@@ -1,4 +1,4 @@
-// N-02: a shallower replay of the same cloud terminal never shrinks the history its pane holds.
+// A shallower replay of the same cloud terminal never shrinks the history its pane holds.
 // A resubscribe or resync answers with the host's 1000-row cut and clears the pane first; when that
 // cut overlaps what the pane held, the older lines above the overlap are written back above it,
 // client-side only (nothing reaches the PTY). No overlap (the terminal moved on by more than the
@@ -23,7 +23,7 @@ const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 const TRAILING_LINES_SKIPPED = 6
 
 /**
- * The host restored the pre-sleep history into the woken terminal (V3-02 follow-up): its replay
+ * The host restored the pre-sleep history into the woken terminal: its replay
  * then already holds the lines that end just above the pane's divider. The divider goes back where
  * those lines end; nothing is repeated. Pre-sleep lines older than the host's start come from the
  * pane. Null when the host holds none of the pre-sleep lines.
@@ -75,7 +75,7 @@ function plain(line: string | undefined): string {
 export function mergeDeeperHistory(paneCopy: string, replayHistory: string): string | null {
   const before = paneCopy.split('\r\n')
   const after = replayHistory.split('\r\n')
-  // V3-02: output from before a sleep lives only in this pane (sleep stopped the host's processes).
+  // Output from before a sleep lives only in this pane (sleep stopped the host's processes).
   // A host replay never carries the wake divider, so everything up to it is kept, then the host's.
   let dividerAt = before.length - 1
   while (dividerAt >= 0 && !isWakeDivider(before[dividerAt])) {

@@ -86,7 +86,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   terminalBlocked?: boolean
   runLaunch: AgentPickerMenuLaunch
   shortcut?: string
-  /** Muted status after the label, such as "Ready" or "Set up" for Orca Cloud (JA-22). */
+  /** Muted status after the label, such as "Ready" or "Set up" for Orca Cloud. */
   status?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
   isDefault?: boolean

@@ -1,4 +1,4 @@
-// CLOUD-HELD-SURFACE (END-PASS n49): the real composer hands its create the agent menu's choice.
+// The real composer hands its create the agent menu's choice.
 // With Orca Cloud selected the menu has no host to ask, so that choice says "terminal" whatever the
 // person prefers (Settings › Chat UI). A VM create's route is decided here unless a surface was picked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

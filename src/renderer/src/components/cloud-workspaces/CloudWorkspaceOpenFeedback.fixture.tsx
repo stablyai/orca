@@ -1,4 +1,4 @@
-// EP-6-FLAKE: the three states of a cloud workspace open that does not finish quickly: still opening
+// The three states of a cloud workspace open that does not finish quickly: still opening
 // (loading), taking longer than usual (warning, Try again), and gone (error, Show cloud workspaces).
 import { useEffect } from 'react'
 import { toast } from 'sonner'

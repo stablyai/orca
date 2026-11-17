@@ -135,7 +135,7 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  // RA-11: on Orca Cloud a Claude pane with no session to resume starts a new conversation.
+  // On Orca Cloud a Claude pane with no session to resume starts a new conversation.
   const fresh = agent === 'codex' || isOrcaCloudPane(args)
   const startup = resume ?? (fresh ? buildFreshAccountRestartStartup(agent, args) : null)
   // Orca Cloud: refresh the shell's session env first, so a renewed account reaches the agent.
@@ -143,13 +143,13 @@ export function buildPaneAccountRestartStartup(
 }
 
 /**
- * RA-11e: the command that starts this pane's agent fresh (a new conversation), with the Orca Cloud
+ * The command that starts this pane's agent fresh (a new conversation), with the Orca Cloud
  * session-env refresh in front. Used when a resume finds no conversation to pick up.
  */
 export function buildFreshAccountRestartCommand(
   agent: AccountRestartAgent,
   args: AccountRestartPane,
-  /** RA-11d: the pane's recorded launch args (model, effort, …); the defaults when absent. */
+  /** The pane's recorded launch args (model, effort, …); the defaults when absent. */
   agentArgs?: string | null
 ): string {
   return withOrcaCloudSessionEnv(buildFreshAccountRestartStartup(agent, args, agentArgs), args)

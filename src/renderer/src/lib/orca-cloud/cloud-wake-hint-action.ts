@@ -1,6 +1,7 @@
-// What the woke-up strip's one button does (JA-15). A shell pane retypes its own command; an agent
-// pane runs the agent's Restart (the RA-11 path, with its no-conversation fresh fallback), never a
-// retyped launch line: Orca's launch script deletes itself and resumes a conversation that may be gone.
+// What the woke-up strip's one button does. A shell pane retypes its own command; an agent
+// pane runs the agent's Restart (the account restart path, with its no-conversation fresh
+// fallback), never a retyped launch line: Orca's launch script deletes itself and resumes a
+// conversation that may be gone.
 import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 import type { CloudWokeAction } from '@/components/orca-cloud/offline/CloudWokeProcessesNotice'
 import type { WakeProcessHint } from './cloud-wake-process-hints'
@@ -28,7 +29,7 @@ export function runCloudWokeAction(
     pane.sendInput(`${hint.command}\r`)
     return
   }
-  // Interim until agents relaunch themselves on wake (WAKE-1).
+  // Interim until agents relaunch themselves on wake.
   restart({
     tabId: pane.tabId,
     leafId: pane.leafId,

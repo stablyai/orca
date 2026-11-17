@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: "Skip for now" on the create wizard's GitHub access step, remembered per
+// "Skip for now" on the create wizard's GitHub access step, remembered per
 // repository on this device so the next create doesn't ask again. The step still shows (as
 // skipped, with Set up), and the memory is dropped once the repository has access.
 const STORAGE_KEY = 'orca.cloud-create.github-skip.v1'

@@ -23,7 +23,7 @@ export type CloudWorkspaceErrorCode =
   | 'not_found'
   | 'failed'
 
-/** EP-5: the `reason` on a cancelled create whose sandbox the control plane didn't confirm deleted. */
+/** The `reason` on a cancelled create whose sandbox the control plane didn't confirm deleted. */
 export const CANCEL_CLEANUP_UNCONFIRMED = 'cancelCleanupUnconfirmed'
 
 export type CloudWorkspaceResult<T> =
@@ -72,7 +72,7 @@ export type GitHubInstallRights = { admin: boolean; ownerType: 'User' | 'Organiz
 
 /** The status panel's read plus what the desktop needs from the sandbox view alongside it. */
 export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
-  /** GIT-SETUP: commits and pushes are refused in the VM until a boot installs the identities. */
+  /** Commits and pushes are refused in the VM until a boot installs the identities. */
   gitSetupFailed?: true
   /** The provider region the sandbox runs in (e.g. `pdx1`), from the sandbox view. */
   region?: string
@@ -93,31 +93,29 @@ export type OrcaCloudWorkspaceApi = {
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
   restart: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   /**
-   * LIVE-GIT-ACCESS: apply a GitHub App install made after this workspace started, to the running VM.
+   * Apply a GitHub App install made after this workspace started, to the running VM.
    * `applied` false says why not (`not_installed`, `not_running`, ...). Absent on clients without it.
    */
   refreshGitAccess?: (
-    // CREATE-GH-STEP: the create wizard names its sandbox before it has a workspace.
+    // The create wizard names its sandbox before it has a workspace.
     args: CloudWorkspaceTarget | { environmentId: string } | { sandboxId: string }
   ) => Promise<CloudWorkspaceResult<{ applied: boolean; reason?: string }>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
   archive: (
     args: CloudWorkspaceTarget & { pullRequests?: HostedArchivePullRequest[] }
   ) => Promise<CloudWorkspaceResult<null>>
-  /** A paired one also names its server (PAIRED-ARCHIVE), as for status and restart. */
+  /** A paired one also names its server, as for status and restart. */
   unarchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<null>>
   getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /**
-   * ARCHIVE-HOOK: runs the repo's orca.yaml `scripts.archive` in the VM (up to 2 min). Asleep, it
+   * Runs the repo's orca.yaml `scripts.archive` in the VM (up to 2 min). Asleep, it
    * answers `asleep` unless `wake` asks the control plane to wake it for the hook first.
    */
   runArchiveHook: (
     args: CloudWorkspaceTarget & { wake?: boolean }
   ) => Promise<CloudWorkspaceResult<HostedArchiveHookResult>>
   /** What the control plane knows about the hook, without touching the VM. */
-  getArchiveHookState: (
-    args: CloudWorkspaceTarget
-  ) => Promise<
+  getArchiveHookState: (args: CloudWorkspaceTarget) => Promise<
     CloudWorkspaceResult<{
       memo: HostedArchiveHookMemo | null
       running: boolean
@@ -144,7 +142,7 @@ export type OrcaCloudWorkspaceApi = {
   gitHubUserConnectLink: () => Promise<CloudWorkspaceResult<string>>
   /** Forgets the person's GitHub identity; cloud commits use Orca Cloud's name again. */
   disconnectGitHubUser: () => Promise<CloudWorkspaceResult<HostedGithubUser>>
-  /** Can Orca Cloud clone this https GitHub repository for the signed-in account (cloud-start N2)? */
+  /** Can Orca Cloud clone this https GitHub repository for the signed-in account? */
   getRepoAccess: (args: {
     repoUrl: string
     setupSessionId?: string
@@ -156,20 +154,20 @@ export type OrcaCloudWorkspaceApi = {
   gitHubInstallRights: (args: {
     repoUrl: string
   }) => Promise<CloudWorkspaceResult<GitHubInstallRights | null>>
-  /** One page of the repositories the account's GitHub installations reach (cloud-start N12). */
+  /** One page of the repositories the account's GitHub installations reach. */
   listGitHubRepositories: (args: {
     cursor?: string | null
   }) => Promise<CloudWorkspaceResult<HostedGithubRepositoriesResponse>>
   /**
-   * Starts a sandbox that clones a GitHub repository with no copy on this computer (cloud-start
-   * D4). Resolves once it is ready; the window then opens it like any cloud workspace.
+   * Starts a sandbox that clones a GitHub repository with no copy on this computer.
+   * Resolves once it is ready; the window then opens it like any cloud workspace.
    */
   createFromGitHub: (args: {
     repoUrl: string
-    /** The name typed in the composer; becomes the workspace's title (NAME-DROPPED). */
+    /** The name typed in the composer; becomes the workspace's title. */
     title?: string
     /**
-     * The window's creation id (GH-CREATE-SHEET): progress streams as `ephemeralVm:provisionEvent`
+     * The window's creation id: progress streams as `ephemeralVm:provisionEvent`
      * under it, and `ephemeralVm.cancelProvision` with it cancels the create.
      */
     provisionId?: string
@@ -177,7 +175,7 @@ export type OrcaCloudWorkspaceApi = {
     idempotencyKey?: string
   }) => Promise<CloudWorkspaceResult<{ sandboxId: string }>>
   /**
-   * EP-5: Try again for a cancelled GitHub-only create whose sandbox wasn't confirmed deleted
+   * Try again for a cancelled GitHub-only create whose sandbox wasn't confirmed deleted
    * (`reason: 'cancelCleanupUnconfirmed'`). True once the control plane confirms the delete.
    */
   retryCancelledCreate: (args: { provisionId: string }) => Promise<boolean>

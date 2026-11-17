@@ -95,7 +95,7 @@ describe('CloudAgentSignInStrip Copy link', () => {
   })
 })
 
-describe('CloudAgentSignInStrip code step: cancel lives on the × (CANCEL-SIGNIN-MENU)', () => {
+describe('CloudAgentSignInStrip code step: cancel lives on the ×', () => {
   const codeStep: CloudStripModel = {
     ...model,
     status: 'need',

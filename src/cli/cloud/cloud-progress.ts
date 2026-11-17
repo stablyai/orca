@@ -3,10 +3,10 @@
 // stdout keeps only the result. No spinners: stderr is often not a TTY.
 import { RuntimeClientError } from '../runtime/connection/types'
 
-export type CloudProgressMode = 'text' | 'json' | 'none'
+type CloudProgressMode = 'text' | 'json' | 'none'
 
 /** Long waits get one reassurance line at this point. */
-export const CLOUD_SLOW_NOTICE_MS = 10_000
+const CLOUD_SLOW_NOTICE_MS = 10_000
 
 export function readCloudProgressMode(
   flags: Map<string, string | boolean>,
@@ -17,15 +17,13 @@ export function readCloudProgressMode(
     throw new RuntimeClientError(
       'invalid_argument',
       '--progress must be one of: text, json, none',
-      {
-        field: 'progress'
-      }
+      { field: 'progress' }
     )
   }
   return value
 }
 
-export type CloudProgress = {
+type CloudProgress = {
   phase: (name: string, text: string, extra?: Record<string, unknown>) => void
   /** Runs `work`; if it is still running after CLOUD_SLOW_NOTICE_MS, prints one `slow` line. */
   track: <T>(work: Promise<T>, slowText: (seconds: number) => string) => Promise<T>

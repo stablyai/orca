@@ -1,4 +1,4 @@
-// WAKE-1: a Claude pane that never took a turn wrote no transcript, so the host's wake relaunch must not
+// A Claude pane that never took a turn wrote no transcript, so the host's wake relaunch must not
 // `--resume` it (Claude prints "No conversation found" and the pane is left a bare shell).
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

@@ -117,7 +117,7 @@ function ComposerParentWorktreePickerImpl({
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          {/* A field, not a <Button>: the shared combobox shell draws the --focus-ring (DS-22). */}
+          {/* A field, not a <Button>: the shared combobox shell draws the --focus-ring. */}
           <button
             type="button"
             role="combobox"

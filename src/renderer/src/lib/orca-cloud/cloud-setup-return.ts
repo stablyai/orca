@@ -1,4 +1,4 @@
-// N9: orca://cloud/setup/return?session=… from the setup done page. Main validates the id and
+// orca://cloud/setup/return?session=… from the setup done page. Main validates the id and
 // focuses Orca; this fans the event out to whoever is tracking that session (the setup session
 // poller re-reads at once instead of waiting for its next tick). One IPC subscription is shared.
 type Listener = (sessionId: string) => void

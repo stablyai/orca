@@ -1,4 +1,4 @@
-// V3-08: signed out of Orca in a build that offers Orca Cloud, Landing says where the team's
+// Signed out of Orca in a build that offers Orca Cloud, Landing says where the team's
 // cloud workspaces went and how to see them. Local builds and signed-in people never see it. While it shows, it stands in for the trial card (one cloud card).
 import React from 'react'
 import { Cloud } from 'lucide-react'

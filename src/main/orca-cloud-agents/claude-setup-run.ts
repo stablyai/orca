@@ -36,7 +36,7 @@ export function startClaudeSetupRun(args: {
   let submitter: SubmitSetupCode | null = null
   // The CLI showed its sign-in link: a run that ends without a token after that has expired.
   let linkShown = false
-  // The pasted code's progress; a refusal stays until the next paste or "Open again" (design-squad).
+  // The pasted code's progress; a refusal stays until the next paste or "Open again".
   let code: 'checking' | 'rejected' | null = null
   const startedAt = args.now()
   const browser = (next?: 'checking' | 'rejected' | null): void => {

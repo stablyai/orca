@@ -17,7 +17,7 @@ type WorkspaceSleepMenuItemsProps = {
   subtreeSleepDisabled: boolean
   onSleep: () => void
   onSleepSubtree: () => void
-  /** SHARED-MEMBER-SLEEP-HANG: Sleep is someone else's (the owner's or an admin's); shown disabled with why. */
+  /** Sleep is someone else's (the owner's or an admin's); shown disabled with why. */
   sleepRefusedHint?: string | null
 }
 

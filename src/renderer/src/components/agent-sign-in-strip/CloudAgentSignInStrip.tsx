@@ -1,6 +1,6 @@
 // The 56 px strip at the top of an Orca Cloud pane (redesign §6). Fixed slots: status 16, two text
 // lines, the queued prompt chip (140, hidden below 720 px), actions (304, or 200 below 560 px).
-// Laid out from its own live width (RA-1): a pane narrowed after mount gets the narrow layout too.
+// Laid out from its own live width: a pane narrowed after mount gets the narrow layout too.
 // A region, never a dialog; one polite status sentence per state.
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import {
@@ -72,10 +72,10 @@ function useLiveStripWidth(
 
 /**
  * Where the strip sits in a pane: below the pane's title row, so the pane's own split and close
- * buttons stay visible and clickable while it shows (RA-1). The pane and its fixture share it.
+ * buttons stay visible and clickable while it shows. The pane and its fixture share it.
  */
 export function CloudStripLayer({ children }: { children: React.ReactNode }): React.JSX.Element {
-  // A pane-top banner (RA-11): the pane reserves its height and the terminal refits below it, so
+  // A pane-top banner: the pane reserves its height and the terminal refits below it, so
   // no row sits under the strip. The spacer keeps it below a chromeless pane's title-row buttons.
   const ref = useReservePaneTopSpace()
   return (
@@ -104,11 +104,11 @@ export type CloudStripActions = {
    * setup's sign-in page, known only to main). Actions carrying a `url` copy it without this.
    */
   linkFor?: (action: CloudStripPrimary) => ExternalLinkSource | null
-  /** CHAT-RENEW-INPLACE: the model's `settingsLink` ("Renew in Settings"). */
+  /** The model's `settingsLink` ("Renew in Settings"). */
   openSettings?: () => void
 }
 
-/** GA-P3t: the strip's severity look; anything that isn't a warning or an error reads as info. */
+/** The strip's severity look; anything that isn't a warning or an error reads as info. */
 function stripSeverity(status: CloudStripStatus): BannerSeverity {
   return status === 'warning' ? 'warning' : status === 'error' ? 'error' : 'info'
 }
@@ -137,7 +137,7 @@ function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element
   }
 }
 
-/** `…` in a detail is a command: shown as inline code (design-squad). */
+/** `…` in a detail is a command: shown as inline code. */
 function withInlineCode(text: string): React.ReactNode {
   if (!text.includes('`')) {
     return text
@@ -192,12 +192,12 @@ export function CloudAgentSignInStrip({
   })
   const width = useLiveStripWidth(sectionRef, initialWidth)
   const compact = width === 'compact'
-  // Text never truncates in these strips (design-squad): title and detail wrap (up to 3 lines each)
+  // Text never truncates in these strips: title and detail wrap (up to 3 lines each)
   // and the strip grows from 56 px; actions stay top-right.
   const setupCode = model.paste?.setupCode ? model.paste : null
-  // Both secret pastes (the sign-in code and the setup-token fallback) share one layout (design-squad).
+  // Both secret pastes (the sign-in code and the setup-token fallback) share one layout.
   const secretPaste = model.paste?.secretLabel ? model.paste : null
-  // Narrow (<560 px) with the code field: stack, never truncate (design-squad): text wraps on row 1,
+  // Narrow (<560 px) with the code field: stack, never truncate: text wraps on row 1,
   // [Paste code ……] [Finish setup] [Open again] fill row 2.
   const stacked = secretPaste !== null && (width === 'tiny' || compact)
   const lineFit = 'line-clamp-3 break-words'
@@ -232,7 +232,7 @@ export function CloudAgentSignInStrip({
         }
       }}
       className={cn(
-        // GA-P3t: a severity fill and a 1px bottom border that clear contrast on white panes and
+        // A severity fill and a 1px bottom border that clear contrast on white panes and
         // separate the strip from the terminal below it.
         'grid gap-2.5 border-b px-3 text-foreground outline-none',
         BANNER_TONE[stripSeverity(model.status)].surface,
@@ -324,7 +324,7 @@ export function CloudAgentSignInStrip({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {/* CANCEL-SIGNIN-MENU: the code step cancels with the strip's own × (and Esc), not here. */}
+              {/* The code step cancels with the strip's own × (and Esc), not here. */}
               {model.codeStep ? (
                 <DropdownMenuItem onSelect={actions.pasteCode}>
                   {t('agentSignInStrip.pasteInstead', 'Paste a code instead')}

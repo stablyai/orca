@@ -1,4 +1,4 @@
-// Agent secret requests (contract §3) seen on each runtime environment's client-event stream, plus what
+// Agent secret requests seen on each runtime environment's client-event stream, plus what
 // this window did with them. Names, reasons and ids only: the value a person types stays in the card.
 import { useSyncExternalStore } from 'react'
 import type {
@@ -12,7 +12,7 @@ export type SecretRequestLocalPhase =
   | 'saving'
   /** Saved and the agent was told. */
   | 'saved'
-  /** Saved, but the request had expired, so the agent stopped waiting (D3). */
+  /** Saved, but the request had expired, so the agent stopped waiting. */
   | 'savedAfterExpiry'
   | 'expired'
 
@@ -24,7 +24,7 @@ export type SecretRequestEntry = {
   local: SecretRequestLocalPhase | null
   /** This window's clock when the event first arrived (ties in requestedAt keep arrival order). */
   receivedAt: number
-  /** When this window last sent touchRequest (D3: at most once a minute, across card remounts). */
+  /** When this window last sent touchRequest (at most once a minute, across card remounts). */
   touchedAt: number
 }
 

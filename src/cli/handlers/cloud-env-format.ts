@@ -4,7 +4,7 @@ import type {
   CloudEnvironmentShowData
 } from '../../shared/hosted-sandbox/hosted-environment-cli-contract'
 import type { HostedEnvironmentBuildView } from '../../shared/hosted-sandbox/hosted-environment-wire'
-import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { CLOUD_SANDBOX_SIZE_LINE } from '../cloud/cloud-format'
 
 export function formatOutcome(build: HostedEnvironmentBuildView): string {
   if (build.status === 'succeeded') {
@@ -21,7 +21,7 @@ export function formatOutcome(build: HostedEnvironmentBuildView): string {
 }
 
 /** A build's error code in words (mirrors the desktop's buildErrorCopy); --json keeps the code. */
-export function buildErrorText(error: string | null): string {
+function buildErrorText(error: string | null): string {
   if (error === 'install_failed' || (error !== null && /^exit_\d+$/.test(error))) {
     return 'The install script stopped at a failing command.'
   }
@@ -49,7 +49,7 @@ export function formatShow(data: CloudEnvironmentShowData): string {
   const env = data.environment
   const lines = [
     `Environment: ${env.name} (${env.id})`,
-    `Sandbox size: ${ORCA_CLOUD_SANDBOX_SPEC.vcpus} vCPU · ${ORCA_CLOUD_SANDBOX_SPEC.memoryGb} GB   Revision: ${env.revision}${data.canAdmin ? '' : '   (read-only: ask an owner or admin to change it)'}`,
+    `${CLOUD_SANDBOX_SIZE_LINE}   Revision: ${env.revision}${data.canAdmin ? '' : '   (read-only: ask an owner or admin to change it)'}`,
     'Repos:',
     ...(env.repos.length > 0
       ? env.repos.map(
@@ -108,7 +108,7 @@ function describeBuild(build: HostedEnvironmentBuildView): string {
   }
   parts.push(new Date(build.createdAt).toISOString())
   parts.push(build.id)
-  return parts.filter(Boolean).join('  ')
+  return parts.join('  ')
 }
 
 export function formatBuilds(data: CloudEnvironmentBuildsData): string {

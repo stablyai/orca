@@ -5,7 +5,7 @@ const b64 = (value: string): string => Buffer.from(value).toString('base64')
 const lay = (env: Record<string, string>, lines: string[] | null): Record<string, string> =>
   applyCloudSessionEnv(env, cloudSessionEnvFromText(env, lines === null ? null : lines.join('\n')))
 
-describe('cloud session env overlay (RA-1)', () => {
+describe('cloud session env overlay', () => {
   it('lays the live file over an env captured before a credential was added', () => {
     const env = lay({ PATH: '/usr/bin', ORCA_SESSION_ENV_NAMES: '' }, [
       `CLAUDE_CODE_OAUTH_TOKEN=${b64('orca-ph-claude-account-sbx_1')}`,

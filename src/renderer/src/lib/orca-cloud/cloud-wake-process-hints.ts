@@ -59,7 +59,7 @@ function isIdlePrompt(line: string): boolean {
  * The command still running at the end of a terminal tail: the last prompt line with a command,
  * followed by output and no new prompt. Null when the shell was idle at a prompt, nothing looks
  * like a prompt, or the pane shows a TUI (an agent's input box is typed text, not a command): we
- * only offer Rerun for a shell command we can read back exactly (JA-15).
+ * only offer Rerun for a shell command we can read back exactly.
  */
 export function detectForegroundCommand(
   lines: readonly string[],
@@ -72,7 +72,7 @@ export function detectForegroundCommand(
   }
   if (isIdlePrompt(trimmed[last]!)) {
     // A prompt line with a command and the cursor already below it: submitted, and still running
-    // without output so far (WAKE-RERUN). Otherwise idle, or a half-typed line: nothing ran.
+    // without output so far. Otherwise idle, or a half-typed line: nothing ran.
     const silent = options.cursorBelowText ? promptCommand(trimmed[last]!) : null
     return silent === null || TUI_CHROME.test(trimmed[last]!) ? null : rerunnable(silent)
   }
@@ -302,7 +302,7 @@ export function resetWakeProcessHintsForTests(): void {
 }
 
 /**
- * WAKE-SCROLLBACK: an agent pane (the same rule as the woke-up strip, #451: a Claude/Codex pane not
+ * An agent pane (the same rule as the woke-up strip, #451: a Claude/Codex pane not
  * back at its shell) or a full-screen app restores only the scrollback above its screen; a shell
  * pane restores its visible rows too.
  */

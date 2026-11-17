@@ -51,7 +51,7 @@ export function getWorkspaceVmLifecycleAction(
 }
 
 /**
- * PAIRED-LIFECYCLE: a paired cloud workspace (one this desktop opened or created from a GitHub-only
+ * A paired cloud workspace (one this desktop opened or created from a GitHub-only
  * project) has no VM record here, so its lifecycle item follows the same state the sidebar line
  * shows (deriveCloudDotState: an in-flight wake first, then the control plane): Waking… while the
  * row reads Waking, Wake while it reads Asleep, Try waking again after a failed wake, and otherwise
@@ -135,7 +135,7 @@ export function WorkspaceVmLifecycleMenuItems({
   const t = useTranslate()
   // Orca Cloud speaks the product's lifecycle verbs (sleep / wake), never "Suspend/Resume VM".
   const cloud = useIsCloudWorkspace(worktreeId)
-  // ARCHIVED-DEAD-ACTIONS: an archived cloud workspace (owned or paired) can't sleep or wake;
+  // An archived cloud workspace (owned or paired) can't sleep or wake;
   // Unarchive is its one lifecycle action, so neither Sleep nor Wake is offered here.
   const archived = useCloudWorkspace((state) =>
     isArchivedCloudStatus(state.status[worktreeId]?.status)
@@ -190,7 +190,7 @@ export function WorkspaceVmLifecycleMenuItems({
   )
   // Sleep and Suspend VM are one action on a running VM. A VM still asleep or waking keeps Sleep
   // only while it has restored panels to close; otherwise Sleep would sit there disabled. Not on
-  // Orca Cloud (Neil): there that "Sleep" read as a second, contradictory item beside Wake; the
+  // On Orca Cloud that "Sleep" read as a second, contradictory item beside Wake; the
   // cloud row has exactly one lifecycle item, Sleep or Wake.
   return cloud || (replacesSleep && (action === 'suspend' || !hasSleepableActivity)) ? (
     vmItem

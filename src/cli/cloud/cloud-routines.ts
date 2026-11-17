@@ -38,7 +38,7 @@ const RUN_STATE_LABELS: ReadonlyMap<string, string> = new Map<RoutineRunStatus, 
 
 const FINISHED: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled', 'timed_out'])
 
-export function routineRunStateLabel(status: string): string {
+function routineRunStateLabel(status: string): string {
   return RUN_STATE_LABELS.get(status) ?? 'Unknown'
 }
 
@@ -96,7 +96,7 @@ export function formatRoutineList(value: { routines: Routine[] }, now = Date.now
   )
 }
 
-export function formatRoutineRun(value: {
+function formatRoutineRun(value: {
   routine: Pick<Routine, 'name'>
   run: RoutineRun
 }): string {
@@ -148,9 +148,7 @@ function runFinishedError(routine: Routine, run: RoutineRun): RuntimeClientError
     return new RuntimeClientError(
       'cloud_routine_run_failed',
       routineRunErrorCopy(run.error, run.result?.summary),
-      {
-        run
-      }
+      { run }
     )
   }
   if (run.status === 'timed_out') {
@@ -226,9 +224,7 @@ export function createCloudRoutineHandlers(
           throw failure
         }
       }
-      printCloudResult({ routine: { id: routine.id, name: routine.name }, run }, json, (value) =>
-        formatRoutineRun(value)
-      )
+      printCloudResult({ routine: { id: routine.id, name: routine.name }, run }, json, formatRoutineRun)
     }
   }
 }

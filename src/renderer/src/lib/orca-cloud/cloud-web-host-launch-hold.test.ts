@@ -22,7 +22,7 @@ vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecyc
 vi.mock('@/runtime/hosted-terminals/placement/web-session-terminal-placement', () => ({
   webTerminalPlacementParentTabId: (id: string) => id
 }))
-// FAIL-CLOSED (#568): the hold asks the async launch check (store flag, then main's records).
+// The hold asks the async launch check (store flag, then main's records).
 vi.mock('./orca-cloud-environment-id', () => ({
   isOrcaCloudEnvironmentId: () => host.cloud,
   isOrcaCloudEnvironmentForLaunch: async () => host.cloud
@@ -219,7 +219,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(readCloudAgentHold(key)).toBeNull()
   })
 
-  it('expired: holds; Renew turns it to "renewed · Start", and Start launches it (B)', async () => {
+  it('expired: holds; Renew turns it to "renewed · Start", and Start launches it', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'revoked' }))
     const create = hostCreate()
     const args = { ...CREATE_AGENT, prompt: 'fix the bug' }
@@ -232,7 +232,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     })
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
     await flush()
-    // A renewal never launches by itself (team-lead, B): it waits for Start.
+    // A renewal never launches by itself: it waits for Start.
     expect(readCloudAgentHold(key)).toMatchObject({ reason: 'awaitingStart', awaiting: 'renewed' })
     expect(create).toHaveBeenCalledOnce()
     releaseCloudAgentHold(key, 'proceed')
@@ -252,7 +252,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(host.close).not.toHaveBeenCalled()
   })
 
-  it('FAIL-CLOSED: a host that cannot open the placeholder never gets the agent unheld', async () => {
+  it('a host that cannot open the placeholder never gets the agent unheld', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     const failed = { outcome: { status: 'failed' as const, message: 'x' } }
     const create = vi.fn(async (args: { launchAgent?: string }) =>
@@ -263,7 +263,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
     expect(create.mock.calls[0][0]).not.toHaveProperty('launchAgent')
   })
 
-  it('FAIL-CLOSED: a paired-from-birth launch with no Claude set up never launches Claude', async () => {
+  it('a paired-from-birth launch with no Claude set up never launches Claude', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
     const create = hostCreate()
     void createWithCloudAgentHold({ ...CREATE_AGENT, environmentId: 'env-paired' }, create)
@@ -274,7 +274,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
   })
 })
 
-describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t start"', () => {
+describe('no Claude account is a setup hold, never "didn’t start"', () => {
   beforeEach(() => {
     host.close.mockReset().mockResolvedValue('applied')
     host.cloud = true
@@ -325,7 +325,7 @@ describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t st
     expect(toast).toHaveBeenCalledWith('The agent didn’t start. The shell is still open.')
   })
 
-  it('never confirms a cancel over another workspace or Settings (N-03)', async () => {
+  it('never confirms a cancel over another workspace or Settings', async () => {
     const { useAppStore } = await import('@/store')
     const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const { toast } = await import('sonner')

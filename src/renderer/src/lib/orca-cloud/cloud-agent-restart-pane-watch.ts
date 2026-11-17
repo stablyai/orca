@@ -1,4 +1,4 @@
-// RA-11: a Restart must never vanish without a result. If its pane goes away while the restart runs
+// A Restart must never vanish without a result. If its pane goes away while the restart runs
 // (or after it failed), the strip has nowhere to show; say so in a toast that names the workspace.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

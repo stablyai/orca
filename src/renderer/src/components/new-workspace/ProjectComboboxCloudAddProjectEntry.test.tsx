@@ -13,7 +13,7 @@ const menu = {
   onOpenRemoteHostDialog: vi.fn()
 }
 
-describe('withCloudAddProjectEntry (PROJ-MENU part 2)', () => {
+describe('withCloudAddProjectEntry', () => {
   it('moves the access link into the Add project menu and out of the list', () => {
     const more = vi.fn()
     const closeMenus = vi.fn()

@@ -1,6 +1,6 @@
-// The setup panel's GitHub row (cloud-start D1–D3) from useOrcaCloudRepoAccess. The panel shell and
-// its row rendering are w2-lifecycle's; this only says what the row is, in the CloudSetupStep shape
-// {id:'github', state, detail?}, plus its label, status word and action. Copy is the spec's verbatim.
+// The setup panel's GitHub row from useOrcaCloudRepoAccess. The panel shell and
+// its row rendering live elsewhere; this only says what the row is, in the CloudSetupStep shape
+// {id:'github', state, detail?}, plus its label, status word and action.
 import { translate } from '@/i18n/i18n'
 import { PUSH_TO_GITHUB_URL } from '@/components/worktree-creation/vm-build-repo-actions'
 import type { OrcaCloudRepoAccess } from './use-orca-cloud-repo-access'
@@ -11,17 +11,17 @@ export type OrcaCloudGitHubSetupRow = {
     state: 'done' | 'needed' | 'active' | 'pending' | 'failed'
     detail?: string
   }
-  /** Row title: "GitHub access", or "GitHub repository" when the project isn't on GitHub (D3). */
+  /** Row title: "GitHub access", or "GitHub repository" when the project isn't on GitHub. */
   label: string
   /** Trailing status word ("Needed", "Requested", "Done"); absent while checking. */
   status?: string
-  /** Second line under the detail (D1/D2). */
+  /** Second line under the detail (install needed, or waiting for an owner). */
   note?: string
-  /** In-row button (D3's "How to push"). */
+  /** In-row button ("How to push" when the project isn't on GitHub). */
   action?: { kind: 'push-help'; label: string; url: string }
-  /** What the panel's primary (⌘↵) button becomes while this row is the blocker (D1). */
+  /** What the panel's primary (⌘↵) button becomes while this row is the blocker. */
   primary?: { kind: 'install'; label: string }
-  /** D3 outranks account and plan rows: buying can't fix a project that isn't on GitHub. */
+  /** Not on GitHub outranks account and plan rows: buying can't fix a project that isn't on GitHub. */
   blocksStart: boolean
 }
 
@@ -89,7 +89,7 @@ export function orcaCloudGitHubSetupRow(
           'orcaCloud.setup.github.missingNote',
           'It clones your code from GitHub. Give access to this repository once.'
         ),
-        // D1: no button in the row; the panel's primary action opens GitHub's install page.
+        // Install needed: no button in the row; the panel's primary action opens GitHub's install page.
         primary: {
           kind: 'install',
           label: translate('orcaCloud.setup.github.giveAccessAndStart', 'Give access and start')

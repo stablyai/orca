@@ -46,7 +46,7 @@ function setup(options: {
   }
 }
 
-describe('cloud pairing prune (LC-1)', () => {
+describe('cloud pairing prune', () => {
   it('drops a pairing missing from the list once one more fetch confirms the sandbox is gone', async () => {
     const t = setup({
       bindings: {

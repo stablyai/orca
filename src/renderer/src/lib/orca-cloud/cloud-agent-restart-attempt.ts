@@ -1,15 +1,15 @@
-// RA-11 Restart on the Orca Cloud strip: the attempt the strip shows ("Restarting…", then a result)
+// Restart on the Orca Cloud strip: the attempt the strip shows ("Restarting…", then a result)
 // and the mark that lets it run while the signed-out agent reports 'blocked'.
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { clearCloudRunningSignout, notifyCloudRunningStrips } from './cloud-running-agent-signout'
 
 /**
- * RA-11 Restart the person clicked on a signed-out cloud pane. Its Claude reports 'blocked' after the
+ * Restart the person clicked on a signed-out cloud pane. Its Claude reports 'blocked' after the
  * failed turn, which the account-restart path otherwise reads as mid-turn and waits on forever.
  */
 const forcedRestarts = new Set<string>()
 
-/** Whether a queued restart on this PTY was asked for on the RA-11 strip (and may run now). */
+/** Whether a queued restart on this PTY was asked for on the Restart strip (and may run now). */
 export function isForcedCloudAgentRestart(ptyId: string): boolean {
   return forcedRestarts.has(ptyId)
 }
@@ -154,7 +154,7 @@ export function dismissCloudAgentRestart(paneKey: string): void {
   notifyCloudRunningStrips()
 }
 
-/** RA-11e: how long the strip says a resume became a new conversation before it clears. */
+/** How long the strip says a resume became a new conversation before it clears. */
 export const CLOUD_AGENT_FRESH_NOTICE_MS = 3_000
 const freshNotices = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -181,7 +181,7 @@ export function cloudAgentRestartStartedFresh(paneKey: string, _revision: number
 
 /**
  * The restart relaunched but did not end where it must: the fresh start after an empty resume could
- * not be typed (RA-11e, a bare shell), or the pane bound a terminal other than the resumed one (RA-11
+ * not be typed (a bare shell), or the pane bound a terminal other than the resumed one (the
  * resume race, a new conversation). The attempt may already have settled on the new PTY; show
  * "Couldn't restart" again so the person can Try again, never a quiet wrong result.
  */

@@ -178,7 +178,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     return
   }
   if (entry.request.githubSource) {
-    // GH-CREATE-SHEET: no worktree create here; the sandbox clones from GitHub and is paired.
+    // A GitHub-only Orca Cloud create: no worktree create here; the sandbox clones from GitHub and
+    // is paired.
     void import('@/lib/orca-cloud/start-cloud-workspace-from-github').then(
       ({ retryGitHubCloudCreate }) => retryGitHubCloudCreate(creationId)
     )

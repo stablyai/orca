@@ -85,7 +85,7 @@ export function enqueueCloudPrompt(args: {
   })
 }
 
-export function markCloudPrompt(
+function markCloudPrompt(
   id: string,
   update: Pick<QueuedCloudPrompt, 'status'> & { error?: string }
 ): Promise<void> {

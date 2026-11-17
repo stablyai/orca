@@ -1,4 +1,4 @@
-// Wires S0 to main: the setup steps run there, and this only reads states and sends intents.
+// Wires Cloud agent sign-ins to main: the setup steps run there, and this only reads states and sends intents.
 import { useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'

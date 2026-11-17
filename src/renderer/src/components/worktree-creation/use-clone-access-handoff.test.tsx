@@ -34,7 +34,7 @@ function setup() {
   return { hook, onRetry }
 }
 
-describe('CLONE-ACCESS-ERROR: a clone GitHub refused', () => {
+describe('a clone GitHub refused', () => {
   beforeEach(() => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     Object.defineProperty(window, 'api', {

@@ -42,7 +42,9 @@ function setAgentRow(
     ...(row.evidenceObservedAt === undefined ? {} : { evidenceObservedAt: row.evidenceObservedAt }),
     updatedAt: row.updatedAt ?? asleepAt
   }
-  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })) })
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry }))
+  })
 }
 
 /** A pane whose screen the test controls: at a shell prompt or not, and when it redraws. */
@@ -84,7 +86,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('CloudWokeAgentNotice (RA-WAKE)', () => {
+describe('CloudWokeAgentNotice', () => {
   it('relaunched by the host: no bar at any point, and the hint is dismissed', () => {
     const { onDismiss } = renderNotice(true)
     expect(restartButton()).toBeNull()

@@ -10,7 +10,7 @@ import type { QueuedCloudPrompt } from './cloud-prompt-queue'
 // booted with, and start agents in it with a prompt.
 
 /** Where the control plane clones the repo; the create response confirms it. */
-export const CLOUD_DEFAULT_PROJECT_ROOT = '/vercel/sandbox/project'
+const CLOUD_DEFAULT_PROJECT_ROOT = '/vercel/sandbox/project'
 
 const RepoSchema = z.looseObject({ id: z.string(), path: z.string() })
 

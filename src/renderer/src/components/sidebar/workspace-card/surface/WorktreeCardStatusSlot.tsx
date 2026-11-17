@@ -158,9 +158,9 @@ export function WorktreeCardStatusSlot({
     const reported = state.status[worktreeId]?.status?.state
     return reported === 'sleeping' || reported === 'stopping' || reported === 'archived'
   })
-  // An asleep sandbox runs no agent: a terminal restored from before the sleep is not activity
-  // (RA-9). Until the first status read, the local VM record says it is suspended.
-  // From the Sleep click on (RA-13b): the sandbox is still up, but its agents are being stopped.
+  // An asleep sandbox runs no agent: a terminal restored from before the sleep is not activity.
+  // Until the first status read, the local VM record says it is suspended.
+  // From the Sleep click on: the sandbox is still up, but its agents are being stopped.
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
   const asleepCloud = isCloud && (cloudAsleep || goingToSleep || vmRuntime?.status === 'suspended')
   // A collapsed descendant's louder state still shows; only this card's own activity is quieted.

@@ -4,7 +4,7 @@ import { currentStepCopy } from './cloud-setup-page-copy'
 
 const t: Translate = (_key, fallback) => fallback
 
-describe('CAP-GATE-DESKTOP copy', () => {
+describe('capability-off copy', () => {
   const current = { id: 'plan', state: 'needed', need: 'capability' } as const
 
   it('offers "contact us" only when [Contact us] is shown', () => {

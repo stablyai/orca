@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: shows this member's owner-change notices as persistent cloud toasts while they
+// Shows this member's owner-change notices as persistent cloud toasts while they
 // are signed in to a team. A previous owner is told who took or gave away their workspace and to
 // consider rotating personal secrets (amber, until dismissed); a new owner is told once that the
 // workspace runs like a shared one (info).

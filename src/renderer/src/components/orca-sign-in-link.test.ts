@@ -1,4 +1,4 @@
-// COPY-LINK-FIRST-CLICK: the first "Sign in" / "Continue in browser" copies the link of the same
+// The first "Sign in" / "Continue in browser" copies the link of the same
 // trip a click would make, started without the browser.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'

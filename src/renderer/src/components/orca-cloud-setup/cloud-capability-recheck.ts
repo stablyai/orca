@@ -1,7 +1,7 @@
-// "Try again" on the capability-off step (CAP-GATE), and the one automatic check when the step
+// "Try again" on the capability-off step, and the one automatic check when the step
 // first shows. Main's Orca Cloud availability reads the capabilities stored with the session, which
 // otherwise change only at the next session refresh (up to an access-token lifetime away). Auth
-// grants Orca Cloud to a team that pays for a plan (PAID-TEAM-CHOOSE-PLAN), so asking auth again
+// grants Orca Cloud to a team that pays for a plan, so asking auth again
 // here lets a paying team move on at once instead of staying on "isn't turned on yet".
 
 type CloudCapabilityRecheckDeps = {

@@ -1,5 +1,5 @@
-// Orca Cloud setup session (NP-4 N1), desktop side. "Set up and start" opens ONE browser tab:
-// - signed out: the sign-in tab shows the setup account page (A2); once the code is exchanged,
+// Orca Cloud setup session, desktop side. "Set up and start" opens ONE browser tab:
+// - signed out: the sign-in tab shows the setup account page; once the code is exchanged,
 //   the session is created and the same tab continues to the setup pages;
 // - signed in: the session is created and its start URL is opened.
 // The composer then polls getCloudSetupSession until every step is done.

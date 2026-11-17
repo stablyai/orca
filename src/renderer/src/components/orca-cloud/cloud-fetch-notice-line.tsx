@@ -1,4 +1,4 @@
-// The "can't reach origin" line (GH-FETCH-REASON). "Can't reach … right now" with Check again reads
+// The "can't reach origin" line. "Can't reach … right now" with Check again reads
 // as transient, so it's kept for what is: the network, or no answer yet. Where Orca's GitHub app
 // can't see the repository, the line says so and offers what fixes it (Grant access, or a request
 // for an owner). Where the app can see it but this workspace still can't, it says Restart.
@@ -17,14 +17,14 @@ type CloudFetchLineHandlers = {
   installing: boolean
   copyRequest: () => void
   copied?: boolean
-  /** LIVE-GIT-ACCESS: the live refresh ran and origin still refused. */
+  /** The live refresh ran and origin still refused. */
   needsRestart?: boolean
   restart?: () => void
   recheck?: () => void
   checking?: boolean
 }
 
-/** The doctor's reason (GH-FETCH-REASON): git refused, or said the repository isn't there. */
+/** The doctor's reason: git refused, or said the repository isn't there. */
 function refusedByGitHub(check: EnvironmentDoctorCheck): boolean {
   return check.code === 'remoteDenied' || check.code === 'remoteNotFound'
 }

@@ -1,4 +1,4 @@
-// GH-CREATE-SHEET: Orca Cloud from a GitHub repository with no clone here uses the same build sheet.
+// Orca Cloud from a GitHub repository with no clone here uses the same build sheet.
 // The logs are the lines main streams for it (cloud-create-from-github.ts), so the steps and the
 // billing cards come from the same parsing and classification as an owned create's.
 import { defineFixture } from '../../component-fixtures/component-fixture'
