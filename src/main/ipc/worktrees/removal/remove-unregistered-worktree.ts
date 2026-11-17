@@ -19,7 +19,7 @@ import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/w
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import { cleanupUnusedWorktreePushTargetRemote, notifyWorktreesChanged } from '../worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
@@ -53,14 +53,18 @@ export async function removeUnregisteredWorktree(
     })
   ) {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-        toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+    if (!isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome)) {
+      const [runtimeWorktree, runtimeRepo] = await toLocalWorktreeRuntimePaths(
+        [worktreePath, repo.path],
+        localWorktreeGitOptions
+      )
+      canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+        runtimeWorktree,
+        runtimeRepo,
         removalHome,
         access
-      ))
+      )
+    }
   }
   const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {

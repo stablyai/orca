@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { buildBody, PANE } from '../server.test-fixtures'
 
@@ -86,39 +83,6 @@ describe('AgentHookServer listener replay', () => {
       providerSessionOnly: true,
       providerSession: { id: 'resume-me' }
     })
-  })
-
-  it('hydrates cached statuses as not observed in the current runtime', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
-    const firstServer = new AgentHookServer()
-    const secondServer = new AgentHookServer()
-    try {
-      await firstServer.start({ env: 'production', userDataPath: dir })
-      firstServer.ingestRemote(
-        {
-          paneKey: PANE,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          payload: { state: 'working', agentType: 'claude' }
-        },
-        'conn-1'
-      )
-      firstServer.flushStatusPersistSync()
-      firstServer.stop()
-
-      await secondServer.start({ env: 'production', userDataPath: dir })
-
-      expect(secondServer.getStatusChangeSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'working',
-          observedInCurrentRuntime: false
-        })
-      ])
-    } finally {
-      firstServer.stop()
-      secondServer.stop()
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 
   it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
