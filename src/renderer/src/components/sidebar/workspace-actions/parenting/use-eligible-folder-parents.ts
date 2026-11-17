@@ -5,7 +5,7 @@ import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-rec
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getEligibleFolderParents, storeAcceptsFolderParentIn } from './worktree-parent-candidates'
 
 const NO_FOLDER_PARENTS: Worktree[] = []

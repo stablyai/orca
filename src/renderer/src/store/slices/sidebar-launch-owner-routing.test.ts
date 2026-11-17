@@ -8,7 +8,7 @@ import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/n
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { runtimeStatuses } from './browser/browser-slice-test-harness'
-import { getAgentDetectionTargetKeyForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { getAgentDetectionTargetKeyForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import {
   buildAgentLaunchRouteInput,
   worktreeLaunchWorkspace

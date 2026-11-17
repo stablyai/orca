@@ -1,6 +1,7 @@
+// @protected-copy scope=file
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { UpdateInstallBlock } from '../../../../../shared/update-status-types'
+import type { UpdateInstallBlock } from '../../../../../shared/updater/update-status-types'
 
 export function getUpdateInstallBlockGuidance(
   block: UpdateInstallBlock,

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeTestStores, createStore, makeRepo, testState } from '../persistence-test-harness'
-import { ProjectUpdate } from '../../../shared/rpc-contract/project-runtime-params'
+import { ProjectUpdate } from '../../../shared/rpc-contract/projects/project-runtime-params'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

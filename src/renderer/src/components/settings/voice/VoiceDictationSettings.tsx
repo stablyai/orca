@@ -2,15 +2,15 @@ import type {
   SpeechModelManifest,
   SpeechModelState,
   VoiceSettings
-} from '../../../../../shared/speech-types'
+} from '../../../../../shared/speech/speech-types'
 import {
   dictationShortcutMode,
   dictationShortcutModeSettings,
   type DictationShortcutMode
-} from '../../../../../shared/dictation-shortcut-mode'
+} from '../../../../../shared/speech/dictation/dictation-shortcut-mode'
 import { useAppStore } from '@/store'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeyDetails, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useShortcutKeyDetails, useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 import { Button } from '../../ui/button'
@@ -18,6 +18,7 @@ import { Switch } from '../../ui/switch'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { isSpeechModelDownloading } from './voice-speech-model-rows'
+import { VOICE_SETTING_ANCHORS } from './voice-pane-search'
 
 type VoiceDictationSettingsProps = {
   voiceSettings: VoiceSettings
@@ -129,6 +130,7 @@ export function VoiceDictationSettings(props: VoiceDictationSettingsProps): Reac
         }
       />
       <SettingsRow
+        id={VOICE_SETTING_ANCHORS.mode}
         label={modeLabel}
         description={modeDescription}
         control={

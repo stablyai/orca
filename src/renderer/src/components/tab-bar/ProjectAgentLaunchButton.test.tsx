@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ProjectAgentLaunchButton } from './ProjectAgentLaunchButton'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import type { Project } from '../../../../shared/project-types'
+import type { Project } from '../../../../shared/project/project-types'
 
 const boundary = vi.hoisted(() => ({
   launch: vi.fn((..._args: unknown[]) => true),

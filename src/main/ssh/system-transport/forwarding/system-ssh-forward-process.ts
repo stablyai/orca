@@ -5,7 +5,7 @@ import { createSshOperationAbortError } from '../../connection/ssh-exec-options'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'
 import { findSystemSsh } from '../system-ssh-binary'
 import { reserveLocalForwardPort } from './system-ssh-forward-port-reservation'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 export const SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS = 750
 export const SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS = 50

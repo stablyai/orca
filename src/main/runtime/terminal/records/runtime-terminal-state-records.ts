@@ -5,22 +5,22 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalRowMetadata } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalRowMetadata } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]
@@ -120,6 +120,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
+  /** While lastAgentStatus is permission: a waiting/blocked hook observed after this raised the block. */
+  permissionWaitHookedAfterEpochMs?: number
   /** When a replacement process took over this PTY id; earlier hooks describe its predecessor. */
   providerGenerationResetAtEpochMs?: number
   lastOscTitle: string | null

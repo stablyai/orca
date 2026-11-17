@@ -67,9 +67,7 @@ export function CompactWorktreeCardContent({
       {card.showInlineAgentList ? (
         <WorktreeCardAgents
           worktreeId={card.worktree.id}
-          agents={
-            card.agentActivityDisplayMode === 'compact' ? card.compactInlineAgentRows : undefined
-          }
+          executionHostId={card.worktree.hostId}
           renderHeader={renderHeader}
         />
       ) : (

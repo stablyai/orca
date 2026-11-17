@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { removeTreeSync } from '../../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { WINDOWS_CMD_SAFE_PATH } from './windows-hook-command'
 import {
   buildWindowsNativeHookExecutable,

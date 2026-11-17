@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { useAppStore } from '@/store/index'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
-import { SKILL_BUNDLE_INSTALL_CAPABILITY } from '../../../../../shared/skill-install-capability'
-import type { SkillCloudVersion } from '../../../../../shared/skill-cloud-contract'
+import { SKILL_BUNDLE_INSTALL_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
+import type { SkillCloudVersion } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import type {
   SkillBundleInstallPreview,
   SkillBundleInstallResult
-} from '../../../../../shared/skill-bundle-install-contract'
-import type { SkillInstallDestination } from '../../../../../shared/skill-install-contract'
+} from '../../../../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillInstallDestination } from '../../../../../shared/skills/installation/skill-install-contract'
 import { SkillBundleInstallOutcome } from './SkillBundleInstallOutcome'
 import { SkillBundleInstallReview } from './SkillBundleInstallReview'
 import { SkillInstallTargetFields } from './SkillInstallTargetFields'
@@ -20,14 +20,14 @@ import {
   retrySkillsActionLabel
 } from '../presentation/skill-display-labels'
 import { useSkillInstallDetectedAgents } from './use-skill-install-detected-agents'
-import type { SkillInstallProviderId } from '../../../../../shared/skill-install-providers'
+import type { SkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import { skillInstallWorkspaceChoices } from './skill-install-workspace-choices'
 import { useSkillInstallProgress } from './skill-install-progress-state'
 import { useTranslate } from '@/i18n/use-translate'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
 import { retryableSkillIds } from './skill-bundle-retry-selection'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

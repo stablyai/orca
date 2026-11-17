@@ -1,7 +1,7 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs'
-import { resolveRealPathSync } from '../../../../shared/real-path-sync'
+import { resolveRealPathSync } from '../../../../shared/file-access/real-path-sync'
 import { dirname, isAbsolute, join, relative } from 'node:path'
-import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathSeparators } from '../../../../shared/file-access/cross-platform-path'
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 

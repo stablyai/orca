@@ -37,7 +37,8 @@ export async function createTerminalTabFromMenu(page: Page): Promise<string> {
 
   await (await tabCreateMenuTrigger(tabBar)).click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/i })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/i })
     .first()
     .click()
 

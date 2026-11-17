@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
 import type { ClaudeLateDispatchOutcome } from '../claude-structured-session-state'
@@ -14,7 +14,7 @@ import {
   PROVIDER_SESSION_ID,
   type FakeConnection
 } from '../claude-structured-session-test-support'
-import { claudeStartupSettled } from '../claude-structured-startup-settled-test-support'
+import { claudeStartupSettled } from '../startup/claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { kind: 'meta'; providerSessionId: string }

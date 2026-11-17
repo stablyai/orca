@@ -1,11 +1,11 @@
-import { readAgentMenuLaunchFacts } from './agent-menu-launch-facts'
+import { readAgentMenuLaunchFacts } from '../agent/launch-menu/agent-menu-launch-facts'
 import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
   resolveAgentLaunchInventoryHost,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   runtimeHostContactForEntry,

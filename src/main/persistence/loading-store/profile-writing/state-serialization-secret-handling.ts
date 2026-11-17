@@ -4,7 +4,7 @@ import {
 } from './profile-state-authority-writes'
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
 import { randomUUID } from 'node:crypto'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { collectFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import {
   PROTECTED_SECRET_SLOT,
@@ -13,7 +13,7 @@ import {
 } from '../../../credentials/protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../../applying-settings/terminal-settings-migrations'
 import { LEGACY_OPENCODE_GO_API_KEY_SLOT } from '../profile-loading/legacy-opencode-go-api-key-migration'
-import { omitDefaultWorktreeMetaFieldsInMap } from '../../../../shared/worktree/meta-persisted-defaults'
+import { omitDefaultWorktreeMetaFieldsInMap } from '../../../../shared/worktree/metadata/meta-persisted-defaults'
 import { projectWorktreeMetaByIdentityOntoLocators } from '../worktree-metadata/worktree-meta-alias-projection'
 import { withoutRedundantPartitionGlobals } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'

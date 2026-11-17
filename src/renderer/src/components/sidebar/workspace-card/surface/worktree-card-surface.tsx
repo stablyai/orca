@@ -9,6 +9,7 @@ import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
+import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -47,7 +48,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   const isSleeping = useIsSleepingWorktree(worktree.id)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
-  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+  const { content: templateContent, frame } = renderWorkspaceCardTemplate(
     card,
     DEFAULT_WORKSPACE_CARD_TEMPLATE,
     (templateFrame) => {
@@ -56,6 +57,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         ? { style: { marginLeft: `${parentContentMarginLeft}px` } }
         : undefined
     }
+  )
+  const parentCardContent = newCardStyle ? (
+    // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
+    <WorktreeCardTitleStatusProvider card={card}>{templateContent}</WorktreeCardTitleStatusProvider>
+  ) : (
+    templateContent
   )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine

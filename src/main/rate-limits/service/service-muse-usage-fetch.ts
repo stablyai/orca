@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { fetchMuseRateLimits } from '../providers/muse/muse-usage-fetcher'
 import { settleSiblingProviderFetch } from './service-sibling-provider-result'
 

@@ -3,7 +3,7 @@ import {
   getStandardEmojiShortcodeEntries,
   setEmojiShortcodeDatasetLoader,
   type StandardEmojiShortcodeEntry
-} from '../../../../../shared/emoji-shortcode-catalog'
+} from '../../../../../shared/text/emoji-shortcode-catalog'
 
 // Keep transforms synchronous with eager catalog data; lazy loading once persisted literal :wink: during its unresolved window.
 setEmojiShortcodeDatasetLoader(() => emojiShortcodes)

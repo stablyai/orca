@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { ProjectDefaultAgentMenuItem } from './ProjectDefaultAgentMenuItem'
 import { Button } from '@/components/ui/button'
@@ -9,9 +9,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import WorktreeCard from '../sidebar/workspace-card/surface/WorktreeCard'
-import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { useAppStore } from '@/store'
-import type { Project } from '../../../../shared/project-types'
+import type { Project } from '../../../../shared/project/project-types'
 import { projectAgentLaunchDefaultSchema } from '../../../../shared/agent-launch/project-agent-launch-default'
 
 const repo = { ...makeRepo(), displayName: 'JobBoard' }

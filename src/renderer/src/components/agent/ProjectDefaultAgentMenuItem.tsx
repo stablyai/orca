@@ -13,10 +13,10 @@ import {
 import { AgentIcon } from './icons/AgentIcon'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import { useAgentMenuObservation } from '../tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from './launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { projectForAgentDefault } from './project-agent-default'
 import {
   selectFolderWorkspaces,
@@ -26,8 +26,8 @@ import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../shared/execution-host/execution-host'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   agentPickerDraft,
@@ -35,8 +35,8 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ProjectAgentLaunchDefault } from '../../../../shared/agent-launch/project-agent-launch-default'
 import { normalizeAgentModelOptionChoices } from '../../../../shared/agent-launch/choices/agent-launch-choices'
-import type { Repo } from '../../../../shared/repo-types'
-import type { Project } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { Project } from '../../../../shared/project/project-types'
 
 export function ProjectDefaultAgentMenuItem({ repo }: { repo: Repo }): React.JSX.Element {
   const t = useTranslate()
@@ -146,14 +146,13 @@ function ProjectDefaultAgentPicker({
         mode="select"
         disabled={pending}
         value={choice ? { ...choice, prompt: '' } : undefined}
-        runLaunch={(row, draft, entry, surface) => {
+        runLaunch={(row, draft, entry) => {
           const selectedEntry = entry ?? entries.find((candidate) => candidate.agent === row.agent)
           const selectedDraft =
             draft ?? (selectedEntry ? agentPickerDraft(selectedEntry) : undefined)
           return save({
             agent: row.agent,
-            surface:
-              surface ?? selectedDraft?.surface ?? (row.kind === 'chat' ? 'chat' : 'terminal'),
+            surface: selectedDraft?.surface ?? (row.kind === 'chat' ? 'chat' : 'terminal'),
             choices:
               normalizeAgentModelOptionChoices(
                 selectedEntry && selectedDraft

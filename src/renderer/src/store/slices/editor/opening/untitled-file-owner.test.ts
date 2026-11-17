@@ -9,7 +9,7 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 import { toast } from 'sonner'
 

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'

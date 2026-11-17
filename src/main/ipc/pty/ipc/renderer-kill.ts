@@ -2,13 +2,13 @@ import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { TerminalIntentionalStopKind } from '../../../runtime/terminal/stop/terminal-intentional-stops'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import {

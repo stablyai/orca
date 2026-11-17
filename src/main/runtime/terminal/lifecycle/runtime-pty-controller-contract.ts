@@ -4,7 +4,7 @@ import type {
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
+import type { PtySpawnOutcome } from '../../../ipc/pty/spawn/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
@@ -17,20 +17,20 @@ import type {
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 

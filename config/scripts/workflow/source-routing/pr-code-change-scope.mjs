@@ -72,10 +72,10 @@ const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 
 const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
-  'src/shared/git-',
+  'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
-  'src/shared/review-head-tracking-ref',
-  'src/shared/worktree/local-base-branch-fast-forward',
+  'src/shared/worktree/hosted-review/review-head-tracking-ref',
+  'src/shared/worktree/base-refs/local-base-branch-fast-forward',
   'src/main/git/',
   'config/scripts/git-binary-compatibility'
 ]
@@ -107,9 +107,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
-  'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
-  'src/shared/codex-shell-function',
+  'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
   'src/main/codex/history/index/codex-session-index-heal',
   'src/main/codex/app-server/codex-app-server-session',
@@ -125,8 +124,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/windows/windows-command-paths',
   'src/main/windows/windows-directory-acl',
   'src/main/filesystem/permission-errors',
-  'src/shared/node-cli-command-resolution',
-  'src/shared/windows-batch-spawn'
+  'src/shared/shell/command-resolution/node-cli-command-resolution',
+  'src/shared/shell/launch/windows-batch-spawn'
 ]
 
 const ORCAD_BROWSER_PREFIXES = [
@@ -146,6 +145,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
+  'native/windows-notifications/package.json',
   'native/windows-registry/package.json',
   'native/windows-security/package.json'
 ]
@@ -182,7 +182,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat/native-chat-visual-shell'
+  'src/shared/native-chat/visuals/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -206,37 +206,35 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
   'src/main/daemon/protocol/daemon-protocol-version.ts',
-  'src/shared/protocol-version',
+  'src/shared/remote-runtime/protocol/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
   'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/transports/websocket/ws-transport.ts',
-  'src/shared/web-origin-security.ts',
+  'src/shared/remote-runtime/pairing/web-origin-security.ts',
   'src/shared/browser/client-hosting/browser-client-host-placement',
   'src/shared/agent-launch/contracts/agent-launch-intent',
-  'src/shared/rpc-contract/agent-launch-params',
+  'src/shared/rpc-contract/agent-launch/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
-  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
   'src/shared/agent-session/view/structured-agent-session-projection.ts',
-  'src/shared/agent-session/lifecycle/agent-session-record-stored-form.test.ts',
-  'src/shared/agent-session/lifecycle/agent-session-record-stored-form.ts',
-  'src/shared/agent-session/lifecycle/agent-session-record.test-fixture.ts',
+  'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.test.ts',
+  'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.ts',
+  'src/shared/agent-session/lifecycle/records/agent-session-record.test-fixture.ts',
   'src/shared/agent-session/lifecycle/agent-session-record.ts',
-  'src/shared/agent-session/lifecycle/agent-session-turn-record.test.ts',
-  'src/shared/agent-session/lifecycle/agent-session-turn-record.ts',
-  'src/shared/agent-session/lifecycle/agent-session-mutation-envelope.test.ts',
-  'src/shared/agent-session/lifecycle/agent-session-mutation-envelope.ts',
-  'src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding.ts',
-  'src/shared/agent-session/lifecycle/agent-session-provider-handle-replacement.ts',
-  'src/shared/agent-session/lifecycle/agent-session-provider-handle.test.ts',
-  'src/shared/agent-session/lifecycle/agent-session-provider-handle.ts',
-  'src/shared/agent-session/lifecycle/agent-session-resume-marker.ts',
-  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
+  'src/shared/agent-session/lifecycle/records/agent-session-turn-record.test.ts',
+  'src/shared/agent-session/lifecycle/records/agent-session-turn-record.ts',
+  'src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope.test.ts',
+  'src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope.ts',
+  'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding.ts',
+  'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-replacement.ts',
+  'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.test.ts',
+  'src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle.ts',
+  'src/shared/agent-session/lifecycle/resume/agent-session-resume-marker.ts',
   'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
-  'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts',
+  'src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation.ts',
   'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
@@ -266,19 +264,19 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/orchestration/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch/agent-launch',
   'src/main/runtime/rpc/methods/history/ai-vault.ts',
-  'src/shared/rpc-contract/browser-tab-create-params',
+  'src/shared/rpc-contract/browser/browser-tab-create-params',
   'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-sessions/',
-  'src/shared/rpc-contract/structured-agent-session-params.ts',
-  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
-  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
-  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/shared/rpc-contract/structured-agent-session/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params.ts',
   'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
-  'src/shared/runtime-worktree-contracts',
+  'src/shared/worktree/catalog/runtime-worktree-contracts',
   'src/renderer/src/runtime/hosted-terminals/streams/',
   'src/renderer/src/runtime/hosted-terminals/snapshots/',
   'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
@@ -289,13 +287,12 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-session-turn-record',
   'src/shared/agent-session/view/structured-agent-session-agent-status',
   'src/shared/agent-session/view/structured-agent-session-projection',
-  'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
-  'src/shared/structured-native-chat-launch-route.ts',
+  'src/shared/agent-launch/choices/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
-  'src/shared/electron-remote-runtime-client-capabilities.ts',
+  'src/shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
   'src/main/runtime/orchestration/db/',
@@ -334,7 +331,7 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs',
   'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
-  'src/shared/zip-extractor-command.ts',
+  'src/shared/archives/zip-extractor-command.ts',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',
@@ -349,6 +346,7 @@ const NATIVE_CACHE_PREFIXES = [
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree',
   // The vendored addons' sources: build/ and bin/ beside them are ignored, so nothing else lands here.
+  'native/windows-notifications/',
   'native/windows-registry/',
   'native/windows-security/'
 ]

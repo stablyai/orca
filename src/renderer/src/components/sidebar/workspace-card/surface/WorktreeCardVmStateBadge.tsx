@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
-import type { EphemeralVmFailure } from '../../../../../../shared/ephemeral-vm-failure-copy'
+import type { EphemeralVmFailure } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import type { ExecutionHostVmState } from '../../../../../../shared/execution-host/execution-host-health'
 
 export function getVmStateLabel(state: ExecutionHostVmState, t: Translate = translate): string {

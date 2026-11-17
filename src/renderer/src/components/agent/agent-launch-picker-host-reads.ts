@@ -1,3 +1,4 @@
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
@@ -10,10 +11,10 @@ import {
   type ModelMenuReadScope
 } from '@/runtime/native-chat/model-catalogs/model-menu-catalog-read'
 import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-catalogs/model-menu-invalidation'
-import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function agentPickerModelCatalogReads(
   input: Omit<ModelMenuReadScope, 'agent' | 'target'> & {
@@ -76,4 +77,21 @@ export async function readAgentPickerLaunchSupport(
     options,
     ...(isAgentChatPermissionChoice(permissionMode) ? { permissionMode } : {})
   }
+}
+
+export function agentPickerCatalogUnsupported(
+  entry: AgentPickerEntry,
+  target: RuntimeClientTarget | null,
+  cliDiscoveryRuntime: RuntimeGitContext | null,
+  registeredAgents: readonly { agent: string }[] | null | undefined
+): boolean {
+  return (
+    (!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
+    !entry.surfaces.length ||
+    Boolean(
+      registeredAgents &&
+      !registeredAgents.some(({ agent }) => agent === entry.agent) &&
+      !getAgentSessionOptionLaunchCatalog(entry.agent)
+    )
+  )
 }

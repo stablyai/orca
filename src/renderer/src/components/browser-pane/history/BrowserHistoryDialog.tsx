@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { FileText, Trash2 } from 'lucide-react'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog,
@@ -17,17 +17,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { FooterKey } from '@/components/worktree-jump/worktree-jump-palette-primitives'
+import { FooterKey } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '@/store'
-import { requestBrowserFocus } from '../host-guest/browser-focus'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { useAppStore } from '@/store/index'
+import { requestBrowserFocus } from '../host-guest/input/browser-focus'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { startOfLocalDay } from '../../../../../shared/automations/scheduling/automation-cron-occurrence'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import type { RemovedBrowserHistory } from '@/store/slices/browser/browser-slice-contract'
-import type { BrowserAddressBarSuggestion } from '../assemble-chrome/browser-address-bar-suggestions'
+import type { BrowserAddressBarSuggestion } from '../assemble-chrome/address-bar/browser-address-bar-suggestions'
 import BrowserHistoryRowRemoveButton from './BrowserHistoryRowRemoveButton'
 import { isRemoveRowShortcut, useRemoveHistoryRow } from './browser-history-row-removal'
 import {

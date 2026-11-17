@@ -1,21 +1,21 @@
 import React from 'react'
 import type { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { Plus } from 'lucide-react'
+import { NewTabMenuContent } from './menu-fit/NewTabMenuContent'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ProjectedAgentMenuItems } from './QuickLaunchButton'
-import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
-import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
+import { ProjectedAgentMenuItems } from '../agent/launch-menu/AgentMenuItems'
+import { TabBarAgentPickerEntry } from './create-entry/TabBarAgentPickerEntry'
+import { TabBarStaticCreateMenu } from './create-menu/tab-bar-static-create-menu'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 import type { TabBarProps } from './tab-bar-props'
-import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
-import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
+import type { TabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
+import type { TabBarCreateMenuController } from './create-menu/tab-bar-create-menu-contract'
 
 export function WorkspaceCreateMenu({
   props,
@@ -54,12 +54,7 @@ export function WorkspaceCreateMenu({
     workspaceHasSimulatorTab,
     showMobileEmulatorIntroCallout,
     windowsTerminalCapabilities,
-    defaultWindowsPowerShellImplementation,
-    newTerminalShortcut,
-    newBrowserShortcut,
-    newSimulatorShortcut,
-    newFileShortcut,
-    openMarkdownShortcut
+    defaultWindowsPowerShellImplementation
   } = runtime
   const {
     agentMenu,
@@ -107,7 +102,7 @@ export function WorkspaceCreateMenu({
           </button>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent
+      <NewTabMenuContent
         align="start"
         sideOffset={6}
         className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
@@ -156,11 +151,6 @@ export function WorkspaceCreateMenu({
             windowsShellEntries={windowsShellEntries}
             defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
             pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
-            newTerminalShortcut={newTerminalShortcut}
-            newBrowserShortcut={newBrowserShortcut}
-            newSimulatorShortcut={newSimulatorShortcut}
-            newFileShortcut={newFileShortcut}
-            openMarkdownShortcut={openMarkdownShortcut}
             queueNewActiveTerminalFocusAfterNewTabMenuClose={
               queueNewActiveTerminalFocusAfterNewTabMenuClose
             }
@@ -178,7 +168,7 @@ export function WorkspaceCreateMenu({
             />
           </>
         ) : null}
-      </DropdownMenuContent>
+      </NewTabMenuContent>
     </DropdownMenu>
   )
 }

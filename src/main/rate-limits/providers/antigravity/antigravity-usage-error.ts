@@ -1,4 +1,4 @@
-import type { UsageRateLimitFailureKind } from '../../../../shared/rate-limit-types'
+import type { UsageRateLimitFailureKind } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { stripTerminalControl } from '../../../../shared/terminal/protocol/escape/terminal-control-stripping'
 import { redactString } from '../../../observability/redactor'
 

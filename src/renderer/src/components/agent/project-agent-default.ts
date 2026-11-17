@@ -1,9 +1,12 @@
 import { useAppStore } from '@/store'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import { getProjectIdentityKey } from '../../../../shared/project/host-setup/project-host-setup-projection'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { AppState } from '@/store/types'
 
 export function projectForAgentDefault(state: AppState, repo: Repo) {

@@ -2,11 +2,11 @@ import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artif
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+} from '../../../../../shared/execution-host/execution-host'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
-import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
+import { isShareableHtmlPath } from '@/components/editor/panel/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import {
   fileArtifactSourceKey,
@@ -19,7 +19,7 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   acquireTerminalArtifactGrant,
@@ -94,7 +94,7 @@ async function readDocPreviewGrantFile(
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
-export async function readDocPreviewArtifactRequest(
+async function readDocPreviewArtifactRequest(
   location: DocPreviewGrantLocation,
   filePath: string,
   sourceKey: string
@@ -128,7 +128,8 @@ export function buildDocPreviewShareControl(
   return (
     <ArtifactPublishButton
       sourceKey={sourceKey}
-      className="h-7 w-7"
+      size="icon-xs"
+      variant="muted-field-icon"
       createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
     />
   )

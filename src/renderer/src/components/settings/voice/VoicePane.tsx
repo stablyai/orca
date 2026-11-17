@@ -1,9 +1,9 @@
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
-import type { SecretAtRestProtection } from '../../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../../shared/secure-storage/secret-at-rest-protection'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
@@ -27,8 +27,8 @@ import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
-import { speechModelRatingLanguage } from '../../../../../shared/speech-model-quality'
-import { suggestSpeechModel } from '../../../../../shared/speech-model-suggestion'
+import { speechModelRatingLanguage } from './speech-model-quality'
+import { suggestSpeechModel } from './speech-model-suggestion'
 
 type VoicePaneProps = {
   settings: GlobalSettings
@@ -300,7 +300,7 @@ export function VoicePane({
             <>
               {voiceSettings.openAiApiKeyConfigured ? (
                 <>
-                  <div data-settings-row="" className="px-5 py-3 empty:hidden">
+                  <div data-settings-row="" className="py-3 empty:hidden">
                     <UnsealedCredentialNotice
                       protection={openAiKeyProtection}
                       credentialName={t(
@@ -310,7 +310,6 @@ export function VoicePane({
                     />
                   </div>
                   <OpenAiTranscriptionSettingsRow
-                    className="px-5"
                     configured
                     disabled={openAiKeyPending}
                     onConfigure={() => openOpenAiDialog(null)}
@@ -320,7 +319,6 @@ export function VoicePane({
               ) : null}
               {compatibleConfigured ? (
                 <OpenAiTranscriptionSettingsRow
-                  className="px-5"
                   variant="compatible"
                   configured
                   disabled={false}

@@ -116,7 +116,7 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     await enableDevPlugins(orcaPage, [pluginRoot])
 
     await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
-    const item = orcaPage.getByRole('menuitem', { name: 'New sketch' })
+    const item = orcaPage.getByRole('menu').getByRole('button', { name: 'New sketch' })
     await expect(item).toBeVisible({ timeout: 15_000 })
     await expect(item.locator('img[src^="orca-plugin-image://"]')).toBeVisible()
     await item.click({ force: true })
@@ -169,7 +169,10 @@ test('sidebar static plugin creation waits for the file without seeding a termin
     await worktreeRow(orcaPage, worktreeId)
       .getByRole('button', { name: 'New tab', exact: true })
       .click({ force: true })
-    await orcaPage.getByRole('menuitem', { name: 'New sketch', exact: true }).click({ force: true })
+    await orcaPage
+      .getByRole('menu')
+      .getByRole('button', { name: 'New sketch', exact: true })
+      .click({ force: true })
     await expect(orcaPage.getByRole('menu')).toBeHidden()
     await orcaPage.evaluate(() => window.dispatchEvent(new Event('test-release-plugin-file')))
     await expect.poll(() => readFile(filePath, 'utf8').catch(() => null)).toBe(TEMPLATE)

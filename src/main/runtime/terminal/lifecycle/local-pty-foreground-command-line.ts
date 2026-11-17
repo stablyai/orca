@@ -1,6 +1,6 @@
 import { listRegisteredPtys } from '../../../memory/pty-registry'
-import { resolveAgentForegroundCommandLine } from '../../../providers/agent-foreground-process'
-import { resolveWindowsAgentForegroundCommandLine } from '../../../providers/windows-agent-foreground-command-line'
+import { resolveAgentForegroundCommandLine } from '../../../providers/foreground/agent-process'
+import { resolveWindowsAgentForegroundCommandLine } from '../../../providers/foreground/windows/agent-command-line'
 
 export async function readLocalPtyForegroundCommandLine(
   ptyId: string,

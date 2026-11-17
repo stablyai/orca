@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { Project } from '../../../../shared/project-types'
-import { callRuntimeResult } from './web-runtime-calls'
+import type { Project } from '../../../../shared/project/project-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 
 export function createWebProjectsApi(): Pick<PreloadApi['projects'], 'list' | 'update'> {
   return {

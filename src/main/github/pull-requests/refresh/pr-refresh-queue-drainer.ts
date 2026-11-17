@@ -1,41 +1,41 @@
-import type {
-  GitHubPRRefreshAlias,
-  GitHubPRRefreshCandidate,
-  PRRefreshOutcome
-} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getPRForBranchOutcome } from '../../client/lookup/pr-for-branch-outcome'
+import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
-  aliasFromCandidate,
-  freshRetryAt,
-  hostedReviewOptionArgs,
+  preparePRBranchRead,
+  type PRReadSettlement
+} from '../../client/lookup/pr-for-branch-outcome'
+import { completePRBranchRead } from '../../client/lookup/pr-branch-read-resources'
+import {
+  bypassesFreshnessDelay,
+  candidateReadRequest,
+  freshQueuedPROutcome,
   isBackground,
-  isBudgetedBackground,
-  isMergeabilityPendingOutcome,
-  sameAliasRequestIdentity,
-  validateCandidate,
-  visibleCandidateAfterOutcome
+  validateCandidate
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
-import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
-import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
+import type { PRRefreshPacing } from './pr-refresh-pacing'
+import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import {
   blockedWslDistroForPath,
   wslDistroForPath
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
-import { outsideWslUserAct } from '../../../wsl/discovery/wsl-user-act-scope'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
+import { HostedPRReadJobs } from './hosted-pr-read-jobs'
+import { PRRefreshQueueScheduler } from './pr-refresh-queue-scheduler'
+import { deliverLocalPRRead } from './pr-refresh-local-delivery'
+import { PRRefreshAdmission } from './pr-refresh-admission'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
 export class PRRefreshQueueDrainer {
   private draining = false
-  private timer: ReturnType<typeof setTimeout> | null = null
-  // Why: queued work can outlive its project; re-check on every removal path before Git runs.
-  private registrationCheck: PRRefreshRegistrationCheck | null = null
+  registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
+  readonly hostedJobs: HostedPRReadJobs
+  readonly scheduler: PRRefreshQueueScheduler
+  private readonly admission: PRRefreshAdmission
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -45,112 +45,27 @@ export class PRRefreshQueueDrainer {
     private readonly events: PRRefreshEventPublisher
   ) {
     this.watchJobs = new PRWatchJobRunner(queue, retry, this)
-  }
-
-  setRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
-    this.registrationCheck = check
+    this.scheduler = new PRRefreshQueueScheduler(
+      queue,
+      pacing,
+      visibility,
+      retry,
+      events,
+      this.watchJobs,
+      () => this.drain()
+    )
+    this.admission = new PRRefreshAdmission(queue, pacing, visibility, retry, events, this)
+    this.hostedJobs = new HostedPRReadJobs(
+      queue,
+      pacing,
+      retry,
+      () => this.schedule(),
+      (candidate, outcome) => events.observe(candidate, outcome)
+    )
   }
 
   schedule(delay = 0): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-    }
-    this.timer = setTimeout(() => {
-      this.timer = null
-      // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
-      void outsideWslUserAct(() => this.drain())
-    }, delay)
-  }
-
-  scheduleVisibleFollowUp(
-    key: string,
-    candidate: GitHubPRRefreshCandidate,
-    outcome: PRRefreshOutcome,
-    priority: number,
-    aliases: GitHubPRRefreshAlias[],
-    windowId?: number,
-    options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
-  ): void {
-    if (outcome.kind === 'upstream-error') {
-      const retryAt = Math.max(
-        options?.plannedRetryAt ??
-          this.retry.nextVisibleErrorRetryAt(key, this.visibility.candidate(key, candidate)),
-        this.retry.manualGateUntil(key)
-      )
-      this.queue.protectBackgroundUntil(key, retryAt)
-      if (!this.visibility.has(key)) {
-        return
-      }
-      this.queue.setVisibleFollowUp({
-        key,
-        candidate,
-        aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
-        reason: 'visible',
-        priority,
-        dueAt: retryAt,
-        queuedAt: this.queue.nextOrder(),
-        windowId
-      })
-      this.schedule(retryAt - Date.now())
-      return
-    }
-    this.retry.reset(key)
-    const refreshed = visibleCandidateAfterOutcome(candidate, outcome)
-    this.visibility.update(refreshed)
-    if (!this.visibility.has(key)) {
-      return
-    }
-    const followUpCandidate = this.visibility.candidate(key, refreshed)
-    const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
-    const pendingDueAt =
-      options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
-        ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
-        : null
-    const dueAt = pendingDueAt === null ? regularDueAt : Math.min(regularDueAt, pendingDueAt)
-    if (!Number.isFinite(dueAt)) {
-      const pending = this.queue.get(key)
-      if (
-        pending?.reason === 'visible' &&
-        sameAliasRequestIdentity(
-          aliasFromCandidate(pending.candidate),
-          aliasFromCandidate(followUpCandidate)
-        )
-      ) {
-        this.queue.delete(key)
-      }
-      return
-    }
-    this.queue.setVisibleFollowUp({
-      key,
-      candidate: followUpCandidate,
-      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
-      reason: 'visible',
-      priority,
-      dueAt,
-      queuedAt: this.queue.nextOrder(),
-      bypassBackgroundBudget: pendingDueAt !== null,
-      followUp: true,
-      windowId
-    })
-    this.schedule(Math.max(0, dueAt - Date.now()))
-  }
-
-  private ordered(): PRRefreshQueueEntry[] {
-    this.watchJobs.age(this.queue.values(), Date.now())
-    return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
-  }
-
-  private nextQueuedWakeDelay(excludedKey: string): number | null {
-    const now = Date.now()
-    let nextDelay = Number.POSITIVE_INFINITY
-    for (const entry of this.queue.values()) {
-      if (entry.key === excludedKey) {
-        continue
-      }
-      const delay = entry.dueAt > now ? entry.dueAt - now : this.pacing.entryDelay(entry)
-      nextDelay = Math.min(nextDelay, delay)
-    }
-    return Number.isFinite(nextDelay) ? Math.max(0, nextDelay) : null
+    this.scheduler.schedule(delay)
   }
 
   private async drain(): Promise<void> {
@@ -159,8 +74,16 @@ export class PRRefreshQueueDrainer {
     }
     this.draining = true
     try {
-      while (this.queue.size > 0) {
-        let next = this.ordered()[0]
+      for (;;) {
+        // One selection per decision: pruning closed windows may leave no work at all.
+        const ordered = this.scheduler.ordered()
+        let next = ordered[0]
+        if (!next) {
+          return
+        }
+        if (this.hostedJobs.completeFromCache(next)) {
+          continue
+        }
         const waitMs = next.dueAt - Date.now()
         if (waitMs > 0) {
           this.schedule(waitMs)
@@ -169,23 +92,27 @@ export class PRRefreshQueueDrainer {
 
         let delay = this.pacing.entryDelay(next)
         if (delay > 0) {
-          const runnable = this.ordered().find(
+          const runnable = ordered.find(
             (entry) => entry.dueAt <= Date.now() && this.pacing.entryDelay(entry) === 0
           )
           if (runnable && runnable.key !== next.key) {
             next = runnable
             delay = 0
           } else {
-            this.notePacingDelay(next)
-            this.schedule(Math.min(delay, this.nextQueuedWakeDelay(next.key) ?? delay))
+            this.scheduler.notePacingDelay(next)
+            this.schedule(Math.min(delay, this.scheduler.nextQueuedWakeDelay(next.key) ?? delay))
             return
           }
         }
 
         this.queue.delete(next.key)
+        if (this.hostedJobs.completeFromCache(next)) {
+          continue
+        }
         const aliases = Array.from(next.aliases.values())
         const skippedReason = validateCandidate(next.candidate)
         if (skippedReason) {
+          next.hosted?.finish(null)
           this.events.record('skipped', next.reason, skippedReason)
           this.events.broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason })
           continue
@@ -201,6 +128,7 @@ export class PRRefreshQueueDrainer {
               next.candidate.localGitOptions?.wslDistro
             )))
         ) {
+          next.hosted?.finish(null)
           this.events.broadcast({
             aliases,
             reason: next.reason,
@@ -210,70 +138,157 @@ export class PRRefreshQueueDrainer {
           this.watchJobs.skipped(next)
           continue
         }
+        if (
+          !next.hosted &&
+          !next.watch &&
+          !next.bypassBackgroundBudget &&
+          (next.reason === 'visible' || next.reason === 'swr')
+        ) {
+          const candidate = next.candidate
+          const fresh = freshQueuedPROutcome(candidate, next.reason, next.foreground)
+          if (fresh) {
+            this.events.broadcast({ aliases, reason: next.reason, outcome: fresh })
+            this.scheduler.scheduleVisibleFollowUp(
+              next.key,
+              candidate,
+              fresh,
+              next.priority,
+              aliases,
+              next.windowId
+            )
+            continue
+          }
+        }
         const requestSequence = this.events.nextSequence()
         const requestStartedAt = Date.now()
         this.queue.noteRequestStarted(next.key, requestSequence)
-        this.events.broadcast(
-          { aliases, reason: next.reason, status: 'in-flight', requestStartedAt },
-          requestSequence
-        )
+        if (!next.hosted) {
+          this.events.broadcast(
+            { aliases, reason: next.reason, status: 'in-flight', requestStartedAt },
+            requestSequence
+          )
+        }
 
-        if (isBackground(next.reason)) {
-          const pausedUntil = await prRefreshRateLimitPausedUntil(next.candidate, true)
+        let joinedRead = next.hosted?.prepared.pending()
+        if (isBackground(next.reason) && !joinedRead) {
+          const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
+          const pausedUntil = await (next.hosted
+            ? next.hosted.prepared.withExecution(checkRateLimit)
+            : checkRateLimit())
           if (!this.queue.ownsRequest(next.key, requestSequence)) {
+            next.hosted?.finish(null)
             continue
           }
-          if (pausedUntil !== null) {
-            this.queue.protectBackgroundUntil(next.key, pausedUntil)
-            this.queue.set(next.key, { ...next, dueAt: pausedUntil })
-            this.events.broadcast({
-              aliases,
-              reason: next.reason,
-              status: 'paused',
+          // A job retired or replaced while quota was checked never starts.
+          if (
+            !this.admission.admitAfterQuota(
+              next,
               pausedUntil,
-              skippedReason: 'rate-limit'
-            })
-            this.schedule(Math.max(1_000, pausedUntil - Date.now()))
+              this.hostedJobs.completeFromCache(next),
+              requestSequence
+            )
+          ) {
             continue
           }
-          if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
-            this.pacing.noteBackgroundStart()
-            this.watchJobs.noteBudgetedStart(next)
-          }
-          if (usesActiveRefreshPacing(next)) {
-            this.pacing.noteActiveStart(next)
+          // A watch's earlier-head read starts next; every other read is charged at its start.
+          if (next.watch) {
+            this.admission.chargeBudget(next)
           }
         }
 
         if (await this.watchJobs.readHead(next)) {
           continue
         }
-        const outcome = await getPRForBranchOutcome(
-          next.candidate.repoPath,
-          next.candidate.branch,
-          next.candidate.linkedPRNumber ?? null,
-          next.candidate.connectionId ?? null,
-          next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
-          ...hostedReviewOptionArgs(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
-        )
-        if (!this.queue.ownsRequest(next.key, requestSequence)) {
-          this.events.broadcast(
-            { aliases, reason: next.reason, outcome, requestStartedAt },
-            requestSequence
+        if (next.hosted) {
+          next.hosted.running = true
+        }
+        const prepared =
+          next.hosted?.prepared ??
+          (await preparePRBranchRead(
+            ...candidateReadRequest(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
+          ))
+        // Automatic work joins a read already running for its request; a user's action reads fresh.
+        joinedRead ??= bypassesFreshnessDelay(next.reason) ? undefined : prepared.pending()
+        const settle: PRReadSettlement = (outcome, producer) => {
+          if (!prepared.isCurrent()) {
+            return outcome
+          }
+          // A host job's failure keeps its job's own finite lifetime, so it takes no retry claim.
+          const settled = this.retry.settleProducerError(
+            outcome,
+            next.key,
+            next.hosted
+              ? { ...next.candidate, isSelected: false }
+              : this.visibility.candidate(next.key, next.candidate),
+            prepared,
+            this.queue,
+            next.hosted ? { retained: producer.retained } : producer,
+            Boolean(next.hosted) || this.visibility.has(next.key),
+            () => this.queue.ownsRequest(next.key, requestSequence)
           )
+          this.events.observe(next.candidate, settled, aliases)
+          // A host job's read also plans the visible row of the same request, under its own claim.
+          const unretained = { ...producer, retained: false }
+          if (next.hosted) {
+            completePRBranchRead(settled, unretained, prepared, next.candidate)
+          }
+          return settled
+        }
+        // Nothing is awaited from this check to the provider start, so it sees current state.
+        if (
+          !next.hosted &&
+          !this.admission.admitPreparedRead(next, prepared, requestSequence, requestStartedAt)
+        ) {
           continue
         }
-        let plannedRetryAt: number | undefined
-        let broadcastOutcome = outcome
-        if (outcome.kind === 'upstream-error' && this.visibility.has(next.key)) {
-          plannedRetryAt = this.retry.nextVisibleErrorRetryAt(
-            next.key,
-            this.visibility.candidate(next.key, next.candidate)
-          )
-          broadcastOutcome = this.retry.withErrorSchedule(outcome, plannedRetryAt)
+        if (!next.watch && isBackground(next.reason) && !joinedRead) {
+          this.admission.chargeBudget(next)
         }
-        this.events.observe(next.candidate, outcome, aliases)
+        const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))
+        if (
+          !result ||
+          (next.hosted &&
+            (!next.hosted.prepared.isCurrent() ||
+              !next.hosted.prepared.accepts(result.outcome) ||
+              !this.queue.ownsRequest(next.key, requestSequence)))
+        ) {
+          next.hosted?.finish(null)
+          continue
+        }
+        const read = {
+          ...next,
+          // A user's action or a validated return stays owed; automatic work follows the cadence.
+          foreground: next.foreground === true || bypassesFreshnessDelay(next.reason),
+          aliases,
+          requestSequence,
+          requestStartedAt
+        }
+        const owners = { queue: this.queue, events: this.events, scheduler: this.scheduler }
+        const outcome =
+          next.hosted || next.watch
+            ? result.outcome
+            : deliverLocalPRRead(owners, read, prepared, result)
+        if (!outcome || !this.queue.ownsRequest(next.key, requestSequence)) {
+          continue
+        }
+        const plannedRetryAt = this.retry.errorFollowUpAt(
+          next.key,
+          this.visibility.candidate(next.key, next.candidate),
+          outcome,
+          !next.hosted && this.visibility.has(next.key)
+        )
+        const broadcastOutcome =
+          plannedRetryAt === undefined
+            ? outcome
+            : this.retry.withErrorSchedule(outcome, plannedRetryAt)
         this.retry.noteManualGate(next.key, broadcastOutcome)
+        if (next.hosted) {
+          if (outcome.kind !== 'upstream-error') {
+            this.retry.reset(next.key)
+          }
+          next.hosted.finish(broadcastOutcome)
+          continue
+        }
         this.events.broadcast(
           { aliases, reason: next.reason, outcome: broadcastOutcome, requestStartedAt },
           requestSequence
@@ -282,7 +297,7 @@ export class PRRefreshQueueDrainer {
           this.watchJobs.afterOutcome(next, outcome)
           continue
         }
-        this.scheduleVisibleFollowUp(
+        this.scheduler.scheduleVisibleFollowUp(
           next.key,
           next.candidate,
           outcome,
@@ -294,24 +309,6 @@ export class PRRefreshQueueDrainer {
       }
     } finally {
       this.draining = false
-    }
-  }
-
-  private notePacingDelay(entry: PRRefreshQueueEntry): void {
-    if (this.pacing.isActiveBurstDelayed(entry) && !entry.activeDelayNotified) {
-      entry.activeDelayNotified = true
-      this.events.broadcast({
-        aliases: Array.from(entry.aliases.values()),
-        reason: entry.reason,
-        status: 'queued'
-      })
-    }
-    if (
-      entry.bypassBackgroundBudget !== true &&
-      isBudgetedBackground(entry.reason) &&
-      this.pacing.nextBudgetDelay() > 0
-    ) {
-      this.events.record('background-pause', entry.reason)
     }
   }
 }

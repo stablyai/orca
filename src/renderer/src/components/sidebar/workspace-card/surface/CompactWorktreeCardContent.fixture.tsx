@@ -1,5 +1,6 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '@/store'
 import {
@@ -104,7 +105,7 @@ function fixture(
       },
       activeGroupIdByWorktree: { [workspace.id]: `group-${workspace.id}` },
       terminalLayoutsByTabId: Object.fromEntries(tabs.map((tab) => [tab.id, layout])),
-      agentStatusByPaneKey: Object.fromEntries(entries.map((entry) => [entry.paneKey, entry])),
+      agentStatusByPaneKey: acceptedAgentStatuses(entries.map((entry) => [entry.paneKey, entry])),
       agentActivityDisplayMode: 'compact'
     },
     setup: () => {

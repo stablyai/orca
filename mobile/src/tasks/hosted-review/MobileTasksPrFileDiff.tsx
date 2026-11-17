@@ -5,7 +5,7 @@ import {
   highlightMobileDiffLines
 } from '../../files/session-documents/mobile-file-syntax'
 import { Text, View } from 'react-native'
-import { MobileSyntaxSegments } from '../../components/MobileSyntaxSegments'
+import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MAX_RENDERED_PR_DIFF_LINES } from '../task-list/mobile-tasks-options'

@@ -2,8 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { SecretStore } from '../../../shared/secret-store'
-import { classifyUnenvelopedCredential } from '../../../shared/secret-at-rest-protection'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
+import { classifyUnenvelopedCredential } from '../../../shared/secure-storage/secret-at-rest-protection'
 import {
   hardenExistingSecureFile,
   writeSecureFile

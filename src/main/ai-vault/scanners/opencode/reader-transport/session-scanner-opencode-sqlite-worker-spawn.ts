@@ -7,15 +7,15 @@ import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
-import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
+import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../../../../shared/opencode-sqlite-session-path'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   mapOpenCodeWslSession,
   openCodeWslClient,
@@ -41,7 +41,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-opencode-sqlite-reader' })
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null

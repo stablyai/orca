@@ -2,7 +2,7 @@ import {
   compareAppVersions,
   isPrereleaseAppVersion,
   isValidAppVersion
-} from '../../../src/shared/app-version'
+} from '../../../src/shared/app-lifecycle/identity/app-version'
 
 export type AppUpdateCheckResult =
   | { kind: 'available'; version: string; url: string }

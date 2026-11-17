@@ -1,5 +1,5 @@
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
   WorkspaceCardFacts,
   WorkspaceCardShowOptions
@@ -121,6 +121,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       compactHeader: !card.newCardStyle && card.settings?.compactWorktreeHeader === true,
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
       show: showOptions(card.cardProps),
+      detailsRow: card.settings?.worktreeCardDetailsRow !== false,
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
     },
     env: { projectGroups: card.projectGroups.length > 0 }

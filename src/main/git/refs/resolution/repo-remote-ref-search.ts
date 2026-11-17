@@ -1,9 +1,9 @@
 import { searchLegacyRemoteRefPage } from './repo-legacy-ref-search'
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import {
   clampRepoSearchRefsLimit,
   getRepoSearchRefsProbeLimit
-} from '../../../../shared/repo-search-limits'
+} from '../../../../shared/git/refs/repo-search-limits'
 import { searchBranchRefSnapshot } from '../snapshot/branch-ref-snapshot'
 
 export async function searchRemoteRefPage(

@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ShellReadyState } from './daemon-rpc-contract'
 import type { TerminalSnapshot } from './terminal-snapshot'
 import type { DaemonLaunchNote } from './daemon-launch-note-protocol'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
 export type DaemonCreateOrAttachResult = {

@@ -1,6 +1,6 @@
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { authorityKey } from '../../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
 import {
   resolveOwner,
   runtimeEnvironmentIdForWorkspaceOwner
@@ -11,7 +11,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
@@ -24,7 +24,7 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/runtime/hosts/preflight/local-preflight-context'
-import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -36,7 +36,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -45,12 +45,10 @@ import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/
 
 // Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
 
-export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
-
 /** A launch target may precede its workspace row; create dialogs identify the repo, runtime or host until then. */
 export type ProspectiveWorkspace = {
   executionContext?: ProjectLaunchContext['executionContext']
-  kind: ProspectiveWorkspaceKind
+  kind: NonNullable<AgentLaunchRoutingInput['workspaceKind']>
   repoId?: string
   worktreeId?: string
   /** Qualifies an existing workspace copy; creation hints below do not. */
@@ -206,15 +204,7 @@ function resolveTranscriptIsLocalReadable(
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
 }
 
-function hostStructuredAgentsInput(
-  store: AgentLaunchRouteStore,
-  executionHostId: string
-): Pick<AgentLaunchRoutingInput, 'hostStructuredAgents'> {
-  const agents = readHostStructuredAgents(executionHostId, store.runtimeStatusByEnvironmentId)
-  return agents ? { hostStructuredAgents: agents.map((row) => row.agent) } : {}
-}
-
-export function resolveAgentLaunchHost(
+export function resolveAgentLaunchOwner(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace
 ) {
@@ -230,7 +220,14 @@ export function resolveAgentLaunchHost(
         : null
       : resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
     : undefined
-  const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
+  return { owner, executionHostId: owner ?? resolveExecutionHostId(store, workspace) }
+}
+
+export function resolveAgentLaunchHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+) {
+  const { owner, executionHostId } = resolveAgentLaunchOwner(store, workspace)
   return {
     owner,
     executionHostId,
@@ -263,6 +260,10 @@ export function buildAgentLaunchRouteInput(
     ? { ...args.workspace, hostId: args.selectedExecutionHostId }
     : args.workspace
   const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
+  const structuredAgents = readHostStructuredAgents(
+    executionHostId,
+    store.runtimeStatusByEnvironmentId
+  )
   const selectedWorkspace =
     workspace.worktreeId && workspace.hostId
       ? findKnownWorktreeById(
@@ -319,6 +320,8 @@ export function buildAgentLaunchRouteInput(
                   ?.folderPath
         })
       : false,
-    ...hostStructuredAgentsInput(store, executionHostId)
+    ...(structuredAgents
+      ? { hostStructuredAgents: structuredAgents.map(({ agent }) => agent) }
+      : {})
   }
 }

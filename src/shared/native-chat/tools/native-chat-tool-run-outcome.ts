@@ -1,6 +1,6 @@
 // Derive success independently of live activity: no active call does not prove success, and collapsed headers must expose failures.
 
-import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
+import { agentJournalToolCallLifecycle } from '../../agent-session/journal/agent-journal-tool-call-lifecycle'
 import { selectActiveToolCall } from './native-chat-tool-activity'
 import type { NativeChatBlock } from '../native-chat-types'
 

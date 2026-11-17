@@ -1,9 +1,9 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
-import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
+import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
@@ -14,6 +14,7 @@ import {
   WorktreeCardRuntimeHostMark,
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
+import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath,
@@ -24,6 +25,10 @@ import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import { WorktreeCreateButton } from '../surface/WorktreeCreateButton'
+import {
+  useWorktreeCardRolledUpUnread,
+  WorktreeCardTitleStatus
+} from '../surface/worktree-card-title-status'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -32,15 +37,23 @@ const part = cardElement<Card>
 // Why: a parent hover card already shows the full title, so the title skips its own tooltip.
 const withoutTitleTooltip = (title: React.ReactElement): React.ReactElement => title
 
-function title(props: Readonly<Record<string, unknown>>, card: Card): React.ReactNode {
+function CardTitle({
+  props,
+  card
+}: {
+  props: Readonly<Record<string, unknown>>
+  card: Card
+}): React.JSX.Element {
   const { affiliateListMode, worktree } = card
+  // Bold and the unread dot are one signal: any unread the card speaks for, its own or a hidden one.
+  const rolledUpUnread = useWorktreeCardRolledUpUnread()
   return (
     <>
       <WorktreeTitleInlineRename
         displayName={card.visibleCardTitle}
         disabled={card.isDeleting || affiliateListMode}
-        showUnreadEmphasis={card.showUnreadEmphasis}
-        dimReadTitle={props.dimWhenRead === true}
+        showUnreadEmphasis={card.showUnreadEmphasis || rolledUpUnread}
+        dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}
         className="text-[13px] leading-5"
         editingClassName="flex-1"
         titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
@@ -100,7 +113,10 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
 }
 
 export const CARD_IDENTITY_PARTS = {
-  Title: part(['dimWhenRead', 'tooltip'], (props, _children, card) => title(props, card)),
+  Title: part(['dimWhenRead', 'tooltip'], (props, _children, card) => (
+    <CardTitle props={props} card={card} />
+  )),
+  TitleStatus: part([], () => <WorktreeCardTitleStatus />),
   RepoChip: part([], (_props, _children, { repo }) =>
     repo ? <WorktreeCardRepoChip repo={repo} /> : null
   ),
@@ -127,6 +143,9 @@ export const CARD_IDENTITY_PARTS = {
       hasHoverDetails={props.hasHoverDetails === true}
       directories={card.worktree.sparseDirectories}
     />
+  )),
+  NotificationsMuted: part([], (_props, _children, { worktree }) => (
+    <WorktreeCardNotificationsMutedBadge worktreeId={worktree.id} />
   )),
   DeleteQuickAction: part([], (_props, _children, card) => (
     <WorktreeCardDeleteQuickAction

@@ -14,7 +14,7 @@ import {
   FederationAckParams,
   FederationImportParams,
   FederationPullParams
-} from '../../../../shared/rpc-contract/orchestration-federation-relay-params'
+} from '../../../../shared/rpc-contract/orchestration/orchestration-federation-relay-params'
 
 export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   defineOrchestrationMethod({

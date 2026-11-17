@@ -1,5 +1,9 @@
 import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
+import type { TerminalLaidOutCellBox } from '../viewport/terminal-cell-box'
+import {
+  DEFAULT_TERMINAL_FONT_STYLE,
+  type TerminalFontStyle
+} from '../preferences/terminal-font-style'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
 import {
   createEngineTerminal,
@@ -62,7 +66,11 @@ export type TerminalDocumentState = {
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
   handledMessageIds: number[]
   currentTextScale: number
+  // The family xterm draws with; a bundled font joins it only once loaded, so cells are never measured on a fallback.
   terminalFontFamily: string
+  terminalFontStyle: TerminalFontStyle
+  // Settles once the picked bundled face is drawn with; the first fit waits for it.
+  terminalFontLoad: Promise<void> | null
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
   activeAltScreenSnapshot: boolean
@@ -189,6 +197,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
+    terminalFontStyle: DEFAULT_TERMINAL_FONT_STYLE,
+    terminalFontLoad: null,
     firstDataPending: false,
     reportedCellBox: null,
     activeAltScreenSnapshot: false,

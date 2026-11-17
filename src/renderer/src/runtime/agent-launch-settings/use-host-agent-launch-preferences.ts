@@ -1,8 +1,8 @@
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {

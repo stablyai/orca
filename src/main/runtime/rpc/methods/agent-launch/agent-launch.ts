@@ -6,7 +6,7 @@ import { agentLaunchFeatureRequirement } from '../../startup/agent-launch-featur
 import { AgentLaunchTabClosedError } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -32,7 +32,7 @@ import {
   AgentLaunch,
   AgentLaunchReplay,
   type AgentLaunchParams
-} from '../../../../../shared/rpc-contract/agent-launch-params'
+} from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
@@ -81,7 +81,7 @@ async function runAgentLaunch(
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    onSurfacePublished: (surface) => {
+    onSurfacePublished: async (surface) => {
       try {
         context.agentLaunchPolicy?.onSurfacePublished?.(surface)
       } catch (error) {
@@ -89,7 +89,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
+      await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

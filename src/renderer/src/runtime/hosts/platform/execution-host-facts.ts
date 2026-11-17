@@ -4,14 +4,16 @@ import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owne
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId,
-  type ParsedExecutionHost,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type {
+  ParsedExecutionHost,
+  ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from '../preflight/local-preflight-context'
 import { CLIENT_PLATFORM } from '../../../lib/workspace/creation/new-workspace'
 import {
@@ -98,7 +100,7 @@ export type ExecutionHostTarget = {
   sshOwnerEnvironmentId: string | null
 }
 
-function resolveHostPlatform(
+export function resolveHostPlatform(
   state: HostFactsState,
   args: ExecutionHostTarget & {
     workspacePath: string | null | undefined

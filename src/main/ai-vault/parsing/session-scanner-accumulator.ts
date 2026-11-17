@@ -6,13 +6,16 @@ import {
   type AiVaultSessionTitleKind
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../../shared/ai-vault/resume/ai-vault-resume-command'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
   SessionAccumulator
 } from '../session-scanner-types'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { timestampMs } from './session-record-time'
 import {
   NO_TRANSCRIPT_MESSAGES,

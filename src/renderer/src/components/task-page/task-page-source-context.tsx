@@ -9,14 +9,14 @@ import type {
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   type TaskSourceContext,
@@ -27,7 +27,7 @@ import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
-} from '../task-source-context-summary'
+} from './source-selection/task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'

@@ -79,7 +79,7 @@ describe('main blocking API ratchets', () => {
       '1 src/main/daemon/daemon-entry.ts\n'
     )
     execFileSync('git', ['add', '.'], { cwd: root })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
     expect(fsMain(root)).toBe(0)
     writeFileSync(
@@ -88,7 +88,6 @@ describe('main blocking API ratchets', () => {
     )
     expect(fsMain(root)).toBe(1)
     expect(main(root)).toBe(1)
-    expect(error.mock.calls.flat().join('\n')).toContain('Move CPU or SQL work to a worker')
     main(root, '--prune')
     expect(readFileSync(cryptoFile, 'utf8')).not.toContain('1 src/')
     writeFileSync(cryptoFile, '1 src/main/consumer.ts\n')

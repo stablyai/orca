@@ -2,7 +2,7 @@ import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../shared/remote-runtime/relay/mobile-relay-close-codes'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import {
   RelayConnectionOpenMessageSchema,
   RelayControlErrorMessageSchema,
@@ -50,7 +50,8 @@ export class RelayControlClient {
       send: (frame) => this.socket?.send(frame),
       isLive: () => this.isLive(),
       terminate: () => this.socket?.terminate(),
-      random: options.livenessRandom
+      random: options.livenessRandom,
+      onStall: options.onStall
     })
     this.requests = new RelayControlRequests(options.onPendingChanged, (timeout) =>
       this.liveness.noteRequestTimeout(timeout)

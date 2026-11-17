@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { getWorkspaceCardPropertiesValue } from '../../../../../../shared/workspace-view/workspace-view-options'
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
@@ -19,6 +19,7 @@ import {
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { useTranslate } from '@/i18n/use-translate'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -68,6 +69,9 @@ export function WorktreeCardDisplayMenuItem({
   const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
+  const experimentalCard = useAppStore(selectDrawsNewWorktreeCards)
+  const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -82,6 +86,20 @@ export function WorktreeCardDisplayMenuItem({
         className="w-56"
         data-workspace-board-preserve-open={boardAttr(preserveWorkspaceBoardOpen)}
       >
+        {experimentalCard ? (
+          <>
+            <DropdownMenuCheckboxItem
+              checked={detailsRow}
+              onCheckedChange={(checked) =>
+                void updateSettings({ worktreeCardDetailsRow: checked === true })
+              }
+              onSelect={(e) => e.preventDefault()}
+            >
+              {t('sidebar.cardSlot.detailsRow', 'Details row')}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         {options.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}

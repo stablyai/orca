@@ -1,7 +1,7 @@
 import { resolveUnstampedRecordHost } from '@/lib/workspace/ownership/worktree-operation-catalog-route'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import {
   findIndexedWorktreeOwnerForHost,

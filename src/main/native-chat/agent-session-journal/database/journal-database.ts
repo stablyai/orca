@@ -11,13 +11,14 @@ import {
 } from './journal-database-schema'
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
+import { readForgottenJournalChats } from '../journal-forgotten-chats'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
-export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
-const JOURNAL_SYNCHRONOUS = 'FULL'
+export const JOURNAL_SIZE_LIMIT_BYTES = 128 * 1024 * 1024
+const JOURNAL_SYNCHRONOUS = 'NORMAL'
 
 export type OpenJournalDatabase = {
   db: Database.Database
@@ -37,9 +38,13 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
         .all()
         .map(({ name }) => name)
     )
-    return ['agent_session_records', 'agent_session_tabs'].some(
-      (table) =>
-        tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
+    return (
+      ['agent_session_records', 'agent_session_tabs'].some(
+        (table) =>
+          tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
+      ) ||
+      // Deleted chats whose rows are still being removed: opening the store finishes them.
+      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0)
     )
   } finally {
     db.close()
@@ -71,16 +76,7 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     }
     configureJournalPragmas(probe, stored)
     migrateJournalSchema(probe, stored)
-    // Additive tables must exist on every writable open, even when version migration returns early.
-    ensureQueuedMessagesTable(probe)
-    ensureCommandReceiptsTable(probe)
-    ensureJournalOutcomeTables(probe)
-    // Sender identity follows clear predecessors without scanning saved conversations.
-    probe.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
-      ON agent_session_records (CASE WHEN json_valid(record_json)
-        THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
-    ensureAgentSessionAttachmentClaimTables(probe)
-    ensurePRWatchTables(probe)
+    ensureJournalAdditiveTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false }
@@ -91,6 +87,19 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
   }
 }
 
+/** Additive tables must exist on every writable open, even when version migration returns early. */
+export function ensureJournalAdditiveTables(db: Database.Database): void {
+  ensureQueuedMessagesTable(db)
+  ensureCommandReceiptsTable(db)
+  ensureJournalOutcomeTables(db)
+  // Sender identity follows clear predecessors without scanning saved conversations.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+    ON agent_session_records (CASE WHEN json_valid(record_json)
+      THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
+  ensureAgentSessionAttachmentClaimTables(db)
+  ensurePRWatchTables(db)
+}
+
 function configureJournalPragmas(db: Database.Database, stored: number): void {
   if (stored === 0) {
     // INCREMENTAL must precede WAL/table creation to permit later bounded page reclamation.
@@ -99,7 +108,7 @@ function configureJournalPragmas(db: Database.Database, stored: number): void {
   db.pragma('journal_mode = WAL')
   db.pragma(`busy_timeout = ${JOURNAL_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // FULL fsyncs submissions before dispatch; checkpoint_fullfsync also flushes macOS drive caches.
+  // WAL commits survive app crashes; OS crashes or power loss may roll back uncheckpointed commits.
   db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
   db.pragma('checkpoint_fullfsync = ON')
   db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)

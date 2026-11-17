@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import {
   getConnectionIdFromState,

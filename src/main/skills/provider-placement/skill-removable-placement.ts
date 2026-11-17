@@ -4,8 +4,8 @@ import {
   nativeSkillPathSemantics,
   normalizedSkillPath,
   skillPathInside
-} from '../../../shared/skill-path-containment'
-import type { SkillPlacementResult } from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/paths/skill-path-containment'
+import type { SkillPlacementResult } from '../../../shared/skills/installation/skill-install-contract'
 import type { SkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
 import type { SkillInstallReceiptV1 } from '../transaction-state/skill-install-provenance'
 

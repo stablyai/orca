@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
+import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment

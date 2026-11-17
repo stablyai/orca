@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import { gateAndReseedEmptyWorkspace } from '@/lib/workspace/activation/worktree-activation-gated-empty-reseed'
 

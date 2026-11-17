@@ -9,7 +9,7 @@ export const LAYOUT_ORACLE_E2E_SPECS = [
 const LAYOUT_ORACLE_PREFIXES = [
   // Layout model, persistence and compatibility folders.
   'src/shared/workspace-layout/',
-  'src/shared/remote-layout-snapshot.ts',
+  'src/shared/remote-runtime/session-graph/remote-layout-snapshot.ts',
   'src/shared/workspace-layout/terminal-topology/terminal-leaf-move.ts',
   'src/main/persistence/terminal-topology/',
   'src/main/persistence/restoring-sessions/',
@@ -22,6 +22,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // Window-side layout writers the layout-holder stack replaces; widened while it is open.
   'src/renderer/src/store/slices/tabs',
   'src/renderer/src/store/terminals/',
+  'src/renderer/src/components/sidebar/workspace-card/activity/worktree-terminal-record-selector.ts',
   'src/renderer/src/store/workspace-layout/workspace-layout-cache',
   'src/renderer/src/components/terminal-pane/',
   'src/renderer/src/components/agent-session-continuation/AgentSessionContinuationMenuItem.tsx',
@@ -31,8 +32,8 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/lib/agent-session/identity/pane-agent-session-id.ts',
   'src/renderer/src/runtime/hosts/wsl/wsl-host-availability.ts',
   'src/renderer/src/lib/workspace/ownership/workspace-runtime-environment.ts',
-  'src/renderer/src/components/tab-group/tab-drag-drop-commit.ts',
-  'src/renderer/src/app-shell/use-runtime-graph-sync.ts',
+  'src/renderer/src/components/tab-group/drag/tab-drag-drop-commit.ts',
+  'src/renderer/src/runtime/sync-runtime-graph/use-runtime-graph-sync.ts',
   'src/renderer/src/runtime/sync-runtime-graph',
   'src/renderer/src/runtime/web-session-tabs-sync',
   // Other layout writers the stack edits.
@@ -43,13 +44,13 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/main/runtime/terminal/output/terminal-derived-agent-facts.ts',
   'src/main/runtime/terminal/output/terminal-output-generation.ts',
   'src/main/runtime/session-graph/session-window-graph.ts',
-  'src/main/runtime/session-tabs/mobile-session-hydration.ts',
-  'src/main/runtime/session-tabs/mobile-session-reconciliation.ts',
-  'src/main/runtime/session-tabs/mobile-session-preservation.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-hydration.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-reconciliation.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-preservation.ts',
   'src/main/runtime/workspaces/session-hosts/get-runtime-id.ts',
-  'src/renderer/src/components/terminal/terminal-tab-actions.ts',
-  'src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts',
-  'src/shared/rpc-contract/workspace-layout-params.ts',
+  'src/renderer/src/components/terminal/tab-lifecycle/terminal-tab-actions.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror.ts',
+  'src/shared/rpc-contract/workspace-layout/workspace-layout-params.ts',
   'src/renderer/src/store/slices/tabs/recently-closed-tabs.ts',
   // The client the oracle reads every view through.
   'src/cli/runtime/client.ts',
@@ -81,8 +82,8 @@ const RUNTIME_LAYOUT_WRITERS = [
   'src/main/runtime/workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity.ts',
   'src/main/runtime/terminal/adoption/runtime-terminal-orphan-adoption.ts',
   'src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts',
-  'src/main/runtime/session-tabs/mobile-session-membership.ts',
-  'src/main/runtime/session-tabs/pty-backed-session-publication.ts'
+  'src/main/runtime/session-tabs/restoration/mobile-session-membership.ts',
+  'src/main/runtime/session-tabs/publication/pty-backed-session-publication.ts'
 ]
 
 // Runtime matches only the modules that create, move, close, persist or publish layout.

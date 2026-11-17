@@ -11,8 +11,8 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { notifyAgentLaunchFailure } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { restoreWorktreeCreateMenuSurface } from '../sidebar/workspace-card/surface/restore-worktree-create-menu-surface'
 import { workspaceRootGroupId } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { useTabAgentMenuLaunch } from './QuickLaunchButton'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { useTabAgentMenuLaunch } from '../agent/launch-menu/AgentMenuItems'
 
 export function ProjectAgentLaunchButton({
   worktreeId,

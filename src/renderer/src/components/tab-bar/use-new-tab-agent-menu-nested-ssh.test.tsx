@@ -1,6 +1,6 @@
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 // @vitest-environment happy-dom
-import './new-tab-agent-menu-host-preferences-test-fixture'
+import '../agent/launch-menu/new-tab-agent-menu-host-preferences-test-fixture'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -10,7 +10,7 @@ import {
   useAgentLaunchPickerInventorySource,
   useAgentPickerInventoryEntries
 } from '../agent/use-agent-launch-picker-inventory'
-import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
+import { useNewTabAgentMenuRows } from '../agent/launch-menu/use-new-tab-agent-menu-rows'
 
 it('uses nested SSH runtime preferences and picker seeds while offering only terminal launches', async () => {
   useAppStore.setState({

@@ -1,5 +1,10 @@
 import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
-import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
+import {
+  settledForegroundAgeMs,
+  reviewRefreshIntervalMs,
+  scaleReviewRefreshInterval,
+  type PRAutoRefreshCadence
+} from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -10,6 +15,10 @@ import type {
 import type { GitHubPRBranchLookupOptions } from '../../client/lookup/pull-request-lookup-data'
 import { PR_CHECK_PAGE_LIMIT } from '../../client/check/pr-check-rollup'
 import { parsePRKey } from '../../pr-watch/pr-watch-types'
+import { quietPRIntervalForCandidate } from '../../client/lookup/pr-quiet-policy-evidence'
+import type { readTimedPROutcome } from '../../client/lookup/pr-last-outcome'
+import { cachedPRBranchOutcome, type prBranchReadKeys } from '../../client/lookup/pr-read-identity'
+import type { PRBranchReadRequest } from '../../client/lookup/pr-branch-read-resources'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -26,6 +35,9 @@ export function hostedReviewOptionArgs(
 ): [] | [GitHubPRBranchLookupOptions] {
   const options: GitHubPRBranchLookupOptions =
     requestOptions.userRefresh === true ? { userRefresh: true } : {}
+  if (bypassesFreshnessDelay(reason)) {
+    options.resetQuietBackoff = true
+  }
   options.localGitExecOptions = {
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
@@ -60,7 +72,23 @@ export function admissionTierForRefreshReason(
   return reason === 'manual' ? 'interactive' : 'background'
 }
 
-export function refreshKey(candidate: GitHubPRRefreshCandidate): string {
+/** The read a queued refresh of the row makes for this reason. */
+export function candidateReadRequest(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason,
+  requestOptions?: Parameters<typeof hostedReviewOptionArgs>[2]
+): Parameters<typeof prBranchReadKeys> {
+  return [
+    candidate.repoPath,
+    candidate.branch,
+    candidate.linkedPRNumber ?? null,
+    candidate.connectionId ?? null,
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    hostedReviewOptionArgs(candidate, reason, requestOptions)[0] ?? {}
+  ]
+}
+
+export function refreshKey(candidate: PRBranchReadRequest): string {
   const connectionScope = candidate.connectionId ?? 'local'
   const runtimeScope = candidate.connectionId
     ? 'remote'
@@ -104,14 +132,6 @@ export function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
   return reason === 'visible' || reason === 'swr' || reason === 'watch'
 }
 
-export function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): boolean {
-  if (isBudgetedBackground(reason)) {
-    return false
-  }
-  const delay = dueAt - Date.now()
-  return delay > 0 && delay <= 5_000
-}
-
 export function shouldSkipFresh(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason
@@ -130,6 +150,43 @@ export function freshRetryAt(candidate: GitHubPRRefreshCandidate): number | null
   return candidate.cachedFetchedAt == null || hasStaleHead(candidate)
     ? null
     : candidate.cachedFetchedAt + refreshIntervalForCandidate(candidate)
+}
+
+/** When a visible row's automatic follow-up is due under the current cadence: its validated
+ *  interval after its data, now when it has none yet, or null when there is no timer for it (Off,
+ *  or data even Default does not poll). Creation, retiming and the check before a start all use it. */
+export function automaticDueAt(candidate: GitHubPRRefreshCandidate): number | null {
+  return Number.isFinite(refreshIntervalForCandidate(candidate))
+    ? (freshRetryAt(candidate) ?? Date.now())
+    : null
+}
+
+/** How old data may be when a foreground return reads it again: its Default interval (the
+ *  validated quiet one where that applies), or the settled age for data Default runs no timer for.
+ *  The same age decides whether a return earns a read and whether a cached answer satisfies it. */
+export function foregroundAgeMs(candidate: GitHubPRRefreshCandidate): number {
+  const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
+  return Number.isFinite(defaultInterval) ? defaultInterval : settledForegroundAgeMs()
+}
+
+/** The exact completed answer a queued read may take instead of reading: the same validated
+ *  interval that schedules its follow-up has not passed since that answer was read. A foreground
+ *  return judges the current answer by the foreground age that earned it the read. */
+export function freshQueuedPROutcome(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason,
+  foreground = false
+): PRRefreshOutcome | null {
+  const outcome = cachedPRBranchOutcome(...candidateReadRequest(candidate, reason))?.outcome
+  if (!outcome || outcome.kind === 'upstream-error') {
+    return null
+  }
+  const current = visibleCandidateAfterOutcome(candidate, outcome)
+  if (foreground) {
+    return Date.now() - outcome.fetchedAt < foregroundAgeMs(current) ? outcome : null
+  }
+  const dueAt = freshRetryAt(current)
+  return dueAt !== null && dueAt > Date.now() ? outcome : null
 }
 
 export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubPRRefreshAlias {
@@ -175,15 +232,70 @@ export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
   )
 }
 
-export function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): number {
+export function refreshIntervalForCandidate(
+  candidate: GitHubPRRefreshCandidate,
+  cadence?: PRAutoRefreshCadence
+): number {
+  if (candidate.cachedFetchedAt != null && !hasStaleHead(candidate)) {
+    const quiet = quietPRIntervalForCandidate(candidate)
+    if (quiet !== null) {
+      return scaleReviewRefreshInterval(quiet, cadence) ?? Number.POSITIVE_INFINITY
+    }
+  }
   return (
-    reviewRefreshIntervalMs({
-      state: candidate.cachedPRState,
-      checksStatus: candidate.cachedChecksStatus,
-      hasReview: candidate.cachedHasPR,
-      selected: candidate.isSelected
-    }) ?? Number.POSITIVE_INFINITY
+    reviewRefreshIntervalMs(
+      {
+        state: candidate.cachedPRState,
+        checksStatus: candidate.cachedChecksStatus,
+        hasReview: candidate.cachedHasPR,
+        selected: candidate.isSelected
+      },
+      cadence
+    ) ?? Number.POSITIVE_INFINITY
   )
+}
+
+/** An exact completed answer a client's timed snapshot read may still take: its quiet or normal
+ *  host interval, scaled by the cadence, has not passed since it was read. */
+export function freshTimedPROutcome(
+  cached: ReturnType<typeof readTimedPROutcome>
+): PRRefreshOutcome | null {
+  if (!cached || cached.outcome.kind === 'upstream-error') {
+    return null
+  }
+  const outcome = cached.outcome
+  const interval =
+    cached.quietIntervalMs !== null
+      ? scaleReviewRefreshInterval(cached.quietIntervalMs)
+      : reviewRefreshIntervalMs({
+          state: outcome.kind === 'found' ? outcome.pr.state : null,
+          checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
+          hasReview: outcome.kind === 'found',
+          selected: true
+        })
+  return interval === null || Date.now() - outcome.fetchedAt < interval ? outcome : null
+}
+
+/** How old a candidate's data must be for a foreground exposure to read it now instead of waiting
+ *  for its timer, or null when the exposure earns no early read. A row shown again that settled
+ *  under Default reads after the settled age (Default's cooldown, a minute otherwise). When the cadence stretches or stops the timer, a row shown
+ *  again, or the selected PR on window return, reads once the Default interval has passed: the
+ *  cadence slows the timers, never the user's return, and never makes it faster than Default. */
+export function foregroundExposureAgeMs(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason,
+  priority: number,
+  reexposed: boolean
+): number | null {
+  const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
+  if (!Number.isFinite(defaultInterval)) {
+    return reexposed ? foregroundAgeMs(candidate) : null
+  }
+  const foreground =
+    reexposed || (reason === 'visible' && candidate.isSelected === true && priority >= 80)
+  return foreground && defaultInterval < refreshIntervalForCandidate(candidate)
+    ? defaultInterval
+    : null
 }
 
 function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {

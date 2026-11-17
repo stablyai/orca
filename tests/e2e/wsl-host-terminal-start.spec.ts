@@ -27,7 +27,8 @@ import {
 async function openNewTerminal(page: Page): Promise<void> {
   await (await tabCreateMenuTrigger(page)).click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/ })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/ })
     .first()
     .click()
 }

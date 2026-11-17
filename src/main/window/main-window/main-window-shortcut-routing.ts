@@ -3,7 +3,7 @@ import type { BrowserWindow } from 'electron'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../shared/modifier-double-tap-detector'
+} from '../../../shared/keybindings/modifier-double-tap-detector'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import type { KeybindingMatchOptions } from '../../../shared/keybindings/types'
 import {
@@ -13,18 +13,17 @@ import {
   resolveWindowShortcutAction,
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
-} from '../../../shared/window-shortcut-policy'
+} from '../../../shared/keybindings/window-shortcut-policy'
 import type { Store } from '../../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from '../editing/mac-app-paste-input'
-import { dictationShortcutMode } from '../../../shared/dictation-shortcut-mode'
+import { dictationShortcutMode } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
-  nativeChatPromptClaimsShortcut,
   textInputOwnsComposition,
   type TextShortcutInput
-} from '../../../shared/text-input-shortcut-policy'
+} from '../../../shared/keybindings/text-input-shortcut-policy'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -45,14 +44,6 @@ export function installMainWindowShortcutRouting(args: {
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
-    // The IPC carries no key event; preserve prompt editing before consuming a destructive chord.
-    if (
-      action.type === 'deleteCurrentWorkspace' &&
-      focusedShortcutContext.context !== 'terminal' &&
-      nativeChatPromptClaimsShortcut(options.input, process.platform, 'workspace.delete')
-    ) {
-      return false
-    }
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -108,10 +99,7 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
-    if (
-      (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
-      isAutoRepeat
-    ) {
+    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
       event.preventDefault()
       return true
     }

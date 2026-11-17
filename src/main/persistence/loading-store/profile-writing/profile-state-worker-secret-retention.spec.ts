@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSecretStore, setSecretStore } from '../../../../shared/secret-store'
+import { getSecretStore, setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
 export function registerProfileStateWorkerSecretRetentionTests(): void {

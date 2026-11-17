@@ -9,7 +9,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-items/work-item-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -141,6 +141,9 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           args.sourceContext
         ))
       : null
+  if (args.accepts?.() === false) {
+    return null
+  }
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(

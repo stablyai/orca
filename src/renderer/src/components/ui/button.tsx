@@ -8,7 +8,7 @@ const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -26,6 +26,9 @@ const buttonVariants = cva(
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
+        // A quiet secondary link, such as a dialog footer's "Manual steps".
+        'link-muted':
+          'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -43,6 +46,8 @@ const buttonVariants = cva(
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
+        // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
+        'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
