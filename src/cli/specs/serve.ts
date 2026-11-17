@@ -98,7 +98,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'On Linux the service stops at logout unless lingering is on (`loginctl enable-linger`); install reports it.',
       "Reinstalling replaces the unit and clears a previous give-up. --command defaults to the installed Orca app's `orca` command on PATH (`orca-ide` on Linux) and must not be a launcher tied to one Orca version. --dry-run prints the unit without installing it.",
       "Needs the Orca app installed on this machine. The `orca` command in an Orca terminal on an SSH host belongs to that connection's server and cannot install a service.",
-      'Not available on Windows yet.'
+      'Windows registers a Task Scheduler task (\\Zotz\\Serve) that runs `orca serve --no-pairing` at logon in your desktop session, retries every minute and has no time limit; registering a logon task may need an elevated terminal. Only the default profile is supported there.'
     ],
     examples: [
       'orca serve service install',

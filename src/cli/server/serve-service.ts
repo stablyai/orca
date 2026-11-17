@@ -20,6 +20,11 @@ import {
   type ServeServiceSpec
 } from '../runtime/serve/supervision/serve-service-unit'
 import { resolveServiceCommand, resolveServicePath } from '../runtime/app-launch/serve-app-launcher'
+import {
+  installWindowsServeService,
+  readWindowsServeServiceStatus,
+  uninstallWindowsServeService
+} from './zotz-windows-serve-service'
 
 type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
 
@@ -51,10 +56,10 @@ function defaultDeps(): ServeServiceDeps {
 }
 
 function requireManager(platform: NodeJS.Platform): void {
-  if (!resolveServeServiceManager(platform)) {
+  if (platform !== 'win32' && !resolveServeServiceManager(platform)) {
     throw new RuntimeClientError(
       'unsupported_platform',
-      '`orca serve service` is not available on Windows yet. Run `orca serve` under a service wrapper of your own.'
+      `\`orca serve service\` is not available on ${platform}. Run \`orca serve\` under a service wrapper of your own.`
     )
   }
 }
@@ -129,10 +134,12 @@ export async function installServeService(
   deps: ServeServiceDeps = defaultDeps()
 ): Promise<Record<string, unknown>> {
   requireManager(deps.platform)
-  const spec = serviceSpec(deps, {
-    ...options,
-    command: resolveServiceCommand(options.command, deps)
-  })
+  const command = resolveServiceCommand(options.command, deps)
+  if (deps.platform === 'win32') {
+    const bind = resolveServeServiceBind(options.bind)
+    return installWindowsServeService(deps, { ...options, bind, command })
+  }
+  const spec = serviceSpec(deps, { ...options, command })
   if (options.dryRun) {
     return { installed: false, dryRun: true, ...spec }
   }
@@ -181,6 +188,9 @@ export type ServeServiceStatus = {
 export async function readServeServiceStatus(
   deps: ServeServiceDeps = defaultDeps()
 ): Promise<ServeServiceStatus> {
+  if (deps.platform === 'win32') {
+    return readWindowsServeServiceStatus(deps)
+  }
   requireManager(deps.platform)
   const spec = serviceSpec(deps, { command: 'orca' })
   const base = {
@@ -240,6 +250,9 @@ export async function readServeServiceStatus(
 export async function uninstallServeService(
   deps: ServeServiceDeps = defaultDeps()
 ): Promise<Record<string, unknown>> {
+  if (deps.platform === 'win32') {
+    return uninstallWindowsServeService(deps)
+  }
   requireManager(deps.platform)
   const spec = serviceSpec(deps, { command: 'orca' })
   await (spec.manager === 'launchd'

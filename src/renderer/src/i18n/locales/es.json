@@ -24177,6 +24177,66 @@
     "updater": {
       "manualUpdate": "Zotz se actualiza con git pull + build.",
       "manualUpdateDetail": "Consulta docs/zotz/UPDATE.md. Define ZOTZ_ENABLE_UPDATER=1 para reactivar el actualizador integrado."
+    },
+    "machineMode": {
+      "autostartRemoveFailed": "No se pudo quitar la tarea de inicio de sesión: {{detail}}",
+      "autostartRemoved": "Zotz ya no arranca al iniciar sesión.",
+      "pairedDevicesKeepAccess": "Los equipos y teléfonos emparejados pueden seguir conectándose hasta que los revoques en Ajustes → Servidores remotos de Orca.",
+      "back": "Atrás",
+      "change": "Cambiar",
+      "description": "Puedes cambiarlo después en Ajustes → General.",
+      "later": "Decidir después",
+      "personal": {
+        "description": "Usa Zotz en esta computadora. No cambia nada del sistema.",
+        "title": "Personal"
+      },
+      "server": {
+        "description": "Un nodo siempre encendido: accesible por Tailscale, nunca se duerme y arranca solo. Le mandas trabajo desde otra computadora o desde tu celular.",
+        "title": "Servidor remoto"
+      },
+      "settingsDescription": "Cambia entre uso personal y servidor remoto siempre encendido, o vuelve a ejecutar la configuración del servidor.",
+      "settingsLabel": "Modo de la máquina: {{mode}}",
+      "settingsTitle": "Esta computadora",
+      "title": "¿Cómo vas a usar esta computadora?",
+      "unset": "Sin elegir"
+    },
+    "nodeSetup": {
+      "description": "Zotz conecta Tailscale (lo instala si falta), mantiene la computadora despierta, abre su puerto solo a tu tailnet, arranca al iniciar sesión y se reinicia si se detiene. Lo que requiere administrador se aplica con un solo permiso.",
+      "detail": {
+        "autologon": "Usa Sysinternals Autologon para que Windows inicie sesión solo después de reiniciar. Zotz nunca pide ni guarda tu contraseña.",
+        "declined": "Se rechazó el permiso de administrador.",
+        "devBuild": "Se omite en builds de desarrollo.",
+        "installing": "Instalando Tailscale…",
+        "waitingForLogin": "Esperando a que inicies sesión en Tailscale…"
+      },
+      "done": "Listo",
+      "link": {
+        "copy": "Copiar",
+        "description": "Quien tenga el enlace puede ejecutar comandos como tú en esta computadora hasta que lo revoques en Ajustes.",
+        "desktop": "Enlace para otra computadora (Zotz u Orca)",
+        "generating": "Generando el enlace de acceso…",
+        "qr": "Escanéalo con la app móvil de Orca con tu celular conectado a Tailscale.",
+        "qrAlt": "Código QR de vinculación",
+        "regenerate": "Nuevo enlace",
+        "title": "Enlace de acceso",
+        "web": "Enlace para un navegador"
+      },
+      "open": "Abrir",
+      "retry": "Ejecutar de nuevo",
+      "running": "Configurando…",
+      "start": "Configurar servidor",
+      "step": {
+        "autologon": "Inicio de sesión automático (manual)",
+        "autostart": "Arrancar al iniciar sesión y reiniciar si se detiene",
+        "firewall": "Firewall abierto solo a Tailscale",
+        "keepAwake": "Mantener la computadora despierta",
+        "networkExposure": "Aceptar conexiones remotas",
+        "power": "Nunca suspender con corriente",
+        "ssh": "SSH solo con llave",
+        "tailscale": "Tailscale conectado",
+        "windowsUpdate": "Sin reinicios automáticos con sesión iniciada"
+      },
+      "title": "Configurar esta computadora como servidor remoto"
     }
   }
 }

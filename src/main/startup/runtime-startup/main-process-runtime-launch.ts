@@ -55,6 +55,7 @@ import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-bo
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
 import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
 import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
+import { zotzServerNetworkSources } from '../../../shared/zotz/zotz-machine-mode'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -85,13 +86,16 @@ function installRuntimeRpc(
     orcadSidecar: isOrcadSidecarLaunch(),
     serveOptions
   })
+  const zotzServerSources = serveOptions
+    ? null
+    : zotzServerNetworkSources(state.store?.getSettings())
   const runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Pairing must use pre-setName canonical userData or restarts can lose devices.
     userDataPath: getCanonicalUserDataPath(),
     enableWebSocket: true,
     // STA-2370: desktop stays loopback until pairing; serve explicitly opts into remote access and E2E needs harness-wide bind.
-    exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    exposeNetworkByDefault: Boolean(serveOptions) || isE2E || zotzServerSources !== null,
     ...(pinnedBindHost !== undefined ? { pinnedBindHost } : {}),
     ...(serveOptions
       ? {
@@ -101,7 +105,9 @@ function installRuntimeRpc(
             pairingAddress: serveOptions.pairingAddress
           }
         }
-      : {}),
+      : zotzServerSources
+        ? { serveNetworkSources: zotzServerSources }
+        : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined

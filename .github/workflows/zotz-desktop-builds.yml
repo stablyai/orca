@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/zotz-desktop-builds.yml'
+      - 'resources/win32/zotz/**'
   workflow_dispatch:
 
 concurrency:
@@ -54,6 +55,15 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      # Nothing else executes the node setup script before a user runs it elevated.
+      - name: Parse the Windows node setup script
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/resources/win32/zotz/zotz-node-setup.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store.
       - name: Setup pnpm

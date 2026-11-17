@@ -1,5 +1,6 @@
 import type { App } from 'electron'
 import { argvRequestsServeMode } from '../serve-launch/serve-mode-argv'
+import { ZOTZ_NODE_AUTOSTART_ARG } from '../../../shared/zotz/zotz-node-setup-contract'
 import {
   writeStartupDiagnosticLine,
   type StartupDiagnosticSink
@@ -14,7 +15,8 @@ export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
 
 // Supervisor duplicate serve launches must not activate desktop; recognize CLI-form argv too (#12677, #11935). Missing argv preserves activation.
 export function shouldActivateDesktopForSecondInstance(argv: readonly string[] = []): boolean {
-  return !argvRequestsServeMode(argv)
+  // Zotz's logon watchdog relaunches every minute; finding Zotz already open must stay silent.
+  return !argvRequestsServeMode(argv) && !argv.includes(ZOTZ_NODE_AUTOSTART_ARG)
 }
 
 /** Duplicate mains clobber runtime/hook discovery files and leave stale_bootstrap after exit. Acquire after userData overrides so dev/packaged instances lock distinct profile namespaces. */

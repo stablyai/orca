@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { SERVE_LAUNCHD_LABEL_PREFIX } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
-export type ServeServiceManager = 'launchd' | 'systemd'
+export type ServeServiceManager = 'launchd' | 'systemd' | 'task-scheduler'
 
 export type ServeServiceSpec = {
   manager: ServeServiceManager

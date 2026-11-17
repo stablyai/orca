@@ -16,6 +16,7 @@ import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagA
 import { NativeChatResumeOnRestartModal } from '../components/native-chat-recovery/NativeChatResumeRuntimeModal'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
+import { ZotzMachineModeGate } from '../components/zotz/ZotzMachineModeGate'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
 import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
@@ -378,6 +379,11 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             document.body
           )
         : null}
+      <OverlayBoundary boundaryId="overlay.zotz-machine-mode">
+        <ZotzMachineModeGate
+          onboardingVisible={onboardingGate.onboarding === null || onboardingGate.shouldRender}
+        />
+      </OverlayBoundary>
       {shouldMountDictationController ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.dictation" resetKey={activeView}>
