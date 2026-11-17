@@ -6,8 +6,8 @@ import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
 import {
-  includesQualifiedSearchRefs,
-  projectRepoSearchRefsForClient
+  projectRepoSearchRefsForClient,
+  repoSearchRefSelectorForm
 } from './repo-search-ref-projection'
 import {
   RepoIssueCommandRead,
@@ -214,21 +214,18 @@ export const REPO_METHODS = [
     name: 'repo.searchRefs',
     permission: 'workspace',
     params: RepoSearchRefs,
-    handler: async (params, { runtime, clientCapabilities }) => {
-      const searchArgs: Parameters<typeof runtime.searchRepoRefs> = [
-        params.repo,
-        params.query,
-        params.limit,
-        includesQualifiedSearchRefs(clientCapabilities)
-      ]
-      if (params.namespace !== undefined) {
-        searchArgs.push(params.namespace)
-      }
-      return projectRepoSearchRefsForClient(
-        await runtime.searchRepoRefs(...searchArgs),
+    handler: async (params, { runtime, clientCapabilities, signal }) =>
+      projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(
+          params.repo,
+          params.query,
+          params.limit,
+          repoSearchRefSelectorForm(clientCapabilities),
+          params.namespace,
+          signal
+        ),
         clientCapabilities
       )
-    }
   }),
   defineMethod({
     name: 'repo.hooks',
