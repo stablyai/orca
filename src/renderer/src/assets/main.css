@@ -1946,7 +1946,9 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -7px;
-  left: 0.8125rem;
+  /* Why: centred on the phone icon, measured by use-intro-arrow. */
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 7px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 7px 7px;
   /* Why: use foreground + border to create a subtle shadow that adapts to theme */
@@ -1958,7 +1960,8 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   top: -6px;
-  left: 0.8125rem;
+  inset-inline-start: calc(var(--intro-arrow-x, 1.25rem) - 6px);
+  display: var(--intro-arrow-display, block);
   border-style: solid;
   border-width: 0 6px 6px;
   border-color: transparent transparent var(--muted) transparent;
