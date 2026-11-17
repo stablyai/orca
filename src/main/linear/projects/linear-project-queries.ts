@@ -53,10 +53,13 @@ export async function listProjects(
   return readCollection(
     key,
     workspaceId,
-    async (entry) => {
+    async (entry, yieldSlot) => {
       const { nodes, hasMore } = await readConnectionPages(
         cap,
         async (page) => {
+          if (page.after) {
+            await yieldSlot()
+          }
           const result = await entry.client.client.rawRequest<
             ProjectConnectionResponse,
             LinearRawVariables
