@@ -7,8 +7,8 @@ import {
   legacyHostChatPermissionMode,
   type ChatPermissionHostVerdict
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-host-support'
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-permission-modes-capability'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'

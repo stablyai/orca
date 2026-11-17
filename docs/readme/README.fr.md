@@ -23,10 +23,6 @@
 <h3 align="center"><a href="https://orca.dev/download"><ins>Télécharger Orca</ins></a></h3>
 
 <p align="center">
-  <sub>Sous Windows ? Prenez la <a href="https://github.com/stablyai/orca/releases#release-v1.4.147-rc.3">dernière RC</a> — elle inclut des correctifs Windows.</sub>
-</p>
-
-<p align="center">
   <img src="../assets/readme-hero.jpg" alt="Application de bureau Orca exécutant des agents dans des worktrees parallèles, avec l'app companion mobile Orca dans le coin" width="960" />
 </p>
 
@@ -40,7 +36,7 @@
 
 Surveillez et pilotez vos agents depuis votre téléphone — soyez notifié quand un agent termine, et envoyez des instructions de suivi où que vous soyez.
 
-[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK Android](https://orca.dev/download/android) · [Docs →](https://orca.dev/docs/mobile)
+[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK Android](https://orca.dev/download/android) · [Docs →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -220,8 +216,7 @@ Fonctionne avec **n'importe quel agent CLI** — s'il tourne dans un terminal, i
 ### Desktop — macOS, Windows, Linux
 
 - **[Télécharger depuis orca.dev](https://orca.dev/download)**
-- Ou récupérez un build directement : [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/download/v1.4.147-rc.3/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [Tous les builds](https://github.com/stablyai/orca/releases/latest)
-- **Sous Windows :** utilisez la [dernière RC (`v1.4.147-rc.3`)](https://github.com/stablyai/orca/releases#release-v1.4.147-rc.3) — elle inclut des correctifs Windows absents de la stable.
+- Ou récupérez un build directement : [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [Tous les builds](https://github.com/stablyai/orca/releases/latest)
 
 _Ou via un gestionnaire de paquets :_
 
@@ -241,7 +236,7 @@ yay -S stably-orca-bin
 Associez-la à l'app de bureau pour surveiller et piloter vos agents depuis votre téléphone.
 
 - **iOS :** [Télécharger sur l'App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android :** [Télécharger l'APK](https://orca.dev/download/android)
+- **Android :** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Télécharger l'APK](https://orca.dev/download/android)
 
 ---
 

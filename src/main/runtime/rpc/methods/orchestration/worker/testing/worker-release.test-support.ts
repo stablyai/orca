@@ -14,13 +14,13 @@ import '../../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeStore } from '../../../../../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   getAppEnvironment,
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../../../../../shared/app-environment'
+} from '../../../../../../../shared/app-lifecycle/app-environment'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
 type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }

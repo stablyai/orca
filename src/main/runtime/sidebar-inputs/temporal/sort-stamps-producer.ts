@@ -1,5 +1,8 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AgentPhase,
   AgentTransition
@@ -11,7 +14,7 @@ import {
   REST_PANE,
   type AgentPaneState,
   type SortStampEvent
-} from '../../../../shared/sidebar-list/sort-stamps'
+} from '../../../../shared/sidebar-list/sorting/sort-stamps'
 import type { TerminalSideEffectBatch } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   agentPaneWorkspace,

@@ -1,13 +1,16 @@
 // Compare stores independently of mover export so omitted rows remain visible after host/path normalization.
 import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   isWorktreeHostIdentity

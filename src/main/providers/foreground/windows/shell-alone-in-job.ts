@@ -3,7 +3,7 @@ import type { WindowsProcessIdentityRow } from '../../../windows/windows-process
 import {
   buildProcessTableIndex,
   collectDescendantsFromIndex
-} from '../../../../shared/process-table-index'
+} from '../../../../shared/process-observation/tables/process-table-index'
 
 const MSYS_BASH_IMAGE = 'bash.exe'
 

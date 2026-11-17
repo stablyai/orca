@@ -6,7 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { parseMessageTaskId } from './message-payload'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import type { SendParams } from './send-params'
@@ -107,6 +107,13 @@ export function sendPointToPointMessage(args: {
             reason: refusal.reason
           }
         })
+        // No Dispatch means no coordinator can act on it; mark it read and record the receipt
+        // directly, since recordReceiptForPostCommitNudge would default a replay nudge.
+        if (!dispatch) {
+          db.markAsRead([msg.id])
+          recordMutationReceipt?.(receipt)
+          return { receipt, nudge: () => undefined }
+        }
         return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
           runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
         )
@@ -184,7 +191,8 @@ function lifecycleRefusal(args: {
     return coordinatorMutation
       ? {
           code: 'sender_not_assignee',
-          reason: 'No active Dispatch belongs to this message sender.'
+          reason:
+            'No active Dispatch belongs to this message sender. Send --type status instead; `orca orchestration gate-create` only blocks a Task in a Run you coordinate.'
         }
       : null
   }

@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import {
   isCrossStoreInferredSource,
   type CrossStoreInferredSource,
@@ -6,16 +6,16 @@ import {
   type WorktreeLineage,
   type WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 import {
   type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
-import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
-import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage-row-identity'
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage/lineage-row-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'

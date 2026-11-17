@@ -2,7 +2,7 @@ import { deleteConfirmedListSnapshot } from '@/components/task-page/github/mutat
 import { deleteLastConfirmedClientValue } from '@/components/task-page/github/mutations/task-page-github-confirmed-client-values'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
 import {
@@ -13,7 +13,7 @@ import {
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import {
   isHostIdentityContinued,

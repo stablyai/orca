@@ -12,7 +12,7 @@ import type {
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,

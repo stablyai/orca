@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 import type { CapturedRuntimeOwner } from '../host-selection/add-repo-runtime-owner'
 import { trackNestedFolderOpen } from './track-nested-folder-open'
 

@@ -1,6 +1,6 @@
 import { app, BaseWindow, protocol, session } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'

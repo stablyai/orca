@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { BackendBootstrapSchema, BACKEND_CAPABILITIES } from '../../shared/backend-service-contract'
-import { BackendPortRpc } from '../../shared/backend-port-rpc'
-import { setAppEnvironment } from '../../shared/app-environment'
-import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
+import {
+  BackendBootstrapSchema,
+  BACKEND_CAPABILITIES
+} from '../../shared/backend/backend-service-contract'
+import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
 import { createDesktopBackendEnvironment } from './node-service-environment'
 import { BackendServiceLifetime, activateBackendServices } from './service-composition'
@@ -13,10 +16,13 @@ import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop
 import { clearWindowsStdHandleInheritance } from '../startup/windows-startup/windows-std-handle-inheritance'
 import { installWindowsIsolatedSpawner } from '../startup/windows-startup/windows-isolated-spawner'
 import { dropE2eSpawnLogOutsideE2e } from '../startup/testing/e2e-spawn-log-env'
-import { ignoreInheritedWslHostsGateState } from '../../shared/wsl-host-internal-gate'
+import { ignoreInheritedWslHostsGateState } from '../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 dropE2eSpawnLogOutsideE2e()
 clearWindowsStdHandleInheritance()
 installWindowsIsolatedSpawner()

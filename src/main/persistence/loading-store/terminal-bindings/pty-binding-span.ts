@@ -8,7 +8,7 @@ import {
   findTerminalBindingConflict,
   type TerminalOwnerConflictReason
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-owner-invariants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 

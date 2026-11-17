@@ -16,6 +16,7 @@ export type TaskPageGitHubLandingRefreshModel = Pick<
   | 'selectedReposKey'
   | 'setTasksRefreshing'
   | 'setTasksFiltering'
+  | 'setGithubListRevalidating'
   | 'setTasksError'
   | 'setFailedCount'
   | 'setGithubUnavailable'
@@ -45,4 +46,6 @@ export type TaskPageGitHubLandingRefreshModel = Pick<
   | 'retryingSourceKeys'
   | 'setRetryingSourceKeys'
   | 'githubWorkItemMutationQueryKey'
+  | 'unreachableTaskSourceHostIds'
+  | 'recheckUnreachableTaskSourceHosts'
 >

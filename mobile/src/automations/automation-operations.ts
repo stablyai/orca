@@ -3,7 +3,7 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 import {
   automationListSchema,
   automationSchema,

@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
@@ -9,6 +9,7 @@ import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cur
 import { getZcodeStatusBarToggleSearchEntry } from './appearance-status-bar-zcode-toggle-search'
 import { getMuseStatusBarToggleSearchEntry } from './appearance-status-bar-muse-toggle-search'
 import { getKiroStatusBarToggleSearchEntry } from './appearance-status-bar-kiro-toggle-search'
+import { getGitBlameStatusBarToggleSearchEntry } from './appearance-status-bar-git-blame-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -270,6 +271,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'settings.appearance.statusBar.portsToggleDescription',
         'Show live workspace ports. Click it for workspace-scoped ports and external listeners.'
       )
-    }
+    },
+    getGitBlameStatusBarToggleSearchEntry()
   ]
 )

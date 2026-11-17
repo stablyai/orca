@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
@@ -17,7 +17,7 @@ import {
 import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
-import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -30,13 +30,13 @@ import {
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
+} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
-} from '../../../../../shared/resolved-worktree-lineage'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorkspaceLineage,
   WorktreeLineage
@@ -45,7 +45,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'

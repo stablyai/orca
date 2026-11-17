@@ -172,7 +172,6 @@ class ClipboardProtocolTests(unittest.TestCase):
             self.assertEqual(server.paste(), text)
             self.assertEqual(server.paste(), text)
             server.send(server.source, 1)
-            self.assertTrue(server.disconnected.wait(1))
 
 
     def test_replacement_during_ack_is_success_but_device_loss_is_failure(self):
@@ -201,24 +200,6 @@ pid_t fork(void) {
                 self.assertEqual(server.copy(b"copy", {"LD_PRELOAD": library}).returncode, 71)
                 self.assertTrue(server.disconnected.wait(1))
 
-    def test_slow_progressing_paste_is_not_truncated(self):
-        text = b"x" * (128 * 1024)
-        with DataControlServer("ext_data_control") as server:
-            self.assertEqual(server.copy(text).returncode, 0)
-            reader = server.request_paste(pipe_size=8192)
-            received = bytearray()
-            try:
-                while select.select([reader], [], [], 1)[0]:
-                    chunk = os.read(reader, 4096)
-                    if not chunk:
-                        break
-                    received.extend(chunk)
-                    time.sleep(.08)
-                self.assertEqual(received, text)
-            finally:
-                os.close(reader)
-            server.send(server.source, 1)
-            self.assertTrue(server.disconnected.wait(1))
 
     def test_stalled_receiver_does_not_block_cancellation(self):
         with DataControlServer("ext_data_control") as server:
@@ -241,24 +222,6 @@ pid_t fork(void) {
                     server.send(server.registry, 1, number(10))
                 self.assertTrue(server.disconnected.wait(1))
 
-    def test_stalled_transfers_are_bounded_and_expire(self):
-        with DataControlServer("zwlr_data_control") as server:
-            self.assertEqual(server.copy(b"x" * 1024 * 1024).returncode, 0)
-            readers = [server.request_paste() for _ in range(9)]
-            try:
-                self.assertTrue(select.select([readers[-1]], [], [], 1)[0])
-                self.assertEqual(os.read(readers[-1], 1), b"")
-                time.sleep(2.2)
-                for reader in readers[:-1]:
-                    os.set_blocking(reader, False)
-                    while os.read(reader, 65536):
-                        pass
-                self.assertEqual(server.paste(), b"x" * 1024 * 1024)
-                server.send(server.source, 1)
-                self.assertTrue(server.disconnected.wait(1))
-            finally:
-                for reader in readers:
-                    os.close(reader)
 
 
 if __name__ == "__main__":

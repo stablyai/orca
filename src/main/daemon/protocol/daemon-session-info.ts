@@ -1,6 +1,6 @@
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { SessionState, ShellReadyState } from './daemon-rpc-contract'
-import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
+import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
 export type SessionInfo = {
   foregroundProcess?: string

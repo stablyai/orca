@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { TerminalResumeState } from '../session/terminal-stream-resume'
+import type { TerminalResumeState } from '../session/streaming/terminal-stream-resume'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 

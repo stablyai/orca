@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   recordPtySurface,
@@ -12,7 +12,7 @@ import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placemen
 import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
-import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.

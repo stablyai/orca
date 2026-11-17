@@ -9,12 +9,12 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../shared/native-chat/input/composer/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentInlineImageMimeType,
   isAgentInlineImageMimeType
-} from '../../../shared/agent-inline-image-types'
+} from '../../../shared/native-chat/input/composer/agent-inline-image-types'
 import type { NativeChatImageRefBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,

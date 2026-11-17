@@ -24,7 +24,7 @@ import { withRemoteWorkerRows } from '../../../../orchestration/federation/remot
 import {
   WORKER_TERMINAL_LIST_STATES,
   WorkerListParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 
 export const emptyWorkerListPage = (limit: number) => ({
   workers: [],
@@ -45,7 +45,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
     const remoteRows = paged
       ? (params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX)
       : ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS - page.workers.length
-    return withRemoteWorkerRows(runtime, params, page, remoteRows)
+    return await withRemoteWorkerRows(runtime, params, page, remoteRows)
   }
 })
 

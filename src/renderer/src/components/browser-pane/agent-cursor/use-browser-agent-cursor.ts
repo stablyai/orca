@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import { createAgentCursor, type AgentCursorController } from './agent-cursor-motion'
 import { attachBrowserAgentCursorSink } from './browser-agent-activity-state'
-import { readPrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { readPrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 
 const AGENT_ACTIVE_ATTRIBUTE = 'data-agent-active'
 

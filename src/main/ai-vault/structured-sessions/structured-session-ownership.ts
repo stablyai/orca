@@ -1,19 +1,19 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   agentSessionAccountHome,
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
-import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
+import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { historyRowFallsBackToChatLabel } from '../../../shared/structured-chat-row-name'
+import { historyRowFallsBackToChatLabel } from '../../../shared/agent-session/view/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
@@ -21,13 +21,13 @@ import {
 } from '../../../shared/ai-vault/search/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,

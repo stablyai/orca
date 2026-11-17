@@ -6,7 +6,7 @@ import {
 } from './service-sibling-provider-result'
 import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 function hasKnownProvenanceChange(
   previous: ProviderRateLimits | null,

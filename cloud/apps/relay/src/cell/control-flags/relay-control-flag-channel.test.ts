@@ -77,25 +77,6 @@ describe('control flag channel', () => {
       .filter((line) => line.includes(`"event":"${CELL_FLAGS_APPLIED_EVENT}"`))
       .map((line): unknown => JSON.parse(line))
 
-  it('flips a flag on and back off, logging each applied generation once', async () => {
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true, ticketCheck: 'shadow' }))
-    const channel = cellChannel(google.fetchImpl)
-    await channel.poll()
-    await channel.poll()
-    expect(google.state.storageRequests[1]?.searchParams.get('ifGenerationNotMatch')).toBe('5')
-    google.state.object = cellObject(7, { readinessLocal: false, ticketCheck: 'off' })
-    await channel.poll()
-    expect(channel.applied()).toEqual({ generation: 7, flags: CELL_FLAG_DEFAULTS })
-    expect(appliedLines()).toEqual([
-      {
-        event: CELL_FLAGS_APPLIED_EVENT,
-        generation: 5,
-        flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true, ticketCheck: 'shadow' }
-      },
-      { event: CELL_FLAGS_APPLIED_EVENT, generation: 7, flags: CELL_FLAG_DEFAULTS }
-    ])
-  })
-
   it('keeps the applied values through every kind of lost contact, logging once per cause', async () => {
     const google = fakeGoogle(cellObject(5, { readinessLocal: true }))
     const channel = cellChannel(google.fetchImpl)

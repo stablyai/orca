@@ -4,7 +4,7 @@ import {
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {

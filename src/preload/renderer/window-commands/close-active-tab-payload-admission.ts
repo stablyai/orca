@@ -1,4 +1,4 @@
-import type { CloseActiveTabPayload } from '../../api/ui-command-event-api'
+import type { CloseActiveTabPayload } from '../../api/window-ui/ui-command-event-api'
 
 export type AdmittedCloseActiveTabPayload =
   | { kind: 'legacy' }

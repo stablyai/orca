@@ -2,8 +2,8 @@ import { computerProviderUnavailableMessage } from './computer-provider-unavaila
 import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
 import { RuntimeClientError } from './runtime-client-error'
 import { ComputerTreeBaselines } from './computer-snapshot-tree-diff'
-import type { ComputerProviderCapabilities } from '../../shared/computer-use-runtime-types'
-import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
+import type { ComputerProviderCapabilities } from '../../shared/computer/computer-use-runtime-types'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer/computer-use-type-text-target'
 
 type SidecarRequest = {
   id: number
@@ -58,6 +58,9 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
     }
     case 'listApps': {
       return await provider.listApps()
+    }
+    case 'launchApp': {
+      return await provider.launchApp(params)
     }
     case 'listWindows': {
       return await provider.listWindows(params)

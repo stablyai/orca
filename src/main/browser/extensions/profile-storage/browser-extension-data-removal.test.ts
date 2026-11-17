@@ -8,13 +8,14 @@ type WindowRecord = { options: unknown; url: string; script: string; destroyed: 
 
 const mocks = vi.hoisted(() => {
   const windows: WindowRecord[] = []
-  return { windows, userData: '', readdir: vi.fn() }
+  return { windows, userData: '', readdir: vi.fn(), rm: vi.fn() }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FsPromises>()
   mocks.readdir.mockImplementation(fs.readdir)
-  return { ...fs, readdir: mocks.readdir }
+  mocks.rm.mockImplementation(fs.rm)
+  return { ...fs, readdir: mocks.readdir, rm: mocks.rm }
 })
 
 vi.mock('electron', () => ({
@@ -117,7 +118,7 @@ describe('uninstall while another Orca profile is inactive', () => {
     }))
     personal.sync.write('default', ID, { token: 'old secret' })
     personal.states.flush()
-    personal.sync.flush()
+    await personal.sync.flush()
     personal.installed.save(record)
 
     const work = await openOrcaProfile(workDirectory)
@@ -135,7 +136,7 @@ describe('uninstall while another Orca profile is inactive', () => {
     reopened.sync.write('default', ID, { token: 'new secret' })
     await reopened.sweep(sess, 'default', new Set([ID]))
     expect(reopened.sync.read('default', ID)).toEqual({ token: 'new secret' })
-    reopened.sync.flush()
+    await reopened.sync.flush()
   })
 })
 
@@ -232,5 +233,56 @@ it("preserves another pending unpacked reinstall's data when reconciling one ext
   expect(sess.clearStorageData).toHaveBeenCalledExactlyOnceWith({
     origin: `chrome-extension://${OTHER}`
   })
-  sync.flush()
+  await sync.flush()
+})
+
+it('records reinstall cleanup only after the old sync storage file is deleted', async () => {
+  const store = getBrowserExtensionInstallStore()
+  const record = {
+    id: ID,
+    name: 'Vault',
+    version: '1',
+    path: store.installDirectory(ID, '1'),
+    source: 'webstore' as const,
+    iconPath: null,
+    permissions: [],
+    hostPermissions: [],
+    optionsPage: null
+  }
+  store.save(record)
+  await store.remove(ID)
+  store.save(record)
+  const profileId = 'held-delete'
+  const sync = getBrowserExtensionSyncStorageStore()
+  const states = getBrowserExtensionProfileStateStore()
+  sync.write(profileId, ID, { token: 'old secret' })
+  await sync.flush()
+  let releaseDelete: () => void = () => {}
+  let deleteStarted: () => void = () => {}
+  const started = new Promise<void>((resolve) => (deleteStarted = resolve))
+  const held = new Promise<void>((resolve) => (releaseDelete = resolve))
+  mocks.rm.mockImplementation(async (...args: Parameters<typeof FsPromises.rm>) => {
+    if (String(args[0]).endsWith(`${ID}.json`)) {
+      deleteStarted()
+      await held
+    }
+    return realFsPromises.rm(...args)
+  })
+  try {
+    const cleanup = removeReinstalledBrowserExtensionData(fakeSession(false), profileId, ID)
+    await started
+    // A marker saved before the delete would skip it after a crash, bringing the old items back.
+    expect(states.read(profileId, ID).removalGeneration).toBe(0)
+    releaseDelete()
+    await cleanup
+    expect(states.read(profileId, ID).removalGeneration).toBeGreaterThan(0)
+    expect(
+      existsSync(
+        join(mocks.userData, 'browser-extensions', 'sync-storage', profileId, `${ID}.json`)
+      )
+    ).toBe(false)
+  } finally {
+    releaseDelete()
+    mocks.rm.mockImplementation(realFsPromises.rm)
+  }
 })

@@ -2,7 +2,7 @@ import { lstat, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SkillDeleteRequest } from '../../../shared/skill-delete-contract'
+import type { SkillDeleteRequest } from '../../../shared/skills/deletion/skill-delete-contract'
 import { deleteSkills } from './skill-deletion'
 
 import {

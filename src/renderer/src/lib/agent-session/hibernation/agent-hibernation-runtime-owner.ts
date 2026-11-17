@@ -1,4 +1,4 @@
-import { resolveTerminalTeardownOwner } from '@/store/terminals/terminal-teardown-owner'
+import { resolveTerminalTeardownOwner } from '@/store/terminals/sleep/terminal-teardown-owner'
 import type { TerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 
 export type AgentHibernationRuntimeOwner =

@@ -9,7 +9,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 const API_TIMEOUT_MS = 10_000
 const MONTHLY_WINDOW_MINUTES = 30 * 24 * 60

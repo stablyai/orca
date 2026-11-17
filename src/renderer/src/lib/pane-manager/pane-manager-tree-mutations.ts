@@ -27,6 +27,7 @@ export function splitPaneOnManager(
     createDivider: (isVertical) => host.createDivider(isVertical),
     publishPaneCreated: (pane, spawnHints) => host.publishPaneCreated(pane, spawnHints),
     getDragCallbacks: () => host.getDragCallbacks(),
+    activePaneId: host.getActivePaneId(),
     setActivePaneId: (id) => {
       host.setActivePaneId(id)
     },
@@ -55,6 +56,7 @@ export function splitPaneAroundLeafIdsOnManager(
     createDivider: (isVertical) => host.createDivider(isVertical),
     publishPaneCreated: (pane, spawnHints) => host.publishPaneCreated(pane, spawnHints),
     getDragCallbacks: () => host.getDragCallbacks(),
+    activePaneId: host.getActivePaneId(),
     setActivePaneId: (id) => {
       host.setActivePaneId(id)
     },

@@ -15,15 +15,15 @@ import type {
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { EventProps } from '../../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../../shared/telemetry/telemetry-event-classification'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
   RemoteRuntimeSnapshotOutcome,

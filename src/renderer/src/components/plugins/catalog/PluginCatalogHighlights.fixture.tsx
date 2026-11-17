@@ -1,4 +1,4 @@
-import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugin-host-api'
+import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugins/plugin-host-api'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import { PluginListGroup } from '../list/PluginListGroup'

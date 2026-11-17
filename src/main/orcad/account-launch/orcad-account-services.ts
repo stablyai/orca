@@ -9,7 +9,7 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
 import { createCodexRuntimeHomeLaunchPreparation } from '../../codex/configuration/homes/codex-runtime-home-launch-preparation'
@@ -17,7 +17,7 @@ import { createCodexSessionResumeLaunchPreparation } from '../../codex/history/r
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
 type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }

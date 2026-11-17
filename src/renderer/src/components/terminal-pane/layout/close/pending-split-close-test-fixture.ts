@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { TerminalTabRetirementState } from '@/store/terminals/terminal-tab-retirement'
+import type { TerminalTabRetirementState } from '@/store/terminals/retirement/terminal-tab-retirement'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectResult, PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -23,11 +23,15 @@ vi.mock('react', () => ({
 vi.mock('../../../../runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('../../../terminal/terminal-close-copy-kind', () => ({ resolveLeafCloseCopyKind: vi.fn() }))
-vi.mock('../../../terminal/running-terminal-close-guard', () => ({
+vi.mock('../../../terminal/tab-lifecycle/terminal-close-copy-kind', () => ({
+  resolveLeafCloseCopyKind: vi.fn()
+}))
+vi.mock('../../../terminal/tab-lifecycle/running-terminal-close-guard', () => ({
   RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100
 }))
-vi.mock('../../../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: vi.fn() }))
+vi.mock('../../../terminal/tab-lifecycle/pty-running-work-probe', () => ({
+  probePtyRunningWork: vi.fn()
+}))
 vi.mock('../detach/terminal-pane-tab-detach', () => ({
   detachTerminalPaneToTab: vi.fn()
 }))

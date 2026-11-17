@@ -1,4 +1,4 @@
-import type { BrowserCookieImportResult } from '../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 import type { CookieImportOptions } from './imports/cookie-import-contracts'
 import { importChromiumCookies } from './chromium/import-cookies'

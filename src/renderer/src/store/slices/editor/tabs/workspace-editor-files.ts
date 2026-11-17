@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'

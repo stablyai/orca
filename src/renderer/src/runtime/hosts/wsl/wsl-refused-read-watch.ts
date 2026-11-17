@@ -1,5 +1,5 @@
 import { ipcOrRuntimeTargetForHostId } from '../../rpc/targets/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** How often a refused read is re-asked from a host whose running signal cannot reach us. */
 export const REFUSED_WSL_READ_REPOLL_MS = 30_000

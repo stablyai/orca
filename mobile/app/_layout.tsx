@@ -15,7 +15,7 @@ import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { OrcaLogo } from '../src/components/icons/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
 import { getNotificationNavigationTarget } from '../src/notifications/navigation/notification-routing'
@@ -29,9 +29,11 @@ import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/foreground-delivery/desktop-notification-channel'
 import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
+import { readWorkspaceRouteExecutionHost } from '../src/navigation/route-param-reader'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
-import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { appUpdateChecker, isRetiredGithubAndroidApp } from '../src/app-update/app-update-runtime'
+import { AppMoveScreen } from '../src/app-move/AppMoveScreen'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
@@ -39,7 +41,7 @@ import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startDeviceStore } from '../src/device-store/device-store'
 
-export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
+export { NativeScreenRecovery as ErrorBoundary } from '../src/components/feedback/NativeScreenRecovery'
 
 // Keep splash visible until React content is ready to avoid a blank frame.
 SplashScreen.preventAutoHideAsync()
@@ -68,11 +70,16 @@ export default function RootLayout() {
   const colorScheme = useMobileColorScheme()
   useFollowDeviceUiLocale()
   const pathname = usePathname()
-  const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
+  const {
+    hostId,
+    worktreeId,
+    executionHost: routeExecutionHost
+  } = useGlobalSearchParams<{
     hostId?: string
     worktreeId?: string
     executionHost?: string
   }>()
+  const executionHost = readWorkspaceRouteExecutionHost(routeExecutionHost)
   useEffect(() => {
     setNotificationViewingWorkspace(
       notificationViewingOfRoute(pathname, { hostId, worktreeId, executionHost })
@@ -239,6 +246,7 @@ export default function RootLayout() {
               </Stack>
             </SideSafeArea>
           </SideRailProvider>
+          {isRetiredGithubAndroidApp ? <AppMoveScreen /> : null}
         </View>
       </OrcaQueryProvider>
     </RpcClientProvider>

@@ -2,9 +2,13 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
-} from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
 import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser/devtools/browser-devtools-dock'
+import {
+  DEFAULT_BROWSER_EXTENSION_SIDE_PANEL_WIDTH,
+  normalizeBrowserExtensionSidePanelWidth
+} from '../../../../../shared/browser/extensions/browser-extension-side-panel-types'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
@@ -142,6 +146,12 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     setBrowserDevToolsDock: (layout) => {
       void window.api.ui.set({ browserDevToolsDock: layout }).catch(console.error)
       set({ browserDevToolsDock: layout })
+    },
+    browserExtensionSidePanelWidth: DEFAULT_BROWSER_EXTENSION_SIDE_PANEL_WIDTH,
+    setBrowserExtensionSidePanelWidth: (width) => {
+      const normalized = normalizeBrowserExtensionSidePanelWidth(width)
+      void window.api.ui.set({ browserExtensionSidePanelWidth: normalized }).catch(console.error)
+      set({ browserExtensionSidePanelWidth: normalized })
     }
   }
 }

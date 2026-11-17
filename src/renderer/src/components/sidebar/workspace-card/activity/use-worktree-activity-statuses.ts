@@ -2,9 +2,9 @@ import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
   selectTerminalLayoutRootsForWorktree,
@@ -27,8 +27,6 @@ export function selectWorktreeActivityStatuses(
       hasInterrupted,
       hasUnconfirmed,
       hasLiveDone,
-      hasRetainedDone,
-      hasRetainedFailed,
       agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId
     } = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
@@ -52,9 +50,7 @@ export function selectWorktreeActivityStatuses(
         hasFailed,
         hasInterrupted,
         hasUnconfirmed,
-        hasLiveDone,
-        hasRetainedDone,
-        hasRetainedFailed
+        hasLiveDone
       })
     )
   }

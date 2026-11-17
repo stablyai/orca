@@ -8,7 +8,7 @@ import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
 } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
 import {
   NativeChatSignInStrip,

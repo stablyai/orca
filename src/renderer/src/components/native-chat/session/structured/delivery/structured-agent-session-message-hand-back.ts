@@ -4,7 +4,7 @@ import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-c
 import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../../../drafts/native-chat-draft-scope'
 import { unavailableNativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-persistence'
-import { promptMarkersToImageReferences } from '../../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { promptMarkersToImageReferences } from '../../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   promptTextContent,
   seedPromptSkillReferences
