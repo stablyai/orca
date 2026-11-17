@@ -15,7 +15,7 @@ import { sha256Hex } from '../media/plugin-image-cache'
 describe('catalog image extraction passes', () => {
   it('scans each image header once across passes that share a memo', async () => {
     const icons = [Buffer.from('icon-a'), Buffer.from('icon-b')]
-    const marketplace = {
+    const listing = {
       plugins: icons.map((bytes, index) => ({
         releases: [
           {
@@ -30,7 +30,9 @@ describe('catalog image extraction passes', () => {
           }
         ]
       }))
-    } as unknown as PluginMarketplace
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: extraction reads only plugins[].releases[].images; the rest of a listing is irrelevant here.
+    const marketplace = listing as unknown as PluginMarketplace
     const readBlob = async (path: string): Promise<Buffer | null> => icons[Number(path[1])] ?? null
     const memo = createCatalogBufferMemo()
 
