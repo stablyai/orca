@@ -1,4 +1,5 @@
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
+import { UsageLimitMoveWaits } from './structured-agent-session-usage-limit-move-waits'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { randomUUID } from 'node:crypto'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -27,8 +28,9 @@ export class StructuredAgentSessionUsageLimitContinue {
   private running = false
   private disposed = false
   private readonly attempts = new Map<string, Attempt>()
-  /** Due chats whose agent still works on the account they are leaving: the continue waits. */
-  private readonly awaitingMove = new Set<string>()
+  private readonly awaitingMove = new UsageLimitMoveWaits((id) =>
+    this.deps.stopsAwaitingAccountMove?.(id)
+  )
   private readonly holds = new UsageLimitAccountHolds()
   private readonly cold: UsageLimitColdCuts
 
@@ -88,12 +90,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         this.attempts.delete(id)
       }
     }
-    for (const id of this.awaitingMove) {
-      if (!shown.has(id)) {
-        this.awaitingMove.delete(id)
-        this.deps.stopsAwaitingAccountMove?.(id)
-      }
-    }
+    this.awaitingMove.retain(shown)
     this.cold.retain(shown)
     this.holds.retain(shown)
   }
@@ -195,6 +192,10 @@ export class StructuredAgentSessionUsageLimitContinue {
         }
         const attempt = this.attempts.get(id)
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
+          // No continue is due any more, so nothing waits on the chat's move for one.
+          if (this.awaitingMove.set(id, false)) {
+            this.deps.publish(id)
+          }
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
@@ -204,13 +205,7 @@ export class StructuredAgentSessionUsageLimitContinue {
           ready &&
           (await this.deps.awaitsAccountMove?.(id, this.holds.launchHome(id, this.deps.host))) ===
             true
-        if (awaiting !== this.awaitingMove.has(id)) {
-          if (awaiting) {
-            this.awaitingMove.add(id)
-          } else {
-            this.awaitingMove.delete(id)
-            this.deps.stopsAwaitingAccountMove?.(id)
-          }
+        if (this.awaitingMove.set(id, awaiting)) {
           this.deps.publish(id)
         }
         if (ready && !awaiting) {

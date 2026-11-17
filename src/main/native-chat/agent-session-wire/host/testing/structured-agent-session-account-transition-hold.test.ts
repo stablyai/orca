@@ -271,9 +271,8 @@ it('still continues a usage-limited worker whose open Dispatch waits on that con
   // Its Dispatch closes only once the worker continues; holding the continue would never end.
   await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
 
-  // Nothing is left held for it: later Dispatch events, each in its own tick, read and wake nothing.
-  chat.closeDispatch()
-  await new Promise((settled) => setImmediate(settled))
+  // Nothing is left held for it: Dispatch events, each in its own tick, read and wake nothing,
+  // while its Dispatch stays open and after it closes.
   const wake = vi.spyOn(rig!.host.collaboratorsForTests().conversationDelivery.loop, 'wake')
   const events = async (count: number) => {
     const before = chat.dispatchReads()
@@ -283,6 +282,10 @@ it('still continues a usage-limited worker whose open Dispatch waits on that con
     }
     return chat.dispatchReads() - before
   }
+  expect(await events(10)).toBe(0)
+  expect(await events(100)).toBe(0)
+  chat.closeDispatch()
+  await new Promise((settled) => setImmediate(settled))
   expect(await events(10)).toBe(0)
   expect(await events(100)).toBe(0)
   expect(wake).not.toHaveBeenCalled()
