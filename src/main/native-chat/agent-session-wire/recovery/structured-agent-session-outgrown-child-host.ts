@@ -1,5 +1,6 @@
 // Host reads behind outgrown-child retirement and the account move a running child defers.
 
+import { traceAccountMove } from './structured-agent-session-account-move-trace'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
@@ -119,6 +120,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         next,
         deps.logger
       )
+      traceAccountMove('keep', kept)
       if (kept === 'failed') {
         // Nothing else may wake a send left pending; try again shortly, never in a tight loop.
         setTimeout(() => input.wake(sessionId), KEEP_RETRY_MS).unref?.()
@@ -129,10 +131,19 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       const session = sessions.get(sessionId)
       const held = holds.reusable(session, sessionId)
       if (held?.fresh) {
+        traceAccountMove('fresh', held.transition.waitsFor)
         return held.transition
       }
       const reading = await unlessStopping(sessionId)
       const read = holds.begin(sessionId)
+      traceAccountMove(
+        'begin',
+        read,
+        'known',
+        !!held,
+        'open',
+        clientDelivery.childWorkOpen(sessionId)
+      )
       const transition = await readStructuredAgentSessionAccountTransition(reading, {
         work: retainedWork(sessionId),
         launchAccountHome: options?.launchHome ?? launchAccountHome(sessionId),
@@ -142,7 +153,17 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         holds.end(sessionId, read)
         throw error
       })
-      if (holds.end(sessionId, read) && options?.observe !== false) {
+      const newest = holds.end(sessionId, read)
+      traceAccountMove(
+        'end',
+        read,
+        transition?.waitsFor ?? null,
+        'newest',
+        newest,
+        'observe',
+        options?.observe !== false
+      )
+      if (newest && options?.observe !== false) {
         holds.observe(sessions.get(sessionId), sessionId, transition)
       }
       return transition
@@ -151,7 +172,10 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
     accountMoveHeld: (sessionId: string): boolean =>
       holds.reusable(sessions.get(sessionId), sessionId)?.fresh === true,
     /** Its child work settled: a hold waiting on it is read again. */
-    accountMoveEvidence: (sessionId: string) => holds.stale(sessionId, 'work'),
+    accountMoveEvidence: (sessionId: string) => {
+      traceAccountMove('evidence')
+      holds.stale(sessionId, 'work')
+    },
     accountMoveSettled: (sessionId: string): null => {
       holds.observe(sessions.get(sessionId), sessionId, null)
       return null
