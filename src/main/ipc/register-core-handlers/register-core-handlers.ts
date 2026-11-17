@@ -44,6 +44,7 @@ import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/br
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
+import { registerSettingsFileHandlers } from '../settings/settings-file'
 import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills/skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
@@ -181,6 +182,7 @@ export async function registerCoreHandlers(
     registerTerminalRenderDesyncEvidenceHandler()
     registerComputerUsePermissionHandlers()
     registerSettingsHandlers(store, agentAwakeService)
+    registerSettingsFileHandlers(lifecycleOptions.settingsFile ?? null, app.getPath('home'))
     registerSkillsHandlers(store, runtime)
     registerSkillDeleteIpcHandlers(store, runtime)
     if (automations) {

@@ -1,0 +1,32 @@
+import type { GlobalSettings } from '../global-settings-types'
+
+export const PRIVATE_KEY_TABLE = {
+  antigravityChatAuth: 'private',
+  agentPermissionDefault: 'private',
+  agentPermissionOverrides: 'private',
+  pluginConsents: 'private',
+  pluginExternalHostGrants: 'private',
+  browserPasswordsFillRequiresReauth: 'private',
+  agentWorkspaceTrustEnabled: 'private',
+  managedAccountDisplayNames: 'private',
+  httpProxyUrl: 'private',
+  nativeChatPermissionMode: 'private',
+  orchestrationCoordinatorApprovalsEnabled: 'private',
+  floatingTerminalTrustedCwds: 'private',
+  codexManagedAccounts: 'private',
+  activeCodexManagedAccountId: 'private',
+  activeCodexManagedAccountIdsByRuntime: 'private',
+  claudeManagedAccounts: 'private',
+  activeClaudeManagedAccountId: 'private',
+  activeClaudeManagedAccountIdsByRuntime: 'private',
+  opencodeSessionCookie: 'private',
+  opencodeWorkspaceId: 'private',
+  minimaxGroupId: 'private',
+  minimaxEndpoint: 'private',
+  zcodePlanSite: 'private',
+  geminiCliOAuthEnabled: 'private',
+  claudeOAuthUsageEnabled: 'private',
+  mobilePairingCustomAddress: 'private',
+  mobilePairingCustomAddresses: 'private',
+  telemetry: 'private'
+} as const satisfies Partial<Record<keyof GlobalSettings, 'private'>>

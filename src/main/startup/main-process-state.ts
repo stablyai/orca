@@ -26,6 +26,7 @@ import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import type { SettingsFileSync } from '../settings-file/settings-file-sync-types'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
@@ -134,6 +135,8 @@ export const mainProcessState = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
   pluginUpdateReviewNotices: null as PluginUpdateReviewNotices | null,
   keybindings: null as KeybindingService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once the store loads.
+  settingsFile: null as SettingsFileSync | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),
   recoveryReloadInFlight: createWebContentsTimedFlag(),

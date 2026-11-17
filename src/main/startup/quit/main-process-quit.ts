@@ -100,6 +100,9 @@ function installWillQuitHandler(): void {
         return false
       }
     )
+    // A UI change still inside its debounce must reach the file before exit.
+    const settingsFileShutdown = state.settingsFile?.dispose() ?? Promise.resolve()
+    state.settingsFile = null
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
@@ -282,6 +285,7 @@ function installWillQuitHandler(): void {
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
+      { name: 'settings-file', promise: settingsFileShutdown },
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))

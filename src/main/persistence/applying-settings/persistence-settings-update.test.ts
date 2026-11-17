@@ -56,6 +56,33 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('reports every applied settings change with its origin, even when listeners are not notified', async () => {
+    const store = await createStore()
+    const persisted: { changed: Record<string, unknown>; origin: string | undefined }[] = []
+    store.onSettingsPersisted((changed, origin) => persisted.push({ changed, origin }))
+
+    store.updateSettings({ theme: 'dark' })
+    await store.updateSettingsAndFlush({ terminalFontSize: 21 }, { origin: 'settings-file' })
+    store.updateSettings({ theme: 'dark' })
+
+    expect(persisted).toEqual([
+      { changed: { theme: 'dark' }, origin: undefined },
+      { changed: { terminalFontSize: 21 }, origin: 'settings-file' }
+    ])
+  })
+
+  it('reports the sibling a durable update derives, so the settings file gets it too', async () => {
+    const store = await createStore()
+    const persisted: Record<string, unknown>[] = []
+    store.onSettingsPersisted((changed) => persisted.push(changed))
+
+    await store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'open' })
+
+    expect(persisted).toEqual([
+      { terminalLinkClickBehavior: 'open', terminalLinkActionPopoverEnabled: false }
+    ])
+  })
+
   it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
     const store = await createStore()
     store.updateSettings({ workspaceDir: '/Users/me/dev' })
