@@ -197,6 +197,12 @@ export function applyAgentPickerEdit(
                 }
   const keys = new Set(patchKeys(patch))
   const source = agentPickerArgumentsText(entry, draft) ?? ''
+  const analysis = analyzeAgentChoiceArgs(entry.agent, source)
+  const defaultEffort =
+    edit.kind === 'choice' && edit.patch.options?.effort === TEXT_ACTION_DEFAULT_MODEL
+  const clearedEffort = defaultEffort
+    ? analysis.cut(analysis.occurrences.filter((item) => item.key === 'effort' && item.source))
+    : null
   const visible = agentPickerPanelArguments(entry, draft)
   draft = { ...draft, literalKeys: visible.context.literalKeys }
   const catalog = getAgentSessionOptionLaunchCatalog(entry.agent)
@@ -209,7 +215,7 @@ export function applyAgentPickerEdit(
   )
   const result = reconcileAgentChoiceArgsDetailed({
     agent: entry.agent,
-    userArgs: source,
+    userArgs: clearedEffort ?? source,
     choices: visible.choices,
     mode: 'choice-edit',
     keys: dependency ? new Set([...keys, 'model']) : keys,
@@ -219,8 +225,10 @@ export function applyAgentPickerEdit(
       ? { permissionRanges: agentPickerArgumentPermission(entry, draft)?.ranges }
       : {})
   })
-  const analysis = analyzeAgentChoiceArgs(entry.agent, source)
-  if ([...keys].some((key) => analysis.opaqueKeys.has(key))) {
+  if (
+    (defaultEffort && clearedEffort === null) ||
+    [...keys].some((key) => analysis.opaqueKeys.has(key))
+  ) {
     return draft
   }
   const domain =
@@ -236,12 +244,23 @@ export function applyAgentPickerEdit(
             visible.choices.model ?? edit.model
           )
         : undefined
-  return publishAccepted(
+  const accepted = publishAccepted(
     entry,
     draft,
     result,
     result.effects,
     false,
-    domain ? domain.arguments : draft.arguments !== undefined ? result.userArgs || null : undefined
+    domain
+      ? domain.arguments
+      : draft.arguments !== undefined || defaultEffort
+        ? result.userArgs || null
+        : undefined
   )
+  // Default must carry the cleared source through fresh launches and saved launch setups.
+  return defaultEffort
+    ? {
+        ...accepted,
+        acceptedEdits: { ...accepted.acceptedEdits!, arguments: result.userArgs || null }
+      }
+    : accepted
 }
