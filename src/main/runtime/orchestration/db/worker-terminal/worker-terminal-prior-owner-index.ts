@@ -18,7 +18,9 @@ END`,
 AFTER UPDATE OF id, prior_owner_dispatch_ids ON worker_terminal_resources
 WHEN OLD.id IS NOT NEW.id OR OLD.prior_owner_dispatch_ids IS NOT NEW.prior_owner_dispatch_ids
 BEGIN
-  DELETE FROM worker_terminal_resource_prior_owners WHERE resource_id = OLD.id;
+  DELETE FROM worker_terminal_resource_prior_owners WHERE resource_id = OLD.id
+    AND (OLD.id IS NOT NEW.id OR dispatch_id NOT IN (
+      SELECT prior.value FROM ${priorOwnerIdsSql('NEW')} WHERE prior.type = 'text'));
   ${INSERT_PRIOR_OWNERS_SQL}
 END`,
   trg_worker_terminal_prior_owners_delete: `CREATE TRIGGER trg_worker_terminal_prior_owners_delete
@@ -50,8 +52,7 @@ INSERT OR IGNORE INTO worker_terminal_resource_prior_owners (dispatch_id, resour
    WHERE prior.type = 'text';
 `
 
-/** Rebuilds only when a trigger is missing or differs, since rows written without it may be stale. */
-export function installWorkerTerminalPriorOwnerIndex({ db }: Pick<OrchestrationDb, 'db'>): void {
+function isPriorOwnerIndexCurrent(db: OrchestrationDb['db']): boolean {
   const names = Object.keys(PRIOR_OWNER_TRIGGERS)
   const stored = db
     .prepare(
@@ -59,15 +60,23 @@ export function installWorkerTerminalPriorOwnerIndex({ db }: Pick<OrchestrationD
         AND name IN (${names.map(() => '?').join(', ')})`
     )
     .all(...names)
-  if (
+  return (
     stored.length === names.length &&
     stored.every((row) => PRIOR_OWNER_TRIGGERS[String(row.name)] === row.sql)
-  ) {
+  )
+}
+
+/** Rebuilds only when a trigger is missing or differs, since rows written without it may be stale. */
+export function installWorkerTerminalPriorOwnerIndex({ db }: Pick<OrchestrationDb, 'db'>): void {
+  if (isPriorOwnerIndexCurrent(db)) {
     return
   }
   db.exec('BEGIN IMMEDIATE')
   try {
-    db.exec(PRIOR_OWNER_INDEX_SQL)
+    // Another process may have installed it while this one waited for the lock.
+    if (!isPriorOwnerIndexCurrent(db)) {
+      db.exec(PRIOR_OWNER_INDEX_SQL)
+    }
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
