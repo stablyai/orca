@@ -86,6 +86,7 @@ async function readMarketplaceAtCommit(
   const loaded: CatalogLoadState = {
     files: new Map(),
     listed: new Map(),
+    failed: new Set(),
     digests: new WeakMap()
   }
   const batched = await extractBatchedMarketplaceImages(
@@ -98,10 +99,11 @@ async function readMarketplaceAtCommit(
   if (batched) {
     return batched
   }
-  const { files, listed, digests } = loaded
+  const { files, listed, failed, digests } = loaded
   // Past the retained cap, read the rest one at a time, handing out each loaded file once so only what extraction keeps stays alive.
+  // Failed Git reads are retried, as a fresh one-at-a-time reader would.
   const readBlob: CatalogBlobReader = async (path, maxBytes) => {
-    const file = files.get(path)
+    const file = failed.has(path) ? undefined : files.get(path)
     files.delete(path)
     if (file === null || (file && file.size > maxBytes)) {
       return null
@@ -109,9 +111,9 @@ async function readMarketplaceAtCommit(
     if (file?.bytes) {
       return file.bytes
     }
-    const single = new Map<string, CatalogFile>()
-    await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), single, listed)
-    return single.get(path)?.bytes ?? null
+    const single: CatalogLoadState = { files: new Map(), listed, failed: new Set(), digests }
+    await loadCatalogFiles(repository, commit, new Map([[path, maxBytes]]), single)
+    return single.files.get(path)?.bytes ?? null
   }
   return extractCatalogImages(
     index,
@@ -124,6 +126,8 @@ async function readMarketplaceAtCommit(
 type CatalogLoadState = {
   files: Map<string, CatalogFile>
   listed: Map<string, ListedBlob>
+  /** Paths whose Git listing or read failed; batched passes treat them as absent. */
+  failed: Set<string>
   digests: WeakMap<Uint8Array, string>
 }
 
@@ -132,13 +136,13 @@ async function extractBatchedMarketplaceImages(
   repository: string,
   commit: string,
   catalogUrl: string,
-  { files, listed, digests }: CatalogLoadState
+  state: CatalogLoadState
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] } | null> {
   // Rerun extraction until every file it asks for is loaded, so each round's misses share a few Git calls.
   for (;;) {
     const missing = new Map<string, number>()
     const readBlob = async (path: string, maxBytes: number): Promise<Buffer | null> => {
-      const file = files.get(path)
+      const file = state.files.get(path)
       if (file === undefined || (file && !file.bytes && file.size <= maxBytes)) {
         missing.set(path, Math.max(missing.get(path) ?? 0, maxBytes))
         return null
@@ -148,13 +152,13 @@ async function extractBatchedMarketplaceImages(
     const extracted = await extractCatalogImages(
       index,
       readBlob,
-      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests),
-      digests
+      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, state.digests),
+      state.digests
     )
     if (missing.size === 0) {
       return extracted
     }
-    if (!(await loadCatalogFiles(repository, commit, missing, files, listed))) {
+    if (!(await loadCatalogFiles(repository, commit, missing, state))) {
       return null
     }
   }
@@ -174,8 +178,7 @@ async function loadCatalogFiles(
   repository: string,
   commit: string,
   requests: ReadonlyMap<string, number>,
-  files: Map<string, CatalogFile>,
-  listed: Map<string, ListedBlob>
+  { files, listed, failed }: CatalogLoadState
 ): Promise<boolean> {
   const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
   const unlisted = [...requests.keys()].filter((path) => !listed.has(path))
@@ -200,7 +203,7 @@ async function loadCatalogFiles(
       }
     } catch {
       for (const path of chunk) {
-        listed.set(path, null)
+        failed.add(path)
       }
     }
   }
@@ -248,6 +251,7 @@ async function loadCatalogFiles(
   } catch {
     for (const read of reads) {
       files.set(read.path, null)
+      failed.add(read.path)
     }
   }
   return true
