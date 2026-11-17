@@ -12,7 +12,7 @@ Zotz es un fork de [stablyai/orca](https://github.com/stablyai/orca) para correr
 2. **Una fase por rama/PR**: `zotz/fase-N-<tema>`. No mezcles fases.
 3. **Diff mínimo contra upstream.** Vamos a seguir jalando cambios de Orca, así que:
    - Cambia **configuración, defaults y textos visibles**, no renombres identificadores internos en masa.
-   - **No renombres** variables `ORCA_*`, paquetes `@orca/*`, nombres de RPC ni el protocolo de pairing. Si lo haces, se rompe la compatibilidad con la app móvil oficial de Orca y cada sync con upstream va a ser un infierno.
+   - **No renombres** variables `ORCA_*`, paquetes `@orca/*`, nombres de RPC ni el protocolo de pairing. (La Fase 1c renombra solo lo que choca con Orca o se ve: CLI, `~/.orca`, procesos; ver `RENAME-SPEC.md`.) Si lo haces, se rompe la compatibilidad con la app móvil oficial de Orca y cada sync con upstream va a ser un infierno.
    - Si necesitas lógica nueva, ponla en archivos nuevos con nombre `zotz-*` y engánchala con un cambio de pocas líneas en el código existente.
 4. **No borres features de upstream**: desactívalas desde un default o un guard. Así hacer rebase es barato.
 5. Antes de cada push: `pnpm check:changed`. Nunca `--no-verify`.
@@ -57,6 +57,17 @@ Archivos clave:
 **Fase 1b — Logo:** crear `resources/icon-source/zotz-bat.svg` (murciélago minimalista, legible a 16px, que funcione en monocromo para la bandeja del sistema) y regenerar los íconos con el script que ya usa `resources/icon-source/` (buscarlo antes de escribir uno nuevo).
 
 **Listo cuando:** un build de Windows instala como "Zotz", con ícono de murciélago, convive con Orca instalado y guarda datos en su propia carpeta.
+
+---
+
+## Fase 1c — Nombres internos y CLI `zotz`
+
+Spec en [`RENAME-SPEC.md`](./RENAME-SPEC.md). Va después de la Fase 3b para que llegue por el actualizador.
+
+- [ ] CLI `zotz` en el PATH global; `orca` solo como alias dentro de las terminales de Zotz.
+- [ ] `~/.orca` → `~/.zotz`, procesos `zotz-*.exe`, etiquetas de launchd, sidecar de macOS y ejecutable de Linux, con migración.
+- [ ] Alias `ZOTZ_*` → `ORCA_*` al arrancar cada proceso.
+- [ ] **No** se renombran protocolo/RPC/pairing (app móvil oficial) ni `ORCA_*`/`@orca/*` en el código (costo de sync).
 
 ---
 
@@ -339,6 +350,7 @@ Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-
 | ----------------------- | ---------- | -------------------------------------- |
 | 0 Setup                 | —          | S                                      |
 | 1 Rebrand + 1b logo     | 0          | M                                      |
+| 1c Nombres internos/CLI | 1, 3b      | M                                      |
 | 2 Telemetría y red      | 0          | M                                      |
 | 3 Updates               | 0          | S                                      |
 | 3b Updates desde Zotz   | 3          | M                                      |
