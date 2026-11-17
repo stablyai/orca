@@ -1,5 +1,5 @@
 import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
-import { cloneElement, isValidElement, useCallback } from 'react'
+import { cloneElement, isValidElement, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -271,7 +271,20 @@ export function useMarkdownPreviewAnnotationRenderers({
     [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
   )
 
-  return { renderAnnotationControls, wrapAnnotatedBlock }
+  return useMemo(
+    () => ({
+      renderAnnotationControls,
+      wrapAnnotatedBlock,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick
+    }),
+    [
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls,
+      wrapAnnotatedBlock
+    ]
+  )
 }
 
 export type MarkdownPreviewAnnotationRenderers = ReturnType<

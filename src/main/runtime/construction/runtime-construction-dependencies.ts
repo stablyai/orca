@@ -11,7 +11,7 @@ import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/te
 import type { ClaudeTerminalEvidence } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
-import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
+import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-hooks/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {
   AiVaultPrepareSessionResumeArgs,

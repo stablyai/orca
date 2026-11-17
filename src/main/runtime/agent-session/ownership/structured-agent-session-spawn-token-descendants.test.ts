@@ -10,8 +10,8 @@ import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-ses
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
-import { createStructuredAgentSessionOwnerProbe } from '../structured-agent-session-owner-probe'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { createStructuredAgentSessionOwnerProbe } from './structured-agent-session-owner-probe'
+import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))

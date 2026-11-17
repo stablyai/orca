@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from '../../session-tabs/renderer-session-terminal-rescue'
+import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from '../../session-tabs/restoration/renderer-session-terminal-rescue'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 

@@ -125,11 +125,7 @@
       "codeNoLongerValid": "此配对码已过期、已被使用或已被替换。请在电脑上显示新的配对码后重新扫描。"
     },
     "terminalSettings": {
-      "defaultText": "默认（100%）",
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "largeText": "大（125%）",
-      "largerText": "更大（150%）",
-      "largestText": "最大（200%）",
       "leaveAppDescription": "在手机上使用终端时，Orca 会缩小终端尺寸以适应屏幕。关闭应用或切换到其他应用时，此设置决定终端是保持手机尺寸（避免交互式 CLI 工具的界面重新排版），还是恢复为桌面尺寸。您随时可以点击桌面横幅中的“恢复”手动调整尺寸",
       "leaveAppHeading": "离开应用时",
       "noPairedDesktops": "尚未配对桌面。配对后即可设置终端行为",
@@ -138,12 +134,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒后",
       "restoreAfterSeconds_other": "{{count}} 秒后",
       "restoreHost": "恢复 {{name}}",
-      "smallerText": "较小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "文字大小",
-      "textSizeDescription": "调整终端文字大小。文字较小时可显示更多列，两侧留有边距；文字较大时显示的列数较少，可横向拖动查看。也可以直接在终端中双指缩放，此设置会随之更新。仅影响当前设备的显示，不会改变桌面终端",
-      "textSizeHeading": "文字大小",
-      "textSizePickerTitle": "终端文字大小",
       "title": "终端"
     }
   },
@@ -1057,7 +1047,8 @@
       "copyCode": "复制代码",
       "openImage": "打开图片",
       "wrapLines": "自动换行",
-      "disableLineWrap": "关闭自动换行"
+      "disableLineWrap": "关闭自动换行",
+      "codeLabel": "代码"
     },
     "markdownCallout": {
       "note": "备注",
@@ -1165,7 +1156,6 @@
       "clearSearch": "清除搜索"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "始终信任并运行",
       "description": "此仓库的 orca.yaml 会在工作区启动前运行。请仅在信任此仓库时运行",
       "dontRun": "不运行",
       "runArchiveTitle": "运行 {{repoName}} 的归档脚本？",
@@ -4646,27 +4636,19 @@
       "reconnecting": "重新连接中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "始终信任并运行",
       "creating": "创建中…",
       "directoriesLabel": "目录",
       "directories_one": "{{count}} 个目录",
       "directories_other": "{{count}} 个目录",
-      "dontRun": "不运行",
       "editSparsePreset": "编辑稀疏检出预设",
       "nameLabel": "名称",
       "namePlaceholder": "渲染器界面",
-      "newSetupScript": "新设置脚本",
       "newSparsePreset": "新建稀疏检出预设",
-      "runHooks": "运行钩子",
       "runSetupAndCreate": "运行设置脚本并创建",
-      "runSetupTitle": "运行 {{name}} 的设置脚本？",
-      "setupChangedTitle": "{{name}} 的设置脚本已更改",
-      "setupScript": "设置脚本",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
       "setupTitle": "运行设置脚本？",
       "skipSetupAndCreate": "跳过设置脚本并创建",
-      "trustFailed": "无法将设置脚本设为可信",
-      "trustSubtitle": "工作区启动前，此仓库的 orca.yaml 会在您的电脑上运行。请仅在信任此仓库时运行"
+      "trustFailed": "无法将设置脚本设为可信"
     },
     "worktreeCreateRetry": {
       "createFailed": "创建工作区失败"

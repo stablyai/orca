@@ -1,13 +1,11 @@
-import {
-  createStructuredAgentSessionId,
-  structuredAgentSessionCreateParams
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
@@ -101,7 +99,7 @@ export function createStructuredAgentSessionLaunchIntent(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createNonSecureContextUuid)
+  const sessionId = createOrcaSessionId(createNonSecureContextUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),

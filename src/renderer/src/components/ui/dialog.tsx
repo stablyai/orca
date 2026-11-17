@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { Minus, XIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
@@ -22,8 +23,13 @@ function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
-function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+function DialogPortal({
+  container,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+  const inherited = usePortalContainer()
+  const portalContainer = container === undefined ? (inherited ?? undefined) : container
+  return <DialogPrimitive.Portal data-slot="dialog-portal" container={portalContainer} {...props} />
 }
 
 function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {

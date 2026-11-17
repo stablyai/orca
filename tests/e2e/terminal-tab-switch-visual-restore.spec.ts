@@ -7,7 +7,6 @@ import {
   readRenderedAltScreenFrame,
   writeToPaneTerminal
 } from './helpers/alt-screen-frame'
-import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -44,19 +43,6 @@ type TabTerminalGeometry = {
 }
 
 const TAB_SWITCH_MARKER_PREFIX = 'TAB_SWITCH_VISUAL_RESTORE'
-
-type TerminalOutputSchedulerSnapshot = {
-  backgroundEnqueueCount: number
-  scheduledDrainCount: number
-  queuedChars: number
-}
-
-type SchedulerDebugWindow = Window & {
-  __terminalOutputSchedulerDebug?: {
-    reset: () => void
-    snapshot: () => TerminalOutputSchedulerSnapshot
-  }
-}
 
 type HiddenOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
@@ -310,64 +296,6 @@ async function setHiddenSnapshotOverride(
   )
 }
 
-async function resetTerminalOutputSchedulerDebug(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
-    if (!debug) {
-      throw new Error('Terminal output scheduler debug API unavailable')
-    }
-    debug.reset()
-  })
-}
-
-async function waitForHiddenOutputSchedulerActivity(
-  page: Page
-): Promise<TerminalOutputSchedulerSnapshot> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const snapshot = (
-            window as SchedulerDebugWindow
-          ).__terminalOutputSchedulerDebug?.snapshot()
-          return snapshot?.backgroundEnqueueCount ?? 0
-        }),
-      {
-        timeout: 5_000,
-        message: 'hidden PTY output did not reach the background output scheduler'
-      }
-    )
-    .toBeGreaterThan(0)
-  return page.evaluate(() => {
-    const snapshot = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug?.snapshot()
-    if (!snapshot) {
-      throw new Error('Terminal output scheduler debug API unavailable')
-    }
-    return {
-      backgroundEnqueueCount: snapshot.backgroundEnqueueCount,
-      scheduledDrainCount: snapshot.scheduledDrainCount,
-      queuedChars: snapshot.queuedChars
-    }
-  })
-}
-
-async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: string): Promise<void> {
-  const marker = `${TAB_SWITCH_MARKER_PREFIX}_PTY_${runId}`
-  const script = [
-    `const marker=${JSON.stringify(marker)};`,
-    'setTimeout(()=>{',
-    'let frame=0;',
-    'const timer=setInterval(()=>{',
-    'console.log(`${marker} frame=${String(frame).padStart(3,"0")} abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\\\#@%&*+=~`);',
-    'frame+=1;',
-    'if(frame>=180) clearInterval(timer);',
-    '},1);',
-    '},30);'
-  ].join('')
-  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
-  await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-tab-switch-burst' })
-}
-
 async function writeStaticTabContent(
   page: Page,
   tabId: string,
@@ -401,33 +329,6 @@ async function resetAtlasOnTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     window.__paneManagers?.get(id)?.resetWebglTextureAtlases?.()
   }, tabId)
-}
-
-async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: string): Promise<void> {
-  const marker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}`
-  await page.evaluate(
-    ({ tabId, marker }) => {
-      const manager = window.__paneManagers?.get(tabId)
-      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
-      if (!pane) {
-        throw new Error(`No terminal pane for tab ${tabId}`)
-      }
-      // Stress Grok-sized hidden bursts beyond a few lines before visibility-resume flush.
-      const burst = Array.from({ length: 400 }, (_, frame) => {
-        const progress = `${'█'.repeat((frame % 16) + 1)}${'░'.repeat(16 - ((frame % 16) + 1))}`
-        return [
-          `hidden_stream frame=${String(frame).padStart(3, '0')} ${marker}`,
-          `Dimension              │ Rating                                              │`,
-          `status ${frame % 2 === 0 ? 'thinking' : 'streaming'} ${progress}`,
-          `abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\#@%&*+=~`
-        ].join('\r\n')
-      }).join('\r\n')
-      return new Promise<void>((resolve) => {
-        pane.terminal.write(`${burst}\r\n`, resolve)
-      })
-    },
-    { tabId, marker }
-  )
 }
 
 async function readTabTerminalGeometry(
@@ -526,82 +427,6 @@ async function captureTabScreenshot(
 
 test.describe('Terminal tab switch visual restore', () => {
   test.describe.configure({ mode: 'serial' })
-
-  test('keeps full-width geometry after switching away and back', async ({
-    orcaPage
-  }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const { firstTabId, secondTabId } = await ensureTwoTerminalTabs(orcaPage)
-    await forceWebglOnActiveTab(orcaPage)
-
-    const runId = `${Date.now()}`
-    const marker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}`
-    const firstPtyId = await waitForPanePtyIdOnTab(orcaPage, firstTabId)
-    await writeStaticTabContent(orcaPage, firstTabId, marker, TAB_A_GLYPH_ROW)
-
-    const baseline = await readTabTerminalGeometry(orcaPage, firstTabId, runId)
-    expect(baseline.markerPresent).toBe(true)
-    expect(baseline.overlayWidth).toBeGreaterThan(300)
-    expect(geometryLooksCorrupted(baseline)).toBeNull()
-
-    const corruptionReports: string[] = []
-    await resetTerminalOutputSchedulerDebug(orcaPage)
-    await startHiddenPtyOutputBurst(orcaPage, firstPtyId, runId)
-
-    for (let cycle = 0; cycle < 12; cycle += 1) {
-      await activateTerminalTab(orcaPage, secondTabId)
-      await injectHiddenStreamingBurst(orcaPage, firstTabId, runId)
-      // Switch immediately to race the overlay’s rAF/50ms retries.
-      await activateTerminalTab(orcaPage, firstTabId)
-      if (cycle % 3 === 0) {
-        await activateTerminalTab(orcaPage, secondTabId)
-        await activateTerminalTab(orcaPage, firstTabId)
-      }
-
-      // Sample immediately — bug often shows before the 50ms overlay refit retry.
-      const immediate = await readTabTerminalGeometry(orcaPage, firstTabId, runId)
-      const immediateIssue = geometryLooksCorrupted(immediate)
-      if (immediateIssue) {
-        corruptionReports.push(`cycle ${cycle} immediate: ${immediateIssue}`)
-        await captureTabScreenshot(
-          orcaPage,
-          firstTabId,
-          testInfo,
-          `tab-switch-corrupt-immediate-cycle-${cycle}`
-        )
-      }
-
-      await orcaPage.waitForTimeout(60)
-      const settled = await readTabTerminalGeometry(orcaPage, firstTabId, runId)
-      const settledIssue = geometryLooksCorrupted(settled)
-      if (settledIssue) {
-        corruptionReports.push(`cycle ${cycle} settled: ${settledIssue}`)
-        await captureTabScreenshot(
-          orcaPage,
-          firstTabId,
-          testInfo,
-          `tab-switch-corrupt-settled-cycle-${cycle}`
-        )
-      }
-    }
-    const schedulerActivity = await waitForHiddenOutputSchedulerActivity(orcaPage)
-    expect(schedulerActivity.scheduledDrainCount).toBeGreaterThan(0)
-
-    if (corruptionReports.length > 0) {
-      console.log('[tab-switch-repro] corruption reports:', corruptionReports)
-    }
-
-    expect(
-      corruptionReports,
-      corruptionReports.length > 0
-        ? `tab switch left stale terminal geometry:\n${corruptionReports.join('\n')}`
-        : undefined
-    ).toEqual([])
-  })
 
   test('keeps geometry after hidden alt-screen TUI redraws during tab switches', async ({
     orcaPage

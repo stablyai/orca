@@ -27,14 +27,15 @@ export function reviewSetupTrustMismatch(
   repoId: string,
   hostId: ExecutionHostId | undefined,
   result: Pick<CreateWorktreeResult, 'setupTrustMismatch' | 'worktree'>,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  context: 'workspace' | 'vm' = 'workspace'
 ): void {
   const mismatch = result.setupTrustMismatch
   if (!mismatch) {
     return
   }
   reviewCreatedWorktreeSetup(
-    { getState, repoId, hostId, worktreeId: result.worktree.id, target },
+    { getState, repoId, hostId, worktreeId: result.worktree.id, target, context },
     mismatch.scriptContent
   )
 }
@@ -45,6 +46,7 @@ type CreatedWorktreeSetupReview = {
   hostId: ExecutionHostId | undefined
   worktreeId: string
   target: RuntimeClientTarget
+  context: 'workspace' | 'vm'
 }
 
 function reviewCreatedWorktreeSetup(
@@ -56,7 +58,9 @@ function reviewCreatedWorktreeSetup(
       review.getState,
       review.repoId,
       scriptContent,
-      review.hostId
+      review.hostId,
+      'created-branch',
+      review.context
     )
     if (approval.decision !== 'run' || approval.approvedContentHash === undefined) {
       showSetupSkippedToast(review, scriptContent)

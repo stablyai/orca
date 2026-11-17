@@ -163,7 +163,7 @@ export class CodexAccountRegistration {
     )
 
     // Restore this runtime's selection while retaining current validation of other runtimes.
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: updatedAccounts,
       activeCodexManagedAccountId: activeSelection.host,
       activeCodexManagedAccountIdsByRuntime: activeSelection
@@ -250,7 +250,7 @@ export class CodexAccountRegistration {
     const settings = this.dependencies.store.getSettings()
     const selection = normalizeCodexRuntimeSelection(settings)
     const targetSelection = getCodexSelectionTargetForAccount(account)
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: [...settings.codexManagedAccounts, account],
       activeCodexManagedAccountId: targetSelection.runtime === 'host' ? account.id : selection.host,
       activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
@@ -265,7 +265,7 @@ export class CodexAccountRegistration {
       this.dependencies.runtimeHome.syncForCurrentSelection(targetSelection)
     } catch (error) {
       // Restore settings before caller cleanup removes the failed account's home.
-      this.dependencies.store.updateSettings({
+      this.dependencies.selection.saveSettings({
         codexManagedAccounts: settings.codexManagedAccounts,
         activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
         activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime

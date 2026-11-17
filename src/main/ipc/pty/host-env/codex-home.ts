@@ -19,7 +19,7 @@ import {
 } from '../../../pty/shell-startup/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
+import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
 export function shouldSkipCodexHomeEnvForWindowsShell(
   shellPath: string | undefined,

@@ -14,7 +14,7 @@ import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../shared/agent-session/agent-session-message-source'
+} from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { JournalMailCustody } from './journal-writer-host-facts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'

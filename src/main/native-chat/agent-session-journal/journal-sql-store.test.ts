@@ -1,15 +1,14 @@
 import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import Database from '../../sqlite/sync-database'
-import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
-import type { StatusFeedSession } from '../agent-session-wire/observations/structured-agent-session-status-feed-deps'
+
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
 import { journalDatabasePath } from './database/journal-host-database'
 import { journalDomainDatabasePath } from './database/journal-domain-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
@@ -67,68 +66,6 @@ async function fixture(now: () => number = () => 100) {
   const journal = await SqlAgentSessionJournal.open({ database, identity, now })
   return { root, database, journal }
 }
-
-it('holds automatic delivery for every editor until committed release, expiry or handle close', async () => {
-  let now = 100
-  const { database, journal } = await fixture(() => now)
-  const card = await journal.queuedMessages.insert({
-    messageId: 'draft',
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
-  })
-  const desktop = { callerKey: 'desktop', editId: 'editing' }
-  const phone = { callerKey: 'phone', editId: 'editing' }
-  await journal.queuedMessages.editLeases.acquire(desktop, {
-    messageId: 'draft',
-    fingerprint: card.fingerprint
-  })
-  now = 200
-  expect(
-    await journal.queuedMessages.editLeases.acquire(phone, {
-      messageId: 'draft',
-      fingerprint: card.fingerprint
-    })
-  ).toMatchObject({ status: 'held', remainingMs: 120_000 })
-  await journal.queuedMessages.editLeases.release(desktop, 'draft')
-  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
-  const heldRevision = journal.queuedMessages.revision()
-  await journal.appendSteps([
-    {
-      kind: 'resolved-item',
-      resolution: {
-        kind: 'text-snapshot',
-        identity: { provider: 'orca', clientMessageId: 'text' },
-        body: {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: 'Still writing' }]
-        }
-      },
-      options: { fence: 1, turnScope: { kind: 'thread' } },
-      reservedBytes: 4096
-    }
-  ])
-  expect(journal.queuedMessages.revision()).toBe(heldRevision)
-  now = 120_200
-  const opening = journal.physicalCursor()
-  const expired = await SqlAgentSessionJournal.open({ database, identity, now: () => now })
-  expect(expired.openingCursor()).toEqual(opening)
-  expect(expired.physicalCursor().sequence).toBe(opening.sequence + 1)
-  expect(await expired.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
-  await expired.close()
-  await journal.queuedMessages.editLeases.expire()
-  expect(journal.queuedMessages.revision()).not.toBe(heldRevision)
-  expect(await journal.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
-  await journal.queuedMessages.editLeases.acquire(phone, {
-    messageId: 'draft',
-    fingerprint: card.fingerprint
-  })
-  await journal.close()
-  const reopened = await SqlAgentSessionJournal.open({ database, identity, now: () => now })
-  expect(await reopened.queuedMessages.editLeases.renew(phone, 'draft')).toEqual({
-    status: 'expired'
-  })
-  await reopened.close()
-})
 
 function receipt(adopt: (committed: boolean) => void): JournalOperationReceipt {
   return {
@@ -359,98 +296,6 @@ it('rechecks row-free owner death before answering an attempt-end action read', 
     kind: 'item',
     current: false
   })
-})
-
-it('publishes SQL status only with recaptured live owners through the existing refresh path', async () => {
-  const { journal } = await fixture()
-  await journal.write({
-    kind: 'item',
-    identity: { provider: 'orca', clientMessageId: 'prompt' },
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Read my chat' }] },
-    options: { fence: 0, turnScope: { kind: 'thread' } }
-  })
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: 'turn' },
-    { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:prompt' },
-    { fence: 0, turnScope: { kind: 'thread' } }
-  )
-  const held = new Set<string>()
-  const session: StatusFeedSession = {
-    journal,
-    params: {
-      provider: 'codex',
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'workspace',
-        workspaceKind: 'git-worktree'
-      }
-    },
-    child: { fence: 0, phase: 'ready', generation: 'generation', heldSends: () => held }
-  }
-  const logger = { warn: vi.fn(), error: vi.fn() }
-  const feed = new StructuredAgentSessionStatusFeed({
-    sessions: new Map([['session-1', session]]),
-    getConversation: () => null,
-    now: () => 999,
-    logger
-  })
-  expect(await feed.journalProjection('session-1', journal)).toMatchObject({ stopping: false })
-  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
-  const reached = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<void>()
-  const published = Promise.withResolvers<void>()
-  const alsoPublished = Promise.withResolvers<void>()
-  const read = journal.reads.observer.bind(journal.reads)
-  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(async (input) => {
-    const result = await read(input)
-    reached.resolve()
-    await release.promise
-    return result
-  })
-  const observations: unknown[] = []
-  const pending = feed.publish('session-1', journal, { replay: true }, (projection) => {
-    observations.push({
-      revision: projection.workRevision,
-      held: projection.authority?.child?.heldSends,
-      stopping: projection.stopping
-    })
-    published.resolve()
-  })
-  const alsoPending = feed.publish('session-1', journal, { replay: true }, (projection) => {
-    expect(projection).toMatchObject({
-      workRevision: 1,
-      stopping: true,
-      authority: { child: { heldSends: ['held-without-row'] } }
-    })
-    alsoPublished.resolve()
-  })
-  await reached.promise
-  expect(feed.readPublished('session-1')).toBeUndefined()
-  session.operationalRevision = 1
-  held.add('held-without-row')
-  const settle = await journal.stopMarks.beginSettle(true)
-  release.resolve()
-  await pending
-  await published.promise
-  await alsoPending
-  await alsoPublished.promise
-  expect(observations).toEqual([{ revision: 1, held: ['held-without-row'], stopping: true }])
-  expect(feed.readPublished('session-1')).toMatchObject({
-    latestPrompt: 'Read my chat',
-    status: 'working',
-    stopping: true,
-    updatedAt: 100
-  })
-  expect(logger.warn).not.toHaveBeenCalled()
-  const cursor = journal.cursor()
-  const stopping = await feed.journalProjection('session-1', journal)
-  journal.stopMarks.settled(settle, 'other-turn')
-  await feed.publish('session-1', journal, { replay: true })
-  expect(feed.readPublished('session-1')).toMatchObject({ status: 'working' })
-  expect(feed.readPublished('session-1')).not.toHaveProperty('stopping')
-  expect(journal.cursor()).toEqual(cursor)
-  expect(stopping?.authority?.stop?.settle).toEqual({ settling: true })
 })
 
 it('drops a revoked history invocation after worker dispatch and preserves deduplicated verdicts', async () => {

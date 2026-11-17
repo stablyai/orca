@@ -125,6 +125,7 @@ export const SettingsUpdate = z
       .strict()
       .optional(),
     codexWorkspaceAccounts: z.record(z.string().min(1), z.string().min(1)).optional(),
+    deleteChatHistoryWithWorkspace: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

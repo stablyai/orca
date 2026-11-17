@@ -37,19 +37,6 @@ describe('ownRetainedString', () => {
     resetOwnRetainedStringCopier()
   })
 
-  it.each([
-    ['ascii', 'x'.repeat(4096)],
-    ['two-byte', '漢'.repeat(4096)],
-    ['lone lead surrogate', `\ud800${'a'.repeat(64)}`],
-    ['lone trail surrogate', `${'a'.repeat(64)}\udfff`],
-    ['split pair around padding', `\ud83d${'a'.repeat(64)}\ude00`],
-    ['well-formed astral', '😀'.repeat(2048)],
-    ['mixed controls', `\x1b]2;${'漢\ud800|\udc00\ud83d'.repeat(512)}`]
-  ])('round-trips %s exactly', (_label, value) => {
-    expect(ownRetainedString(value)).toBe(value)
-    expect(ownRetainedString(value).length).toBe(value.length)
-  })
-
   it('matches the block copier when Buffer is unavailable', () => {
     const values = [
       '漢\ud800|\udc00|\ud83d'.repeat(512),

@@ -10,7 +10,7 @@ import type {
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import {
   foldAgentLeadStatus,
   heldTurnCountsAsFinished
