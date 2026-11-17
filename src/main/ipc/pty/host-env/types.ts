@@ -71,6 +71,8 @@ export function allocatePtyLifecycleSequence(): number {
   return ++ptyLifecycleSequence
 }
 
+/** `accountId` names a saved account to prepare instead of the selection. */
 export type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  accountId?: string
 ) => Promise<ClaudeRuntimeAuthPreparation>

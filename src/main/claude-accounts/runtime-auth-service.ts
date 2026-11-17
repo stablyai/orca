@@ -6,6 +6,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { claudeChosenAccountUnsupported } from './profiles/routing/claude-profile-launch-errors'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
@@ -44,11 +45,19 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+  async prepareForClaudeLaunch(
+    target?: ClaudeAccountSelectionTarget,
+    accountId?: string
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
-    return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+    if (accountId === undefined) {
+      return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+    }
+    if (wsl) {
+      // Host setup would hand a WSL launch an empty host folder.
+      throw claudeChosenAccountUnsupported()
+    }
+    return this.router.prepareLaunchFor(accountId)
   }
 
   async prepareForRateLimitFetch(

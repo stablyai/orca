@@ -51,9 +51,9 @@ export type PtyIpcSpawnState = {
   preAdoptedStablePane: AdoptStablePaneResult | null
   paneAgentLaunch: PaneAgentLaunch | null
   isClaudeLaunch: boolean
+  /** The saved Claude account an `agent.launch.before` plugin chose; internal, never from args. */
+  pluginAccountId?: string
   claudeAuth: ClaudeRuntimeAuthPreparation | null
-  /** The env an `agent.launch.before` plugin set; applied after the host's account env. Never from the caller. */
-  pluginLaunchEnv?: Record<string, string>
   terminalRuntimeOptions: {
     shellOverride?: string
     terminalWindowsWslDistro?: string | null

@@ -50,7 +50,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       if (!ctx.earlyStablePaneOwner) {
         const launched = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
         ctx.args = launched.args
-        ctx.pluginLaunchEnv = launched.pluginEnv
+        ctx.pluginAccountId = launched.accountId
       }
       await preparePtyIpcSpawnPreflight(ctx)
       await assemblePtyIpcSpawnEnv(ctx)

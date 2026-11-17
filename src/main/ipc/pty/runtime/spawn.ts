@@ -24,7 +24,7 @@ export async function spawnPtyFromRuntimeController(
     prepare: async () => {
       const launched = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
       ctx.args = launched.args
-      ctx.pluginLaunchEnv = launched.pluginEnv
+      ctx.pluginAccountId = launched.accountId
       await prepareRuntimePtySpawn(ctx)
       await buildRuntimePtySpawnOptions(ctx)
     },
