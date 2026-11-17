@@ -96,12 +96,12 @@ function startTreeKill(
 }
 
 /** True when taskkill reported every tree ended within its wait. */
-function runTaskkill(pids: number[]): Promise<boolean> {
+function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promise<boolean> {
   return new Promise((resolve) => {
     const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
     let killer: ChildProcess | WorkerThreadChildProcess
     try {
-      if (canSpawnOnWorkerThread()) {
+      if (onWorker) {
         // Process creation blocks its thread on Windows; keep cleanup off main like the Git it ends.
         killer = spawnProcessOnWorkerThread({ program: 'taskkill', args })
         killer.stdin.end()
@@ -131,7 +131,19 @@ function runTaskkill(pids: number[]): Promise<boolean> {
       killer.removeAllListeners()
       resolve(ended)
     }
-    killer.once('error', () => finish(false))
+    killer.once('error', (error) => {
+      if (onWorker && isAbandonedWorkerChildError(error) && !settled) {
+        // The worker died before taskkill ran; cleanup must still happen, so start it here.
+        settled = true
+        if (timer) {
+          clearTimeout(timer)
+        }
+        killer.removeAllListeners()
+        resolve(runTaskkill(pids, false))
+        return
+      }
+      finish(false)
+    })
     killer.once('close', (code) => finish(code === 0))
     timer = setTimeout(() => {
       killer.kill()

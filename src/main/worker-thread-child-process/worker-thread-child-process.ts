@@ -88,10 +88,12 @@ export class WorkerThreadChildProcess extends EventEmitter {
   }
 
   kill(signal?: NodeJS.Signals): boolean {
-    if (this.exitCode !== null || this.signalCode !== null) {
+    if (this.closed) {
       return false
     }
-    return this.send({ type: 'kill', id: this.id, signal })
+    const exited = this.exitCode !== null || this.signalCode !== null
+    // After exit the worker still retires pipes a descendant may hold, as execFile's kill does.
+    return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
   stopOwnedGroup(): void {

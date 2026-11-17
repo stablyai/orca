@@ -170,6 +170,46 @@ describe('Windows process creation off the calling loop', () => {
     expect(terminated).toHaveBeenCalledOnce()
   })
 
+  it('retires the pipes of a Git root that exited before its output overflowed', async () => {
+    const send = vi.fn(() => true)
+    const child = new WorkerThreadChildProcess(1, send)
+    worker.spawn.mockReturnValue(child)
+    const pending = execFileCapture('git', ['log'], { maxBuffer: 4 })
+    await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'exit', id: 1, code: 0, signal: null })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'kill' }))
+    )
+    expect(treeKills.args).toEqual([])
+    child.receive({ type: 'close', id: 1, code: 0, signal: null })
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+  })
+
+  it('starts the tree kill from main when the worker dies before running it', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    worker.spawn.mockReturnValue(child)
+    const pending = execFileCapture('git', ['log'], { maxBuffer: 4 })
+    await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
+    await vi.waitFor(() => expect(treeKills.via).toEqual(['worker']))
+    const queued = treeKills.killers[0] as WorkerThreadChildProcess
+    queued.receive({
+      type: 'error',
+      id: 99,
+      error: {
+        message: 'Child process worker exited with code 1',
+        code: WORKER_CHILD_ABANDONED_CODE
+      }
+    })
+    expect(treeKills.via).toEqual(['worker', 'main'])
+    expect(treeKills.args[1]).toEqual(['/pid', '4242', '/t', '/f'])
+    treeKills.killers[1]!.emit('close', 0)
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+  })
+
   it('runs on the calling loop when the worker cannot start', async () => {
     worker.available = false
     const result = await execFileCapture(process.execPath, ['-e', 'process.stdout.write("ran")'], {
