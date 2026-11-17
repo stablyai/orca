@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { NATIVE_CHAT_BOTTOM_THRESHOLD_PX } from '../scroll/native-chat-autoscroll'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
+import { nativeChatMarkerRevealTarget } from './native-chat-marker-reveal'
 import { nativeChatScrollOffsetWithin } from '../virtualization/use-native-chat-viewport-align'
 
 /** Fields in the pane that take text for something other than the conversation. */
@@ -30,17 +30,16 @@ export function NativeChatNewRowsMarker({
     if (!marker || !row || !scroller) {
       return
     }
-    const top = nativeChatScrollOffsetWithin(marker, scroller)
-    // Preserve a reader parked above new rows; replies can still be short while paced rendering catches up.
-    if (
-      top === null ||
-      top - (scroller.scrollTop + scroller.clientHeight) > NATIVE_CHAT_BOTTOM_THRESHOLD_PX
-    ) {
+    const target = nativeChatMarkerRevealTarget({
+      markerTop: nativeChatScrollOffsetWithin(marker, scroller),
+      rowTop: nativeChatScrollOffsetWithin(row, scroller),
+      scrollTop: scroller.scrollTop,
+      clientHeight: scroller.clientHeight
+    })
+    if (target === null) {
       return
     }
-    // Reveal the prompt’s row unless it would leave the marker too low in the viewport.
-    const intoRow = top - (nativeChatScrollOffsetWithin(row, scroller) ?? top)
-    onReveal(intoRow < scroller.clientHeight / 2 ? row : marker)
+    onReveal(target === 'row' ? row : marker)
   }, [arriving, onArrived, onReveal])
 
   useEffect(() => {
