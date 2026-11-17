@@ -14,6 +14,10 @@ import {
   parseOpenCode2SqliteSession
 } from '../../opencode2/session-scanner-opencode2-sqlite'
 import {
+  hasHermesSession,
+  readHermesChatTranscript
+} from '../../../../native-chat/transcript-history/hermes/transcript-hermes-sqlite'
+import {
   captureHermesSqliteSession,
   listHermesSqliteSessions,
   parseHermesSqliteSession
@@ -35,6 +39,12 @@ export async function handleOpenCodeSqliteRequest(
         read: (db) => readOpenCode2ForkCoverage(db, request.sessionId, request.sourceSessionId)
       })
       return { id: request.id, ok: true, value }
+    }
+    if (request.kind === 'hermes-history') {
+      return { id: request.id, ok: true, value: readHermesChatTranscript(request) }
+    }
+    if (request.kind === 'hermes-exists') {
+      return { id: request.id, ok: true, value: { exists: hasHermesSession(request) } }
     }
     if (request.kind === 'native-page' || request.kind === 'native-signal') {
       const value =

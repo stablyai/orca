@@ -13,6 +13,7 @@ import {
   resolveDefaultHermesHome,
   resolveHermesActiveProfileHome
 } from './hermes-default-home'
+import { HERMES_TRANSCRIPT_IMPORT } from './hermes-transcript-import'
 
 // Chats and terminals share the profile's session store; `--resume` also takes a session title.
 const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -73,7 +74,7 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   compaction: true,
   compactionInstructions: true,
-  transcriptImport: null,
+  transcriptImport: HERMES_TRANSCRIPT_IMPORT,
   sessionHistory: HERMES_SESSION_HISTORY,
   keepsEverySession: true,
   // Tools run in the profile's gateway, which outlives the chat that started it and serves the rest.
