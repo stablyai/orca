@@ -45,19 +45,24 @@ export function showAdoptedChat(
 
 /** Chat history lists a local chat by the head of its provider chain. */
 function hasHistoryRow(record: string): boolean {
+  let parsed: unknown
   try {
-    const { providerHandleChain: chain, location } = JSON.parse(record) as {
-      providerHandleChain?: unknown
-      location?: { executionHostId?: unknown }
-    }
-    return (
-      Array.isArray(chain) &&
-      chain.length > 0 &&
-      location?.executionHostId === LOCAL_EXECUTION_HOST_ID
-    )
+    parsed = JSON.parse(record)
   } catch {
     return false
   }
+  return (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'providerHandleChain' in parsed &&
+    Array.isArray(parsed.providerHandleChain) &&
+    parsed.providerHandleChain.length > 0 &&
+    'location' in parsed &&
+    typeof parsed.location === 'object' &&
+    parsed.location !== null &&
+    'executionHostId' in parsed.location &&
+    parsed.location.executionHostId === LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 /**
