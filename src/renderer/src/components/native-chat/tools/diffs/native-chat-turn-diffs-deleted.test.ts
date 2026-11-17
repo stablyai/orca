@@ -34,6 +34,28 @@ describe('turn diff deleted state', () => {
     expect(nativeChatTurnDiffs(restored, ['t', 't', 't']).get('t')?.files[0]?.deleted).toBe(false)
   })
 
+  it('is deleted when Codex removes a file that was empty', () => {
+    const codexChange = (id: string, kind: string, contents: string): NativeChatMessage => ({
+      id,
+      role: 'assistant',
+      source: 'transcript',
+      timestamp: 1,
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'apply_patch',
+          state: 'completed',
+          input: { changes: [{ path: 'empty.html', kind: { type: kind }, diff: contents }] }
+        }
+      ]
+    })
+    const turn = nativeChatTurnDiffs(
+      [codexChange('add', 'add', ''), codexChange('delete', 'delete', '')],
+      ['t', 't']
+    ).get('t')
+    expect(turn?.files.map((file) => [file.path, file.deleted])).toEqual([['empty.html', true]])
+  })
+
   it('keeps a turn that deleted the file deleted when a later turn recreates it', () => {
     const turns = nativeChatTurnDiffs([removal, recreate], ['turn-1', 'turn-2'])
     expect(turns.get('turn-1')?.files[0]?.deleted).toBe(true)
