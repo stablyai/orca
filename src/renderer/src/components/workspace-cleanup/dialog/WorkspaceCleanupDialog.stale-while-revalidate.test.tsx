@@ -545,4 +545,59 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await flush()
     expect(rowNames()).toEqual(['alpha', 'beta'])
   })
+
+  it('Refresh keeps a selected row that late evidence filtered out visible and checked', async () => {
+    const rig = installApi(cachedFleet())
+    const browse = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
+    holders.store.setState({
+      workspaceCleanupBrowse: {
+        ...browse,
+        filters: {
+          ...browse.filters,
+          safety: { ...browse.filters.safety, blockers: ['dirty-files'], blockerMode: 'none-of' }
+        }
+      }
+    })
+    await renderDialog()
+    await openDialog()
+    await act(async () => {
+      rig.resolvers.at(-1)?.(cachedFleet())
+    })
+    await flush()
+    await act(async () => rowCheckbox('alpha')?.click())
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+
+    const dirtyAlpha = (): WorkspaceCleanupScanResult => ({
+      scannedAt: NOW,
+      candidates: [
+        makeCandidate({
+          worktreeId: 'repo1::/tmp/alpha',
+          displayName: 'alpha',
+          blockers: ['dirty-files']
+        }),
+        makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
+      ],
+      errors: []
+    })
+    await act(async () => {
+      holders.store.setState({ workspaceCleanupScan: dirtyAlpha() })
+    })
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+
+    await act(async () => {
+      container?.querySelector<HTMLElement>('[aria-label="Refresh"]')?.click()
+    })
+    await flush()
+    expect(rig.scan).toHaveBeenCalledTimes(2)
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      rig.resolvers.at(-1)?.(dirtyAlpha())
+    })
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
+  })
 })
