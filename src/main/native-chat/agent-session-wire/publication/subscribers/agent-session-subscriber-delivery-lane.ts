@@ -66,7 +66,7 @@ export class SubscriberDeliveryLane {
     return !this.active && !this.scheduled && this.pending.length === 0
   }
 
-  /** Coalescing never crosses ordered work: it may reset what later work reads from. */
+  /** Catch-ups and refreshes never merge across ordered work: it may reset what they read from. */
   ordered(run: () => Promise<unknown>): void {
     this.add({ kind: 'ordered', since: this.runners.now(), run })
   }
@@ -94,7 +94,10 @@ export class SubscriberDeliveryLane {
     this.add({ kind: 'background-tasks', since: this.runners.now(), fence })
   }
 
-  /** Each snapshot replaces the whole live text, so only the newest still waiting is kept. */
+  /**
+   * Each snapshot replaces the whole live text, so only the newest still waiting is kept, even
+   * across ordered work: an opening or snapshot republishes the current live text itself.
+   */
   liveText(liveText: SubscriberLiveText): void {
     const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
     const since = index === -1 ? this.runners.now() : this.pending[index]!.since

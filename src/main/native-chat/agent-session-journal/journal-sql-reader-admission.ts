@@ -1,9 +1,10 @@
 /**
  * Four reader workers bound concurrency, not outstanding requests: every request posted at once
- * becomes a reply main must hold. Admission keeps at most this many reads out at a time in one
- * FIFO; reply bytes are bounded separately by the readers' reply credit.
+ * becomes a reply main must hold. Each reader admits this many reads at a time in FIFO, so the
+ * pool has at most eight out and a slow read holds only its own reader's share while least-pending
+ * selection steers new reads elsewhere. Reply bytes are bounded separately by the reply credit.
  */
-export const JOURNAL_READER_ADMITTED_READS = 8
+export const JOURNAL_READER_ADMITTED_READS = 2
 
 export type JournalReaderTicket = {
   /** The reply reached main, carrying `bytes` when its reader charged it. */

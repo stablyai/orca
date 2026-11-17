@@ -34,8 +34,6 @@ export class JournalSqlReaderPool {
   private conversionSlot?: ReaderSlot
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
-  /** Shared by every slot: four workers must not mean unbounded replies waiting on main. */
-  private readonly admission = new JournalReaderAdmission()
   private readonly replyCredit = new JournalReaderReplyCredit()
 
   constructor(
@@ -52,7 +50,27 @@ export class JournalSqlReaderPool {
   }
 
   retention(): JournalReaderRetention {
-    return { ...this.admission.stats(), outstandingBytes: this.replyCredit.outstandingBytes() }
+    const total: JournalReaderRetention = {
+      inFlight: 0,
+      unconsumed: 0,
+      waiting: 0,
+      oldestWaitMs: 0,
+      receivedBytes: 0,
+      consumedBytes: 0,
+      creditWaitsExpired: 0,
+      outstandingBytes: this.replyCredit.outstandingBytes()
+    }
+    for (const slot of this.slots) {
+      const stats = slot.admissionStats()
+      total.inFlight += stats.inFlight
+      total.unconsumed += stats.unconsumed
+      total.waiting += stats.waiting
+      total.oldestWaitMs = Math.max(total.oldestWaitMs, stats.oldestWaitMs)
+      total.receivedBytes += stats.receivedBytes
+      total.consumedBytes += stats.consumedBytes
+      total.creditWaitsExpired += stats.creditWaitsExpired
+    }
+    return total
   }
 
   async prepareFork(
@@ -197,7 +215,7 @@ export class JournalSqlReaderPool {
         this.filename,
         this.originalFilename,
         this.workerPath,
-        this.admission,
+        new JournalReaderAdmission(),
         this.replyCredit
       )
       this.slots.push(slot)

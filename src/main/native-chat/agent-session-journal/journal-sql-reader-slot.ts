@@ -111,6 +111,10 @@ export class ReaderSlot {
   private readonly grant: JournalReaderReplyCreditGrant | undefined
   private retired = false
 
+  admissionStats() {
+    return this.admission.stats()
+  }
+
   get pendingCount(): number {
     return this.pending.size + this.conversions
   }

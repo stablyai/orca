@@ -98,3 +98,15 @@ it('withdraws waiting reads whose reader stopped before a worker took them', asy
   // 4 warm-up reads, 8 held, 10 kept; none of the obsolete reads reached a worker.
   expect(Atomics.load(counters, 0)).toBe(22)
 })
+
+it('answers a new read on a free reader while another is held by a slow read', async () => {
+  const readers = await openPool()
+  await Promise.all(['a', 'b', 'c', 'd'].map((id) => read(readers, id)))
+  const slow = read(readers, 'hold-slow')
+  const burst = Array.from({ length: 40 }, (_, index) => read(readers, `fast-${index}`))
+  // Lands on the least-loaded free reader; a pool-wide admission stall never admits it.
+  await read(readers, 'probe')
+  Atomics.store(counters, 2, 1)
+  Atomics.notify(counters, 2)
+  await Promise.all([slow, ...burst])
+})
