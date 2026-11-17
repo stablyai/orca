@@ -1,6 +1,6 @@
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
-import { resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
+import { resolveGuestNativeProgram } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 
 export {

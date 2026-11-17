@@ -20,7 +20,7 @@ import { replaceTabBuckets } from '../../../keyed-record-transitions'
 import {
   browserCertificateFailureEqual,
   browserPageEqual
-} from '@/runtime/web-session-tabs-sync/state-equality-tabs'
+} from '@/runtime/web-session-tabs-sync/snapshots/state-equality-tabs'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,

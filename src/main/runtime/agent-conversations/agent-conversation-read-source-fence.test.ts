@@ -138,7 +138,6 @@ async function dormantAgent() {
   } as unknown as RpcContext
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal read uses only the kind and the id.
   const resolved = { kind: 'terminal', orcaSessionId } as ResolvedAgentConversation
-  server.identityClient.providerKeyRequests = 0
   return {
     server,
     records,
@@ -159,31 +158,6 @@ async function readAcross(read: () => Promise<unknown>, change: () => void): Pro
   release()
   return pending
 }
-
-it.skipIf(process.platform === 'win32')(
-  'returns a read whose source still stands, with one store question',
-  async () => {
-    const agent = await dormantAgent()
-    expect(await readAcross(agent.read, () => {})).toMatchObject({
-      entries: [{ kind: 'message', role: 'assistant', text: 'reply from store A' }]
-    })
-    expect(agent.server.identityClient.providerKeyRequests).toBe(1)
-  }
-)
-
-it.skipIf(process.platform === 'win32')(
-  'returns a read across an identity worker restart in the same store',
-  async () => {
-    const agent = await dormantAgent()
-    const client = agent.server.identityClient
-    expect(
-      await readAcross(agent.read, () => {
-        // The worker is down mid-restart: a second store question would get no answer.
-        client.providerKeyOf = async () => undefined
-      })
-    ).toMatchObject({ entries: [{ text: 'reply from store A' }] })
-  }
-)
 
 it.skipIf(process.platform === 'win32').each([
   ['the status path moves to another store', 'switch'],

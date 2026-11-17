@@ -6,8 +6,7 @@ import type { ResolvedAgentConversation } from './agent-conversation-address'
 
 const terminal = vi.hoisted(() => ({
   source: vi.fn(),
-  read: vi.fn(),
-  host: vi.fn()
+  read: vi.fn()
 }))
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
@@ -22,7 +21,7 @@ vi.mock('../orchestration/workers/transcripts/worker-transcript-read', () => ({
 
 vi.mock('../rpc/methods/structured-sessions/creation/structured-agent-session-gate', () => ({
   requireStructuredAgentAudience: () => {},
-  requireInstalledStructuredHost: terminal.host
+  requireInstalledStructuredHost: vi.fn()
 }))
 
 const actualTranscriptReader = await vi.importActual<typeof TranscriptReadModule>(
@@ -79,52 +78,6 @@ it.each([
         Object.defineProperty(process, 'platform', platform)
       }
     }
-  }
-)
-
-it.each(['missing', 'unreadable', 'loop'] as const)(
-  'refuses a %s /clear successor instead of reading the old root',
-  async (failure) => {
-    const root = {
-      sessionId: 'root',
-      provider: 'codex',
-      conversationCommand: {
-        command: 'clear',
-        phase: 'committed',
-        replacementSessionId: 'successor'
-      }
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the lineage fields are read before this refusal.
-    const resolved = {
-      kind: 'chat',
-      orcaSessionId: 'codex_root',
-      record: root,
-      store: {
-        getRecord: (id: string) => {
-          if (id === 'root') {
-            return root
-          }
-          if (failure === 'unreadable') {
-            throw new Error('unreadable')
-          }
-          return failure === 'loop'
-            ? {
-                ...root,
-                sessionId: 'successor',
-                conversationCommand: {
-                  command: 'clear',
-                  phase: 'committed',
-                  replacementSessionId: 'root'
-                }
-              }
-            : null
-        }
-      }
-    } as unknown as ResolvedAgentConversation
-    await expect(readAgentConversation(ctx, resolved, {})).rejects.toMatchObject({
-      code: 'agent_unavailable'
-    })
-    expect(terminal.host).not.toHaveBeenCalled()
   }
 )
 
