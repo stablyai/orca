@@ -74,11 +74,8 @@ export async function execLocalPreflightCommandOrThrow(
 ): Promise<PreflightCommandResult> {
   const env = options.env ?? buildLocalPreflightEnv()
   const timeoutMs = options.timeoutMs ?? PREFLIGHT_COMMAND_TIMEOUT_MS
-  // Node cannot execFile a batch shim; the shared runner handles its argv safely.
-  if (
-    options.terminationBarrier ||
-    (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
-  ) {
+  // Windows: the shared runner launches off Electron main and handles batch-shim argv, which execFile cannot.
+  if (options.terminationBarrier || process.platform === 'win32') {
     const { started, onSpawn } = spawnStart()
     const pending = runProcess({
       program: command,
