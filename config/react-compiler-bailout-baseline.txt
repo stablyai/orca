@@ -17,7 +17,6 @@
 1 src/renderer/src/components/activity/activity-thread-hover-card-summary.tsx
 1 src/renderer/src/components/activity/activity-thread-list-pane.tsx
 1 src/renderer/src/components/activity/use-activity-thread-action-bindings.ts
-1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 1 src/renderer/src/components/agent-session-continuation/AgentSessionContinuationDialog.tsx
 1 src/renderer/src/components/agent/AgentLaunchPickerMenuRow.tsx
 1 src/renderer/src/components/agent/AgentSettingsDialog.tsx
