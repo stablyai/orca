@@ -3,14 +3,14 @@ import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
-import { agentMessageSendersShown } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
+import { agentMessageSendersShown } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy,
   type AgentMessageHeading
-} from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../../components/icons/MobileAgentIcon'

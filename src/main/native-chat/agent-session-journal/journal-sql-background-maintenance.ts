@@ -4,8 +4,6 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
-import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
-import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -26,8 +24,8 @@ export class JournalSqlBackgroundMaintenance {
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
-    private readonly readers: Pick<JournalSqlReaderPool, 'database' | 'compareLegacyChat'>,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
+    private readonly conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
@@ -113,13 +111,7 @@ export class JournalSqlBackgroundMaintenance {
       if (this.discover) {
         this.discover = false
         try {
-          await compareJournalLegacyChatsWhenIdle(
-            this.writer,
-            this.readers,
-            () => this.boundary(),
-            () => this.stopped.signal.aborted,
-            (error, id) => this.report(error, id)
-          )
+          await this.conversions.compareLegacyChats(() => this.boundary())
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)
@@ -161,6 +153,33 @@ export class JournalSqlBackgroundMaintenance {
       } catch (error) {
         this.report(error)
       }
+      try {
+        await this.forgottenChats()
+      } catch (error) {
+        this.report(error)
+      }
+    }
+  }
+
+  /** Rows of chats the record store deleted, page by page like retired epochs. */
+  private async forgottenChats(): Promise<void> {
+    let after: string | null = null
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      const page = await this.readers.database({ kind: 'forgotten-chats', after })
+      if (page.kind !== 'forgotten-chats') {
+        throw new Error('journal reader returned no forgotten chats')
+      }
+      for (const sessionId of page.sessionIds) {
+        await this.pages({ kind: 'chat-discard', sessionId })
+        if (this.stopped.signal.aborted) {
+          return
+        }
+      }
+      if (page.sessionIds.length === 0) {
+        return
+      }
+      after = page.sessionIds.at(-1)!
     }
   }
 
@@ -199,7 +218,7 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<
       JournalSqlMaintenance,
-      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
+      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' | 'chat-discard' }
     >,
     limit = Infinity
   ): Promise<void> {
@@ -273,12 +292,6 @@ export class JournalSqlBackgroundMaintenance {
       (error) => {
         complete = true
         this.report(error, sessionId)
-        if (!this.stopped.signal.aborted && isJournalSqlSourceContentFailure(error)) {
-          const message = error instanceof Error ? error.message : String(error)
-          void this.writer
-            .maintain({ kind: 'legacy-copy-failed', sessionId, error: message.slice(0, 500) })
-            .catch((failure: unknown) => this.report(failure, sessionId))
-        }
       }
     )
     while (!complete && !this.stopped.signal.aborted) {

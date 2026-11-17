@@ -1,8 +1,18 @@
 import { setImmediate } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
+import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 
 type Conversion = { promotion: AbortController; result: Promise<string | null> }
+
+function warnLegacy(step: string, sessionId: string, error: unknown): void {
+  console.warn(
+    `[agent-session-journal] ${step} a chat an older Orca saved failed`,
+    sessionId,
+    error
+  )
+}
 
 /** One lock per chat, shared by background work and opens; promotion wakes a paused conversion. */
 export class JournalSqlConversions {
@@ -12,9 +22,23 @@ export class JournalSqlConversions {
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
-    private readonly readers: Pick<JournalSqlReaderPool, 'importState' | 'prepareConversion'>,
+    private readonly readers: Pick<
+      JournalSqlReaderPool,
+      'importState' | 'prepareConversion' | 'database' | 'compareLegacyChat'
+    >,
     private readonly waitForIdle: (promotion: AbortSignal) => Promise<void>
   ) {}
+
+  /** Converted chats an older Orca may have continued, compared before idle conversion. */
+  compareLegacyChats(boundary: () => Promise<boolean>): Promise<void> {
+    return compareJournalLegacyChatsWhenIdle(
+      this.writer,
+      this.readers,
+      boundary,
+      () => this.closed,
+      (error, sessionId) => warnLegacy('comparing', sessionId, error)
+    )
+  }
 
   async ensure(sessionId: string, foreground = true): Promise<string | null> {
     if (this.closed) {
@@ -42,11 +66,26 @@ export class JournalSqlConversions {
         }
         return epoch
       })
+      .catch((error: unknown) => {
+        this.noteCopyFailure(sessionId, error)
+        throw error
+      })
       .finally(() => {
         this.pending.delete(sessionId)
       })
     this.pending.set(sessionId, { promotion, result })
     return result
+  }
+
+  /** A copy whose original content can't convert is left to an open, never to a quit's rejection. */
+  private noteCopyFailure(sessionId: string, error: unknown): void {
+    if (this.closed || !isJournalSqlSourceContentFailure(error)) {
+      return
+    }
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 500)
+    void this.writer
+      .maintain({ kind: 'legacy-copy-failed', sessionId, error: message })
+      .catch((failure: unknown) => warnLegacy('recording', sessionId, failure))
   }
 
   /** A ready physical epoch survives context changes for the lifetime of the database owner. */

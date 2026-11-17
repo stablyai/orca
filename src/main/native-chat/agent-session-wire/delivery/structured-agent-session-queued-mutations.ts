@@ -134,20 +134,19 @@ export function sendQueuedStructuredAgentMessage(
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
       }
+      // An earlier unechoed send never blocks: delivery orders handovers behind it and its opening turn.
       if (
         (work.activeTurnId() !== null || work.queueState().owedEnteredSubmissions.length > 0) &&
-        (work.activeTurnId() === null ||
-          work.queueState().owedEnteredSubmissions.length > 0 ||
-          !canSteerStructuredQueuedMessage(
-            {
-              record,
-              work,
-              child: context.sessions.get(ctx.sessionId)?.child,
-              stopping: await context.readStopping(ctx.sessionId),
-              adapter: context.deps.adapter
-            },
-            row
-          ))
+        !canSteerStructuredQueuedMessage(
+          {
+            record,
+            work,
+            child: context.sessions.get(ctx.sessionId)?.child,
+            stopping: await context.readStopping(ctx.sessionId),
+            adapter: context.deps.adapter
+          },
+          row
+        )
       ) {
         return {
           ok: false,

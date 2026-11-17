@@ -16,6 +16,7 @@ import {
   pendingJournalLegacyCompares,
   type JournalLegacyCompare
 } from './database/journal-legacy-compare'
+import { readForgottenJournalChats } from './journal-forgotten-chats'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
@@ -37,6 +38,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'legacy-compares'; after: string | null }
+  | { kind: 'forgotten-chats'; after: string | null }
 
 export type JournalSqlDatabaseReadResult =
   | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
@@ -55,6 +57,7 @@ export type JournalSqlDatabaseReadResult =
       claims: { rowid: number; uploadId: string; sessionId: string }[]
     }
   | { kind: 'attachment-sweeps'; uploadIds: string[] }
+  | { kind: 'forgotten-chats'; sessionIds: string[] }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -174,5 +177,7 @@ function read(
               .all(operation.after)
       return { kind: 'attachment-sweeps', uploadIds: rows.map((row) => String(row.upload_id)) }
     }
+    case 'forgotten-chats':
+      return { kind: 'forgotten-chats', sessionIds: readForgottenJournalChats(db, operation.after) }
   }
 }

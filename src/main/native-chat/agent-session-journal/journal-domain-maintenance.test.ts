@@ -250,10 +250,10 @@ it('finishes a retired pass during activity while an already-started conversion 
           passFinished.resolve()
         }
         return result
-      },
-      compareLegacyChat: async () => null
+      }
     },
     {
+      compareLegacyChats: async () => {},
       ensure: async (_sessionId, foreground) => {
         if (foreground) {
           throw new Error('background conversion was promoted')

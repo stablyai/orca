@@ -1,5 +1,5 @@
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { withoutImageReference } from '../../../../../../shared/native-chat/native-chat-image-reference'
+import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences

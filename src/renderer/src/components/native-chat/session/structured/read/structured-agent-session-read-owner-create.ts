@@ -5,7 +5,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'

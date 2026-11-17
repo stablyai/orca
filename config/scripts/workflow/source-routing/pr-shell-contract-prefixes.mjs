@@ -1,6 +1,5 @@
 // Files whose edits run the real-shell contracts job (shell_contracts in pr.yml).
 export const SHELL_PREFIXES = [
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-readiness/shell-ready.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready-bash-wrapper.test.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',

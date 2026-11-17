@@ -11,7 +11,7 @@ import {
   type NativeChatImageRefBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isAgentSessionHostStatusPresentation } from '../../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../../src/shared/native-chat/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import { MobileNativeChatMarkdownRowKeyContext } from '../viewport/mobile-native-chat-disclosure-store'
 import {

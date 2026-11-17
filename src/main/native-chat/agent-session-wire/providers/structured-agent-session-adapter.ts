@@ -2,7 +2,7 @@ import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-s
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -34,7 +34,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
@@ -45,7 +45,7 @@ export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt

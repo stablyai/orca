@@ -1,4 +1,4 @@
-import type { AgentSessionAutoReviewApprovalResult } from '../../../../../../shared/agent-session/agent-session-auto-review-approval'
+import type { AgentSessionAutoReviewApprovalResult } from '../../../../../../shared/agent-session/requests/approvals/agent-session-auto-review-approval'
 import { AutoReviewApprovalParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-auto-review-params'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
