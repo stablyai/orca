@@ -2,6 +2,12 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { readRemovedWorkWatermark } from '../reset/removed-orchestration-work-read'
 import { forgetUnownedRemovedWork, RETENTION_AGE, RETIRED_RUN_SQL } from './settled-run-retention'
+import {
+  forgetRetiringRunWrites,
+  isRetiringRunWritten,
+  unwatchRetiringRun,
+  watchRetiringRun
+} from './run-retirement-write-watch'
 
 const DISPATCH_IDS = 'SELECT id FROM dispatch_contexts WHERE run_id = ?1'
 const MESSAGE_IDS = 'SELECT id FROM messages WHERE run_id = ?1'
@@ -9,79 +15,42 @@ const LEGACY_PRINCIPAL_IDS = 'SELECT id FROM legacy_compatibility_principals WHE
 
 // Dispatch-keyed rows go first, while each Dispatch still names its Run for removed-work capture.
 // Each is deleted a page at a time and the Run row goes last, so the next pass finishes an interrupted one.
-// `stamps` are the columns the retention rule reads as activity. A page holding a fresh one keeps the
-// Run, so a write in place between pages, such as a corrected Task result, is never deleted.
-const RUN_CHILD_DELETES: readonly {
-  table: string
-  where: string
-  pageRows?: number
-  stamps?: readonly string[]
-}[] = [
+const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: number }[] = [
   // Saved output copies run to 256 KB each.
   { table: 'worker_terminal_archives', where: `dispatch_id IN (${DISPATCH_IDS})`, pageRows: 8 },
-  {
-    table: 'federation_relay_items',
-    where: `dispatch_id IN (${DISPATCH_IDS})`,
-    stamps: ['acked_at']
-  },
+  { table: 'federation_relay_items', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'federation_relay_sequences', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'remote_questions', where: `dispatch_id IN (${DISPATCH_IDS})` },
-  {
-    table: 'remote_dispatch_attachments',
-    where: `dispatch_id IN (${DISPATCH_IDS})`,
-    stamps: ['updated_at']
-  },
+  { table: 'remote_dispatch_attachments', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'attempt_observation_facts', where: `dispatch_id IN (${DISPATCH_IDS})` },
-  {
-    table: 'federated_dispatches',
-    where: `dispatch_id IN (${DISPATCH_IDS})`,
-    stamps: ['updated_at']
-  },
-  {
-    table: 'worker_terminal_resources',
-    where: `owner_dispatch_id IN (${DISPATCH_IDS})`,
-    stamps: ['updated_at']
-  },
-  { table: 'worker_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})`, stamps: ['updated_at'] },
+  { table: 'federated_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
+  { table: 'worker_terminal_resources', where: `owner_dispatch_id IN (${DISPATCH_IDS})` },
+  { table: 'worker_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'structured_mail_sends', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'legacy_operation_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },
   { table: 'legacy_mail_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },
   { table: 'legacy_compatibility_principals', where: 'run_id = ?1' },
-  {
-    table: 'question_threads',
-    where: 'run_id = ?1',
-    stamps: ['created_at', 'answered_at', 'closed_at']
-  },
-  { table: 'decision_gates', where: 'run_id = ?1', stamps: ['created_at', 'resolved_at'] },
-  { table: 'deliveries', where: 'run_id = ?1', stamps: ['created_at', 'acknowledged_at'] },
-  {
-    table: 'dispatch_contexts',
-    where: 'run_id = ?1',
-    stamps: ['created_at', 'dispatched_at', 'completed_at', 'last_heartbeat_at']
-  },
+  { table: 'question_threads', where: 'run_id = ?1' },
+  { table: 'decision_gates', where: 'run_id = ?1' },
+  { table: 'deliveries', where: 'run_id = ?1' },
+  { table: 'dispatch_contexts', where: 'run_id = ?1' },
   // Each message row updates about 17 indexes.
-  { table: 'messages', where: 'run_id = ?1', pageRows: 64, stamps: ['created_at'] },
-  { table: 'tasks', where: 'run_id = ?1', stamps: ['created_at', 'completed_at'] },
+  { table: 'messages', where: 'run_id = ?1', pageRows: 64 },
+  { table: 'tasks', where: 'run_id = ?1' },
   { table: 'structured_pointer_operations', where: "mailbox_handle = 'run:' || ?1" },
   // The deletes above record each Task, Dispatch and worker row; the Run's own delete would drop all.
   { table: 'removed_orchestration_work', where: 'run_id = ?1' }
 ]
 
-/** Rows one retention step deletes from one table, as bb's thread purge pages them. */
+/** Rows one retention step deletes from one table. */
 const RUN_CHILD_PAGE_ROWS = 128
 
-const RUN_CHILD_PAGES = RUN_CHILD_DELETES.map(({ table, where, pageRows, stamps }) => {
-  const page = `SELECT rowid FROM ${table} WHERE ${where} LIMIT ?2`
-  const fresh = stamps?.map((column) => `julianday(${column}) > julianday('now', ?3)`).join(' OR ')
-  return {
-    rows: pageRows ?? RUN_CHILD_PAGE_ROWS,
-    // Reads only the page it would delete, the same rows in the same transaction.
-    fresh: fresh && `SELECT 1 FROM ${table} WHERE rowid IN (${page}) AND (${fresh}) LIMIT 1`,
-    sql: `DELETE FROM ${table} WHERE rowid IN (${page})`
-  }
-})
+const RUN_CHILD_PAGES = RUN_CHILD_DELETES.map(({ table, where, pageRows }) => ({
+  rows: pageRows ?? RUN_CHILD_PAGE_ROWS,
+  sql: `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${where} LIMIT ?2)`
+}))
 
 const RUN_DELETES = [
   ...RUN_CHILD_DELETES.map(({ table, where }) => `DELETE FROM ${table} WHERE ${where}`),
@@ -149,36 +118,6 @@ function isRunPartySeenInMemory(party: string, liveness: RunPartyLiveness): bool
     : liveness.isWaitingForMail(party.slice('handle:'.length))
 }
 
-// A write to the Run leaves a newer updated_at, a newer row or reopened work, and a write in place
-// leaves a fresh stamp on its page; the full check costs ~9 probes per Dispatch. Reopened work counts
-// because the pages would delete it before the final check.
-const RUN_TOUCH_MARK = `SELECT
-    (SELECT updated_at FROM runs WHERE id = ?1) AS updated,
-    (SELECT max(sequence) FROM messages WHERE run_id = ?1) AS message,
-    (SELECT max(rowid) FROM tasks WHERE run_id = ?1) AS task,
-    (SELECT max(rowid) FROM dispatch_contexts WHERE run_id = ?1) AS dispatch,
-    (SELECT max(rowid) FROM deliveries WHERE run_id = ?1) AS delivery,
-    (SELECT max(rowid) FROM question_threads WHERE run_id = ?1) AS question,
-    EXISTS (SELECT 1 FROM tasks WHERE run_id = ?1
-        AND status IN ('pending', 'ready', 'dispatched', 'blocked'))
-      OR EXISTS (SELECT 1 FROM dispatch_contexts WHERE run_id = ?1
-        AND status IN ('pending', 'dispatched'))
-      OR EXISTS (SELECT 1 FROM decision_gates WHERE run_id = ?1 AND status = 'pending')
-      OR EXISTS (SELECT 1 FROM question_threads WHERE run_id = ?1 AND status = 'pending') AS open`
-
-function runTouchMark(db: OrchestrationDb['db'], runId: string): unknown[] {
-  return Object.values(db.prepare(RUN_TOUCH_MARK).get(runId) ?? {})
-}
-
-// Deleting rows only lowers each newest row and never reopens work, so anything above the first mark is new.
-function isTouchedSince(db: OrchestrationDb['db'], runId: string, mark: unknown[]): boolean {
-  const [updated, ...newest] = runTouchMark(db, runId)
-  return (
-    updated !== mark[0] ||
-    newest.some((row, index) => Number(row ?? 0) > Number(mark[index + 1] ?? 0))
-  )
-}
-
 function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
   return Boolean(
     db
@@ -192,8 +131,8 @@ function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
  * are read a page at a time, then its rows a page of one table at a time, then the Run row. It keeps
  * the Run when a coordinator it bound, a reader of its unread mail or its worker terminal is live,
  * read first and again before the Run row (panes and blocked readers, read in memory, on every page),
- * or once the Run is touched: fully checked first and before the Run row, and on every page by a newer
- * `updated_at`, a newer row or a fresh stamp on the page it would delete. A step interrupted by a
+ * or once anything writes to the Run: fully checked first and before the Run row, and before every
+ * page by the write watch, which sees a write in place as well as a new row. A step interrupted by a
  * quit or crash leaves only fewer settled rows.
  */
 export function* retireSettledRun(
@@ -205,7 +144,20 @@ export function* retireSettledRun(
   if (!isRetiredRun(db, runId)) {
     return false
   }
-  const mark = runTouchMark(db, runId)
+  watchRetiringRun(orchestrationDb, runId)
+  try {
+    return yield* retireWatchedRun(orchestrationDb, runId, liveness)
+  } finally {
+    unwatchRetiringRun(orchestrationDb)
+  }
+}
+
+function* retireWatchedRun(
+  orchestrationDb: OrchestrationDb,
+  runId: string,
+  liveness: RunPartyLiveness
+): Generator<void, boolean> {
+  const { db } = orchestrationDb
   const parties = new Set(partyKeys(db.prepare(RUN_PARTIES_EXCEPT_SENDER_PANES).all(runId)))
   for (let after = 0; ;) {
     yield
@@ -233,7 +185,7 @@ export function* retireSettledRun(
     yield
     const from = next
     const step = runLifecycleWriteTransaction(db, 'orchestration_run_retention', () => {
-      if (anyPartySeenLive() || isTouchedSince(db, runId, mark)) {
+      if (anyPartySeenLive() || isRetiringRunWritten(orchestrationDb)) {
         return undefined
       }
       const watermark = readRemovedWorkWatermark(db)
@@ -241,9 +193,6 @@ export function* retireSettledRun(
       let index = from
       for (; index < RUN_CHILD_PAGES.length; index++) {
         const page = RUN_CHILD_PAGES[index]!
-        if (page.fresh && db.prepare(page.fresh).get(runId, page.rows, RETENTION_AGE)) {
-          return undefined
-        }
         const deleted = db.prepare(page.sql).run(runId, page.rows).changes
         if (deleted > 0) {
           index = deleted < page.rows ? index + 1 : index
@@ -252,6 +201,7 @@ export function* retireSettledRun(
       }
       // A deleted row whose Run is gone, such as a remote attachment, leaves a record nothing reads.
       forgetUnownedRemovedWork(orchestrationDb, watermark)
+      forgetRetiringRunWrites(orchestrationDb)
       return { next: index }
     })
     if (!step) {
@@ -265,6 +215,7 @@ export function* retireSettledRun(
     // Liveness was read before the lock; a party added since keeps the Run.
     if (
       anyPartyLive() ||
+      isRetiringRunWritten(orchestrationDb) ||
       !isRetiredRun(db, runId) ||
       runParties(orchestrationDb, runId).some((party) => !parties.has(party))
     ) {
