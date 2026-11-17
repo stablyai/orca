@@ -1,4 +1,5 @@
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/view/model-menu-options'
+import { orderEffortLevels } from '../../../../../shared/agent-session/options/view/effort-level-order'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -173,7 +174,9 @@ export function AgentChoiceFields({
       {options.map(({ option, route }) => {
         const choices =
           option.kind.type === 'select'
-            ? option.kind.choices
+            ? option.category === 'thought_level'
+              ? orderEffortLevels(option.kind.choices)
+              : option.kind.choices
             : [
                 {
                   value: 'true',
