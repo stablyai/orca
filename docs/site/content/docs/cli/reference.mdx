@@ -240,6 +240,15 @@ By default, `terminal read` returns the accumulated output stream with terminal 
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
+## Installed agents
+
+```bash
+orca agent installed --json
+orca agent installed --worktree active
+```
+
+Lists the agent CLIs Orca detects on the host, including ones set up with a custom command in Settings → Agents. Each `id` is what `--agent` takes in `orca agent launch` and `orca worktree create`. `--worktree` checks where that workspace runs agents, such as its SSH host or WSL distro; a stopped WSL distro is not started to check.
+
 ## Agents by ID
 
 ```bash

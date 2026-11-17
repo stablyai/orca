@@ -31,5 +31,16 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
       'orca agent launch --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
       'orca agent launch --agent claude --worktree path:/projects/myapp --focus'
     ]
+  },
+  {
+    path: ['agent', 'installed'],
+    summary: 'List the agent CLIs installed on this host, with the IDs --agent takes',
+    usage: 'orca agent installed [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Lists the agents Orca detects on the host, including ones set up with a custom command in Settings → Agents. Each `id` is what `orca agent launch --agent` and `orca worktree create --agent` take.',
+      '--worktree checks where that workspace runs agents, such as its SSH host or WSL distro. A stopped WSL distro is not started to check.'
+    ],
+    examples: ['orca agent installed --json', 'orca agent installed --worktree active']
   }
 ]
