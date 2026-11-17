@@ -1,5 +1,5 @@
 import type { GitBranchChangeStatus } from '../status/git-status-types'
-import type { LargeDiffRenderLimit } from '../../large-diff-render-limit'
+import type { LargeDiffRenderLimit } from '../../source-control/diff/large-diff-render-limit'
 
 // Mobile consumes git-status-types.ts directly to avoid this desktop aggregate.
 

@@ -1,5 +1,5 @@
 import type { WorkspaceViewChoice } from '../../../../src/shared/workspace-view/workspace-view-options'
-import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 
 // Omit Ports: the phone has no port scan; desktop retains it.
 const PHONE_HIDDEN_CARD_PROPERTIES: ReadonlySet<WorktreeCardProperty> = new Set(['ports'])

@@ -3,7 +3,7 @@ import {
   isRepoHidden,
   withoutHiddenFilterRepoIds,
   type HiddenProjects
-} from '../../hidden-projects'
+} from '../../project/catalog/hidden-projects'
 import type { Worktree } from '../../worktree/types'
 import type { WorktreeGroupBy } from '../row-types'
 

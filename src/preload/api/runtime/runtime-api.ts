@@ -1,4 +1,8 @@
 import type {
+  RendererStatusPublication,
+  RendererStatusAck
+} from '../../../shared/agent-status/renderer-status-publication'
+import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
   CrewSubscriptionSetupResult
@@ -34,6 +38,7 @@ export type RuntimeEnvironmentSubscriptionHandle = {
 
 export type RuntimeApi = {
   runtime: {
+    syncAgentStatus: (batch: RendererStatusPublication) => Promise<RendererStatusAck>
     syncWindowGraph: (
       graph: RuntimeRendererSyncWindowGraph
     ) => Promise<RuntimeSyncWindowGraphResult>
@@ -177,6 +182,8 @@ export type RuntimeApi = {
   wsl: {
     isAvailable: () => Promise<boolean>
     listDistros: () => Promise<string[]>
+    /** The `\\wsl.localhost\<distro>` spelling of a path on a drive mapped to a distro share; else null. */
+    resolveMappedDrivePath: (path: string) => Promise<string | null>
   }
   pwsh: {
     isAvailable: () => Promise<boolean>

@@ -11,6 +11,7 @@ import {
   formatAllAgentsInState,
   formatStateCount,
   formatSummaryStateLabel,
+  isUnreadDoneAgent,
   selectSummaryGroupIconAgents,
   summarizeAgentIdentities,
   summarizeAgents
@@ -90,14 +91,13 @@ export function CompactAgentSummaryButton({
   unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
-  const groups: readonly (AgentGroupSummary & { unread?: boolean })[] =
+  const isUnread = unreadByPaneKey
+    ? (agent: DashboardAgentRowData) => unreadByPaneKey[agent.paneKey] ?? false
+    : undefined
+  const groups: readonly AgentGroupSummary[] =
     precomputedGroups ??
-    buildSummaryAgentGroups(
-      agents,
-      unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
-    ).map((group) => ({
+    buildSummaryAgentGroups(agents).map((group) => ({
       state: group.state,
-      unread: group.unread,
       count: group.agents.length,
       icons: selectSummaryGroupIconAgents(group.agents, 3),
       identities: []
@@ -110,7 +110,9 @@ export function CompactAgentSummaryButton({
           subject: subjectLabel,
           states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
         })
-  const unreadCount = groups.find((group) => group.unread)?.count ?? 0
+  const unreadCount = isUnread
+    ? agents.reduce((count, agent) => count + (isUnreadDoneAgent(agent, isUnread) ? 1 : 0), 0)
+    : 0
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
@@ -197,15 +199,10 @@ export function CompactAgentSummaryButton({
               const hiddenIconCount = Math.max(0, group.count - iconAgents.length)
               return (
                 <span
-                  key={group.unread ? 'unread' : group.state}
+                  key={group.state}
                   className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
                 >
-                  <AgentStateDot
-                    state={group.state}
-                    unread={group.unread}
-                    size="sm"
-                    tooltipSide="right"
-                  />
+                  <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
                   {/* Overlap identities only within the same status cluster to save width. */}
                   <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
                     {iconAgents.map((agent) => (

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { ChevronDown, Server } from 'lucide-react'
-import type { NotificationSourceId } from '../../../../../shared/notification-source'
+import type { NotificationSourceId } from '../../../../../shared/notifications/notification-source'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { useNotificationSourceOptions } from './use-notification-source-options'

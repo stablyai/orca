@@ -15,7 +15,7 @@ import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
 import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import { noteAgentLaunchPaneClosedByUser } from '../../../../lib/agent-session/launch/pane/agent-launch-pane-closes'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
 import type { TerminalTabCloseIntent } from '../../../terminal/terminal-tab-close-intent'
 import type { useTerminalPaneTabDetachActions } from '../detach/use-terminal-pane-tab-detach-actions'

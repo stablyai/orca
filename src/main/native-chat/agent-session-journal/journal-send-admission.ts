@@ -1,5 +1,5 @@
 import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { JournalSubmissionInput } from './journal-store-contracts'
 

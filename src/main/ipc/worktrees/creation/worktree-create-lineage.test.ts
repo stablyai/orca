@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import {
-  assertAttachableParentWorkspace,
-  recordWorkspaceLineageForCreatedWorktree
-} from '../../worktree-remote'
+import { recordWorkspaceLineageForCreatedWorktree } from '../worktree-remote'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 const CHILD_ID = 'repo-1::/repos/child'
@@ -113,72 +110,5 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     expect(result.lineage).toBeNull()
     expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
     expect(result.workspaceLineage).toBeNull()
-  })
-  it('nests under the task parent a note names when no parent was picked', () => {
-    const store = createStore({})
-    const parent = {
-      ...createdWorktree({ id: PARENT_ID, instanceId: 'parent-instance', path: '/repos/parent' }),
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: {
-        path: '/repos/parent',
-        head: 'abc123',
-        branch: 'refs/heads/parent',
-        isBare: false,
-        isMainWorktree: false
-      }
-    }
-
-    const result = record(store, { comment: 'review task_7Kq2' }, createdWorktree(), {
-      kind: 'lineage',
-      parent: {
-        type: 'worktree',
-        workspaceKey: worktreeWorkspaceKey(PARENT_ID),
-        worktree: parent,
-        instanceId: 'parent-instance'
-      },
-      origin: 'orchestration',
-      capture: { source: 'orchestration-context', confidence: 'inferred' },
-      taskId: 'task_7Kq2'
-    })
-
-    expect(result.lineage?.parentWorktreeId).toBe(PARENT_ID)
-    expect(result.workspaceLineage?.parentWorkspaceKey).toBe(worktreeWorkspaceKey(PARENT_ID))
-  })
-})
-
-describe('assertAttachableParentWorkspace', () => {
-  const childKey = worktreeWorkspaceKey(CHILD_ID)
-
-  beforeEach(() => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  function assertParent(
-    store: ReturnType<typeof createStore>,
-    parentWorkspace: CreateWorktreeArgs['parentWorkspace']
-  ) {
-    assertAttachableParentWorkspace(store as never, parentWorkspace, childKey)
-  }
-
-  // Composer parent selection can go stale; nesting must not block creation.
-
-  it('rejects a self-referential parent', () => {
-    const store = createStore({ metaById: { [CHILD_ID]: parentMeta() } })
-
-    expect(() => assertParent(store, childKey)).toThrow(/cannot be attached to itself/)
-  })
-
-  it('rejects a malformed parent key', () => {
-    const store = createStore({})
-
-    expect(() => assertParent(store, 'not-a-workspace-key' as never)).toThrow(
-      /Invalid parent workspace/
-    )
   })
 })

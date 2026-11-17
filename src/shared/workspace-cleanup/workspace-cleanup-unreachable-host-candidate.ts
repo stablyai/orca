@@ -1,4 +1,4 @@
-import { getRepoRoutingConnectionId, type ExecutionHostId } from '../execution-host'
+import { getRepoRoutingConnectionId, type ExecutionHostId } from '../execution-host/execution-host'
 import type { Repo } from '../repository/repo-types'
 import {
   createWorkspaceCleanupFingerprint,

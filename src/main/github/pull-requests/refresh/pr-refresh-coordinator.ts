@@ -32,7 +32,7 @@ import {
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   deliverablePRBranchOutcome,
   setPRBranchReadCompletion,

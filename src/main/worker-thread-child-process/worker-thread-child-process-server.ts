@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { spawnProcess } from '@orca/process-host'
 import type {
   WorkerThreadChildErrorPayload,
@@ -26,7 +27,14 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
   const children = new Map<
     number,
-    { child: ChildProcessWithoutNullStreams; pendingOutputBytes: number }
+    {
+      child: ChildProcessWithoutNullStreams
+      pendingOutputBytes: number
+      group?: ReturnType<typeof createPosixGroupTermination>
+      stopping: boolean
+      closed: boolean
+      groupTerminated: boolean
+    }
   >()
 
   const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
@@ -37,7 +45,22 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
-    const state = { child, pendingOutputBytes: 0 }
+    const state: NonNullable<ReturnType<typeof children.get>> = {
+      child,
+      pendingOutputBytes: 0,
+      stopping: false,
+      closed: false,
+      groupTerminated: false
+    }
+    if (spec.terminationBarrier && process.platform !== 'win32') {
+      state.group = createPosixGroupTermination(child, () => {
+        state.groupTerminated = true
+        if (state.closed) {
+          children.delete(id)
+        }
+        port.postMessage({ type: 'group-terminated', id })
+      })
+    }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
       state.pendingOutputBytes += chunk.byteLength
@@ -62,8 +85,14 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('error', postError)
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
-      children.delete(id)
+      state.closed = true
+      if (!state.group || state.groupTerminated) {
+        children.delete(id)
+      }
       port.postMessage({ type: 'close', id, code, signal })
+      if (state.stopping) {
+        state.group?.close()
+      }
     })
   }
 
@@ -78,7 +107,19 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const { child } = state
     try {
-      if (request.type === 'output-consumed') {
+      if (request.type === 'stop-owned-group') {
+        if (state.group) {
+          state.stopping = true
+          void state.group.stop()
+          if (state.closed) {
+            state.group.close()
+          }
+        }
+      } else if (request.type === 'release') {
+        if (!state.stopping && state.closed) {
+          children.delete(request.id)
+        }
+      } else if (request.type === 'output-consumed') {
         state.pendingOutputBytes = Math.max(0, state.pendingOutputBytes - request.bytes)
         if (state.pendingOutputBytes < OUTPUT_HIGH_WATER_BYTES) {
           child.stdout?.resume()

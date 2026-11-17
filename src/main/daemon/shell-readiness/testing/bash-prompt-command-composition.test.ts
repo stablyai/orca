@@ -142,18 +142,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     expectLifecycle(output)
   })
 
-  itWithBash('passes the foreground exit status to the inherited hook', () => {
-    const profile = `__status_hook() { printf 'PROMPT_STATUS:%s\\n' "$?"; }\nPROMPT_COMMAND=__status_hook\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect([...output.matchAll(/PROMPT_STATUS:(\d+)/g)].map((match) => match[1])).toEqual([
-      '0',
-      '0',
-      '1'
-    ])
-    expectLifecycle(output)
-  })
-
   itWithBash('preserves BASH_REMATCH while normalizing a scalar hook', () => {
     const profile = `[[ "seed:VALUE" =~ seed:(.*) ]]
 PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'

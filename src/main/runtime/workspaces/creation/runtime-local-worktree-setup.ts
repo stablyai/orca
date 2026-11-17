@@ -20,7 +20,7 @@ import {
   folderSharedSetupLacksApproval
 } from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { HookWorkspaceIdentity } from '../../../workspace-hooks/setup-hook-env-vars'
-import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspaces/folder-workspace-hooks'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

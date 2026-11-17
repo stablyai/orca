@@ -3,7 +3,10 @@ import { resolve } from 'node:path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { onWslMoveJournalChange } from '../cutover-recovery/wsl-move-cutover-journal'
 import { onWslDriveUncConversionJournalChange } from '../../../wsl/filesystem/wsl-drive-unc-conversion-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'

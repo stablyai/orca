@@ -2,15 +2,16 @@ import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch/cho
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   normalizeAgentDefaultSurface,
   carriedChatUiLaunchSettings
-} from '../../../../shared/native-chat/native-chat-providers'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
-import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
+} from '../../../../shared/native-chat/settings/native-chat-providers'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeContextualTourIds,
@@ -23,12 +24,12 @@ import {
 } from '../../../../shared/feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type {
   PairedUiState,
   PairingLocalUiField
 } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
@@ -44,8 +45,8 @@ import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/pe
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeUiLanguage } from '../../../../shared/ui-language'
-import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
+import { normalizeUiLanguage } from '../../../../shared/i18n/ui-language'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
@@ -109,7 +110,9 @@ export function mergeHostWebUIState(
     agentsReadFilter: local.agentsReadFilter,
     agentsGroupBy: local.agentsGroupBy,
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
-    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
+    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey,
+    wslMovedSectionCollapsed: local.wslMovedSectionCollapsed,
+    hiddenWslMovedProjectKeys: local.hiddenWslMovedProjectKeys
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
   return {
     ...mergeWebUIState(local, incoming),

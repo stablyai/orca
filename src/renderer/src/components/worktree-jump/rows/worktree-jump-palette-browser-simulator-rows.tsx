@@ -14,7 +14,7 @@ import {
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { BrowserFavicon } from '@/components/browser-favicon'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function WorktreeJumpPaletteSimulatorRow({
   entry,

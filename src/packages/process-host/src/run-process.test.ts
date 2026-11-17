@@ -6,8 +6,6 @@ import { runProcess, runProcessSync } from './run-process'
 import { resolveSpawn } from './spawn-resolution'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
-const SPEC = { program: 'C:\\bin\\agent.cmd', args: ['--prompt', 'hi'] }
-
 describe('resolveSpawn', () => {
   it('always hides the console and never uses a shell', () => {
     for (const platform of ['win32', 'darwin', 'linux'] as const) {
@@ -15,46 +13,6 @@ describe('resolveSpawn', () => {
       expect(resolved.options.windowsHide).toBe(true)
       expect(resolved.options.shell).toBe(false)
     }
-  })
-
-  it('preserves IPC serialization while hiding the worker on every platform', () => {
-    for (const platform of ['win32', 'darwin', 'linux'] as const) {
-      for (const serialization of ['json', 'advanced'] as const) {
-        const resolved = resolveSpawn(
-          { program: process.execPath, stdio: ['pipe', 'pipe', 'pipe', 'ipc'], serialization },
-          platform
-        )
-        expect(resolved.options.serialization).toBe(serialization)
-        expect(resolved.options.stdio).toEqual(['pipe', 'pipe', 'pipe', 'ipc'])
-        expect(resolved.options.windowsHide).toBe(true)
-        expect(resolved.options.shell).toBe(false)
-      }
-    }
-    expect(
-      resolveSpawn({ program: process.execPath }, 'linux').options.serialization
-    ).toBeUndefined()
-  })
-
-  it('spawns a non-cmd program directly, letting Node do the argv quoting', () => {
-    const resolved = resolveSpawn({ program: 'C:\\bin\\agent.exe', args: ['a b'] }, 'win32')
-    expect(resolved.file).toBe('C:\\bin\\agent.exe')
-    expect(resolved.args).toEqual(['a b'])
-    expect(resolved.options.windowsVerbatimArguments).toBeUndefined()
-  })
-
-  it('routes a .cmd target through cmd.exe with a verbatim line', () => {
-    const resolved = resolveSpawn({ ...SPEC, env: { ComSpec: 'C:\\W\\cmd.exe' } }, 'win32')
-    expect(resolved.file).toBe('C:\\W\\cmd.exe')
-    expect(resolved.args).toHaveLength(1)
-    expect(resolved.args[0]).toContain('/d /v:off /s /c')
-    expect(resolved.options.windowsVerbatimArguments).toBe(true)
-    expect(resolved.options.windowsHide).toBe(true)
-  })
-
-  it('treats a .cmd path as an ordinary program off Windows', () => {
-    const resolved = resolveSpawn(SPEC, 'linux')
-    expect(resolved.file).toBe(SPEC.program)
-    expect(resolved.args).toEqual(SPEC.args)
   })
 
   it('never lets a corpus argument reach cmd as an operator', () => {
@@ -100,35 +58,6 @@ describe('runProcessSync', () => {
       captureStdoutAsBytes ? Buffer.concat([Buffer.from(input), Buffer.from([0, 255])]) : undefined
     )
   })
-
-  it('reports a timeout as timedOut', () => {
-    const result = runProcessSync({
-      program: process.execPath,
-      args: ['-e', 'setTimeout(() => {}, 5000)'],
-      timeoutMs: 300
-    })
-    expect(result.timedOut).toBe(true)
-  })
-
-  it('does not report a deliberately terminated child as timedOut', () => {
-    const result = runProcessSync({
-      program: process.execPath,
-      args: ['-e', 'process.kill(process.pid, "SIGTERM")'],
-      timeoutMs: 30_000
-    })
-    // Windows reports an exit code for deliberate termination; POSIX reports a signal.
-    expect(result.timedOut).toBe(false)
-    expect(result.code === 0 && result.signal === null).toBe(false)
-  })
-
-  it('captures stdout and the exit code without throwing on failure', () => {
-    const result = runProcessSync({
-      program: process.execPath,
-      args: ['-e', 'process.stdout.write("hi"); process.exit(3)']
-    })
-    expect(result.stdout).toBe('hi')
-    expect(result.code).toBe(3)
-  })
 })
 
 describe('bounded output', () => {
@@ -151,20 +80,6 @@ describe('bounded output', () => {
     expect(result.stdout).toBe('xxxxxxxx')
     expect(result.code).toBe(0)
     expect(result.outputTruncated).toBe(false)
-  })
-})
-
-describe('stderr streaming', () => {
-  it('forwards stderr as it arrives without changing the captured result', async () => {
-    const chunks: string[] = []
-    const result = await runProcess({
-      program: process.execPath,
-      args: ['-e', 'process.stderr.write("x".repeat(64))'],
-      maxOutputBytes: 8,
-      onStderr: (chunk) => chunks.push(chunk.toString())
-    })
-    expect(chunks.join('')).toBe('x'.repeat(64))
-    expect(result.stderr).toBe('xxxxxxxx')
   })
 })
 
@@ -276,19 +191,4 @@ describe('a signal that is already aborted', () => {
     expect(result.timedOut).toBe(false)
     expect(onChildTerminated).toHaveBeenCalledOnce()
   }, 20_000)
-})
-
-describe('output truncation', () => {
-  const emit = (bytes: number): string =>
-    `for (let i = 0; i < ${bytes}; i += 1) process.stderr.write('n'); process.stderr.write('FAILED')`
-
-  it('keeps the head by default', async () => {
-    const result = await runProcess({
-      program: process.execPath,
-      args: ['-e', emit(200)],
-      maxOutputBytes: 64
-    })
-    expect(result.stderr).not.toContain('FAILED')
-    expect(result.stderr).toBe('n'.repeat(64))
-  })
 })

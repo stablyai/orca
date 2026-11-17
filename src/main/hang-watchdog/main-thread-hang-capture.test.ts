@@ -12,7 +12,12 @@ const state = vi.hoisted(() => ({
   terminations: new Array<() => void>(),
   records: new Array<unknown>()
 }))
-vi.mock('node:worker_threads', () => ({ isMainThread: false, parentPort: null, workerData: null }))
+vi.mock('node:worker_threads', () => ({
+  isMainThread: false,
+  parentPort: null,
+  workerData: null,
+  getEnvironmentData: () => undefined
+}))
 vi.mock('node:inspector', () => ({
   Session: class {
     connectToMainThread() {}

@@ -8,8 +8,8 @@ import {
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-education/interactions/feature-interactions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { ChatUiLaunchTipVariant } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 

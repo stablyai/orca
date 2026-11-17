@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { BrowserClientDownloadTransferStore } from './browser-client-download-transfers'
 import {
   captureRuntimeFileMutationExpectation,

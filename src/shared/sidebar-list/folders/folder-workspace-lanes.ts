@@ -1,6 +1,6 @@
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import { getFolderWorkspaceHostId } from '../../folder-workspaces/folder-workspace-host-id'
 import type { WorkspaceStatusDefinition } from '../../worktree/types'
 import {
@@ -28,7 +28,7 @@ export function getRenderableFolderWorkspaces(
   for (const folderWorkspace of folderWorkspaces) {
     const projectGroup = projectGroupsById.get(folderWorkspace.projectGroupId)
     // A group filtered out for host visibility legitimately hides its workspaces.
-    if (!projectGroup?.parentPath) {
+    if (!projectGroup) {
       continue
     }
     // Stamp an unstamped folder the way catalog adoption does, so its card, label and section name

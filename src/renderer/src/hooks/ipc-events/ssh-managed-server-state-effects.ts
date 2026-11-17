@@ -2,7 +2,7 @@ import type {
   SshConnectionState,
   SshManagedServerLinkedProject
 } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -11,7 +11,7 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { toastSshHostMoveRefused } from './ssh-managed-server-refusal-toast'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'

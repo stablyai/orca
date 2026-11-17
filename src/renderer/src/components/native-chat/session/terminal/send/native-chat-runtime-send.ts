@@ -164,7 +164,13 @@ export function sendNativeChatTypedCommand(
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(ptyId)
         }
-        markSubmitted()
+        markSubmitted(
+          outcome === 'accepted'
+            ? 'submitted'
+            : outcome === 'unknown'
+              ? 'uncertain'
+              : 'not-submitted'
+        )
       }
       const typeCommand = (): void => {
         void typeAgentTuiCommand({

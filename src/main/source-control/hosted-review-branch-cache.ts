@@ -3,7 +3,7 @@ import type {
   HostedReviewBranchCacheIdentity,
   HostedReviewBranchCacheOptions
 } from './hosted-review-branch-cache-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   HostedReviewForBranchOutcome,
   HostedReviewInfo
@@ -46,7 +46,7 @@ import {
   noteFailure
 } from './hosted-review-lookup-backoff'
 import { observeProviderRead } from './hosted-review-provider-read'
-import { scaleReviewRefreshInterval } from '../../shared/review-refresh-policy'
+import { scaleReviewRefreshInterval } from '../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,

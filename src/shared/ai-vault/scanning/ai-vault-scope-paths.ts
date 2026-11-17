@@ -1,4 +1,7 @@
-import { isRuntimePathAbsolute, normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import {
+  isRuntimePathAbsolute,
+  normalizeRuntimePathForComparison
+} from '../../file-access/cross-platform-path'
 import type { ProjectHostSetupProjection } from '../../project/host-setup/project-host-setup-projection'
 import type { ProjectHostSetup } from '../../project/project-types'
 import type { AiVaultScope } from '../contracts/ai-vault-types'
