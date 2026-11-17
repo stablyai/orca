@@ -26,14 +26,8 @@ import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
-import {
-  SubscriberDeliveryLane,
-  type SubscriberDeliveryRetention
-} from './agent-session-subscriber-delivery-lane'
-import {
-  subscriberLaneRetention,
-  subscriberLaneRunners
-} from './agent-session-subscriber-lane-runners'
+import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
+import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
@@ -42,7 +36,12 @@ import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-sug
 export type { AgentSessionSubscribersHooks } from './agent-session-subscribe-input'
 
 export class AgentSessionSubscribers {
-  private readonly lanes = new WeakMap<Subscriber, SubscriberDeliveryLane>()
+  private readonly lanes = new SubscriberLanes({
+    deliveryPort: () => this.deliveryPort(),
+    now: () => this.now(),
+    isActive: (subscriber) => this.isActive(subscriber),
+    fail: (subscriber, error) => this.fail(subscriber, error)
+  })
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
   private readonly forkMarkers = new ForkMarkerSubscriptions(
     () => this.deliveryPort(),
@@ -66,7 +65,7 @@ export class AgentSessionSubscribers {
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
   retention(measured: Map<object, number>): SubscriberDeliveryRetention[] {
-    return subscriberLaneRetention(this.bySession, this.lanes, this.now(), measured)
+    return this.lanes.retention(this.bySession, this.now(), measured)
   }
 
   subscriberCountForTests(sessionId: string): number {
@@ -87,10 +86,10 @@ export class AgentSessionSubscribers {
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
-    subscriber.stopped = this.lane(subscriber).stopped
+    subscriber.stopped = this.lanes.of(subscriber).stopped
     const replaced = session.get(input.id)
     if (replaced) {
-      this.lanes.get(replaced)?.clear()
+      this.lanes.clear(replaced)
     }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
@@ -156,7 +155,7 @@ export class AgentSessionSubscribers {
   ): void => {
     const hostNow = this.now()
     for (const subscriber of targets.filter(this.isActive)) {
-      this.lane(subscriber).liveText({ journal, fence, items, hostNow })
+      this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
     }
   }
 
@@ -181,7 +180,7 @@ export class AgentSessionSubscribers {
     const queuePort = () =>
       queueChanged ? port : (owedQueue ??= this.deliveryPort(sessionId, journal, true))
     for (const subscriber of this.subscribers(sessionId)) {
-      this.lane(subscriber).catchUp({
+      this.lanes.of(subscriber).catchUp({
         journal,
         port,
         queuePort,
@@ -213,7 +212,7 @@ export class AgentSessionSubscribers {
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
     for (const subscriber of this.subscribers(sessionId)) {
-      this.lane(subscriber).backgroundTasks(fence)
+      this.lanes.of(subscriber).backgroundTasks(fence)
     }
   }
 
@@ -300,22 +299,7 @@ export class AgentSessionSubscribers {
   }
 
   private enqueue(subscriber: Subscriber, deliver: () => Promise<unknown>): void {
-    this.lane(subscriber).ordered(deliver)
-  }
-
-  private lane(subscriber: Subscriber): SubscriberDeliveryLane {
-    const lane =
-      this.lanes.get(subscriber) ??
-      new SubscriberDeliveryLane(subscriberLaneRunners(subscriber, this.laneOwner))
-    this.lanes.set(subscriber, lane)
-    return lane
-  }
-
-  private readonly laneOwner = {
-    deliveryPort: () => this.deliveryPort(),
-    now: () => this.now(),
-    isActive: (subscriber: Subscriber) => this.isActive(subscriber),
-    fail: (subscriber: Subscriber, error: unknown) => this.fail(subscriber, error)
+    this.lanes.of(subscriber).ordered(deliver)
   }
 
   /**
@@ -331,7 +315,7 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
-    this.lanes.get(subscriber)?.clear()
+    this.lanes.clear(subscriber)
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
     if (session?.size === 0) {
