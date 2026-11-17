@@ -8,6 +8,7 @@ export const LEGACY_SOURCE_REFUSALS = [
   'source-queued-only-v1',
   'source-corrupt',
   'source-newer',
+  'source-history',
   'source-oversize'
 ] as const
 export type LegacySourceRefusalReason = (typeof LEGACY_SOURCE_REFUSALS)[number]

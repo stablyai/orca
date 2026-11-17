@@ -111,6 +111,20 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
       )
     )
   ).toMatchObject({ phase: 'refused', reason: 'source-orphan' })
+
+  // History an older Orca added to a converted chat without a record (as every chat in a journal
+  // from before records is): no pass absorbs it.
+  const unrecorded = await profile()
+  await unrecorded.convert('unopened')
+  const legacy = new Database(unrecorded.filename)
+  legacy.exec(`DELETE FROM agent_session_records WHERE session_id='unopened';
+    INSERT INTO journal_rows SELECT session_id,epoch,seq+1,ts,row_json FROM journal_rows
+      WHERE session_id='unopened' ORDER BY seq DESC LIMIT 1`)
+  legacy.close()
+  await initializeJournalDomainDatabase(unrecorded.root)
+  await unrecorded.launch().run()
+  expect(companions(unrecorded.filename)).toContain(unrecorded.filename)
+  expect(String(unrecorded.errors.at(-1))).toContain('history this store lacks')
 })
 
 it('finishes a removal stopped after the main file went', async () => {

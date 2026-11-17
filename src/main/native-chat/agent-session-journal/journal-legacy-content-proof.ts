@@ -58,9 +58,15 @@ export function legacySessionHold(
   // since is kept with the original's version.
   const queueDiffers = converted && hasQueue && !queueHeld(source, store, sessionId)
   if (!recorded) {
-    // An older Orca removes a record only when the person deletes the chat there (or its workspace),
-    // so, like a chat deleted here, turns it saved before that are not held. Text still waiting in
-    // a chat converted here is kept, as for any chat.
+    // The reconcile tracks chats by record (and a journal from before records has none), so history
+    // an older Orca added to a converted chat without one is read by no pass: it keeps the original.
+    // Conversions before the reconcile left no revision to compare.
+    if (converted && shown !== undefined && shown !== revision) {
+      throw new JournalLegacyRetentionError(
+        'an original chat without a record has history this store lacks',
+        'source-history'
+      )
+    }
     return {
       convert: true,
       original: queueDiffers ? originalVersion(source, sessionId, true) : undefined
@@ -253,7 +259,8 @@ function originalVersion(
   return {
     value: JSON.stringify({ version: 1, record: row?.record_json ?? null, queued }),
     identity: JSON.stringify([
-      row?.edits ?? null,
+      // A record that isn't valid JSON has no fields to read; its bytes are what a person has.
+      row?.edits ?? row?.record_json ?? null,
       queued.map((message) => [message.message_id, message.body_json, message.options_json])
     ])
   }
@@ -294,7 +301,9 @@ export function readLegacyProofSessions(
   for (const row of rows) {
     const session = readLegacyProofSession(db, store, tables, row)
     // V8 serializes a string with any character past Latin-1 at two bytes per character.
-    const size = (session.original?.value.length ?? 0) * 2
+    const size = session.original
+      ? (session.original.value.length + session.original.identity.length) * 2
+      : 0
     if (size > LEGACY_ORIGINAL_MAX_BYTES) {
       throw new JournalLegacyRetentionError(
         'an original chat holds more waiting text than one reply can carry',
