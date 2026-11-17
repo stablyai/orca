@@ -18,9 +18,9 @@ import {
 
 const META_PREFIX = 'orca-checkpoint: '
 
-export type WorktreeCheckpointKind = 'turn' | 'undo'
+type WorktreeCheckpointKind = 'turn' | 'undo'
 
-export type WorktreeCheckpointMeta = {
+type WorktreeCheckpointMeta = {
   v: 1
   kind: WorktreeCheckpointKind
   /** HEAD when the checkpoint was taken; null on an unborn branch. */
@@ -32,7 +32,7 @@ export type WorktreeCheckpointMeta = {
   labels?: Record<string, string>
 }
 
-export type WorktreeTree = {
+type WorktreeTree = {
   tree: string
   head: string | null
   indexTree: string | null

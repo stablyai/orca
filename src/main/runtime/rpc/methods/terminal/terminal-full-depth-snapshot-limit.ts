@@ -6,7 +6,7 @@
 //   loop (a new id each time) cannot turn a flaky link into a stream of 2 MB snapshots.
 // A quit-and-reopen is a new mount, so it always gets depth within those limits.
 export const FULL_DEPTH_SNAPSHOT_INTERVAL_MS = 2 * 60_000
-export const FULL_DEPTH_SNAPSHOTS_PER_PTY_PER_MINUTE = 3
+const FULL_DEPTH_SNAPSHOTS_PER_PTY_PER_MINUTE = 3
 const MINUTE_MS = 60_000
 // Prune once the maps hold this many entries; expired entries no longer limit anything.
 const PRUNE_AT_SIZE = 1024
@@ -37,7 +37,7 @@ export function admitFullDepthSnapshot(
 }
 
 /** Rows a client may get back when it asks for more than the recovery cut. */
-export const DEEP_REQUEST_FALLBACK_ROWS = 1000
+const DEEP_REQUEST_FALLBACK_ROWS = 1000
 
 /**
  * A requested snapshot (a hidden pane rebuilt on reveal after it missed output) asking for more

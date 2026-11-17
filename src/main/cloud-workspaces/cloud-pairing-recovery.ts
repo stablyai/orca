@@ -17,7 +17,7 @@ export function isPairingRejection(code: string | undefined, message: string): b
   )
 }
 
-export type CloudPairingTarget = {
+type CloudPairingTarget = {
   sandboxId: string
   /** owned: this computer's own workspace (its VM's environment); paired: a teammate's (a binding). */
   kind: 'owned' | 'paired'
@@ -56,13 +56,13 @@ export type CloudPairingRecoveryDeps = {
 }
 
 /** Attempts per saved pairing: the first, then two retries after transient failures. */
-export const MAX_RECOVERY_ATTEMPTS = 3
+const MAX_RECOVERY_ATTEMPTS = 3
 /** Wait before each retry (after the 1st and 2nd failed attempts). */
 export const RECOVERY_RETRY_DELAYS_MS = [30_000, 120_000] as const
 
 export type CloudPairingRepair = 'saved' | 'wrong_server' | 'failed'
 
-export type CloudPairingRecoveryOutcome =
+type CloudPairingRecoveryOutcome =
   | 'not_cloud'
   | 'already_tried'
   | 'repaired'
@@ -194,5 +194,3 @@ export function createCloudPairingRecovery(deps: CloudPairingRecoveryDeps) {
     recover
   }
 }
-
-export type CloudPairingRecovery = ReturnType<typeof createCloudPairingRecovery>

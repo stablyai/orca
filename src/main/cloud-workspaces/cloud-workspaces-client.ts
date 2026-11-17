@@ -39,7 +39,7 @@ export class CloudWorkspacesError extends Error {
   }
 }
 
-export type CloudWorkspacesClientOptions = {
+type CloudWorkspacesClientOptions = {
   baseUrl: string
   getAccessToken: (signal?: AbortSignal) => Promise<string>
   fetch?: typeof fetch
@@ -54,7 +54,7 @@ const MAX_READ_SNAPSHOT_BYTES = 16 * 1024 * 1024
 
 /** The read-snapshot 404s are states, not failures: each has its own copy. */
 const READ_SNAPSHOT_MISSES = ['not_found', 'no_snapshot', 'not_sealed_for_key'] as const
-export type ReadSnapshotMiss = (typeof READ_SNAPSHOT_MISSES)[number]
+type ReadSnapshotMiss = (typeof READ_SNAPSHOT_MISSES)[number]
 export type ReadSnapshotFetch =
   | { kind: 'sealed'; sealed: SealedReadSnapshot }
   | { kind: ReadSnapshotMiss }
@@ -149,7 +149,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
     },
     async patch(id: string, patch: CloudWorkspacePatch) {
-      return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)
+      return call('PATCH', ws(id), CloudWorkspaceResponseSchema.passthrough(), patch)
     },
     async wake(id: string) {
       return (

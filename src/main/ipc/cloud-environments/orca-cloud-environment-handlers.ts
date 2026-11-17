@@ -100,29 +100,28 @@ export function registerOrcaCloudEnvironmentHandlers(
     }
   }
 
+  const stopSenderWatches = (senderId: number): void => {
+    for (const [watchId, watch] of watches) {
+      if (watch.senderId === senderId) {
+        stopWatch(watchId)
+      }
+    }
+  }
+
   const trackSender = (sender: WebContents): void => {
     if (trackedSenders.has(sender.id)) {
       return
     }
     trackedSenders.add(sender.id)
     const senderId = sender.id
-    const cleanup = (): void => {
+    sender.once('destroyed', () => {
       trackedSenders.delete(senderId)
-      for (const [watchId, watch] of watches) {
-        if (watch.senderId === senderId) {
-          stopWatch(watchId)
-        }
-      }
-    }
-    sender.once('destroyed', cleanup)
+      stopSenderWatches(senderId)
+    })
     // A reload keeps the WebContents but drops every renderer listener.
     sender.on('did-start-navigation', (details) => {
       if (details.isMainFrame && !details.isSameDocument) {
-        for (const [watchId, watch] of watches) {
-          if (watch.senderId === senderId) {
-            stopWatch(watchId)
-          }
-        }
+        stopSenderWatches(senderId)
       }
     })
   }

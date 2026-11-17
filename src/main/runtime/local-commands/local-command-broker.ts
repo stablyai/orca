@@ -49,7 +49,7 @@ type LocalCommandRecord = {
   settledAt: number | null
 }
 
-export type LocalCommandRequestInput = {
+type LocalCommandRequestInput = {
   command: string
   cwd: string | null
   timeoutSec?: number
@@ -100,10 +100,6 @@ export class LocalCommandBroker {
     return () => {
       this.attachments.delete(attachmentId)
     }
-  }
-
-  hasAttachedDesktop(): boolean {
-    return this.attachments.size > 0
   }
 
   request(input: LocalCommandRequestInput): LocalCommandRequestResult {

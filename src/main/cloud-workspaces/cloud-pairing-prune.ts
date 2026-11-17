@@ -9,7 +9,7 @@
 // wipes a pairing. (Owned workspaces are retired by cloud-sandbox-gone-prune; this is the pairing
 // half.)
 
-export type CloudPairingBinding = {
+type CloudPairingBinding = {
   environmentId: string
   grantId: string | null
   /** The team the sandbox belongs to; absent on bindings saved by older versions. */

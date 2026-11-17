@@ -21,7 +21,7 @@ type Call = <T>(
  * The control plane puts the workspace to sleep before it changes the owner, then asks Orca Cloud
  * auth up to three things (6 s each). The usual 20 s would give up on a change that then lands.
  */
-export const OWNER_CHANGE_TIMEOUT_MS = 90_000
+const OWNER_CHANGE_TIMEOUT_MS = 90_000
 
 export function cloudWorkspaceOwnerChangeMethods(call: Call) {
   return {

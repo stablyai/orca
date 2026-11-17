@@ -1,6 +1,6 @@
 // Background delivery for queued Orca Cloud prompts runs only while prompts are owed: at the next
 // due attempt, never sooner than the base cadence, doubling while a pass changes nothing.
-export type OwedWorkBeat = {
+type OwedWorkBeat = {
   /** Something changed (a prompt was queued or settled): arm at the base cadence again. */
   poke(): void
   /** Run a pass now (startup), then keep the cadence while work is owed. */

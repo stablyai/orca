@@ -3,7 +3,7 @@
 import type { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 
 /** Header the control plane checks against the token's `org` claim. */
-export const ORCA_ORG_HEADER = 'x-orca-org'
+const ORCA_ORG_HEADER = 'x-orca-org'
 /** `x-orca-org` value for a personal account: the token must carry no org. */
 export const ORCA_ORG_HEADER_PERSONAL = 'user'
 export const ORG_MISMATCH = 'org_mismatch'

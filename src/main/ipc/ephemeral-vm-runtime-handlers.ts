@@ -23,8 +23,8 @@ import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-att
 import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
 import { installCloudSsh } from '../cloud-ssh/cloud-ssh-main'
 import { pendingVmCheckouts } from '../ephemeral-vm/pending-vm-checkouts'
+import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/hosted-remote-desktop'
 import {
-  cloudSandboxIdForEnvironment,
   preflightCloudWorkspaceDelete,
   type CloudDeletePreflight
 } from '../hosted-sandbox/cloud-delete-preflight'

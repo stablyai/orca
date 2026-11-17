@@ -26,7 +26,7 @@ const ContinueAnswer = z.looseObject({
 
 /** `recordedAt` is the host's clock and `drainStartedAt` this machine's: tolerate skew between
  *  them so an offer the drain just recorded is not mistaken for an older one. */
-export const CLOCK_SKEW_TOLERANCE_MS = 2 * 60_000
+const CLOCK_SKEW_TOLERANCE_MS = 2 * 60_000
 /** A host too slow to list its offers before a restart is treated as unable to (falls back to time). */
 const OFFER_SNAPSHOT_TIMEOUT_MS = 5_000
 

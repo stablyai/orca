@@ -23,7 +23,7 @@ export function githubRepoSlug(repoUrl: string): string | null {
   }
 }
 
-export function parseGitHubRepoIds(stdout: string): GitHubRepoIds | null {
+function parseGitHubRepoIds(stdout: string): GitHubRepoIds | null {
   const [repoId, ownerId] = stdout.trim().split(/\s+/).map(Number)
   return repoId &&
     ownerId &&

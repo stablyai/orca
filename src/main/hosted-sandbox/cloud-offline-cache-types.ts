@@ -62,7 +62,7 @@ export type OfflineCacheEntry = {
 }
 
 /** On disk and in memory the answer stays serialized; it is parsed only when read. */
-export type StoredEntry = Omit<OfflineCacheEntry, 'result'> & { resultJson: string }
+type StoredEntry = Omit<OfflineCacheEntry, 'result'> & { resultJson: string }
 
 export type EnvironmentFile = {
   version: 2

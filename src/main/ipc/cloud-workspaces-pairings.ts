@@ -38,7 +38,7 @@ const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
 
 type GetService = () => Promise<CloudWorkspacesService | null>
 
-export type CloudWorkspacesPairings = {
+type CloudWorkspacesPairings = {
   prune: CloudPairingPrune
   readBindings: () => Promise<Record<string, Binding>>
   updateBindings: (

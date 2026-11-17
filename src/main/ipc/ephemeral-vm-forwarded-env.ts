@@ -8,10 +8,10 @@ import {
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 
 /** Which recipe host the renderer asks about. Main looks its recipe up; it never takes a passEnv. */
-export type RecipeForwardedEnvSummaryArgs = { environmentId?: string }
+type RecipeForwardedEnvSummaryArgs = { environmentId?: string }
 
 /** The recipe's passEnv as its lifecycle scripts get it; undefined (whole env) when unresolvable. */
-export function resolveRecipeHostPassEnv(
+function resolveRecipeHostPassEnv(
   store: Store,
   userDataPath: string,
   environmentId: unknown

@@ -46,7 +46,7 @@ const MAX_CAPTURED_TERMINALS = 12
 const BEAT_MS = 30_000
 const MAX_BEAT_BACKOFF_STEPS = 4
 
-export type CloudOfflineService = {
+type CloudOfflineService = {
   cache: CloudOfflineCache
   queue: CloudMessageQueue
   /** Read the workspace's terminals, git state and known chats into the cache (before Sleep). */

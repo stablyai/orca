@@ -1,7 +1,7 @@
 // The idle timer asks the window to run its ordinary Sleep, so the suspend that follows looks
 // like any other. Remember the request per sandbox so that suspend tells the control plane it was
 // the idle timer: only sleeps someone chose hold off predictive wake on every client.
-export type HostedSuspendReason = 'idle' | 'user'
+type HostedSuspendReason = 'idle' | 'user'
 
 /** The window's Sleep normally lands within seconds of the request; an older one is stale. */
 export const IDLE_SLEEP_REQUEST_TTL_MS = 60_000

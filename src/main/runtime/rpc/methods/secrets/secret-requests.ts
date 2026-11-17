@@ -22,7 +22,7 @@ import { defineMethod, type RpcContext } from '../../core'
 import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 import { verifiedCallerTerminalHandle } from '../orchestration/turn-sender'
 
-export type SecretRequestDeps = {
+type SecretRequestDeps = {
   store: () => SecretRequestStore
   sessionEnvNames: () => Promise<ReadonlySet<string>>
   /** Only a cloud workspace's orcad takes requests; a desktop's local runtime refuses them. */

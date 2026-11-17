@@ -165,7 +165,7 @@ async function hostSaysOrcaCloud(
  * An SSH target that reaches an Orca Cloud workspace (`orca ssh` writes `orca-*` aliases that proxy
  * through the Orca CLI; OpenSSH config Includes can surface them as targets).
  */
-export function isOrcaCloudSshConnection(connectionId: string | null | undefined): boolean {
+function isOrcaCloudSshConnection(connectionId: string | null | undefined): boolean {
   if (!connectionId) {
     return false
   }

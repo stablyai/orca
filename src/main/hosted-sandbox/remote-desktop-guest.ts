@@ -41,9 +41,9 @@ const PAGE_READY_TIMEOUT_MS = 10_000
 const CONNECT_WATCH_MS = 20_000
 const CONNECT_POLL_MS = 150
 
-export type RemoteDesktopGuestState = RemoteDesktopPageState
+type RemoteDesktopGuestState = RemoteDesktopPageState
 
-export type RemoteDesktopGuestDeps = {
+type RemoteDesktopGuestDeps = {
   browserPageId: string
   guest: Electron.WebContents
   platform?: NodeJS.Platform

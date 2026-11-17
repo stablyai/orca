@@ -7,7 +7,7 @@ import { loopbackListenerPids } from './loopback-callback-listener'
 const ONE_SHOT_GRACE_MS = 3_000
 const LISTENER_POLL_MS = 1_000
 
-export type LoopbackCallbackGrantDeps = {
+type LoopbackCallbackGrantDeps = {
   listenerPids?: (port: number) => Promise<number[]>
   pollMs?: number
 }

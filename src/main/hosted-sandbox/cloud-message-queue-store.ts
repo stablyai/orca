@@ -30,7 +30,7 @@ const StoredPromptSchema = z.looseObject({
 })
 const SealedQueueSchema = z.object({ version: z.literal(2), prompts: z.array(z.unknown()) })
 
-export async function readSealedPrompts(
+async function readSealedPrompts(
   path: string,
   codec: OfflineCacheCodec | null
 ): Promise<StoredPrompt[]> {
@@ -51,7 +51,7 @@ export async function readSealedPrompts(
   }
 }
 
-export async function writeSealedPrompts(
+async function writeSealedPrompts(
   path: string,
   codec: OfflineCacheCodec | null,
   prompts: readonly StoredPrompt[]
@@ -67,7 +67,7 @@ export async function writeSealedPrompts(
 }
 
 /** The first build kept the queue as plaintext JSON beside the sealed file; it is never read. */
-export function removeLegacyPlaintextQueue(path: string): Promise<void> {
+function removeLegacyPlaintextQueue(path: string): Promise<void> {
   return rm(join(dirname(path), 'orca-cloud-queued-prompts.json'), { force: true })
 }
 

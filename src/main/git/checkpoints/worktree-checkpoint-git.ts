@@ -25,7 +25,7 @@ export type CheckpointGitOptions = {
   timeoutMs?: number
 }
 
-export type CheckpointGit = (args: string[], options?: CheckpointGitOptions) => Promise<string>
+type CheckpointGit = (args: string[], options?: CheckpointGitOptions) => Promise<string>
 
 export type CheckpointRepo = {
   /** The worktree root; every path below is relative to it. */
@@ -62,7 +62,7 @@ export function gitExitCode(error: unknown): number | null {
   return typeof code === 'number' ? code : null
 }
 
-export function defaultCheckpointGit(cwd: string): CheckpointGit {
+function defaultCheckpointGit(cwd: string): CheckpointGit {
   return async (args, options = {}) => {
     const { stdout } = await gitExecFileAsync(args, {
       cwd,

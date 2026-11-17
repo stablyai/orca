@@ -31,7 +31,7 @@ export type HostedSandboxConfig = {
 }
 
 /** `reason` on the provider error when the team's MFA policy refused the token. */
-export const MFA_REQUIRED_REASON = 'mfa_required'
+const MFA_REQUIRED_REASON = 'mfa_required'
 
 /** Reads a copy of the body, so the caller can still read the response. */
 export async function isMfaRequiredRefusal(response: Response): Promise<boolean> {

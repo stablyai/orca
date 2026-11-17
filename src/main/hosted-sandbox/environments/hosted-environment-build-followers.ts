@@ -5,9 +5,9 @@ import type { HostedEnvironmentBuildView } from '../../../shared/hosted-sandbox/
 import { watchHostedEnvironmentBuild } from './hosted-environment-build-watch'
 import type { HostedEnvironmentClient } from './hosted-environment-client'
 
-export type HostedEnvironmentBuildLogChunk = { stream: 'stdout' | 'stderr'; data: string }
+type HostedEnvironmentBuildLogChunk = { stream: 'stdout' | 'stderr'; data: string }
 
-export type HostedEnvironmentBuildFollowPoll = {
+type HostedEnvironmentBuildFollowPoll = {
   build: HostedEnvironmentBuildView | null
   chunks: HostedEnvironmentBuildLogChunk[]
   /** Pass back on the next poll. */

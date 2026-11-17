@@ -6,7 +6,7 @@ const TCP_LISTEN = '0A'
 const LOOPBACK_OR_ANY =
   /^(?:[0-9A-F]{6}7F|00000000|0{24}01000000|0{32}|0{16}FFFF0000[0-9A-F]{6}7F|0{16}FFFF000000000000)$/
 
-export type ProcNetListener = { inode: string; uid: number }
+type ProcNetListener = { inode: string; uid: number }
 
 /** Listening sockets on `port` reachable from loopback, parsed from /proc/net/tcp or tcp6 text. */
 export function parseProcNetListeners(text: string, port: number): ProcNetListener[] {

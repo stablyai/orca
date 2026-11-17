@@ -9,7 +9,7 @@
 import { join } from 'node:path'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 
-export const CLOUD_PAIRING_BINDINGS_FILE = 'cloud-workspaces-environments.json'
+const CLOUD_PAIRING_BINDINGS_FILE = 'cloud-workspaces-environments.json'
 
 export function cloudPairingBindingsPath(userDataPath: string): string {
   return join(userDataPath, CLOUD_PAIRING_BINDINGS_FILE)

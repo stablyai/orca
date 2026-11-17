@@ -288,5 +288,3 @@ export function createReadSnapshotReader(deps: {
     }
   }
 }
-
-export type ReadSnapshotReader = ReturnType<typeof createReadSnapshotReader>

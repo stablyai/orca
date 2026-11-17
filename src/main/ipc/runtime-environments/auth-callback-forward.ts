@@ -24,11 +24,11 @@ import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-brows
 
 const ATTACH_TIMEOUT_MS = 20_000
 
-export type AuthCallbackTunnel = { client: BrowserNetworkTunnelClient; close: () => void }
+type AuthCallbackTunnel = { client: BrowserNetworkTunnelClient; close: () => void }
 /** Opens the host end of one sign-in's forward; injectable so tests can wire it in-process. */
 export type AuthCallbackTunnelOpener = (onClosed: () => void) => Promise<AuthCallbackTunnel>
 /** A sign-in's callback (flowId) or, without one, any OAuth callback an agent on the host listens for. */
-export type AuthCallbackForwardTarget = {
+type AuthCallbackForwardTarget = {
   environmentId: string
   port: number
   flowId: string | null

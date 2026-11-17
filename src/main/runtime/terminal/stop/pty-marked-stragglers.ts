@@ -9,7 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export const ORCA_PTY_SESSION_ENV = 'ORCA_PTY_SESSION_ID'
 
-export type MarkedProcess = { pid: number; pgid: number }
+type MarkedProcess = { pid: number; pgid: number }
 
 export type StragglerDeps = {
   platform?: NodeJS.Platform

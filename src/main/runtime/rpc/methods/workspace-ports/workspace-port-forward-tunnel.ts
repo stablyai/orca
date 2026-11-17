@@ -22,7 +22,7 @@ const TUNNEL_GENERATION = 1
 
 const LOOPBACK_TARGET_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])
 
-export class PortForwardDestinationRefusedError extends Error {
+class PortForwardDestinationRefusedError extends Error {
   constructor() {
     super('port_forward_destination_refused')
   }

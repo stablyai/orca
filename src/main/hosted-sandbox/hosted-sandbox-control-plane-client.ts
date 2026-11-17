@@ -124,7 +124,7 @@ export type HostedSandboxControlPlaneClient = HostedArchiveClient & {
   ): Promise<HostedGithubRepositoriesResponse>
 }
 
-export type HostedGithubConnectTarget = {
+type HostedGithubConnectTarget = {
   repo: string
   setupSessionId?: string
   repoId?: number

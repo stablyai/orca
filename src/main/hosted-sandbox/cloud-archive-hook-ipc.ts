@@ -6,7 +6,7 @@ import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
   type CloudWorkspaceTarget
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
-import { cloudSandboxIdForEnvironment } from './cloud-delete-preflight'
+import { cloudSandboxIdForEnvironment } from './hosted-remote-desktop'
 import { findCloudSandbox } from './cloud-workspace-target'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { NOT_CLOUD, failure } from './hosted-workspace-runtime'

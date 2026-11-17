@@ -4,7 +4,8 @@ import type {
   LoopbackCallbackForwardRequest
 } from '../../../shared/auth-callback-forward'
 
-function field(value: unknown, name: string): unknown {
+/** An own property of an untrusted IPC payload, never one inherited through its prototype. */
+export function field(value: unknown, name: string): unknown {
   return value && typeof value === 'object'
     ? Object.getOwnPropertyDescriptor(value, name)?.value
     : undefined

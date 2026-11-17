@@ -11,7 +11,7 @@ function defaultTimer(run: () => void, ms: number): () => void {
   return () => clearTimeout(timer)
 }
 
-export type WakePreconnectDeps = {
+type WakePreconnectDeps = {
   /** Creates (or keeps) the control socket for the saved pairing. */
   ensure: () => void
   isReady: () => boolean
