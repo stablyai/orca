@@ -15,6 +15,7 @@ import {
 import { hardenSqliteDatabaseFiles } from '../harden-database-files'
 import { classifyRowCacheFailure } from './row-cache-failure'
 import { readLegacyJsonSource, removeLegacyJsonSource } from './legacy-json-source'
+import { rowCacheWalCheckpoints, type RowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
 
 export type KeyedJsonRow = { key: string; json: string }
 
@@ -26,6 +27,7 @@ export type KeyedJsonRowCacheOptions = {
   holdConnection?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
+  walCheckpoints?: Pick<RowCacheWalCheckpoints, 'attach' | 'detach' | 'request'>
 }
 
 /**
@@ -63,12 +65,14 @@ export class KeyedJsonRowCache {
   private dataVersion: unknown
   private closed = false
   private readonly busyTimeoutMs: number
+  private readonly walCheckpoints: NonNullable<KeyedJsonRowCacheOptions['walCheckpoints']>
 
   constructor(
     readonly path: string,
     private readonly options: KeyedJsonRowCacheOptions
   ) {
     this.busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS
+    this.walCheckpoints = options.walCheckpoints ?? rowCacheWalCheckpoints
   }
 
   /**
@@ -199,6 +203,7 @@ export class KeyedJsonRowCache {
       // Sample under the write lock; publish the planned baseline only after COMMIT.
       const version = db.pragma('data_version', { simple: true })
       db.exec('COMMIT')
+      this.walCheckpoints.request(this.path)
       if (plan.next) {
         this.stored = plan.next
       } else {
@@ -305,6 +310,19 @@ export class KeyedJsonRowCache {
     })
     hardenSqliteDatabaseFiles(this.path)
     this.db = db
+    const autoCheckpoint = db.pragma('wal_autocheckpoint', { simple: true })
+    const restore = (): void => {
+      try {
+        if (this.db === db) {
+          db.pragma(`wal_autocheckpoint = ${Number(autoCheckpoint)}`)
+        }
+      } catch {
+        // A failing handle is rebuilt or closed by its next operation.
+      }
+    }
+    if (this.walCheckpoints.attach(this.path, restore)) {
+      db.pragma('wal_autocheckpoint = 0')
+    }
     // A fresh connection cannot vouch for a baseline read through an earlier one.
     this.dataVersion = undefined
     this.stored = new Map()
@@ -313,6 +331,7 @@ export class KeyedJsonRowCache {
   }
 
   private closeDatabase(): void {
+    this.walCheckpoints.detach(this.path)
     try {
       this.db?.close()
     } catch {
