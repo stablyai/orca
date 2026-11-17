@@ -27,6 +27,7 @@ import {
   type ProviderTimelineStream
 } from './provider-timeline-text-stream'
 import { splitProviderTimelineTextBlocks } from './provider-timeline-text-blocks'
+import { JOURNAL_TEXT_TAIL_WRITES } from '../agent-session-journal/journal-text-tail-writes'
 import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
 import { providerKey, turnOf } from './provider-timeline-rows'
@@ -198,11 +199,16 @@ export class ProviderTimelineTextStreams {
   planClose(plan: ProviderTimelinePlan, stream: ProviderTimelineStream, finalText?: string): void {
     if (finalText === undefined) {
       const owed = this.coalescer.snapshot(stream.id)
-      if (owed && owed.text.length !== stream.queuedLength) {
-        this.planText(plan, stream, owed.text)
+      // A saved tail folds into its payload with one last whole save.
+      if (
+        owed &&
+        (owed.text.length !== stream.queuedLength ||
+          (JOURNAL_TEXT_TAIL_WRITES && stream.queuedLength > 0))
+      ) {
+        this.planText(plan, stream, owed.text, false, true)
       }
     } else {
-      this.planText(plan, stream, finalText, true)
+      this.planText(plan, stream, finalText, true, true)
     }
     this.planRelease(plan, (each) => each === stream)
   }
@@ -269,7 +275,8 @@ export class ProviderTimelineTextStreams {
     plan: ProviderTimelinePlan,
     stream: ProviderTimelineStream,
     text: string,
-    providerFinal = false
+    providerFinal = false,
+    final = false
   ): void {
     const empty = providerFinal ? text.length === 0 : text.trim().length === 0
     if (stream.queuedLength === 0 && empty) {
@@ -284,7 +291,8 @@ export class ProviderTimelineTextStreams {
           kind: 'text-snapshot',
           identity: stream.row.identity,
           body,
-          scopeItemIds: stream.scopeItemIds
+          scopeItemIds: stream.scopeItemIds,
+          ...(final ? { final: true as const } : {})
         },
         options: { ...stream.producer, turnScope: stream.scope }
       },
