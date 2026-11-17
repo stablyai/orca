@@ -113,6 +113,7 @@ export function ReviewNotesSendMenuContent({
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
         selectPaneForegroundAgentsForWorktree(state, worktreeId),
+        state.runtimeAgentOrchestrationByPaneKey,
         selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
         state.agentStatusEpoch
       ]

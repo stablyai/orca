@@ -31,7 +31,10 @@ export type RunningAgentTargetState = Pick<
   Partial<
     Pick<
       AppState,
-      'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId' | 'paneForegroundAgentByPaneKey'
+      | 'runtimePaneTitlesByTabId'
+      | 'runtimeStatusByEnvironmentId'
+      | 'paneForegroundAgentByPaneKey'
+      | 'runtimeAgentOrchestrationByPaneKey'
     >
   > & {
     /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
@@ -156,6 +159,7 @@ function deriveTerminalAgentSendTargets(
 
   markCompletedWorkerParentPaneKeysSeen({
     entries: Array.from(state.agentStatusByPaneKey.values()),
+    runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     currentTabsById: tabsById,
     seenPaneKeys: statusPaneKeys
@@ -177,16 +181,17 @@ function deriveStatuslessTerminalAgentSendTargets(
     ptyIdsByTabId: state.ptyIdsByTabId,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
     seenPaneKeys: statusPaneKeys,
     now: 0
   })
   for (const row of rows) {
     const parsed = parsePaneKey(row.paneKey)
     const ptyId = parsed ? liveLeafPtyId(state, parsed.tabId, parsed.leafId) : null
-    // The row builder lends a split's tab title to its focused pane; only the pane's own title counts here.
-    const title = parsed
-      ? resolveLeafTitle(state, parsed.tabId, parsed.leafId, row.tab.title)
-      : null
+    const title =
+      parsed && !borrowsSplitTabTitle(state, parsed.tabId)
+        ? (row.entry.terminalTitle ?? null)
+        : null
     const titleStatus = detectAgentSendTitleStatus(title)
     // A launch or shell command title names the agent before its TUI takes input; wait for its own state title.
     if (!parsed || !ptyId || !titleStatus) {
@@ -210,6 +215,13 @@ function deriveStatuslessTerminalAgentSendTargets(
     })
   }
   return targets
+}
+
+// Without pane titles the row builder lends a split's tab title to its focused pane, which may be a shell.
+function borrowsSplitTabTitle(state: RunningAgentTargetState, tabId: string): boolean {
+  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
+  const hasPaneTitles = paneTitles !== undefined && Object.keys(paneTitles).length > 0
+  return !hasPaneTitles && state.terminalLayoutsByTabId[tabId]?.root?.type === 'split'
 }
 
 function liveLeafPtyId(

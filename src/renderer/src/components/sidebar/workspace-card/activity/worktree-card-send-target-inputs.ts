@@ -14,6 +14,7 @@ export type SendTargetInputsState = Pick<
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
   | 'paneForegroundAgentByPaneKey'
+  | 'runtimeAgentOrchestrationByPaneKey'
   | 'runtimeStatusByEnvironmentId'
 >
 
@@ -60,6 +61,7 @@ export function selectSendTargetInputs(
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
     paneForegroundAgentByPaneKey: selectPaneForegroundAgentsForWorktree(s, worktreeId),
+    runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
     sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(
       s.runtimeStatusByEnvironmentId
     )
