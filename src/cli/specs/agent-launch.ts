@@ -38,7 +38,8 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca agent installed [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
     notes: [
-      'Lists the agents Orca detects on the host, including ones set up with a custom command in Settings → Agents. Each `id` is what `orca agent launch --agent` and `orca worktree create --agent` take.',
+      "Lists the agents Orca detects on the host that can start: ones turned off in Settings → Agents are left out, and ones set up there with a custom command are included. Each `id` is what `orca agent launch --agent` and `orca worktree create --agent` take; `default` marks the user's default agent.",
+      'This lists installed agent CLIs, not running agents; use `orca agent list` for those.',
       '--worktree checks where that workspace runs agents, such as its SSH host or WSL distro. A stopped WSL distro is not started to check.'
     ],
     examples: ['orca agent installed --json', 'orca agent installed --worktree active']

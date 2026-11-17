@@ -247,7 +247,7 @@ orca agent installed --json
 orca agent installed --worktree active
 ```
 
-Lists the agent CLIs Orca detects on the host, including ones set up with a custom command in Settings → Agents. Each `id` is what `--agent` takes in `orca agent launch` and `orca worktree create`. `--worktree` checks where that workspace runs agents, such as its SSH host or WSL distro; a stopped WSL distro is not started to check.
+Lists the agent CLIs Orca detects on the host that can start: agents turned off in Settings → Agents are left out, and ones set up there with a custom command are included. Each `id` is what `--agent` takes in `orca agent launch` and `orca worktree create`, and `default` marks the default agent. For running agents, use `agent list`. `--worktree` checks where that workspace runs agents, such as its SSH host or WSL distro; a stopped WSL distro is not started to check.
 
 ## Agents by ID
 
