@@ -54,7 +54,8 @@ export class JournalForkCapture {
     for (const row of this.db
       .prepare(`SELECT header.rank,header.item_id,header.provider_key,
       item.wire_version,CASE WHEN item.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
-        AND item.original_stop_note_json IS NOT NULL THEN item.wire_json END AS wire_json,item.payload_json
+        AND item.original_stop_note_json IS NOT NULL THEN item.wire_json END AS wire_json,item.payload_json,
+        item.output_blob
       FROM temp.fork_headers header LEFT JOIN journal_items item
         ON item.session_id=?3 AND item.epoch=?4 AND item.item_id=header.item_id
       WHERE header.rank>?1 AND (header.rank<?2 OR EXISTS(SELECT 1 FROM temp.fork_kept WHERE member=header.member))
@@ -97,7 +98,7 @@ export class JournalForkCapture {
       }
       this.after = Number(row.rank)
       // The staged body is the restored text, not the row's stored form.
-      account(journalForkRowBytes({ ...row, payload_json: payload }))
+      account(journalForkRowBytes({ ...row, payload_json: payload, output_blob: null }))
       drainEdges()
       if (!budget()) {
         exhausted = false

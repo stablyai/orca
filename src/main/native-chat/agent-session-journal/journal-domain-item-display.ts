@@ -85,7 +85,13 @@ export function readJournalDomainDisplayedRow(
   stopStates?: ReadonlyMap<string, unknown>
 ): { item: AgentJournalRenderItem; payload: string } {
   const parsed: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
-  const source = hydrateJournalStoredItem(db, [target.sessionId, target.epoch], parsed)
+  // A row that did not select `output_blob` has it read by key.
+  const source = hydrateJournalStoredItem(
+    db,
+    [target.sessionId, target.epoch],
+    parsed,
+    row.output_blob
+  )
   const states =
     row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
       ? undefined
