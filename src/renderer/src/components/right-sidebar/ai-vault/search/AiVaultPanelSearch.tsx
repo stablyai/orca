@@ -100,8 +100,8 @@ export function AiVaultPanelSearch({
   let message: string | null = null
   if (needsLocalConsent) {
     message = t(
-      'sessionSearch.panel.consent',
-      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.'
+      'sessionSearch.panel.consentTranscriptIndex',
+      'Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.'
     )
   } else if (noAgents) {
     message = t('auto.components.right.sidebar.AiVaultPanel.noAgentsSelected', 'No agents selected')
@@ -158,10 +158,7 @@ export function AiVaultPanelSearch({
     }
   }
   if (response?.kind === 'results' && search.hits.length === 0 && !message) {
-    message = t(
-      'sessionSearch.panel.noMatches',
-      'No matching sessions in the indexed history. Try another query or scope.'
-    )
+    message = t('sessionSearch.panel.noMatchesToShow', 'No matching sessions to show.')
   }
   const skippedHosts =
     response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? [], t) : null

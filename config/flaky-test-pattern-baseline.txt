@@ -3,14 +3,13 @@
 # Prune after a fix: pnpm check:flaky-test-pattern-ratchet --prune
 4 test-no-in-test-import-actual:src/main/bitbucket/credential-store.test.ts
 1 test-no-in-test-import-actual:src/main/bitbucket/status-no-decrypt.test.ts
-5 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
+4 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 1 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/process-capture/spawned-command-tree-kill.test.ts
 1 test-no-in-test-import-actual:src/main/linear/issues/linear-description-images.test.ts
 1 test-no-in-test-import-actual:src/main/omp/omp-session-cwd-lookup.test.ts
 1 test-no-in-test-import-actual:src/main/pty/scrollback/overlay-mirror.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/rpc/server/pairing/mobile-pairing-userdata-path.test.ts
-1 test-no-in-test-import-actual:src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-swap-detection.test.ts
 5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
 1 test-no-in-test-import-actual:src/main/window/file-drop/dropped-path-preparation.test.ts
@@ -357,8 +356,7 @@
 2 test-no-wall-clock:src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts
 8 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-alias-coalescing.test.ts
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
-1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
-2 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
+1 test-no-wall-clock:src/main/ipc/terminal-views/terminal-render-desync-evidence.test.ts
 2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 4 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence-mutation-race.test.ts
 6 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence.test.ts
@@ -483,7 +481,6 @@
 1 test-timeout-needs-reason:src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts
 3 test-timeout-needs-reason:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
 1 test-timeout-needs-reason:src/main/ipc/filesystem/search/filesystem-quick-open-options.integration.test.ts
-1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
 1 test-timeout-needs-reason:src/main/jcode/hook-gate-script.test.ts
 1 test-timeout-needs-reason:src/main/managed-server/host-state/orcad-windows-host-lane.test.ts
 4 test-timeout-needs-reason:src/main/managed-server/lifecycle/orcad-managed-tunnel-transport-real-openssh.test.ts

@@ -22,7 +22,7 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isNotificationSourceEnabled } from '../../../../shared/notifications/notification-source-gate'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { buildNotificationOptions } from '../../../ipc/notification-options'
+import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from '../../push/notifications/runtime-mobile-notification-controller'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
