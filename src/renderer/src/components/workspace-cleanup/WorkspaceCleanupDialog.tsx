@@ -23,7 +23,7 @@ import {
 import { WorkspaceCleanupSelectAllBar } from './dialog/workspace-cleanup-select-all-bar'
 import { WorkspaceCleanupPickFooter } from './dialog/workspace-cleanup-pick-footer'
 import { useWorkspaceCleanupPickRows } from './dialog/use-workspace-cleanup-pick-rows'
-import { listenForWorkspaceCleanupListInput } from './candidate-list/workspace-cleanup-list-input'
+import { useWorkspaceCleanupSettleResortGate } from './candidate-list/use-workspace-cleanup-settle-resort-gate'
 import { listActiveWorkspaceCleanupFacetGroups } from './browse/workspace-cleanup-active-facets'
 import type { WorkspaceCleanupGroup } from '../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { WorkspaceCleanupConfirmStopAgents } from './removal/agent-consent/workspace-cleanup-confirm-stop-agents'
@@ -87,7 +87,7 @@ function WorkspaceCleanupDialogContent({
   const [facetPanelOpen, setFacetPanelOpen] = useState(false)
   const [activeGroup, setActiveGroup] = useState<WorkspaceCleanupGroup>('nothing-local')
   const run = useWorkspaceCleanupRunStore((s) => s.run)
-  const dismissRun = useWorkspaceCleanupRunStore.getState().dismissRun
+  const dismissRun = useWorkspaceCleanupRunStore((s) => s.dismissRun)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
   const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
   const wasOpenRef = useRef(open)
@@ -98,7 +98,6 @@ function WorkspaceCleanupDialogContent({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setOpenedAt(Date.now())
-      listInteractedRef.current = false
     }
     wasOpenRef.current = open
   }, [open])
@@ -139,20 +138,11 @@ function WorkspaceCleanupDialogContent({
     now: facetNow,
     facetPanelOpen
   })
-  const selectedIdsRef = useRef(selectedIds)
-  useEffect(() => {
-    selectedIdsRef.current = selectedIds
-  }, [selectedIds])
-  // Held order must never wait on the user's first touch, so interaction is tracked in a ref.
-  const listInteractedRef = useRef(false)
-  const markListInteracted = useCallback(() => {
-    listInteractedRef.current = true
-  }, [])
-  useEffect(() => {
-    // Interaction stops the settle re-sort; programmatic scrolls must not count.
-    const target = rowsScrollElement?.parentElement ?? rowsScrollElement
-    return target ? listenForWorkspaceCleanupListInput(target, markListInteracted) : undefined
-  }, [markListInteracted, rowsScrollElement])
+  const shouldResortAtSettle = useWorkspaceCleanupSettleResortGate({
+    open,
+    selectedIds,
+    rowsScrollElement
+  })
   const {
     rowsByGroup,
     groupSummaries,
@@ -173,8 +163,7 @@ function WorkspaceCleanupDialogContent({
     gitEvidence,
     selectedIds,
     deletingIdentities,
-    // Re-sorting at settle is safe only while the user has not started working in the list.
-    shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
+    shouldResortAtSettle
   })
   // Host-qualify selection: identical workspace IDs on different hosts must never confirm one row and delete another (STA-4343).
   const candidateIdentities = useMemo(
