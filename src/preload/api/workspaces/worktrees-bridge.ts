@@ -6,7 +6,8 @@ import type {
 import type { CreateWorktreeProgressEvent } from '../../../shared/worktree/create-types'
 import type {
   GitStatusMetadataChangedEvent,
-  WorktreeHeadIdentity
+  WorktreeHeadIdentity,
+  WorktreesChangedEvent
 } from '../../../shared/worktree/types'
 import type { PreloadApi } from '../../api-types'
 import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
@@ -72,16 +73,9 @@ export const worktreesApi = {
   getBranchRenameFailureOutput: (args) =>
     ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
 
-  onChanged: (
-    callback: (data: {
-      repoId: string
-      renamed?: { oldWorktreeId: string; newWorktreeId: string }
-    }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
-    ) => callback(data)
+  onChanged: (callback: (data: WorktreesChangedEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: WorktreesChangedEvent) =>
+      callback(data)
     ipcRenderer.on('worktrees:changed', listener)
     return () => ipcRenderer.removeListener('worktrees:changed', listener)
   },

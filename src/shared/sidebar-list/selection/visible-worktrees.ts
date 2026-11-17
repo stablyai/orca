@@ -2,6 +2,7 @@ import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { isWorktreeRetiredByRemoval } from '../../worktree/removal/removal-visibility'
+import type { HiddenProjects } from '../../project/catalog/hidden-projects'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader,
@@ -17,6 +18,10 @@ export type VisibleSidebarWorktreeInputs = {
   rows: readonly Worktree[]
   /** Non-archived rows by host identity, the lineage ancestors a visible child may pull in. */
   ancestorByIdentity: ReadonlyMap<string, Worktree>
+  /** The current row for an ancestor-map row, whose display fields may be older; identity otherwise. */
+  currentRowOf?: (worktree: Worktree) => Worktree
+  /** The hidden-project index behind facts; with it, the filtered ancestor map is reused while both hold. */
+  hiddenProjects?: HiddenProjects
   /** A row's place in the frozen sort order; unranked rows go last. */
   rankOf: (worktree: Worktree) => number | undefined
   filters: WorkspaceRowFilters
@@ -34,6 +39,8 @@ export type VisibleSidebarWorktreeInputs = {
 export function selectVisibleSidebarWorktrees({
   rows,
   ancestorByIdentity: everyAncestorByIdentity,
+  currentRowOf = (worktree) => worktree,
+  hiddenProjects,
   rankOf,
   filters,
   facts,
@@ -48,7 +55,11 @@ export function selectVisibleSidebarWorktrees({
   const listedFilterIds = filterRepoIds.filter((id) => !facts.isProjectHidden(id))
   const selectedRepoIds = listedFilterIds.length > 0 ? new Set(listedFilterIds) : null
   // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back.
-  const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
+  const ancestorByIdentity = withoutHiddenProjectRows(
+    everyAncestorByIdentity,
+    facts,
+    hiddenProjects
+  )
 
   let all = filterWorkspaceRows(rows, filters, {
     ...facts,
@@ -58,9 +69,11 @@ export function selectVisibleSidebarWorktrees({
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
     for (const worktreeId of forcedVisibleWorktreeIds) {
-      const worktree = includedIds.has(worktreeId)
+      const indexed = includedIds.has(worktreeId)
         ? undefined
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
+      // The ancestor index may hold an older revision; retirement is read from the current row.
+      const worktree = indexed && currentRowOf(indexed)
       if (worktree && !isWorktreeRetiredByRemoval(worktree)) {
         includedIds.add(worktreeId)
         all.push(worktree)
@@ -75,7 +88,8 @@ export function selectVisibleSidebarWorktrees({
       ancestorByIdentity,
       worktreeLineageById,
       selectedRepoIds,
-      lineageParentIdentities
+      lineageParentIdentities,
+      currentRowOf
     )
   }
   all = all
@@ -90,11 +104,34 @@ export function selectVisibleSidebarWorktrees({
         ancestorByIdentity,
         worktreeLineageById,
         selectedRepoIds,
-        lineageParentIdentities
+        lineageParentIdentities,
+        currentRowOf
       )
 }
 
+// One filtered map per ancestor index and hidden-project index, so the parent cache keyed on it holds.
+const filteredAncestorCache = new WeakMap<
+  ReadonlyMap<string, Worktree>,
+  { hiddenProjects: HiddenProjects; rows: ReadonlyMap<string, Worktree> }
+>()
+
 function withoutHiddenProjectRows(
+  rows: ReadonlyMap<string, Worktree>,
+  facts: WorkspaceRowFactReader<Worktree>,
+  hiddenProjects: HiddenProjects | undefined
+): ReadonlyMap<string, Worktree> {
+  const cached = hiddenProjects && filteredAncestorCache.get(rows)
+  if (cached && cached.hiddenProjects === hiddenProjects) {
+    return cached.rows
+  }
+  const filtered = filterHiddenProjectRows(rows, facts)
+  if (hiddenProjects) {
+    filteredAncestorCache.set(rows, { hiddenProjects, rows: filtered })
+  }
+  return filtered
+}
+
+function filterHiddenProjectRows(
   rows: ReadonlyMap<string, Worktree>,
   facts: WorkspaceRowFactReader<Worktree>
 ): ReadonlyMap<string, Worktree> {
@@ -113,7 +150,8 @@ function addVisibleLineageAncestors(
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null,
-  lineageParentIdentities: SidebarLineageParentIdentities | undefined
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined,
+  currentRowOf: (worktree: Worktree) => Worktree
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -138,7 +176,7 @@ function addVisibleLineageAncestors(
     const parent = parentByIdentity.get(identity)
     // Repository filters are hard boundaries; ordinary filters may retain ancestors.
     if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
-      addWithAncestors(parent)
+      addWithAncestors(currentRowOf(parent))
     }
     if (!included.has(identity)) {
       included.add(identity)

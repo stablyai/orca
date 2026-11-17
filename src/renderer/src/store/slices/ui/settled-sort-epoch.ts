@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/sidebar-list/sorting/sort-settle'
 import type { AppState } from '../../types'
 import { getIndexedAllWorktrees } from '../worktrees/listing/worktree-catalog-index'
+import { replacedWorktreeRows } from '../worktrees/listing/worktree-catalog-membership'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): number {
@@ -19,11 +20,29 @@ function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): numbe
   return count
 }
 
+/** Live-row counter for sort settling; a title-only write reuses the last count instead of rescanning every row. */
+export function createLiveWorktreeCounter(): (
+  worktreesByRepo: AppState['worktreesByRepo']
+) => number {
+  // Weak so the counter never keeps a replaced catalog alive.
+  let counted: WeakRef<AppState['worktreesByRepo']> | null = null
+  let count = 0
+  return (worktreesByRepo) => {
+    const previous = counted?.deref()
+    if (!previous || replacedWorktreeRows(worktreesByRepo, previous) === null) {
+      count = countLiveWorktrees(worktreesByRepo)
+    }
+    counted = new WeakRef(worktreesByRepo)
+    return count
+  }
+}
+
 /** Call once from inside the store's state creator, passing its `api`. */
 export function installSettledSortEpoch(
   api: Pick<StoreApi<AppState>, 'setState' | 'subscribe'>
 ): void {
   let settleState = INITIAL_SORT_SETTLE_STATE
+  const countLive = createLiveWorktreeCounter()
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const dispatch = (event: SortSettleEvent): void => {
@@ -50,7 +69,7 @@ export function installSettledSortEpoch(
       kind: 'write',
       change:
         epochBumped || rowsChanged
-          ? { epochBumped, liveCount: countLiveWorktrees(selectWorktreesByRepo(state)) }
+          ? { epochBumped, liveCount: countLive(selectWorktreesByRepo(state)) }
           : null,
       settled: state.settledSortEpoch === state.sortEpoch,
       sortBy: state.sortBy,

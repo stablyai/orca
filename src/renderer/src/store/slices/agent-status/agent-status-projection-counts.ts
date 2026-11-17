@@ -9,6 +9,7 @@ import {
   selectFolderWorkspaces
 } from '../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../types'
+import { replacedWorktreeRows } from '../worktrees/listing/worktree-catalog-membership'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { readRecordChanges } from '../../keyed-record-change-reads'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
@@ -56,7 +57,8 @@ export function stageProjectionCounts(
   const nextActiveOwners =
     previous &&
     previous.repos === state.repos &&
-    selectWorktreesByRepo(previous) === selectWorktreesByRepo(state) &&
+    // A title write replaces rows in place; owners follow only ids and archive state.
+    replacedWorktreeRows(selectWorktreesByRepo(state), selectWorktreesByRepo(previous)) !== null &&
     selectFolderWorkspaces(previous) === selectFolderWorkspaces(state) &&
     previous.projectGroups === state.projectGroups
       ? data.activeDashboardOwners

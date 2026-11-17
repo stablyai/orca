@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { patchDetectedWorktreeHeadIdentities } from '@/store/slices/worktrees/listing/detected-worktree-head-identity'
+import { applyLocalPinnedDisplayName } from './pinned-display-name-apply'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -35,17 +36,15 @@ export function registerProjectCatalogIpcBridge(
   )
 
   unsubs.push(
-    window.api.worktrees.onChanged(
-      async (data: {
-        repoId: string
-        renamed?: { oldWorktreeId: string; newWorktreeId: string }
-      }) => {
-        // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
-        worktreeChangeRefreshQueue.enqueue(
-          adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
-        )
+    window.api.worktrees.onChanged(async ({ pinnedDisplayName, ...data }) => {
+      if (pinnedDisplayName) {
+        applyLocalPinnedDisplayName(pinnedDisplayName)
       }
-    )
+      // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
+      worktreeChangeRefreshQueue.enqueue(
+        adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
+      )
+    })
   )
 
   if (window.api.worktrees.onMetadataSet) {

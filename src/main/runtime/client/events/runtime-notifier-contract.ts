@@ -1,3 +1,4 @@
+import type { WorktreePinnedDisplayName } from '../../../../shared/worktree/types'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
@@ -49,7 +50,7 @@ export type RuntimeNotifier = {
     repoId: string,
     renamed?: { oldWorktreeId: string; newWorktreeId: string },
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
-    options?: { invalidateGitScans?: boolean }
+    options?: { invalidateGitScans?: boolean; pinnedDisplayName?: WorktreePinnedDisplayName }
   ): void
   workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void

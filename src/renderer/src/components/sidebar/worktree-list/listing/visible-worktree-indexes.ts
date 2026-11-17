@@ -1,24 +1,106 @@
-import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import {
+  replacedWorktreeRows,
+  sameWorktreeLineageInputs,
+  type ReplacedWorktreeRow
+} from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { ReadOnlyOverlayMap } from '@/store/slices/worktrees/listing/read-only-overlay-map'
 
 type WorktreesByRepo = Record<string, Worktree[]>
 
+type LineageIndex = {
+  /** Immutable index shared by every catalog that only replaced rows since it was built. */
+  base: Map<string, Worktree>
+  overlay: ReadonlyMap<string, Worktree>
+  index: Map<string, Worktree>
+}
+
+// Past this many replaced rows, a rebuild costs less than carrying the overlay.
+const MAX_LINEAGE_OVERLAY = 64
+
 /** Cache non-archived rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
-const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
+const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, LineageIndex>()
+// Weak so a replaced catalog's lineage index stays collectable.
+let lastLineageRows: WeakRef<WorktreesByRepo> | null = null
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
   const cached = lineageAncestorIndexCache.get(worktreesByRepo)
   if (cached) {
-    return cached
+    return cached.index
   }
+  const previousRows = lastLineageRows?.deref()
+  const previous = previousRows && lineageAncestorIndexCache.get(previousRows)
+  const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
+  const lineage =
+    (previous && replaced && overlayLineageIndex(previous, replaced, worktreesByRepo)) ||
+    lineageView(buildLineageAncestorIndex(worktreesByRepo), new Map())
+  lineageAncestorIndexCache.set(worktreesByRepo, lineage)
+  lastLineageRows = new WeakRef(worktreesByRepo)
+  return lineage.index
+}
+
+function lineageView(
+  base: Map<string, Worktree>,
+  overlay: ReadonlyMap<string, Worktree>
+): LineageIndex {
+  return {
+    base,
+    overlay,
+    index: overlay.size === 0 ? base : new ReadOnlyOverlayMap(base, overlay)
+  }
+}
+
+/** Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was. Values may carry an older title. Null asks for a rebuild. */
+function overlayLineageIndex(
+  previous: LineageIndex,
+  replaced: readonly ReplacedWorktreeRow[],
+  worktreesByRepo: WorktreesByRepo
+): LineageIndex | null {
+  // The indexed row may be an older revision than `before` (a kept title write), so compare against it.
+  const moved = replaced.flatMap(({ before, after }) => {
+    const identity = getWorktreeHostIdentity(before)
+    const indexed = previous.index.get(identity)
+    return indexed &&
+      !sameWorktreeLineageInputs(after, indexed) &&
+      isKeptRow(worktreesByRepo, after)
+      ? [{ identity, after }]
+      : []
+  })
+  // Title-only writes keep the index object so lineage caches keyed on it still hit; display reads current rows.
+  if (moved.length === 0) {
+    return previous
+  }
+  const overlay = new Map(previous.overlay)
+  for (const { identity, after } of moved) {
+    if (previous.base.get(identity) === after) {
+      overlay.delete(identity)
+    } else {
+      overlay.set(identity, after)
+    }
+  }
+  return overlay.size > MAX_LINEAGE_OVERLAY ? null : lineageView(previous.base, overlay)
+}
+
+/** Same-host copies of one id collapse to the last one; a discarded earlier copy must not reach the index. */
+function isKeptRow(worktreesByRepo: WorktreesByRepo, row: Worktree): boolean {
+  const identity = getWorktreeHostIdentity(row)
+  return getIndexedWorktreesById(worktreesByRepo, row.id).some(
+    (kept) => kept === row && getWorktreeHostIdentity(kept) === identity
+  )
+}
+
+function buildLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
     if (!worktree.isArchived) {
       index.set(getWorktreeHostIdentity(worktree), worktree)
     }
   }
-  lineageAncestorIndexCache.set(worktreesByRepo, index)
   return index
 }
 

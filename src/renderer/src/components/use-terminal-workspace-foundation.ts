@@ -3,7 +3,7 @@ import { MountedTerminalWorktrees } from './terminal/workspace-mounting/split-gr
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store/index'
-import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
+import { useWorktreeTopology } from '../store/slices/worktrees/listing/use-worktree-catalog'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import type { WorktreeTabBucketProjection } from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
@@ -29,7 +29,8 @@ export function useTerminalWorkspaceFoundation() {
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeParkCooldownUntilRef = useRef(new Map<string, number>())
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
-  const worktreesById = useWorktreeMap()
+  // Surfaces read only ids and paths, so a title write must not rebuild them.
+  const worktreesById = useWorktreeTopology()
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId

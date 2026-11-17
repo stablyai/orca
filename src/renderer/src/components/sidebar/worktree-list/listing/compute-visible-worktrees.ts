@@ -8,7 +8,10 @@ import type {
   ExecutionHostId,
   ExecutionHostScope
 } from '../../../../../../shared/execution-host/execution-host'
-import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectVisibleSidebarWorktrees } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
@@ -61,6 +64,12 @@ export function computeVisibleWorktrees(
   return selectVisibleSidebarWorktrees({
     rows: getIndexedAllWorktrees(worktreesByRepo),
     ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
+    // The ancestor index keeps its rows across title writes; show each ancestor's current row.
+    currentRowOf: (ancestor) =>
+      getIndexedWorktreesById(worktreesByRepo, ancestor.id).find(
+        (row) => getWorktreeHostIdentity(row) === getWorktreeHostIdentity(ancestor)
+      ) ?? ancestor,
+    hiddenProjects: opts.hiddenProjects,
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),

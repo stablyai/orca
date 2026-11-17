@@ -1,3 +1,4 @@
+import type { WorktreePinnedDisplayName } from '../../../shared/worktree/types'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
@@ -77,7 +78,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
 
-  abstract notifyBranchRenamed(repoId: string): void
+  abstract notifyBranchRenamed(repoId: string, pinnedDisplayName?: WorktreePinnedDisplayName): void
 
   /** Remote views consume raw bytes even with a hidden desktop; resync daemon marks so those streams are never thinned. */
   onRemoteTerminalViewPresenceChanged: ((ptyId: string) => void) | null = null

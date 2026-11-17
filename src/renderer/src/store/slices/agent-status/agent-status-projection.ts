@@ -1,4 +1,7 @@
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import {
+  structuredAgentSessionOwnerInputs,
+  structuredAgentSessionOwnerInputsMoved
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../types'
 import {
   movedAgentSenderChannels,
@@ -236,7 +239,7 @@ export class AgentStatusProjection {
       (sendersChanged && !samePublishingHosts(previous, state)) ||
       previous.tabsByWorktree !== state.tabsByWorktree ||
       previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
-      ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
+      structuredAgentSessionOwnerInputsMoved(state, previous, ownerInputs, oldOwnerInputs) ||
       changes.some(
         (change) =>
           change.previous?.terminalHandle !== change.current?.terminalHandle ||

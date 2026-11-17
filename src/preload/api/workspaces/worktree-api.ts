@@ -50,7 +50,8 @@ import type {
   GitStatusMetadataChangedEvent,
   GitWorktreeInfo,
   Worktree,
-  WorktreeHeadIdentity
+  WorktreeHeadIdentity,
+  WorktreesChangedEvent
 } from '../../../shared/worktree/types'
 
 export type WorktreeApi = {
@@ -158,7 +159,7 @@ export type WorktreeApi = {
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
-  onChanged: (callback: (data: { repoId: string }) => void) => () => void
+  onChanged: (callback: (data: WorktreesChangedEvent) => void) => () => void
   onGitStatusMetadataChanged: (
     callback: (data: GitStatusMetadataChangedEvent) => void
   ) => () => void

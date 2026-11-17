@@ -39,6 +39,32 @@ export function withoutErasedRequiredWorktreeFields(
   return next
 }
 
+/** One row with meta updates applied; returns the same row when every resulting field is unchanged. */
+export function applyWorktreeRowUpdates<T extends Worktree>(
+  worktree: T,
+  updates: Partial<WorktreeMeta>
+): T {
+  // Rows store the pin as displayNameMode, so the meta flag itself never lands on the row.
+  const { displayNameIsPinned, ...rowUpdates } = updates
+  const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, rowUpdates) }
+  if (displayNameIsPinned !== undefined) {
+    next.displayNameMode = displayNameIsPinned ? 'fixed' : 'automatic'
+    if (displayNameIsPinned === false && !updates.displayName?.trim()) {
+      const automaticName = branchName(next.branch)
+      // A detached worktree has no branch-derived label; keep the old text until the host
+      // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
+      next.displayName = automaticName || worktree.displayName
+    }
+  }
+  const before = new Map(Object.entries(worktree))
+  const fields = Object.entries(next)
+  // A key on only one row changes the key count or misses in `before`.
+  const unchanged =
+    fields.length === before.size &&
+    fields.every(([key, value]) => before.has(key) && before.get(key) === value)
+  return unchanged ? worktree : next
+}
+
 export function applyWorktreeUpdates(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string,
@@ -57,18 +83,8 @@ export function applyWorktreeUpdates(
     if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
       return worktree
     }
-
-    changed = true
-    const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
-    if (updates.displayNameIsPinned !== undefined) {
-      next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
-      if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
-        const automaticName = branchName(next.branch)
-        // A detached worktree has no branch-derived label; keep the old text until the host
-        // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
-        next.displayName = automaticName || worktree.displayName
-      }
-    }
+    const next = applyWorktreeRowUpdates(worktree, updates)
+    changed ||= next !== worktree
     return next
   })
   if (!changed) {

@@ -3,10 +3,16 @@ import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   structuredAgentSessionOwnerInputs,
-  structuredAgentSessionTargetForHost
+  structuredAgentSessionOwnerInputsMoved,
+  structuredAgentSessionTargetForHost,
+  type OwnerCatalogState
 } from '../session-ownership/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '../status/structured-agent-session-status-feed'
 import {
@@ -21,11 +27,20 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 const listeners = new Set<() => void>()
 let snapshot: StructuredChatTabNames = new Map()
 let inputs: unknown[] = []
+let inputsState: OwnerCatalogState | null = null
 let nameMaps = new Map<ExecutionHostId, unknown>()
 let stopObserving: (() => void) | undefined
+
+function ownerCatalogState(state: OwnerCatalogState): OwnerCatalogState {
+  return {
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state)
+  }
+}
 export function getStructuredChatTabNames(): StructuredChatTabNames {
   const state = useAppStore.getState()
-  const nextInputs = [state.unifiedTabsByWorktree, ...structuredAgentSessionOwnerInputs(state)]
+  const ownerInputs = structuredAgentSessionOwnerInputs(state)
+  const nextInputs = [state.unifiedTabsByWorktree, ...ownerInputs]
   const nextMaps = new Map<ExecutionHostId, unknown>()
   for (const owner of nameMaps.keys()) {
     const target = structuredAgentSessionTargetForHost(owner)
@@ -33,7 +48,14 @@ export function getStructuredChatTabNames(): StructuredChatTabNames {
       nextMaps.set(owner, getStructuredAgentSessionStatusFeed(target).getNamingSnapshot())
     }
   }
-  if (shallow(inputs, nextInputs) && shallow(nameMaps, nextMaps)) {
+  const ownersKept =
+    inputsState !== null &&
+    inputs[0] === state.unifiedTabsByWorktree &&
+    !structuredAgentSessionOwnerInputsMoved(state, inputsState, ownerInputs, inputs.slice(1))
+  if (ownersKept && shallow(nameMaps, nextMaps)) {
+    // A title write replaces catalog rows without moving an owner; keep the resolved names.
+    inputs = nextInputs
+    inputsState = ownerCatalogState(state)
     return snapshot
   }
   const next = new Map(
@@ -53,6 +75,7 @@ export function getStructuredChatTabNames(): StructuredChatTabNames {
     }
   }
   inputs = nextInputs
+  inputsState = ownerCatalogState(state)
   nameMaps = nextMaps
   if (
     next.size !== snapshot.size ||
@@ -114,7 +137,9 @@ function observe(): () => void {
   const stopStore = useAppStore.subscribe((state, previous) => {
     if (
       state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-      !shallow(
+      structuredAgentSessionOwnerInputsMoved(
+        state,
+        previous,
         structuredAgentSessionOwnerInputs(state),
         structuredAgentSessionOwnerInputs(previous)
       )
