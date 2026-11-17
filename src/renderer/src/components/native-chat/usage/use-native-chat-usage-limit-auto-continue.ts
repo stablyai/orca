@@ -16,7 +16,7 @@ import {
   usageLimitContinueAtForCut,
   usageLimitContinueStateForCut
 } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
-import type { NativeChatUsageLimitAutoContinueState } from './NativeChatUsageLimitAutoContinue'
+import type { NativeChatUsageLimitAutoContinueState } from './native-chat-usage-limit-auto-continue-setting'
 
 const invalidatedByClock = (): (() => void) => () => {}
 

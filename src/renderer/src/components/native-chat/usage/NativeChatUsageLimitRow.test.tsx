@@ -1,0 +1,239 @@
+// @vitest-environment happy-dom
+import '@testing-library/jest-dom/vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
+import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
+import {
+  NativeChatOrcaStopContext,
+  type NativeChatOrcaStopView
+} from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
+import {
+  UsageLimitActionsContext,
+  type UsageLimitActions
+} from '@/components/native-chat/usage/NativeChatUsageLimitActions'
+import type { NativeChatUsageLimitAutoContinueState } from '@/components/native-chat/usage/native-chat-usage-limit-auto-continue-setting'
+import type { NativeChatTextBlock } from '../../../../../shared/native-chat/native-chat-types'
+
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
+
+const HOUR = 60 * 60 * 1000
+const start = new Date(2026, 9, 18, 12).getTime()
+
+function limitBlock(
+  resetsAt: number | undefined,
+  extra: Partial<NativeChatTextBlock> = {}
+): NativeChatTextBlock {
+  return {
+    type: 'text',
+    tone: 'warning',
+    text: 'Codex hit its usage limit.',
+    usageLimitTurnItemId: 'cut-turn',
+    failure: { kind: 'usageLimitReached', usageLimit: { window: 'session', resetsAt } },
+    ...extra
+  }
+}
+
+function stopView(
+  active: boolean,
+  auto: NativeChatUsageLimitAutoContinueState | null,
+  continueUsageLimit: (hadFocus?: boolean) => void
+): NativeChatOrcaStopView {
+  return {
+    hostLabel: null,
+    remoteHost: false,
+    continueAvailable: false,
+    offeredTurnItemId: null,
+    continueNow: () => {},
+    usageLimitTurnItemId: active ? 'cut-turn' : null,
+    usageLimitAutoContinue: auto,
+    continueUsageLimit
+  }
+}
+
+function row({
+  resetsAt,
+  active = true,
+  auto = null,
+  actions = null,
+  block,
+  continueUsageLimit = () => {}
+}: {
+  resetsAt?: number
+  active?: boolean
+  auto?: NativeChatUsageLimitAutoContinueState | null
+  actions?: UsageLimitActions | null
+  block?: NativeChatTextBlock
+  continueUsageLimit?: (hadFocus?: boolean) => void
+}) {
+  const view = stopView(active, auto, continueUsageLimit)
+  return (
+    <TranslationScopeProvider>
+      <TooltipProvider>
+        <NativeChatOrcaStopContext.Provider value={view}>
+          <UsageLimitActionsContext.Provider value={actions}>
+            <input aria-label="composer" />
+            <NativeChatNoticeRow agentName="Codex" block={block ?? limitBlock(resetsAt)} />
+          </UsageLimitActionsContext.Provider>
+        </NativeChatOrcaStopContext.Provider>
+      </TooltipProvider>
+    </TranslationScopeProvider>
+  )
+}
+
+const handOffActions = (handOff = vi.fn()): UsageLimitActions => ({
+  account: null,
+  handOff,
+  disabled: false,
+  preparing: false
+})
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  toastError.mockReset()
+})
+
+describe('usage-limit row over time', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: start, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  })
+
+  it('offers Continue only once the effective time passes, and keeps a later schedule cancellable', () => {
+    const cancel = vi.fn()
+    const auto = { kind: 'scheduled', resetsAt: start + 3 * HOUR, cancel } as const
+    render(row({ resetsAt: start + HOUR, auto, actions: handOffActions() }))
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    const clock = screen.getByRole('button', { pressed: true })
+    fireEvent.click(clock)
+    expect(cancel).toHaveBeenCalledTimes(1)
+
+    act(() => vi.advanceTimersByTime(HOUR))
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { pressed: true })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+  })
+
+  it('never turns an older turn into a ready row, however long it waits', () => {
+    render(row({ resetsAt: start + HOUR, active: false, actions: handOffActions() }))
+    act(() => vi.advanceTimersByTime(2 * HOUR))
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument()
+  })
+
+  it('moves focus from a tool that disappears at the reset to Continue', () => {
+    render(row({ resetsAt: start + HOUR, actions: handOffActions() }))
+    screen.getByRole('button', { name: 'Hand off to another agent' }).focus()
+    act(() => vi.advanceTimersByTime(HOUR))
+    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus()
+  })
+
+  it('leaves focus elsewhere alone when the reset swaps the tools', () => {
+    render(row({ resetsAt: start + HOUR, actions: handOffActions() }))
+    screen.getByRole('textbox', { name: 'composer' }).focus()
+    act(() => vi.advanceTimersByTime(HOUR))
+    expect(screen.getByRole('textbox', { name: 'composer' })).toHaveFocus()
+  })
+
+  it('keeps a preparing Hand off focusable but inert', () => {
+    const handOff = vi.fn()
+    render(
+      row({
+        resetsAt: start + HOUR,
+        actions: { ...handOffActions(handOff), disabled: true, preparing: true }
+      })
+    )
+    const button = screen.getByRole('button', { name: 'Hand off to another agent' })
+    button.focus()
+    fireEvent.click(button)
+    expect(button).toHaveFocus()
+    expect(handOff).not.toHaveBeenCalled()
+  })
+})
+
+describe('usage-limit row More menu', () => {
+  const frame = {
+    provider: 'codex',
+    kind: 'notification:error',
+    payload: {
+      head: '{"error":"PAYLOAD_SENTINEL"}',
+      byteLength: 9999,
+      digest: 'd',
+      truncated: true
+    }
+  }
+  let writeClipboardText: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+  })
+
+  it('shows details on demand and returns focus to More when they collapse', async () => {
+    const user = userEvent.setup()
+    render(
+      row({
+        resetsAt: Date.now() + HOUR,
+        block: limitBlock(Date.now() + HOUR, { providerFrame: frame })
+      })
+    )
+    expect(screen.queryByText(/PAYLOAD_SENTINEL/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Show details' }))
+    expect(screen.getByText(/PAYLOAD_SENTINEL/)).toBeVisible()
+
+    const summary = screen.getByText('Details').closest('summary')!
+    summary.focus()
+    await act(async () => {
+      const details = summary.closest('details')!
+      details.open = false
+      details.dispatchEvent(new Event('toggle'))
+    })
+    expect(screen.queryByText(/PAYLOAD_SENTINEL/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'More actions' })).toHaveFocus()
+  })
+
+  it('copies the sentence with the frame identity, payload and truncation', async () => {
+    const user = userEvent.setup()
+    render(
+      row({
+        resetsAt: Date.now() + HOUR,
+        block: limitBlock(Date.now() + HOUR, { providerFrame: frame })
+      })
+    )
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
+    for (const part of ['codex · notification:error', 'PAYLOAD_SENTINEL', '9999']) {
+      expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining(part))
+    }
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('reports a clipboard failure', async () => {
+    writeClipboardText.mockRejectedValue(new Error('denied'))
+    const user = userEvent.setup()
+    render(row({ resetsAt: Date.now() + HOUR }))
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
+    expect(toastError).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens and closes from the keyboard, returning focus to its trigger', async () => {
+    const user = userEvent.setup()
+    render(row({ resetsAt: Date.now() + HOUR }))
+    const more = screen.getByRole('button', { name: 'More actions' })
+    more.focus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('menuitem', { name: 'Copy error' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menuitem', { name: 'Copy error' })).toBeNull()
+    expect(more).toHaveFocus()
+  })
+})

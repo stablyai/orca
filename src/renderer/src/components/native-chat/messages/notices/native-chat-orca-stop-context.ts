@@ -1,4 +1,4 @@
-import type { NativeChatUsageLimitAutoContinueState } from '../../usage/NativeChatUsageLimitAutoContinue'
+import type { NativeChatUsageLimitAutoContinueState } from '../../usage/native-chat-usage-limit-auto-continue-setting'
 import { createContext, useContext } from 'react'
 
 /** Host stop details; only hosts known not to support continuation suppress Continue. */
