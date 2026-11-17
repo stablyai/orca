@@ -41,15 +41,17 @@ function isTailText(body: AgentJournalRenderItem['body']): body is TailText {
   return body.blocks.length === 1 && block.type === 'text' && typeof block.text === 'string'
 }
 
+/** Rows saved after `revision`: an item at a revision already holds the text saved through it. */
 function readTail(
   db: Database.Database,
   prefix: Prefix,
-  itemId: string
+  itemId: string,
+  revision: number
 ): { seq: number; text: string }[] {
   return db
     .prepare(`SELECT seq,text FROM journal_text_tail
-      WHERE session_id=? AND epoch=? AND item_id=? ORDER BY seq`)
-    .all(...prefix, itemId)
+      WHERE session_id=? AND epoch=? AND item_id=? AND seq>? ORDER BY seq`)
+    .all(...prefix, itemId, revision)
     .map((row) => ({ seq: Number(row.seq), text: String(row.text) }))
 }
 
@@ -68,7 +70,7 @@ function joinTail<T extends AgentJournalRenderItem>(
   item: T,
   body: TailText
 ): T {
-  const tail = readTail(db, prefix, item.itemId)
+  const tail = readTail(db, prefix, item.itemId, item.revision)
   if (tail.length === 0) {
     return item
   }
@@ -101,7 +103,7 @@ export function appendJournalTextTail(
   if (!stored || !stored.plain || typeof stored.folded !== 'string') {
     return false
   }
-  const skeleton = JSON.stringify(item, function (key, value: unknown) {
+  const skeleton = JSON.stringify(item, function (this: unknown, key, value: unknown) {
     return (this === item && key === 'revision') || (this === block && key === 'text')
       ? undefined
       : value
@@ -109,7 +111,7 @@ export function appendJournalTextTail(
   if (skeleton !== stored.skeleton) {
     return false
   }
-  const tail = readTail(db, prefix, item.itemId)
+  const tail = readTail(db, prefix, item.itemId, -1)
   const saved = stored.folded + tail.map((row) => row.text).join('')
   const added = block.text.slice(saved.length)
   if (
