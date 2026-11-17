@@ -3,8 +3,7 @@ import {
   type PluginMarketplaceEntry
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { catalogImagesFromManifest } from '../../../shared/plugins/images/plugin-manifest-catalog-images'
-import { sha256Hex } from '../media/plugin-image-cache'
-import type { CatalogBlobReader } from './plugin-catalog-image-extraction'
+import { catalogImageDigest, type CatalogBlobReader } from './plugin-catalog-image-extraction'
 
 const MANIFEST_MAX_BYTES = 256 * 1024
 
@@ -16,7 +15,8 @@ const MANIFEST_MAX_BYTES = 256 * 1024
 export async function fillMonorepoReleaseImages(
   entry: PluginMarketplaceEntry,
   catalogUrl: string,
-  readBlob: CatalogBlobReader
+  readBlob: CatalogBlobReader,
+  digests?: WeakMap<Uint8Array, string>
 ): Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }> {
   const [newest, ...older] = entry.releases ?? []
   const prefix = entry.source.path
@@ -43,7 +43,7 @@ export async function fillMonorepoReleaseImages(
       }
       return bytes
     },
-    sha256: (bytes) => sha256Hex(Buffer.from(bytes))
+    sha256: (bytes) => catalogImageDigest(bytes, digests)
   })
   if (!images) {
     return { entry, readBlob }

@@ -105,7 +105,7 @@ async function extractBatchedMarketplaceImages(
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] } | null> {
   const files = new Map<string, CatalogFile>()
   const listed = new Map<string, ListedBlob>()
-  const digests = new WeakMap<Buffer, string>()
+  const digests = new WeakMap<Uint8Array, string>()
   // Rerun extraction until every file it asks for is loaded, so each round's misses share a few Git calls.
   for (;;) {
     const missing = new Map<string, number>()
@@ -120,7 +120,7 @@ async function extractBatchedMarketplaceImages(
     const extracted = await extractCatalogImages(
       index,
       readBlob,
-      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read),
+      (entry, read) => fillMonorepoReleaseImages(entry, catalogUrl, read, digests),
       digests
     )
     if (missing.size === 0) {
