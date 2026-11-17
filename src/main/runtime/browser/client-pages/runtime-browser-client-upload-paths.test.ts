@@ -14,6 +14,7 @@ function uploadTo(files: string[], workspacePath = '/srv/work/app') {
     method: 'browser.upload',
     params: { element: '#f', files, page: 'page-1' },
     caller: undefined,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the upload route reads only getPage from the registry.
     pages: {
       getPage: () => ({
         browserPageId: 'page-1',
@@ -25,6 +26,7 @@ function uploadTo(files: string[], workspacePath = '/srv/work/app') {
         }
       })
     } as unknown as RuntimeBrowserPageRegistry,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the upload route reads only authority ids and issueClientPageCommand.
     leases: {
       authorityRuntimeId: 'runtime-1',
       authorityEpoch: 1,

@@ -123,9 +123,10 @@ async function toWorkspaceRelativeUploadParams(
   if (!Array.isArray(params.files) || !params.files.some(isAbsolute)) {
     return params
   }
+  const requested: unknown[] = params.files
   const root = await resolveWorkspacePath()
-  const files = []
-  for (const file of params.files as unknown[]) {
+  const files: unknown[] = []
+  for (const file of requested) {
     // Older CLIs and paired callers already send workspace-relative paths.
     if (!isAbsolute(file)) {
       files.push(file)
