@@ -70,3 +70,15 @@ export function getRenderedSetupScriptPromptState(input: {
 export function isSharedSetupIgnored(state: SetupScriptPromptState, repo: Repo): boolean {
   return state.status === 'ok' && state.candidate === null && ignoresSharedSetupScripts(repo)
 }
+
+// The card only appears when it has something to offer: a retry, a detected command, or a local-only warning.
+export function isSetupScriptPromptActionable(state: SetupScriptPromptState, repo: Repo): boolean {
+  if (state.status === 'error') {
+    return true
+  }
+  return (
+    state.status === 'ok' &&
+    !state.hasEffectiveSetup &&
+    (state.candidate !== null || isSharedSetupIgnored(state, repo))
+  )
+}
