@@ -11,8 +11,12 @@ import type { TabSplitDirection } from '../../../store/slices/tabs/tabs-slice-co
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
-
-const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
+import { useAppStore } from '../../../store/index'
+import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  TAB_MOVE_TO_SPLIT_DIRECTIONS,
+  tabMoveToSplitActionId
+} from '../../../../../shared/keybindings/tab-move-to-split-definitions'
 
 function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Element {
   switch (direction) {
@@ -44,16 +48,15 @@ export function TabWorkspaceLayoutMenuSection({
   unifiedTabId,
   groupId,
   leadingSeparator = false,
-  trailingSeparator = false,
-  shortcutLabels
+  trailingSeparator = false
 }: {
   unifiedTabId: string
   groupId: string
   leadingSeparator?: boolean
   trailingSeparator?: boolean
-  shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const keybindings = useAppStore((state) => state.keybindings)
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
@@ -73,20 +76,24 @@ export function TabWorkspaceLayoutMenuSection({
           animation="none"
           className="max-w-[calc(100vw-1rem)] whitespace-nowrap"
         >
-          {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <ContextMenuItem
-              key={direction}
-              onSelect={() => {
-                moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
-              }}
-            >
-              {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction, t)}
-              {shortcutLabels?.[direction] ? (
-                <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
-              ) : null}
-            </ContextMenuItem>
-          ))}
+          {TAB_MOVE_TO_SPLIT_DIRECTIONS.map((direction) => {
+            const shortcut = formatOptionalShortcutLabel(
+              tabMoveToSplitActionId(direction),
+              keybindings
+            )
+            return (
+              <ContextMenuItem
+                key={direction}
+                onSelect={() => {
+                  moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+                }}
+              >
+                {paneColumnDirectionIcon(direction)}
+                {paneColumnDirectionLabel(direction, t)}
+                {shortcut ? <ContextMenuShortcut>{shortcut}</ContextMenuShortcut> : null}
+              </ContextMenuItem>
+            )
+          })}
         </ContextMenuSubContent>
       </ContextMenuSub>
       {trailingSeparator ? <ContextMenuSeparator /> : null}

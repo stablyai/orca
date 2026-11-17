@@ -1,7 +1,8 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import {
   toVisibleTabType,
-  type Tab
+  type Tab,
+  type TabGroup
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store/index'
 import {
@@ -30,6 +31,8 @@ import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-wo
 import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import type { TabMoveToSplitDirection } from '../../../../../shared/keybindings/tab-move-to-split-definitions'
+import { moveTabToNewPaneColumn } from '../../../components/tab-bar/pane-actions/tab-move-to-pane-column'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -52,6 +55,7 @@ export type WorkspaceTabCommand =
     }
   | { type: 'previous-recent'; floatingPanelOwned?: boolean }
   | { type: 'move'; direction: -1 | 1; floatingPanelOwned?: boolean }
+  | { type: 'move-to-split'; direction: TabMoveToSplitDirection; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -135,16 +139,37 @@ function closeFocusedSplitLanding(state: TabState): boolean {
   return true
 }
 
+function findFocusedGroup(state: TabState, worktreeId: string): TabGroup | undefined {
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  return (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
+}
+
+/** Move the focused group's active tab into a new split, as the tab menu's Move Tab to Split does. */
+function moveActiveTabToSplit(
+  worktreeId: string | null,
+  direction: TabMoveToSplitDirection
+): boolean {
+  const group = worktreeId ? findFocusedGroup(useAppStore.getState(), worktreeId) : undefined
+  if (!worktreeId || !group?.activeTabId) {
+    return false
+  }
+  return (
+    moveTabToNewPaneColumn({
+      worktreeId,
+      unifiedTabId: group.activeTabId,
+      groupId: group.id,
+      direction
+    }) !== false
+  )
+}
+
 /** Move the focused group's active tab past its visible neighbor; moves stop at the group's edges. */
 export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boolean {
   if (!worktreeId) {
     return false
   }
   const state = useAppStore.getState()
-  const groupId = state.activeGroupIdByWorktree[worktreeId]
-  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
-    (candidate) => candidate.id === groupId
-  )
+  const group = findFocusedGroup(state, worktreeId)
   const tabId = group?.activeTabId
   if (!group || !tabId) {
     return false
@@ -241,12 +266,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     }
     return handleSwitchRecentTab()
   }
-  if (command.type === 'move') {
+  if (command.type === 'move' || command.type === 'move-to-split') {
     const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
-    return moveActiveTab(
-      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
-      command.direction
-    )
+    const worktreeId = floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId
+    return command.type === 'move'
+      ? moveActiveTab(worktreeId, command.direction)
+      : moveActiveTabToSplit(worktreeId, command.direction)
   }
   if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

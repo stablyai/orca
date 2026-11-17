@@ -15,12 +15,18 @@ import {
   type EditorRequestCmdSaveDetail
 } from './editor/autosave/editor-autosave'
 import '@/store/testing/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import {
+  TAB_MOVE_TO_SPLIT_DIRECTIONS,
+  tabMoveToSplitActionId
+} from '../../../shared/keybindings/tab-move-to-split-definitions'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
 
 import './agent/launch-menu/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import type { KeybindingOverrides } from '../../../shared/keybindings/types'
 import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
 
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
@@ -163,5 +169,98 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
         ? { contentType: 'editor', entityId: 'floating-file' }
         : null
     expect(pressCmdS()).toEqual([{ fileId: 'floating-file' }])
+  })
+})
+
+describe('tab.moveToSplit.*', () => {
+  const worktreeId = 'repo-1::/repo/worktree'
+  const dropUnifiedTab = vi.fn(() => true)
+  const arrowKeys = { right: 'ArrowRight', left: 'ArrowLeft', down: 'ArrowDown', up: 'ArrowUp' }
+  const keybindings: KeybindingOverrides = {}
+  for (const direction of TAB_MOVE_TO_SPLIT_DIRECTIONS) {
+    keybindings[tabMoveToSplitActionId(direction)] = [`Mod+Alt+Shift+${arrowKeys[direction]}`]
+  }
+  const boundController: TerminalActivationController = { ...controller, keybindings }
+
+  function seed(tabOrder: string[], groupsWorktreeId = worktreeId): void {
+    mocks.state = {
+      activeView: 'terminal',
+      activeWorktreeId: worktreeId,
+      activeGroupIdByWorktree: { [groupsWorktreeId]: 'g' },
+      groupsByWorktree: {
+        [groupsWorktreeId]: [
+          makeTabGroup({ id: 'g', worktreeId: groupsWorktreeId, activeTabId: 'a', tabOrder })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [groupsWorktreeId]: tabOrder.map((id) =>
+          makeUnifiedTab({ id, worktreeId: groupsWorktreeId, groupId: 'g', createdAt: 0 })
+        )
+      },
+      dropUnifiedTab
+    }
+  }
+
+  function press(direction: keyof typeof arrowKeys): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: arrowKeys[direction],
+      code: arrowKeys[direction],
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      cancelable: true
+    })
+    handleTerminalWorkspaceKeyDown(event, boundController, 'darwin')
+    return event
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+  })
+
+  it.each(TAB_MOVE_TO_SPLIT_DIRECTIONS)('moves the active tab into a new split %s', (direction) => {
+    seed(['a', 'b'])
+    expect(press(direction).defaultPrevented).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('a', { groupId: 'g', splitDirection: direction })
+  })
+
+  it('lets the chord fall through when the active tab is alone in its group', () => {
+    seed(['a'])
+    expect(press('down').defaultPrevented).toBe(false)
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('still reorders with tab.moveRight, which shares the tab-move handler', () => {
+    seed(['a', 'b'])
+    const reorderUnifiedTabs = vi.fn()
+    Object.assign(mocks.state, {
+      tabsByWorktree: { [worktreeId]: [{ id: 'a' }, { id: 'b' }] },
+      tabBarOrderByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      reorderUnifiedTabs
+    })
+    const event = new KeyboardEvent('keydown', {
+      key: ']',
+      code: 'BracketRight',
+      metaKey: true,
+      cancelable: true
+    })
+    const controllerWithMove: TerminalActivationController = {
+      ...controller,
+      keybindings: { 'tab.moveRight': ['Mod+BracketRight'] }
+    }
+    handleTerminalWorkspaceKeyDown(event, controllerWithMove, 'darwin')
+    expect(event.defaultPrevented).toBe(true)
+    expect(reorderUnifiedTabs).toHaveBeenCalledWith('g', ['b', 'a'])
+  })
+
+  it('moves the floating panel tab when the panel owns the event', () => {
+    seed(['a', 'b'], FLOATING_TERMINAL_WORKTREE_ID)
+    mocks.targetInsideFloatingPanel = true
+    expect(press('right').defaultPrevented).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('a', { groupId: 'g', splitDirection: 'right' })
   })
 })

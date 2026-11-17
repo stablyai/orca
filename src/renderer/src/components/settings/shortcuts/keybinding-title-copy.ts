@@ -79,6 +79,14 @@ const STATIC_TITLE_COPY = {
   'tab.reopenClosed': () => translate('keybindings.title.tabReopenClosed', 'Reopen closed tab'),
   'tab.moveLeft': () => translate('keybindings.title.tabMoveLeft', 'Move active tab left'),
   'tab.moveRight': () => translate('keybindings.title.tabMoveRight', 'Move active tab right'),
+  'tab.moveToSplit.right': () =>
+    translate('keybindings.title.tabMoveToSplitRight', 'Move active tab to split right'),
+  'tab.moveToSplit.left': () =>
+    translate('keybindings.title.tabMoveToSplitLeft', 'Move active tab to split left'),
+  'tab.moveToSplit.down': () =>
+    translate('keybindings.title.tabMoveToSplitDown', 'Move active tab to split down'),
+  'tab.moveToSplit.up': () =>
+    translate('keybindings.title.tabMoveToSplitUp', 'Move active tab to split up'),
   'tab.nextSameType': () => translate('keybindings.title.tabNextSameType', 'Next tab (same type)'),
   'tab.previousSameType': () =>
     translate('keybindings.title.tabPreviousSameType', 'Previous tab (same type)'),
