@@ -207,7 +207,7 @@ function absorbChat(
   })
 }
 
-/** The original's record, a tab and a catalog row; history converts lazily as usual. */
+/** The original's record, its tab if open there, and a catalog row; history converts lazily. */
 function adoptChat(
   source: Database.Database,
   db: Database.Database,
@@ -224,17 +224,19 @@ function adoptChat(
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  // The older build wrote this chat, so it is shown even if it was closed here.
-  if (!adoption.tabsRecorded) {
-    recordTabIndex(db, adoption)
+  // Only a chat the older build had open gets a tab; the rest join chat history with tabs untouched.
+  const saved = adoption.savedTabs.get(id)
+  if (saved !== undefined) {
+    if (!adoption.tabsRecorded) {
+      recordTabIndex(db, adoption)
+    }
+    addTab(
+      db,
+      adoption,
+      as,
+      as === id && !adoption.takenTabs.has(saved) ? saved : structuredAgentSessionTabId(as)
+    )
   }
-  const saved = as === id ? adoption.savedTabs.get(id) : undefined
-  addTab(
-    db,
-    adoption,
-    as,
-    saved !== undefined && !adoption.takenTabs.has(saved) ? saved : structuredAgentSessionTabId(as)
-  )
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
     .get(id)

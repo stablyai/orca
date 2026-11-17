@@ -314,7 +314,8 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .all(...known)
     .map((row) => String(row.session_id))
   expect(items(later.db, copy!)).toContain('older-turn')
-  expect(tabbedChats(later.db)).toEqual(['open', copy, 'started-older'])
+  // Closed in the older Orca: the copy joins chat history without a tab.
+  expect(tabbedChats(later.db)).toEqual(['open', 'started-older'])
   expect(later.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 1
   })
@@ -325,7 +326,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  expect(tabbedChats(again.db)).toHaveLength(4)
+  expect(tabbedChats(again.db)).toEqual(['open', 'started-older'])
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 2
   })
