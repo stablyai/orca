@@ -152,6 +152,7 @@ function* retirableAliasRows(
   for (const copies of outranked) {
     for (const copy of copies ?? []) {
       if (
+        copy.file.path !== preferred.file.path &&
         rows.has(copy.file.path) &&
         copy.file.mtimeMs === preferred.file.mtimeMs &&
         (copy.file.path.endsWith('.zst') !== preferred.file.path.endsWith('.zst') ||
