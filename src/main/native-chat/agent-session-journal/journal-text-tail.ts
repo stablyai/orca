@@ -214,10 +214,7 @@ export function foldJournalTurnTextTails(
   target: { sessionId: string; epoch: string },
   item: AgentJournalRenderItem
 ): void {
-  if (
-    JOURNAL_TEXT_TAIL_WRITES &&
-    (readAgentJournalTurn(item.body)?.state ?? 'running') !== 'running'
-  ) {
+  if ((readAgentJournalTurn(item.body)?.state ?? 'running') !== 'running') {
     foldJournalTextTails(db, [target.sessionId, target.epoch])
   }
 }
