@@ -75,13 +75,6 @@ export function cycleVisibleHostRow(
   visibleHostIds: readonly ExecutionHostId[] | null
 ): ExecutionHostId[] | null | undefined {
   const rows = pickerExecutionHosts(hosts)
-  if (rows.length === 0) {
-    return undefined
-  }
-  const knownIds = new Set(hosts.flatMap((host) => [host.id, ...(host.aliasHostIds ?? [])]))
-  if (visibleHostIds?.some((id) => !knownIds.has(id))) {
-    return null
-  }
   const checkedRows = visibleHostIds ? getCheckedHostRows(rows, visibleHostIds) : rows
   const showsAll = checkedRows.length === rows.length
   if (rows.length < 2) {

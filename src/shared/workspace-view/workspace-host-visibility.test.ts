@@ -33,16 +33,4 @@ describe('cycleVisibleHostRow', () => {
   it('clears a filter left on a host that is gone', () => {
     expect(cycleVisibleHostRow([{ id: 'local' }], ['ssh:removed'])).toBeNull()
   })
-
-  it('clears a filter that mixes a live host with a removed one', () => {
-    expect(cycleVisibleHostRow(hosts, ['local', 'ssh:removed'])).toBeNull()
-  })
-
-  it('keeps cycling when the saved list names a merged row by its alias', () => {
-    expect(cycleVisibleHostRow(hosts, ['ssh:orb', 'runtime:orb-server'])).toEqual(['ssh:github'])
-  })
-
-  it('does nothing before any host rows are known', () => {
-    expect(cycleVisibleHostRow([], ['local'])).toBeUndefined()
-  })
 })

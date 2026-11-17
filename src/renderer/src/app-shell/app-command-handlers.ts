@@ -195,11 +195,8 @@ export function createAppCommandHandlers(
         ) {
           return false
         }
-        if (!resolveSidebarHostCycle()) {
-          return false
-        }
-        // A plugin replacement can defer this; resolve again so queued presses each advance.
-        return claim('sidebar.hosts.cycle', () => resolveSidebarHostCycle()?.())
+        const cycle = resolveSidebarHostCycle()
+        return cycle ? claim('sidebar.hosts.cycle', cycle) : false
       }
     ],
     [
