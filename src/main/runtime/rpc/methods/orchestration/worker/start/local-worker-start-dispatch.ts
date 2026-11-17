@@ -9,6 +9,7 @@ import type { WorkerStartInput } from './worker-start-input'
 import type { RunRow } from '../../../../../orchestration/db/orchestration-records'
 import type { startLocalWorker } from './local-worker-start'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
+import type { WorkerDefaultAgentSelection } from './launch/worker-configured-agent-preflight'
 
 export function createLocalWorkerStartDispatch(
   {
@@ -31,6 +32,7 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId,
     repoSelector,
     agent,
+    agentSelection,
     launchReceipt
   }: {
     params: WorkerStartInput
@@ -41,6 +43,7 @@ export function createLocalWorkerStartDispatch(
     resolvedWorktreeId: string | undefined
     repoSelector: string | undefined
     agent: TuiAgent | undefined
+    agentSelection?: WorkerDefaultAgentSelection
     launchReceipt: OrchestrationWorkerLaunchReceipt
   }
 ) {
@@ -53,6 +56,7 @@ export function createLocalWorkerStartDispatch(
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
+    agentSelection: agentSelection ?? null,
     // Mail from a reuse start that never binds still names the agent already running there.
     launch: params.terminal
       ? reusedWorkerLaunchReceipt(

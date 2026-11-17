@@ -9,6 +9,7 @@ export type RemotePlacementRow = {
   conversation_id: string
   state: 'reserved' | 'accepted'
   request_key: string
+  agent_selection: string | null
   prior_task_status: TaskStatus
   dispatch_id: string | null
   created_at: string

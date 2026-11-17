@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -6,6 +9,10 @@ import {
   parseExecutionHostId
 } from '../../execution-host/execution-host'
 
+const ProjectDefaultTuiAgent = z.custom<TuiAgent | 'blank' | null>(
+  (value) => value === null || value === 'blank' || isTuiAgent(value),
+  { message: 'Unknown project default agent' }
+)
 export const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
   owner: requiredString('Missing project owner'),
@@ -27,6 +34,7 @@ export const RequestedHostId = requiredString('Missing host ID').transform((valu
 
 export const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
+  defaultTuiAgent: ProjectDefaultTuiAgent.optional(),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: RequestedHostId,
   path: requiredString('Missing project path'),
@@ -37,6 +45,7 @@ export const ProjectHostSetupExistingFolder = z.object({
 
 export const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
+  defaultTuiAgent: ProjectDefaultTuiAgent.optional(),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
   hostId: RequestedHostId,
   url: requiredString('Missing clone URL'),
@@ -58,12 +67,14 @@ export const LocalWindowsRuntimePreference = z.discriminatedUnion('kind', [
 export const ProjectUpdate = z.object({
   projectId: requiredString('Missing project ID'),
   updates: z.object({
-    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional()
+    localWindowsRuntimePreference: LocalWindowsRuntimePreference.optional(),
+    defaultTuiAgent: ProjectDefaultTuiAgent.optional()
   })
 })
 
 export const ProjectHostSetupCreate = z.object({
   projectId: requiredString('Missing project ID'),
+  defaultTuiAgent: ProjectDefaultTuiAgent.optional(),
   hostId: RequestedHostId,
   setupId: OptionalString,
   path: OptionalString,

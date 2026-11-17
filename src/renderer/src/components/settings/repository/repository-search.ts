@@ -1,3 +1,4 @@
+import { getProjectDefaultAgentSearchEntry } from '../ProjectDefaultAgentSetting'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepositoryPresenceSearchEntries } from './repository-project-presence-search'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
@@ -57,6 +58,7 @@ function getRepositorySearchParts(
       )
     ]
   }
+  const defaultAgent = getProjectDefaultAgentSearchEntry(repo.displayName, t)
   const displayName = {
     title: t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
     description: t(
@@ -210,6 +212,7 @@ function getRepositorySearchParts(
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     browserProfile: getRepositoryBrowserProfileSearchEntry(t),
     jira,
+    defaultAgent,
     displayName,
     icon,
     github,
@@ -233,6 +236,7 @@ export function getRepositoryPaneSearchEntries(
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
     parts.browserProfile,
+    parts.defaultAgent,
     parts.jira,
     parts.displayName,
     parts.icon
@@ -270,13 +274,8 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [
-    parts.agentTrust,
-    parts.browserProfile,
-    parts.jira,
-    parts.displayName,
-    parts.icon
-  ]
+  const { agentTrust, browserProfile, defaultAgent, jira, displayName, icon } = parts
+  const identity = [agentTrust, browserProfile, defaultAgent, jira, displayName, icon]
   if (parts.github) {
     identity.push(parts.github)
   }
@@ -291,6 +290,7 @@ export function getRepositoryPaneSearchMetadata(
   }
   return {
     identity,
+    defaultAgent: parts.defaultAgent,
     removeProject: parts.removeProject,
     sidebarVisibility: parts.sidebarVisibility,
     projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],

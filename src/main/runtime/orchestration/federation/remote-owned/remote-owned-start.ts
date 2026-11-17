@@ -13,6 +13,7 @@ import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
+  getRemotePlacement,
   recordRemoteStart,
   releaseRemotePlacement,
   reserveRemotePlacement
@@ -21,6 +22,10 @@ import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placemen
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey } from './remote-forward-caller'
+import {
+  readRemotePlacementAgentSelection,
+  resolveRemoteOwnedDefaultAgent
+} from './remote-owned-default-agent'
 import { errorData, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 
 type StartParams = z.infer<typeof WorkerStartParams>
@@ -88,20 +93,32 @@ export async function startRemoteOwnedWorker(
   )
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
-  const { run } = bindRun()
-  // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
   const taskId = existingTask?.id ?? adoptedTaskId(forward.key)
+  const priorPlacement = getRemotePlacement(db, taskId)
+  const frozenSelection =
+    params.agent === 'default' && priorPlacement?.request_key === forward.key
+      ? readRemotePlacementAgentSelection(priorPlacement)
+      : undefined
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
+  const defaultAgent = await resolveRemoteOwnedDefaultAgent(
+    runtime,
+    params,
+    server,
+    budgets.preflightTimeoutMs,
+    frozenSelection
+  )
+  const { run } = bindRun()
   // Before any link is written: a Task an earlier pairing with this server placed is not reused there.
   refuseTaskOfClosedPairing(db, taskId, server)
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
-  const { task } = reserveRemotePlacement(db, {
+  const { task, placement } = reserveRemotePlacement(db, {
     link,
     taskId,
     requestKey: forward.key,
+    agentSelection: defaultAgent?.agentSelection,
     retryOf: params.retryOf,
     create: existingTask
       ? undefined
@@ -115,6 +132,7 @@ export async function startRemoteOwnedWorker(
           createdByRunGeneration: run.consumer_generation
         }
   })
+  const agentSelection = defaultAgent ? readRemotePlacementAgentSelection(placement) : undefined
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
   const {
@@ -132,6 +150,12 @@ export async function startRemoteOwnedWorker(
       method: 'orchestration.workerStart',
       params: {
         ...options,
+        ...(agentSelection
+          ? {
+              agent: agentSelection.agent,
+              resolvedAgentSelection: agentSelection
+            }
+          : {}),
         // A retry names the server's existing Task, whose ordinary retry checks refuse a spec.
         ...(params.retryOf
           ? { task: task.id }
@@ -188,6 +212,7 @@ export async function startRemoteOwnedWorker(
     answer && typeof answer === 'object'
       ? {
           ...answer,
+          ...(agentSelection ? { agentSelection } : {}),
           // This Orca's Run and Task; the server's own Run for them is named apart.
           taskId,
           runId: run.id,
