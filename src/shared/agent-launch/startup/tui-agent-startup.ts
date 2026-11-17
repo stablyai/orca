@@ -177,7 +177,7 @@ export function buildAgentStartupPlan(args: {
   if (config.promptInjectionMode === 'flag-interactive') {
     return {
       agent,
-      launchCommand: `${launchCommand} -i ${quotedPrompt}`,
+      launchCommand: `${launchCommand} ${config.interactivePromptFlag ?? '-i'} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,

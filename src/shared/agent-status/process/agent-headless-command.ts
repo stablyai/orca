@@ -7,6 +7,7 @@ import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
+import { isGitlabDuoNonInteractiveCommand } from './gitlab-duo-headless-command'
 import type { TerminalAgent } from '../identity/terminal-agent'
 
 // Agent-specific one-shot forms cannot accept pane prompts; DSH server/JSON-RPC modes must be excluded too.
@@ -23,7 +24,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
   dsh: isDshNonInteractiveCommand,
-  dsb: isDsbHeadlessOneShotCommand
+  dsb: isDsbHeadlessOneShotCommand,
+  'gitlab-duo': isGitlabDuoNonInteractiveCommand
 }
 
 export function isHeadlessOneShotAgentCommand(

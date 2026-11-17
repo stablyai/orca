@@ -2612,6 +2612,7 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "qoder_cn_label": "Qoder CLI China",
+          "gitlab_duo_label": "GitLab Duo",
           "jcode_label": "Jcode"
         },
         "skill": {

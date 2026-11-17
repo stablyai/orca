@@ -153,6 +153,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'gitlab-duo',
+      label: translate('auto.lib.agent.catalog.gitlab_duo_label', 'GitLab Duo'),
+      // Why: seeds the full-command override, so it must be the launch command, not `glab`.
+      cmd: 'glab duo cli',
+      homepageUrl: 'https://docs.gitlab.com/user/gitlab_duo_cli/'
     }
   ]
 }

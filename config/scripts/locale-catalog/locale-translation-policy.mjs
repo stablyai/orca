@@ -40,6 +40,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Git',
   'Git Bash',
   'GitHub Copilot',
+  'GitLab Duo',
   'GitLab',
   'Goose',
   'Grok',

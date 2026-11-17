@@ -36,6 +36,10 @@ export type TuiAgentConfig = {
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
+  /** Prompt flag for `flag-interactive` mode; defaults to `-i`. */
+  interactivePromptFlag?: string
+  /** detectCmd is a general-purpose CLI (e.g. `glab`); only expectedProcess or the full launchCmd identify the agent. */
+  sharedLauncherCmd?: true
   /** Option terminator required before positional prompts that may look like CLI syntax. */
   argvPromptSeparator?: '--'
   /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
