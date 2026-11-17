@@ -167,8 +167,9 @@ export function runOnceWorkerReportsPid(
   if (child.pid) {
     return action()
   }
+  // A close the worker reported before any PID means the process never started: nothing is left to stop.
   if (child.closed) {
-    return Promise.resolve(false)
+    return Promise.resolve(true)
   }
   return new Promise((resolve) => {
     const settle = (result: boolean): void => {
@@ -191,11 +192,12 @@ export function runOnceWorkerReportsPid(
     }
     const onClose = (): void => {
       detach()
-      settle(false)
+      settle(true)
     }
     const onError = (error: Error): void => {
       if (isAbandonedWorkerChildError(error)) {
-        onClose()
+        detach()
+        settle(false)
       }
     }
     const timer = setTimeout(() => settle(false), WORKER_PID_WAIT_MS)
