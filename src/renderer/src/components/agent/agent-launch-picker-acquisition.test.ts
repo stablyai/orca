@@ -1,0 +1,140 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { observeAgentPickerAcquisition } from './agent-launch-picker-acquisition'
+import { AGENT_PICKER_CATALOG_RETRY_DELAYS_MS } from './agent-picker-catalog-jobs'
+import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
+
+const mocks = vi.hoisted(() => {
+  const responses: RuntimeRpcResponse<unknown>[] = []
+  const calls: { method: string; params: unknown }[] = []
+  return { responses, calls }
+})
+
+// The remote runtime transport: each call answers with the next wire envelope the host sent.
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
+    mocks.calls.push({ method, params })
+    const response = mocks.responses.shift()
+    if (!response) {
+      throw new Error('unexpected call')
+    }
+    return unwrapRuntimeRpcResult(response)
+  }
+}))
+
+const meta = { runtimeId: 'wsl-runtime' }
+/** What a host before 1.4.248 answers a session-less catalog read before its chat host is built. */
+function refusal(reason: 'hostDisabled' | 'clientCapabilityMissing'): RuntimeRpcResponse<unknown> {
+  return {
+    id: 'r',
+    ok: false,
+    error: {
+      code: 'structured_agent_session_unsupported',
+      message: 'structured_agent_session_unsupported',
+      data: { refusal: { code: 'structured_agent_session_unsupported', details: { reason } } }
+    },
+    _meta: meta
+  }
+}
+const piCatalog: RuntimeRpcResponse<unknown> = {
+  id: 'r',
+  ok: true,
+  result: {
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [
+      { id: 'gateway/model-a', label: 'Model A', isDefault: true, efforts: [] },
+      { id: 'gateway/model-b', label: 'Model B', isDefault: false, efforts: [] }
+    ]
+  },
+  _meta: meta
+}
+
+const pi: AgentPickerEntry = {
+  agent: 'pi',
+  label: 'Pi',
+  rows: [],
+  surfaces: ['chat', 'terminal'],
+  defaultSurface: 'chat',
+  terminal: {},
+  structured: {},
+  catalog: { origin: 'unknown' }
+}
+
+function observe(key: string) {
+  let latest: AgentPickerEntry[] = []
+  const reads = agentPickerModelCatalogReads({
+    target: { kind: 'environment', environmentId: 'wsl-env' },
+    worktree: 'id:repo::/home/me/project'
+  })
+  const stop = observeAgentPickerAcquisition(
+    key,
+    [pi],
+    { catalog: reads.catalog, support: async () => undefined },
+    { selected: () => undefined, publish: (entries) => (latest = entries) }
+  )
+  return { stop, entry: () => latest[0] }
+}
+
+describe('agent picker catalog acquisition against a remote runtime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mocks.responses.length = 0
+    mocks.calls.length = 0
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('retries an older host that refused the read before its chat host was built', async () => {
+    mocks.responses.push(refusal('hostDisabled'), piCatalog)
+    const picker = observe('host-not-built')
+    await vi.advanceTimersByTimeAsync(0)
+    // Still loading rather than settled on Pi's empty built-in list.
+    expect(picker.entry().catalogRead).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(AGENT_PICKER_CATALOG_RETRY_DELAYS_MS[0])
+    expect(mocks.calls.map(({ method }) => method)).toEqual([
+      'agentSession.modelCatalog',
+      'agentSession.modelCatalog'
+    ])
+    expect(picker.entry().catalogRead).toBe('settled')
+    expect(agentPickerModels(picker.entry(), 'chat').map(({ id }) => id)).toEqual(
+      expect.arrayContaining(['gateway/model-a', 'gateway/model-b'])
+    )
+    picker.stop()
+  })
+
+  it('gives up after its bounded retries', async () => {
+    mocks.responses.push(...Array.from({ length: 4 }, () => refusal('hostDisabled')))
+    const picker = observe('host-never-built')
+    await vi.advanceTimersByTimeAsync(
+      AGENT_PICKER_CATALOG_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0)
+    )
+    expect(mocks.calls).toHaveLength(4)
+    expect(picker.entry().catalogRead).toBe('failed')
+    picker.stop()
+  })
+
+  it('does not retry a client the host will never serve', async () => {
+    mocks.responses.push(refusal('clientCapabilityMissing'))
+    const picker = observe('client-unsupported')
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(mocks.calls).toHaveLength(1)
+    expect(picker.entry().catalogRead).toBe('unsupported')
+    picker.stop()
+  })
+
+  it('stops retrying once the picker closes', async () => {
+    mocks.responses.push(refusal('hostDisabled'))
+    const picker = observe('closed')
+    await vi.advanceTimersByTimeAsync(0)
+    picker.stop()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(mocks.calls).toHaveLength(1)
+  })
+})
