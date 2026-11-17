@@ -1,4 +1,5 @@
 import { pluginInstallLinkFromArguments } from '../../../shared/plugins/catalog/plugin-install-link'
+import { pairingLinkFromArguments } from '../../../shared/remote-runtime/pairing/pairing-deep-link'
 import { skillShareIdFromArguments } from '../../../shared/skills/sharing/skill-share-link'
 
 const REPEAT_WINDOW_MS = 3_000
@@ -47,5 +48,11 @@ export class SkillShareDeepLinkState extends PendingDeepLinkState {
 export class PluginInstallLinkState extends PendingDeepLinkState {
   constructor(now?: () => number) {
     super(pluginInstallLinkFromArguments, now)
+  }
+}
+
+export class RemotePairingLinkState extends PendingDeepLinkState {
+  constructor(now?: () => number) {
+    super(pairingLinkFromArguments, now)
   }
 }
