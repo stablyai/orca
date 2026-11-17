@@ -76,6 +76,10 @@ function parseArgs(argv) {
 }
 
 const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+const gitOptional = (cwd, args) => {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : ''
+}
 
 function run(command, args, cwd, logFile) {
   const fd = fs.openSync(logFile, 'a')
@@ -105,7 +109,22 @@ function ensureBuild(repoRoot, sha) {
     run('git', ['fetch', '--quiet', 'origin', sha], repoRoot, log)
   }
   run('git', ['clone', '--quiet', '--shared', '--no-checkout', repoRoot, dir], buildsDir, log)
+  // A blobless source repo leaves new blobs unfetched; let the clone fetch them from the same origin on checkout.
+  const filter = gitOptional(repoRoot, ['config', '--get', 'remote.origin.partialclonefilter'])
+  if (filter) {
+    run(
+      'git',
+      ['config', 'remote.origin.url', git(repoRoot, ['remote', 'get-url', 'origin'])],
+      dir,
+      log
+    )
+    run('git', ['config', 'remote.origin.promisor', 'true'], dir, log)
+    run('git', ['config', 'remote.origin.partialclonefilter', filter], dir, log)
+  }
   run('git', ['checkout', '--quiet', '--detach', sha], dir, log)
+  if (git(dir, ['status', '--porcelain', '--untracked-files=no']) !== '') {
+    throw new Error(`checkout of ${sha.slice(0, 12)} is incomplete in ${dir} (log ${log})`)
+  }
   run('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], dir, log)
   run('pnpm', ['run', 'build:packages'], dir, log)
   run(
