@@ -94,7 +94,9 @@ export function watchRetiringRun(db: OrchestrationDb, runId: string): void {
     .prepare(
       `INSERT INTO temp.${table}_tracked
          SELECT 'dispatch:' || id FROM dispatch_contexts WHERE run_id = ?1
-         UNION SELECT 'principal:' || id FROM legacy_compatibility_principals WHERE run_id = ?1`
+         UNION SELECT 'principal:' || id FROM legacy_compatibility_principals
+           -- Its every role, so the lookup can use the (role, run_id) index.
+           WHERE role IN ('coordinator', 'worker') AND run_id = ?1`
     )
     .run(runId)
 }
