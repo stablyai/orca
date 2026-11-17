@@ -16,6 +16,7 @@ import {
   encodeClaudeProjectPaths,
   isClaudeProjectOwnBucketName
 } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 
 export type AdoptedTranscriptSource = {
   providerSessionId: string
@@ -107,11 +108,8 @@ export function adoptedTranscriptSourceObserver(input: {
       if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
         throw new Error('The saved conversation header does not match its file identity.')
       }
-      // Moved or copied chats keep their old cwd; Claude resumes from the cwd's bucket regardless.
-      if (
-        input.agent === 'claude' &&
-        isClaudeCwdBucket(basename(dirname(input.filePath)), input.source.workspaceCwd)
-      ) {
+      // Moved or copied chats keep their old cwd; Claude and Grok resume from the cwd's bucket regardless.
+      if (isWorkspaceCwdBucket(input.agent, input.filePath, input.source.workspaceCwd)) {
         cwd = input.source.workspaceCwd
       }
       await assertAdoptedSourceIdentity(
@@ -125,11 +123,18 @@ export function adoptedTranscriptSourceObserver(input: {
   }
 }
 
-// Windows file systems resolve bucket names without case, as Claude's own lookup does.
-function isClaudeCwdBucket(bucket: string, cwd: string): boolean {
+// Windows file systems resolve bucket names without case, as the agents' own lookups do.
+function isWorkspaceCwdBucket(agent: AgentType, filePath: string, cwd: string): boolean {
   const fold = (name: string) => (process.platform === 'win32' ? name.toLowerCase() : name)
-  return encodeClaudeProjectPaths(cwd).some((encoded) =>
-    isClaudeProjectOwnBucketName(fold(bucket), fold(encoded))
+  if (agent === 'grok') {
+    const encoded = grokEncodedCwdDirName(cwd)
+    return encoded !== null && fold(basename(dirname(dirname(filePath)))) === fold(encoded)
+  }
+  return (
+    agent === 'claude' &&
+    encodeClaudeProjectPaths(cwd).some((encoded) =>
+      isClaudeProjectOwnBucketName(fold(basename(dirname(filePath))), fold(encoded))
+    )
   )
 }
 
