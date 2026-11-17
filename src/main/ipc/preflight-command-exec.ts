@@ -24,25 +24,33 @@ export type PreflightCommandResult = { stdout: string; stderr: string }
 async function withPreflightTimeout<T>(
   command: string,
   commandPromise: Promise<T>,
-  timeoutMs = PREFLIGHT_COMMAND_TIMEOUT_MS
+  timeoutMs = PREFLIGHT_COMMAND_TIMEOUT_MS,
+  started: Promise<void> = Promise.resolve()
 ): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+  let settled = false
   try {
     return await Promise.race([
       commandPromise,
       new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          const error = Object.assign(new Error(`Timed out running ${command}`), {
-            code: 'ETIMEDOUT'
-          })
-          reject(error)
-        }, timeoutMs)
-        if (typeof timeout.unref === 'function') {
-          timeout.unref()
-        }
+        void started.then(() => {
+          if (settled) {
+            return
+          }
+          timeout = setTimeout(() => {
+            const error = Object.assign(new Error(`Timed out running ${command}`), {
+              code: 'ETIMEDOUT'
+            })
+            reject(error)
+          }, timeoutMs)
+          if (typeof timeout.unref === 'function') {
+            timeout.unref()
+          }
+        })
       })
     ])
   } finally {
+    settled = true
     if (timeout) {
       clearTimeout(timeout)
     }
@@ -62,16 +70,22 @@ export async function execLocalPreflightCommandOrThrow(
     options.terminationBarrier ||
     (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
   ) {
+    let spawned = (): void => {}
+    // Windows may queue the launch behind others on a worker; time the run, not the queue.
+    const started = new Promise<void>((resolve) => {
+      spawned = () => resolve()
+    })
     const pending = runProcess({
       program: command,
       args,
       env,
       timeoutMs,
+      onSpawn: spawned,
       ...(options.terminationBarrier ? { terminationBarrier: true } : {})
     })
     const result = options.terminationBarrier
       ? await pending
-      : await withPreflightTimeout(command, pending, timeoutMs)
+      : await withPreflightTimeout(command, pending, timeoutMs, started)
     if (result.timedOut || result.outputTruncated || result.code !== 0) {
       throw Object.assign(new Error(`Failed running ${command}`), {
         ...result,
