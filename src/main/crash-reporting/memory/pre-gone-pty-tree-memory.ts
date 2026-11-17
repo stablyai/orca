@@ -66,10 +66,7 @@ export function hostMemoryHeadroom(
   return { headroomMB: freeMB + reclaimableMB, limitMB }
 }
 
-function pressureHeadroomMB(
-  details: CrashReportDetails,
-  platform: NodeJS.Platform
-): number | null {
+function pressureHeadroomMB(details: CrashReportDetails, platform: NodeJS.Platform): number | null {
   const headroom = hostMemoryHeadroom(details, platform)
   if (!headroom || headroom.headroomMB < MIN_HEADROOM_TO_SAMPLE_MB) {
     return null
