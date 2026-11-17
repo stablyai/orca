@@ -41,6 +41,7 @@ import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace/status/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
+import { createWorkspaceLabelActions } from './ui-slice-workspace-labels'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -242,6 +243,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ workspaceStatuses: normalized })
     },
     ...createHostWorkspaceStatusActions(set, get),
+    ...createWorkspaceLabelActions(set, get),
 
     workspaceBoardOpacity: 1,
     setWorkspaceBoardOpacity: (opacity) => {

@@ -189,6 +189,9 @@ export const UiUpdateFields = z
     showAgentModels: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
+    workspaceLabels: z
+      .array(z.object({ id: z.string(), name: z.string(), color: z.string() }))
+      .optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
     syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),

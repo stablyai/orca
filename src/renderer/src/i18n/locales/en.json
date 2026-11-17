@@ -26233,5 +26233,26 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "workspaceLabels": {
+    "dialog": {
+      "nameTaken": "A label with this name already exists.",
+      "nameTooLong": "Use {{max}} characters or fewer.",
+      "title": "New Label",
+      "description": "Create a label and add it to this workspace.",
+      "name": "Name",
+      "color": "Color",
+      "useColor": "Use {{value0}} label color",
+      "cancel": "Cancel",
+      "create": "Create"
+    },
+    "card": {
+      "moreLabels": "More labels: {{names}}"
+    },
+    "menu": {
+      "labels": "Labels",
+      "newLabel": "New label…"
+    },
+    "updateRemoteRuntime": "Update the remote runtime to use labels"
   }
 }

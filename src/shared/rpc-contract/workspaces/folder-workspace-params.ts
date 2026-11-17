@@ -9,6 +9,7 @@ import { DiffCommentSchema } from '../../file-review/diff-comment-schema'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
 import { LaunchSourceParam } from '../agent-launch/launch-source-param'
+import { WorkspaceLabelIdsSchema } from '../../workspace/labels/workspace-labels'
 
 export const FolderWorkspaceHookCreateShape = {
   runHooks: z.boolean().optional(),
@@ -98,6 +99,7 @@ export const FolderWorkspaceUpdate = z.object({
       sortOrder: OptionalFiniteNumber,
       manualOrder: OptionalFiniteNumber,
       workspaceStatus: OptionalString,
+      labelIds: WorkspaceLabelIdsSchema.optional(),
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),

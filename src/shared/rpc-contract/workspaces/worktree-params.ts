@@ -17,6 +17,7 @@ import { DiffCommentSchema, MobileDiffReviewSchema } from '../../file-review/dif
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
+import { WorkspaceLabelIdsSchema } from '../../workspace/labels/workspace-labels'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -194,6 +195,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
+  labelIds: WorkspaceLabelIdsSchema.optional(),
   pushTarget: z
     .object({
       remoteName: z.string(),

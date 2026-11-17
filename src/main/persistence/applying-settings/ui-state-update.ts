@@ -9,6 +9,7 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
 } from '../../../shared/workspace/status/workspace-statuses'
+import { normalizeWorkspaceLabels } from '../../../shared/workspace/labels/workspace-labels'
 import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
@@ -137,6 +138,11 @@ export function updatePersistedUI(
       sanitizedUpdates.workspaceStatuses !== undefined
         ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)
         : normalizeWorkspaceStatuses(operations.state.ui?.workspaceStatuses),
+    workspaceLabels: normalizeWorkspaceLabels(
+      sanitizedUpdates.workspaceLabels !== undefined
+        ? sanitizedUpdates.workspaceLabels
+        : operations.state.ui?.workspaceLabels
+    ),
     workspaceBoardOpacity: clampWorkspaceBoardOpacity(
       sanitizedUpdates.workspaceBoardOpacity ?? operations.state.ui?.workspaceBoardOpacity
     ),

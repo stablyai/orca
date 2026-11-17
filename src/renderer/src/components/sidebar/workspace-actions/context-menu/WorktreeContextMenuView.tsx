@@ -16,6 +16,7 @@ import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controlle
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
+import { WorktreeLabelMenuItems } from '../../workspace-labels/WorktreeLabelMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
@@ -38,6 +39,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   const {
     children,
     contentClassName,
+    checkedLabelIds,
     contextMenuOpenedAtRef,
     contextWorkspaceStatus,
     deletingContext,
@@ -51,8 +53,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRename,
     handleSleepSubtree,
     handleSleepSubtreeWithVm,
+    handleNewWorkspaceLabel,
     handleTogglePin,
     handleToggleRead,
+    handleToggleWorkspaceLabel,
     showsUnread,
     hasAnyContextLineage,
     isDeleting,
@@ -72,6 +76,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     subtreeSleepableWorktrees,
     suppressOpeningPointerEvent,
     worktree,
+    workspaceLabels,
     workspaceStatuses
   } = model
   const t = useTranslate()
@@ -198,6 +203,13 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             isMultiContext={isMultiContext}
             onAssignWorkspaceStatus={handleAssignWorkspaceStatus}
             workspaceStatuses={workspaceStatuses}
+          />
+          <WorktreeLabelMenuItems
+            labels={workspaceLabels}
+            checkedLabelIds={checkedLabelIds}
+            disabled={deletingContext}
+            onToggle={handleToggleWorkspaceLabel}
+            onNewLabel={handleNewWorkspaceLabel}
           />
           {!isMultiContext && (
             <>

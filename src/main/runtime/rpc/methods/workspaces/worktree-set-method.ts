@@ -56,6 +56,7 @@ export const WORKTREE_SET_METHOD = defineMethod({
       sparsePresetId: params.sparsePresetId,
       baseRef: params.baseRef,
       workspaceStatus: params.workspaceStatus,
+      labelIds: params.labelIds,
       pushTarget: params.pushTarget,
       diffComments: params.diffComments,
       ...(params.diffCommentsBase !== undefined

@@ -29,6 +29,7 @@ import {
   WorktreeCardTitleStatus
 } from '../surface/worktree-card-title-status'
 import { cardElement } from './card-template-compiler'
+import { WorktreeCardLabels } from '../../workspace-labels/WorktreeCardLabels'
 
 type Card = WorktreeCardController
 const part = cardElement<Card>
@@ -150,6 +151,9 @@ export const CARD_IDENTITY_PARTS = {
     <CardHostBadge card={card} label={typeof props.label === 'string' ? props.label : ''} />
   )),
   Branch: part(['tooltip'], (props, _children, card) => sidebarLabel(card.branch, props.tooltip)),
+  Labels: part([], (_props, _children, { worktree }) =>
+    worktree.labelIds?.length ? <WorktreeCardLabels labelIds={worktree.labelIds} /> : null
+  ),
   IdentityLabel: part(['tooltip'], (props, _children, card) =>
     card.identityDisplay ? sidebarLabel(card.identityDisplay, props.tooltip) : null
   ),

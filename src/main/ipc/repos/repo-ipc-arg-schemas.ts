@@ -12,6 +12,7 @@ import {
   FolderWorkspaceDelete,
   assertFolderWorkspaceStartup
 } from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
+import { WorkspaceLabelIdsSchema } from '../../../shared/workspace/labels/workspace-labels'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -185,6 +186,7 @@ export const FolderWorkspaceUpdateArgs = z.object({
       sortOrder: z.number().finite().optional(),
       manualOrder: z.number().finite().optional(),
       workspaceStatus: z.string().optional(),
+      labelIds: WorkspaceLabelIdsSchema.optional(),
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
