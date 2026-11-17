@@ -131,6 +131,8 @@ export function useFocusedTabStripSlotId(
       setFocusedSlotId(null)
       return
     }
+    // Why read now: a tab focused before the strip crossed into windowing (a rename) must stay mounted.
+    setFocusedSlotId(slotIdOf(el, document.activeElement))
     const onFocusIn = (event: FocusEvent): void => setFocusedSlotId(slotIdOf(el, event.target))
     const onFocusOut = (event: FocusEvent): void =>
       setFocusedSlotId(slotIdOf(el, event.relatedTarget))

@@ -136,18 +136,23 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   )
   const activeDragVisibleTabId = useActiveDragVisibleTabId()
   const { orderedItems, sortableIds, activeVisibleTabId } = itemProjection
+  const windowed = tabStripRange !== null
+  // Why keyed on sortableIds: they change only when tabs open, close or move, not on every tab write.
+  const indexBySortableId = useMemo(
+    () => (windowed ? new Map(sortableIds.map((id, index) => [id, index])) : null),
+    [sortableIds, windowed]
+  )
   const tabStripWindow = useMemo(() => {
-    if (tabStripRange === null) {
+    if (tabStripRange === null || indexBySortableId === null) {
       return { segments: buildTabStripSegments(orderedItems.length, null, []), sortableIds }
     }
     // Keep the active, dragged and focused tabs mounted wherever they sit in the order.
-    const keptIds = new Set([activeVisibleTabId, activeDragVisibleTabId, focusedSlotId])
-    const keptIndices: number[] = []
-    orderedItems.forEach((item, index) => {
-      if (keptIds.has(item.id)) {
-        keptIndices.push(index)
+    const keptIndices = [activeVisibleTabId, activeDragVisibleTabId, focusedSlotId].flatMap(
+      (id) => {
+        const index = id === null ? undefined : indexBySortableId.get(id)
+        return index === undefined ? [] : [index]
       }
-    })
+    )
     const segments = buildTabStripSegments(orderedItems.length, tabStripRange, keptIndices)
     const mountedIds = segments.flatMap((segment) =>
       segment.kind === 'tabs' ? sortableIds.slice(segment.start, segment.end) : []
@@ -157,7 +162,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     activeDragVisibleTabId,
     activeVisibleTabId,
     focusedSlotId,
-    orderedItems,
+    indexBySortableId,
+    orderedItems.length,
     sortableIds,
     tabStripRange
   ])
