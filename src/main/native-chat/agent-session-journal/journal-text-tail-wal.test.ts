@@ -58,18 +58,25 @@ async function streamWal(tails: boolean, answers: number, kib: number) {
   }
 }
 
-it('appended tails write WAL linear in answer length and well under whole rewrites', async () => {
-  const rewrite = await streamWal(false, 1, 100)
-  const tail = await streamWal(true, 1, 100)
-  const longTail = await streamWal(true, 1, 400)
-  console.log(JSON.stringify([rewrite, tail, longTail]))
-  expect(tail.walMB * 2).toBeLessThan(rewrite.walMB)
-  // Four times the text costs about four times the WAL, not sixteen.
-  expect(longTail.walMB).toBeLessThan(tail.walMB * 5)
-}, 300_000)
+// Timeout: streams 750 real SQLite commits to a file database in WAL mode.
+it(
+  'appended tails write WAL linear in answer length and well under whole rewrites',
+  { timeout: 300_000 },
+  async () => {
+    const rewrite = await streamWal(false, 1, 100)
+    const tail = await streamWal(true, 1, 100)
+    const longTail = await streamWal(true, 1, 400)
+    console.log(JSON.stringify([rewrite, tail, longTail]))
+    expect(tail.walMB * 2).toBeLessThan(rewrite.walMB)
+    // Four times the text costs about four times the WAL, not sixteen.
+    expect(longTail.walMB).toBeLessThan(tail.walMB * 5)
+  }
+)
 
+// Timeout: the opt-in fleet bench writes about 3 GB of WAL across 47,000 commits.
 it.runIf(process.env.ORCA_TEXT_TAIL_WAL_BENCH === '1')(
   'reports WAL at fleet scale and for long answers',
+  { timeout: 3_600_000 },
   async () => {
     for (const [answers, kib] of [
       [150, 100],
@@ -101,6 +108,5 @@ it.runIf(process.env.ORCA_TEXT_TAIL_WAL_BENCH === '1')(
     const msProbesPerPage = (performance.now() - probed) / 20
     console.log(JSON.stringify({ historyPageItems: 1000, msPerPage, msProbesPerPage }))
     db.close()
-  },
-  3_600_000
+  }
 )
