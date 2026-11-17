@@ -9,9 +9,10 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), dismiss: v
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 
 function seedSettings(overrides: Partial<GlobalSettings>): void {
-  const updateSettingsOrThrow = async (updates: Partial<GlobalSettings>): Promise<void> => {
+  const updateSettingsOrThrow = (updates: Partial<GlobalSettings>): Promise<void> => {
     const settings = useAppStore.getState().settings
     useAppStore.setState({ settings: settings && { ...settings, ...updates } })
+    return Promise.resolve()
   }
   useAppStore.setState({
     settings: { ...getDefaultSettings('/home/test'), ...overrides },
@@ -32,7 +33,7 @@ describe('setAgentDefaultSurfaceFromFeatureTip', () => {
     async ({ from, to, claudeChat }) => {
       seedSettings({ agentDefaultSurface: from, nativeChatProviders: { claude: claudeChat } })
 
-      await expect(setAgentDefaultSurfaceFromFeatureTip(to)).resolves.toBe(true)
+      await expect(setAgentDefaultSurfaceFromFeatureTip(to)).resolves.toBe('reported')
 
       expect(toast.success).toHaveBeenCalledTimes(1)
       const options = vi.mocked(toast.success).mock.calls[0]?.[1]

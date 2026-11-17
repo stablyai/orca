@@ -12,10 +12,13 @@ import {
 
 const KEPT_SURFACE_NOTICE_ID = 'feature-tip-kept-surface'
 
+/** `saved` leaves confirmation to the caller; `reported` means a notice named the agents kept on their own surface, or a later change superseded this one. */
+export type FeatureTipSurfaceResult = 'failed' | 'saved' | 'reported'
+
 export async function setAgentDefaultSurfaceFromFeatureTip(
   surface: AgentDefaultSurface,
   { confirmWithToast = true }: { confirmWithToast?: boolean } = {}
-): Promise<boolean> {
+): Promise<FeatureTipSurfaceResult> {
   const { settings, updateSettingsOrThrow } = useAppStore.getState()
   const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
   try {
@@ -31,15 +34,22 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
-    // Agents set for themselves still open on the other surface; name them over the generic confirmation.
-    const namedKept =
-      !!settings &&
+    const latest = useAppStore.getState().settings
+    // A later write superseded this one, so there is nothing to confirm.
+    if (!latest || normalizeAgentDefaultSurface(latest.agentDefaultSurface) !== surface) {
+      return 'reported'
+    }
+    // Agents set for themselves still open on the other surface; name them instead of the generic confirmation.
+    if (
       showKeptSurfaceNotice({
         id: KEPT_SURFACE_NOTICE_ID,
         surface,
-        writer: { fallbackSettings: settings, updateSettings: updateSettingsOrThrow }
+        writer: { fallbackSettings: latest, updateSettings: updateSettingsOrThrow }
       })
-    if (surface === 'chat' && confirmWithToast && !namedKept) {
+    ) {
+      return 'reported'
+    }
+    if (surface === 'chat' && confirmWithToast) {
       toast.success(
         translate(
           'featureTips.chatUiHere.switched',
@@ -47,7 +57,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
         )
       )
     }
-    return true
+    return 'saved'
   } catch {
     toast.error(
       surface === 'chat'
@@ -60,7 +70,7 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
             'Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.'
           )
     )
-    return false
+    return 'failed'
   }
 }
 
