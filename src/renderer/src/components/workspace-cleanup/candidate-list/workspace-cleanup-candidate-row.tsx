@@ -127,6 +127,10 @@ export const CandidateRow = React.memo(function CandidateRow({
   const facts = getCandidateFactStatuses(candidate, t)
   const gitStatuses = facts.filter((fact) => fact.git)
   const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
+  // Blocking pills first so a warning is the last thing to be cut, never the first.
+  const gitStatusPillsOrdered = [...gitStatuses].sort(
+    (left, right) => Number(right.tone === 'destructive') - Number(left.tone === 'destructive')
+  )
   // Clean is the default, so only non-clean git states get a chip. Main/folder/disconnected
   // rows are never queued and git is not read for them; "unknown" would be a false alarm.
   const showGitChip = queueable && gitStatuses.length === 0
@@ -241,7 +245,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                     data-workspace-cleanup-git-slot
                     role="group"
                     aria-label={gitSlotText ?? undefined}
-                    className="inline-flex h-5 min-w-0 shrink items-center gap-1.5 overflow-hidden"
+                    className="inline-flex h-5 min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
                   >
                     {deletionPhase ? (
                       <StatusPill tone="destructive">
@@ -256,8 +260,14 @@ export const CandidateRow = React.memo(function CandidateRow({
                             )}
                       </StatusPill>
                     ) : (
-                      gitStatuses.map((status) => (
-                        <StatusPill key={status.label} tone={status.tone}>
+                      gitStatusPillsOrdered.map((status, index) => (
+                        <StatusPill
+                          key={status.label}
+                          tone={status.tone}
+                          className={
+                            index < gitStatusPillsOrdered.length - 1 ? 'shrink-0' : undefined
+                          }
+                        >
                           {status.label}
                         </StatusPill>
                       ))
