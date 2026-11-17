@@ -2,7 +2,7 @@ import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-
 import { cn } from '@/lib/class-names'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
-import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { LinearPriorityIcon } from '@/components/task-page/linear/issues/linear-priority-icon'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'

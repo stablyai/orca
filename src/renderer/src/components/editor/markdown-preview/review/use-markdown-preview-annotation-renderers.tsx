@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
+  getMarkdownReviewHighlightedText,
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
@@ -73,13 +74,17 @@ export function useMarkdownPreviewAnnotationRenderers({
       const commentsForBlock = getMarkdownCommentsForRange(range)
 
       const handleSubmit = async (body: string): Promise<boolean> => {
+        const startLine = range.startLine === range.endLine ? undefined : range.startLine
+        const selectedText =
+          annotationQuote ??
+          getMarkdownReviewHighlightedText(content, { startLine, lineNumber: range.endLine })
         const result = await addDiffComment(commentOwner, {
           worktreeId: sourceWorktree.id,
           filePath: sourceRelativePath,
           source: 'markdown',
-          startLine: range.startLine === range.endLine ? undefined : range.startLine,
+          startLine,
           lineNumber: range.endLine,
-          ...(annotationQuote ? { selectedText: annotationQuote } : {}),
+          ...(selectedText ? { selectedText } : {}),
           body,
           side: 'modified'
         })

@@ -13,7 +13,7 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/ui/workspace-navigation-history'
-import { useShortcutLabel } from '../../hooks/useShortcutLabel'
+import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../store/index'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'

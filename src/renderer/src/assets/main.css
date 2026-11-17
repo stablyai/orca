@@ -901,6 +901,11 @@ body[data-modal-overlay-open]
    :focus-visible) so a dialog's auto-focused default action is visibly marked on open, and
    clears the Button's focus-visible ring so the two cues don't stack. */
 [data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
+  /* Why: Button's transition-all otherwise animates the hover outline in from medium/currentColor, a bright 3px flash. */
+  outline-width: 1px;
+  outline-offset: 1px;
+  outline-color: var(--ring);
+
   @media (hover: hover) {
     &:hover {
       outline: 1px solid var(--ring);

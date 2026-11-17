@@ -1,13 +1,13 @@
 import React from 'react'
 import { Activity } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { AgentStateDot } from '@/components/AgentStateDot'
-import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
+import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
-} from '@/components/StateIndicatorTooltip'
+} from '@/components/agent/status/StateIndicatorTooltip'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 

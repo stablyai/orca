@@ -31,7 +31,7 @@ function parseMode(flags: Map<string, string | boolean>): BrowserUserAgentMode {
 function formatStatus(status: BrowserIdentityModeStatus): string {
   const { identity } = status
   if (identity.configuredMode === null) {
-    return `Browser identity: ${identity.state}; Cleaned is applied for this launch. Explicit reset required.`
+    return `Browser identity: ${identity.state}; ${identity.appliedMode} is applied for this launch. Explicit reset required.`
   }
   return `Browser identity: ${identity.configuredMode} (applied: ${identity.appliedMode}${identity.restartRequired ? ', restart required' : ''})`
 }

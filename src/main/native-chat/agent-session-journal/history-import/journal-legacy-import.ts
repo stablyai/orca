@@ -61,7 +61,8 @@ export type LegacyImportResult =
 
 type PreparedLegacyImport =
   | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
-  | { ok: false; error: string }
+  // cause keeps a typed adoption refusal for the caller.
+  | { ok: false; error: string; cause?: unknown }
 
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
@@ -125,7 +126,7 @@ export async function prepareLegacyTranscriptImport(input: {
     })
     return { ok: true, items, sourceEmpty, forkTipItemIds }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
 }
 
@@ -143,8 +144,8 @@ async function prepareOpenCodeImport(input: {
     }
     try {
       await validateAdoptedOpenCodeSource(dbPath, input.options.source, input.options.signal)
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
     }
   }
   const read = await readOpenCodeNativeChatTranscriptFull(

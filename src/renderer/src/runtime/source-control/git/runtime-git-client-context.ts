@@ -127,8 +127,9 @@ export function getRuntimeCommitMessageSettings(
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
       : {}),
+    // Why: hosts before the contract accepted 'blank' reject it; null picks the same fallback agent.
     ...(settings.defaultTuiAgent !== undefined
-      ? { defaultTuiAgent: settings.defaultTuiAgent }
+      ? { defaultTuiAgent: settings.defaultTuiAgent === 'blank' ? null : settings.defaultTuiAgent }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }

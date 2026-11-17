@@ -89,7 +89,7 @@
 3 src/main/claude/agent-view/agent-view-install.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 14 src/main/claude/configuration/claude-folder-trust-file.ts
-1 src/main/claude/configuration/claude-rejected-api-key.ts
+1 src/main/claude/configuration/claude-global-config.ts
 1 src/main/claude/hook-service.ts
 2 src/main/claude/hooks/claude-profile-hook-target.ts
 3 src/main/claude/hooks/statusline-install.ts
@@ -105,7 +105,7 @@
 3 src/main/cli/installation/cli-install-location.ts
 1 src/main/cli/launchers/cli-dev-launcher.ts
 2 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
-7 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
+6 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 2 src/main/cli/wsl/wsl-managed-cli.ts
 3 src/main/codex-accounts/account-management/codex-account-registration.ts
 2 src/main/codex-accounts/credentials/codex-account-identity.ts

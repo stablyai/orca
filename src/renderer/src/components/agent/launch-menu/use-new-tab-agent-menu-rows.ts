@@ -38,7 +38,8 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
