@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
@@ -22,7 +22,7 @@ import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,
@@ -38,7 +38,7 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 import { useAppStore } from '@/store'
-import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
+import { useReadOnScreenAttention } from '@/attention/useReadOnScreenAttention'
 import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'

@@ -14,7 +14,7 @@ import {
   PROVIDER_SESSION_ID,
   type FakeConnection
 } from '../claude-structured-session-test-support'
-import { claudeStartupSettled } from '../claude-structured-startup-settled-test-support'
+import { claudeStartupSettled } from '../startup/claude-structured-startup-settled-test-support'
 
 type CapturedEvent =
   | { kind: 'meta'; providerSessionId: string }

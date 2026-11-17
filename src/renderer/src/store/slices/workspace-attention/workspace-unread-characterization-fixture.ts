@@ -12,7 +12,7 @@ import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectFloatingWorkspaceHasUnread
 } from '@/store/workspaces/floating/floating-workspace-unread-selector'
-import { startOnScreenAttentionScan } from '@/hooks/on-screen-attention-scan'
+import { startOnScreenAttentionScan } from '@/attention/on-screen-attention-scan'
 
 // Store setup and observables for the unread characterization suites; the events live in the driver.
 

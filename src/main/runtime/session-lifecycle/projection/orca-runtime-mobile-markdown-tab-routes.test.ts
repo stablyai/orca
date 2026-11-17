@@ -28,11 +28,11 @@ vi.mock('../../files/chat-scratch-file-root', async (importOriginal) => ({
   resolveRuntimeAuthorizedPath: async (path: string) => path
 }))
 
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const { TEST_REPO_ID, TEST_WORKTREE_ID, makeRuntimeStoreWithWorkspaceSession, store } =
-  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+  await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 
 type Runtime = InstanceType<typeof OrcaRuntimeService>
 

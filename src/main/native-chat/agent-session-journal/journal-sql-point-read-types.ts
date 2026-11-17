@@ -53,7 +53,7 @@ export type JournalSqlPointRead = {
     | { kind: 'rewind-target'; itemId: string }
     | { kind: 'rewind-cut'; target: JournalRewindSelection }
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
-    | { kind: 'provider-turn-in-namespace'; namespace: string }
+    | { kind: 'provider-turn-in-namespace'; namespace: string; sinceFence?: number }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
     | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }

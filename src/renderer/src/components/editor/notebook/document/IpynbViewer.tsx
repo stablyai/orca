@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { editorShortcutMatches } from '../../commands/editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'

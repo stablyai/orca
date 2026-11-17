@@ -1,8 +1,8 @@
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { describe, expect, it, vi } from 'vitest'
 
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
@@ -10,10 +10,10 @@ import {
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { committingSpawn } from '../layout/bind-first-pane.test-fixture'
 import '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 
 describe('terminal rename before renderer graph hydration', () => {

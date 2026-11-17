@@ -3,10 +3,10 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '../../../store/index'
 import { isProvenProcessExit } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { RetainedPaneHost } from '../../tab-group/retained-pane/RetainedPaneHost'
-import type { ActivityTerminalPortalTarget } from '../../activity/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from '../../activity/terminal-portal/activity-terminal-portal'
 import TerminalPane from '../TerminalPane'
 import type { HiddenTerminalPrewarm } from '../controller/terminal-pane-types'
-import { closeTerminalTab } from '../../terminal/terminal-tab-actions'
+import { closeTerminalTab } from '../../terminal/tab-lifecycle/terminal-tab-actions'
 import { shouldDeferParkedPtyExitTabClose } from '../parking/output-watchers/terminal-parked-tab-watchers'
 
 type TerminalOverlaySlotProps = {
