@@ -1,5 +1,4 @@
 import { reopenClosedWorkspaceTab } from '../tab-lifecycle/reopen-closed-workspace-tab'
-import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
@@ -11,7 +10,6 @@ import {
 } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   createFloatingWorkspaceBrowserTab,
-  createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
 } from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
@@ -20,7 +18,6 @@ import {
   showClientCreationActionError
 } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
-import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from '../workbench/terminal-workspace-model'
 import { isAgentTerminalPreviewTarget } from '../../dashboard/terminal-preview/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
@@ -30,6 +27,7 @@ import {
   launchFloatingWorkspaceAgentShortcut
 } from './agent-tab-shortcut-launch'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
+import { handleTerminalWorkspaceFileShortcut } from './terminal-workspace-file-shortcuts'
 import type { TerminalActivationController } from '../tab-lifecycle/use-terminal-activation-actions'
 
 export function handleTerminalWorkspaceKeyDown(
@@ -43,6 +41,7 @@ export function handleTerminalWorkspaceKeyDown(
     handleNewBrowserTab,
     handleNewBrowserTabSplitRight,
     handleNewFile,
+    handleNewNamedFile,
     handleNewSimulatorTab,
     handleNewTab,
     keybindings,
@@ -171,23 +170,16 @@ export function handleTerminalWorkspaceKeyDown(
   ) {
     return
   }
-  if (!event.repeat && matchShortcut('tab.newMarkdown')) {
-    event.preventDefault()
-    notifyTerminalCapture('tab.newMarkdown')
-    if (floatingWorkspaceFocused) {
-      void createFloatingWorkspaceMarkdownTab(useAppStore.getState()).catch((error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.Terminal.f0600556b3',
-                'Failed to create untitled markdown file.'
-              )
-        )
-      })
-      return
-    }
-    void handleNewFile()
+  if (
+    handleTerminalWorkspaceFileShortcut({
+      event,
+      floatingWorkspaceFocused,
+      matchShortcut,
+      notifyTerminalCapture,
+      handleNewFile,
+      handleNewNamedFile
+    })
+  ) {
     return
   }
   const previewOwnsClose = isAgentTerminalPreviewTarget(event.target)

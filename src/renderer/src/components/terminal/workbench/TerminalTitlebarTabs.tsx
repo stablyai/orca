@@ -39,6 +39,7 @@ export function TerminalTitlebarTabs({
     handleDuplicateBrowserTab,
     handleNewBrowserTab,
     handleNewFile,
+    handleNewNamedFile,
     handleNewSimulatorTab,
     handleNewTab,
     handleOpenEntry,
@@ -81,6 +82,7 @@ export function TerminalTitlebarTabs({
       onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
       onOpenEntry={handleOpenEntry}
       onNewFileTab={handleNewFile}
+      onNewNamedFileTab={handleNewNamedFile}
       onSetCustomTitle={setTabCustomTitle}
       onSetTabColor={setTabColor}
       expandedPaneByTabId={expandedPaneByTabId}

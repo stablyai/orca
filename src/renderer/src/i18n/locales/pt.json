@@ -2600,6 +2600,9 @@
       },
       "pluginInstallLink": {
         "invalid": "Esse link de plugin não é válido."
+      },
+      "newFile": {
+        "failed": "Não foi possível criar o arquivo."
       }
     },
     "hooks": {
@@ -13853,7 +13856,8 @@
           "folderEmpty": "O caminho da pasta não pode estar vazio",
           "folderOutsideWorkspace": "A pasta deve estar dentro do espaço de trabalho atual",
           "nameTaken": "Já existe um arquivo com esse nome",
-          "saveFailed": "Não foi possível salvar o arquivo"
+          "saveFailed": "Não foi possível salvar o arquivo",
+          "invalidName": "Digite um nome de arquivo"
         },
         "DiffSectionBody": {
           "35d6afb5be": "Arquivo binário alterado",
@@ -14296,6 +14300,12 @@
         },
         "MarkdownDefaultViewContextMenu": {
           "label": "Visualização Markdown padrão"
+        },
+        "NewFileDialog": {
+          "failed": "Não foi possível criar o arquivo.",
+          "title": "Novo arquivo",
+          "description": "Digite o nome do arquivo com a extensão e escolha uma pasta.",
+          "create": "Criar"
         }
       },
       "skills": {
@@ -17781,7 +17791,8 @@
             "1a8af49530": "Prompt CMD",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Rolar abas para a esquerda",
-            "232e075b07": "Rolar abas para a direita"
+            "232e075b07": "Rolar abas para a direita",
+            "newFile": "Novo arquivo..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Criar arquivo",
@@ -24055,7 +24066,8 @@
       "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
       "d286d1ab85": "Limpar Título do Painel",
       "botItemPrevious": "Item anterior",
-      "botItemNext": "Próximo item"
+      "botItemNext": "Próximo item",
+      "tabNewFile": "Nova aba de arquivo"
     },
     "group": {
       "global": "Global",

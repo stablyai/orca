@@ -1730,6 +1730,9 @@
       },
       "pluginInstallLink": {
         "invalid": "该插件链接无效。"
+      },
+      "newFile": {
+        "failed": "无法创建文件。"
       }
     },
     "lib": {
@@ -4815,7 +4818,8 @@
             "1a8af49530": "命令提示符",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "向左滚动标签页",
-            "232e075b07": "向右滚动标签页"
+            "232e075b07": "向右滚动标签页",
+            "newFile": "新建文件..."
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -17216,7 +17220,8 @@
           "folderEmpty": "文件夹路径不能为空",
           "folderOutsideWorkspace": "文件夹必须位于当前工作区内",
           "nameTaken": "已存在同名文件",
-          "saveFailed": "无法保存文件"
+          "saveFailed": "无法保存文件",
+          "invalidName": "请输入文件名"
         },
         "export": {
           "active": {
@@ -17604,6 +17609,12 @@
           "open": "用默认应用打开",
           "downloadOpen": "下载并打开",
           "openFailed": "这台计算机上没有能打开此文件的应用"
+        },
+        "NewFileDialog": {
+          "failed": "无法创建文件。",
+          "title": "新建文件",
+          "description": "输入包含扩展名的文件名并选择一个文件夹",
+          "create": "创建"
         }
       },
       "diff": {
@@ -25645,7 +25656,8 @@
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
       "5468defe61": "折叠/展开所有项目",
       "botItemPrevious": "上一个事项",
-      "botItemNext": "下一个事项"
+      "botItemNext": "下一个事项",
+      "tabNewFile": "新建文件标签页"
     },
     "group": {
       "global": "全局",

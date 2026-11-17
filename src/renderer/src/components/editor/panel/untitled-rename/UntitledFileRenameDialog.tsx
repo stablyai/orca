@@ -1,7 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useId, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { resolveRuntimePath } from '../../../../../../shared/file-access/cross-platform-path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -22,6 +24,14 @@ type UntitledFileRenameDialogProps = {
   worktreePath: string
   externalError?: string | null
   disableBrowse?: boolean
+  title?: string
+  description?: string
+  confirmLabel?: string
+  preserveExtension?: boolean
+  initialDirectory?: string
+  pending?: boolean
+  showPendingIndicator?: boolean
+  onInputChange?: () => void
   onClose: () => void
   onConfirm: (newRelativePath: string) => void
 }
@@ -32,10 +42,19 @@ export function UntitledFileRenameDialog({
   worktreePath,
   externalError,
   disableBrowse = false,
+  title,
+  description,
+  confirmLabel,
+  preserveExtension = true,
+  initialDirectory = worktreePath,
+  pending = false,
+  showPendingIndicator = false,
+  onInputChange,
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
   const t = useTranslate()
+  const fieldId = useId()
   const [name, setName] = useState('')
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
@@ -72,15 +91,17 @@ export function UntitledFileRenameDialog({
       seededOpenState.worktreePath !== worktreePath
     ) {
       setSeededOpenState({ open: true, currentName, worktreePath })
-      setName(splitUntitledFileName(currentName).stem)
-      setDir(worktreePath)
+      setName(preserveExtension ? splitUntitledFileName(currentName).stem : currentName)
+      setDir(initialDirectory)
       setError(null)
     }
   } else if (seededOpenState.open) {
     // Why: the parent clears currentName on close; keep the saved suffix through the fade-out.
     setSeededOpenState({ ...seededOpenState, open: false })
   }
-  const { extension } = splitUntitledFileName(seededOpenState.currentName)
+  const extension = preserveExtension
+    ? splitUntitledFileName(seededOpenState.currentName).extension
+    : ''
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: dir || worktreePath })
@@ -92,9 +113,13 @@ export function UntitledFileRenameDialog({
     }
     setDir(picked)
     setError(null)
-  }, [dir, mountedRef, worktreePath])
+    onInputChange?.()
+  }, [dir, mountedRef, onInputChange, worktreePath])
 
   const handleSubmit = useCallback(() => {
+    if (pending) {
+      return
+    }
     const typedName = name.trim()
     const stem =
       extension && typedName.endsWith(extension) ? typedName.slice(0, -extension.length) : typedName
@@ -117,7 +142,7 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
+    const trimmedDir = preserveExtension ? dir.trim().replace(/[\\/]+$/, '') : dir.trim()
     if (!trimmedDir) {
       setError(
         translate(
@@ -128,7 +153,10 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
+    const relDir = getRelativePathInsideRoot(
+      preserveExtension ? trimmedDir : resolveRuntimePath(worktreePath, trimmedDir),
+      worktreePath
+    )
     if (relDir === null) {
       setError(
         translate(
@@ -140,12 +168,21 @@ export function UntitledFileRenameDialog({
     }
 
     const fileName = `${stem}${extension}`
+    if (!preserveExtension && (fileName === '.' || fileName === '..')) {
+      setError(
+        translate(
+          'auto.components.editor.UntitledFileRenameDialog.invalidName',
+          'Enter a file name'
+        )
+      )
+      return
+    }
     const relativePath = relDir ? `${relDir}/${fileName}` : fileName
     onConfirm(relativePath)
-  }, [name, dir, extension, worktreePath, onConfirm])
+  }, [name, dir, extension, worktreePath, onConfirm, pending, preserveExtension])
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && !pending && onClose()}>
       <DialogContent
         showCloseButton={false}
         className="max-w-[340px]"
@@ -161,27 +198,34 @@ export function UntitledFileRenameDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {t('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
+            {title ?? t('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {t(
-              'auto.components.editor.UntitledFileRenameDialog.description',
-              'Name your file and pick a folder.'
-            )}
+            {description ??
+              t(
+                'auto.components.editor.UntitledFileRenameDialog.description',
+                'Name your file and pick a folder.'
+              )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            <label
+              htmlFor={`${fieldId}-name`}
+              className="text-2xs font-medium text-muted-foreground mb-1 block"
+            >
               {t('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
+                id={`${fieldId}-name`}
                 ref={setNameInputNode}
                 value={name}
+                disabled={pending}
                 onChange={(e) => {
                   setName(e.target.value)
                   setError(null)
+                  onInputChange?.()
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -202,15 +246,21 @@ export function UntitledFileRenameDialog({
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            <label
+              htmlFor={`${fieldId}-folder`}
+              className="text-2xs font-medium text-muted-foreground mb-1 block"
+            >
               {t('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
+                id={`${fieldId}-folder`}
                 value={dir}
+                disabled={pending}
                 onChange={(e) => {
                   setDir(e.target.value)
                   setError(null)
+                  onInputChange?.()
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -225,7 +275,7 @@ export function UntitledFileRenameDialog({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
-                disabled={disableBrowse}
+                disabled={disableBrowse || pending}
                 onClick={() => void handleBrowse()}
                 title={
                   disableBrowse
@@ -244,13 +294,27 @@ export function UntitledFileRenameDialog({
             </div>
           </div>
         </div>
-        {displayError && <p className="text-xs text-destructive mt-1">{displayError}</p>}
+        {displayError && (
+          <p role="alert" className="text-xs text-destructive mt-1">
+            {displayError}
+          </p>
+        )}
         <DialogFooter className="mt-1">
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" disabled={pending} onClick={onClose}>
             {t('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
           </Button>
-          <Button size="sm" onClick={handleSubmit}>
-            {t('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
+          <Button size="sm" disabled={pending} aria-busy={pending} onClick={handleSubmit}>
+            <span className="relative">
+              <span className={showPendingIndicator ? 'invisible' : undefined}>
+                {confirmLabel ??
+                  t('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
+              </span>
+              {showPendingIndicator && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <LoadingSpinner className="size-4" />
+                </span>
+              )}
+            </span>
           </Button>
         </DialogFooter>
       </DialogContent>

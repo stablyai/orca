@@ -8,6 +8,7 @@ export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
   | 'new-markdown'
+  | 'new-file'
   | 'new-simulator'
   | 'new-terminal'
   | 'new-terminal-shell'
@@ -37,6 +38,7 @@ export type TabCreateMenuOption = {
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
   hasNewMarkdown: boolean
+  hasNewFile?: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
   simulatorIsGoTo: boolean
@@ -145,6 +147,16 @@ export function buildTabCreateMenuOptions(
     })
   }
 
+  if (context.hasNewFile) {
+    const label = t('auto.components.tab.bar.TabBar.newFile', 'New File...')
+    options.push({
+      id: 'new-file',
+      kind: 'new-file',
+      label,
+      keywords: [t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file')]
+    })
+  }
+
   if (context.hasOpenMarkdown) {
     const label = t('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')
     options.push({
@@ -183,7 +195,7 @@ export function buildTabCreateMenuOptions(
   return options
 }
 
-/** Puts a plugin's new files right after New Markdown, and only where it is offered: they
+/** Puts a plugin's new files after the built-in file actions, and only where New Markdown is offered: they
  *  create files the same way. */
 export function withPluginNewFileMenuOptions(
   options: readonly TabCreateMenuOption[],
@@ -194,6 +206,8 @@ export function withPluginNewFileMenuOptions(
   if (markdownIndex === -1 || newFiles.length === 0) {
     return [...options]
   }
+  const fileIndex = options.findIndex((option) => option.kind === 'new-file')
+  const insertionIndex = fileIndex === -1 ? markdownIndex + 1 : fileIndex + 1
   const pluginOptions = newFiles.map((newFile): TabCreateMenuOption => ({
     id: `new-plugin-file:${newFile.key}`,
     kind: 'new-plugin-file',
@@ -205,11 +219,7 @@ export function withPluginNewFileMenuOptions(
       t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file')
     ]
   }))
-  return [
-    ...options.slice(0, markdownIndex + 1),
-    ...pluginOptions,
-    ...options.slice(markdownIndex + 1)
-  ]
+  return [...options.slice(0, insertionIndex), ...pluginOptions, ...options.slice(insertionIndex)]
 }
 
 export function findMatchingTabCreateMenuOptions(
