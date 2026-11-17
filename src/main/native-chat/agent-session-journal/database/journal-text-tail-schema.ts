@@ -12,8 +12,12 @@ CREATE TABLE IF NOT EXISTS journal_text_tail (
   folded_chars INTEGER NOT NULL,
   saved_hash TEXT NOT NULL,
   skeleton TEXT NOT NULL,
+  -- The item's turn, so a finished turn finds its own tails without visiting other turns'.
+  turn_item_id TEXT,
   PRIMARY KEY(session_id, epoch, item_id, seq)
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS journal_text_tail_turn
+  ON journal_text_tail(session_id, epoch, turn_item_id, item_id) WHERE turn_item_id IS NOT NULL;
 CREATE TRIGGER IF NOT EXISTS journal_text_tail_rewritten AFTER UPDATE OF payload_json ON journal_items
 BEGIN
   DELETE FROM journal_text_tail

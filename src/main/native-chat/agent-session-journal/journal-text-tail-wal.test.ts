@@ -140,20 +140,10 @@ it('each save reads one tail row, and folded text once per fold', async () => {
   }
 })
 
-it('a finished turn finds pending tails from the tail table, never by walking its items', () => {
-  const visits = (width: number) => {
+it('a finished turn reads only its own tails, however many items or other tails the chat holds', async () => {
+  const finish = async (width: number) => {
     const db = new Database(':memory:')
-    const { seedItem } = messageFixture(db)
-    for (let index = 0; index < width; index++) {
-      seedItem({
-        itemId: `orca:tool-${index}`,
-        revision: 1,
-        sequence: 20 + index,
-        observedAt: 1,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] },
-        turnScope: { kind: 'turn', turnItemId: 'turn' }
-      })
-    }
+    const { commit, seedItem } = messageFixture(db)
     const turn = (state: 'running' | 'completed', revision: number): AgentJournalRenderItem => ({
       itemId: 'turn',
       revision,
@@ -171,25 +161,43 @@ it('a finished turn finds pending tails from the tail table, never by walking it
         })
       )
     write(turn('running', 1))
+    // `width` finished items of this turn without tails, and `width` streams of other scopes
+    // whose tails outlive it.
+    for (let index = 0; index < width; index++) {
+      seedItem({
+        itemId: `orca:done-${index}`,
+        revision: 1,
+        sequence: 20 + index,
+        observedAt: 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] },
+        turnScope: { kind: 'turn', turnItemId: 'turn' }
+      })
+      const other = 'word '.repeat(80)
+      await commit(message(other, `thread-${index}`))
+      await commit(message(`${other}more`, `thread-${index}`))
+    }
+    const own = (text: string) => {
+      const step = message(text, 'own')
+      return {
+        ...step,
+        options: { ...step.options, turnScope: { kind: 'turn' as const, turnItemId: 'turn' } }
+      }
+    }
+    await commit(own('word '.repeat(80)))
+    await commit(own(`${'word '.repeat(80)}more`))
     const reads = countTailReads(db)
     write(turn('completed', 2), turn('running', 1))
-    const statements = reads.statements
-    // Each tail query's plan starts at the tail table, so a wide turn adds no work.
-    const plans = [...reads.sql].map((sql) =>
-      db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(...Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => ''))
-        .map((row) => String(row.detail))
+    const result = { statements: reads.statements, tailRows: reads.tailRows }
+    const pending = Number(
+      db.prepare('SELECT count(DISTINCT item_id) AS n FROM journal_text_tail').get()!.n
     )
     db.close()
-    return { statements, plans }
+    return { ...result, pending }
   }
   for (const width of [100, 1000]) {
-    const { statements, plans } = visits(width)
-    expect(statements).toBe(1)
-    for (const plan of plans) {
-      expect(plan[0]).toMatch(/journal_text_tail/)
-    }
+    // One indexed discovery naming only the turn's own pending item, and the fold's read of
+    // that item's tail; the others keep their tails.
+    expect(await finish(width)).toEqual({ statements: 2, tailRows: 2, pending: width })
   }
 })
 

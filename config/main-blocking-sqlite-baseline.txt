@@ -125,7 +125,7 @@
 7 src/main/native-chat/agent-session-journal/journal-sql-steps.ts
 10 src/main/native-chat/agent-session-journal/journal-stored-output-compaction.ts
 4 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
-20 src/main/native-chat/agent-session-journal/journal-text-tail.ts
+24 src/main/native-chat/agent-session-journal/journal-text-tail.ts
 4 src/main/native-chat/agent-session-journal/journal-writer-effects.ts
 4 src/main/native-chat/agent-session-journal/journal-writer-operation-expiry.ts
 12 src/main/native-chat/agent-session-journal/journal-writer-store-mutation.ts

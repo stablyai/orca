@@ -196,7 +196,7 @@ export function appendJournalTextTail(
     return false
   }
   db.prepare(`INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text,saved_chars,folded_chars,
-    saved_hash,skeleton) VALUES(?,?,?,?,?,?,?,?,?)`).run(
+    saved_hash,skeleton,turn_item_id) VALUES(?,?,?,?,?,?,?,?,?,?)`).run(
     ...prefix,
     item.itemId,
     item.revision,
@@ -204,7 +204,8 @@ export function appendJournalTextTail(
     block.text.length,
     saved.foldedChars,
     textHash(block.text),
-    skeleton
+    skeleton,
+    item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
   )
   // The client size is the whole text's, as the stored payload no longer is.
   db.prepare(
@@ -236,29 +237,15 @@ export function writeJournalTextPayload(
   )
 }
 
-/**
- * The chat's items with a tail, one key lookup each (an empty table costs one probe), kept when
- * the item belongs to the finished turn; tails that outlive other turns are never read.
- */
+/** The finished turn's own items with a tail, through the tail table's turn index. */
 function turnTailItems(
   db: Database.Database,
   turn: { sessionId: string; epoch: string; turnItemId: string }
-): { session_id: string; epoch: string; item_id: string }[] {
-  const next = db.prepare(`SELECT item_id FROM journal_text_tail
-    WHERE session_id=? AND epoch=? AND item_id>? ORDER BY item_id LIMIT 1`)
-  const owner = db.prepare(
-    'SELECT turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
-  )
-  const items: { session_id: string; epoch: string; item_id: string }[] = []
-  let after = ''
-  for (let row = next.get(turn.sessionId, turn.epoch, after); row;) {
-    after = String(row.item_id)
-    if (owner.get(turn.sessionId, turn.epoch, after)?.turn_item_id === turn.turnItemId) {
-      items.push({ session_id: turn.sessionId, epoch: turn.epoch, item_id: after })
-    }
-    row = next.get(turn.sessionId, turn.epoch, after)
-  }
-  return items
+): Record<string, unknown>[] {
+  return db
+    .prepare(`SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail
+      INDEXED BY journal_text_tail_turn WHERE session_id=? AND epoch=? AND turn_item_id=?`)
+    .all(turn.sessionId, turn.epoch, turn.turnItemId)
 }
 
 /** Folds every tail in the store, or only those of one finished turn's items. */
