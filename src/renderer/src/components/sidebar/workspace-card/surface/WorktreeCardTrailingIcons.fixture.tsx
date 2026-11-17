@@ -34,8 +34,34 @@ const SEEDS: WorkspaceSeed[] = [
     agents: [],
     lastActivityMinutesAgo: 600 + i * 60
   })),
-  { id: 'ti-plain', name: 'short', agents: [], lastActivityMinutesAgo: 14 * 60 }
+  { id: 'ti-plain', name: 'short', agents: [], lastActivityMinutesAgo: 14 * 60 },
+  // Status pills widen the time slot, so these rows' icons sit just left of the pill instead.
+  {
+    id: 'ti-needs',
+    name: 'needs-an-answer',
+    agents: [{ agentType: 'codex', state: 'blocked', minutesAgo: 2, prompt: 'Pick a plan' }],
+    lastActivityMinutesAgo: 2
+  },
+  {
+    id: 'ti-failed',
+    name: 'failed-run',
+    agents: [
+      {
+        agentType: 'claude',
+        state: 'done',
+        minutesAgo: 5,
+        failed: true,
+        prompt: 'Run the suite',
+        message: 'Usage limit reached'
+      }
+    ],
+    lastActivityMinutesAgo: 5
+  },
+  { id: 'ti-offline', name: 'remote-host-work', agents: [], lastActivityMinutesAgo: 30 },
+  { id: 'ti-quiet', name: 'no-status-pill', agents: [], lastActivityMinutesAgo: 9 }
 ]
+// No saved SSH state reads as disconnected, which draws the offline label.
+const OFFLINE_REPO = { ...FIXTURE_REPO, id: 'repo-remote', connectionId: 'ssh-sample-host' }
 const CHILD_IDS = SEEDS.filter((seed) => seed.id.startsWith('ti-prs-child-')).map((s) => s.id)
 
 const pr = (number: number) => ({
@@ -61,7 +87,13 @@ function decorate(worktree: Worktree): Worktree {
   switch (worktree.id) {
     case 'ti-parent':
     case 'ti-child':
+    case 'ti-needs':
+    case 'ti-quiet':
       return { ...worktree, linkedItems: [pr(101)] }
+    case 'ti-failed':
+      return { ...worktree, automationProvenance }
+    case 'ti-offline':
+      return { ...worktree, repoId: OFFLINE_REPO.id, linkedItems: [pr(501), pr(502)] }
     case 'ti-grandchild':
       return { ...worktree, linkedItems: [pr(301), pr(302)], automationProvenance }
     // Detached HEAD fills the details row, so its icon moves there instead of the title line.
@@ -96,7 +128,7 @@ function Card({
   return (
     <WorktreeCard
       worktree={worktree}
-      repo={FIXTURE_REPO}
+      repo={worktree.repoId === OFFLINE_REPO.id ? OFFLINE_REPO : FIXTURE_REPO}
       hideRepoBadge
       isActive={false}
       // Grouped-by-project geometry: one tree step plus the project inset.
@@ -116,24 +148,45 @@ function Card({
   )
 }
 
+function setup(): void {
+  seedWorkspaces(SEEDS, now)
+  useAppStore.setState((state) => ({
+    settings: state.settings
+      ? { ...state.settings, experimentalNewWorktreeCardStyle: true, worktreeCardDetailsRow: true }
+      : null,
+    repos: [FIXTURE_REPO, OFFLINE_REPO],
+    worktreeCardProperties: ['status', 'pr', 'automation', 'cli', 'comment', 'ports'],
+    worktreesByRepo: {
+      [FIXTURE_REPO.id]: [...worktrees.values()].filter((w) => w.repoId === FIXTURE_REPO.id),
+      [OFFLINE_REPO.id]: [worktrees.get('ti-offline')!]
+    }
+  }))
+}
+
+const Frame = ({ children }: { children: React.ReactNode }): React.JSX.Element => (
+  <div className="flex flex-col gap-0.5 bg-worktree-sidebar py-1.5 text-worktree-sidebar-foreground">
+    {children}
+  </div>
+)
+
+export const statusPills = defineFixture({
+  width: 320,
+  setup,
+  render: () => (
+    <Frame>
+      <Card id="ti-quiet" />
+      <Card id="ti-needs" />
+      <Card id="ti-failed" />
+      <Card id="ti-offline" />
+    </Frame>
+  )
+})
+
 export const nestedAndLongTitles = defineFixture({
   width: 320,
-  setup: () => {
-    seedWorkspaces(SEEDS, now)
-    useAppStore.setState((state) => ({
-      settings: state.settings
-        ? {
-            ...state.settings,
-            experimentalNewWorktreeCardStyle: true,
-            worktreeCardDetailsRow: true
-          }
-        : null,
-      worktreeCardProperties: ['status', 'pr', 'automation', 'cli', 'comment', 'ports'],
-      worktreesByRepo: { [FIXTURE_REPO.id]: [...worktrees.values()] }
-    }))
-  },
+  setup,
   render: () => (
-    <div className="flex flex-col gap-0.5 bg-worktree-sidebar py-1.5 text-worktree-sidebar-foreground">
+    <Frame>
       <Card id="ti-parent" descendantIds={['ti-child', 'ti-grandchild']}>
         <Card id="ti-child" nested descendantIds={['ti-grandchild']}>
           <Card id="ti-grandchild" nested />
@@ -143,7 +196,7 @@ export const nestedAndLongTitles = defineFixture({
       <Card id="ti-prs" descendantIds={CHILD_IDS} collapsed />
       <Card id="ti-plain" />
       <Card id="ti-detached" />
-    </div>
+    </Frame>
   )
 })
 
