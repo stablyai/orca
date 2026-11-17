@@ -2,7 +2,7 @@
 import { isClaudeIdleEdge } from '@/components/terminal-pane/agent-status/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
-import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../../shared/notifications/notification-source'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../../shared/terminal/links/terminal-github-pr-link-detector'

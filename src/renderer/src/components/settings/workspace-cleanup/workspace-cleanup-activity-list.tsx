@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type {
   WorkspaceCleanupRun,
   WorkspaceCleanupRunRow
@@ -104,6 +104,24 @@ function ActivityRun({
   const kept = run.rows.filter((row) => row.outcome === 'kept')
   const failed = run.rows.filter((row) => row.outcome === 'failed')
   const removedCount = run.counts.removed + run.counts.archived
+  const chats = run.chatHistory?.deleted ?? 0
+  const summary = [
+    removedCount > 0
+      ? t('components.settings.workspaceCleanup.activity.removedCount', '{{count}} removed', {
+          count: removedCount
+        })
+      : null,
+    chats > 0
+      ? t(
+          'components.settings.workspaceCleanup.activity.chatsDeletedCount',
+          '{{count}} chats deleted',
+          {
+            count: chats,
+            defaultValue_one: '1 chat deleted'
+          }
+        )
+      : null
+  ].filter((part): part is string => part !== null)
   const when = uiDateTimeFormat({
     month: 'short',
     day: 'numeric',
@@ -134,18 +152,12 @@ function ActivityRun({
             </span>
           ) : (
             <>
-              {removedCount === 0
+              {summary.length === 0
                 ? t(
                     'components.settings.workspaceCleanup.activity.nothingRemoved',
                     'Nothing to clean'
                   )
-                : t(
-                    'components.settings.workspaceCleanup.activity.removedCount',
-                    '{{count}} removed',
-                    {
-                      count: removedCount
-                    }
-                  )}
+                : summary.join(', ')}
               {', '}
               {t('components.settings.workspaceCleanup.activity.keptCount', '{{count}} kept', {
                 count: run.counts.kept
@@ -183,6 +195,9 @@ function ActivityRun({
               ))}
             </>
           ) : null}
+          {run.chatHistory && (chats > 0 || run.chatHistory.failed > 0) ? (
+            <ChatHistoryLines chatHistory={run.chatHistory} />
+          ) : null}
           {kept.length > 0 ? <KeptRows rows={kept} total={run.counts.kept} /> : null}
           {failed.length > 0 ? (
             <>
@@ -202,6 +217,41 @@ function ActivityRun({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function ChatHistoryLines({
+  chatHistory
+}: {
+  chatHistory: NonNullable<WorkspaceCleanupRun['chatHistory']>
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
+      <GroupLabel>
+        {t('components.settings.workspaceCleanup.chatHistory.title', 'Chat history')}
+      </GroupLabel>
+      <p className="py-1.5 text-xs text-muted-foreground tabular-nums">
+        {t(
+          'components.settings.workspaceCleanup.activity.chatsDeleted',
+          'Deleted {{count}} chats from deleted workspaces',
+          {
+            count: chatHistory.deleted,
+            defaultValue_one: 'Deleted 1 chat from a deleted workspace'
+          }
+        )}
+        {chatHistory.freedBytes > 0 ? ` · ${formatBytes(chatHistory.freedBytes)}` : null}
+      </p>
+      {chatHistory.failed > 0 ? (
+        <ErrorLine
+          message={t(
+            'components.settings.workspaceCleanup.activity.chatsFailed',
+            "{{count}} chats couldn't be deleted",
+            { count: chatHistory.failed, defaultValue_one: "1 chat couldn't be deleted" }
+          )}
+        />
+      ) : null}
+    </>
   )
 }
 

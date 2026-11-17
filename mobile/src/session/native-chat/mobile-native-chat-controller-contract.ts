@@ -17,8 +17,8 @@ import type {
 } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
-import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
@@ -31,6 +31,7 @@ import type { MobileStructuredInterruptedContinue } from './composer/delivery/us
 import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
+import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
@@ -104,6 +105,7 @@ export type MobileNativeChatController = {
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
+  nativeChatMcpPanel: MobileStructuredMcpPanel | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void

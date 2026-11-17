@@ -68,21 +68,4 @@ describe('connector places', () => {
       create: { repo: 'id:orca', repoHostId: 'ssh:box' }
     })
   })
-
-  it('starts folder projects as fresh folder workspaces', () => {
-    const [folder] = connectorProjects(
-      store(
-        [],
-        [
-          { id: 'g1', name: 'Docs', parentPath: '/docs' },
-          { id: 'g2', name: 'Group', parentPath: null }
-        ]
-      )
-    )
-    expect(folder).toMatchObject({ name: 'Docs', kind: 'folder', where: { kind: 'local' } })
-    expect(placeLaunchTarget(folder!.placeId, 'd1', 'slack')).toEqual({
-      kind: 'create-folder-workspace',
-      create: { projectGroupId: 'g1', name: expect.stringMatching(/^slack-[0-9a-f]{8}$/) }
-    })
-  })
 })

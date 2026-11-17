@@ -38,12 +38,13 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
-import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
+import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
+import { readWslInstallation } from './wsl/discovery/wsl-installation'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
@@ -53,11 +54,19 @@ import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows
 import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
 import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
 import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
-import { argvRequestsBackgroundOpen, BACKGROUND_OPEN_ARG } from '../shared/background-open-argv'
+import {
+  argvRequestsBackgroundOpen,
+  BACKGROUND_OPEN_ARG
+} from '../shared/app-lifecycle/launch/background-open-argv'
 import { setBackgroundWindowOpener } from './window/activation/background-window-open'
+import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
+// A fatal OOM must crash with a report, never spin on its own trap.
+installFatalSignalListenerGuard()
+installWorkerThreadDiagnostics()
 
 async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   return await openMainWindowController(options)
@@ -153,6 +162,8 @@ if (preflightReady) {
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
     deleteLegacyWslHostWakeList(app.getPath('userData'))
+    // Sync WSL readers wait on this verdict instead of spawning wsl.exe; answer it early.
+    void readWslInstallation()
   }
   app.on('open-url', (event, url) => {
     if (!isRoutedOrcaDeepLink(url)) {

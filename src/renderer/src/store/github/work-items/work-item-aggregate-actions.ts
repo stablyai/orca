@@ -3,7 +3,7 @@ import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-ite
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { ClassifiedError } from '../../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../../shared/errors/classified-error'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../../shared/github/work-items/work-item-ssh-error'
 import { sortWorkItemsByNumber } from '../../../../../shared/work-items/work-item-order'

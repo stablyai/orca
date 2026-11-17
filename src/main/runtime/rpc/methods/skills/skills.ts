@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import type { z } from 'zod'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../../shared/skills/deletion/skill-delete-contract'
 import {
   BundledSkillAutoUpdateRequestSchema,
@@ -33,7 +33,7 @@ import {
 } from '../../../../skills/discovery/skill-discovery-target'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   AgentSkillShareRequestSchema,

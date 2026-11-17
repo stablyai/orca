@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/selection/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'

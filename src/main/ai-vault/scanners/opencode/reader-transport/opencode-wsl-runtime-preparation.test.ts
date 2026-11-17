@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   bundles: vi.fn((platform: string) => [`C:/relay/${platform}`])
 }))
 vi.mock('node:fs', () => ({ existsSync: mocks.exists }))
-vi.mock('../../../../../shared/app-environment', () => ({
+vi.mock('../../../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({
     getAppPath: () => 'C:/app',
     getPath: () => 'C:/profile'

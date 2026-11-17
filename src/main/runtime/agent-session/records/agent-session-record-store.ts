@@ -2,7 +2,7 @@ import { clearSuccessor } from './agent-session-sender-identity-revision'
 import type * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
-import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
+import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import {
   agentSessionOperationKey,
   type AgentSessionOperationDecision,
@@ -29,13 +29,14 @@ import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-sessi
 import type {
   AgentSessionFailedAcquisitionSettlement,
   AgentSessionFailedPostAcquisitionAttachmentSettlement
-} from '../agent-session-acquisition-failure-settlement'
+} from '../ownership/agent-session-acquisition-failure-settlement'
 import type { AgentSessionLeaseRenewal } from '../ownership/agent-session-lease-renewal'
 import {
   collectAgentSessionRestartProbes,
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
+import type { AgentSessionIdleForget } from './agent-session-record-forget'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -48,10 +49,10 @@ import {
   heldAgentSessionIds,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import { AgentSessionRecordTabs } from '../agent-session-tab-table'
+import { AgentSessionRecordTabs } from './agent-session-tab-table'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
-import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
+import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
@@ -149,7 +150,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Include unreadable records in presence queries. */
   listHeldSessionIds = (): string[] => heldAgentSessionIds(this.state)
 
-  /** Record presence is permanent, including unreadable rows. */
+  /** Includes unreadable rows; workspace cleanup can delete the last chat. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -251,6 +252,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
     this.updateRecord(id, { kind: 'cancel-continue', cut })
 
+  skipAsyncQuestions = (id: string, itemId: string) =>
+    this.updateRecord(id, { kind: 'skip-async-questions', itemId })
+
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {
     const probes = await collectAgentSessionRestartProbes(this, args)
@@ -321,4 +325,23 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.updateRecord(args.sessionId, { kind: 'options', args })
+
+  /** Deletes a chat at rest for good, with its tab, when `stillWanted` agrees after any conversion
+   *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
+   *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
+   *  it meanwhile. */
+  forgetIdleChat = (
+    forget: AgentSessionIdleForget,
+    stillWanted: () => Promise<boolean>
+  ): Promise<boolean> =>
+    this.journalDatabase.forgetChat(
+      forget.sessionId,
+      async () =>
+        (await stillWanted()) &&
+        this.commitStoreCommand({
+          kind: 'forget-idle',
+          ...forget,
+          legacyTabIds: this.transactions.legacySessionTabIds
+        })
+    )
 }

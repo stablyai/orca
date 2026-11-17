@@ -4,7 +4,7 @@ import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runt
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspacePathStatusRouteOptions } from '../repos/repo-state'
 import type { FolderWorkspaceUpdateField } from './folder-workspace-mutations'

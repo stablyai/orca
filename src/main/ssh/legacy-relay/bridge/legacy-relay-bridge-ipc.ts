@@ -4,7 +4,7 @@
  */
 import { ipcMain, type BrowserWindow } from 'electron'
 import { z } from 'zod'
-import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/legacy-relay-bridge-contract'
+import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { isRemoteCliControlAllowed } from '../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

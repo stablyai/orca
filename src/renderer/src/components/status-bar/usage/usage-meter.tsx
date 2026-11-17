@@ -11,17 +11,22 @@ import {
   type UsagePercentageDisplay
 } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { formatBareUsagePercentage } from './usage-percentage-label'
-import { usageBarClass, usageTextClass } from './usage-health-tone'
+import { usageBarClass, type UsageBarTone } from './usage-health-tone'
 
-/** Track stays neutral; the fill is the displayed % and its color is the consumption tone. */
+/**
+ * Track stays neutral; the fill is the displayed %. Only a provider's details card passes
+ * tone="health" to color the fill by consumption; everywhere else it stays grey.
+ */
 export function UsageBar({
   usedPercent,
   display,
+  tone = 'plain',
   className,
   trackClassName = 'bg-muted'
 }: {
   usedPercent: number
   display: UsagePercentageDisplay
+  tone?: UsageBarTone
   className?: string
   trackClassName?: string
 }): React.JSX.Element {
@@ -31,14 +36,14 @@ export function UsageBar({
       className={cn('block overflow-hidden rounded-full', trackClassName, className)}
     >
       <span
-        className={`block h-full rounded-full transition-all duration-300 ${usageBarClass(usedPercent)}`}
+        className={`block h-full rounded-full transition-all duration-300 ${usageBarClass(usedPercent, tone)}`}
         style={{ width: `${getDisplayedUsagePercentage(usedPercent, display)}%` }}
       />
     </span>
   )
 }
 
-/** Bare "86%" in the consumption tone; the Used/Left column header names what it counts. */
+/** Bare "86%" in the surrounding text color; the Used/Left column header names what it counts. */
 export function UsageValue({
   usedPercent,
   display,
@@ -50,7 +55,7 @@ export function UsageValue({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <span className={cn('tabular-nums', usageTextClass(usedPercent), className)}>
+    <span className={cn('tabular-nums', className)}>
       {formatBareUsagePercentage(usedPercent, display, t)}
     </span>
   )

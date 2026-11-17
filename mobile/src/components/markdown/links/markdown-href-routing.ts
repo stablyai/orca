@@ -1,4 +1,4 @@
-import { routeNativeChatHref } from '../../../../../src/shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../src/shared/native-chat/file-access/native-chat-href-routing'
 
 export type MarkdownHrefRoute =
   | { kind: 'web'; url: string }

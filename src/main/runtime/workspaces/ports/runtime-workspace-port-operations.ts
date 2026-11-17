@@ -17,7 +17,7 @@ import {
   type WorkspacePortExecutionHostDeps
 } from '../../../ports/workspace-port-execution-host'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { RuntimeWorkspaceSleepOperations } from '../sleep/runtime-workspace-sleep-operations'
 export abstract class RuntimeWorkspacePortOperations extends RuntimeWorkspaceSleepOperations {
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

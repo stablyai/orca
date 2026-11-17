@@ -3,8 +3,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
@@ -202,6 +202,8 @@ export function useWorktreeListKeyboardNavigation(args: {
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
+        // A terminal that finishes mounting after this shortcut must not take the keys back.
+        scrollRef.current?.setAttribute('data-keyboard-navigation', '')
         e.preventDefault()
         return
       }
@@ -227,10 +229,9 @@ export function useWorktreeListKeyboardNavigation(args: {
         commitPreview()
       }
     }
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node && scrollRef.current?.contains(event.target))) {
-        endListNavigation()
-      }
+    // Why every press: a click on a row or agent row hands keys back to the workspace; modifier selection reclaims them on click.
+    const handlePointerDown = () => {
+      endListNavigation()
       resetDeleteGesture()
       dropPreview()
     }

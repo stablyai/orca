@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import { AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
+import { AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { AgentSessionRewindResult } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
   createAgentSessionRewindHook,
   type AgentSessionRewindInput,
   type AgentSessionRewindSendOutcome
 } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
-import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { actionableStructuredPrompts } from '../input/prompts/mobile-structured-actionable-prompt'
 import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
 import { sayMobileNativeChatRewind } from '../history/mobile-native-chat-rewind-copy'

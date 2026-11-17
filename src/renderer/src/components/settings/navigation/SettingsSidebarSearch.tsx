@@ -116,7 +116,7 @@ export function SettingsSearchResultsList({
 }: SettingsSearchResultsListProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 pb-4 pt-2">
       {searchResults.length > 0 ? (
         <div
           id={listboxId}
@@ -141,7 +141,7 @@ export function SettingsSearchResultsList({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSelect(result)}
                 className={cn(
-                  'flex min-h-10 w-full items-start gap-2 rounded-lg px-3 py-1 text-left outline-none transition-colors duration-150',
+                  'flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-1 text-left outline-none transition-colors duration-150',
                   isSelected
                     ? 'bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/25'
                     : 'hover:bg-worktree-sidebar-accent/60'
@@ -151,13 +151,13 @@ export function SettingsSearchResultsList({
                   <RepoIconGlyph
                     repoIcon={repoSection.repoIcon}
                     color={repoSection.badgeColor}
-                    className="mt-px size-4 shrink-0 text-muted-foreground"
+                    className="size-4 shrink-0 text-muted-foreground"
                     iconClassName="size-3.5"
                   />
                 ) : (
                   <Icon
                     className={cn(
-                      'mt-px size-4 shrink-0',
+                      'size-4 shrink-0',
                       isSelected
                         ? 'text-worktree-sidebar-accent-foreground'
                         : 'text-muted-foreground'

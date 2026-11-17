@@ -1,4 +1,4 @@
-import '../../../../../../shared/protocol-version'
+import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {

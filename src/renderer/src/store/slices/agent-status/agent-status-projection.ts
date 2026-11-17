@@ -1,5 +1,9 @@
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../types'
+import {
+  movedAgentSenderChannels,
+  samePublishingHosts
+} from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   readTerminalLeafAgentTypes,
@@ -31,9 +35,18 @@ import { publishProjectionTopology } from './agent-status-projection-publish-top
 import { publishProjectionRows } from './agent-status-projection-publish-rows'
 import { publishProjectionArrangement } from './agent-status-projection-publish-arrangement'
 
+import { KeyedChangeJournal } from '../../../../../shared/collections/keyed-change-journal'
+
 /** Live keyed derivatives; historical views capture explicitly. */
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
+  private changes = new KeyedChangeJournal()
+  changeCursor(): number {
+    return this.changes.cursor()
+  }
+  changesSince(cursor: number): ReadonlySet<string> | null {
+    return this.changes.since(cursor)
+  }
   get display() {
     return this.data.display
   }
@@ -121,6 +134,11 @@ export class AgentStatusProjection {
     } finally {
       this.data.notifying = false
     }
+  }
+  mobileSource(key: string, tabId: string) {
+    const worktreeId = this.data.mobileOwners.get(key)
+    const tab = this.data.tabs.get(tabId)
+    return worktreeId && tab ? { worktreeId, tab } : undefined
   }
   tabKeys(tabId: string): Iterable<string> {
     return this.data.acceptedByTab.get(tabId) ?? []
@@ -211,9 +229,11 @@ export class AgentStatusProjection {
     const { previous } = topology
     const ownerInputs = structuredAgentSessionOwnerInputs(state)
     const oldOwnerInputs = previous ? structuredAgentSessionOwnerInputs(previous) : []
+    const sendersChanged =
+      previous?.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost
     const senderLocationsChanged =
       !previous ||
-      previous.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost ||
+      (sendersChanged && !samePublishingHosts(previous, state)) ||
       previous.tabsByWorktree !== state.tabsByWorktree ||
       previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
       ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
@@ -223,8 +243,23 @@ export class AgentStatusProjection {
           (Boolean(change.previous?.terminalHandle || change.current?.terminalHandle) &&
             change.previous?.worktreeId !== change.current?.worktreeId)
       )
+    // Only a publication moved: notify the senders whose answer it moved, not every card.
+    const movedSenders =
+      previous && sendersChanged && !senderLocationsChanged
+        ? movedAgentSenderChannels(previous, state, data.listeners.keys())
+        : []
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
+      const changed = new Set(topology.changedKeys)
+      for (const [key, next] of rows.prepared) {
+        changed.add(key)
+        for (const rowKey of data.rowsForSource.get(key) ?? []) {
+          changed.add(rowKey)
+        }
+        for (const row of next.rows) {
+          changed.add(row.paneKey)
+        }
+      }
       data.fullResync ||= fullResync
       for (const key of refreshKeys) {
         data.notices.add(`status\0${key}`)
@@ -232,12 +267,23 @@ export class AgentStatusProjection {
       if (senderLocationsChanged) {
         data.notices.add('sender-locations')
       }
+      for (const channel of movedSenders) {
+        data.notices.add(channel)
+      }
       publishCounts()
       publishTerminalTypes()
       publishTransitions()
       publishProjectionTopology(data, state, changes, topology, rows)
       const rowUpdates = publishProjectionRows(data, state, topology, rows)
       publishProjectionArrangement(data, state, topology, rows, rowUpdates)
+      // Membership changes can move a key across commits a reader skipped.
+      this.changes.publish(
+        fullResync ||
+          topology.moved.size > 0 ||
+          changes.some(({ previous, current }) => !previous || !current)
+          ? null
+          : changed
+      )
     }
   }
 }

@@ -3,11 +3,11 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { HostRepoCatalogSnapshot } from '../../../../shared/execution-host/host-repo-catalog-snapshot'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getRepoRowIdentity } from './repo-host-identity'
 import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { hasLiveRepoCatalogApplied, markSavedHostCatalogRow } from './saved-host-catalog-rows'
 
 /** Adds saved rows the store lacks; the host's next live list replaces them like any other row. */

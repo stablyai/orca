@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/protocol-version'
+import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../../shared/remote-runtime/protocol/protocol-version'
 import {
   encodePairingCode,
   installBrowserGlobals,

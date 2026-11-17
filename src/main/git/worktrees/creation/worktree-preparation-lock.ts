@@ -2,7 +2,7 @@ import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { readFile, realpath, unlink, writeFile } from 'node:fs/promises'
 import { dirname, posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   resolveGitMetadataPath,
   type GitMetadataPathOptions

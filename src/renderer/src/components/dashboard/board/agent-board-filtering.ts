@@ -1,4 +1,7 @@
-import type { DashboardCard, DashboardCardReview } from '../../../../../shared/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardCardReview
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
 export type DashboardReviewFilter = DashboardCardReview['state'] | 'none'
 

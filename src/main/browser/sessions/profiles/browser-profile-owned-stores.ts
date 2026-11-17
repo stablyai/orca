@@ -1,6 +1,7 @@
 import { forgetBrowserPasswordVault } from '../../../browser-passwords/browser-password-vaults'
 import { forgetBrowserSiteDisplay } from '../../site-settings/display/browser-site-display-store'
 import { forgetBrowserSitePermissions } from '../../site-settings/permissions/browser-site-permission-store'
+import { forgetBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 
 /** Drops everything Orca stores per browser profile outside its Chromium partition. */
 export function forgetBrowserProfileOwnedStores(profileId: string): boolean {
@@ -10,5 +11,6 @@ export function forgetBrowserProfileOwnedStores(profileId: string): boolean {
   }
   forgetBrowserSitePermissions(profileId)
   forgetBrowserSiteDisplay(profileId)
+  forgetBrowserSessionCookies(profileId)
   return true
 }

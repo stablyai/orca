@@ -5,7 +5,7 @@ import '../__fixtures__/main-layout-close-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import '../orca-runtime-test-mocks/setup.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 
 import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 import '../../../shared/worktree/host-qualified-identity'

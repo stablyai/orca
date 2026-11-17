@@ -8,7 +8,7 @@ import {
   getWorktreeIdFromHostIdentity,
   type HostScopedWorktreeKey
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /**
  * What the slot projection itself recorded about each pane: which workspaces display it, and when

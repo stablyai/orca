@@ -1,6 +1,6 @@
 import { existsSync, chmodSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import {
   writeFileAtomically,

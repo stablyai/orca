@@ -7,10 +7,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   createStore,
@@ -23,7 +23,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { idOf, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../../../agent-session/installation/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
@@ -310,7 +310,11 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export { isWholeMail, turnText } from './structured-chat-coordinator-fake-codex-fixture'
+export {
+  isMailPointer,
+  isWholeMail,
+  turnText
+} from './structured-chat-coordinator-fake-codex-fixture'
 
 export function restartRuntime(): void {
   runtime = startRuntime()

@@ -20,10 +20,10 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import { AgentSessionTabTable, type PersistedAgentSessionTab } from '../agent-session-tab-table'
+import { AgentSessionTabTable, type PersistedAgentSessionTab } from './agent-session-tab-table'
 
 /** Never-recorded differs from recorded-empty; legacy fallback cannot infer this from row count (#17439). */
-const SESSION_TABS_RECORDED = 'session_tabs_recorded'
+export const AGENT_SESSION_TABS_RECORDED = 'session_tabs_recorded'
 
 /** Drop retired lease fields during load so later writes cannot carry them forward. */
 type RetiredAgentSessionLeaseFields = {
@@ -186,7 +186,7 @@ export function loadAgentSessionStoreTabs(
 ): AgentSessionStoreState['sessionTabs'] {
   const recorded = db
     .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
-    .get(SESSION_TABS_RECORDED)
+    .get(AGENT_SESSION_TABS_RECORDED)
   const table = new AgentSessionTabTable()
   for (const row of db
     .prepare(
@@ -249,11 +249,13 @@ function writeTabIndex(
   }
   if (index.recorded) {
     db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-      SESSION_TABS_RECORDED,
+      AGENT_SESSION_TABS_RECORDED,
       '1'
     )
   } else {
-    db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(SESSION_TABS_RECORDED)
+    db.prepare('DELETE FROM agent_session_store_meta WHERE key = ?').run(
+      AGENT_SESSION_TABS_RECORDED
+    )
   }
 }
 

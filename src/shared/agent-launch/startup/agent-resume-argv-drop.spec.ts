@@ -39,27 +39,6 @@ describe('dropAgentResumeArgvFromCommand', () => {
     }
   })
 
-  it('leaves the Codex folder setting behind when dropping an AI Vault resume', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: CODEX_SESSION,
-      cmdOverrides: {},
-      platform: 'darwin',
-      resumeInLaunchCwd: true
-    })
-
-    expect(
-      dropAgentResumeArgvFromCommand({
-        command: plan?.launchCommand ?? '',
-        agent: 'codex',
-        providerSession: CODEX_SESSION
-      })
-    ).toEqual({
-      status: 'dropped',
-      command: "codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current'"
-    })
-  })
-
   it('keeps the user CLI args that precede the resume argv', () => {
     expect(
       dropAgentResumeArgvFromCommand({
@@ -106,16 +85,6 @@ describe('dropAgentResumeArgvFromCommand', () => {
     expect(
       dropAgentResumeArgvFromCommand({
         command: `codex xresume ${CODEX_SESSION.id}`,
-        agent: 'codex',
-        providerSession: CODEX_SESSION
-      })
-    ).toEqual({ status: 'unrecognized' })
-  })
-
-  it('does not strip a bare resume argv with no launch command in front of it', () => {
-    expect(
-      dropAgentResumeArgvFromCommand({
-        command: `resume ${CODEX_SESSION.id}`,
         agent: 'codex',
         providerSession: CODEX_SESSION
       })

@@ -8,7 +8,7 @@ import {
 import { getCodexAccountHomeSessionDirectories } from '../codex/history/rollouts/codex-account-home-discovery'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/history/bridges/codex-session-bridge'
 import { normalizeFsPath } from '../usage/worktree-attribution/usage-path-comparison'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 
 const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 

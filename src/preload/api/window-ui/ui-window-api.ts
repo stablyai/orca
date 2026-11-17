@@ -4,7 +4,7 @@ import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboa
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
@@ -19,6 +19,8 @@ export type UiWindowApi = {
     forNativeChatDraft?: boolean
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
+    /** Web client only: the paste event's picture, since insecure origins have no async clipboard. */
+    eventImage?: Blob
   }) => Promise<string | null>
   /** Saves paste text on the execution host so the agent can read it. */
   savePastedTextAsFile: (args: {

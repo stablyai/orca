@@ -10,6 +10,7 @@ import type {
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
 import { acpPrivateTempConnect } from '../launch/acp-private-temp'
+import { acpClientInfo } from '../launch/acp-client-info'
 import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
@@ -21,6 +22,7 @@ import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-prep
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchPermissionModes } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
+import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
 import { routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
@@ -100,8 +102,9 @@ export async function acquireAcpStructuredSession(input: {
       envToDelete: launch.envToDelete
     },
     {
-      clientInfo: { name: 'orca', version: '1' },
-      clientCapabilities: spec.dialect.clientCapabilities,
+      clientInfo: acpClientInfo(spec, launch.version ?? null),
+      // Only a chat can show a URL request's card, so other connections never advertise it.
+      clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {

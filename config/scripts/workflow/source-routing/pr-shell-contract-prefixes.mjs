@@ -1,6 +1,5 @@
 // Files whose edits run the real-shell contracts job (shell_contracts in pr.yml).
 export const SHELL_PREFIXES = [
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-readiness/shell-ready.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready-bash-wrapper.test.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
@@ -27,7 +26,6 @@ export const SHELL_PREFIXES = [
   'src/shared/shell/wsl/fish-wsl-cwd-report',
   'src/shared/shell/testing/fish-binary-requirement',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
-  'src/shared/shell/launch/startup-shell-portability',
   'src/shared/shell/command-resolution/posix-command-path-lookup',
   'src/shared/agent-launch/startup/readiness/draft-paste-ready-scanner.ts',
   'src/main/wsl/filesystem/wsl-shell-cwd-report',

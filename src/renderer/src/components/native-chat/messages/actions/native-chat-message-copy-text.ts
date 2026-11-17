@@ -1,4 +1,4 @@
-import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
+import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { nativeChatMessageCopyText } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-copy-text'
 import { nativeChatStoppedBeforeStartLabel } from '../rows/native-chat-stopped-before-start-row'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'

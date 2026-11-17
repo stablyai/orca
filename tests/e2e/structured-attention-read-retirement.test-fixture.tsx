@@ -7,11 +7,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RuntimeClientTarget } from '../../src/shared/remote-runtime/host-catalog/runtime-client-target'
-import type { NotificationSettings } from '../../src/shared/notification-settings-types'
+import type { NotificationSettings } from '../../src/shared/notifications/notification-settings-types'
 import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
 import type { RuntimeRpcResponse } from '../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
+import { createGlobalSettingsFixture } from '../../src/shared/settings/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
@@ -22,7 +22,7 @@ import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,

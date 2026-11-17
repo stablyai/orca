@@ -1,7 +1,6 @@
-import type { ExecutionHostId } from '../../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import type { Repo as SharedRepo } from '../../../../../src/shared/repository/repo-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import type { SetupHookTrust } from '../setup-hook-trust'
 import { resolveRepoBadgeColor } from '../../../../../src/shared/repository/appearance/repo-badge-color'
 
 export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
@@ -70,7 +69,6 @@ export type SetupHookDetails = {
   repoId: string
   command: string | null
   source: string | null
-  trust: SetupHookTrust | null
   runPolicy: SetupRunPolicy
 }
 

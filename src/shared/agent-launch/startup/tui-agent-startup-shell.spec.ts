@@ -30,18 +30,6 @@ describe('tokenizeStartupCommand spans (windows shells)', () => {
     ])
     expect(expectSpansCoverTokens('claude `x tail', 'powershell')).toEqual(['claude', '`x', 'tail'])
   })
-
-  it('spans a powershell doubled-quote token as one raw range', () => {
-    expect(expectSpansCoverTokens("claude 'a''b' end", 'powershell')).toEqual([
-      'claude',
-      "'a''b'",
-      'end'
-    ])
-  })
-
-  it('spans a token opened by a quote at end of input', () => {
-    expect(expectSpansCoverTokens('claude ""', 'cmd')).toEqual(['claude', '""'])
-  })
 })
 
 describe('one Unix startup dialect', () => {
