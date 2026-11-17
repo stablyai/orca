@@ -9,6 +9,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { toWindowsWslUncPath, wslUncPathToLinux } from '../../shared/file-access/wsl-paths'
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 
 const SCREENSHOT_TTL_MS = 24 * 60 * 60 * 1000
 const SCREENSHOT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
@@ -24,15 +26,24 @@ export function writeCliScreenshotTempFile(
   data: string,
   extension: 'png' | 'jpg' | 'img'
 ): { path: string; expiresAt: string } {
-  const outputDir = screenshotTempDir(dir)
+  const wslDistro = getWslCallerDistro()
+  const outputDir = screenshotTempDir(dir, wslDistro)
   cleanupExpiredScreenshots(outputDir)
   const path = join(outputDir, `${safeCliFileStem(requestId)}-screenshot.${extension}`)
   writeFileSync(path, Buffer.from(data, 'base64'), { mode: 0o600 })
-  return { path, expiresAt: new Date(Date.now() + SCREENSHOT_TTL_MS).toISOString() }
+  return {
+    path: (wslDistro && wslUncPathToLinux(path, wslDistro)) || path,
+    expiresAt: new Date(Date.now() + SCREENSHOT_TTL_MS).toISOString()
+  }
 }
 
-function screenshotTempDir(dir: CliScreenshotTempDir): string {
-  const outputDir = process.env[dir.envVar] || join(tmpdir(), dir.dirName)
+function screenshotTempDir(dir: CliScreenshotTempDir, wslDistro: string | null): string {
+  // A WSL shell can't open the Windows temp dir, so a WSL caller's screenshots go in the distro's /tmp.
+  const outputDir =
+    process.env[dir.envVar] ||
+    (wslDistro
+      ? toWindowsWslUncPath(`/tmp/${dir.dirName}`, wslDistro)
+      : join(tmpdir(), dir.dirName))
   mkdirSync(outputDir, { recursive: true, mode: 0o700 })
   const stat = lstatSync(outputDir)
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
