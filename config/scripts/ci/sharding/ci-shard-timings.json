@@ -1647,7 +1647,6 @@
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-action-receipts.test.ts": 5519,
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-move.test.ts": 1986,
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-published-bytes.test.ts": 1780,
-      "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-quit.test.ts": 2500,
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-refused-card.test.ts": 2478,
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-repeat-press.test.ts": 2765,
       "src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-withdrawn-draft.test.ts": 1916,

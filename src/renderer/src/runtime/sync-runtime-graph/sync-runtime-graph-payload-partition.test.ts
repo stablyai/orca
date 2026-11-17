@@ -5,7 +5,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './graph-sync-scheduler'
 import type { AppState } from '../../store/types'
-import { acceptedAgentStatuses } from '../../store/slices/agent-status/live-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '../../store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
@@ -65,23 +65,6 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
-
-function startSync(
-  state: AppState,
-  syncWindowGraph: ReturnType<typeof vi.fn>
-): { setState: (next: AppState) => void } {
-  let current = state
-  vi.useFakeTimers()
-  vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
-  vi.stubGlobal('HTMLElement', class HTMLElement {})
-  setRuntimeGraphStoreStateGetter(() => current)
-  setRuntimeGraphSyncEnabled(true)
-  return {
-    setState: (next: AppState) => {
-      current = next
-    }
-  }
-}
 
 describe('orchestration graph reply', () => {
   it('keeps the applied projection when main answers unchanged, and restores it after a local edit', async () => {
