@@ -27,10 +27,12 @@ export type MessageIdentity = {
 
 export type MessageRow = {
   id: number
+  session_id: string
   role: string
   content: string | null
   content_truncated: number
   tool_calls: string | null
+  tool_call_id: string | null
   reasoning: string | null
   timestamp: number
 }
@@ -115,6 +117,7 @@ function bodyColumns(schema: HermesSchema, full: boolean, tools: boolean): strin
   const reasoning = ['reasoning_content', 'reasoning'].filter(has).map((column) => `m.${column}`)
   return [
     'm.id',
+    'm.session_id',
     'm.role',
     'm.timestamp',
     // Multimodal content is JSON whose text a cut would lose; only plain text is cut for previews.
@@ -125,6 +128,7 @@ function bodyColumns(schema: HermesSchema, full: boolean, tools: boolean): strin
       ? '0 AS content_truncated'
       : `NOT (${MULTIMODAL}) AND length(CAST(m.content AS BLOB)) > ${PREVIEW_CONTENT_BYTES} AS content_truncated`,
     tools && has('tool_calls') ? 'm.tool_calls' : 'NULL AS tool_calls',
+    tools && has('tool_call_id') ? 'm.tool_call_id' : 'NULL AS tool_call_id',
     `${reasoning.length > 1 ? `COALESCE(${reasoning.join(', ')})` : (reasoning[0] ?? 'NULL')} AS reasoning`
   ].join(', ')
 }
@@ -158,7 +162,7 @@ export function* readMessageBodies(
   }
 }
 
-function decodedContent(row: MessageRow): unknown {
+export function decodedContent(row: MessageRow): unknown {
   const { content } = row
   if (!content?.startsWith(CONTENT_JSON_PREFIX)) {
     return content

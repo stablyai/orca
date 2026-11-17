@@ -6,6 +6,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { SqliteSessionAgent } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { TranscriptMessage } from '../../../transcripts/session-transcript-consumers'
@@ -45,7 +46,8 @@ export type OpenCodeSqliteCaptureRequest = {
 
 export type OpenCodeNativeChatReadRequest = {
   id: number
-  kind: 'native-page' | 'native-signal'
+  /** `hermes-history`: a Hermes conversation as chat messages, for a chat that takes it over. */
+  kind: 'native-page' | 'native-signal' | 'hermes-history'
   dbPath: string
   sessionId: string
   limit?: number
@@ -62,7 +64,11 @@ export type OpenCodeForkCoverageRequest = {
   sessionId: string
 }
 
-export type OpenCodeNativeChatReadValue = OpenCodeTranscriptPage | OpenCodeTranscriptSignal | null
+export type OpenCodeNativeChatReadValue =
+  | OpenCodeTranscriptPage
+  | OpenCodeTranscriptSignal
+  | NativeChatMessage[]
+  | null
 
 export type OpenCodeSqliteWorkerRequest = (
   | OpenCodeSqliteListRequest

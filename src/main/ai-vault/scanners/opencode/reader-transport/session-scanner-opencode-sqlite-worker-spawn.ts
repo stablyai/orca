@@ -10,7 +10,10 @@ import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
-import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
+import type {
+  OpenCodeNativeChatReadRequest,
+  OpenCodeSqliteCaptureValue
+} from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   buildOpenCodeSqliteCandidatePath,
@@ -264,6 +267,18 @@ export async function captureForHost(
   }
 }
 
+/** A native chat read, on WSL through the distro's own reader. */
+export async function readNativeChatForHost(
+  request: Omit<OpenCodeNativeChatReadRequest, 'id'>,
+  signal?: AbortSignal
+) {
+  const wsl = openCodeWslPath(request.dbPath)
+  const client = wsl
+    ? await openCodeWslClient(wsl.distro, request.dbPath, signal)
+    : getSharedClient()
+  return client.readNativeChat({ ...request, dbPath: wsl?.linuxPath ?? request.dbPath }, signal)
+}
+
 export async function readOpenCodeTranscriptPageViaWorker(
   args: {
     dbPath: string
@@ -274,15 +289,8 @@ export async function readOpenCodeTranscriptPageViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    {
-      ...args,
-      limit: openCodeTranscriptPageLimit(args.limit),
-      dbPath: wsl?.linuxPath ?? args.dbPath,
-      kind: 'native-page'
-    },
+  const value = await readNativeChatForHost(
+    { ...args, limit: openCodeTranscriptPageLimit(args.limit), kind: 'native-page' },
     signal
   )
   if (value !== null && !('items' in value)) {
@@ -299,12 +307,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    { ...args, dbPath: wsl?.linuxPath ?? args.dbPath, kind: 'native-signal' },
-    signal
-  )
+  const value = await readNativeChatForHost({ ...args, kind: 'native-signal' }, signal)
   if (value !== null && !('messageCount' in value)) {
     throw new Error('Invalid OpenCode transcript signal')
   }
