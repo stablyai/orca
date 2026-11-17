@@ -32,6 +32,10 @@ export type UtilityWorkerHeapReport = {
   workers: { id: number; bytes: number | null; estimated: boolean }[]
 }
 
+export function utilityWorkerHeapTotal(report: UtilityWorkerHeapReport): number {
+  return report.workers.reduce((sum, worker) => sum + (worker.bytes ?? 0), report.hostBytes)
+}
+
 /** Worker messages travel as v8-serialized bytes, split so no IPC message passes the chunk size. */
 export type UtilityWorkerHostEvent =
   | { type: 'ready' }

@@ -5,13 +5,12 @@ import {
   WORKER_HEAP_BREADCRUMB_MIN_INTERVAL_MS
 } from '../worker-threads/worker-heap-sample'
 import type { HostedWorker } from './hosted-worker'
-import type { UtilityWorkerHeapReport } from './utility-worker-host-protocol'
+import {
+  type UtilityWorkerHeapReport,
+  utilityWorkerHeapTotal
+} from './utility-worker-host-protocol'
 
 const MB = 2 ** 20
-
-function heapTotal(report: UtilityWorkerHeapReport): number {
-  return report.workers.reduce((sum, worker) => sum + (worker.bytes ?? 0), report.hostBytes)
-}
 
 /** Each worker's heap beside its replies; matched by spawn id, since every reader has one role. */
 export function utilityWorkerHeapData(
@@ -19,13 +18,14 @@ export function utilityWorkerHeapData(
   workers: readonly HostedWorker[]
 ): CrashReportBreadcrumbData {
   if (!report) {
-    return { heapAgeS: null }
+    return { heapReportAgeS: null }
   }
   const heaps = new Map(report.workers.map((worker) => [worker.id, worker]))
   const data: CrashReportBreadcrumbData = {
-    heapAgeS: Math.round((Date.now() - report.sampledAt) / 1000),
+    // Reports post only on change: later samples stayed within 64 MB of these figures.
+    heapReportAgeS: Math.round((Date.now() - report.sampledAt) / 1000),
     hostHeapMB: Math.round(report.hostBytes / MB),
-    totalHeapMB: Math.round(heapTotal(report) / MB)
+    totalHeapMB: Math.round(utilityWorkerHeapTotal(report) / MB)
   }
   workers.forEach((worker, index) => {
     const heap = heaps.get(worker.id)
@@ -44,7 +44,7 @@ export function recordUtilityWorkerHeapPressure(
   report: UtilityWorkerHeapReport,
   workers: readonly HostedWorker[]
 ): void {
-  if (heapTotal(report) < WORKER_HEAP_BREADCRUMB_BYTES) {
+  if (utilityWorkerHeapTotal(report) < WORKER_HEAP_BREADCRUMB_BYTES) {
     return
   }
   const data = utilityWorkerHeapData(report, workers)

@@ -8,15 +8,14 @@ import {
   WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS,
   WORKER_HEAP_SAMPLE_INTERVAL_MS
 } from '../worker-threads/worker-heap-sample'
-import type { UtilityWorkerHeapReport } from './utility-worker-host-protocol'
+import {
+  type UtilityWorkerHeapReport,
+  utilityWorkerHeapTotal
+} from './utility-worker-host-protocol'
 
 /** Smaller moves are noise for an OOM report and would only add IPC. */
 const REPORT_CHANGE_BYTES = 64 * 2 ** 20
 const MARKS = [WORKER_HEAP_PRESSURED_BYTES, WORKER_HEAP_BREADCRUMB_BYTES]
-
-function total(report: UtilityWorkerHeapReport): number {
-  return report.workers.reduce((sum, worker) => sum + (worker.bytes ?? 0), report.hostBytes)
-}
 
 /** Any isolate counts on its own, so one reader growing while another shrinks is still reported. */
 export function utilityWorkerHeapReportChanged(
@@ -31,10 +30,12 @@ export function utilityWorkerHeapReportChanged(
     (a === null) !== (b === null) ||
     Math.abs((a ?? 0) - (b ?? 0)) >= REPORT_CHANGE_BYTES
   const before = new Map(last.workers.map((worker) => [worker.id, worker.bytes]))
+  const lastTotal = utilityWorkerHeapTotal(last)
+  const nextTotal = utilityWorkerHeapTotal(next)
   return (
     moved(last.hostBytes, next.hostBytes) ||
-    moved(total(last), total(next)) ||
-    MARKS.some((mark) => total(last) >= mark !== total(next) >= mark) ||
+    moved(lastTotal, nextTotal) ||
+    MARKS.some((mark) => lastTotal >= mark !== nextTotal >= mark) ||
     next.workers.some((worker) => moved(before.get(worker.id), worker.bytes))
   )
 }
@@ -52,7 +53,8 @@ export function sampleUtilityWorkerHeaps(
   let sampling = false
   let last: UtilityWorkerHeapReport | undefined
   const schedule = (delayMs: number): void => {
-    timer = setTimeout(() => void sample(), delayMs)
+    // Diagnostics must never take the reader host down with an unhandled rejection.
+    timer = setTimeout(() => void sample().catch(() => undefined), delayMs)
     timer.unref?.()
   }
   const sample = async (): Promise<void> => {
@@ -73,7 +75,7 @@ export function sampleUtilityWorkerHeaps(
         hostBytes: getHeapStatistics().total_heap_size,
         workers: readings
       }
-      if (total(report) >= WORKER_HEAP_PRESSURED_BYTES) {
+      if (utilityWorkerHeapTotal(report) >= WORKER_HEAP_PRESSURED_BYTES) {
         delayMs = WORKER_HEAP_PRESSURED_SAMPLE_INTERVAL_MS
       }
       if (utilityWorkerHeapReportChanged(last, report)) {

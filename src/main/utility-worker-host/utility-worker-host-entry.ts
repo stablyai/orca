@@ -23,7 +23,9 @@ if (!parent) {
 }
 const port = parent
 const workers = new Map<number, Worker>()
-const heaps = sampleUtilityWorkerHeaps(workers, (report) => port.postMessage({ type: 'heap', report }))
+const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
+  port.postMessage({ type: 'heap', report })
+)
 
 function failure(error: unknown): UtilityWorkerFailure {
   const value = error instanceof Error ? error : new Error(String(error))

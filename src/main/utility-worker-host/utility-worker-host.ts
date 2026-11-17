@@ -3,7 +3,10 @@ import { app, utilityProcess, type UtilityProcess } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { HostedWorker } from './hosted-worker'
-import { recordUtilityWorkerHeapPressure, utilityWorkerHeapData } from './utility-worker-heap-report'
+import {
+  recordUtilityWorkerHeapPressure,
+  utilityWorkerHeapData
+} from './utility-worker-heap-report'
 import type {
   HostedWorkerThread,
   UtilityWorkerHeapReport,
