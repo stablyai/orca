@@ -18,17 +18,10 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   const blank = page.host.dataset.browserClientPageBlank === 'true'
   const viewport = page.host.ownerDocument.defaultView
   const interactive = shown && !blank
-  // A preset can outsize the pane; the body-level host must not paint or take input past its scroller.
-  const clip = visible
-    ? container!.closest('[data-browser-page-scroller]')?.getBoundingClientRect()
-    : null
-  const clipInsets = clip
-    ? [
-        clip.top - bounds!.top,
-        bounds!.right - clip.right,
-        bounds!.bottom - clip.bottom,
-        clip.left - bounds!.left
-      ].map((inset) => Math.max(0, inset))
+  // A preset can outsize the pane; the body-level host must not paint or take input past the scroller's client box, which leaves its scrollbars uncovered.
+  const scroller = visible ? container!.closest('[data-browser-page-scroller]') : null
+  const clipInsets = scroller
+    ? scrollerClipInsets(bounds!, scroller.getBoundingClientRect(), scroller)
     : []
   // Chromium needs a sized, onscreen guest to composite even when its desktop pane is hidden.
   const style = {
@@ -66,6 +59,17 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   } else if (page.host.getAttribute('aria-hidden') !== 'true') {
     page.host.setAttribute('aria-hidden', 'true')
   }
+}
+
+function scrollerClipInsets(bounds: DOMRect, scrollerBounds: DOMRect, scroller: Element): number[] {
+  const left = scrollerBounds.left + scroller.clientLeft
+  const top = scrollerBounds.top + scroller.clientTop
+  return [
+    top - bounds.top,
+    bounds.right - (left + scroller.clientWidth),
+    bounds.bottom - (top + scroller.clientHeight),
+    left - bounds.left
+  ].map((inset) => Math.max(0, inset))
 }
 
 export function retainBrowserClientPagePaint(page: BrowserClientRetainedRendererPage): () => void {

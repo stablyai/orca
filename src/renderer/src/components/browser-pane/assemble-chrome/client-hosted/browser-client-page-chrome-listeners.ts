@@ -1,9 +1,13 @@
 import {
   browserNavigationLeavesFaviconOrigin,
-  pickDisplayableFaviconUrl
+  pickDisplayableFaviconUrl,
+  remoteTabFaviconUrl
 } from '../../../../../../shared/browser/browser-favicon-url'
 import { cachedBrowserGuestMetadata } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { BrowserTabPageState } from '../../describe-page/browser-page-types'
+
+// The retained guest outlives its pane, so remember which document each guest's icon came from.
+const faviconDocumentUrlByGuest = new WeakMap<Electron.WebviewTag, string>()
 
 /** The favicon, address-bar dismissal and viewport preset a local page binds, for a desktop-hosted guest. */
 export function bindBrowserClientPageChromeListeners(
@@ -21,21 +25,36 @@ export function bindBrowserClientPageChromeListeners(
     applyViewportPreset: () => void
   }
 ): () => void {
+  const guestUrl = (): string | null => cachedBrowserGuestMetadata(webview)?.url ?? null
+  const clearFavicon = (): void => {
+    faviconDocumentUrlByGuest.delete(webview)
+    updatePageState(browserPageId, { faviconUrl: null })
+  }
+  // Icon events fired while no pane listened are lost; drop an icon a background navigation left behind.
+  const iconDocumentUrl = faviconDocumentUrlByGuest.get(webview)
+  if (iconDocumentUrl && browserNavigationLeavesFaviconOrigin(iconDocumentUrl, guestUrl())) {
+    clearFavicon()
+  }
   const onFavicon = (event: { favicons?: string[] }): void => {
-    updatePageState(browserPageId, { faviconUrl: pickDisplayableFaviconUrl(event.favicons) })
+    // The page's loopback is the remote machine's, but the tab strip loads the icon from this one.
+    const faviconUrl = remoteTabFaviconUrl(pickDisplayableFaviconUrl(event.favicons))
+    const documentUrl = guestUrl()
+    if (documentUrl) {
+      faviconDocumentUrlByGuest.set(webview, documentUrl)
+    }
+    updatePageState(browserPageId, { faviconUrl })
   }
   // Chromium sends no icon update for an icon-less page, so a cross-origin leave clears the old one.
-  const onStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
-    if (!event.isMainFrame || event.isInPlace || !event.url) {
-      return
-    }
+  const onLeaveDocument = (
+    event: Electron.DidStartNavigationEvent | Electron.DidRedirectNavigationEvent
+  ): void => {
     if (
-      browserNavigationLeavesFaviconOrigin(
-        cachedBrowserGuestMetadata(webview)?.url ?? null,
-        event.url
-      )
+      event.isMainFrame &&
+      !event.isInPlace &&
+      event.url &&
+      browserNavigationLeavesFaviconOrigin(guestUrl(), event.url)
     ) {
-      updatePageState(browserPageId, { faviconUrl: null })
+      clearFavicon()
     }
   }
   // Guests never send outside pointer events to the renderer, so a page click can't close suggestions otherwise.
@@ -43,12 +62,14 @@ export function bindBrowserClientPageChromeListeners(
   applyViewportPreset()
   webview.addEventListener('dom-ready', applyViewportPreset)
   webview.addEventListener('page-favicon-updated', onFavicon)
-  webview.addEventListener('did-start-navigation', onStartNavigation)
+  webview.addEventListener('did-start-navigation', onLeaveDocument)
+  webview.addEventListener('did-redirect-navigation', onLeaveDocument)
   webview.addEventListener('focus', onFocus)
   return () => {
     webview.removeEventListener('dom-ready', applyViewportPreset)
     webview.removeEventListener('page-favicon-updated', onFavicon)
-    webview.removeEventListener('did-start-navigation', onStartNavigation)
+    webview.removeEventListener('did-start-navigation', onLeaveDocument)
+    webview.removeEventListener('did-redirect-navigation', onLeaveDocument)
     webview.removeEventListener('focus', onFocus)
   }
 }

@@ -27,8 +27,9 @@ import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-too
 import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
 import {
   applyClientHostedBrowserViewportOverride,
+  ClientHostedBrowserPageBox,
   useClientHostedBrowserPageViewport
-} from './use-client-hosted-browser-page-viewport'
+} from './client-hosted-browser-page-box'
 import { BrowserPageContextMenu } from '../context-menu/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from '../focus/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../address-bar/use-browser-address-bar-edit-session'
@@ -149,7 +150,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, { current: pageBox.content })
 
   useLayoutEffect(() => {
-    const viewport = pageBox.content
+    const viewport = pageBox.contentRef.current
     if (initialization.suppressAttachment) {
       setAttachmentError(null)
       return
@@ -276,7 +277,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
       updatePageState: (pageId, updates) => updatePageStateFromGuest(pageId, updates),
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
       applyViewportPreset: () =>
-        applyClientHostedBrowserViewportOverride(browserTab.id, readViewportPresetId())
+        applyClientHostedBrowserViewportOverride(
+          browserTab.id,
+          readViewportPresetId(),
+          pageBox.scrollerRef.current
+        )
     })
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       loadFailureRef.current = loadError
@@ -307,7 +312,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
     return cleanupGuest
   }, [
     browserTab.id,
-    pageBox.content,
+    pageBox.contentRef,
+    pageBox.scrollerRef,
     initialization.suppressAttachment,
     browserHostClientId,
     browserHostGeneration,
@@ -365,14 +371,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
           {...fileDrop}
         >
-          <div
-            ref={pageBox.setScroller}
-            data-browser-page-scroller=""
-            className="scrollbar-sleek absolute inset-0 overflow-hidden"
-          >
-            <div ref={pageBox.setContent} className="relative mx-auto" />
-          </div>
-          {markup.overlay}
+          {/* The drawing screenshot is the guest's, so it takes the guest's box. */}
+          <ClientHostedBrowserPageBox box={pageBox}>{markup.overlay}</ClientHostedBrowserPageBox>
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
             browserPageId={browserTab.id}
