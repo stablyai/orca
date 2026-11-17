@@ -27,6 +27,8 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  /** The session will hold a readiness barrier, so the wrapper may run the command itself. */
+  shellReadySupported?: boolean
   launchAgent?: TuiAgent
   shellOverride?: string
   /** Unix interactive profile args are ignored for command and agent launches. */
@@ -118,6 +120,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
+      startupCommandDeliveredByShellWrapper: launch.startupCommandDeliveredByShellWrapper,
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,

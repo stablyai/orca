@@ -37,6 +37,7 @@ export class SessionShellReadyBarrier {
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
+  private startupCommandFallback: (() => string) | null = null
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
@@ -79,6 +80,13 @@ export class SessionShellReadyBarrier {
     }
     this.preReadyStdinQueue.push(data)
     return true
+  }
+
+  /** The wrapper runs the command with its ready marker; type it only if the marker never comes. */
+  holdStartupCommandFallback(build: () => string): void {
+    if (this._state === 'pending') {
+      this.startupCommandFallback = build
+    }
   }
 
   ingestSubprocessData(data: string): void {
@@ -127,6 +135,7 @@ export class SessionShellReadyBarrier {
 
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
+    this.startupCommandFallback = null
     this.postReadyFlushGate.clear()
   }
 
@@ -143,6 +152,7 @@ export class SessionShellReadyBarrier {
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
     this.scanState = null
+    this.startupCommandFallback = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
       return
@@ -175,6 +185,11 @@ export class SessionShellReadyBarrier {
     this._state = 'timed_out'
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
+    const fallback = this.startupCommandFallback
+    this.startupCommandFallback = null
+    if (fallback) {
+      this.preReadyStdinQueue.unshift(fallback())
+    }
     this.flushPreReadyQueue()
   }
 

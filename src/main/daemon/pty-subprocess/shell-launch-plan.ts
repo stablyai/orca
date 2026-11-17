@@ -32,6 +32,7 @@ import {
 } from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
@@ -55,6 +56,8 @@ export type PtyShellLaunchPlan = {
   spawnCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  /** The zsh wrapper runs the command from its first prompt, so nothing is typed ahead of the user. */
+  startupCommandDeliveredByShellWrapper: boolean
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
 }
@@ -67,6 +70,7 @@ export function createPtyShellLaunchPlan(
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
+  let startupCommandDeliveredByShellWrapper = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
@@ -203,6 +207,7 @@ export function createPtyShellLaunchPlan(
     }
     const waitsForShellReady = Boolean(opts.command)
     delete env.ORCA_SHELL_FEATURES
+    delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
     const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,
@@ -221,6 +226,14 @@ export function createPtyShellLaunchPlan(
     )
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
+    if (
+      opts.command &&
+      opts.shellReadySupported === true &&
+      canDeliverStartupCommandFromZshWrapper(shellPath, shellLaunch, opts.command)
+    ) {
+      env[POSIX_SHELL_STARTUP_COMMAND_ENV] = opts.command.replace(/(\r\n|\r|\n)$/, '')
+      startupCommandDeliveredByShellWrapper = true
+    }
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
@@ -239,7 +252,24 @@ export function createPtyShellLaunchPlan(
     spawnCwd,
     validationCwd,
     startupCommandDeliveredInShellArgs,
+    startupCommandDeliveredByShellWrapper,
     windowsFallbackAttempts,
     startupAgentRecognition
   }
+}
+
+// Linux caps one env string at 128 KiB; longer commands keep the typed, staged path.
+const MAX_WRAPPER_STARTUP_COMMAND_BYTES = 32 * 1024
+
+function canDeliverStartupCommandFromZshWrapper(
+  shellPath: string,
+  launch: ReturnType<typeof getShellLaunchConfig>,
+  command: string
+): boolean {
+  return (
+    pathWin32.basename(shellPath).toLowerCase() === 'zsh' &&
+    launch.supportsReadyMarker &&
+    launch.env.ZDOTDIR !== undefined &&
+    Buffer.byteLength(command) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES
+  )
 }

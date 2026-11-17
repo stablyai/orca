@@ -67,6 +67,7 @@ export async function spawnAndPublishSession(
       envToDelete: opts.envToDelete,
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.shellReadySupported ? { shellReadySupported: true } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       shellOverride: opts.shellOverride,
       terminalShellArgs: opts.terminalShellArgs,
@@ -183,8 +184,13 @@ export async function spawnAndPublishSession(
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
 
+  // The wrapper runs the command at the first prompt, so early keystrokes queue for the agent, not the shell.
+  const startupCommandByWrapper =
+    Boolean(opts.command) && subprocess.startupCommandDeliveredByShellWrapper === true
   const startupCommandWritten =
-    Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+    Boolean(opts.command) &&
+    !subprocess.startupCommandDeliveredInShellArgs &&
+    !startupCommandByWrapper
   // Distinguish absent from undelivered commands; log only length because command text may contain credentials.
   try {
     deps.reportReadinessEvent?.('startup-command-delivery', {
@@ -193,14 +199,15 @@ export async function spawnAndPublishSession(
       hasCommand: Boolean(opts.command),
       commandLength: opts.command?.length ?? 0,
       viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
+      viaShellWrapper: startupCommandByWrapper,
       queuedByShellReadyBarrier: shellReadySupported
     })
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  if (startupCommandWritten && opts.command) {
+  const buildSubmission = (command: string): string => {
     staging.current = stageStartupCommand({
-      command: opts.command,
+      command,
       shellPath: subprocess.shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
@@ -217,11 +224,16 @@ export async function spawnAndPublishSession(
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    return buildStartupCommandSubmission(staging.current.command, {
+      bracketedPasteSafe: shellReadySupported
+    })
+  }
+  const command = opts.command
+  if (command && startupCommandByWrapper) {
+    // Typed only if the shell never reaches a prompt (zle disabled, or rc exec'd another program).
+    session.holdStartupCommandFallback(() => buildSubmission(command))
+  } else if (command && startupCommandWritten) {
+    session.writeStartupCommand(buildSubmission(command))
   }
 
   return {
