@@ -26,6 +26,12 @@ When your review is done, click **Send to agent** at the top of the diff. Orca c
 
 **Send Review Notes to Agent** is unbound by default so it won't collide with other chords. Assign it under [Settings → Shortcuts](/docs/settings) to open that send menu from the keyboard (works even while the editor is focused).
 
+## Let an agent review first
+
+Choose **Review changes with AI** from the **⋯** menu at the top of the Source Control panel. Orca starts your Source Control AI agent in the workspace and asks it to review the branch against the panel's base ref, plus uncommitted and new files, without editing anything. The agent leaves each finding as a note on its line with `orca worktree notes add`, starting with its severity. Resolve the notes you disagree with and send the rest back with **Send to agent**.
+
+The agent and prompt come from the **Change review** action recipe under [Settings → Git & Source Control](/docs/settings).
+
 ## Why batch?
 
 Sending comments one at a time causes the agent to swing back and forth. Batching keeps the feedback coherent: one round of thinking, one revision pass, and a much higher hit rate.

@@ -20,6 +20,7 @@ import { useSourceControlAiRecipeSaves } from './use-recipe-saves'
 import type { SourceControlAiControllerParams } from './controller-types'
 import { openSourceControlAiSettingsTarget } from '../panel/source-control-ai-settings-navigation'
 import { useSourceControlRecoveryAi } from './use-recovery-ai'
+import { useSourceControlReviewChangesAi } from './use-review-changes-ai'
 import { useConflictRecoveryComposer } from './use-conflict-recovery-composer'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,6 +37,7 @@ export function useSourceControlAi({
   unresolvedConflicts,
   stagedEntries,
   worktreePath,
+  compareBaseRef,
   commitMessage,
   commitError,
   pushRecoveryPrompt,
@@ -206,6 +208,18 @@ export function useSourceControlAi({
     getStoreState
   })
 
+  const { isLaunchingReviewChangesAgent, handleReviewChangesWithAI } =
+    useSourceControlReviewChangesAi({
+      activeWorktreeId,
+      activeGroupId,
+      activeSourceControlLaunchPlatform,
+      sourceRepoConnectionId: activeRepo?.connectionId,
+      worktreePath,
+      compareBaseRef,
+      getLaunchActionRecipe: getCurrentLaunchActionRecipe,
+      getStoreState
+    })
+
   const openCommitGenerationDialog = useCallback((): void => {
     setCommitGenerationDialogOpen(true)
   }, [])
@@ -232,6 +246,7 @@ export function useSourceControlAi({
     openPullRequestGenerationDialog,
     isLaunchingCommitFailureAgent,
     isLaunchingPushFailureAgent,
+    isLaunchingReviewChangesAgent,
     resolveConflictsPrompt,
     commitFailureRecoveryPrompt,
     pushFailureRecoveryPrompt,
@@ -240,6 +255,7 @@ export function useSourceControlAi({
     handleResolveConflictsWithAI,
     handleFixCommitFailureWithAI,
     handleFixPushFailureWithAI,
+    handleReviewChangesWithAI,
     handleSaveCommitMessageGenerationDefaults,
     handleSavePullRequestGenerationDefaults,
     openSourceControlAiSettings

@@ -102,7 +102,9 @@ export const FolderWorkspaceUpdate = z.object({
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
       lastActivityAt: OptionalFiniteNumber,
-      diffComments: z.array(DiffCommentSchema).optional()
+      diffComments: z.array(DiffCommentSchema).optional(),
+      // The list the writer started from; the host applies only its changes so other writers' notes survive.
+      diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined)
     })
     .superRefine(assertLinkedTaskSourceContextMatch)
 })

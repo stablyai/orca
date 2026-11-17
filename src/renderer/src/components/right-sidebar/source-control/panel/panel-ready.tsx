@@ -31,12 +31,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleCreatePrHeaderClick,
     handleOpenComment,
     handleRelinkSuppressedGitHubPR,
+    handleReviewChangesWithAI,
     handleSourceControlKeyDown,
     handleToggleSourceControlViewMode,
     hostedReview,
     isCreatePrIntentInFlight,
     isCreatingPr,
     isExecutingBulk,
+    isLaunchingReviewChangesAgent,
     manualReviewUrl,
     openHostedReviewInChecks,
     prGenerating,
@@ -50,6 +52,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setPendingDiffCommentsClear,
     setSourceControlRoot,
     settings,
+    sourceControlAiActionsVisible,
     sourceControlViewMode,
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
@@ -94,6 +97,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
+          onReviewChanges={
+            sourceControlAiActionsVisible ? () => void handleReviewChangesWithAI() : undefined
+          }
+          reviewChangesDisabled={isLaunchingReviewChangesAgent || !worktreePath}
           branchSummary={branchSummary}
           branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}

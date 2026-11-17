@@ -12262,7 +12262,8 @@
                   "supportedAgents": "Supported agents for this recipe: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.",
                   "resolveComments": "Start an agent from selected unresolved PR or MR comments.",
-                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails.",
+                  "reviewChanges": "Start an agent that reviews the changes and leaves its findings as review notes."
                 }
               }
             }
@@ -23636,6 +23637,11 @@
       "switchedIn": "In {{workspace}}",
       "thisComputer": "this computer",
       "updateHost": "Update Orca on {{host}} to switch branches from here."
+    },
+    "reviewChanges": {
+      "menuItem": "Review changes with AI",
+      "emptyPrompt": "Change review prompt is empty. Update Source Control AI settings.",
+      "started": "Started an AI agent to review the changes. Its findings will appear as notes."
     }
   },
   "agentsSidebarIntro": {

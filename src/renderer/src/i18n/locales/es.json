@@ -10902,7 +10902,8 @@
                   "unsupportedSavedAgent": "{{value0}} no puede ejecutar esta acción de generación de texto. Elige uno de los agentes compatibles a continuación.",
                   "resolveComments": "Inicia un agente a partir de comentarios de PR o MR sin resolver seleccionados.",
                   "fixPushFailure": "Inicia un agente cuando falla un hook pre-push o un git push.",
-                  "commitMessageSharedModel": "Los detalles de la solicitud de extracción, el nombre de la rama y el nombre del chat también pueden usar este modelo si no eligen uno propio; su opción «Igual que el predeterminado» muestra qué modelo usan."
+                  "commitMessageSharedModel": "Los detalles de la solicitud de extracción, el nombre de la rama y el nombre del chat también pueden usar este modelo si no eligen uno propio; su opción «Igual que el predeterminado» muestra qué modelo usan.",
+                  "reviewChanges": "Inicia un agente que revisa los cambios y deja sus hallazgos como notas de revisión."
                 }
               }
             }
@@ -22350,6 +22351,11 @@
       "switchedIn": "En {{workspace}}",
       "thisComputer": "este equipo",
       "updateHost": "Actualiza Orca en {{host}} para cambiar de rama desde aquí."
+    },
+    "reviewChanges": {
+      "menuItem": "Revisar cambios con AI",
+      "emptyPrompt": "El prompt de revisión de cambios está vacío. Actualiza la configuración de AI de Control de Código.",
+      "started": "Se inició un agente de AI para revisar los cambios. Sus hallazgos aparecerán como notas."
     }
   },
   "aiVault": {

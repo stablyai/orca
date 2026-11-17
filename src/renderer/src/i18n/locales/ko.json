@@ -10612,7 +10612,8 @@
                   "unsupportedSavedAgent": "{{value0}}은(는) 이 텍스트 생성 레시피를 실행할 수 없습니다. 아래에서 지원되는 에이전트 중 하나를 선택하세요.",
                   "resolveComments": "선택한 해결되지 않은 PR 또는 MR 댓글에서 agent를 시작합니다.",
                   "fixPushFailure": "pre-push 훅이나 git push가 실패할 때 에이전트를 시작합니다.",
-                  "commitMessageSharedModel": "PR 상세 정보, 브랜치 이름 및 채팅 이름에서도 별도 모델을 선택하지 않으면 이 모델을 사용할 수 있습니다. 해당 항목의 ‘기본값과 동일’ 옵션에 사용할 모델이 표시됩니다."
+                  "commitMessageSharedModel": "PR 상세 정보, 브랜치 이름 및 채팅 이름에서도 별도 모델을 선택하지 않으면 이 모델을 사용할 수 있습니다. 해당 항목의 ‘기본값과 동일’ 옵션에 사용할 모델이 표시됩니다.",
+                  "reviewChanges": "변경 사항을 검토하고 발견한 문제를 리뷰 메모로 남기는 agent를 시작합니다."
                 }
               }
             }
@@ -21262,6 +21263,11 @@
       "switchedIn": "{{workspace}}에서",
       "thisComputer": "이 컴퓨터",
       "updateHost": "여기서 브랜치를 전환하려면 {{host}}의 Orca를 업데이트하세요."
+    },
+    "reviewChanges": {
+      "menuItem": "AI로 변경 사항 검토",
+      "emptyPrompt": "변경 사항 검토 프롬프트가 비어 있습니다. 소스 컨트롤 AI 설정을 업데이트하세요.",
+      "started": "변경 사항을 검토할 AI 에이전트가 시작되었습니다. 발견한 문제는 메모로 표시됩니다."
     }
   },
   "rendererRecovery": {

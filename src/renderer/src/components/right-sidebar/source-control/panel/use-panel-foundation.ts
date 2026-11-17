@@ -89,6 +89,7 @@ export function useSourceControlPanelFoundation() {
     unresolvedConflicts: listing.unresolvedConflicts,
     stagedEntries: listing.grouped.staged,
     worktreePath,
+    compareBaseRef: reviewContext.compareBaseRef,
     commitMessage,
     commitError,
     pushRecoveryPrompt: listing.pushRecovery?.prompt ?? null,

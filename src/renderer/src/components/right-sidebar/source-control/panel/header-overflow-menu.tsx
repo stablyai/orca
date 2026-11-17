@@ -6,6 +6,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Settings2,
+  Sparkle,
   Unlink
 } from 'lucide-react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -33,6 +34,9 @@ type PanelActions = {
   branchCompareRefreshDisabled: boolean
   diffCommentCount: number
   onExpandNotes: () => void
+  /** Absent when Source Control AI is off for this repository. */
+  onReviewChanges?: () => void
+  reviewChangesDisabled?: boolean
 }
 
 export function SourceControlHeaderOverflowMenu({
@@ -104,6 +108,18 @@ export function SourceControlHeaderOverflowMenu({
                 'Refresh branch compare'
               )}
             </DropdownMenuItem>
+            {panelActions.onReviewChanges ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={panelActions.reviewChangesDisabled}
+                  onSelect={panelActions.onReviewChanges}
+                >
+                  <Sparkle className="size-3.5" />
+                  {t('sourceControl.reviewChanges.menuItem', 'Review changes with AI')}
+                </DropdownMenuItem>
+              </>
+            ) : null}
             {panelActions.diffCommentCount > 0 ? (
               <>
                 <DropdownMenuSeparator />

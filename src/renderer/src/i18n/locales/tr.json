@@ -11466,7 +11466,8 @@
                   "unsupportedSavedAgent": "{{value0}} bu metin oluşturma tarifini çalıştıramaz. Aşağıdaki desteklenen ajanlardan birini seçin.",
                   "resolveComments": "Seçilen çözülmemiş PR veya MR yorumlarından bir ajan başlatın.",
                   "fixPushFailure": "Bir pre-push hook'u veya git push başarısız olduğunda bir ajan başlatın.",
-                  "commitMessageSharedModel": "Pull request ayrıntıları, dal adı ve sohbet adı da kendi modellerini seçmediklerinde bu modeli kullanabilir; “Varsayılanla aynı” seçeneği hangi modeli kullandıklarını gösterir."
+                  "commitMessageSharedModel": "Pull request ayrıntıları, dal adı ve sohbet adı da kendi modellerini seçmediklerinde bu modeli kullanabilir; “Varsayılanla aynı” seçeneği hangi modeli kullandıklarını gösterir.",
+                  "reviewChanges": "Değişiklikleri inceleyip bulgularını inceleme notu olarak bırakan bir ajan başlatın."
                 }
               }
             }
@@ -21667,6 +21668,11 @@
       "switchedIn": "{{workspace}} içinde",
       "thisComputer": "bu bilgisayar",
       "updateHost": "Buradan dal değiştirmek için {{host}} üzerindeki Orca'yı güncelleyin."
+    },
+    "reviewChanges": {
+      "menuItem": "Değişiklikleri AI ile incele",
+      "emptyPrompt": "Değişiklik inceleme istemi boş. Kaynak Kontrolü AI ayarlarını güncelleyin.",
+      "started": "Değişiklikleri incelemek için bir AI ajanı başlatıldı. Bulguları not olarak görünecek."
     }
   },
   "agentsSidebarIntro": {
