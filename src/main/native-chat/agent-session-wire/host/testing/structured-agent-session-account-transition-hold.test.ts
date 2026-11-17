@@ -324,3 +324,30 @@ it('never hands the old account a send it could not keep, and delivers it on the
   expect(chat.dispatchedTo('unkept')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })
+
+it('sends a queued card back to wait when the old account turns out busy as it is handed over', async () => {
+  const chat = await chatOnAccountA()
+  const first = rig!.send('first turn')
+  await first.result
+  await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
+  const queued = rig!.send('queued next', 'queue-if-active')
+  await queued.result
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
+  )
+  chat.switchTo('/homes/b')
+  // The agent reports a background command once the card is claimed, before it is handed over.
+  chat.onNextAccountRead(() => chat.background([devServer()]))
+  await rig!.settleAccepted(first.id, 'first turn')
+
+  await eventually(() => expect(chat.accountReads()).toBeGreaterThan(0))
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
+  )
+  expect(chat.dispatchedTo('queued next')).toEqual([])
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
+  expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})

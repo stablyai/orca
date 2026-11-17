@@ -104,9 +104,13 @@ export function applyJournalDomainInputRecovery(
   const selected = recoverableSubmissions(
     db,
     target,
-    operation.kind === 'hold-unsent' && operation.hold.cause === 'accountMove'
-      ? operation.hold.select.only?.clientMessageId
-      : undefined
+    operation.kind === 'hold-unsent'
+      ? operation.hold.cause === 'accountMove'
+        ? operation.hold.select.only?.clientMessageId
+        : undefined
+      : operation.kind === 'queued-reject'
+        ? operation.select?.only?.clientMessageId
+        : undefined
   )
   if (operation.kind === 'hold-unsent') {
     return holdUnsent(db, target, operation, facts, savedAt, selected, result)
