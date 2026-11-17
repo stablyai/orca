@@ -36,6 +36,8 @@ type TrustDialogStatusDeps = {
   readLaunchedAgentForeground: (ptyId: string, agent: TuiAgent) => Promise<LaunchedAgentForeground>
   /** The PTY's current screen model; replaced on renderer-snapshot recovery, undefined once gone. */
   getEmulator: (ptyId: string) => HeadlessEmulator | undefined
+  /** A model still being rebuilt is no evidence the card closed. */
+  isScreenRestoring: (ptyId: string) => boolean
   readStatus: (ptyId: string) => AgentStatusIpcPayload | undefined
   /** A sidebar projection of the blocked text agentWait already reads, never first-party agent evidence. */
   publish: (ptyId: string, payload: ParsedAgentStatusPayload) => void
@@ -194,7 +196,7 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.outputSinceRead = false
-    if (emulator.isSynchronizedOutput) {
+    if (emulator.isSynchronizedOutput || this.deps.isScreenRestoring(ptyId)) {
       return true
     }
     const card = startupDialogPrompt(emulator, owned.agent)

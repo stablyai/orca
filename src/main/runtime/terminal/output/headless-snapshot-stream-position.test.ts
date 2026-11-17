@@ -114,3 +114,32 @@ it('reseeds the model from the provider after a dropped span instead of trusting
     await runtime.onPtyExit('pty-gap', 0)
   }
 })
+
+it('recaptures instead of seeding a snapshot taken before the dropped span', async () => {
+  const snapshots: PtyProviderBufferSnapshot[] = [
+    { data: 'before-gap', ...grid, seq: 7, source: 'headless' },
+    { data: '\x1b[H\x1b[2Jfresh\r\ntail', ...grid, seq: 20, source: 'headless' }
+  ]
+  let captures = 0
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async () => snapshots[Math.min(captures++, 1)]
+  })
+  try {
+    runtime.onPtyData('pty-stale', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-stale', 9)
+    runtime.onPtyData('pty-stale', 'tail', 2)
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-stale')
+    expect(captures).toBe(2)
+    expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
+  } finally {
+    await runtime.onPtyExit('pty-stale', 0)
+  }
+})

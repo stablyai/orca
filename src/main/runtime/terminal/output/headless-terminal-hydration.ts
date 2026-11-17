@@ -36,6 +36,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
     getEmulator: (ptyId) =>
       this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
+    isScreenRestoring: (ptyId) => this.headlessHydrationState.get(ptyId) === 'pending',
     readStatus: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined
