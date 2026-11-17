@@ -29,8 +29,8 @@ import {
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
 import {
   isBrowserExtensionPageContents,
-  scheduleIdleBrowserExtensionProfileCheck,
-  setIdleBrowserExtensionPageObserver
+  setIdleBrowserExtensionPageObserver,
+  trackBrowserExtensionPage
 } from './profile-sessions/browser-extension-idle-profiles'
 import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
 import {
@@ -130,8 +130,7 @@ function observeExtensionContents(contents: Electron.WebContents): void {
     return
   }
   observedContents.add(contents)
-  const sess = contents.session
-  contents.once('destroyed', () => scheduleIdleBrowserExtensionProfileCheck(profileId, sess))
+  trackBrowserExtensionPage(profileId, contents)
   // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
   if (!isBrowserExtensionSidePanelGuest(contents)) {
     observeBrowserExtensionWebNavigation(contents)

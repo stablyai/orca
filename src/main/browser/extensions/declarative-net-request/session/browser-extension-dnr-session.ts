@@ -268,15 +268,20 @@ export function attachBrowserExtensionDnr(
   profileId: string,
   enabledExtensionIds: readonly string[]
 ): void {
-  if (runtimes.has(session)) {
-    return
-  }
-  const runtime = new DnrSessionRuntime(session, profileId)
-  runtimes.set(session, runtime)
   const installs = getBrowserExtensionInstallStore()
   const expectsRules = enabledExtensionIds.some((id) =>
     installs.get(id)?.permissions.some((permission) => DNR_PERMISSIONS.includes(permission))
   )
+  const existing = runtimes.get(session)
+  // A session attached again (idle profile reopened, extensions turned back on) holds requests again.
+  if (existing) {
+    if (expectsRules) {
+      existing.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+    }
+    return
+  }
+  const runtime = new DnrSessionRuntime(session, profileId)
+  runtimes.set(session, runtime)
   if (expectsRules) {
     runtime.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
   }

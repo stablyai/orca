@@ -189,6 +189,18 @@ export function listDiscardedBrowserTabs(): DiscardedBrowserTab[] {
   return tabs
 }
 
+/**
+ * Whether the saved workspace session still holds a web page in this extension session, freed or
+ * not shown yet. A closed page leaves it with the renderer's next session write.
+ */
+export function hasSavedBrowserTabInSession(sess: Electron.Session): boolean {
+  let found = false
+  if (source) {
+    visitSavedPages(source, (_page, session) => (found = session === sess))
+  }
+  return found
+}
+
 /** Looks up one page without listing (and numbering) every other discarded tab. */
 export function findDiscardedBrowserTabForPage(browserPageId: string): DiscardedBrowserTab | null {
   if (!source || unloadedPageIds.has(browserPageId) || hasLiveGuest(browserPageId)) {
