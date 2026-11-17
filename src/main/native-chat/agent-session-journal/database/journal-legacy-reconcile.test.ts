@@ -18,6 +18,7 @@ import { JournalSqlConversions } from '../journal-sql-conversions'
 import { journalSqlReaderPath } from '../journal-sql-worker-bundle.test-fixture'
 import { applyJournalSqlMaintenance } from '../journal-sql-maintenance'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
+import { AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readJournalSqlDatabase } from '../journal-sql-database-read'
 
 const cleanup: (() => Promise<void> | void)[] = []
@@ -354,6 +355,48 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 2
   })
+})
+
+it('keeps a message an older Orca queued in a chat from before revisions were kept', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'queued', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('queued')).toBe('epoch')
+  asOlderChatStore(first.db)
+  await first.close()
+
+  insertJournalRow(original, 'queued', {
+    v: AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION,
+    epoch: 'epoch',
+    seq: tip + 1,
+    ts: 100,
+    fence: 1,
+    kind: 'queue',
+    messageId: 'older-queued',
+    change: {
+      op: 'queued',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
+      position: 1,
+      queuedAt: null
+    }
+  })
+  const compared = await upgrade(root)
+  await compared.compare()
+  await compared.close()
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const copy = later.db
+    .prepare("SELECT session_id FROM agent_session_records WHERE session_id!='queued'")
+    .get()?.session_id
+  expect(await later.convert(String(copy))).toBe('epoch')
+  expect(
+    later.db
+      .prepare('SELECT message_id FROM journal_queue_cards WHERE session_id=?')
+      .all(String(copy))
+  ).toEqual([{ message_id: 'older-queued' }])
 })
 
 it('records a chat it cannot keep and does not retry it until the older Orca writes it again', async () => {

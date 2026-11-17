@@ -1,5 +1,6 @@
 import type Database from '../../../sqlite/sync-database'
 import { isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
+import { isUnsettledQueuedMessage } from '../queued-messages/queued-message-table'
 import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
 import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
 import {
@@ -40,7 +41,7 @@ export function compareJournalLegacyChat(
   db: Database.Database,
   sessionId: string
 ): { revision: string; held: boolean } | { error: string } | null {
-  const held = heldItems(db, sessionId)
+  const held = { items: heldItems(db, sessionId), cards: heldCards(db, sessionId) }
   try {
     const source = openSource()
     if (!source) {
@@ -101,14 +102,31 @@ function heldItems(db: Database.Database, id: string): Map<string, number> {
   )
 }
 
+/** Every card this chat ever queued, whatever became of it. */
+function heldCards(db: Database.Database, id: string): Set<string> {
+  return new Set(
+    db
+      .prepare('SELECT DISTINCT message_id AS id FROM journal_queue_cards WHERE session_id=?')
+      .all(id)
+      .map((row) => String(row.id))
+  )
+}
+
+/** A message the older Orca queued and never sent has no item, only its card. */
 function heldEveryItem(
-  held: Map<string, number>,
+  held: { items: Map<string, number>; cards: Set<string> },
   pages: Iterable<JournalDomainImportPage>
 ): boolean {
   for (const page of pages) {
     if (
       page.kind === 'items' &&
-      !page.rows.every(({ item }) => (held.get(item.itemId) ?? -1) >= item.revision)
+      !page.rows.every(({ item }) => (held.items.get(item.itemId) ?? -1) >= item.revision)
+    ) {
+      return false
+    }
+    if (
+      page.kind === 'cards' &&
+      page.rows.some((card) => isUnsettledQueuedMessage(card) && !held.cards.has(card.messageId))
     ) {
       return false
     }
