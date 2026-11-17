@@ -58,12 +58,20 @@ export function showKeptSurfaceNotice({
         ? translate(
             'settings.agents.defaultSurfaceKeptTerminal',
             '{{agents}} stay in the terminal, as you set.',
-            { ...values, defaultValue_one: '{{agents}} stays in the terminal, as you set.' }
+            {
+              ...values,
+              count: values.count,
+              defaultValue_one: '{{agents}} stays in the terminal, as you set.'
+            }
           )
         : translate(
             'settings.agents.defaultSurfaceKeptChat',
             '{{agents}} stay as chats, as you set.',
-            { ...values, defaultValue_one: '{{agents}} stays as a chat, as you set.' }
+            {
+              ...values,
+              count: values.count,
+              defaultValue_one: '{{agents}} stays as a chat, as you set.'
+            }
           ),
       action: {
         label: chat

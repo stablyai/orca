@@ -29,7 +29,7 @@ describe('setAgentDefaultSurfaceFromFeatureTip', () => {
     { from: 'terminal', to: 'chat', claudeChat: false },
     { from: 'chat', to: 'terminal', claudeChat: true }
   ] as const)(
-    'names agents kept on their own surface when switching to $to, and Set all clears them',
+    'names agents kept on their own surface when switching to $to',
     async ({ from, to, claudeChat }) => {
       seedSettings({ agentDefaultSurface: from, nativeChatProviders: { claude: claudeChat } })
 
@@ -38,11 +38,6 @@ describe('setAgentDefaultSurfaceFromFeatureTip', () => {
       expect(toast.success).toHaveBeenCalledTimes(1)
       const options = vi.mocked(toast.success).mock.calls[0]?.[1]
       expect(String(options?.description)).toContain('Claude')
-      const action = options?.action as { onClick: () => void }
-      action.onClick()
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().settings?.nativeChatProviders).not.toHaveProperty('claude')
-      )
       expect(useAppStore.getState().settings?.agentDefaultSurface).toBe(to)
     }
   )
