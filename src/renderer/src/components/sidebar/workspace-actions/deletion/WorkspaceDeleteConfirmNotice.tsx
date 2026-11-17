@@ -1,6 +1,6 @@
 import React from 'react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 
 export function WorkspaceDeleteConfirmNotice({

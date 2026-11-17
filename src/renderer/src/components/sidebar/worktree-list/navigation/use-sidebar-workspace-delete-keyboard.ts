@@ -9,7 +9,7 @@ import {
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   armWorkspaceDeleteConfirmation,
   confirmWorkspaceDeleteConfirmation
