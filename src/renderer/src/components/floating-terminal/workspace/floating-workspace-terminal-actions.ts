@@ -7,9 +7,9 @@ import {
   getNextTerminalCycleTab,
   getNextTabWithinActiveType,
   getPreviousRecentTab,
-  type TabCycleType,
   type TypeCyclableTab
-} from '@/components/terminal/tab-type-cycle'
+} from '@/lib/workspace/tabs/tab-type-cycle'
+import type { WorkspaceVisibleTabType as TabCycleType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import {
   selectEmptyFloatingWorkspacePanelVisible,
