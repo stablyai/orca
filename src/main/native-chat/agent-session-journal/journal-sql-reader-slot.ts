@@ -11,7 +11,7 @@ import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
 import {
   claimJournalReaderRecord,
-  JournalReaderReservedChats,
+  describeJournalReaderOperation,
   recordJournalReaderRequest,
   type JournalReaderRunningRequest,
   releaseJournalReaderRecord
@@ -31,13 +31,14 @@ export class JournalSqlForkReader {
   constructor(
     private readonly slot: ReaderSlot,
     private readonly preparationId: number,
-    private readonly release: () => void
+    private readonly release: () => void,
+    private readonly chat: string | null
   ) {}
   async next(): Promise<JournalForkPreparationResult> {
-    const response = await this.slot.request({
-      kind: 'fork-next',
-      preparationId: this.preparationId
-    })
+    const response = await this.slot.request(
+      { kind: 'fork-next', preparationId: this.preparationId },
+      this.chat
+    )
     if (response.type !== 'fork-next') {
       throw new Error('fork reader returned no preparation step')
     }
@@ -45,7 +46,7 @@ export class JournalSqlForkReader {
   }
   close(): Promise<void> {
     return (this.closing ??= this.slot
-      .request({ kind: 'fork-release', preparationId: this.preparationId })
+      .request({ kind: 'fork-release', preparationId: this.preparationId }, this.chat)
       .then(() => {})
       .finally(this.release))
   }
@@ -59,14 +60,15 @@ export class JournalSqlConversionReader {
     readonly header: JournalDomainImportHeader,
     private readonly slot: ReaderSlot,
     private readonly conversionId: number,
-    private readonly release: () => void
+    private readonly release: () => void,
+    private readonly chat: string | null
   ) {}
 
   async next(): Promise<JournalDomainImportPage | null> {
-    const response = await this.slot.request({
-      kind: 'conversion-page',
-      conversionId: this.conversionId
-    })
+    const response = await this.slot.request(
+      { kind: 'conversion-page', conversionId: this.conversionId },
+      this.chat
+    )
     if (response.type !== 'rows') {
       throw new Error('journal reader returned no conversion page')
     }
@@ -75,7 +77,7 @@ export class JournalSqlConversionReader {
 
   close(): Promise<void> {
     return (this.closing ??= this.slot
-      .request({ kind: 'conversion-release', conversionId: this.conversionId })
+      .request({ kind: 'conversion-release', conversionId: this.conversionId }, this.chat)
       .then(() => {})
       .finally(this.release))
   }
@@ -88,13 +90,13 @@ export class ReaderSlot {
     number,
     {
       operation: JournalSqlReaderOperation
+      chat?: string | null
       resolve: (response: JournalSqlReaderResult) => void
       reject: (error: Error) => void
     }
   >()
   private record?: number
   private running?: { id: number; queued: number; request: JournalReaderRunningRequest }
-  private readonly reservedChats = new JournalReaderReservedChats()
   failed = false
   private failure?: Error
   private conversions = 0
@@ -159,17 +161,20 @@ export class ReaderSlot {
     input: JournalForkPreparationInput,
     release: () => void
   ): Promise<JournalSqlForkReader> {
-    const request = this.send({ kind: 'fork-prepare', input })
+    const operation = { kind: 'fork-prepare', input } as const
+    const request = this.send(operation)
     const result = await request.result
     if (result.type !== 'fork-prepared') {
       throw new Error('fork reader returned no preparation')
     }
-    return new JournalSqlForkReader(this, request.id, release)
+    const { chat } = describeJournalReaderOperation(operation)
+    return new JournalSqlForkReader(this, request.id, release, chat)
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
     this.conversions++
-    const request = this.send({ kind: 'conversion-prepare', sessionId })
+    const operation = { kind: 'conversion-prepare', sessionId } as const
+    const request = this.send(operation)
     try {
       const response = await request.result
       if (response.type !== 'prepared') {
@@ -179,20 +184,29 @@ export class ReaderSlot {
         this.conversions--
         return null
       }
-      return new JournalSqlConversionReader(response.conversion, this, request.id, () => {
+      const { chat } = describeJournalReaderOperation(operation)
+      const release = () => {
         this.conversions--
-      })
+      }
+      return new JournalSqlConversionReader(response.conversion, this, request.id, release, chat)
     } catch (error) {
       this.conversions--
       throw error
     }
   }
 
-  request(operation: JournalSqlReaderOperation): Promise<JournalSqlReaderResult> {
-    return this.send(operation).result
+  /** `chat` names a reservation step's chat, which its operation doesn't carry. */
+  request(
+    operation: JournalSqlReaderOperation,
+    chat?: string | null
+  ): Promise<JournalSqlReaderResult> {
+    return this.send(operation, chat).result
   }
 
-  private send(operation: JournalSqlReaderOperation): {
+  private send(
+    operation: JournalSqlReaderOperation,
+    chat?: string | null
+  ): {
     id: number
     result: Promise<JournalSqlReaderResult>
   } {
@@ -210,7 +224,7 @@ export class ReaderSlot {
     }
     this.worker.ref()
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
-      this.pending.set(id, { operation, resolve, reject })
+      this.pending.set(id, { operation, chat, resolve, reject })
       this.recordRunning()
       void this.ready.promise
         .then(() => {
@@ -276,16 +290,20 @@ export class ReaderSlot {
       recordJournalReaderRequest(this.record, null)
       return
     }
-    const [id, { operation }] = oldest
-    const request: JournalReaderRunningRequest =
-      id === this.running?.id
-        ? { ...this.running.request, queued }
-        : {
-            ...this.reservedChats.describe(id, operation),
-            startedAt: Date.now(),
-            queued,
-            threadId: this.worker.threadId
-          }
+    const [id, { operation, chat }] = oldest
+    let request: JournalReaderRunningRequest
+    if (id === this.running?.id) {
+      request = { ...this.running.request, queued }
+    } else {
+      const described = describeJournalReaderOperation(operation)
+      request = {
+        operation: described.operation,
+        chat: chat === undefined ? described.chat : chat,
+        startedAt: Date.now(),
+        queued,
+        threadId: this.worker.threadId
+      }
+    }
     this.running = { id, queued, request }
     recordJournalReaderRequest(this.record, request)
   }
