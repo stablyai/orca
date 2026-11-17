@@ -8,6 +8,7 @@ import { getSelectedDeletableCandidates } from '../browse/workspace-cleanup-sele
 import { useWorkspaceCleanupHeldRows } from '../candidate-list/use-workspace-cleanup-row-order'
 import type { WorkspaceCleanupFacets } from '../query/workspace-cleanup-facets'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import { makeFacets } from '../query/workspace-cleanup-facet.test.fixture'
 import { useWorkspaceCleanupGroupedRows } from './use-workspace-cleanup-grouped-rows'
 
 // Both list hooks wired the way the dialog wires them: the held order reads the FILTERED rows
@@ -31,12 +32,8 @@ const dirty = (candidate: WorkspaceCleanupCandidate) => ({
   blockers: [...candidate.blockers, 'dirty-files' as const]
 })
 const unchecked = (candidate: WorkspaceCleanupCandidate) => ({ ...candidate, git: UNCHECKED })
-const facet = (candidate: WorkspaceCleanupCandidate) =>
-  ({
-    candidate,
-    identity: getWorkspaceCleanupCandidateIdentity(candidate),
-    isSelectable: true
-  }) as WorkspaceCleanupFacets
+const facet = (candidate: WorkspaceCleanupCandidate): WorkspaceCleanupFacets =>
+  makeFacets({ candidate })
 const names = (rows: readonly WorkspaceCleanupFacets[]) => rows.map((r) => r.candidate.displayName)
 const pendingFor = (...candidates: WorkspaceCleanupCandidate[]) =>
   new Set(candidates.map((candidate) => candidate.worktreeId))

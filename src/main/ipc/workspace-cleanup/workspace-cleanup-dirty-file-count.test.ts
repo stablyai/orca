@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
 import { countWorkspaceCleanupDirtyFiles } from './workspace-cleanup-git-evidence'
 
-const entry = (path: string, area: 'staged' | 'unstaged' | 'untracked') =>
-  ({ path, area, status: 'modified' }) as never
+const entry = (path: string, area: GitStatusEntry['area']): GitStatusEntry => ({
+  path,
+  area,
+  status: 'modified'
+})
 
 describe('countWorkspaceCleanupDirtyFiles', () => {
   it('counts a partly staged file once', () => {

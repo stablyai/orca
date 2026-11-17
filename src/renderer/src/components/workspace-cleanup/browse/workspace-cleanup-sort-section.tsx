@@ -45,9 +45,10 @@ export function WorkspaceCleanupSortSection({
               size="xs"
               aria-pressed={active}
               onClick={() => onToggleSortField(field)}
-              className={cn('text-xs', !active && 'text-muted-foreground')}
             >
-              {getWorkspaceCleanupSortFieldLabel(field, t)}
+              <span className={cn(!active && 'text-muted-foreground')}>
+                {getWorkspaceCleanupSortFieldLabel(field, t)}
+              </span>
               {active ? <DirectionIcon className="size-3" aria-hidden="true" /> : null}
             </Button>
           )
@@ -78,12 +79,12 @@ function SizeScanButton({
     <Button
       variant="outline"
       size="xs"
-      className="mt-2 text-xs tabular-nums"
+      className="mt-2"
       disabled={scanning}
       onClick={onRun}
     >
       {scanning ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : null}
-      {label}
+      <span className="tabular-nums">{label}</span>
     </Button>
   )
 }

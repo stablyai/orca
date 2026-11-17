@@ -33,7 +33,7 @@ describe('WorkspaceCleanupConfirmStep', () => {
       <Dialog>
         <WorkspaceCleanupConfirmStep
           candidates={candidates}
-          now={Date.now()}
+          now={1_700_000_000_000}
           onBack={vi.fn()}
           onClose={vi.fn()}
           onConfirm={vi.fn()}

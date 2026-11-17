@@ -22,7 +22,7 @@ import {
 } from './dialog/workspace-cleanup-group-cards'
 import { WorkspaceCleanupSelectAllBar } from './dialog/workspace-cleanup-select-all-bar'
 import { WorkspaceCleanupPickFooter } from './dialog/workspace-cleanup-pick-footer'
-import { useWorkspaceCleanupGroupedRows } from './dialog/use-workspace-cleanup-grouped-rows'
+import { useWorkspaceCleanupPickRows } from './dialog/use-workspace-cleanup-pick-rows'
 import { listActiveWorkspaceCleanupFacetGroups } from './browse/workspace-cleanup-active-facets'
 import type { WorkspaceCleanupGroup } from '../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { WorkspaceCleanupConfirmStopAgents } from './removal/agent-consent/workspace-cleanup-confirm-stop-agents'
@@ -49,11 +49,9 @@ import { useWorkspaceCleanupGitEvidence } from './candidate-evidence/use-workspa
 import { useWorkspaceCleanupBulkSelection } from './browse/use-workspace-cleanup-bulk-selection'
 import { useWorkspaceCleanupSpaceScan } from './browse/use-workspace-cleanup-space-scan'
 import { useWorkspaceCleanupIgnore } from './browse/use-workspace-cleanup-ignore'
-import { useWorkspaceCleanupHeldRows } from './candidate-list/use-workspace-cleanup-row-order'
 import { openWorkspaceCleanupForgetLocally } from './removal/workspace-cleanup-forget-locally-button'
 import {
   formatWithheldSelectionNotice,
-  getSelectedDeletableCandidates,
   toggleSetMember
 } from './browse/workspace-cleanup-selection-model'
 
@@ -166,21 +164,26 @@ function WorkspaceCleanupDialogContent({
       }
     }
   }, [markListInteracted, rowsScrollElement])
-  const liveRowByIdentity = useMemo(
-    () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
-    [facetRows.allRows]
-  )
-  const orderResetKey = `${browse.sort.field}:${browse.sort.direction}:${JSON.stringify(browse.filters)}`
-  const { rows, releaseRows } = useWorkspaceCleanupHeldRows({
+  const {
+    rowsByGroup,
+    groupSummaries,
+    getRowGroup,
+    resetGroups,
+    uncheckedCount,
+    updatesAvailable,
+    releaseRows,
+    selectedCandidates
+  } = useWorkspaceCleanupPickRows({
     liveRows: facetRows.rows,
-    liveRowByIdentity,
-    resetKey: orderResetKey,
+    allRows: facetRows.allRows,
+    sort: browse.sort,
+    filters: browse.filters,
+    candidates: evidencedCandidates,
     open,
     loading,
-    gitChecking: gitEvidence.pendingWorktreeIds.size > 0,
-    // Selected rows are never hidden: a Refresh reset keeps them even if late evidence made
-    // them stop matching the filters. Only the user's own filter change prunes them.
-    keepIdentities: selectedIds,
+    gitEvidence,
+    selectedIds,
+    deletingIdentities,
     // Re-sorting at settle is safe only while the user has not started working in the list.
     shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
   })
@@ -258,32 +261,6 @@ function WorkspaceCleanupDialogContent({
     [setSelectedIds]
   )
 
-  const {
-    rowsByGroup,
-    groupSummaries,
-    getRowGroup,
-    resetGroups,
-    uncheckedCount,
-    updatesAvailable,
-    visibleIdentities
-  } = useWorkspaceCleanupGroupedRows({
-    rows,
-    candidates: evidencedCandidates,
-    open,
-    scanning: loading,
-    gitEvidence,
-    selectedIds,
-    deletingIdentities
-  })
-  const selectedCandidates = useMemo(
-    () =>
-      getSelectedDeletableCandidates(
-        rows.filter((row) => visibleIdentities.has(row.identity)),
-        selectedIds,
-        deletingIdentities
-      ),
-    [deletingIdentities, rows, selectedIds, visibleIdentities]
-  )
   const selectedCount = selectedCandidates.length
   const hasActiveFilters = useMemo(
     () =>

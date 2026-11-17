@@ -10,7 +10,9 @@ const cardVariants = cva(
       size: {
         default: 'gap-6 py-6',
         sm: 'gap-3 py-2.5 shadow-xs',
-        list: 'gap-6 py-1'
+        list: 'gap-6 py-1',
+        // A card in the bottom-right notification stack: content owns its padding, and it floats.
+        floating: 'gap-0 py-0 shadow-floating'
       }
     },
     defaultVariants: { size: 'default' }

@@ -5,9 +5,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import type { WorkspaceCleanupReviewInfo } from '../candidate-evidence/workspace-cleanup-review-lookup'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 
 vi.mock('@/store', () => ({ useAppStore: () => undefined }))
+
+const NO_REVIEW: WorkspaceCleanupReviewInfo = {
+  hasReview: false,
+  label: null,
+  state: null,
+  provider: null,
+  title: null
+}
 
 let root: Root | null = null
 afterEach(() => {
@@ -30,7 +39,7 @@ function render(candidate = makeCandidate(), group: WorkspaceCleanupGroup): HTML
           expanded={false}
           last={false}
           lastActivityLabel="1d ago"
-          reviewInfo={{ hasReview: false, label: null, state: null, provider: null } as never}
+          reviewInfo={NO_REVIEW}
           repo={null}
           selected={false}
           onIgnore={noop}

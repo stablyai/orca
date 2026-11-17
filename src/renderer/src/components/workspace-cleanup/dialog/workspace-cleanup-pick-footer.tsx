@@ -28,7 +28,7 @@ export function WorkspaceCleanupPickFooter({
     </Button>
   )
   return (
-    <DialogFooter className="items-center border-t border-border px-4 py-3 sm:justify-between">
+    <DialogFooter variant="bar" className="items-center sm:justify-between">
       <span className="text-sm text-muted-foreground">
         {t('components.workspace.cleanup.footer.selected', '{{count}} selected', {
           count: selectedCount

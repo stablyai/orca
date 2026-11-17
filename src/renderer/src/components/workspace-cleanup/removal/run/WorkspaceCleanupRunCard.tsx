@@ -46,7 +46,7 @@ export function WorkspaceCleanupRunCardContent({
   )
   const runningTitle = t('components.workspace.cleanup.runCard.title', 'Deleting workspaces')
   return (
-    <Card className="gap-0 py-0 shadow-floating" role="group" aria-label={runningTitle}>
+    <Card size="floating" role="group" aria-label={runningTitle}>
       {/* Only this line is live, and it changes at start and finish, never per workspace. */}
       <p role="status" className="sr-only">
         {running ? runningTitle : finishedTitle}

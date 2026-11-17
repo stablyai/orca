@@ -6,6 +6,7 @@ import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/work
 import type { WorkspaceCleanupFacets } from '../query/workspace-cleanup-facets'
 import { getSelectedDeletableCandidates } from '../browse/workspace-cleanup-selection-model'
 import { makeCandidate } from '../query/workspace-cleanup-candidate-state.test-fixture'
+import { makeFacets } from '../query/workspace-cleanup-facet.test.fixture'
 import { useWorkspaceCleanupGroupedRows } from './use-workspace-cleanup-grouped-rows'
 
 const NONE: ReadonlySet<string> = new Set()
@@ -13,12 +14,8 @@ const UNCHECKED = { clean: null, upstreamAhead: null, upstreamBehind: null, chec
 
 const row = (name: string, overrides: Partial<WorkspaceCleanupCandidate> = {}) =>
   makeCandidate({ worktreeId: `repo-1::/repo/${name}`, displayName: name, ...overrides })
-const facet = (candidate: WorkspaceCleanupCandidate) =>
-  ({
-    candidate,
-    identity: getWorkspaceCleanupCandidateIdentity(candidate),
-    isSelectable: true
-  }) as WorkspaceCleanupFacets
+const facet = (candidate: WorkspaceCleanupCandidate): WorkspaceCleanupFacets =>
+  makeFacets({ candidate })
 const names = (rows: readonly WorkspaceCleanupFacets[]) => rows.map((r) => r.candidate.displayName)
 
 type Props = { candidates: WorkspaceCleanupCandidate[]; scanning: boolean }

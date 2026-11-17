@@ -117,7 +117,7 @@ export function WorkspaceCleanupRunStep({
           )}
         />
       </ScrollArea>
-      <DialogFooter className="border-t border-border px-4 py-3">
+      <DialogFooter variant="bar">
         <Button onClick={running ? onClose : onDone}>
           {running
             ? t('components.workspace.cleanup.deleting.runInBackground', 'Run in background')
@@ -191,12 +191,13 @@ const RunRow = memo(function RunRow({
               ) : null}
               {failure?.canDeleteAnyway ? (
                 <Button
-                  variant="link"
+                  variant="destructive-link"
                   size="inline"
-                  className="text-xs text-destructive"
                   onClick={() => onDeleteAnyway(row.candidate)}
                 >
-                  {t('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
+                  <span className="text-xs">
+                    {t('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
+                  </span>
                 </Button>
               ) : null}
             </div>

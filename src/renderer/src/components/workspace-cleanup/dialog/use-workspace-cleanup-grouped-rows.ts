@@ -70,10 +70,9 @@ export function useWorkspaceCleanupGroupedRows({
       }
     }
     // Rows admitted later list after earlier ones; within a pass the held order stands.
-    const sorted = {} as Record<WorkspaceCleanupGroup, WorkspaceCleanupFacets[]>
-    for (const group of WORKSPACE_CLEANUP_GROUPS) {
-      sorted[group] = byGroup[group].sort((a, b) => a.batch - b.batch).map((entry) => entry.row)
-    }
+    const sorted = mapWorkspaceCleanupGroups((group) =>
+      byGroup[group].sort((a, b) => a.batch - b.batch).map((entry) => entry.row)
+    )
     const visible = new Set<string>()
     for (const group of WORKSPACE_CLEANUP_GROUPS) {
       sorted[group].forEach((row) => visible.add(row.identity))
@@ -82,17 +81,15 @@ export function useWorkspaceCleanupGroupedRows({
   }, [getFrozenGroup, rows])
   const rowsByGroup = grouped.byGroup
   const groupSummaries = useMemo(() => {
-    const summary = {} as Record<WorkspaceCleanupGroup, WorkspaceCleanupGroupSummary>
-    for (const group of WORKSPACE_CLEANUP_GROUPS) {
+    return mapWorkspaceCleanupGroups((group) => {
       const groupRows = rowsByGroup[group]
-      summary[group] = {
+      return {
         count: groupRows.length,
         selectedCount: groupRows.filter(
           (row) => selectedIds.has(row.identity) && !deletingIdentities.has(row.identity)
         ).length
       }
-    }
-    return summary
+    })
   }, [deletingIdentities, rowsByGroup, selectedIds])
   const getRowGroup = useCallback(
     (row: { candidate: WorkspaceCleanupCandidate }) =>
@@ -109,6 +106,16 @@ export function useWorkspaceCleanupGroupedRows({
     uncheckedCount: grouped.unchecked,
     updatesAvailable,
     visibleIdentities: grouped.visible
+  }
+}
+
+function mapWorkspaceCleanupGroups<T>(
+  build: (group: WorkspaceCleanupGroup) => T
+): Record<WorkspaceCleanupGroup, T> {
+  return {
+    'nothing-local': build('nothing-local'),
+    'local-files': build('local-files'),
+    'cannot-delete': build('cannot-delete')
   }
 }
 

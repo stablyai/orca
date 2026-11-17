@@ -257,9 +257,10 @@ export const CandidateRow = React.memo(function CandidateRow({
                   variant="link"
                   size="inline"
                   onClick={() => onForgetLocally(candidate)}
-                  className="shrink-0 text-xs"
                 >
-                  {t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
+                  <span className="text-xs">
+                    {t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
+                  </span>
                 </Button>
               ) : null}
               {ignored && !deleting ? (
