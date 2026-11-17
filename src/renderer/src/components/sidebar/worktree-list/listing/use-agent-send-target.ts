@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { selectPaneForegroundAgentsForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = acceptedAgentStatuses()
@@ -42,7 +43,9 @@ export function useAgentSendTargetWorktreeId(): string | null {
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
   const agentTargetPaneForegroundAgents = useAppStore((s) =>
-    agentSendPopoverTargetMode ? s.paneForegroundAgentByPaneKey : EMPTY_PANE_FOREGROUND_AGENTS
+    agentSendPopoverTargetMode
+      ? selectPaneForegroundAgentsForWorktree(s, agentSendPopoverTargetMode.worktreeId)
+      : EMPTY_PANE_FOREGROUND_AGENTS
   )
   const agentTargetGuardedHosts = useAppStore((s) =>
     agentSendPopoverTargetMode

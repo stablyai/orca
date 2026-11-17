@@ -18,6 +18,7 @@ import {
   selectSendApprovalGuardEnvironmentIds
 } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
+import { markCompletedWorkerParentPaneKeysSeen } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -153,6 +154,12 @@ function deriveTerminalAgentSendTargets(
     })
   }
 
+  markCompletedWorkerParentPaneKeysSeen({
+    entries: Array.from(state.agentStatusByPaneKey.values()),
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    currentTabsById: tabsById,
+    seenPaneKeys: statusPaneKeys
+  })
   targets.push(...deriveStatuslessTerminalAgentSendTargets(state, tabs, statusPaneKeys))
   return targets
 }
@@ -176,7 +183,10 @@ function deriveStatuslessTerminalAgentSendTargets(
   for (const row of rows) {
     const parsed = parsePaneKey(row.paneKey)
     const ptyId = parsed ? liveLeafPtyId(state, parsed.tabId, parsed.leafId) : null
-    const title = row.entry.terminalTitle ?? null
+    // The row builder lends a split's tab title to its focused pane; only the pane's own title counts here.
+    const title = parsed
+      ? resolveLeafTitle(state, parsed.tabId, parsed.leafId, row.tab.title)
+      : null
     const titleStatus = detectAgentSendTitleStatus(title)
     // A launch or shell command title names the agent before its TUI takes input; wait for its own state title.
     if (!parsed || !ptyId || !titleStatus) {
@@ -185,7 +195,8 @@ function deriveStatuslessTerminalAgentSendTargets(
     const disabledReason =
       titleStatus === 'permission'
         ? 'Agent needs permission'
-        : hookSilentAgentSendRefusal(state, row.tab, ptyId, null, title)
+        : // The resolved agent isn't a report from it, so it can name the agent but never prove its turn ended.
+          hookSilentAgentSendRefusal(state, row.tab, ptyId, { agentType: row.agentType }, title)
     targets.push({
       kind: 'terminal',
       paneKey: row.paneKey,
@@ -272,7 +283,7 @@ export function hookSilentAgentSendRefusal(
   state: RunningAgentTargetState,
   tab: Pick<TerminalTab, 'ptyId' | 'launchAgent'>,
   ptyId: string,
-  entry: Pick<AgentStatusEntry, 'state' | 'agentType'> | null | undefined,
+  entry: Partial<Pick<AgentStatusEntry, 'state' | 'agentType'>> | null | undefined,
   leafTitle: string | null
 ): string | undefined {
   // Every identity counts: a row another agent left behind can't vouch for the one running now.
