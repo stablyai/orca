@@ -207,6 +207,17 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, devin, or antigravity'
   }
+  if (command === 'stats usage') {
+    const statsUsageFlagHelp: Record<string, string> = {
+      provider: '--provider <agent>     Usage provider: claude, codex, opencode, or muse',
+      range: '--range <range>        7d, 30d, 90d, or all (default 30d)',
+      scope: '--scope <scope>        orca for Orca workspaces only, or all (default orca)',
+      sessions: '--sessions <n>         Recent sessions to include, 0-100 (default 10)'
+    }
+    if (statsUsageFlagHelp[flag]) {
+      return statsUsageFlagHelp[flag]
+    }
+  }
   if (command === 'chat rename' && flag === 'session') {
     return '--session <id>        Chat session id (defaults to the chat this runs in)'
   }

@@ -31,6 +31,24 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/na
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { Automation } from '../../../shared/automations/automation-definition'
+import type {
+  UsageProviderKey,
+  UsageSnapshotQuery
+} from '../../../shared/backend/backend-service-contract'
+import type { STATS_USAGE_PROVIDERS } from '../../../shared/rpc-contract/host-management/stats-usage-params'
+
+type StatsUsageProvider = (typeof STATS_USAGE_PROVIDERS)[number]
+type UsageSnapshotReader = (
+  provider: UsageProviderKey,
+  query: UsageSnapshotQuery
+) => Promise<unknown>
+
+const STATS_USAGE_PROVIDER_KEYS: Record<StatsUsageProvider, UsageProviderKey> = {
+  claude: 'claudeUsage',
+  codex: 'codexUsage',
+  opencode: 'openCodeUsage',
+  muse: 'museUsage'
+}
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
@@ -167,6 +185,19 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  private usageSnapshotReader: UsageSnapshotReader | null = null
+
+  setUsageSnapshotReader(reader: UsageSnapshotReader): void {
+    this.usageSnapshotReader = reader
+  }
+
+  getUsageSnapshot(provider: StatsUsageProvider, query: UsageSnapshotQuery): Promise<unknown> {
+    if (!this.usageSnapshotReader) {
+      throw new Error('Stats & Usage is not available on this host.')
+    }
+    return this.usageSnapshotReader(STATS_USAGE_PROVIDER_KEYS[provider], query)
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {

@@ -10,6 +10,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Diagnostics:',
   '  diagnostics memory        Collect a memory snapshot for Orca and managed terminals',
+  '  stats usage               Print Stats & Usage token and cost aggregates for one provider',
   '',
   'Agent Discovery:',
   '  agent-context             Print the machine-readable command schema for agents',

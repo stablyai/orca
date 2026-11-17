@@ -353,6 +353,7 @@ import {
 } from './host-management/orcad-migration-params'
 import { RecipeVmWakeParams } from './host-management/recipe-vm-wake-params'
 import { ClientCapabilitiesUpdate } from './host-management/runtime-client-capabilities-params'
+import { StatsUsageParams } from './host-management/stats-usage-params'
 import { StatusGetParams } from './host-management/status-params'
 import { JiraFavouriteFilterParams } from './jira/jira-favourite-filter-params'
 import {
@@ -1621,6 +1622,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.removeTarget': SshTarget,
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
+  'stats.usage': StatsUsageParams,
   'status.get': StatusGetParams,
   'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
