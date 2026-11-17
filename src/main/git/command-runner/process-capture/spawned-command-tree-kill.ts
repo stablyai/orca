@@ -179,6 +179,8 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
   if (child.closed) {
     return Promise.resolve()
   }
+  // A launch still queued behind others is dropped outright; one already underway reports its PID.
+  child.cancelPendingSpawn()
   return new Promise((resolve) => {
     let settled = false
     const settle = (): void => {

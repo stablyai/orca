@@ -15,6 +15,8 @@ export type WorkerThreadChildRequest =
   | { type: 'stop-owned-group'; id: number }
   | { type: 'release'; id: number }
   | { type: 'kill'; id: number; signal?: NodeJS.Signals }
+  // Drops a spawn still queued behind other launches; ignored once the process exists.
+  | { type: 'cancel-spawn'; id: number }
 
 /** Node's errno fields survive the hop so callers can classify spawn failures (spawn ENOENT). */
 export type WorkerThreadChildErrorPayload = {

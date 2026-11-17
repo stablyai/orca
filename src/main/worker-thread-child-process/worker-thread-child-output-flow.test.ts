@@ -73,3 +73,31 @@ it.each([1, CHUNKS])(
     }
   }
 )
+
+it('never starts a launch cancelled while queued, and replays early requests for the next', async () => {
+  const stdin = new PassThrough()
+  const endStdin = vi.spyOn(stdin, 'end')
+  const child = Object.assign(new EventEmitter(), {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin,
+    kill: vi.fn()
+  })
+  spawn.mockReset().mockReturnValue(child)
+  const events: WorkerThreadChildEvent[] = []
+  const port = Object.assign(new EventEmitter(), {
+    postMessage: (event: WorkerThreadChildEvent) => events.push(event)
+  })
+  serveWorkerThreadChildProcesses(port)
+  port.emit('message', { type: 'spawn', id: 1, spec: { program: 'cancelled', args: [] } })
+  port.emit('message', { type: 'spawn', id: 2, spec: { program: 'kept', args: [] } })
+  port.emit('message', { type: 'cancel-spawn', id: 1 })
+  port.emit('message', { type: 'stdin-end', id: 2 })
+  await nextTurn()
+  await nextTurn()
+
+  expect(spawn).toHaveBeenCalledOnce()
+  expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ program: 'kept' }))
+  expect(events).toContainEqual({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
+  expect(endStdin).toHaveBeenCalled()
+})

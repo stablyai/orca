@@ -101,13 +101,51 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     })
   }
 
-  port.on('message', (request) => {
+  // Each launch waits a turn so cancels queued behind a slow CreateProcess can withdraw it first.
+  const queued = new Map<
+    number,
+    {
+      request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
+      early: WorkerThreadChildRequest[]
+    }
+  >()
+  let launching = false
+  const launchNext = (): void => {
+    const next = queued.values().next()
+    if (next.done) {
+      launching = false
+      return
+    }
+    queued.delete(next.value.request.id)
+    spawnChild(next.value.request)
+    for (const request of next.value.early) {
+      handle(request)
+    }
+    setImmediate(launchNext)
+  }
+
+  const handle = (request: WorkerThreadChildRequest): void => {
     if (request.type === 'spawn') {
-      spawnChild(request)
+      queued.set(request.id, { request, early: [] })
+      if (!launching) {
+        launching = true
+        setImmediate(launchNext)
+      }
+      return
+    }
+    const waiting = queued.get(request.id)
+    if (waiting && request.type === 'cancel-spawn') {
+      queued.delete(request.id)
+      port.postMessage({ type: 'exit', id: request.id, code: null, signal: 'SIGTERM' })
+      port.postMessage({ type: 'close', id: request.id, code: null, signal: 'SIGTERM' })
+      return
+    }
+    if (waiting) {
+      waiting.early.push(request)
       return
     }
     const state = children.get(request.id)
-    if (!state) {
+    if (!state || request.type === 'cancel-spawn') {
       return
     }
     const { child } = state
@@ -145,5 +183,6 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     } catch {
       // Races with exit; the exit/close events still reach the stand-in.
     }
-  })
+  }
+  port.on('message', handle)
 }

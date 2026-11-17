@@ -96,6 +96,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
+  /** Withdraws a launch the worker has not started yet; no effect once it has. */
+  cancelPendingSpawn(): void {
+    if (!this.closed && this.pid === undefined) {
+      this.send({ type: 'cancel-spawn', id: this.id })
+    }
+  }
+
   stopOwnedGroup(): void {
     this.ownedGroupStopping = true
     this.send({ type: 'stop-owned-group', id: this.id })
