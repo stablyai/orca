@@ -113,10 +113,10 @@ Orca ya trae casi todo:
 
 Tareas:
 
-- [ ] Verificar en Windows que los tres CLIs se detectan (`where claude`, `where codex`, `where agy`) y arrancan en full-access desde terminal **y** desde chat.
-- [ ] Codex: confirmar que full-access implica `--sandbox danger-full-access` y sin aprobaciones, también en `src/shared/agent-launch/permissions/codex-permission-policy.ts`.
-- [ ] Workspace trust: confirmar que `agent-workspace-trust-decision.ts` / `workspace-pretrust-scope.ts` no frenan a ningún agente con un prompt de "¿confías en esta carpeta?". Si lo hacen, pre-confiar las carpetas de trabajo de la MSI.
-- [ ] Setting nuevo `zotzVisibleAgents` (default `['claude', 'codex', 'antigravity']`) para que la UI y el selector solo muestren esos tres. **No borres** los demás agentes del catálogo; solo ocúltalos.
+- [ ] Verificar en Windows que los tres CLIs se detectan (`where claude`, `where codex`, `where agy`) y arrancan en full-access desde terminal **y** desde chat. (Código revisado: un perfil nuevo lanza los tres en full-access en terminal y chat. En la MSI solo está `claude`; faltan instalar `codex` y `agy` y probarlos a mano.)
+- [x] Codex: confirmar que full-access implica `--sandbox danger-full-access` y sin aprobaciones, también en `src/shared/agent-launch/permissions/codex-permission-policy.ts`.
+- [x] Workspace trust: confirmar que `agent-workspace-trust-decision.ts` / `workspace-pretrust-scope.ts` no frenan a ningún agente con un prompt de "¿confías en esta carpeta?". Si lo hacen, pre-confiar las carpetas de trabajo de la MSI.
+- [x] ~~Setting nuevo `zotzVisibleAgents`~~ Reemplazado: se reusa `disabledTuiAgents` de upstream (ya oculta agentes del selector y del auto-launch sin borrarlos del catálogo); `src/shared/zotz/zotz-visible-agents.ts` deja visibles solo `claude`, `codex` y `antigravity`. **No borres** los demás agentes del catálogo; solo ocúltalos.
 
 **Listo cuando:** desde el móvil o la laptop, por Tailscale, lanzas una tarea a cada uno de los tres agentes y la completan sin pedir ninguna aprobación.
 
@@ -184,70 +184,83 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 
 ### Lo que Orca ya trae (reutilízalo, no lo dupliques)
 
-| Pieza | Dónde | Qué hace hoy | Qué le falta |
-|---|---|---|---|
-| Admisión de spawns | `src/main/daemon/admission/terminal-spawn-gate.ts` + `src/shared/terminal/pty/admission/` | Limita trabajo **automático**: `automaticConcurrency: 3`, `maxLiveAutomatic: 8` (`DEFAULT_SPAWN_ADMISSION_LIMITS`). Ya tiene **cola de espera** (`terminal-spawn-waiters.ts`, `TerminalSpawnDeferredError`). | Cuenta procesos, no memoria. No aplica a agentes lanzados a mano. |
-| Nivel de presión | `HostPressureLevel = 'ok' \| 'elevated' \| 'critical' \| 'unknown'` en `spawn-admission-contract.ts`, alimentado por `daemon-process-growth-monitor.ts` | Detecta "tormentas" de procesos (descendientes/seg). | **No mira la RAM.** |
-| Pausa por presión | `AutomaticWorkMode` `{ kind: 'paused', reason: 'pressure' }` en `daemon-automatic-work-guard.ts` | Pausa trabajo automático cuando hay presión. | Se dispara solo por crecimiento de procesos. |
-| Tope por terminal | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`) | Tope duro vía **cgroups**, opt-in, **solo Linux**. | Nada en Windows ni macOS; no hay UI. |
-| Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal) | Ya agrupa descendientes por terminal. | Solo cuenta procesos, no RSS. |
+| Pieza                          | Dónde                                                                                                                                                   | Qué hace hoy                                                                                                                                                                                                 | Qué le falta                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Admisión de spawns             | `src/main/daemon/admission/terminal-spawn-gate.ts` + `src/shared/terminal/pty/admission/`                                                               | Limita trabajo **automático**: `automaticConcurrency: 3`, `maxLiveAutomatic: 8` (`DEFAULT_SPAWN_ADMISSION_LIMITS`). Ya tiene **cola de espera** (`terminal-spawn-waiters.ts`, `TerminalSpawnDeferredError`). | Cuenta procesos, no memoria. No aplica a agentes lanzados a mano. |
+| Nivel de presión               | `HostPressureLevel = 'ok' \| 'elevated' \| 'critical' \| 'unknown'` en `spawn-admission-contract.ts`, alimentado por `daemon-process-growth-monitor.ts` | Detecta "tormentas" de procesos (descendientes/seg).                                                                                                                                                         | **No mira la RAM.**                                               |
+| Pausa por presión              | `AutomaticWorkMode` `{ kind: 'paused', reason: 'pressure' }` en `daemon-automatic-work-guard.ts`                                                        | Pausa trabajo automático cuando hay presión.                                                                                                                                                                 | Se dispara solo por crecimiento de procesos.                      |
+| Tope por terminal              | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`)                                                                 | Tope duro vía **cgroups**, opt-in, **solo Linux**.                                                                                                                                                           | Nada en Windows ni macOS; no hay UI.                              |
+| Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal)                                                                                                       | Ya agrupa descendientes por terminal.                                                                                                                                                                        | Solo cuenta procesos, no RSS.                                     |
 
 ### 8a. Medir la memoria de verdad
+
 Nuevo `src/main/daemon/admission/zotz-memory-pressure.ts`:
+
 - **Memoria disponible real por plataforma** (no uses `os.freemem()` a secas: en macOS subestima porque no cuenta memoria inactiva o purgable):
-  - Windows: `os.freemem()` (equivale a *Available*), y como respaldo `GlobalMemoryStatusEx` si hace falta precisión.
+  - Windows: `os.freemem()` (equivale a _Available_), y como respaldo `GlobalMemoryStatusEx` si hace falta precisión.
   - macOS: `sysctl kern.memorystatus_level` (porcentaje disponible según el kernel) o `vm_stat` (free + inactive + purgeable + speculative). Reutiliza la lectura de `vm_stat` que ya existe en `src/main/hang-watchdog/hang-incident-snapshot.ts`.
   - Linux: `MemAvailable` de `/proc/meminfo`.
 - Leer cada 2 s y solo con agentes vivos o en cola; en reposo, cada 10 s.
 - Convertirlo a `HostPressureLevel` con los umbrales de 8d, y **combinarlo con el nivel de crecimiento existente: gana el peor de los dos**. Engánchalo en `daemon-automatic-work-guard.ts`, donde ya se lee `this.monitor.level`.
 
 ### 8b. Costo estimado de cada agente
+
 Nuevo `zotz-agent-memory-ledger.ts`:
+
 - Mide el **RSS del árbol completo** de cada terminal de agente (padre + hijos: tests, builds, servidores), reutilizando los scopes por terminal de `process-growth-breaker.ts`.
 - Guarda por tipo de agente (`claude`, `codex`, `antigravity`) el **p90 del pico** de las últimas 20 corridas, persistido en el userData de Zotz.
 - Sin historial, usa el default de configuración (`agentDefaultReserveGb`, 2.5 GB).
 
 ### 8c. Admisión por memoria antes de lanzar
+
 En `terminal-spawn-gate.ts` (y en `openAgentLaunch` de `src/main/agent-launch/agent-launch-executor.ts` para los lanzamientos manuales):
+
 - Un agente entra solo si `disponible − costo_estimado ≥ reserva_minima` **y** la suma de costos de los agentes vivos no rebasa `agentMemoryBudget`. Además, nunca más de `maxConcurrentAgents`.
 - Si no cabe: **en cola**, usando los waiters existentes. Se arranca **en orden de llegada** cuando un agente termina o la memoria se recupera. Nunca se descarta una tarea.
 - Aplica a **todos los lanzamientos de agentes** (manuales, automatizaciones, orquestación, remotos por `serve`). **No** aplica a terminales normales sin agente.
 - Interruptor "Lanzar de todos modos" por tarea, para cuando Hugo decida forzar.
 
 ### 8d. Regulación en caliente
+
 Si con agentes ya corriendo la presión sube:
+
 1. **`elevated`** (disponible < 20 % o < `minFreeGb` + 1 GB): no se admiten agentes nuevos y se avisa (notificación y UI).
 2. **`critical`** (disponible < `minFreeGb`), sostenido 30 s: se **pausa el agente más reciente** (macOS/Linux `SIGSTOP` al árbol; Windows `NtSuspendProcess` o suspender el Job Object), se avisa, y se **reanuda solo** cuando el nivel vuelve a `ok` durante 60 s. Un agente a la vez, del más nuevo al más viejo.
 3. **Tope por agente rebasado** (`perAgentMaxGb`): según `onAgentOverLimit` = `notify` | `pause` (default) | `kill`. `kill` solo si Hugo lo elige en Settings.
+
 - Nunca pausar ni matar el propio Zotz, el daemon, `tailscaled`, ni la sesión del sistema.
 - Ojo: pausar un agente mucho tiempo puede hacer que su sesión con la API expire. Registra en la UI cuánto lleva pausado y, pasados 15 min, avisa para que Hugo decida.
 
 ### 8e. Topes duros por plataforma
+
 - **Linux:** ya existe (`ORCA_TERMINAL_MEMORY_MAX`). Solo conectarlo a la configuración de Zotz.
 - **Windows:** meter cada terminal de agente en un **Job Object** con `JOB_OBJECT_LIMIT_JOB_MEMORY` = `perAgentMaxGb` y `KILL_ON_JOB_CLOSE`. El spawn de ConPTY está en `src/main/daemon/pty-subprocess/` (`native-pty-spawn-windows`); el Job Object va en el módulo nativo (carpeta `native/`, en Rust) o vía `koffi`/FFI si ya se usa en el repo. **Revisa antes qué hay** para no meter dependencias nuevas.
 - **macOS:** no existe un tope duro por proceso para usuarios normales; ahí aplica la regulación suave de 8d (medir, pausar, avisar).
 
 ### 8f. Configuración y "al instalar"
+
 Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-settings.ts`:
 
-| Clave | Default | Qué es |
-|---|---|---|
-| `agentMemoryBudgetPercent` | 70 | Máximo de RAM total que pueden usar los agentes juntos |
-| `minFreeGb` | max(2, 15 % de la RAM) | Memoria que siempre se deja libre para el sistema |
-| `perAgentMaxGb` | min(6, 35 % de la RAM) | Tope por agente (árbol completo) |
-| `maxConcurrentAgents` | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos |
-| `agentDefaultReserveGb` | 2.5 | Costo supuesto de un agente sin historial |
-| `onAgentOverLimit` | `pause` | `notify` / `pause` / `kill` |
+| Clave                      | Default                                               | Qué es                                                 |
+| -------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| `agentMemoryBudgetPercent` | 70                                                    | Máximo de RAM total que pueden usar los agentes juntos |
+| `minFreeGb`                | max(2, 15 % de la RAM)                                | Memoria que siempre se deja libre para el sistema      |
+| `perAgentMaxGb`            | min(6, 35 % de la RAM)                                | Tope por agente (árbol completo)                       |
+| `maxConcurrentAgents`      | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos                                    |
+| `agentDefaultReserveGb`    | 2.5                                                   | Costo supuesto de un agente sin historial              |
+| `onAgentOverLimit`         | `pause`                                               | `notify` / `pause` / `kill`                            |
 
 - **Primer arranque y `zotz-node-setup.ps1`:** detectar la RAM total, calcular los defaults de la tabla y mostrarlos ("Esta máquina tiene 16 GB: hasta 2 agentes a la vez, 4 GB libres siempre"). Hugo puede ajustarlos ahí mismo.
 - Los defaults se calculan una vez y se guardan; no se recalculan si Hugo ya los cambió.
 
 ### 8g. Que se vea
+
 - En la barra de estado (ya existe `status-bar/resources/popover/resource-usage-metrics.tsx`): memoria disponible, presupuesto usado por agentes y **agentes en cola**.
-- Cada tarea en cola muestra por qué: *"En cola: necesita ~3.1 GB, hay 1.4 GB libres. 2 agentes antes."*
+- Cada tarea en cola muestra por qué: _"En cola: necesita ~3.1 GB, hay 1.4 GB libres. 2 agentes antes."_
 - Notificación (y push al celular si está activo) cuando: un agente entra en cola, arranca desde la cola, se pausa o rebasa su tope.
 
 ### Pruebas
+
 - Unit tests **solo** para la lógica pura de admisión y regulación (alimentada con muestras falsas): cabe/no cabe, orden FIFO, reanudación con histéresis (no reanudar y pausar en bucle), p90 del ledger y procesos protegidos nunca tocados.
 - Prueba manual documentada en `docs/zotz/MEMORIA.md`: en la MSI, lanzar 6 tareas que corran un script que consuma 3 GB cada una. Resultado esperado: nunca bajan de `minFreeGb`, las que no caben esperan en cola y arrancan solas, y nada se mata.
 
@@ -265,17 +278,17 @@ Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-
 
 ## Orden y alcance sugeridos
 
-| Fase                | Depende de | Tamaño                                 |
-| ------------------- | ---------- | -------------------------------------- |
-| 0 Setup             | —          | S                                      |
-| 1 Rebrand + 1b logo | 0          | M                                      |
-| 2 Telemetría y red  | 0          | M                                      |
-| 3 Updates           | 0          | S                                      |
-| 4 Agentes           | 1          | S                                      |
-| 5 Nodo 24/7 Windows | 1, 3       | L                                      |
-| 6 Tailscale         | 5          | S                                      |
-| 7 Seguridad         | 5          | S (en su mayoría docs y configuración) |
-| 8 Gobernador de memoria | 4, 5    | L                                      |
+| Fase                    | Depende de | Tamaño                                 |
+| ----------------------- | ---------- | -------------------------------------- |
+| 0 Setup                 | —          | S                                      |
+| 1 Rebrand + 1b logo     | 0          | M                                      |
+| 2 Telemetría y red      | 0          | M                                      |
+| 3 Updates               | 0          | S                                      |
+| 4 Agentes               | 1          | S                                      |
+| 5 Nodo 24/7 Windows     | 1, 3       | L                                      |
+| 6 Tailscale             | 5          | S                                      |
+| 7 Seguridad             | 5          | S (en su mayoría docs y configuración) |
+| 8 Gobernador de memoria | 4, 5       | L                                      |
 
 Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 
@@ -357,3 +370,16 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - `docs/zotz/UPDATE.md`: `git pull` + `pnpm install` + `pnpm build:win` + reinstalar y reiniciar `serve` (manual hoy; tarea programada cuando exista `zotz serve service` en Fase 5).
 - Sorpresas: (1) no hace falta tocar `updater-setup.ts`: todos los caminos automáticos (timers, `powerMonitor` resume, `browser-window-focus`, nudges, reintentos) nacen en `setupAutoUpdater` o en eventos que este registra. (2) `orcad-managed-auto-update` (actualiza hosts SSH administrados) se dejó: empuja el orcad **empaquetado en este mismo build de Zotz**, no descarga nada de Orca. (3) Upstream rompía un import (`structural-value-equality`); se resolvió en la base `zotz/fase-0-setup` y esta rama se rebasó encima.
 - Pendiente: "Listo cuando" (24 h sin pedir ni instalar updates) solo se puede verificar corriendo el nodo real.
+
+### 2026-11-17 — Fase 4 (`zotz/fase-4-agentes`)
+
+- Permisos: no hizo falta código. Un perfil nuevo trae `agentPermissionDefault: 'full-access'` y en cada lanzamiento se convierte en flags (`claude`/`agy` → `--dangerously-skip-permissions`, `codex` → `--dangerously-bypass-approvals-and-sandbox`) o en política de chat (Codex `never` + `danger-full-access`; Claude con skip-permissions; Antigravity por ACP en modo `yolo`). El `'own'` de `agent-launch-profile.ts:161` solo arma vistas del selector, no pisa el lanzamiento.
+- Workspace trust: tampoco hizo falta código. Orca pre-confía la carpeta para Claude (`~/.claude.json`), Codex (`config.toml`) y Antigravity (`~/.gemini/antigravity-cli/settings.json`) justo antes de cada lanzamiento, en cualquier modo de permisos y también en workspaces de carpeta (`agentWorkspaceTrustEnabled`, default `true`).
+- Agentes visibles: `applyZotzVisibleAgents` se engancha en los defaults y al cargar el perfil. Guarda en `zotzSeenTuiAgents` qué agentes del catálogo ya vio, así que los que agregue upstream en un sync nacen ocultos y lo que Hugo active o desactive a mano se respeta.
+
+**Sorpresas / pendientes**
+
+- Casos en que un agente sí puede preguntar: Claude cuando la carpeta es la raíz de un disco o el home (`isTooBroadToPreTrust`); Antigravity si arranca en una subcarpeta del workspace (solo confía rutas exactas); escribir `claude`/`codex`/`agy` a mano en una terminal (no pasa por el pre-trust); Codex en WSL; hosts SSH con relay viejo. Para el nodo: abrir cada proyecto como su propio workspace, nunca `C:\` ni la carpeta del usuario.
+- Un perfil guardado con `agentYoloDefaultsMigrated: true` pero sin `agentPermissionDefault` cae en `'own'` (sin flags). No pasa con perfiles nuevos de Zotz.
+- Antigravity, aun en `yolo`, a veces hace preguntas o pide revisiones administrativas (lo dice su propio spec en `antigravity-acp-launch-spec.ts`).
+- La MSI (Katana 15, 16 GB) solo tiene `claude` en el PATH. Falta instalar `codex` y `agy` para cerrar el "Listo cuando".

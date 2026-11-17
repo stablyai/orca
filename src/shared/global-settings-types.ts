@@ -337,6 +337,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   newWorkspaceSetupOnly?: boolean
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
+  /** Zotz: catalog agents already offered once, so only ones added later start hidden. */
+  zotzSeenTuiAgents?: TuiAgent[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */

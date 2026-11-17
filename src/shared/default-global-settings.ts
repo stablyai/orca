@@ -10,6 +10,7 @@ import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from './native-chat/native-chat-idle-stop'
 import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from './browser/guest-lifecycle/browser-memory-saver'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
+import { applyZotzVisibleAgents } from './zotz/zotz-visible-agents'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -224,7 +225,7 @@ export function buildDefaultSettings(args: {
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
     defaultTuiAgent: null,
-    disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
+    ...applyZotzVisibleAgents(DEFAULT_DISABLED_TUI_AGENTS, []),
     pluginSystemEnabled: true,
     pluginSystemDefaultedOn: true,
     disabledPlugins: [],
