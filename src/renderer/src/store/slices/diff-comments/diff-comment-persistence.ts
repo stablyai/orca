@@ -59,6 +59,9 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 // Why: bumped on every re-seed, so an in-flight write can tell whether the floor it captured is still the current one.
 const floorSeedEpochByQueue = new Map<string, number>()
 
+// Why: a failed write may still have landed, so later writes in its burst can't name what the host holds.
+const floorsUncertainAfterFailure = new Set<string>()
+
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
   owner: DiffCommentOwner
@@ -105,6 +108,7 @@ export function enqueueDiffCommentPersist(
   ) {
     lastPersistedByQueue.set(floorKey, mutation.previous)
     floorSeedEpochByQueue.set(floorKey, (floorSeedEpochByQueue.get(floorKey) ?? 0) + 1)
+    floorsUncertainAfterFailure.delete(floorKey)
   }
   lastMutationNextByQueue.set(floorKey, mutation.next)
   const run = async (): Promise<void> => {
@@ -113,9 +117,14 @@ export function enqueueDiffCommentPersist(
     // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
     let stateList: DiffComment[] | undefined
     // What this copy last saw on disk; the host merges only the edits since then.
-    const base = (
-      lastPersistedByQueue.has(floorKey) ? lastPersistedByQueue.get(floorKey) : mutation.previous
-    )?.map(normalizeDiffComment)
+    // Unknown after a failed write, so this write replaces the list as writes did before bases.
+    const base = floorsUncertainAfterFailure.has(floorKey)
+      ? undefined
+      : (
+          (lastPersistedByQueue.has(floorKey)
+            ? lastPersistedByQueue.get(floorKey)
+            : mutation.previous) ?? []
+        ).map(normalizeDiffComment)
     try {
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder' && mutation.owner.kind === 'folder') {
@@ -127,7 +136,7 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           mutation.owner,
           (stateList ?? []).map(normalizeDiffComment),
-          base ?? []
+          base
         )
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
@@ -139,7 +148,7 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           mutation.owner,
           (stateList ?? []).map(normalizeDiffComment),
-          base ?? []
+          base
         )
       }
     } catch (err) {
@@ -149,6 +158,7 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
       rollback(set, worktreeId, floor, mutation)
+      floorsUncertainAfterFailure.add(floorKey)
       throw err
     }
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
@@ -168,6 +178,7 @@ export function enqueueDiffCommentPersist(
         lastPersistedByQueue.delete(key)
         lastMutationNextByQueue.delete(key)
         floorSeedEpochByQueue.delete(key)
+        floorsUncertainAfterFailure.delete(key)
       }
       floorKeysByQueue.delete(queueKey)
     }

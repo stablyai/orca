@@ -96,13 +96,15 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
         diffCommentsBase: [...base],
         mobileDiffReview: reviewState
       })
-      return interpretOrThrowRefusalMessage(
+      const record = interpretOrThrowRefusalMessage(
         () => sessionWorktreeNotesWrite.interpret(response),
         translate(
           'session.useDiffReviewCommentActions.saveStateFailed',
           'Failed to save review state'
         )
-      )?.diffComments
+      )
+      // A readable record without a note list means the host holds no notes.
+      return record === undefined ? undefined : (record.diffComments ?? [])
     },
     [client, connState, worktreeId]
   )
