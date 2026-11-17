@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  POWERSHELL_TIMEOUT_MS,
   findSignatureOffenders,
   isWindowsPayloadBinary,
   listWindowsPayloadBinaries,
   main,
   parseArgs,
+  parseDistinguishedName,
   verifyWindowsPayloadSignatures
 } from './verify-windows-payload-signatures.mjs'
 
@@ -99,13 +101,53 @@ describe('findSignatureOffenders', () => {
     ])
   })
 
-  it('compares subjects after whitespace normalization', () => {
-    const spaced = 'CN = SignPath Foundation,O=SignPath Foundation, L=Lewes, S=Delaware, C=US'
+  const verdicts = (subjects) =>
+    findSignatureOffenders(
+      subjects.map((signerSubject, index) => ({
+        path: `f${index}`,
+        status: 'Valid',
+        signerSubject
+      })),
+      { expectedSigners: [SIGNPATH] }
+    ).map((offender) => offender.path)
+
+  it('matches our signer on CN alone, so renewed address fields still pass', () => {
     expect(
-      findSignatureOffenders([{ path: 'a.exe', status: 'Valid', signerSubject: spaced }], {
-        expectedSigners: [SIGNPATH]
-      })
+      verdicts([
+        'CN = SignPath Foundation,O=SignPath Foundation, L=Lewes, S=Delaware, C=US',
+        'CN=SignPath Foundation, O=SignPath Foundation, L=Wilmington, S=Delaware, C=US'
+      ])
     ).toEqual([])
+  })
+
+  it('rejects look-alike subjects that a substring match would accept', () => {
+    expect(
+      verdicts([
+        'CN=SignPath Foundation Imitation, O=Someone',
+        'CN="Evil, CN=SignPath Foundation", O=Someone',
+        'CN=Evil, CN=SignPath Foundation, O=Someone',
+        'O=SignPath Foundation, CN=Not SignPath'
+      ])
+    ).toEqual(['f0', 'f1', 'f2', 'f3'])
+  })
+
+  it('matches Microsoft vendors on CN and O', () => {
+    expect(
+      verdicts([
+        'CN=Microsoft Windows, O=Microsoft Corporation, L=Somewhere, C=US',
+        'CN=Microsoft Windows, O=Not Microsoft'
+      ])
+    ).toEqual(['f1'])
+  })
+})
+
+describe('parseDistinguishedName', () => {
+  it('reads quoted and escaped values and voids repeated keys', () => {
+    const attributes = parseDistinguishedName('CN="Foo, Inc.", O=Bar\\, Ltd, OU=a, OU=b')
+    expect(attributes.get('CN')).toBe('Foo, Inc.')
+    expect(attributes.get('O')).toBe('Bar, Ltd')
+    expect(attributes.get('OU')).toBeNull()
+    expect(parseDistinguishedName(null).size).toBe(0)
   })
 })
 
@@ -128,7 +170,10 @@ describe('verifyWindowsPayloadSignatures', () => {
       expectedSigners: [SIGNPATH]
     })
     expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0][1]).not.toContain('Bypass')
+    const [, args, options] = spawn.mock.calls[0]
+    expect(args).not.toContain('Bypass')
+    expect(args.join(' ')).toContain('[Console]::OutputEncoding = [Text.Encoding]::UTF8')
+    expect(options.timeout).toBe(POWERSHELL_TIMEOUT_MS)
     expect(signatures).toHaveLength(3)
     expect(offenders.map((offender) => offender.path)).toEqual([
       'resources/node_modules/node-pty/build/Release/conpty.node'
@@ -171,24 +216,49 @@ describe('main', () => {
     }
   }
 
-  it('fails a required check and lists the offenders', () => {
+  it('fails a required check, lists the offenders and says how to allow a vendor', () => {
     const root = makePayload(['Orca.exe', 'resources/bin/orca.exe'])
-    const result = run([root], (path) => (path === 'Orca.exe' ? SIGNPATH : null))
+    const summary = join(root, 'summary.json')
+    const result = run([root, '--summary', summary], (path) =>
+      path === 'Orca.exe' ? SIGNPATH : null
+    )
     expect(result.code).toBe(1)
-    expect(result.output).toContain('1 of 2 Windows binaries lack an expected signature')
+    expect(result.output).toContain('1 of 2 Windows binaries lack a trusted signature')
     expect(result.output).toContain('resources/bin/orca.exe')
+    expect(result.output).toContain("add the signer's CN and O to VENDOR_IDENTITIES")
+    expect(JSON.parse(readFileSync(summary, 'utf8'))).toEqual({ checked: 2, offenders: 1 })
   })
 
   it('passes a required check when everything is signed', () => {
     const root = makePayload(['Orca.exe'])
-    expect(run([root], () => SIGNPATH).code).toBe(0)
+    const result = run([root], () => SIGNPATH)
+    expect(result.code).toBe(0)
+    expect(result.output).toBe('All 1 Windows binaries in the payload carry a trusted signature.')
+  })
+
+  it('treats a PowerShell timeout as a check that could not run', () => {
+    const root = makePayload(['Orca.exe'])
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const timedOut = Object.assign(new Error('spawnSync pwsh ETIMEDOUT'), { code: 'ETIMEDOUT' })
+      const code = main([root], {
+        platform: 'win32',
+        spawnSyncImpl: vi.fn(() => ({ error: timedOut, status: null, stdout: '', stderr: '' }))
+      })
+      expect(code).toBe(2)
+      expect(error.mock.calls.flat().join('\n')).toContain('timed out after 10 minutes')
+    } finally {
+      log.mockRestore()
+      error.mockRestore()
+    }
   })
 
   it('only reports in advisory mode, even when the check cannot run', () => {
     const root = makePayload(['Orca.exe'])
     const unsigned = run([root, '--mode', 'advisory'], () => null)
     expect(unsigned.code).toBe(0)
-    expect(unsigned.output).toContain('::notice::1 unsigned Windows binaries')
+    expect(unsigned.output).toContain('::notice::1 Windows binaries lack a trusted signature')
     expect(run([join(root, 'missing'), '--mode=advisory'], () => null).code).toBe(0)
   })
 
@@ -203,5 +273,6 @@ describe('parseArgs', () => {
     expect(parseArgs(['dir'])).toEqual({ root: 'dir', mode: 'required' })
     expect(() => parseArgs(['dir', '--mode', 'off'])).toThrow('Usage')
     expect(() => parseArgs(['a', 'b'])).toThrow('Usage')
+    expect(parseArgs(['dir', '--summary', 's.json']).summaryPath).toBe('s.json')
   })
 })

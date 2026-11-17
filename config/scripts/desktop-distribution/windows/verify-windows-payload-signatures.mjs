@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { normalizeSignerSubject, parseExpectedSigners } from './verify-windows-inner-signature.mjs'
+import { parseExpectedSigners } from './verify-windows-inner-signature.mjs'
 
 // Smart App Control refuses to load any unsigned Windows binary, so every one we ship must be signed.
 
@@ -11,18 +11,28 @@ const WINDOWS_BINARY_EXTENSION = /\.(exe|dll|node)$/iu
 // The orcad template's Linux/macOS addons are data for SSH hosts, not Windows binaries.
 const NON_WINDOWS_ORCAD_TEMPLATE = /^resources\/orcad-template\/targets\/(?!win32-)/iu
 
-// Third-party binaries that arrive already signed by Microsoft and are deliberately not re-signed.
-export const VENDOR_SIGNERS = [
-  'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US',
-  'CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US',
-  'CN=Microsoft Windows Software Compatibility Publisher, O=Microsoft Corporation, L=Redmond, S=Washington, C=US'
+const SCRIPT_PATH =
+  'config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs'
+
+// Third-party binaries that arrive already signed by Microsoft; release staging skips them, so they are never re-signed.
+// Matched on CN and O only, so a certificate renewal that changes address fields cannot block a cut.
+export const VENDOR_IDENTITIES = [
+  { CN: 'Microsoft Corporation', O: 'Microsoft Corporation' },
+  { CN: 'Microsoft Windows', O: 'Microsoft Corporation' },
+  { CN: 'Microsoft Windows Software Compatibility Publisher', O: 'Microsoft Corporation' }
 ]
 
-const USAGE =
-  'Usage: node config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs <win-unpacked dir> [--mode required|advisory]'
+export const POWERSHELL_TIMEOUT_MS = 10 * 60 * 1000
+
+const USAGE = `Usage: node ${SCRIPT_PATH} <win-unpacked dir> [--mode required|advisory] [--summary <file>]`
+
+const VENDOR_HINT =
+  `A file validly signed by another vendor is skipped by release staging, so it is never re-signed. ` +
+  `To ship it under that vendor's signature, add the signer's CN and O to VENDOR_IDENTITIES in ${SCRIPT_PATH}.`
 
 const POWERSHELL_PAYLOAD_SIGNATURE_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $root = $env:ORCA_WINDOWS_SIGNATURE_ROOT
 $rows = Get-Content -LiteralPath $env:ORCA_WINDOWS_SIGNATURE_LIST -Encoding utf8 |
   Where-Object { $_ -ne '' } |
@@ -73,19 +83,54 @@ export function parsePayloadSignatureJson(stdout, expectedCount) {
   return parsed
 }
 
+/** Split an X.500 subject into its attributes; a repeated key maps to null so it can never match. */
+export function parseDistinguishedName(subject) {
+  const attributes = new Map()
+  if (typeof subject !== 'string') {
+    return attributes
+  }
+  // Values may be quoted ("Foo, Inc.") or contain backslash-escaped commas.
+  const pattern = /\s*([A-Za-z][\w.]*)\s*=\s*("(?:[^"\\]|\\.)*"|(?:[^,\\]|\\.)*)\s*(?:,|$)/gy
+  let match
+  while ((match = pattern.exec(subject)) !== null && match[0] !== '') {
+    const key = match[1].toUpperCase()
+    let value = match[2].trim()
+    if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+      value = value.slice(1, -1)
+    }
+    value = value.replace(/\\(.)/g, '$1')
+    attributes.set(key, attributes.has(key) ? null : value)
+  }
+  return attributes
+}
+
+/** Our own signer is matched on CN alone, like the other release checks, but exactly rather than by substring. */
+export function expectedSignerIdentities(expectedSigners = parseExpectedSigners()) {
+  return expectedSigners
+    .map((subject) => parseDistinguishedName(subject).get('CN'))
+    .filter((cn) => typeof cn === 'string' && cn !== '')
+    .map((cn) => ({ CN: cn }))
+}
+
+export function subjectMatchesIdentity(subject, identity) {
+  const attributes = parseDistinguishedName(subject)
+  return Object.entries(identity).every(([key, value]) => attributes.get(key) === value)
+}
+
 export function findSignatureOffenders(
   signatures,
-  { expectedSigners = parseExpectedSigners(), vendorSigners = VENDOR_SIGNERS } = {}
+  { expectedSigners = parseExpectedSigners(), vendorIdentities = VENDOR_IDENTITIES } = {}
 ) {
-  const allowed = new Set([...expectedSigners, ...vendorSigners].map(normalizeSignerSubject))
-  return signatures.filter((signature) => {
-    const subject = normalizeSignerSubject(signature?.signerSubject)
-    return signature?.status !== 'Valid' || !allowed.has(subject)
-  })
+  const allowed = [...expectedSignerIdentities(expectedSigners), ...vendorIdentities]
+  return signatures.filter(
+    (signature) =>
+      signature?.status !== 'Valid' ||
+      !allowed.some((identity) => subjectMatchesIdentity(signature?.signerSubject, identity))
+  )
 }
 
 export function formatSignatureLine(signature) {
-  const subject = normalizeSignerSubject(signature?.signerSubject) || '<none>'
+  const subject = typeof signature?.signerSubject === 'string' ? signature.signerSubject : '<none>'
   return `${String(signature?.status ?? '<missing>').padEnd(14)} ${signature?.path}  <${subject}>`
 }
 
@@ -101,6 +146,7 @@ export function readPayloadSignatures(root, relativePaths, spawnSyncImpl = spawn
       {
         encoding: 'utf8',
         maxBuffer: 64 * 1024 * 1024,
+        timeout: POWERSHELL_TIMEOUT_MS,
         env: {
           ...process.env,
           ORCA_WINDOWS_SIGNATURE_ROOT: root,
@@ -108,6 +154,11 @@ export function readPayloadSignatures(root, relativePaths, spawnSyncImpl = spawn
         }
       }
     )
+    if (result.error?.code === 'ETIMEDOUT') {
+      throw new Error(
+        `PowerShell signature check timed out after ${POWERSHELL_TIMEOUT_MS / 60000} minutes.`
+      )
+    }
     if (result.error) {
       throw result.error
     }
@@ -127,7 +178,7 @@ export function verifyWindowsPayloadSignatures({
   platform = process.platform,
   spawnSyncImpl = spawnSync,
   expectedSigners = parseExpectedSigners(),
-  vendorSigners = VENDOR_SIGNERS
+  vendorIdentities = VENDOR_IDENTITIES
 }) {
   if (typeof root !== 'string' || root.trim() === '') {
     throw new Error(USAGE)
@@ -145,29 +196,32 @@ export function verifyWindowsPayloadSignatures({
   const signatures = readPayloadSignatures(root, relativePaths, spawnSyncImpl)
   return {
     signatures,
-    offenders: findSignatureOffenders(signatures, { expectedSigners, vendorSigners })
+    offenders: findSignatureOffenders(signatures, { expectedSigners, vendorIdentities })
   }
 }
 
 export function parseArgs(argv) {
   let root
   let mode = 'required'
+  let summaryPath
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index]
     if (arg === '--mode') {
       mode = argv[++index]
     } else if (arg.startsWith('--mode=')) {
       mode = arg.slice('--mode='.length)
+    } else if (arg === '--summary') {
+      summaryPath = argv[++index]
     } else if (root === undefined) {
       root = arg
     } else {
       throw new Error(USAGE)
     }
   }
-  if (mode !== 'required' && mode !== 'advisory') {
+  if ((mode !== 'required' && mode !== 'advisory') || summaryPath === '') {
     throw new Error(USAGE)
   }
-  return { root, mode }
+  return { root, mode, summaryPath }
 }
 
 /** Exit 0 when clean (or advisory), 1 when required and offenders exist, 2 when the check could not run. */
@@ -180,12 +234,20 @@ export function main(argv = process.argv.slice(2), deps = {}) {
       root: parsed.root,
       ...deps
     })
+    if (parsed.summaryPath) {
+      writeFileSync(
+        parsed.summaryPath,
+        JSON.stringify({ checked: signatures.length, offenders: offenders.length })
+      )
+    }
     if (offenders.length === 0) {
-      console.log(`All ${signatures.length} Windows binaries carry an expected signature.`)
+      console.log(
+        `All ${signatures.length} Windows binaries in the payload carry a trusted signature.`
+      )
       return 0
     }
     console.log(
-      `${offenders.length} of ${signatures.length} Windows binaries lack an expected signature:`
+      `${offenders.length} of ${signatures.length} Windows binaries lack a trusted signature:`
     )
     for (const offender of offenders) {
       console.log(`  ${formatSignatureLine(offender)}`)
@@ -193,10 +255,11 @@ export function main(argv = process.argv.slice(2), deps = {}) {
     if (mode === 'advisory') {
       // Unsigned builds are expected here; Smart App Control machines will refuse to load these files.
       console.log(
-        `::notice::${offenders.length} unsigned Windows binaries; Smart App Control machines will block them.`
+        `::notice::${offenders.length} Windows binaries lack a trusted signature; Smart App Control machines will block them.`
       )
       return 0
     }
+    console.log(VENDOR_HINT)
     return 1
   } catch (error) {
     console.error(error.message)
