@@ -289,7 +289,7 @@ export function NativeChatQuestionCard({
             The box scrolls as a last resort, when a tall typed answer outgrows the pane's cap. */}
         <div className="flex min-h-0 flex-col overflow-y-auto rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm scrollbar-sleek">
           {/* Question and options scroll together; only the answer row stays pinned, so a short pane still reaches every option. */}
-          <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+          <div className="min-h-24 shrink overflow-y-auto scrollbar-sleek">
             <NativeChatQuestionCardHeader
               question={q.question}
               isSubmitting={isSubmitting}
