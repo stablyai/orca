@@ -60,6 +60,7 @@ describe('workspace cleanup removal timeout recovery', () => {
     const onProgress = vi.fn()
     const onResult = vi.fn()
     const onLateResult = vi.fn()
+    const onRowStarted = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
       candidates: [parent, child],
@@ -67,6 +68,7 @@ describe('workspace cleanup removal timeout recovery', () => {
       onProgress,
       onResult,
       onLateResult,
+      onRowStarted,
       removalTimeoutMs: 5,
       removalSettlementGraceMs: 5
     })
@@ -77,6 +79,7 @@ describe('workspace cleanup removal timeout recovery', () => {
     await settleBackgroundRemoval()
 
     expect(removeCandidates).toHaveBeenCalledTimes(1)
+    expect(onRowStarted.mock.calls).toEqual([[child]])
     expect(onProgress).toHaveBeenLastCalledWith({
       totalCount: 2,
       processedCount: 2,
@@ -92,13 +95,16 @@ describe('workspace cleanup removal timeout recovery', () => {
           executionHostId: 'local',
           displayName: child.displayName,
           message:
-            'Removing child is taking longer than expected. It will keep running in the background.'
+            'Removing child is taking longer than expected. It will keep running in the background.',
+          // Its real outcome is still coming, so the run shows it as pending, not failed.
+          provisional: true
         },
         {
           worktreeId: parent.worktreeId,
           executionHostId: 'local',
           displayName: parent.displayName,
-          message: 'Skipped because a nested workspace has not finished removing.'
+          message: 'Skipped because a nested workspace has not finished removing.',
+          provisional: true
         }
       ]
     })
@@ -121,6 +127,8 @@ describe('workspace cleanup removal timeout recovery', () => {
     expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {
       approvedCandidates: [parent]
     })
+    // The automatic retry is a new physical delete, so the run starts a new generation for it.
+    expect(onRowStarted.mock.calls).toEqual([[child], [parent]])
     expect(onResult).toHaveBeenCalledTimes(1)
     expect(onLateResult).toHaveBeenNthCalledWith(1, {
       removedIds: [child.worktreeId],
@@ -281,7 +289,8 @@ describe('workspace cleanup removal timeout recovery', () => {
           worktreeId: parent.worktreeId,
           executionHostId: 'local',
           displayName: parent.displayName,
-          message: 'Skipped because a nested workspace could not be removed.'
+          message: 'Skipped because a nested workspace could not be removed.',
+          provisional: false
         },
         {
           worktreeId: child.worktreeId,
