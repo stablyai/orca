@@ -4,7 +4,7 @@ export function registerAgentPaneActivityIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onApplyAgentPaneActivity(({ requestId, ...change }) => {
       // Lazy: Activity's clear module binds window listeners on load. Main holds the caller's RPC open until this reply, so a throw must still answer.
-      void import('@/components/activity/activity-paired-client-change')
+      void import('@/components/activity/paired-clients/activity-paired-client-change')
         .then(({ applyPairedClientActivityChange }) => applyPairedClientActivityChange(change))
         .then(
           (publication): AgentPaneActivityReply => ({ requestId, publication }),
