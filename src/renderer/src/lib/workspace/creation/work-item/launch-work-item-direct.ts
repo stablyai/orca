@@ -15,9 +15,9 @@ import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types
 import { buildDirectWorkItemStartupOpts } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
+  getDirectWorkItemPolicyPrompt,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,
@@ -123,7 +123,7 @@ export async function launchWorkItemDirect(
       return reportFailure(unavailableAgentErrorMessage())
     }
     const requestId = createNonSecureContextUuid()
-    const draftContent = await Promise.resolve(getLaunchableWorkItemDraftContent(item))
+    const draftContent = getDirectWorkItemPolicyPrompt(item, repo.kind, resolvedBaseBranch)
     if (args.signal?.aborted) {
       return 'cancelled'
     }

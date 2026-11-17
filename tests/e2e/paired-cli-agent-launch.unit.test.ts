@@ -84,13 +84,23 @@ describe.each([
       } else if (target.kind === 'create-folder-workspace') {
         expect(boundary.createTerminal).not.toHaveBeenCalled()
         expect(boundary.createFolderWorkspace).toHaveBeenCalledWith(
-          expect.objectContaining({ startupAgent: 'claude', startupPrompt: 'Reply with OK' })
+          expect.objectContaining({
+            startupAgent: 'claude',
+            startupPrompt: expect.stringMatching(
+              /^<orca-worktree-policy version="1">[\s\S]*\n\nReply with OK$/
+            )
+          })
         )
       } else {
         expect(boundary.createTerminal).toHaveBeenCalledTimes(1)
         expect(boundary.createTerminal).toHaveBeenCalledWith(
           expect.any(String),
-          expect.objectContaining({ startupAgent: 'claude', startupPrompt: 'Reply with OK' })
+          expect.objectContaining({
+            startupAgent: 'claude',
+            startupPrompt: expect.stringMatching(
+              /^<orca-worktree-policy version="1">[\s\S]*\n\nReply with OK$/
+            )
+          })
         )
       }
       expect(boundary.createFolderWorkspace).toHaveBeenCalledTimes(

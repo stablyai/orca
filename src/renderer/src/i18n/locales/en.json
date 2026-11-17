@@ -24484,6 +24484,11 @@
         "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
       },
       "suspendFailed": "Failed to suspend VM workspace"
+    },
+    "baseline": {
+      "label": "Baseline (required)",
+      "required": "Select a baseline branch before creating a workspace.",
+      "select": "Select baseline…"
     }
   },
   "tabHoverCard": {

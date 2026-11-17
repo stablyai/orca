@@ -1,6 +1,16 @@
-// Backend base resolution owns stale-ref fallback, so the renderer only forwards explicit selections.
+import { translate } from '@/i18n/i18n'
+
 export async function resolveWorktreeCreateBaseBranch(args: {
   explicitBaseBranch: string | undefined
-}): Promise<string | undefined> {
-  return args.explicitBaseBranch?.trim() || undefined
+}): Promise<string> {
+  const baseline = args.explicitBaseBranch?.trim()
+  if (!baseline) {
+    throw new Error(
+      translate(
+        'workspace.baseline.required',
+        'Select a baseline branch before creating a workspace.'
+      )
+    )
+  }
+  return baseline
 }

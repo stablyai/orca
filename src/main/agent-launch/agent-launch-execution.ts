@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   AgentLaunchIntent,
   AgentLaunchResult,
@@ -9,6 +10,7 @@ import type { readAgentLaunchModeSettings, AgentLaunchModeVocabulary } from './a
 
 import type {
   AgentLaunchSurfaceFactory,
+  AgentLaunchStructuredSurface,
   AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
 
@@ -59,3 +61,12 @@ export type AgentLaunchLegacyHostExecution = AgentLaunchExecutionBase & {
 }
 
 export type AgentLaunchExecution = AgentLaunchSurfaceExecution | AgentLaunchLegacyHostExecution
+
+/** Keep the structured create receipt for prompt settlement. */
+export type CreatedSurface = {
+  outcome: AgentLaunchResult['outcome']
+  warning?: string
+  terminalCreation?: RuntimeTerminalCreate
+  structured?: AgentLaunchStructuredSurface
+  promptRodeLaunchCommand?: boolean
+}

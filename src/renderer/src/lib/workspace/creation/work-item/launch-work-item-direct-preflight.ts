@@ -1,3 +1,4 @@
+import { getDirectWorkItemIdentity } from './launch-work-item-direct-draft'
 import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
 import { planAgentCliArgsSuffix } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -199,7 +200,10 @@ export function directWorkItemAgentArgsError(
 
 export function prepareDirectLaunchContext(
   store: AppState,
-  args: Pick<LaunchWorkItemDirectArgs, 'repoId' | 'launchPlatform' | 'openModalFallback'>
+  args: Pick<
+    LaunchWorkItemDirectArgs,
+    'repoId' | 'launchPlatform' | 'openModalFallback' | 'baseBranch' | 'item'
+  >
 ) {
   const owner = resolveDirectLaunchOwnerRow(store.repos, args.repoId)
   if (!owner) {
@@ -207,6 +211,14 @@ export function prepareDirectLaunchContext(
     return null
   }
   const { repo, target: repoOwnerTarget } = owner
+  if (
+    repo.kind !== 'folder' &&
+    !args.baseBranch?.trim() &&
+    getDirectWorkItemIdentity(args.item).itemType !== 'pr'
+  ) {
+    args.openModalFallback()
+    return null
+  }
 
   const repoConnectionId = repo.connectionId?.trim() || null
   const repoProjectRuntime = repoConnectionId

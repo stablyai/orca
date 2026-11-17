@@ -73,6 +73,7 @@ export function CreateFromPicker({
   triggerClassName,
   compact = false,
   readOnly = false,
+  requireExplicitSelection = false,
   onValueChange,
   onSetDefault
 }: {
@@ -83,6 +84,7 @@ export function CreateFromPicker({
   triggerClassName?: string
   compact?: boolean
   readOnly?: boolean
+  requireExplicitSelection?: boolean
   onValueChange: (baseBranch: string) => void
   onSetDefault?: (baseBranch: string) => void | Promise<void>
 }): React.JSX.Element {
@@ -99,19 +101,25 @@ export function CreateFromPicker({
   const listId = React.useId()
   const effectiveDefault =
     repo?.worktreeBaseRef ?? probedDefaultBranchRef(defaultBaseRef, searchResults)
-  const selectedValue = value || DEFAULT_VALUE
+  const selectedValue = value || (requireExplicitSelection ? '' : DEFAULT_VALUE)
+  const placeholder = requireExplicitSelection
+    ? t('workspace.baseline.select', 'Select baseline…')
+    : undefined
   const projectDefaultLabel = t(
     'auto.components.automations.CreateFromPicker.ef6d762538',
     'Project default'
   )
   const selectedLabel =
     (value ? branchRefLabel(value) : null) ||
+    placeholder ||
     (effectiveDefault ? `${branchRefLabel(effectiveDefault)} (default)` : projectDefaultLabel)
   const compactLabel = value
     ? branchRefLabel(value)
-    : effectiveDefault
-      ? branchRefLabel(effectiveDefault)
-      : projectDefaultLabel
+    : placeholder
+      ? placeholder
+      : effectiveDefault
+        ? branchRefLabel(effectiveDefault)
+        : projectDefaultLabel
   const { options: branchOptions, labels } = React.useMemo(
     () => createBranchOptions(effectiveDefault, searchResults, worktrees),
     [effectiveDefault, searchResults, worktrees]
@@ -329,15 +337,18 @@ export function CreateFromPicker({
                   effectiveDefault ?? '',
                   <CommandItem
                     value={effectiveDefault ? `${effectiveDefault} default` : 'project default'}
+                    disabled={requireExplicitSelection && !effectiveDefault}
                     onSelect={() => {
-                      onValueChange('')
+                      onValueChange(requireExplicitSelection ? (effectiveDefault ?? '') : '')
                       setOpen(false)
                     }}
                   >
                     <Check
                       className={cn(
                         'size-4',
-                        selectedValue === DEFAULT_VALUE ? 'opacity-100' : 'opacity-0'
+                        selectedValue === DEFAULT_VALUE || selectedValue === effectiveDefault
+                          ? 'opacity-100'
+                          : 'opacity-0'
                       )}
                     />
                     <FilePathCursorTooltip path={effectiveDefault ?? projectDefaultLabel}>

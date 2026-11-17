@@ -2,6 +2,7 @@ export type ComposerCreateGateInput = {
   repoId: string
   workspaceSeedName: string
   creating: boolean
+  missingBaseline?: boolean
   sourceIntentBlocksCreate?: boolean
   selectedRepoRequiresConnection: boolean
   selectedTargetNeedsVisibleHost: boolean
@@ -11,6 +12,7 @@ export type ComposerCreateGateInput = {
 function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
   return (
     !input.workspaceSeedName ||
+    input.missingBaseline === true ||
     input.sourceIntentBlocksCreate === true ||
     input.creating ||
     input.selectedRepoRequiresConnection ||

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { withAgentLaunchWorktreePolicy } from './agent-launch-worktree-policy'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
@@ -42,10 +42,13 @@ import {
   AgentLaunchStructuredSessionRefusedError,
   assertTerminalLaunchAdmissible,
   terminalLaunchInputs,
-  type AgentLaunchStructuredSurface,
   type AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
-import type { AgentLaunchExecution, AgentLaunchSurfaceExecution } from './agent-launch-execution'
+import type {
+  AgentLaunchExecution,
+  AgentLaunchSurfaceExecution,
+  CreatedSurface
+} from './agent-launch-execution'
 import {
   beginCreatedWorkspaceLaunch,
   recoverCreatedWorkspace
@@ -69,6 +72,7 @@ export async function executeAgentLaunch(
 export async function openAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchOpening> {
+  execution = withAgentLaunchWorktreePolicy(execution)
   const { intent, runtime } = execution
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
   const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
@@ -256,15 +260,6 @@ async function resolveWorkspace(
   return rest.startupTerminalHandle && promptRodeLaunchCommand
     ? { ...rest, promptRodeLaunchCommand: true }
     : rest
-}
-
-/** Keep the structured create receipt for prompt settlement. */
-export type CreatedSurface = {
-  outcome: AgentLaunchResult['outcome']
-  warning?: string
-  terminalCreation?: RuntimeTerminalCreate
-  structured?: AgentLaunchStructuredSurface
-  promptRodeLaunchCommand?: boolean
 }
 
 async function createSurface(

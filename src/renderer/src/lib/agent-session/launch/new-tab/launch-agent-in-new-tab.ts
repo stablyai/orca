@@ -1,3 +1,4 @@
+import { withAgentWorktreePolicy } from '../../../../../../shared/agent-launch/policy/agent-worktree-policy'
 import { refuseAgentTabLaunch, refuseUnavailableAgentTabLaunch } from './launch-agent-tab-refusal'
 import {
   launchNewTabPromptThroughHost,
@@ -82,7 +83,16 @@ function openAgentInNewTab(
     activate
   } = args
   const store = agentTabLaunchStore(useAppStore.getState(), args)
-  const trimmedPrompt = prompt?.trim() ?? ''
+  const workspaceKind = workspaceKindForWorktreeId(worktreeId)
+  const workspace = store.getKnownWorktreeById?.(worktreeId, args.workspaceExecutionHostId)
+  const taskPrompt = prompt?.trim() ?? ''
+  const trimmedPrompt =
+    taskPrompt && workspaceKind !== 'floating'
+      ? withAgentWorktreePolicy(taskPrompt, {
+          baseline: workspace && 'baseRef' in workspace ? workspace.baseRef : undefined,
+          workspaceKind
+        })
+      : taskPrompt
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
   // Why: a followup-path agent gets its prompt pasted unsubmitted after start, so route it as a draft.
