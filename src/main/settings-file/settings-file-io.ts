@@ -1,6 +1,5 @@
 import { constants } from 'node:fs'
-import type { Stats } from 'node:fs'
-import { access, link, lstat, mkdir, open, realpath, readFile, rm, stat } from 'node:fs/promises'
+import { access, link, lstat, mkdir, realpath, readFile, rm, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   durableWriteTempPath,
@@ -112,32 +111,6 @@ export async function writeSettingsFile(
   }
 }
 
-// Removes a file this attempt created unless something else has replaced it since.
-async function removeIfSameFile(path: string, created: Stats): Promise<void> {
-  const current = await lstat(path).catch(() => null)
-  if (current && current.dev === created.dev && current.ino === created.ino) {
-    await rm(path, { force: true }).catch(() => {})
-  }
-}
-
-// Fallback for filesystems without hard links: create in place, removing a partial file on failure.
-async function createExclusive(path: string, text: string): Promise<void> {
-  const handle = await open(path, 'wx')
-  let written = false
-  try {
-    await handle.writeFile(text, 'utf-8')
-    await handle.sync()
-    written = true
-  } finally {
-    // A partial file left behind would make every retry report `exists`.
-    const created = written ? null : await handle.stat().catch(() => null)
-    await handle.close()
-    if (created) {
-      await removeIfSameFile(path, created)
-    }
-  }
-}
-
 export async function createSettingsFile(path: string, text: string): Promise<SettingsFileCreate> {
   try {
     await mkdir(dirname(path), { recursive: true })
@@ -145,11 +118,15 @@ export async function createSettingsFile(path: string, text: string): Promise<Se
     try {
       await writeTempFileDurable(tmpPath, text)
       // A hard link publishes the complete file at once and never replaces one that appeared meanwhile.
-      await link(tmpPath, path).catch(async (error: unknown) => {
+      await link(tmpPath, path).catch((error: unknown) => {
         if (!hasCode(error, HARDLINK_UNSUPPORTED_CODES)) {
           throw error
         }
-        await createExclusive(path, text)
+        // Node has no portable rename-if-absent, so refuse rather than risk replacing a file.
+        throw new Error(
+          'This folder does not support creating the settings file safely; create it by hand.',
+          { cause: error }
+        )
       })
     } finally {
       await rm(tmpPath, { force: true }).catch(() => {})
