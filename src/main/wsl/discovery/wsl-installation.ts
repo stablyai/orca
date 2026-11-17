@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs'
-import { win32 as pathWin32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import {
   _resetWslNotInstalledLatchForTests,
@@ -8,6 +6,7 @@ import {
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
+import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 
 // Why: Windows 11 24H2's inbox wsl.exe launches the installer on any invocation.
 // WSLService (Store/MSI) or LxssManager (inbox optional component) means WSL is installed.
@@ -21,24 +20,27 @@ const UNKNOWN_INSTALLATION_TTL_MS = 60_000
 
 export type WslInstallation = 'present' | 'absent' | 'unknown'
 
-let serviceBinaryOnDisk: boolean | undefined
+// Registered services live here; the addon reads the key in-process, with no spawn.
+const SERVICES_KEY = 'SYSTEM\\CurrentControlSet\\Services\\'
+
+let serviceRegistered: boolean | undefined
 
 /**
- * Sync, spawn-free hint for readers that run before the service verdict: the inbox component's
- * LxssManager.dll or the Store/MSI install's wslservice.exe. System32\wsl.exe is the stub, so it doesn't count.
- * Checked once per process; the service verdict supersedes it.
+ * Sync and spawn-free: whether either WSL service key exists. A key proves registration, but a
+ * missing one may be an unreadable key, so absence still needs sc.exe's 1060. Read once per process.
  */
-export function wslServiceBinaryOnDisk(): boolean {
-  if (serviceBinaryOnDisk === undefined) {
-    const env = process.env
-    const systemRoot = env.SystemRoot ?? env.SYSTEMROOT ?? env.windir ?? 'C:\\Windows'
-    const programFiles = env.ProgramW6432 ?? env.ProgramFiles ?? 'C:\\Program Files'
-    serviceBinaryOnDisk = [
-      pathWin32.join(systemRoot, 'System32', 'lxss', 'LxssManager.dll'),
-      pathWin32.join(programFiles, 'WSL', 'wslservice.exe')
-    ].some((path) => existsSync(path))
+function wslServiceKeyRegistered(): boolean {
+  if (serviceRegistered === undefined) {
+    try {
+      const registry = loadWindowsNativeRegistry()
+      serviceRegistered = WSL_SERVICE_NAMES.some(
+        (name) => registry.getRegistryKey(registry.HK.LM, SERVICES_KEY + name) != null
+      )
+    } catch {
+      serviceRegistered = false
+    }
   }
-  return serviceBinaryOnDisk
+  return serviceRegistered
 }
 
 let installation: WslInstallation | null = null
@@ -107,21 +109,31 @@ function cachedInstallation(): WslInstallation | null {
   if (installation) {
     return installation
   }
+  if (wslServiceKeyRegistered()) {
+    installation = 'present'
+    return installation
+  }
   return Date.now() < unknownUntilMs ? 'unknown' : null
 }
 
-/** Cached answer only; sync readers must not spawn. Null means no service query has finished. */
+/**
+ * Cached answer only; never spawns. Null means no verdict yet. An expired unknown is still served
+ * as unknown; callers use wslInstallationCheckDue() to start the re-check.
+ */
 export function peekWslInstallation(): WslInstallation | null {
   if (process.platform !== 'win32') {
     return 'absent'
   }
-  const cached = cachedInstallation()
-  if (cached || unknownUntilMs === 0) {
-    return cached
+  return cachedInstallation() ?? (unknownUntilMs > 0 ? 'unknown' : null)
+}
+
+/** For sync readers: the cached answer, starting the async service query when none is current. */
+export function peekWslInstallationAndRefreshIfDue(): WslInstallation | null {
+  const cached = peekWslInstallation()
+  if (process.platform === 'win32' && cachedInstallation() === null) {
+    void readWslInstallation()
   }
-  // Serve the expired unknown while a re-check runs, so sync readers never fall back to "no verdict".
-  void readWslInstallation()
-  return 'unknown'
+  return cached
 }
 
 /** Shared probe. Absent is cached for the process lifetime; unknown only briefly. */
@@ -146,7 +158,7 @@ export function readWslInstallation(): Promise<WslInstallation> {
 }
 
 export function _resetWslInstallationForTests(): void {
-  serviceBinaryOnDisk = undefined
+  serviceRegistered = undefined
   installation = null
   installationProbe = null
   unknownUntilMs = 0

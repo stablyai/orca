@@ -31,8 +31,8 @@ import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
 import {
   _setWslInstallationForTests,
   peekWslInstallation,
-  readWslInstallation,
-  wslServiceBinaryOnDisk
+  peekWslInstallationAndRefreshIfDue,
+  readWslInstallation
 } from './wsl-installation'
 
 // Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
@@ -133,12 +133,12 @@ export function listWslDistros(): string[] {
     return wslDistroCache ?? []
   }
 
-  const installed = peekWslInstallation()
+  const installed = peekWslInstallationAndRefreshIfDue()
   if (installed === 'absent') {
     return rememberWslInstallationAbsent()
   }
-  // Before the async service verdict, only WSL's own binaries on disk justify a sync wsl.exe.
-  if (installed === null && !wslServiceBinaryOnDisk()) {
+  // No registered service key and no sc.exe verdict yet: a sync wsl.exe could open the installer.
+  if (installed === null) {
     void listWslDistrosAsync()
     return wslDistroCache ?? []
   }
@@ -271,9 +271,8 @@ export function getWslHome(distro: string): string | null {
     return null
   }
   // A saved distro on a host without WSL must not reach wsl.exe, before the verdict or after it.
-  const installed = process.platform === 'win32' ? peekWslInstallation() : 'present'
-  if (installed === 'absent' || (installed === null && !wslServiceBinaryOnDisk())) {
-    void readWslInstallation()
+  const installed = process.platform === 'win32' ? peekWslInstallationAndRefreshIfDue() : 'present'
+  if (installed === 'absent' || installed === null) {
     return null
   }
 

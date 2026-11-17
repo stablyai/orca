@@ -214,11 +214,14 @@ describe('WSL is not installed', () => {
   it('serves an expired unknown to sync readers while it re-checks', async () => {
     vi.useFakeTimers()
     const calls = answerServices({ WSLService: 5, LxssManager: 5 })
+    runProcessSyncMock.mockReturnValue(exited('Ubuntu\n'))
     await withPlatformAsync('win32', async () => {
       await readWslInstallation()
       const first = calls.length
       await vi.advanceTimersByTimeAsync(60_001)
       expect(peekWslInstallation()).toBe('unknown')
+      expect(calls.length).toBe(first)
+      expect(listWslDistros()).toEqual(['Ubuntu'])
       await vi.advanceTimersByTimeAsync(0)
       expect(calls.length).toBe(first * 2)
     })
