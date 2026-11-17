@@ -2,11 +2,12 @@ import React from 'react'
 import { useAppStore } from '../../../store'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getTightestUsageSection, usedSections } from '../usage/usage-headline-sections'
 import { getUsageRosterRowState } from '../usage/usage-roster-row-state'
 import { isClaudeUsageWaitingForClaude } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { formatUsagePercentageLabel } from '../usage/usage-percentage-label'
+import { formatLocalizedResetDuration } from '../usage/usage-reset-caption'
 import { UsageBar, UsageValue } from '../usage/usage-meter'
 
 export function useNotCheckedDescription(): string {
@@ -85,6 +86,66 @@ export function AccountUsageGauge({
         display={display}
         className="w-9 text-right text-xs font-medium"
       />
+    </div>
+  )
+}
+
+/**
+ * Every primary window with its own bar, percentage and reset countdown — the account list's
+ * multi-window view, restoring what the tightest-gauge collapsed to one line (#43594).
+ * Falls back to the tightest gauge for states with no readable windows (not-checked, sign-in).
+ */
+export function AccountUsageWindowsGauge({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
+  const sections = usedSections(limits, t)
+  if (sections.length === 0) {
+    return <AccountUsageGauge limits={limits} isFetching={isFetching} />
+  }
+  const now = Date.now()
+  return (
+    <div
+      className={`flex flex-col items-end gap-0.5 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+    >
+      {sections.map((section) => {
+        const resetLabel = formatLocalizedResetDuration(section.window.resetsAt, now, intlLocale)
+        return (
+          <div
+            key={section.label}
+            role="img"
+            aria-label={`${section.label} ${formatUsagePercentageLabel(section.window.usedPercent, display, t)}`}
+            className="flex items-center justify-end gap-1.5"
+          >
+            <span className="text-3xs text-muted-foreground">{section.label}</span>
+            <UsageBar
+              usedPercent={section.window.usedPercent}
+              display={display}
+              tone="health"
+              className="h-[5px] w-[24px] shrink-0"
+            />
+            <UsageValue
+              usedPercent={section.window.usedPercent}
+              display={display}
+              className="w-9 text-right text-xs font-medium"
+            />
+            {/* A window without a reset time keeps its row; the countdown slot stays empty. */}
+            {resetLabel ? (
+              <span className="w-[46px] text-right text-3xs text-muted-foreground">
+                {resetLabel}
+              </span>
+            ) : null}
+          </div>
+        )
+      })}
     </div>
   )
 }
