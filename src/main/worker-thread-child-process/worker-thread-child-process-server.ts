@@ -174,12 +174,17 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
         }
       } else if (request.type === 'discard-output') {
         state.discarding ??= { stdout: false, stderr: false }
-        for (const stream of request.stream ? [request.stream] : (['stdout', 'stderr'] as const)) {
-          state.discarding[stream] = true
+        if (request.stream) {
+          // The other stream's chunks still in flight are acknowledged as usual, so the shared credit stays exact.
+          state.discarding[request.stream] = true
+          child[request.stream]?.resume()
+        } else {
+          state.discarding.stdout = true
+          state.discarding.stderr = true
+          state.pendingOutputBytes = 0
+          child.stdout?.resume()
+          child.stderr?.resume()
         }
-        state.pendingOutputBytes = 0
-        child.stdout?.resume()
-        child.stderr?.resume()
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {

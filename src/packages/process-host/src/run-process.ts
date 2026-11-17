@@ -17,6 +17,8 @@ import { createProcessTreeActions, terminate } from './run-process-tree-actions'
 export { setBufferedProcessSpawner, spawnProcess } from './process-spawn-selection'
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
+// Cleanup after a host died may queue behind a respawned host's launches; the run still ends.
+const ABANDONED_TREE_CLEANUP_WAIT_MS = 30_000
 
 /** Nonzero exits resolve; spawn errors reject. Tail capture preserves final diagnostics. */
 export function runProcess(
@@ -103,6 +105,9 @@ export function runProcess(
       )
 
     const settleBarrierOutcome = (): void => {
+      if (abandoned) {
+        return
+      }
       const rootExit = deferredClose ?? deferredExit
       if (deferredError) {
         settle(() => reject(deferredError))
@@ -252,7 +257,17 @@ export function runProcess(
         clearDeadline()
         clearTimeout(graceTimer)
         clearTimeout(barrierDeadlineTimer)
-        void (hosted.killAbandonedTree?.() ?? Promise.resolve()).then(() => {
+        // A tree already proven gone, or one whose walk is in flight, gets no second PID walk.
+        const cleanup = barrierTerminationVerified
+          ? Promise.resolve()
+          : (inFlightWindowsTreeKill(child) ?? hosted.killAbandonedTree?.() ?? Promise.resolve())
+        let cleanupTimer: ReturnType<typeof setTimeout> | undefined
+        const capped = new Promise<void>((done) => {
+          cleanupTimer = setTimeout(done, ABANDONED_TREE_CLEANUP_WAIT_MS)
+          cleanupTimer.unref?.()
+        })
+        void Promise.race([cleanup, capped]).then(() => {
+          clearTimeout(cleanupTimer)
           terminationReporter.report()
           settle(() => reject(error))
         })
