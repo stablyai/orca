@@ -21,7 +21,9 @@ export function journalDomainClientFormColumns(alias = 'item'): string {
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
       THEN COALESCE(${alias}.wire_json,${alias}.payload_json) ELSE ${alias}.payload_json END AS client_json,
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
-      THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes`
+      THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes,
+    CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} AND ${alias}.wire_json IS NOT NULL
+      THEN NULL ELSE ${alias}.output_blob END AS output_blob`
 }
 
 /** Decode only this selected set; callers retain admitted forms and discard a rejected whole group. */
@@ -56,7 +58,13 @@ export function readJournalDomainClientForm(
   row: SqliteRow,
   states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
-  const item = readJournalStoredItem(db, [target.sessionId, target.epoch], row.client_json)
+  // The blob is selected only when the client form is the stored payload, never beside a saved head.
+  const item = readJournalStoredItem(
+    db,
+    [target.sessionId, target.epoch],
+    row.client_json,
+    row.output_blob
+  )
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
     ? rememberAgentJournalItemWireForm(item, Number(row.client_bytes))
     : agentJournalItemForWire(

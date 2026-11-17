@@ -5,14 +5,17 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
-/** Off until every build in the supported downgrade window reads stored outputs. */
-export const JOURNAL_STORED_OUTPUT_WRITES = false
+/** Writes finished outputs compressed; builds before this one read the row's inline preview. */
+export const JOURNAL_STORED_OUTPUT_WRITES = true
 
 // Format 1: one zstd frame over the text as a JSON string literal, so lone surrogates survive.
 const FORMAT_ZSTD_JSON = 1
 const MIN_STORED_TEXT_BYTES = 512
 // Encoding and the read-back check run inside the writer transaction; larger text stays inline.
 export const MAX_STORED_TEXT_BYTES = 2 * 1024 * 1024
+// Builds that predate stored outputs show this inline preview, as does this one if a blob is unreadable.
+const PREVIEW_HEAD_CHARS = 512
+const PREVIEW_TAIL_CHARS = 512
 const ZSTD_PARAMS = {
   [constants.ZSTD_c_compressionLevel]: 3,
   [constants.ZSTD_c_checksumFlag]: 1
@@ -76,16 +79,24 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
   ) {
     return null
   }
-  const frame = zstdCompressSync(Buffer.from(JSON.stringify(payload.head)), { params: ZSTD_PARAMS })
-  // Small or incompressible text costs more as a blob plus marker than inline.
-  if (frame.length + 1 > textBytes * 0.8) {
+  const text = payload.head
+  if (text.length <= PREVIEW_HEAD_CHARS + PREVIEW_TAIL_CHARS + MIN_STORED_TEXT_BYTES) {
+    return null
+  }
+  const preview =
+    PREVIEW_TAIL_CHARS > 0
+      ? `${text.slice(0, PREVIEW_HEAD_CHARS)}\n…\n${text.slice(-PREVIEW_TAIL_CHARS)}`
+      : text.slice(0, PREVIEW_HEAD_CHARS)
+  const frame = zstdCompressSync(Buffer.from(JSON.stringify(text)), { params: ZSTD_PARAMS })
+  // Small or incompressible text costs more as a blob plus preview than inline.
+  if (frame.length + 1 + Buffer.byteLength(preview, 'utf8') > textBytes * 0.8) {
     return null
   }
   const blob = Buffer.allocUnsafe(frame.length + 1)
   blob.writeUInt8(FORMAT_ZSTD_JSON, 0)
   frame.copy(blob, 1)
   const stored: StoredPayload = {
-    head: '',
+    head: preview,
     byteLength: payload.byteLength,
     digest: payload.digest,
     truncated: true,
