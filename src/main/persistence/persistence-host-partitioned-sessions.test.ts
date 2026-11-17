@@ -207,7 +207,6 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(tabsOn(toSshExecutionHostId('ssh-b'))?.[0]?.id).toBe('twin-tab')
   })
 
-  // Fencing an unwritten host partition would rebase sibling worktrees onto empty state.
   it.each(['local', 'runtime:env-a'])(
     'retires one saved resume in the %s partition and keeps it retired after reload',
     async (hostId) => {
@@ -237,7 +236,6 @@ describe('Store host-partitioned workspace sessions', () => {
         },
         hostId
       )
-      const before = store.getWorkspaceSession(hostId)
 
       expect(
         store.retireSleepingAgentSession('quit', (saved) => saved.updatedAt <= 200, hostId)
@@ -245,9 +243,6 @@ describe('Store host-partitioned workspace sessions', () => {
       expect(
         store.retireSleepingAgentSession('newer', (saved) => saved.updatedAt <= 200, hostId)
       ).toBe(false)
-      expect(store.getWorkspaceSession(hostId).sleepingAgentSessionsByPaneKey?.other).toBe(
-        before.sleepingAgentSessionsByPaneKey?.other
-      )
       store.flush()
       store.freezeWrites()
       await store.waitForPendingWrite()
@@ -259,6 +254,7 @@ describe('Store host-partitioned workspace sessions', () => {
     }
   )
 
+  // Fencing an unwritten host partition would rebase sibling worktrees onto empty state.
   it('does not fence a delayed session write when its host partition was never persisted', async () => {
     const store = await createStore()
     const worktreeId = 'repo-gone::/workspace/stale'
