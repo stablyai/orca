@@ -317,7 +317,8 @@ describe('settled Run retention', () => {
     expect(step.value).toBe(false)
     expect(db!.getTask(task.id)?.result).toBe('corrected result')
     expect(count('dispatch_contexts WHERE run_id = ?', run.id)).toBe(1)
-    expect(count('messages WHERE run_id = ?', run.id)).toBe(1)
+    // The worker's report and its question.
+    expect(count('messages WHERE run_id = ?', run.id)).toBe(2)
   })
 
   it('keeps a settled Run while its coordinator, a reader of its unread mail or its worker terminal is live', () => {
