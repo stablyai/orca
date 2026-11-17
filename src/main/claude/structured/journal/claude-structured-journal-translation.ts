@@ -62,7 +62,6 @@ export function createClaudeJournalTranslator(
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
-    // Keep existing stamps when superseding a turn ends pending attribution corrections.
     turnSuperseded: () => corrections.abandon(),
     endOpenWork: (...e) => endClaudeStreams(streamedThinking, streamedText, streamedBlocks, ...e),
     onOpen: () => context.markActivity()
@@ -91,7 +90,6 @@ export function createClaudeJournalTranslator(
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     rosteredByEarlierRun: journaled.isSubagent,
     taskInvocations,
-    // Task output must open a resumed turn so the session does not appear idle while producing rows.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
     turnScope,
@@ -172,7 +170,6 @@ export function createClaudeJournalTranslator(
     turn.observeStartedSend(event.type === 'message' ? (event.startedSend ?? null) : null)
     if (event.type === 'message') {
       context.observe(event.message, event.observedAt ?? Date.now())
-      // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
       if (isRootClaudeFrame(event.message)) {
         if (event.message.type === 'system' && event.message.subtype === 'init') {
           turn.observeProviderCycleStart()
@@ -198,7 +195,6 @@ export function createClaudeJournalTranslator(
     ) {
       return
     }
-    // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
     const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
     // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
     if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {

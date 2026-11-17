@@ -2,7 +2,11 @@ import { expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
 import type { ClaudeLateDispatchOutcome } from '../claude-structured-session-state'
-import { fakeClaude, identityFor, PROVIDER_SESSION_ID } from '../claude-structured-session-test-support'
+import {
+  fakeClaude,
+  identityFor,
+  PROVIDER_SESSION_ID
+} from '../claude-structured-session-test-support'
 import { claudeStartupSettled } from '../startup/claude-structured-startup-settled-test-support'
 
 it.each(['exact', 'explicit', 'content'])(
@@ -36,7 +40,9 @@ it.each(['exact', 'explicit', 'content'])(
       events: {
         appendItem: (_identity, body) => {
           const turn = readAgentJournalTurn(body)
-          if (turn) turns.set(turn.turnId, turn.state)
+          if (turn) {
+            turns.set(turn.turnId, turn.state)
+          }
         },
         appendTombstone: () => {},
         publish: () => {}
