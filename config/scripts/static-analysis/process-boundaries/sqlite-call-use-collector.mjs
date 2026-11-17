@@ -146,7 +146,8 @@ export function collectSqliteCallSites(file, contents) {
     }
     return false
   }
-  // `const insertMany = db.transaction(fn)`: each insertMany() call runs BEGIN/COMMIT.
+  // `const insertMany = db.transaction(fn)`: each insertMany() call runs BEGIN/COMMIT; its result is not a database.
+  const transactionCalls = new Set()
   const transactionWrapper = (node) => {
     node = unwrap(node)
     return (
@@ -164,10 +165,10 @@ export function collectSqliteCallSites(file, contents) {
       if (
         ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
-        !callableConstructors.has(node.name.text) &&
+        !transactionCalls.has(node.name.text) &&
         transactionWrapper(node.initializer)
       ) {
-        callableConstructors.add(node.name.text)
+        transactionCalls.add(node.name.text)
         changed = true
         continue
       }
@@ -192,7 +193,7 @@ export function collectSqliteCallSites(file, contents) {
       if (ts.isNewExpression(node)) {
         return constructor(target)
       }
-      if (callableConstructors.has(key(target))) {
+      if (callableConstructors.has(key(target)) || transactionCalls.has(key(target))) {
         return true
       }
       return (

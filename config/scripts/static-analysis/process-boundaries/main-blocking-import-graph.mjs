@@ -130,23 +130,36 @@ export function eventLoopEntryFiles(root) {
     try {
       return readFileSync(path.join(root, file), 'utf8')
     } catch {
-      return ''
+      return null
     }
   }
-  const built = [
-    ...read('config/build-plugins/main-build-entry-points.ts').matchAll(
-      /resolve\(\s*'([^']+)'\s*\)/g
+  const builtSource = read('config/build-plugins/main-build-entry-points.ts')
+  const built = [...(builtSource ?? '').matchAll(/resolve\(\s*'([^']+)'\s*\)/g)].map(
+    (match) => match[1]
+  )
+  // A refactor of the entry list must not silently drop guarded roots.
+  if (builtSource !== null && !built.includes('src/main/index.ts')) {
+    throw new Error(
+      'main-blocking-import-graph: cannot read the Electron main entry from config/build-plugins/main-build-entry-points.ts; update eventLoopEntryFiles'
     )
-  ].map((match) => match[1])
+  }
   const cli = [
-    ...read('config/build-plugins/cli-main-entry-names.ts').matchAll(/^\s*'([^']+)',?$/gm)
+    ...(read('config/build-plugins/cli-main-entry-names.ts') ?? '').matchAll(/^\s*'([^']+)',?$/gm)
   ].map((match) => `src/main/${match[1]}.ts`)
   const preload = listTrackedFiles(root, ['src/preload']).filter(
     (file) => file.split('/').length === 3 && isMainBlockingSource(file)
   )
-  return [...built, ...cli, 'src/main/orcad/main.ts', ...preload].filter(
-    (file) => !Object.hasOwn(MAIN_BLOCKING_WORKER_ENTRIES, file)
-  )
+  const entries = [...built, ...cli, 'src/main/index.ts', 'src/main/orcad/main.ts', ...preload]
+  if (builtSource !== null) {
+    const tracked = new Set(listTrackedFiles(root, entries))
+    const missing = entries.filter((file) => !tracked.has(file))
+    if (missing.length > 0) {
+      throw new Error(
+        `main-blocking-import-graph: event-loop entries not found (${missing.join(', ')}); update eventLoopEntryFiles`
+      )
+    }
+  }
+  return entries.filter((file) => !Object.hasOwn(MAIN_BLOCKING_WORKER_ENTRIES, file))
 }
 
 /** Files imported only beneath worker/utility entries; anything an event-loop file or entry imports stays guarded. */

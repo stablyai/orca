@@ -33,25 +33,52 @@ function declaredNames(name, into) {
   }
 }
 
-/** Runtime references inside a function body, minus names it declares itself (parameters, locals). */
+/** A parameter of an enclosing function with the same name is a different binding than the helper. */
+function parameterShadowed(identifier) {
+  for (let node = identifier.parent; node && !ts.isSourceFile(node); node = node.parent) {
+    if (ts.isFunctionLike(node)) {
+      const names = new Set()
+      for (const parameter of node.parameters ?? []) {
+        declaredNames(parameter.name, names)
+      }
+      if (names.has(identifier.text)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function identifierAt(source, position) {
+  let node = source
+  for (;;) {
+    const child = node
+      .getChildren(source)
+      .find((candidate) => candidate.getStart(source) <= position && position < candidate.getEnd())
+    if (!child) {
+      return null
+    }
+    if (ts.isIdentifier(child)) {
+      return child.getStart(source) === position ? child : null
+    }
+    node = child
+  }
+}
+
+/** Runtime references inside a function body; local aliases still count, parameters named like a helper don't. */
 function scanBody(node) {
   const references = new Set()
-  const shadowed = new Set()
   const visit = (child) => {
     if (ts.isTypeNode(child) && !ts.isExpressionWithTypeArguments(child)) {
       return
     }
-    if (ts.isParameter(child) || ts.isVariableDeclaration(child) || ts.isBindingElement(child)) {
-      declaredNames(child.name, shadowed)
-    } else if ((ts.isFunctionDeclaration(child) || ts.isClassDeclaration(child)) && child.name) {
-      shadowed.add(child.name.text)
-    } else if (ts.isIdentifier(child) && isValueReference(child)) {
+    if (ts.isIdentifier(child) && isValueReference(child) && !parameterShadowed(child)) {
       references.add(child.text)
     }
     ts.forEachChild(child, visit)
   }
   ts.forEachChild(node, visit)
-  return { references: new Set([...references].filter((name) => !shadowed.has(name))), shadowed }
+  return { references }
 }
 
 /** Top-level functions with their ranges, runtime references, export names and re-exports. */
@@ -120,7 +147,7 @@ function scanDeclarations(file, contents) {
       reexports.push({ target, names })
     }
   }
-  return { functions, exportNames, reexports }
+  return { source, functions, exportNames, reexports }
 }
 
 /**
@@ -137,16 +164,13 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
   }
   // file -> helper name -> description of the blocking call it reaches.
   const helpers = new Map()
-  const markSites = (file, sites, viaHelpers = false) => {
+  const markSites = (file, sites) => {
     const { functions } = scan(file)
-    const contents = sources.get(file)
     const marked = helpers.get(file) ?? new Map()
     let added = false
     for (const { position, reaches } of sites) {
       const owner = functions.find((fn) => position >= fn.start && position < fn.end)
-      // A parameter or local named like a helper is a different binding (direct sites may use local requires).
-      const local = /^[\w$]+/.exec(contents.slice(position, position + 200))?.[0]
-      if (owner && !marked.has(owner.name) && !(viaHelpers && owner.shadowed.has(local))) {
+      if (owner && !marked.has(owner.name)) {
         marked.set(owner.name, reaches)
         added = true
       }
@@ -222,11 +246,18 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
     const uses = new Map()
     let grew = false
     for (const [file, contents] of sources) {
-      const { count, sites } = collector.collectUses(file, contents)
-      if (count === 0) {
+      const { sites } = collector.collectUses(file, contents)
+      const { source } = scan(file)
+      // The collector is file-wide; a call through a same-named parameter is not the helper.
+      const kept = sites.filter(({ position }) => {
+        const identifier = identifierAt(source, position)
+        return !identifier || !parameterShadowed(identifier)
+      })
+      if (kept.length === 0) {
         continue
       }
-      const reached = sites.map(({ name, position, module }) => ({
+      const count = kept.length
+      const reached = kept.map(({ name, position, module }) => ({
         position,
         name,
         reaches: reachesByModule.get(module)?.get(name) ?? name
@@ -235,7 +266,7 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
         count,
         reaches: [...new Set(reached.map(({ name, reaches }) => `${name} (${reaches})`))].sort()
       })
-      grew = markSites(file, reached, true) || grew
+      grew = markSites(file, reached) || grew
     }
     if (!grew || round + 1 >= depth) {
       return { uses, helpers }

@@ -88,7 +88,7 @@
 2 src/main/automations/runtime-automation-service.ts
 5 src/main/backend/backend-entry.ts
 11 src/main/backend/core-runtime-activation.ts
-1 src/main/backend/core-runtime.ts
+2 src/main/backend/core-runtime.ts
 4 src/main/bitbucket/client.ts
 5 src/main/bitbucket/credential-connection.ts
 7 src/main/bitbucket/credential-store.ts
@@ -918,7 +918,7 @@
 4 src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-request.ts
 3 src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-listener.ts
 5 src/main/orcad/host-lifecycle/orcad-lifecycle.ts
-2 src/main/orcad/host-runtime/orcad-entry.ts
+3 src/main/orcad/host-runtime/orcad-entry.ts
 5 src/main/orcad/host-runtime/orcad-host-adapters.ts
 2 src/main/orcad/host-runtime/orcad-runtime-rpc.ts
 2 src/main/orcad/host-runtime/orcad-session-scanner-idle.ts
