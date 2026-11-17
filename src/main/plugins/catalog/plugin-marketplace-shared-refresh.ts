@@ -36,25 +36,44 @@ export function sharedSourceRefresh(
   }
 }
 
+/** How long an update preview waits on its catalog refresh before using the cached catalog. */
+export const UPDATE_PREVIEW_REFRESH_WAIT_MS = 5_000
+
 /**
  * Re-fetches the catalog an installed plugin updates from, before its update preview. Why: a user
  * checking for updates must see releases published since the last fetch. A failed fetch keeps the
- * cached catalog, so offline still previews what it knows.
+ * cached catalog, so offline still previews what it knows. Why the wait cap: a large catalog's fetch
+ * can take minutes while the review shows a spinner; past the cap it finishes in the background.
  */
 export async function refreshInstalledPluginCatalog(
   services: {
     installer: Pick<PluginMarketplaceInstaller, 'readInstallLockfile'>
     marketplace: { refreshSourceShared: (sourceId: string) => Promise<unknown> }
   },
-  pluginKey: string
+  pluginKey: string,
+  maxWaitMs = UPDATE_PREVIEW_REFRESH_WAIT_MS
 ): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
     // Why the lock entry, not the cached listing: a snapshot that lost the listing is exactly the
     // one a refresh would repair.
     const lock = await services.installer.readInstallLockfile()
     const installed = marketplaceInstallOf(lock.plugins[pluginKey] ?? null)
-    await (installed ? services.marketplace.refreshSourceShared(installed.sourceId) : null)
+    if (!installed) {
+      return
+    }
+    const timedOut = await Promise.race([
+      services.marketplace.refreshSourceShared(installed.sourceId).then(() => false),
+      new Promise<true>((resolve) => {
+        timer = setTimeout(() => resolve(true), maxWaitMs)
+      })
+    ])
+    if (timedOut) {
+      console.warn('[plugins] catalog refresh before update preview is slow; using cached catalog')
+    }
   } catch (error) {
     console.warn('[plugins] catalog refresh before update preview failed:', error)
+  } finally {
+    clearTimeout(timer)
   }
 }

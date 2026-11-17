@@ -303,6 +303,20 @@ describe('PluginMarketplaceInstaller', () => {
     warn.mockRestore()
   })
 
+  it('previews from the cached catalog when the refresh before an update preview never settles', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.marketplaceCommit = 'e'.repeat(40)
+    vi.spyOn(service, 'refreshSource').mockReturnValueOnce(new Promise(() => undefined))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await refreshInstalledPluginCatalog({ installer, marketplace: service }, 'community.notes', 10)
+    await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
+      marketplaceCommit: 'f'.repeat(40)
+    })
+    warn.mockRestore()
+  })
+
   it('lets a Remove that starts during an automatic update win', async () => {
     const { root, installer, sourceId } = await setup()
     await installer.install(await installer.preview(sourceId, 'community.notes'))
