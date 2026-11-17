@@ -161,10 +161,22 @@ export function NativeChatUsageLimitRow({
     : undefined
   // Historical rows pass no time, so they never schedule a wake.
   const passed = useUsageLimitContinueClock(manualAt)
+  // Continue can apply before the provider's reset (an account switch); only the reset itself
+  // says the agent has usage again. Its own wake runs only when it is a different moment.
+  const resetAt = active ? (validResetAt(limit?.resetsAt) ?? undefined) : undefined
+  const resetIsManual = resetAt === manualAt
+  const resetPassedAlone = useUsageLimitContinueClock(resetIsManual ? undefined : resetAt)
+  const usageAgain = resetIsManual ? passed : resetPassedAlone
   const auto = active ? (view.usageLimitAutoContinue ?? null) : null
-  // A host without the feature, or another machine whose setting is off: no control would apply.
-  const autoOffered = active && view.usageLimitAutoContinueUnavailable !== true
+  // This machine's setting configures only its own chats: a remote host offers just a published
+  // schedule to cancel, and a local host without the feature offers nothing.
+  const localSetting = active && !view.remoteHost && view.usageLimitAutoContinueUnavailable !== true
   const scheduled: ScheduledAutoContinue | null = auto?.kind === 'scheduled' ? auto : null
+  const clockAuto: NativeChatUsageLimitAutoContinueState | null = view.remoteHost
+    ? scheduled
+    : localSetting
+      ? (auto ?? AUTO_CONTINUE_OFF)
+      : null
   const phase: UsageLimitPhase = !active
     ? 'historical'
     : manualAt === undefined
@@ -177,6 +189,7 @@ export function NativeChatUsageLimitRow({
   const words = usageLimitRowWords(
     {
       phase,
+      usageAgain,
       window: limit?.window,
       agent: agentName ?? sayAgentSessionFailureTranslated('theAgent', {}),
       // The cause and window, without a reset clause: the status sentences carry the times.
@@ -240,7 +253,7 @@ export function NativeChatUsageLimitRow({
           }
         ]
       : []),
-    ...(auto || (autoOffered && (phase === 'waiting' || phase === 'ready'))
+    ...(localSetting && (phase === 'waiting' || phase === 'ready')
       ? [
           {
             key: 'settings',
@@ -310,9 +323,9 @@ export function NativeChatUsageLimitRow({
                       )}
                     </UsageLimitToolButton>
                   ) : null}
-                  {phase === 'waiting' && autoOffered ? (
-                    // A host still loading, or with no state for this cut yet, offers the setting as "off".
-                    <AutoContinueTool auto={auto ?? AUTO_CONTINUE_OFF} autoTime={autoTime} />
+                  {phase === 'waiting' && clockAuto ? (
+                    // Locally, a host still loading or yet to publish offers the setting as "off".
+                    <AutoContinueTool auto={clockAuto} autoTime={autoTime} />
                   ) : null}
                 </>
               ) : (

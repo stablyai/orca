@@ -8,6 +8,9 @@ export type UsageLimitPhase = 'historical' | 'unknown' | 'waiting' | 'ready'
 
 export type UsageLimitRowWordsInput = {
   phase: UsageLimitPhase
+  /** The provider's own reset has passed. Continue can apply sooner (an account switch), when
+   *  the account may still be spent, so only this claims the agent has usage again. */
+  usageAgain: boolean
   window: AgentSessionUsageLimitWindow | undefined
   /** The agent's display name, or the translated generic agent. */
   agent: string
@@ -67,7 +70,7 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
   if (phase === 'unknown') {
     return t('components.native-chat.usageLimitActions.statusUnknown', 'Reset time unknown.')
   }
-  if (phase === 'ready') {
+  if (phase === 'ready' && input.usageAgain) {
     return autoTime
       ? t(
           'components.native-chat.usageLimitActions.statusHasUsageAuto',
@@ -77,6 +80,19 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
       : t('components.native-chat.usageLimitActions.statusHasUsage', '{{agent}} has usage again.', {
           agent
         })
+  }
+  if (phase === 'ready') {
+    return autoTime
+      ? t(
+          'components.native-chat.usageLimitActions.statusCanContinueNowAuto',
+          '{{agent}} can continue now. Orca will continue this chat at {{time}}.',
+          { agent, time: autoTime }
+        )
+      : t(
+          'components.native-chat.usageLimitActions.statusCanContinueNow',
+          '{{agent}} can continue now.',
+          { agent }
+        )
   }
   if (autoTime && sameTime) {
     return t(
@@ -145,11 +161,21 @@ export function usageLimitRowWords(
   const status = accessibleStatus(input, t)
   return {
     title:
-      input.phase === 'ready'
-        ? t('components.native-chat.usageLimitActions.titleHasUsage', '{{agent}} has usage again', {
-            agent: input.agent
-          })
-        : limitTitle(input.window, input.agent, t),
+      input.phase !== 'ready'
+        ? limitTitle(input.window, input.agent, t)
+        : input.usageAgain
+          ? t(
+              'components.native-chat.usageLimitActions.titleHasUsage',
+              '{{agent}} has usage again',
+              {
+                agent: input.agent
+              }
+            )
+          : t(
+              'components.native-chat.usageLimitActions.titleCanContinueNow',
+              '{{agent}} can continue now',
+              { agent: input.agent }
+            ),
     subline: subline(input, t),
     summary: status
       ? t('components.native-chat.usageLimitActions.srSummary', '{{sentence}} {{status}}', {

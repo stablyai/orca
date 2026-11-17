@@ -49,11 +49,13 @@ function stopView(
   active: boolean,
   auto: NativeChatUsageLimitAutoContinueState | null,
   continueUsageLimit: (hadFocus?: boolean) => void,
-  autoUnavailable = false
+  autoUnavailable = false,
+  host: { remote?: boolean; continueAt?: number } = {}
 ): NativeChatOrcaStopView {
   return {
     hostLabel: null,
-    remoteHost: false,
+    remoteHost: host.remote === true,
+    ...(host.continueAt === undefined ? {} : { usageLimitContinueAt: host.continueAt }),
     continueAvailable: false,
     offeredTurnItemId: null,
     continueNow: () => {},
@@ -70,7 +72,9 @@ function row({
   auto = null,
   actions = null,
   block,
-  continueUsageLimit = () => {}
+  continueUsageLimit = () => {},
+  remote = false,
+  continueAt
 }: {
   resetsAt?: number
   active?: boolean
@@ -78,8 +82,12 @@ function row({
   actions?: UsageLimitActions | null
   block?: NativeChatTextBlock
   continueUsageLimit?: (hadFocus?: boolean) => void
+  /** The chat runs on a paired server, not this machine. */
+  remote?: boolean
+  /** When the host lets Continue apply, e.g. earlier after an account switch. */
+  continueAt?: number
 }) {
-  const view = stopView(active, auto, continueUsageLimit)
+  const view = stopView(active, auto, continueUsageLimit, false, { remote, continueAt })
   return (
     <TranslationScopeProvider>
       <TooltipProvider>
@@ -199,6 +207,50 @@ describe('usage-limit row over time', () => {
       'aria-disabled',
       'true'
     )
+  })
+
+  it('claims usage only once the provider reset passes, not when an earlier Continue applies', () => {
+    const at = (when: number) => {
+      vi.setSystemTime(when)
+      act(() => {
+        fireEvent(window, new Event('focus'))
+      })
+    }
+    // An account switch lets Continue apply at 1h, while the provider still resets at 3h.
+    render(row({ resetsAt: start + 3 * HOUR, continueAt: start + HOUR }))
+    at(start + HOUR)
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
+    expect(screen.queryByText(/has usage again/)).toBeNull()
+    expect(screen.getByText('Codex can continue now')).toBeInTheDocument()
+    at(start + 3 * HOUR)
+    expect(screen.getByText('Codex has usage again')).toBeInTheDocument()
+    expect(screen.queryByText(/can continue now/)).toBeNull()
+  })
+
+  it("never opens this machine's setting for a remote chat; it offers only a published schedule", () => {
+    const remoteClock = (auto: NativeChatUsageLimitAutoContinueState | null) => {
+      const view = render(row({ resetsAt: start + HOUR, auto, remote: true }))
+      const pressed = screen.queryByRole('button', { pressed: true })
+      const settings = screen.queryByRole('button', { name: 'Auto-continue settings' })
+      const wont = screen.queryByRole('button', { name: "Won't continue automatically" })
+      fireEvent.keyDown(screen.getByRole('button', { name: 'More actions' }), { key: 'Enter' })
+      const menuSetting = screen.queryByRole('menuitem', { name: 'Auto-continue settings…' })
+      view.unmount()
+      return { pressed, settings, wont, menuSetting }
+    }
+    // Loading or unpublished: nothing to show.
+    expect(remoteClock(null)).toEqual({
+      pressed: null,
+      settings: null,
+      wont: null,
+      menuSetting: null
+    })
+    expect(remoteClock({ kind: 'cancelled' }).wont).toBeNull()
+    expect(remoteClock({ kind: 'cancelled' }).menuSetting).toBeNull()
+    const cancel = vi.fn()
+    const scheduled = remoteClock({ kind: 'scheduled', resetsAt: start + HOUR, cancel })
+    expect(scheduled.pressed).not.toBeNull()
+    expect(scheduled.menuSetting).toBeNull()
   })
 
   it('offers no auto-continue control where this machine has no say', () => {
