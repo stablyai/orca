@@ -133,17 +133,22 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   }
 
   /** Whether this host pushes the alert to its own phones, so a mirroring desktop can leave them to it. */
-  pushesOwnPhoneAlert(alert: { source: string; paneKey?: string; structured?: boolean }): boolean {
+  pushesOwnPhoneAlert(alert: {
+    source: string
+    agentState?: string
+    paneKey?: string
+    structured?: boolean
+  }): boolean {
     // Host main pushes native chats; a window pushes every terminal alert it raises.
     if (alert.structured === true || this.hasPhonePushingWindow()) {
       return true
     }
-    // Without a window only hook-reported agent turns reach phones, never bells or title-only turns.
-    return (
-      alert.source === 'agent-task-complete' &&
-      alert.paneKey !== undefined &&
-      this.agentTransitions.latestRow(alert.paneKey) !== null
-    )
+    // Without a window only hook-reported turns reach phones, never bells or title-only turns.
+    const row =
+      alert.source === 'agent-task-complete' && alert.paneKey
+        ? this.agentTransitions.latestRow(alert.paneKey)
+        : null
+    return row !== null && row.state === alert.agentState && row.restoredUnconfirmed !== true
   }
 
   protected onTitleAgentStatusChanged(): void {
