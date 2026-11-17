@@ -15,10 +15,11 @@ import {
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import {
-  requestProgramRepaint,
-  restoreFromReattachedReadyScreen
-} from '../wait/reattached-ready-screen'
+  awaitReattachedTerminalPaint,
+  hasTerminalCommandPainted
+} from '../input/terminal-command-paint'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
@@ -248,6 +249,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     const pty = this.ptysById.get(ptyId)
     if (pty && pty.lastOutputAt === null) {
       pty.outputObservedSince ??= Date.now()
+      awaitReattachedTerminalPaint(pty)
     }
   }
 
@@ -261,7 +263,6 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       return
     }
     const { incarnationId } = pty
-    const reattachedAt = Date.now()
     const generation = this.getPtyLifecycleGeneration(ptyId)
     // A respawn, an exit or a live report since the reattach decides instead.
     const isCurrent = (): boolean =>
@@ -289,12 +290,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           agent,
           readScreen: () => this.readCaughtUpRuledScreen(ptyId),
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
-          hasOutputSinceReattach: () => (pty.lastOutputAt ?? -1) >= reattachedAt,
-          requestRepaint: () =>
-            requestProgramRepaint({
-              getSize: () => this.getTerminalSize(ptyId),
-              resize: (cols, rows) => this.ptyController?.resize?.(ptyId, cols, rows) ?? false
-            }),
+          hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
+          requestRepaint: () => this.ptyController?.requestRepaint?.(ptyId),
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })

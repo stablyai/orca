@@ -101,13 +101,23 @@ export class TerminalCommandPaint {
     }
   }
 
+  /** A reattached process's command start predates this observer, so only its next visible paint
+   *  speaks for it; the screen it left may be an earlier program's. */
+  awaitReattachedPaint(): void {
+    this.awaitingPaint = true
+    this.composers = null
+  }
+
   hasPainted(): boolean {
     return !this.awaitingPaint
   }
 
-  /** Whether the agent's own composer marker has arrived since the command started; true before any marker, like paint. */
+  /** Whether the agent's own composer marker has arrived since the command started; before any
+   *  marker, whether it painted, like `hasPainted`. */
   hasAgentComposer(signal: DraftPasteMarkerSignal): boolean {
-    return this.composers === null || (this.composers.get(signal)?.seen ?? false)
+    return this.composers === null
+      ? !this.awaitingPaint
+      : (this.composers.get(signal)?.seen ?? false)
   }
 }
 
@@ -121,6 +131,11 @@ export function observeTerminalCommandPaint(
 ): void {
   record.commandPaint ??= new TerminalCommandPaint()
   record.commandPaint.observe(data, normalizedText)
+}
+
+export function awaitReattachedTerminalPaint(record: TerminalCommandPaintRecord): void {
+  record.commandPaint ??= new TerminalCommandPaint()
+  record.commandPaint.awaitReattachedPaint()
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

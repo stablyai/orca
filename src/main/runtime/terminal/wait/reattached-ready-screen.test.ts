@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { requestProgramRepaint, restoreFromReattachedReadyScreen } from './reattached-ready-screen'
+import { restoreFromReattachedReadyScreen } from './reattached-ready-screen'
 
 const HERMES_READY = { lines: ['─ ready │ 3s', '❯ Ask me anything…'], alternateScreen: false }
 
@@ -17,7 +17,7 @@ describe('a reattached agent ready screen', () => {
       agent: 'hermes',
       readScreen: () => HERMES_READY,
       readOutputClockAt: () => outputAt,
-      hasOutputSinceReattach: () => outputAt !== null,
+      hasPaintedSinceReattach: () => outputAt !== null,
       requestRepaint,
       isCurrent: () => true,
       applyIdle
@@ -34,15 +34,16 @@ describe('a reattached agent ready screen', () => {
     expect(requestRepaint).toHaveBeenCalledTimes(1)
   })
 
-  it('never settles on a retained screen the agent does not repaint', async () => {
+  it('asks a quiet agent to repaint whatever frame it left, and never settles on that frame', async () => {
     vi.useFakeTimers()
     const applyIdle = vi.fn()
     const requestRepaint = vi.fn()
+    const readScreen = vi.fn(() => HERMES_READY)
     restoreFromReattachedReadyScreen({
       agent: 'hermes',
-      readScreen: () => HERMES_READY,
+      readScreen,
       readOutputClockAt: () => null,
-      hasOutputSinceReattach: () => false,
+      hasPaintedSinceReattach: () => false,
       requestRepaint,
       isCurrent: () => true,
       applyIdle
@@ -50,24 +51,6 @@ describe('a reattached agent ready screen', () => {
     await vi.advanceTimersByTimeAsync(120_000)
     expect(applyIdle).not.toHaveBeenCalled()
     expect(requestRepaint).toHaveBeenCalledTimes(1)
-  })
-
-  it('repaints by resizing one row smaller and back', async () => {
-    vi.useFakeTimers()
-    let size = { cols: 120, rows: 40 }
-    const resizes: [number, number][] = []
-    requestProgramRepaint({
-      getSize: () => size,
-      resize: (cols, rows) => {
-        resizes.push([cols, rows])
-        size = { cols, rows }
-        return true
-      }
-    })
-    await vi.advanceTimersByTimeAsync(250)
-    expect(resizes).toEqual([
-      [120, 39],
-      [120, 40]
-    ])
+    expect(readScreen).not.toHaveBeenCalled()
   })
 })
