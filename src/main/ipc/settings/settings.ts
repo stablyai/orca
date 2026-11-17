@@ -113,10 +113,6 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
-    // Generic settings writers cannot change the server preference owned by Advanced controls.
-    delete sanitizedArgs.activeRuntimeEnvironmentId
-    // Only the main-process directory picker may grant trusted floating-workspace paths.
-    delete sanitizedArgs.floatingTerminalTrustedCwds
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
         sanitizedArgs,

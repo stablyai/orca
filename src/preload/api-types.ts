@@ -59,7 +59,7 @@ import type { RuntimeApi } from './api/runtime/runtime-api'
 import type { WslMoveApi } from './api/wsl/wsl-move-bridge'
 import type { WslDriveProjectApi } from './api/wsl/wsl-drive-project-bridge'
 import type { WslDriveUncConversionApi } from './api/wsl/wsl-drive-unc-conversion-bridge'
-import type { KeybindingsApi, SettingsApi } from './api/preferences/settings-api'
+import type { KeybindingsApi, SettingsApi, SettingsFileApi } from './api/preferences/settings-api'
 import type { ShellApi } from './api/terminal/shell-api'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
@@ -123,6 +123,7 @@ export type PreloadApi = {
   telemetryAssignBrowserExtensionsBanner: TelemetryApi['telemetryAssignBrowserExtensionsBanner']
   telemetryAcknowledgeBanner: TelemetryApi['telemetryAcknowledgeBanner']
   settings: SettingsApi
+  settingsFile: SettingsFileApi
   agentAwake: AgentAwakeApi
   localhostWorktreeLabels: LocalhostWorktreeLabelsApi
   keybindings: KeybindingsApi

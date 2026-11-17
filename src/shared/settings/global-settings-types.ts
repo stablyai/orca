@@ -498,4 +498,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
+  /** Portable keys present in ~/.orca/settings.json at its last read; a key that later disappears resets to its default. */
+  settingsFileLastSeenKeys: string[]
 }
