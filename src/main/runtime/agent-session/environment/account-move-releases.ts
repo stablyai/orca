@@ -1,49 +1,54 @@
 import type { CrewChanges } from '../../orchestration/crew/crew-changes'
 import type { StructuredAgentSessionAccountMoveEdge } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import type { AccountsSnapshot, RuntimeAccountController } from './runtime-account-controller'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 
-/** The accounts a start would use; usage and name updates leave it unchanged. */
-function selectionKey(snapshot: AccountsSnapshot): string {
-  return JSON.stringify([
-    snapshot.claude.activeAccountId,
-    snapshot.claude.activeAccountIdsByRuntime,
-    snapshot.codex.activeAccountId,
-    snapshot.codex.activeAccountIdsByRuntime,
-    snapshot.opencode?.activeAccountId,
-    snapshot.devin?.activeAccountId
-  ])
-}
+/** The settings a start's account is chosen from; usage and name updates write none of them. */
+const SELECTION_KEYS: readonly (keyof GlobalSettings)[] = [
+  'activeClaudeManagedAccountId',
+  'activeClaudeManagedAccountIdsByRuntime',
+  'activeCodexManagedAccountId',
+  'activeCodexManagedAccountIdsByRuntime'
+]
 
 /** A Dispatch settling or the account selection changing can release a chat's held sends; mail
- *  traffic and usage readings cannot. */
+ *  traffic and usage readings cannot. Selection is read from the settings write itself, so a
+ *  usage update costs nothing here. */
 export function accountMoveReleases(
   dispatches: Pick<CrewChanges, 'subscribe'>,
-  accounts: Pick<RuntimeAccountController, 'onChanged'>
-): { subscribe: (wake: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void } {
+  settings: () => Pick<RuntimeStore, 'onSettingsChanged' | 'getSettings'> | null
+): {
+  subscribe: (wake: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
+  selection: () => readonly unknown[]
+} {
   return {
+    // Pruning a removed account rewrites these without notifying listeners.
+    selection: () => {
+      const current = settings()?.getSettings()
+      return current ? SELECTION_KEYS.map((key) => current[key]) : []
+    },
     subscribe: (wake) => {
       const stopDispatches = dispatches.subscribe((facets) => {
         if (facets.has('topology')) {
           wake('dispatch')
         }
       })
-      let selection: string | undefined
-      let stopAccounts: (() => void) | undefined
-      try {
-        stopAccounts = accounts.onChanged((snapshot) => {
-          const next = selectionKey(snapshot)
-          // The first answer has nothing to compare: a switch may be what sent it.
-          if (next !== selection) {
+      const stopSettings =
+        settings()?.onSettingsChanged?.((updates) => {
+          if (SELECTION_KEYS.some((key) => key in updates)) {
             wake('account')
           }
-          selection = next
-        })
-      } catch {
-        // A runtime without account services never moves a chat between accounts.
-      }
+        }) ?? (() => {})
+      // OpenCode and Devin keep their selection in the data-account service; it changes rarely.
+      const stopDataAccounts = hasAppEnvironment()
+        ? getManagedDataAccountService().onChanged(() => wake('account'))
+        : () => {}
       return () => {
         stopDispatches()
-        stopAccounts?.()
+        stopSettings()
+        stopDataAccounts()
       }
     }
   }

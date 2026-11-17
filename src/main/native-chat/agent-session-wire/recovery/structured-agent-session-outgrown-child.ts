@@ -140,7 +140,7 @@ type OutgrownChildWorkReads = StructuredAgentSessionChildWorkReads & {
 }
 
 /** A chat whose next start moves it to another account or a fresh login, while its running child
- *  still owes work and so cannot retire yet. Derived each read, never stored. */
+ *  still owes work and so cannot retire yet. Kept in memory until an edge can change it. */
 export type StructuredAgentSessionAccountTransition = {
   cause: 'account' | 'signed-out'
   waitsFor: 'turn' | 'prompt' | 'child-work' | 'held-send' | 'dispatch' | 'wake-up'
@@ -173,30 +173,33 @@ export async function readStructuredAgentSessionAccountTransition(
   deps: AccountTransitionDeps & {
     /** A move already read for this child, whose account selection has not changed since. */
     known?: AccountMove
+    /** The child's next start stays on its account: nothing it owes needs reading. */
+    onNoMove?: () => void
+    /** Known from an unchanged selection: only a sign-out can still move it. */
+    staysOnAccount?: true
   }
 ): Promise<StructuredAgentSessionAccountTransition | null> {
   const child = session?.child
   if (!session || !child || child.phase === 'starting' || child.close) {
     return null
   }
-  // Owed work is read first: the account a start would use is the costlier read.
+  let move = deps.known
+  if (!move) {
+    const to = deps.staysOnAccount
+      ? null
+      : await launchedUnderOtherAccount(child, deps.launchAccountHome)
+    if (!to && !(await session.journal.reads.outgrownChild({ fence: child.fence })).signedOut) {
+      deps.onNoMove?.()
+      return null
+    }
+    move = { cause: to ? 'account' : 'signed-out', from: child.accountHome ?? null, to }
+  }
   const owed = await owedWork(
     deps.work,
     (current) => current?.newestTurnCompletedAt,
     deps.now() - STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS
   )
-  if (!owed) {
-    return null
-  }
-  if (deps.known) {
-    const { cause, from, to } = deps.known
-    return { cause, ...owed, from, to }
-  }
-  const to = await launchedUnderOtherAccount(child, deps.launchAccountHome)
-  if (!to && !(await session.journal.reads.outgrownChild({ fence: child.fence })).signedOut) {
-    return null
-  }
-  return { cause: to ? 'account' : 'signed-out', ...owed, from: child.accountHome ?? null, to }
+  return owed ? { cause: move.cause, ...owed, from: move.from, to: move.to } : null
 }
 
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */

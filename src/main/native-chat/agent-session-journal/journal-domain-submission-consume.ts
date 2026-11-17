@@ -65,6 +65,13 @@ export function nextJournalDomainQueueCard(
       }
       FROM journal_queue_cards AS card WHERE card.session_id=? AND card.epoch=?
         AND card.state IN ('waiting','returned')
+        ${
+          // A card that waits for the account move is no barrier to the mail behind it, and is
+          // left in the table undecoded.
+          selection.awaitsAccountMove
+            ? "AND NOT (json_valid(card.payload_json) AND json_extract(card.payload_json,'$.body.from') IS NULL)"
+            : ''
+        }
         ${after ? 'AND (card.position,card.message_id)>(?,?)' : ''}
       ORDER BY card.position,card.message_id LIMIT 64`)
       .all(
@@ -93,10 +100,6 @@ export function nextJournalDomainQueueCard(
     for (const row of rows) {
       const { card } = readJournalDomainQueueRow(target.sessionId, row)
       after = { position: card.position, messageId: card.messageId }
-      // A card that waits for the account move is no barrier to the mail behind it.
-      if (selection.awaitsAccountMove && card.body.from === undefined) {
-        continue
-      }
       if (automatic && row.edit_held) {
         return { kind: 'selected', card: null }
       }

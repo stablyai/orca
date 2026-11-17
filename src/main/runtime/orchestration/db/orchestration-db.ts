@@ -78,6 +78,8 @@ class OrchestrationDbCore {
     this.db.exec(`
       DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
       CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_run ON dispatch_contexts(run_id);
+      CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_incarnation_status
+        ON dispatch_contexts(process_incarnation, status);
       CREATE INDEX IF NOT EXISTS idx_question_threads_run ON question_threads(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_origin
         ON worker_terminal_resources(origin_dispatch_id);

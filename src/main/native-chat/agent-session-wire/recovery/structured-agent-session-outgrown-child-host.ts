@@ -18,7 +18,10 @@ import {
   type StructuredAgentSessionAccountTransition,
   type StructuredAgentSessionOutgrownChild
 } from './structured-agent-session-outgrown-child'
-import { AccountMoveHolds } from './structured-agent-session-account-move-holds'
+import {
+  AccountMoveHolds,
+  type AccountMoveReader
+} from './structured-agent-session-account-move-holds'
 import { keepStructuredAgentSessionSendForAccountMove } from './structured-agent-session-account-move-keep'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 
@@ -27,8 +30,8 @@ export type StructuredAgentSessionAccountTransitionRead = (
   options?: {
     /** A pass-shared read of the account a start would use, when the caller has one. */
     launchHome?: () => Promise<AgentSessionAccountHome | null>
-    /** Only look: a caller with no waiting person card leaves the chat's hold alone. */
-    observe?: false
+    /** Who waits on the answer; a usage-limit continue does not make the queue read as held. */
+    reader?: AccountMoveReader
   }
 ) => Promise<StructuredAgentSessionAccountTransition | null>
 
@@ -68,7 +71,13 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   // Personal Stop holds handover meanwhile; its next step decides.
   const unlessStopping = async (sessionId: string) =>
     (await clientDelivery.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
-  const holds = new AccountMoveHolds(input.wake, () => deps.accountMoveWakes, now, sessions)
+  const holds = new AccountMoveHolds({
+    wake: input.wake,
+    wakes: () => deps.accountMoveWakes,
+    dispatchOpen: (sessionId) => retainedWork(sessionId).hasOpenDispatch(),
+    now,
+    sessions
+  })
 
   return {
     retainedWork,
@@ -123,37 +132,53 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         // Nothing else may wake a send left pending; try again shortly, never in a tight loop.
         setTimeout(() => input.wake(sessionId), KEEP_RETRY_MS).unref?.()
       }
-      return kept === 'not-persons' ? outcome : { kind: 'withheld' }
+      if (kept === 'not-persons') {
+        return outcome
+      }
+      // Held at once, so the kept card is not claimed again before the hold is read.
+      holds.observe(session, sessionId, outcome.transition, 'person')
+      return { kind: 'withheld' }
     },
     accountTransition: (async (sessionId, options) => {
       const session = sessions.get(sessionId)
+      const reader = options?.reader ?? 'person'
       const held = holds.reusable(session, sessionId)
       if (held?.fresh) {
+        holds.adopt(session, sessionId, reader)
         return held.transition
       }
+      const staysOnAccount = !held && holds.staysOnAccount(session)
       const reading = await unlessStopping(sessionId)
       const read = holds.begin(sessionId)
+      let noMove = false
       const transition = await readStructuredAgentSessionAccountTransition(reading, {
         work: retainedWork(sessionId),
         launchAccountHome: options?.launchHome ?? launchAccountHome(sessionId),
         now,
+        onNoMove: () => {
+          noMove = true
+        },
+        ...(staysOnAccount ? { staysOnAccount } : {}),
         ...(held ? { known: held.transition } : {})
       }).catch((error: unknown) => {
         holds.end(sessionId, read)
         throw error
       })
-      if (holds.end(sessionId, read) && options?.observe !== false) {
-        holds.observe(sessions.get(sessionId), sessionId, transition)
+      if (holds.end(sessionId, read)) {
+        if (noMove && !staysOnAccount) {
+          holds.staysOnAccountFrom(sessions.get(sessionId))
+        }
+        holds.observe(sessions.get(sessionId), sessionId, transition, reader)
       }
       return transition
     }) satisfies StructuredAgentSessionAccountTransitionRead,
-    /** A held chat whose hold no edge has touched: nothing it holds can be sent yet. */
     accountMoveHeld: (sessionId: string): boolean =>
-      holds.reusable(sessions.get(sessionId), sessionId)?.fresh === true,
+      holds.heldForPerson(sessions.get(sessionId), sessionId),
     /** Its child work settled: a hold waiting on it is read again. */
     accountMoveEvidence: (sessionId: string) => holds.stale(sessionId, 'work'),
-    accountMoveSettled: (sessionId: string): null => {
-      holds.observe(sessions.get(sessionId), sessionId, null)
+    /** `reader` no longer waits on the chat's move (no person card, or no continue due). */
+    accountMoveSettled: (sessionId: string, reader: AccountMoveReader = 'person'): null => {
+      holds.forget(sessions.get(sessionId), sessionId, reader)
       return null
     },
     dispose: () => holds.dispose()

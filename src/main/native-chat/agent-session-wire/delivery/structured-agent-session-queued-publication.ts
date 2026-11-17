@@ -49,6 +49,23 @@ export function structuredQueueSendGate(
   resolved?: StructuredAgentSessionObservedWork
 ): QueueSendGate {
   return async (journal, cards) => {
+    const awaitsAccountMove = host.sessions.get(sessionId)?.awaitsAccountMove === true
+    if (
+      awaitsAccountMove &&
+      !cards.some(
+        (card) =>
+          (card.state === 'waiting' || card.state === 'returned') && card.body.from !== undefined
+      )
+    ) {
+      // Every waiting card waits for the move: nothing is next, and the held cards go unread.
+      const answer = await readJournalSqlWorkAnswerOnce(
+        journal,
+        () => captureHostStructuredAgentSessionWork(host, sessionId, journal),
+        { kind: 'state' },
+        resolved?.readSource?.authority
+      )
+      return answer ? gateAnswer(answer.state, null) : null
+    }
     // One attempt, at the resolved frame's own authority when there is one.
     const answer = await readJournalSqlWorkAnswerOnce(
       journal,
@@ -58,7 +75,7 @@ export function structuredQueueSendGate(
         resolved: resolved?.readSource,
         allowSteer: false,
         // The drain's own last reading, so the next card named is the one it would send.
-        ...(host.sessions.get(sessionId)?.awaitsAccountMove ? { awaitsAccountMove: true } : {}),
+        ...(awaitsAccountMove ? { awaitsAccountMove: true } : {}),
         now: now(),
         facts: journal.queuedMessages.facts(journal.queuedMessages.answerMail(cards))
       },
@@ -67,16 +84,23 @@ export function structuredQueueSendGate(
     if (!answer) {
       return null
     }
-    const work = new StructuredAgentSessionObservedWork(journal, answer.state, journal.cursor())
     if ('failure' in answer.queue) {
       throw restoreJournalSqlFailure(answer.queue.failure)
     }
-    return {
-      record: host.store.getRecord(sessionId),
-      authority: captureHostStructuredAgentSessionWork(host, sessionId, journal),
-      work,
-      state: work.queueState(),
-      selected: answer.queue.card
+    return gateAnswer(answer.state, answer.queue.card)
+
+    function gateAnswer(
+      state: ConstructorParameters<typeof StructuredAgentSessionObservedWork>[1],
+      selected: QueuedMessageRow | null
+    ) {
+      const work = new StructuredAgentSessionObservedWork(journal, state, journal.cursor())
+      return {
+        record: host.store.getRecord(sessionId),
+        authority: captureHostStructuredAgentSessionWork(host, sessionId, journal),
+        work,
+        state: work.queueState(),
+        selected
+      }
     }
   }
 }

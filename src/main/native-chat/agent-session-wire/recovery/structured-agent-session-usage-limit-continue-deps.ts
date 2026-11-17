@@ -26,4 +26,6 @@ export type UsageLimitContinueDeps = UsageLimitCutReads & {
     id: string,
     launchHome?: () => Promise<AgentSessionAccountHome | null>
   ) => Promise<boolean>
+  /** The sweep no longer waits on the chat's move. */
+  stopsAwaitingAccountMove?: (id: string) => void
 }

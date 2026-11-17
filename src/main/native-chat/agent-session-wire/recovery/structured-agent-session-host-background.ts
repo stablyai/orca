@@ -20,7 +20,8 @@ export function start(
     now: context.now,
     // A read, outside the chat's lane: one busy chat must not delay every other continue.
     awaitsAccountMove: async (id, launchHome) =>
-      !!(await context.accountTransition?.(id, { launchHome, observe: false }))
+      !!(await context.accountTransition?.(id, { launchHome, reader: 'sweep' })),
+    stopsAwaitingAccountMove: (id) => context.accountMoveSettled?.(id, 'sweep')
   })
   limit.start()
   return limit

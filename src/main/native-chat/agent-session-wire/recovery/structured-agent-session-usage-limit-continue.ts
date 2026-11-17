@@ -91,6 +91,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     for (const id of this.awaitingMove) {
       if (!shown.has(id)) {
         this.awaitingMove.delete(id)
+        this.deps.stopsAwaitingAccountMove?.(id)
       }
     }
     this.cold.retain(shown)
@@ -208,6 +209,7 @@ export class StructuredAgentSessionUsageLimitContinue {
             this.awaitingMove.add(id)
           } else {
             this.awaitingMove.delete(id)
+            this.deps.stopsAwaitingAccountMove?.(id)
           }
           this.deps.publish(id)
         }

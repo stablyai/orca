@@ -1,6 +1,7 @@
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
+import type { AccountMoveReader } from '../recovery/structured-agent-session-account-move-holds'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
@@ -55,7 +56,7 @@ export type StructuredAgentSessionConversationDelivery = {
   ) => Promise<void>
   /** The account move the running child defers. */
   accountTransition: StructuredAgentSessionAccountTransitionRead
-  accountMoveSettled: (sessionId: string) => null
+  accountMoveSettled: (sessionId: string, reader?: AccountMoveReader) => null
   accountMoveHeld: (sessionId: string) => boolean
   accountMoveEvidence: (sessionId: string) => void
 }

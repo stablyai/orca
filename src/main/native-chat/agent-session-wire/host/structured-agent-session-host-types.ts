@@ -215,6 +215,8 @@ export type StructuredAgentSessionHostDeps = {
    *  Dispatch closing, or the account selection changing. */
   accountMoveWakes?: {
     subscribe: (listener: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
+    /** The account selection as written now, compared by value: some writes fire no edge. */
+    selection?: () => readonly unknown[]
   }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed

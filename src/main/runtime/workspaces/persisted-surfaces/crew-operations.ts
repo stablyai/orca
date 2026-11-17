@@ -15,7 +15,6 @@ import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identi
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
 import { accountMoveReleases } from '../../agent-session/environment/account-move-releases'
-import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { StructuredAgentSessionRuntimeDeps } from '../../agent-session/installation/structured-agent-session-runtime-contract'
 import { structuredWorkerOwesWork } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 
@@ -23,7 +22,6 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   private unwatchCrewDb: (() => void) | undefined
-  declare protected readonly accounts: RuntimeAccountController
   // Not a field initializer: a base constructor can bind the database before this class's fields run.
   declare private orchestrationDbChangesSlot: CrewChanges | undefined
   /** The orchestration database's own changes (Runs, Dispatches, mail), without terminal identity's. */
@@ -41,7 +39,14 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
       // A Dispatch settling can release a chat's sends held for an account move.
-      accountMoveWakes: accountMoveReleases(this.orchestrationDbChanges, this.accounts)
+      accountMoveWakes: accountMoveReleases(this.orchestrationDbChanges, () => {
+        try {
+          return this.requireStore()
+        } catch {
+          // A runtime without settings never moves a chat between accounts.
+          return null
+        }
+      })
     }
   }
 

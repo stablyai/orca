@@ -1,4 +1,5 @@
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AccountMoveReader } from '../recovery/structured-agent-session-account-move-holds'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
@@ -61,7 +62,7 @@ export type StructuredAgentSessionMutationContext = {
   /** Inside serialization: the account move the running child still defers. */
   accountTransition?: StructuredAgentSessionAccountTransitionRead
   /** Nothing from the person waits: drop the chat's account-move hold. */
-  accountMoveSettled?: (sessionId: string) => null
+  accountMoveSettled?: (sessionId: string, reader?: AccountMoveReader) => null
   /** A hold no edge has touched since it was read: its held cards cannot be sent yet. */
   accountMoveHeld?: (sessionId: string) => boolean
   /** Evidence a hold may wait on changed: read it again on the next drain. */
