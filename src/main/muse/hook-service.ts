@@ -8,6 +8,7 @@ import type {
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { removeConfigLeftEmpty } from '../agent-hooks/installation/configuration/hooks-json-empty-removal'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
@@ -37,6 +38,7 @@ import {
 } from './hook-settings'
 import {
   hasOrcaEnvVars,
+  isOnlyOrcaSchemaVersion,
   MUSE_MANAGED_HOOK_ENV_VARS,
   parseMuseSettingsText,
   readMuseSettingsSource,
@@ -298,7 +300,8 @@ export class MuseHookService {
     const pointer = source.config.managed_hooks_path
     if (pointer === managedHooksPath || (pointer === undefined && hasOrcaEnvVars(source.config))) {
       const nextText = serializeMuseSettings(source.text, undefined)
-      if (source.text !== nextText) {
+      const emptied = isOnlyOrcaSchemaVersion(nextText) && removeConfigLeftEmpty(configPath)
+      if (source.text !== nextText && !emptied) {
         writeHooksJson(configPath, source.config, { serialized: nextText })
       }
     }

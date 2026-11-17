@@ -13,6 +13,9 @@ import {
 import { installCodexHooksRemote } from './codex-hook-remote-install'
 import { getManagedScript } from '../definitions/codex-hook-script'
 import { readCurrentCodexHookStatus } from '../reconciliation/codex-hook-status'
+import { listLocalCodexAccountHomes } from '../reconciliation/codex-local-hook-homes'
+import { removeRealHomeCodexHookForOptOut } from '../reconciliation/codex-real-home-hook-install'
+import { getInPlaceCodexHookHome } from '../../trust/hooks/codex-hook-orca-approvals'
 import { readEveryKnownCodexHookHashes } from '../../trust/hooks/codex-hook-hash-lookup'
 import { reconcileCodexHooks } from '../reconciliation/codex-hook-reconcile'
 import { cleanupLegacyManagedHookRepresentations } from '../reconciliation/codex-hook-legacy-cleanup'
@@ -281,11 +284,19 @@ export class CodexHookService {
     )
   }
 
-  remove(): Promise<AgentHookInstallStatus> {
+  async remove(): Promise<AgentHookInstallStatus> {
     this.localLaunchPreparation.clear()
-    return runExclusivelyForRuntimeAndSystemTrustConfig(getOrcaManagedCodexHomePath(), () =>
-      this.removeExclusively()
+    const status = await runExclusivelyForRuntimeAndSystemTrustConfig(
+      getOrcaManagedCodexHomePath(),
+      () => this.removeExclusively()
     )
+    // Each account home takes only its own lane, after the runtime and system lanes are released.
+    const hashes = readEveryKnownCodexHookHashes()
+    for (const home of listLocalCodexAccountHomes()) {
+      await removeRealHomeCodexHookForOptOut(hashes, getInPlaceCodexHookHome(home))
+    }
+    // The selected home may be an account home swept above.
+    return status.state === 'error' ? status : this.getStatus()
   }
 
   private removeExclusively(): Promise<AgentHookInstallStatus> {

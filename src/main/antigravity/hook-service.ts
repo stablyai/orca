@@ -6,7 +6,11 @@ import type {
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
-import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
+  readHooksJson,
+  readHooksJsonWithRaw
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { removeConfigLeftEmpty } from '../agent-hooks/installation/configuration/hooks-json-empty-removal'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -236,7 +240,7 @@ export class AntigravityHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
+    const { raw, config } = readHooksJsonWithRaw(configPath)
     if (!config) {
       return {
         agent: 'antigravity',
@@ -247,8 +251,14 @@ export class AntigravityHookService {
       }
     }
 
+    if (raw === null) {
+      return this.getStatus()
+    }
     removeInstalledConfig(config)
-    writeHooksJson(configPath, config)
+    // Orca creates this file; once only its bundle was in it, nothing user-owned is left.
+    if (Object.keys(config).length > 0 || !removeConfigLeftEmpty(configPath)) {
+      writeHooksJson(configPath, config)
+    }
     return this.getStatus()
   }
 }

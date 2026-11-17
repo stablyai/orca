@@ -12,6 +12,7 @@ import {
   rm
 } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { areRollingFileBackupsEnabled } from '../../../filesystem/rolling-file-backup'
 
 export async function writeHooksJsonAsync(
   configPath: string,
@@ -45,7 +46,7 @@ export async function writeHooksJsonAsync(
     if (process.platform !== 'win32') {
       await chmod(tmp, mode)
     }
-    if (original !== null) {
+    if (original !== null && areRollingFileBackupsEnabled()) {
       const backupLink = await lstat(backup).catch((error: unknown) => {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
           return null

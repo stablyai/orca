@@ -18,6 +18,7 @@ import type {
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
+import { areRollingFileBackupsEnabled } from '../filesystem/rolling-file-backup'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
@@ -151,7 +152,7 @@ function writeConfigToml(configPath: string, text: string): void {
   try {
     writeFileSync(tmpPath, text, { encoding: 'utf-8', mode: 0o600 })
     chmodSync(tmpPath, mode)
-    if (existsSync(configPath)) {
+    if (existsSync(configPath) && areRollingFileBackupsEnabled()) {
       copyFileSync(configPath, `${configPath}.bak`)
     }
     renameSync(tmpPath, configPath)

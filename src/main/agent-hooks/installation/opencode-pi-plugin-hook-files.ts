@@ -1,8 +1,9 @@
-import { readdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { lstat, readdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser'
+import { parseHooksJsonText } from './configuration/hooks-json-read'
 import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 import { openCodeTuiPluginDirName } from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 import { ORCA_OPENCODE_PLUGIN_FILE } from '../../opencode/status-hooks/overlay-dir-names'
@@ -83,6 +84,10 @@ async function readTextOrNull(path: string): Promise<string | null> {
   }
 }
 
+async function isSymlink(path: string): Promise<boolean> {
+  return (await lstat(path)).isSymbolicLink()
+}
+
 // OpenCode 1.x lists the TUI copy in tui.json; a dangling entry would fail its plugin load.
 async function unregisterOpenCodeTuiEntry(tuiEntry: string): Promise<void> {
   const configDir = dirname(dirname(dirname(tuiEntry)))
@@ -103,6 +108,16 @@ async function unregisterOpenCodeTuiEntry(tuiEntry: string): Promise<void> {
       continue
     }
     const next = plugins.filter((item) => item !== href)
+    // Orca creates tui.json as `{}`; an emptied plugin list alone (no comments) is not the user's.
+    if (
+      next.length === 0 &&
+      Object.keys(config).length === 1 &&
+      parseHooksJsonText(text) !== null &&
+      !(await isSymlink(configPath))
+    ) {
+      await unlink(configPath)
+      continue
+    }
     await writeFile(
       configPath,
       applyEdits(
