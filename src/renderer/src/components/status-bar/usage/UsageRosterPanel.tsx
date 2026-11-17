@@ -34,13 +34,18 @@ function DetailMetric({
   section,
   label,
   display,
-  title
+  title,
+  now
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
   title?: string
+  now: number
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const resetCaption = formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
   return (
     <span
       data-usage-window={section.label}
@@ -58,6 +63,11 @@ function DetailMetric({
         display={display}
         className="text-[11px]"
       />
+      {resetCaption ? (
+        <span data-usage-reset className="text-[10px] text-muted-foreground">
+          · {resetCaption}
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -193,6 +203,8 @@ export function UsageRow({
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
+  // Why: Detailed lists every window with its own reset below, so a top-right summary would repeat one.
+  const showDetails = hasUsage && mode === 'verbose'
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -215,14 +227,14 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : (
+        ) : showDetails ? null : (
           <RowUsageSummary p={p} display={display} now={now} />
         )}
       </div>
       {state.detail ? (
         <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
       ) : null}
-      {hasUsage && mode === 'verbose' ? (
+      {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => (
             <DetailMetric
@@ -230,6 +242,7 @@ export function UsageRow({
               section={section}
               label={shortUsageLabel(p, section)}
               display={display}
+              now={now}
               title={scopedUsageTitle(
                 p,
                 { ...section, label: shortUsageLabel(p, section) },
