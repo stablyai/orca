@@ -13,6 +13,12 @@ function resolvePoolSize(): number {
   return Math.min(4, Math.max(1, cores - 2))
 }
 
+let currentPool: WorkerPoolManager | undefined
+
+export function retirePierreHighlightLanguage(language: string): void {
+  currentPool?.retireLanguage(language)
+}
+
 /**
  * Pierre's own WorkerPoolContextProvider is bypassed: it terminates the pool
  * singleton from an unmount cleanup but only recreates it in `useState`, so
@@ -39,6 +45,7 @@ export function createDiffHighlightPool(): WorkerPoolManager {
       useTokenTransformer: true
     }
   })
+  currentPool = pool
   if (!pool.isWorkingPool()) {
     void pool
       .initialize()

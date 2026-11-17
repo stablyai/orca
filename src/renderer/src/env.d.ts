@@ -191,3 +191,22 @@ declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer
     }
   }
 }
+
+declare module 'monaco-editor/esm/vs/basic-languages/redis/redis.js' {
+  export const language: {
+    keywords: string[]
+    typeKeywords?: string[]
+    constants?: string[]
+    builtin?: string[]
+    invalidKeywords?: string[]
+  }
+}
+declare module 'monaco-editor/esm/vs/basic-languages/qsharp/qsharp.js' {
+  export const language: {
+    keywords: string[]
+    typeKeywords?: string[]
+    constants?: string[]
+    builtin?: string[]
+    invalidKeywords?: string[]
+  }
+}

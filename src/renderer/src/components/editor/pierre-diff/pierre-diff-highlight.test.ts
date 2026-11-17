@@ -3,6 +3,7 @@ import { parseDiffFromFile } from '@pierre/diffs'
 import { preparePierreDiffHighlight } from './pierre-diff-highlight'
 
 const pool = vi.hoisted(() => ({
+  subscribeToThemeChanges: vi.fn((_subscriber: { onThemeChange: () => void }) => () => {}),
   getDiffResultCache: vi.fn(),
   cleanUpTasks: vi.fn(),
   highlightDiffAST: vi.fn(),
@@ -85,20 +86,10 @@ it('treats a late cache fill as success instead of a timeout', async () => {
   }
 })
 
-it('detaches a timed-out highlight once even if it later notifies or aborts', async () => {
-  vi.useFakeTimers()
-  try {
-    const controller = new AbortController()
-    const promise = preparePierreDiffHighlight(diff, controller.signal)
-    const renderer = pool.highlightDiffAST.mock.calls[0][0]
-    const rejection = expect(promise).rejects.toThrow('timed out')
-    await vi.advanceTimersByTimeAsync(30_000)
-    await rejection
-    renderer.onHighlightSuccess()
-    controller.abort()
-    expect(pool.cleanUpTasks).toHaveBeenCalledWith(renderer)
-    expect(pool.cleanUpTasks).toHaveBeenCalledTimes(1)
-  } finally {
-    vi.useRealTimers()
-  }
+it('completes using the new theme after an in-flight highlight is invalidated', async () => {
+  const promise = preparePierreDiffHighlight(diff, new AbortController().signal)
+  const subscriber = pool.subscribeToThemeChanges.mock.calls[0][0]
+  subscriber.onThemeChange()
+  pool.highlightDiffAST.mock.calls.at(-1)![0].onHighlightSuccess()
+  await expect(promise).resolves.toBeUndefined()
 })

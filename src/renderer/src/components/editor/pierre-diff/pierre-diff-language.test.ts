@@ -33,8 +33,4 @@ describe('resolvePierreDiffLanguage', () => {
   ])('%s highlights as %s', (filePath, expected) => {
     expect(resolvePierreDiffLanguage(filePath, detectLanguage(filePath))).toBe(expected)
   })
-
-  it('falls back to plain text for a Monaco language Shiki cannot load', () => {
-    expect(resolvePierreDiffLanguage('query.redis', 'redis')).toBe('text')
-  })
 })

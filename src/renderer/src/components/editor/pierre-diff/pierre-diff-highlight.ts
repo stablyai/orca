@@ -35,6 +35,7 @@ export function preparePierreDiffHighlight(
   }
   return new Promise((resolve, reject) => {
     let settled = false
+    let unsubscribeTheme: (() => void) | undefined
     const ceiling = setTimeout(() => {
       if (pool.getDiffResultCache(diff)) {
         finish()
@@ -48,6 +49,7 @@ export function preparePierreDiffHighlight(
         return
       }
       settled = true
+      unsubscribeTheme?.()
       signal.removeEventListener('abort', abort)
       if (detach) {
         pool.cleanUpTasks(renderer)
@@ -65,6 +67,13 @@ export function preparePierreDiffHighlight(
       onHighlightSuccess: () => finish(undefined, false),
       onHighlightError: (error: unknown) => finish(error)
     }
+    unsubscribeTheme = pool.subscribeToThemeChanges({
+      onThemeChange: () => {
+        if (!settled && !signal.aborted) {
+          pool.highlightDiffAST(renderer, diff)
+        }
+      }
+    })
     signal.addEventListener('abort', abort, { once: true })
     try {
       pool.highlightDiffAST(renderer, diff)
