@@ -90,8 +90,8 @@ async function enumerateWindowsWithCim(): Promise<WindowsProcessSample | null> {
     '-NonInteractive',
     '-Command',
     "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
-      'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate,PageFileUsage | ' +
-      'ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage)) } catch {} }'
+      'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize,KernelModeTime,UserModeTime,CreationDate,PageFileUsage,Name | ' +
+      'ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage, $_.Name)) } catch {} }'
   ]
   try {
     const stdout = await execFileText('powershell.exe', args)

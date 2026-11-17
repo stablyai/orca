@@ -1,3 +1,4 @@
+import { executableBasename } from './process-index'
 import {
   iterateProcessOutputLines,
   PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS
@@ -24,6 +25,7 @@ export type WindowsProcessResourceRow = {
   memory: number
   /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
+  name?: string
 }
 
 export type WindowsCpuTimes = {
@@ -37,6 +39,7 @@ export type ParsedWindowsProcessSample = {
 }
 
 type TypeperfProcessFields = {
+  name?: string
   pid?: number
   ppid?: number
   memory?: number
@@ -58,12 +61,14 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
       continue
     }
     const privateMemory = parseCimPageFileBytes(fields[6])
+    const name = executableBasename(fields[7])
     rows.push({
       pid,
       ppid,
       cpu: 0,
       memory: Number.isFinite(memory) && memory > 0 ? memory : 0,
-      ...(privateMemory === null ? {} : { privateMemory })
+      ...(privateMemory === null ? {} : { privateMemory }),
+      ...(name ? { name } : {})
     })
 
     const kernelTicks = parseUnsignedBigInt(fields[3])
@@ -86,7 +91,7 @@ function parseCimTabFields(line: string): string[] {
   if (line.length > PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS) {
     return []
   }
-  return line.split('\t', 7).map((field) => field.trim())
+  return line.split('\t', 8).map((field) => field.trim())
 }
 
 /** PageFileUsage reports KiB; missing values must remain distinct from measured zero. */
@@ -135,7 +140,10 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
     if (!Number.isFinite(value)) {
       continue
     }
-    const row = byInstance.get(path.instance) ?? {}
+    // Instances are `<exe without .exe>#<n>` when names repeat.
+    const row = byInstance.get(path.instance) ?? {
+      name: executableBasename(path.instance.replace(/#\d+$/, ''))
+    }
     if (path.counter === 'ID Process') {
       row.pid = Math.trunc(value)
     } else if (path.counter === 'Creating Process ID') {
@@ -160,7 +168,8 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
       memory: row.memory !== undefined && row.memory > 0 ? row.memory : 0,
       ...(row.privateMemory !== undefined && row.privateMemory >= 0
         ? { privateMemory: row.privateMemory }
-        : {})
+        : {}),
+      ...(row.name ? { name: row.name } : {})
     })
   }
   return rows

@@ -13,6 +13,8 @@ export type ProcRow = {
   memory: number
   /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
+  /** Executable basename; never a path or command line. */
+  name?: string
 }
 
 export type ProcIndex = {
@@ -68,14 +70,27 @@ export function parsePsOutput(stdout: string): ProcRow[] {
     if (Number.isNaN(pid) || Number.isNaN(ppid)) {
       continue
     }
+    const name = executableBasename(PS_COMM_COLUMN.exec(line)?.[1])
     rows.push({
       pid,
       ppid,
       cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
-      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
+      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0,
+      ...(name ? { name } : {})
     })
   }
   return rows
+}
+
+// comm= is last and may hold spaces (macOS prints the full executable path).
+const PS_COMM_COLUMN = /^\s*\S+\s+\S+\s+\S+\s+\S+\s+(.+)$/
+
+const MAX_EXECUTABLE_NAME_CHARS = 64
+
+/** Basename only: paths can carry the user's home directory. */
+export function executableBasename(value: string | undefined): string | undefined {
+  const base = value?.trim().split(/[\\/]/).pop()
+  return base ? base.slice(0, MAX_EXECUTABLE_NAME_CHARS) : undefined
 }
 
 export function collectSubtree(
