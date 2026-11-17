@@ -98,8 +98,12 @@ export async function readGrokAuthSessionAsync(): Promise<GrokAuthReadResult> {
   try {
     return parseGrokAuth(await readFile(getGrokAuthPath(), 'utf-8'))
   } catch (err) {
-    const code = (err as NodeJS.ErrnoException | null)?.code
-    if (code === 'ENOENT' || code === 'ENOTDIR') {
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err.code === 'ENOENT' || err.code === 'ENOTDIR')
+    ) {
       return { status: 'missing' }
     }
     return { status: 'error', error: getGrokAuthReadError(err) }

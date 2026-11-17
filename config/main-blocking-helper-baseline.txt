@@ -1134,7 +1134,6 @@
 1 src/main/rate-limits/providers/cursor/cursor-fetcher.ts
 1 src/main/rate-limits/providers/gemini/gemini-oauth-sources.ts
 2 src/main/rate-limits/providers/gemini/gemini-usage-fetcher.ts
-1 src/main/rate-limits/providers/grok/grok-fetcher.ts
 1 src/main/rate-limits/providers/muse/muse-usage-fetcher.ts
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/opencode-go/opencode-go-usage-source-selection.ts
