@@ -45,7 +45,12 @@ function stored(original = 'old\n', modified = 'new\n') {
   const undoStack: { forwardEdits: { text: string }[]; inverseEdits: { text: string }[] }[] = []
   return {
     type: 'file-diff',
-    document: { getText: () => modified, history: { undoStack, redoStack: [] } },
+    document: {
+      getText: () => modified,
+      compact: () => {},
+      retainedCharacters: modified.length,
+      history: { undoStack, redoStack: [] }
+    },
     diffSession: { type: 'change', oldFile: { name: 'file', lines: [original] } }
   }
 }

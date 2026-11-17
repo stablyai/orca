@@ -47,7 +47,8 @@ function retainDormant(key: string): void {
   if (!state) {
     return
   }
-  let characters = state.document.getText().length
+  state.document.compact()
+  let characters = state.document.retainedCharacters
   for (const line of state.diffSession.oldFile?.lines ?? []) {
     characters += line.length
   }

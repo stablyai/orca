@@ -926,6 +926,66 @@ diff --git a/dist/editor/editor.js b/dist/editor/editor.js
  			const { name, lang } = fileOrDiff;
  			editSession.fileInfo = {
  				name,
+diff --git a/dist/editor/pieceTable.js b/dist/editor/pieceTable.js
+--- a/dist/editor/pieceTable.js
++++ b/dist/editor/pieceTable.js
+@@ -98,6 +98,18 @@
+ 		this.#length = this.#root?.subtreeLength ?? 0;
+ 		this.#lineCount = (this.#root?.subtreeLineBreakCount ?? 0) + 1;
+ 	}
++    compact() {
++        const text = this.getText();
++        this.#original = new TextBuffer(text);
++        this.#add = new TextBuffer("");
++        const piece = this.#createPiece(Piece.Original, 0, text.length);
++        this.#root = piece.length > 0 ? this.#createNode(piece) : null;
++        this.#invalidateCaches();
++    }
++    get retainedCharacters() {
++        return this.#original.text.length + this.#add.text.length +
++            4 * (this.#original.lineOffsets.length + this.#add.lineOffsets.length);
++    }
+ 	get lineCount() {
+ 		return this.#lineCount;
+ 	}
+@@ -290,9 +302,10 @@
+ 			const end = clamp(edit.end, start, this.#length);
+ 			this.#replaceRangeIncremental(start, end, edit.text);
+ 		}
+-		this.#invalidateCaches();
+-	}
+-	positionAt(offset) {
++        this.#invalidateCaches();
++        if (this.#add.text.length + 4 * this.#add.lineOffsets.length > Math.max(1_000_000, this.#length * 2)) this.compact();
++    }
++    positionAt(offset) {
+ 		const clampedOffset = clamp(offset, 0, this.#length);
+ 		if (this.#length === 0) return {
+ 			line: 0,
+diff --git a/dist/editor/textDocument.d.ts b/dist/editor/textDocument.d.ts
+--- a/dist/editor/textDocument.d.ts
++++ b/dist/editor/textDocument.d.ts
+@@ -36,6 +36,8 @@
+   get uri(): string;
+   get languageId(): string;
+   get version(): number;
++  compact(): void;
++  readonly retainedCharacters: number;
+   get lineCount(): number;
+   get eol(): '\n' | '\r\n' | '\r';
+   get history(): EditHistoryState<EType, LAnnotation>;
+diff --git a/dist/editor/textDocument.js b/dist/editor/textDocument.js
+--- a/dist/editor/textDocument.js
++++ b/dist/editor/textDocument.js
+@@ -36,6 +36,8 @@
+ 	get version() {
+ 		return this.#version;
+ 	}
++    compact() { this.#pieceTable.compact(); }
++    get retainedCharacters() { return this.#pieceTable.retainedCharacters; }
+ 	get lineCount() {
+ 		return this.#pieceTable.lineCount;
+ 	}
 diff --git a/dist/react/utils/renderDiffChildren.js b/dist/react/utils/renderDiffChildren.js
 --- a/dist/react/utils/renderDiffChildren.js
 +++ b/dist/react/utils/renderDiffChildren.js
