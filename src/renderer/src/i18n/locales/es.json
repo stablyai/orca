@@ -4436,7 +4436,9 @@
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
             "compactTooltip": "Uso condensado: un resumen por proveedor",
             "notChecked": "Sin comprobar",
-            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}"
+            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}",
+            "resetsIn": "Se restablece en {{duration}}",
+            "resetsNow": "Se restablece ahora"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",

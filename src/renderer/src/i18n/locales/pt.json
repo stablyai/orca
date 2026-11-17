@@ -3692,7 +3692,9 @@
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
             "footerDetailAria": "Detalhe do rodapé de uso",
             "notChecked": "Não verificado",
-            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}"
+            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}",
+            "resetsIn": "Redefinição em {{duration}}",
+            "resetsNow": "Redefinição agora"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",

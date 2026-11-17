@@ -5722,7 +5722,9 @@
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
             "notChecked": "Not checked",
-            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}",
+            "resetsIn": "Resets in {{duration}}",
+            "resetsNow": "Resets now"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",

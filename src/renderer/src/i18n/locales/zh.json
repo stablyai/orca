@@ -4937,7 +4937,9 @@
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
             "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
             "notChecked": "未检查",
-            "modelWeeklyLimit": "{{model}} 每周上限：{{usage}}"
+            "modelWeeklyLimit": "{{model}} 每周上限：{{usage}}",
+            "resetsIn": "{{duration}}后重置",
+            "resetsNow": "现在重置"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",

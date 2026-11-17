@@ -5084,7 +5084,9 @@
             "compactTooltip": "Сжатый вид: одна сводка на провайдера",
             "footerDetailAria": "Сведения об использовании в нижней части панели",
             "notChecked": "Не проверено",
-            "modelWeeklyLimit": "Недельный лимит {{model}}: {{usage}}"
+            "modelWeeklyLimit": "Недельный лимит {{model}}: {{usage}}",
+            "resetsIn": "Сброс через {{duration}}",
+            "resetsNow": "Сброс сейчас"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Обновление {{value0}}/{{value1}}",

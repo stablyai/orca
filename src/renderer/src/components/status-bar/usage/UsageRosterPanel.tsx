@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -23,6 +24,7 @@ import {
 import {
   formatLocalizedResetDuration,
   formatResetsInCaption,
+  soonestResetLabel,
   validResetAt
 } from './usage-reset-caption'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
@@ -30,22 +32,18 @@ import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
+
 function DetailMetric({
   section,
   label,
   display,
-  title,
-  now
+  title
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
   title?: string
-  now: number
 }): React.JSX.Element {
-  const t = useTranslate()
-  const intlLocale = useIntlLocale()
-  const resetCaption = formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
   return (
     <span
       data-usage-window={section.label}
@@ -63,11 +61,6 @@ function DetailMetric({
         display={display}
         className="text-[11px]"
       />
-      {resetCaption ? (
-        <span data-usage-reset className="text-[10px] text-muted-foreground">
-          · {resetCaption}
-        </span>
-      ) : null}
     </span>
   )
 }
@@ -199,12 +192,14 @@ export function UsageRow({
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const sections = usedSections(p, t)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
-  // Why: Detailed lists every window with its own reset below, so a top-right summary would repeat one.
+  // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
   const showDetails = hasUsage && mode === 'verbose'
+  const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -212,7 +207,13 @@ export function UsageRow({
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
           <ProviderIcon provider={p.provider} />
         </span>
-        <span className="min-w-14 shrink truncate text-[13px] font-medium text-foreground">
+        <span
+          className={cn(
+            'shrink truncate text-[13px] font-medium text-foreground',
+            // Why: a fixed minimum would leave a gap before the reset that follows a short name.
+            showDetails ? 'min-w-0' : 'min-w-14'
+          )}
+        >
           {name}
           {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
         </span>
@@ -227,7 +228,13 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : showDetails ? null : (
+        ) : showDetails ? (
+          soonestReset ? (
+            <span data-usage-reset className="shrink-0 text-[11px] text-muted-foreground">
+              {soonestReset}
+            </span>
+          ) : null
+        ) : (
           <RowUsageSummary p={p} display={display} now={now} />
         )}
       </div>
@@ -242,7 +249,6 @@ export function UsageRow({
               section={section}
               label={shortUsageLabel(p, section)}
               display={display}
-              now={now}
               title={scopedUsageTitle(
                 p,
                 { ...section, label: shortUsageLabel(p, section) },
