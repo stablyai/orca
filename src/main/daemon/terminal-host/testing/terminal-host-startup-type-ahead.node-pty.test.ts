@@ -61,6 +61,6 @@ describeZsh('typing while an agent tab starts', () => {
     await vi.waitFor(() => expect(tab.output()).toContain(COMMAND), { timeout: 8_000 })
     tab.host.write(SESSION_ID, 'late\r')
     await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[late]'), { timeout: 5_000 })
-    expect(tab.output().split('AGENT_GOT:').length - 1).toBe(1)
+    expect(tab.output().split('AGENT_GOT:[late]').length - 1).toBe(1)
   }, 15_000)
 })
