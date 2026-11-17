@@ -1,8 +1,8 @@
 import type {
   AgentStatusEntry,
   AgentType
-} from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusPayload } from './agent-status-contract'
+} from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusPayload } from '../contracts/agent-status-contract'
 
 /** Main's report wins; a renderer-local write keeps the row's account while the agent is the same. */
 export function claudeAccountIdField(

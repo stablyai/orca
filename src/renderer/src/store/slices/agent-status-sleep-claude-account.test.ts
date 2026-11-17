@@ -9,7 +9,7 @@ import {
   recoveryRecordMatches,
   sleepingRecordsEquivalentIgnoringCaptureTime
 } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { liveResumeRecordChange } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 
 const NOW = 1_800_000_000_000
