@@ -1,7 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
@@ -16,7 +17,7 @@ import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/d
 import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'

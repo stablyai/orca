@@ -10,7 +10,7 @@ import type {
   SkillDiscoveryTarget
 } from '../../../../../shared/skills/discovery/skills'
 
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store/index'

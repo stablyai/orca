@@ -7,8 +7,8 @@ import {
   ensurePathWithinWorkspace,
   sanitizeWorktreeName,
   type getWorktreePathSettings
-} from '../../../ipc/worktree-logic'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
+} from '../../../ipc/worktrees/paths/worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktrees/creation/worktree-display-name'
 import {
   getBranchConflictKind,
   getBranchConflictKindStrict

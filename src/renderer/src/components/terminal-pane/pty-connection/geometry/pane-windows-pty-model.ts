@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalPtyOwner

@@ -14,10 +14,8 @@ import { TraexTimeline } from './traex-timeline'
 import { TraexPromptRegistry } from './traex-prompt-registry'
 import type { TraexModel } from './traex-model-catalog'
 import { traexRecord, traexText } from './traex-protocol'
-import type {
-  AgentSessionModelOption,
-  AgentSessionSlashCommand
-} from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/protocol/agent-session-options-result'
 import { openTraexSession } from './traex-session-start'
 import { readTraexSessionCommands } from './traex-session-commands'

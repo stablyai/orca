@@ -1,5 +1,5 @@
 // WSL exec skips shell setup; hydrate login-shell credentials/proxies before git and daemon startup.
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { PROBE_MARKER_ENV_VAR } from '../../startup/shell-environment/hydrate-shell-path'
 import { resolveLoginShellEnvironment } from '../../startup/shell-environment/login-shell-environment'
 

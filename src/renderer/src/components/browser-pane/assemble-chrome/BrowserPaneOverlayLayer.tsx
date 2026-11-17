@@ -8,7 +8,7 @@ import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-g
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
+import { tabGroupBodyAnchorName } from '../../tab-group/retained-pane/tab-group-body-anchor'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/retention/browser-guest-paint-retention'
 import {
@@ -16,7 +16,7 @@ import {
   useClientHostedBrowserRowSelection,
   useClientHostedBrowserRows
 } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
+import { ClientHostedBrowserHostRowPane } from './client-hosted/client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/retention/browser-page-mount-admission'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.

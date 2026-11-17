@@ -2,16 +2,13 @@
 # This is a RATCHET: counts may only go DOWN. Run `pnpm lint:ast-grep:flaky-tests` to list them.
 # Prune after a fix: pnpm check:flaky-test-pattern-ratchet --prune
 4 test-no-in-test-import-actual:src/main/bitbucket/credential-store.test.ts
-1 test-no-in-test-import-actual:src/main/bitbucket/status-no-decrypt.test.ts
-5 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
+4 test-no-in-test-import-actual:src/main/daemon/endpoint/publication/testing/daemon-endpoint-publish.test.ts
 1 test-no-in-test-import-actual:src/main/daemon/history/storage/testing/terminal-history-permissions.test.ts
 1 test-no-in-test-import-actual:src/main/git/command-runner/process-capture/spawned-command-tree-kill.test.ts
-1 test-no-in-test-import-actual:src/main/ipc/filesystem/filesystem-content-search-cancellation.test.ts
 1 test-no-in-test-import-actual:src/main/linear/issues/linear-description-images.test.ts
 1 test-no-in-test-import-actual:src/main/omp/omp-session-cwd-lookup.test.ts
 1 test-no-in-test-import-actual:src/main/pty/scrollback/overlay-mirror.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/rpc/server/pairing/mobile-pairing-userdata-path.test.ts
-1 test-no-in-test-import-actual:src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-swap-detection.test.ts
 5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
 1 test-no-in-test-import-actual:src/main/window/file-drop/dropped-path-preparation.test.ts
@@ -30,7 +27,6 @@
 1 test-no-polling-loop:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
 1 test-no-polling-loop:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
 1 test-no-polling-loop:src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-codex-real-pty.integration.test.ts
-1 test-no-polling-loop:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
 3 test-no-polling-loop:src/main/skills/install/skill-bundle-process-termination.integration.test.ts
 2 test-no-polling-loop:src/main/skills/runtime-upload/skill-upload-process-restart.integration.test.ts
 1 test-no-polling-loop:src/main/ssh/connection/ssh-connection-host-key-store-wiring.test.ts
@@ -54,7 +50,6 @@
 1 test-no-polling-loop:tests/e2e/browser-guest-crash-recovery.spec.ts
 1 test-no-polling-loop:tests/e2e/browser-tab.spec.ts
 1 test-no-polling-loop:tests/e2e/chinese-ime-chat-input-repro.spec.ts
-3 test-no-polling-loop:tests/e2e/combined-diff-scroll-restore.spec.ts
 1 test-no-polling-loop:tests/e2e/cross-version-wire/released-relay-daemon.ts
 1 test-no-polling-loop:tests/e2e/cross-version-wire/released-relay-transport.ts
 1 test-no-polling-loop:tests/e2e/daemon-lifecycle-retirement.spec.ts
@@ -103,13 +98,11 @@
 2 test-no-polling-loop:tests/e2e/terminal-parked-memory.spec.ts
 2 test-no-polling-loop:tests/e2e/terminal-pty-readiness.ts
 1 test-no-polling-loop:tests/e2e/terminal-tab-screenshot.ts
-2 test-no-polling-loop:tests/e2e/terminal-tab-switch-visual-restore.spec.ts
+1 test-no-polling-loop:tests/e2e/terminal-tab-switch-visual-restore.spec.ts
 1 test-no-polling-loop:tests/e2e/terminal-tui-wheel-reports.spec.ts
 1 test-no-polling-loop:tests/e2e/workspace-sleep-in-main.spec.ts
 2 test-no-polling-loop:tests/e2e/worktree-card-downward-drag.spec.ts
 1 test-no-real-time-wait:src/main/agent-hooks/installation/scripts/posix-hook-json-stdin-reader.test.ts
-2 test-no-real-time-wait:src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts
-1 test-no-real-time-wait:src/main/agent-hooks/server/testing/main-agent/server-turn-ended-at.test.ts
 1 test-no-real-time-wait:src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process.test.ts
 1 test-no-real-time-wait:src/main/antigravity/windows-hook-json-post.test.ts
 1 test-no-real-time-wait:src/main/antigravity/windows-hook-payload-delivery.test.ts
@@ -137,7 +130,6 @@
 1 test-no-real-time-wait:src/main/daemon/server/testing/daemon-server.test.ts
 1 test-no-real-time-wait:src/main/daemon/sessions/testing/repro-12101-mouse-tracking-survives-agent-death.test.ts
 4 test-no-real-time-wait:src/main/daemon/sessions/testing/session-shell-recovery.test.ts
-6 test-no-real-time-wait:src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts
 1 test-no-real-time-wait:src/main/daemon/terminal-host/testing/terminal-host.test.ts
 3 test-no-real-time-wait:src/main/daemon/transport/client/testing/client.test.ts
 3 test-no-real-time-wait:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
@@ -151,9 +143,7 @@
 1 test-no-real-time-wait:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
 1 test-no-real-time-wait:src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts
 5 test-no-real-time-wait:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
-1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-legacy-send-behind-command.test.ts
 3 test-no-real-time-wait:src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-codex-real-pty.integration.test.ts
-1 test-no-real-time-wait:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/rpc/terminal/terminal-subscribe-mounted-pane.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-crash-guard.live-shell.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-shell-handoff-readiness.test.ts
@@ -173,7 +163,6 @@
 1 test-no-real-time-wait:src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts
 2 test-no-real-time-wait:src/main/wsl/execution/wsl-command-loop.test.ts
 2 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
-3 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-real-time-wait:src/renderer/src/store/slices/workspace-cleanup/workspace-cleanup-removal-preflight.test.ts
@@ -195,7 +184,6 @@
 9 test-no-real-time-wait:tests/e2e/chinese-ime-chat-input-repro.spec.ts
 2 test-no-real-time-wait:tests/e2e/cli-floating-file-open-position.spec.ts
 1 test-no-real-time-wait:tests/e2e/codex-ctrl-c-status.spec.ts
-4 test-no-real-time-wait:tests/e2e/combined-diff-scroll-restore.spec.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/released-relay-daemon.ts
 2 test-no-real-time-wait:tests/e2e/cross-version-wire/released-relay-transport.ts
@@ -209,7 +197,6 @@
 1 test-no-real-time-wait:tests/e2e/fixtures/daemon-generation-reconnect-client.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-reopen-webgl-recovery.spec.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-shared-glyph-atlas.spec.ts
-2 test-no-real-time-wait:tests/e2e/github-project-board.spec.ts
 1 test-no-real-time-wait:tests/e2e/headless-paired-remote-terminal-reveal-grid.spec.ts
 1 test-no-real-time-wait:tests/e2e/headless-paired-remote-terminal-viewer-size.spec.ts
 2 test-no-real-time-wait:tests/e2e/helpers/computer-cli-driver.ts
@@ -243,8 +230,6 @@
 1 test-no-real-time-wait:tests/e2e/large-file-count-fixtures.ts
 1 test-no-real-time-wait:tests/e2e/large-markdown-preview.spec.ts
 1 test-no-real-time-wait:tests/e2e/layout-stream-loss-reopen.spec.ts
-1 test-no-real-time-wait:tests/e2e/markdown-table-row-backspace.spec.ts
-1 test-no-real-time-wait:tests/e2e/native-chat-history-prepend-anchor.spec.ts
 3 test-no-real-time-wait:tests/e2e/notification-sound-replay.spec.ts
 4 test-no-real-time-wait:tests/e2e/orchestration-idle-mail-delivery.spec.ts
 1 test-no-real-time-wait:tests/e2e/orchestration-idle-mail-restore.spec.ts
@@ -276,15 +261,12 @@
 2 test-no-real-time-wait:tests/e2e/sidebar-desktop-reads-main.spec.ts
 1 test-no-real-time-wait:tests/e2e/sidebar-unread-older-paired-host.spec.ts
 2 test-no-real-time-wait:tests/e2e/slept-workspace-remount-wake.spec.ts
-1 test-no-real-time-wait:tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-idle-exit.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-pairing-repair.spec.ts
-1 test-no-real-time-wait:tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-sleep-disconnected.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-terminal-network-outage.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-terminal-reconnect-idle-frame.spec.ts
 1 test-no-real-time-wait:tests/e2e/status-bar-session-count-management-kill.spec.ts
-1 test-no-real-time-wait:tests/e2e/structured-attention-read-retirement.unit.test.ts
 1 test-no-real-time-wait:tests/e2e/tasks-page.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-cjk-ime-committed-text.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-closed-pane-quit-relaunch.spec.ts
@@ -304,7 +286,6 @@
 1 test-no-real-time-wait:tests/e2e/terminal-macos-system-key-remap.spec.ts
 3 test-no-real-time-wait:tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-pane-close-layout-consistency.spec.ts
-2 test-no-real-time-wait:tests/e2e/terminal-pane-title-editing.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-parked-memory.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-pinned-viewport-streaming-switch.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-pinned-viewport-worktree-switch.spec.ts
@@ -320,7 +301,7 @@
 2 test-no-real-time-wait:tests/e2e/terminal-tab-level-binding-upgrade.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-tab-screenshot.ts
 2 test-no-real-time-wait:tests/e2e/terminal-tab-switch-sigwinch-restore.spec.ts
-4 test-no-real-time-wait:tests/e2e/terminal-tab-switch-visual-restore.spec.ts
+3 test-no-real-time-wait:tests/e2e/terminal-tab-switch-visual-restore.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-tui-wheel-drain.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-tui-wheel-reports.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-warm-reattach-split-live-output.spec.ts
@@ -328,7 +309,6 @@
 1 test-no-real-time-wait:tests/e2e/unopened-workspace-agent-single-resume.spec.ts
 1 test-no-real-time-wait:tests/e2e/workspace-sleep-in-main.spec.ts
 3 test-no-real-time-wait:tests/e2e/workspace-sleep-main-resume.spec.ts
-1 test-no-real-time-wait:tests/e2e/worktree-active-delete-scroll-position.spec.ts
 2 test-no-real-time-wait:tests/e2e/worktree-card-downward-drag.spec.ts
 1 test-no-real-time-wait:tests/e2e/worktree-jump-sleep-focus.spec.ts
 1 test-no-real-time-wait:tests/e2e/worktree-parent-reorder.spec.ts
@@ -344,7 +324,6 @@
 2 test-no-wall-clock:src/main/agent-hooks/installation/scripts/managed-hook-timeout.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server/testing/http/server-endpoint-file-lifecycle.test.ts
 3 test-no-wall-clock:src/main/agent-hooks/server/testing/replay/spool.test.ts
-3 test-no-wall-clock:src/main/agent-hooks/server/testing/structured-ingress/server-ingest-structured-status.test.ts
 2 test-no-wall-clock:src/main/ai-vault/scanners/cursor/session-scanner-cursor-chat-meta.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/devin/session-scanner-devin-db.test.ts
 1 test-no-wall-clock:src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process.test.ts
@@ -371,8 +350,7 @@
 2 test-no-wall-clock:src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts
 8 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-alias-coalescing.test.ts
 2 test-no-wall-clock:src/main/grok/grok-hook-stdin-no-eof.test.ts
-1 test-no-wall-clock:src/main/ipc/terminal-render-desync-evidence.test.ts
-2 test-no-wall-clock:src/main/ipc/worktrees-orphan-directory-cleanup.test.ts
+1 test-no-wall-clock:src/main/ipc/terminal-views/terminal-render-desync-evidence.test.ts
 2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 4 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence-mutation-race.test.ts
 6 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence.test.ts
@@ -391,6 +369,7 @@
 1 test-no-wall-clock:src/main/orcad/instance-lock/orcad-stale-lock-reclaim.test.ts
 3 test-no-wall-clock:src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts
 1 test-no-wall-clock:src/main/persistence/closed-terminal-tab-write-fence.test.ts
+4 test-no-wall-clock:src/main/persistence/persistence-flush-and-save-scheduling.test.ts
 1 test-no-wall-clock:src/main/persistence/profile-state/backup/profile-state-backup-rotation.test.ts
 1 test-no-wall-clock:src/main/persistence/profile-state/recovery/profile-state-section-repair.test.ts
 2 test-no-wall-clock:src/main/persistence/tracking-repos/persistence-deregistered-repo-residue.test.ts
@@ -401,9 +380,7 @@
 1 test-no-wall-clock:src/main/rate-limits/service/service-cursor-usage.test.ts
 1 test-no-wall-clock:src/main/rate-limits/service/service-minimax-usage.test.ts
 3 test-no-wall-clock:src/main/rate-limits/service/service-zcode-usage.test.ts
-1 test-no-wall-clock:src/main/runtime/agent-session/lifecycle/structured-codex-child-work-runtime.test.ts
-2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
-1 test-no-wall-clock:src/main/runtime/agent-session/structured-child-records-switch.test.ts
+1 test-no-wall-clock:src/main/runtime/agent-session/installation/structured-agent-session-held-signal.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/testing/mobile-relay-e2ee.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-codex-real-pty.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-registration-rpc.test.ts
@@ -413,11 +390,8 @@
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/federation/federation-output.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/observation/fleet-status-observed-identity.test.ts
 1 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/output/worker-output.test.ts
-2 test-no-wall-clock:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-pairing-mode-persistence.test.ts
 6 test-no-wall-clock:src/main/runtime/rpc/server/runtime-rpc-relay-pairing.test.ts
-1 test-no-wall-clock:src/main/runtime/session-construction/agent-session/orca-runtime-agent-session-operation.test.ts
-1 test-no-wall-clock:src/main/runtime/session-construction/agent-session/remote-agent-session-host-authority.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/terminal/adoption/terminal-subscriber-driven-daemon-attach.test.ts
 1 test-no-wall-clock:src/main/runtime/terminal/layout/mobile-subscribe-idle-pane-hydrate.test.ts
 23 test-no-wall-clock:src/main/runtime/terminal/output/terminal-query-responder.test.ts
@@ -445,12 +419,9 @@
 1 test-no-wall-clock:src/main/workspaces/removal/worktree-removal-close-records.test.ts
 2 test-no-wall-clock:src/main/wsl/execution/wsl-runner.wsl.test.ts
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
-1 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
-1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/removal/use-workspace-cleanup-removal.agent-stop.test.tsx
 1 test-no-wall-clock:src/renderer/src/lib/workspace/ownership/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
@@ -462,16 +433,13 @@
 10 test-no-wall-clock:src/wsl-guest/agent-hooks/publication/agent-hook-integration.test.ts
 1 test-no-wall-clock:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
 1 test-no-wall-clock:src/wsl-guest/agent-hooks/presence/relay-idle-process-owner.test.ts
-1 test-no-wall-clock:tests/e2e/cross-version-wire/cross-version-web-device-key.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-2 test-no-wall-clock:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
 1 test-timeout-needs-reason:src/cli/agents/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/serve/startup/serve-pid1-init-reaper.test.ts
 1 test-timeout-needs-reason:src/cli/skills/skills-install.test.ts
 2 test-timeout-needs-reason:src/main/acp/journal/acp-structured-broken-stream.test.ts
-4 test-timeout-needs-reason:src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-relay/testing/wsl-hook-relay-live.integration.test.ts
 2 test-timeout-needs-reason:src/main/antigravity/windows-hook-json-post.test.ts
 3 test-timeout-needs-reason:src/main/antigravity/windows-hook-payload-delivery.test.ts
@@ -486,7 +454,6 @@
 1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
 2 test-timeout-needs-reason:src/main/codex/app-server/codex-app-server-teardown.integration.test.ts
 1 test-timeout-needs-reason:src/main/codex/hooks/installation/hook-service-legacy-cleanup.test.ts
-1 test-timeout-needs-reason:src/main/codex/structured/catalog/codex-model-catalog-probe.test.ts
 1 test-timeout-needs-reason:src/main/codex/structured/launch/codex-structured-real-cli-command-env.test.ts
 1 test-timeout-needs-reason:src/main/codex/structured/launch/codex-structured-real-cli-permissions.test.ts
 1 test-timeout-needs-reason:src/main/codex/structured/launch/codex-structured-real-cli-visuals.test.ts
@@ -502,8 +469,7 @@
 2 test-timeout-needs-reason:src/main/daemon/pty-subprocess/testing/node-pty-windows-input-error.win32.test.ts
 1 test-timeout-needs-reason:src/main/daemon/pty-subprocess/testing/node-pty-windows-output-error.win32.test.ts
 3 test-timeout-needs-reason:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
-1 test-timeout-needs-reason:src/main/ipc/filesystem/filesystem-quick-open-options.integration.test.ts
-1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
+1 test-timeout-needs-reason:src/main/ipc/filesystem/search/filesystem-quick-open-options.integration.test.ts
 1 test-timeout-needs-reason:src/main/jcode/hook-gate-script.test.ts
 1 test-timeout-needs-reason:src/main/managed-server/host-state/orcad-windows-host-lane.test.ts
 4 test-timeout-needs-reason:src/main/managed-server/lifecycle/orcad-managed-tunnel-transport-real-openssh.test.ts
@@ -511,7 +477,6 @@
 1 test-timeout-needs-reason:src/main/notebook/notebook-kernel.test.ts
 1 test-timeout-needs-reason:src/main/orcad/native-runtime/orcad-bundle-native-load-order.test.ts
 1 test-timeout-needs-reason:src/main/orcad/native-runtime/orcad-packaged-node-pty.integration.test.ts
-1 test-timeout-needs-reason:src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/testing/serve-lifecycle/orcad-serve-parity.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts
 1 test-timeout-needs-reason:src/main/orcad/native-runtime/orcad-windows-conpty-breakaway.integration.test.ts
@@ -519,8 +484,6 @@
 5 test-timeout-needs-reason:src/main/pty/process-retirement/node-pty-master-fd-retirement.test.ts
 1 test-timeout-needs-reason:src/main/runtime/mobile-cloud-relay/testing/mobile-relay-e2ee.integration.test.ts
 1 test-timeout-needs-reason:src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts
-2 test-timeout-needs-reason:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
-1 test-timeout-needs-reason:src/main/runtime/session-construction/agent-session/remote-agent-session-host-authority.integration.test.ts
 1 test-timeout-needs-reason:src/main/runtime/terminal/launch/qoder-mobile-resume-adoption.test.ts
 2 test-timeout-needs-reason:src/main/runtime/terminal/wait/launched-agent-crash-guard.live-shell.test.ts
 2 test-timeout-needs-reason:src/main/runtime/terminal/wait/terminal-interactive-wait-visibility.test.ts
@@ -542,7 +505,6 @@
 1 test-timeout-needs-reason:src/renderer/src/lib/source-control/checks/check-run-details-log-normalization-performance.test.ts
 1 test-timeout-needs-reason:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-timeout-needs-reason:src/shared/shell/wsl/wsl-login-shell-command.test.ts
-1 test-timeout-needs-reason:tests/e2e/active-view-restart-restore.spec.ts
 1 test-timeout-needs-reason:tests/e2e/agent-send-picker-reveal.spec.ts
 1 test-timeout-needs-reason:tests/e2e/agent-session-log-tail-stability.spec.ts
 1 test-timeout-needs-reason:tests/e2e/browser-agent-input-focus-isolation-native.spec.ts
@@ -550,13 +512,10 @@
 1 test-timeout-needs-reason:tests/e2e/cli-agent-unopened-workspace-resume.spec.ts
 1 test-timeout-needs-reason:tests/e2e/combined-diff-invalidation-freeze-repro.spec.ts
 1 test-timeout-needs-reason:tests/e2e/completed-worker-retirement-resume.spec.ts
-2 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-newer-chat-refusal.unit.test.ts
-1 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-agent-session-send.unit.test.ts
 3 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 4 test-timeout-needs-reason:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 3 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-1 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/csv-paged-preview.spec.ts
 1 test-timeout-needs-reason:tests/e2e/csv-url-links.spec.ts
@@ -575,7 +534,6 @@
 1 test-timeout-needs-reason:tests/e2e/headless-paired-remote-terminal-stall-recovery.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-paired-remote-terminal-viewer-size.spec.ts
 2 test-timeout-needs-reason:tests/e2e/headless-serve-browser-tab-restart.spec.ts
-1 test-timeout-needs-reason:tests/e2e/headless-serve-chat-tab-placement.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-markdown.spec.ts
 1 test-timeout-needs-reason:tests/e2e/headless-serve-mobile-native-chat-identity.spec.ts
@@ -629,7 +587,6 @@
 1 test-timeout-needs-reason:tests/e2e/paired-pane-title-desktop-host.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-preview-address-bar-convergence.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-browser-ghost-subscriber-rejoin.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-remote-browser-link-open-routing.spec.ts
 2 test-timeout-needs-reason:tests/e2e/paired-remote-browser-stream-reconnect.spec.ts
 3 test-timeout-needs-reason:tests/e2e/paired-remote-html-preview-local-render.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-remote-large-file-open.spec.ts
@@ -682,24 +639,17 @@
 2 test-timeout-needs-reason:tests/e2e/sidebar-unread-older-paired-host.spec.ts
 1 test-timeout-needs-reason:tests/e2e/sidebar-workspace-rows.spec.ts
 1 test-timeout-needs-reason:tests/e2e/source-control-large-file-count.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-browser-drop-owner.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-browser-routing.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-browser-service-status.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-desktop-browser-bridge.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-editor-drafts-migration.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-editor-ownership.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts
 4 test-timeout-needs-reason:tests/e2e/ssh-orcad-idle-exit.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-conversion.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-markdown-live-documents.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-open-in-owner.spec.ts
 3 test-timeout-needs-reason:tests/e2e/ssh-orcad-pairing-repair.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-phone-feed-list.spec.ts
-1 test-timeout-needs-reason:tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-shared-home-machines.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-shared-login-migration.spec.ts
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-sleep-disconnected.spec.ts
@@ -713,7 +663,6 @@
 1 test-timeout-needs-reason:tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts
 4 test-timeout-needs-reason:tests/e2e/ssh-orcad-workspace-tools.spec.ts
 1 test-timeout-needs-reason:tests/e2e/staging-skill-sharing.spec.ts
-1 test-timeout-needs-reason:tests/e2e/structured-chat-tabs-open-close.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal-cli-split-closed-before-mount.spec.ts
 6 test-timeout-needs-reason:tests/e2e/terminal-column-desync-repro.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal-inline-images-memory.spec.ts
@@ -731,5 +680,4 @@
 1 test-timeout-needs-reason:tests/e2e/windows-wsl-terminal-restore.spec.ts
 1 test-timeout-needs-reason:tests/e2e/workspace-layout-oracle-headless.spec.ts
 1 test-timeout-needs-reason:tests/e2e/workspace-session-corrupt-tab-salvage.spec.ts
-2 test-timeout-needs-reason:tests/e2e/worktree-reveal-host-sections.spec.ts
 2 test-timeout-needs-reason:tests/e2e/wsl-host-fake-transport.spec.ts

@@ -3,7 +3,7 @@ import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
   type OrcadMigrationDependencyKind
 } from '../../../../../shared/orcad-migration/orcad-migration-preflight'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   inspectOrcadMigrationSourceSessions,

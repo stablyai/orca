@@ -3,8 +3,8 @@ import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-s
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../shared/agent-session/agent-session-mcp'
-import type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
+import type { StructuredAgentSessionCommandInput } from './structured-agent-session-command-run'
 export type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
@@ -36,7 +36,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
@@ -47,7 +47,7 @@ export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt
@@ -176,6 +176,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     record: AgentSessionRecord,
     operation: AgentSessionMcpOperation
   ): Promise<AgentSessionMcpResult>
+  /** Records the person's approval of one action the agent's automatic review denied; the retry is
+   *  still reviewed. False: no running agent to record it. */
+  approveAutoReviewDenial?(input: {
+    sessionId: string
+    threadId: string
+    event: Record<string, unknown>
+  }): Promise<boolean>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */
@@ -243,17 +250,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     { ok: true; fork: AgentSessionRewindFork } | { ok: false; reason: AgentSessionRewindReason }
   >
   /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
-  compact?(input: {
-    sessionId: string
-    fence: number
-    command: StructuredAgentSessionCommandRun
-  }): Promise<AgentSessionCommandAdmission>
+  compact?(input: StructuredAgentSessionCommandInput): Promise<AgentSessionCommandAdmission>
   /** Return provider recap admission; its text arrives through the adapter's own frames. */
-  recap?(input: {
-    sessionId: string
-    fence: number
-    command: StructuredAgentSessionCommandRun
-  }): Promise<AgentSessionCommandAdmission>
+  recap?(input: StructuredAgentSessionCommandInput): Promise<AgentSessionCommandAdmission>
   /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {
     sessionId: string

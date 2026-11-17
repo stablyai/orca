@@ -16,12 +16,21 @@ export type ReleasedJournal = Pick<
   | 'appendQueueResume'
   | 'appendTombstone'
 > & {
-  queuedMessages: Parameters<typeof queueReleasedCards>[0] & { list: () => ReleasedCard[] }
+  queuedMessages: Parameters<typeof queueReleasedCards>[0] & {
+    list: () => ReleasedCard[] | Promise<ReleasedCard[]>
+  }
   stopMarks: { beginSettle: (userStop: boolean) => unknown; settled: (settle: unknown) => void }
   replaceEpochItems: (reason: string, fence: number, items: readonly unknown[]) => Promise<unknown>
+  /** Only releases that held the chat in memory; later ones read it back from SQL. */
   snapshot: () => AgentJournalSnapshot
 }
 export type ReleasedOpener = {
   open: (options: TestJournalOptions) => Promise<ReleasedJournal>
   closeAll: () => Promise<void>
+}
+/** A chat as a release reads it back: its items and sends, and its queued cards. */
+export type ReleasedChat = { snapshot: AgentJournalSnapshot; cards: ReleasedCard[] }
+/** A release's opener, with its own read of a chat it opened. */
+export type ReleasedReader = ReleasedOpener & {
+  read: (journal: ReleasedJournal) => Promise<ReleasedChat>
 }

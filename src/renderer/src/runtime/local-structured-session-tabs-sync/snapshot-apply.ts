@@ -5,15 +5,15 @@ import type {
 import { markStructuredAgentSessionLaunchesPublished } from '../../lib/agent-session/launch/structured-agent-session-launch-publication'
 import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
 import { getExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
-import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
-import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/store-patch'
-import { receivedAgentSenderPublications } from '../web-session-tabs-sync/received-agent-sender-publications'
+import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshots/snapshot-api'
+import { applyWebSessionTabsStorePatch } from '../web-session-tabs-sync/snapshots/store-patch'
+import { receivedAgentSenderPublications } from '../web-session-tabs-sync/tracking/received-agent-sender-publications'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync/state'
 import {
   admitRetiredValueUnderAuthority,
   noteRetiredValue,
   sameSessionTabsPublicationLineage
-} from '../web-session-tabs-sync/publisher-identity-fences'
+} from '../web-session-tabs-sync/tracking/publisher-identity-fences'
 import { knownStructuredSessionWorktreeIds } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
 import {
   localStructuredSessionEpochHistoryByWorktree,
@@ -26,7 +26,7 @@ import {
   hostSnapshotAffirmsWorktreeContents
 } from '../web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup

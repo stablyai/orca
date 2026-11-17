@@ -145,8 +145,11 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
         ? [entry.agentType, entry.paneKey, entry.tabId, entry.worktreeId, entry.providerSession]
         : undefined
     const changes = this.changes()
+    // A moved key changes iteration order, which picks between equal-priority panes of one tab.
     const titleChanged = changes.some(
-      (change) => !equal(fact(change.previous), fact(change.current))
+      (change) =>
+        !equal(fact(change.previous), fact(change.current)) ||
+        (this.moved.has(change.paneKey) && fact(change.current) !== undefined)
     )
     const titleRevision = this.titleRevision + Number(titleChanged)
     return () => {

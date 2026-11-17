@@ -3,7 +3,7 @@ import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evi
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
-import { isAgentSessionConversationName } from '../agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
@@ -16,9 +16,9 @@ import {
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
-import type { ExecutionHostId } from '../../execution-host'
-import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
-import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { isAgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
@@ -26,7 +26,7 @@ import {
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
-} from '../agent-session-provider-context'
+} from '../conversation-context/agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
 import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {

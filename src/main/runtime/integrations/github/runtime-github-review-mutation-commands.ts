@@ -14,7 +14,7 @@ import { setPRCommentReaction } from '../../../github/client/update/pr-comment-r
 import { setPRFileViewed } from '../../../github/client/update/pr-file-viewed'
 import { updatePRDetails, updatePRTitle } from '../../../github/client/update/pr-details'
 import { updatePRState } from '../../../github/client/update/pr-state'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 

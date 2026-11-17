@@ -1,4 +1,4 @@
-import { useProjectGroupSetup } from './use-project-group-setup'
+import { useProjectGroupSetup } from './workspace-setup/use-project-group-setup'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 

@@ -1,5 +1,5 @@
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AgentSessionPromptUnavailableError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { TraexAppServerConnection, TraexServerRequest } from './traex-app-server-connection'

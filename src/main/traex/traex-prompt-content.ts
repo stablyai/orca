@@ -3,7 +3,7 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers,
   type AgentSessionPromptResponse
-} from '../../shared/agent-session/agent-session-question-answer'
+} from '../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { boundJournalPromptText } from '../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'

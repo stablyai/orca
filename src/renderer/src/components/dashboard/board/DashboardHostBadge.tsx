@@ -4,7 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { DashboardCardHostKind } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 type DashboardHostBadgeProps = {
   hostKind?: DashboardCardHostKind

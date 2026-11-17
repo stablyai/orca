@@ -7,7 +7,7 @@ import {
   pullRequestEventCommitUrl,
   pullRequestEventPullRequestUrl,
   pullRequestEventShortSha
-} from '../../../../../../shared/native-chat/native-chat-pull-request-event'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-ci-result-lines-setting-target'
 import {
   NativeChatCardHideButton,

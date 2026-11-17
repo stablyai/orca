@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project/groups/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY

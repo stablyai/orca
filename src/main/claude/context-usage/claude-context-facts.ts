@@ -4,7 +4,7 @@ import {
   type AgentSessionContextReport,
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
-} from '../../../shared/agent-session/agent-session-context-usage'
+} from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {

@@ -77,7 +77,8 @@ export const StatusBarItem = z.enum([
   'muse',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'git-blame'
 ])
 
 export const WorkspaceStatusDefinition = z.object({
@@ -204,6 +205,7 @@ export const UiUpdateFields = z
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
     _museStatusBarDefaultAdded: z.boolean().optional(),
+    _gitBlameStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),

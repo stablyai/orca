@@ -9,6 +9,7 @@ import {
 import { useMobileDictationCancelDrop } from '../../../../dictation/use-mobile-dictation-cancel-drop'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { keepHeldPressThroughLongPress } from '../../../../platform/held-press-long-press'
+import { useKeyboardPersistingTaps } from '../../../../platform/keyboard/keyboard-persisting-taps'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles
@@ -46,11 +47,14 @@ export function MobileNativeChatComposerMic({
   useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
   const release = useMobileDictationCancelDrop(cancelRef, live?.cancel, onMicPressOut)
+  // Focus taken from the field closes the keyboard, and the mic's blur ends a held press.
+  const keepsField = useKeyboardPersistingTaps('always')
   if (live?.failureReason != null) {
     return <MobileDictationRetryButton onRetry={live.retry} labelled />
   }
   return (
     <Pressable
+      ref={keepsField}
       accessibilityRole="button"
       aria-busy={micStarting || micProcessing}
       accessibilityLabel={dictationControlsCopy.mic({

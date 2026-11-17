@@ -3,7 +3,7 @@ import {
   MAX_CONTEXT_CATEGORY_NAME_CHARS,
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage
-} from '../../shared/agent-session/agent-session-context-usage'
+} from '../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { traexRecord, traexText } from './traex-protocol'
 
 const CATEGORY_NAMES: Readonly<Record<string, string>> = {

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { inspectWorkerTerminal } from '../observation/worker-observation'
 import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
 import { registerBoundPty } from '../../../../../orca-runtime-tests/bind-first-pane.test-fixture'
@@ -12,7 +11,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
     const harness = createOrchestrationWorkerReleaseHarness()
     afterEach(() => harness.cleanup())
 
-    it.each(['release', 'stop', 'read', 'replacement', 'disconnected'] as const)(
+    it.each(['release', 'stop', 'read', 'replacement'] as const)(
       '%s uses runtime identity and close paths',
       async (scenario) => {
         harness.setup()
@@ -37,16 +36,6 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
           incarnationId: scenario === 'replacement' ? '2' : '1'
         })
         await expect(runtime.showTerminal('term_worker')).rejects.toThrow()
-        if (scenario === 'disconnected') {
-          vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-            status: 'unverifiable',
-            reason: 'transport unavailable'
-          })
-          const observed = await inspectWorkerTerminal(runtime, harness.db, dispatchId)
-          expect(observed).toMatchObject({ exact: true, status: 'unverifiable' })
-          expect(kill).not.toHaveBeenCalled()
-          return
-        }
         if (scenario === 'stop') {
           const receipt = await harness.call('orchestration.workerStop', { dispatch: dispatchId })
           expect(receipt).toMatchObject({

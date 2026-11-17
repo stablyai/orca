@@ -11,3 +11,9 @@ export type StructuredAgentSessionCommandRun = {
   /** Only agents declaring `compactInstructions` receive this. */
   instructions?: string
 }
+
+export type StructuredAgentSessionCommandInput = {
+  sessionId: string
+  fence: number
+  command: StructuredAgentSessionCommandRun
+}

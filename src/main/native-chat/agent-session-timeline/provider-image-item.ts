@@ -4,7 +4,7 @@ import { buildImageDataUri } from '../../../shared/file-preview/image-data-uri'
 import {
   NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION,
   NATIVE_CHAT_IMAGE_OPERATION_PRESENTATION
-} from '../../../shared/native-chat/native-chat-generated-image'
+} from '../../../shared/native-chat/transcript/images/native-chat-generated-image'
 import { readString } from '../../codex/app-server/codex-item-field-readers'
 
 // Leave room for operation text and the journal envelope beside inline image bytes.

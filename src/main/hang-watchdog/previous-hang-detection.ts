@@ -114,6 +114,15 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
       details[`machine_${key}`] = value
     }
   }
+  for (const [index, send] of (record.workerSends ?? []).entries()) {
+    details[`workerSend${index}_role`] = send.role
+    details[`workerSend${index}_kind`] = send.kind
+    details[`workerSend${index}_items`] = send.items
+    details[`workerSend${index}_bytes`] = send.bytes
+    details[`workerSend${index}_depth`] = send.depth
+    details[`workerSend${index}_agoMs`] = send.agoMs
+    details[`workerSend${index}_heapUsedMB`] = send.heapUsedMB
+  }
   if (record.watchdogGap) {
     details.overlappingWatchdogGapMs = record.watchdogGap.durationMs
     details.overlappingWatchdogGapAt = record.watchdogGap.observedAt

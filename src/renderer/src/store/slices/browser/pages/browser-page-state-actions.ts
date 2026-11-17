@@ -5,7 +5,7 @@ import {
   preserveBrowserPageLoadingOwner,
   revokeBrowserPageLoadingOwner
 } from '@/lib/browser/browser-page-loading-ownership'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import {
   browserWorkspaceMirrorFieldsEqual,
@@ -20,7 +20,7 @@ import { replaceTabBuckets } from '../../../keyed-record-transitions'
 import {
   browserCertificateFailureEqual,
   browserPageEqual
-} from '@/runtime/web-session-tabs-sync/state-equality-tabs'
+} from '@/runtime/web-session-tabs-sync/snapshots/state-equality-tabs'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,

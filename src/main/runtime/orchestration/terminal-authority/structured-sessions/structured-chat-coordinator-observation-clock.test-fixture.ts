@@ -3,7 +3,7 @@ import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-s
 import { OrchestrationStructuredMailboxPointerDelivery } from '../../mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import { StructuredAgentSessionStatusFeed } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/installation/structured-agent-session-runtime'
 import { awakeNow, createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
 import type * as AwakeClockModule from '../../../../power/awake-clock'
 
@@ -30,7 +30,7 @@ vi.mock('../../../../power/awake-clock', async (importOriginal) => {
   const actual = await importOriginal<typeof AwakeClockModule>()
   return {
     ...actual,
-    awakeNow: vi.fn(() => (fakeTimeAwakeClock.clock ?? actual.getSystemAwakeClock()).now())
+    awakeNow: vi.fn(() => fakeTimeAwakeClock.clock?.now() ?? Date.now())
   }
 })
 
