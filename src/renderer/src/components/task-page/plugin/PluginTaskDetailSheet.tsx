@@ -3,7 +3,7 @@ import { ArrowRight, ExternalLink, LoaderCircle, SquareTerminal, X } from 'lucid
 import { VisuallyHidden } from 'radix-ui'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import type { ActivePluginTaskSource } from '@/store/plugin-task-sources'
