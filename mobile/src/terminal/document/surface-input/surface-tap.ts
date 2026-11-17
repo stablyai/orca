@@ -8,6 +8,7 @@ import {
 import { oscLinkAtViewportPoint } from './osc-link-tap'
 import { viewportToCell } from '../viewport/viewport-cell'
 import type { ParsedFileLinkLocation } from '../../../../../src/shared/file-links/file-link-location'
+import { findTerminalSuggestedCommand } from '../../../../../src/shared/terminal/links/terminal-suggested-command-detection'
 import {
   findTerminalFileLinksAtBufferPosition,
   findTerminalHttpLinkAtBufferPosition
@@ -34,6 +35,12 @@ export function notifyTerminalSurfaceTap(
     // Desktop's link detectors take 1-based cells and rebuild rows that wrap.
     const position = { x: cell.col + 1, y: cell.row + 1 }
     const buffer = term.buffer.active
+    // An agent's `! command` row is one target; a URL or path inside it must not win the tap.
+    const command = findTerminalSuggestedCommand(buffer, position.y, buffer.baseY + buffer.cursorY)
+    if (command) {
+      notify(scope, { type: 'run-suggested-command', text: command.text })
+      return
+    }
     const url = findTerminalHttpLinkAtBufferPosition(buffer, position, term.cols)
     if (url) {
       notify(scope, { type: 'open-url', url })

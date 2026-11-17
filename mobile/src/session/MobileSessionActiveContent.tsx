@@ -24,6 +24,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
 import { useMobileTerminalLinkOpen } from '../terminal/session/links/use-mobile-terminal-link-open'
+import { useMobileTerminalSuggestedCommand } from '../terminal/session/links/use-mobile-terminal-suggested-command'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -120,6 +121,7 @@ export function MobileSessionActiveContent({
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
   const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
+  const suggestedCommands = useMobileTerminalSuggestedCommand(controller)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
@@ -326,6 +328,7 @@ export function MobileSessionActiveContent({
               onTerminalTap={handleTerminalTap}
               onFileTap={handleFileTap}
               onOpenUrl={terminalLinks.handleTerminalOpenUrl}
+              onRunSuggestedCommand={suggestedCommands.handleRunSuggestedCommand}
             />
           )}
         </MountedTerminalPanes>
@@ -380,6 +383,7 @@ export function MobileSessionActiveContent({
           </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
         {terminalLinks.terminalLinkSheet}
+        {suggestedCommands.suggestedCommandSheet}
         {toast}
       </View>
     )

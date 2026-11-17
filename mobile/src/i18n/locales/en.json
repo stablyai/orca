@@ -3016,6 +3016,10 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "suggestedCommandSheet": {
+      "run": "Run in this terminal",
+      "copy": "Copy command"
     }
   },
   "chat": {

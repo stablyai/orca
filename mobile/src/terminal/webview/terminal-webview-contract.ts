@@ -81,6 +81,8 @@ export type TerminalSelectionEvents = {
   // Every reading of the tapped text (hard wraps, overlapping detections); like desktop, the longest that exists opens.
   onFileTap?: (candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl?: (url: string) => void
+  // An agent-suggested `! command` the person tapped; the host asks before it runs.
+  onRunSuggestedCommand?: (text: string) => void
   // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void
   onCellBoxChange?: () => void

@@ -49,6 +49,7 @@ type TerminalPaneViewProps = {
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl: (handle: string, url: string) => void
+  onRunSuggestedCommand: (handle: string, text: string) => void
   onTextScaleChange: (scale: number) => void
   onCellBoxChange: (handle: string) => void
 }
@@ -83,6 +84,7 @@ export function TerminalPaneView({
   onTerminalTap,
   onFileTap,
   onOpenUrl,
+  onRunSuggestedCommand,
   onTextScaleChange,
   onCellBoxChange
 }: TerminalPaneViewProps) {
@@ -194,6 +196,7 @@ export function TerminalPaneView({
             onTerminalTap={() => onTerminalTap(handle)}
             onFileTap={(candidates) => onFileTap(handle, candidates)}
             onOpenUrl={(url) => onOpenUrl(handle, url)}
+            onRunSuggestedCommand={(text) => onRunSuggestedCommand(handle, text)}
             onTextScaleChange={onTextScaleChange}
             onCellBoxChange={() => onCellBoxChange(handle)}
           />
