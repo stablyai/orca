@@ -17,7 +17,6 @@ const HEADLESS_DBUS_ERROR =
   /ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject|Cannot autolaunch D-Bus|dbus-launch|Connection refused|No such file or directory|Failed to connect to socket|The connection is closed/i
 
 class LinuxKeyringLockedError extends Error {}
-class GdbusUnavailableError extends Error {}
 
 function requireLinux(): void {
   if (process.platform !== 'linux') {
@@ -42,11 +41,10 @@ async function run(
     })
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      if (program === 'gdbus') {
-        throw new GdbusUnavailableError('gdbus unavailable')
-      }
       throw new Error(
-        'Antigravity account switching on Linux needs secret-tool. Install libsecret-tools (or your distribution’s equivalent) and try again.'
+        program === 'gdbus'
+          ? 'Antigravity account switching on Linux needs gdbus (GLib) to reach the keyring. Install it and try again.'
+          : 'Antigravity account switching on Linux needs secret-tool. Install libsecret-tools (or your distribution’s equivalent) and try again.'
       )
     }
     // Child-process errors may embed credential-bearing output.
@@ -60,33 +58,25 @@ async function getSecretServiceProperty(
   property: string,
   env?: NodeJS.ProcessEnv
 ) {
-  let result
-  try {
-    result = await run(
-      'gdbus',
-      [
-        'call',
-        '--session',
-        '--timeout',
-        '5',
-        '--dest',
-        'org.freedesktop.secrets',
-        '--object-path',
-        objectPath,
-        '--method',
-        'org.freedesktop.DBus.Properties.Get',
-        iface,
-        property
-      ],
-      undefined,
-      env
-    )
-  } catch (error) {
-    if (error instanceof GdbusUnavailableError) {
-      return null
-    }
-    throw error
-  }
+  const result = await run(
+    'gdbus',
+    [
+      'call',
+      '--session',
+      '--timeout',
+      '5',
+      '--dest',
+      'org.freedesktop.secrets',
+      '--object-path',
+      objectPath,
+      '--method',
+      'org.freedesktop.DBus.Properties.Get',
+      iface,
+      property
+    ],
+    undefined,
+    env
+  )
   if (result.timedOut || result.signal || result.outputTruncated) {
     throw new Error('The Antigravity Linux keyring did not respond.')
   }
@@ -143,7 +133,7 @@ export async function hasAntigravityLinuxSecretService(env?: NodeJS.ProcessEnv):
     if (error instanceof LinuxKeyringLockedError) {
       return true
     }
-    return false
+    throw error
   }
 }
 

@@ -76,13 +76,29 @@ describe('Antigravity Linux keyring access', () => {
     )
   })
 
-  it('treats missing gdbus or headless D-Bus errors as unavailable Secret Service while preserving secret-tool errors when unlocked', async () => {
-    expect(typeof hasAntigravityLinuxSecretService).toBe('function')
+  it('treats headless D-Bus errors as unavailable Secret Service while failing closed on missing gdbus or inconclusive probes', async () => {
+    vi.mocked(runProcess).mockRejectedValueOnce(
+      Object.assign(new Error('spawn gdbus ENOENT'), { code: 'ENOENT' })
+    )
+    await expect(readAntigravityLinuxCredential()).rejects.toThrow('needs gdbus')
 
     vi.mocked(runProcess).mockRejectedValueOnce(
       Object.assign(new Error('spawn gdbus ENOENT'), { code: 'ENOENT' })
     )
-    await expect(readAntigravityLinuxCredential()).resolves.toBeNull()
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).rejects.toThrow('needs gdbus')
+
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: null,
+      signal: 'SIGTERM',
+      stdout: '',
+      stderr: '',
+      timedOut: true
+    })
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).rejects.toThrow('did not respond')
 
     vi.mocked(runProcess).mockResolvedValueOnce({
       code: 1,
@@ -104,6 +120,13 @@ describe('Antigravity Linux keyring access', () => {
     await expect(
       hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/missing' })
     ).resolves.toBe(false)
+
+    vi.mocked(runProcess)
+      .mockResolvedValueOnce(collections)
+      .mockResolvedValueOnce(ok('(<true>,)\n'))
+    await expect(
+      hasAntigravityLinuxSecretService({ DBUS_SESSION_BUS_ADDRESS: 'unix:path=/tmp/active' })
+    ).resolves.toBe(true)
 
     // Once Secret Service responds unlocked, missing secret-tool must still surface the actionable error.
     vi.mocked(runProcess)

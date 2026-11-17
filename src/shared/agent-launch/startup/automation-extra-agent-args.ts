@@ -93,7 +93,7 @@ function matchOption(
       false,
       [],
       0,
-      option.kind !== 'flag'
+      option.kind === 'flag' ? false : 'required'
     )
     if (occurrence?.index === 0) {
       return { option, value: occurrence.value, consumed: occurrence.consumed }

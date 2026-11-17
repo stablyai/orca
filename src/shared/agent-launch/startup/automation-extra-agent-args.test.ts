@@ -88,6 +88,30 @@ describe('antigravity extra agent args', () => {
     ).toMatchObject({ ok: false, errorCode: 'optionNotAllowed' })
   })
 
+  it('accepts dash-leading project operands in extra agent args', () => {
+    expect(
+      parseExtraAgentArgs({
+        agent: 'antigravity',
+        extraAgentArgs: '--remote-agent --project -my-proj'
+      })
+    ).toMatchObject({
+      ok: true,
+      tokens: ['--remote-agent', '--project', '-my-proj']
+    })
+
+    expect(
+      mergeExtraAgentArgs({
+        agent: 'antigravity',
+        defaultArgs: '--project -old-proj --effort high',
+        extraAgentArgs: '--remote-agent --project -my-proj',
+        shell: 'posix'
+      })
+    ).toEqual({
+      ok: true,
+      agentArgs: "'--effort' 'high' '--remote-agent' '--project' '-my-proj'"
+    })
+  })
+
   it('formats bare flag placeholders without a trailing placeholder value', () => {
     const placeholder = getExtraAgentArgsPlaceholder('antigravity')
     expect(placeholder).toContain('--remote-agent')

@@ -15,6 +15,7 @@ import {
   type AgentStateRulesLiveUpdateDeps
 } from './agent-state-rules-live-update'
 import { detectExplicitIdleStatusFromTitle } from '../terminal/wait/terminal-wait-detection'
+import { evaluateAgentStateRules } from './agent-state-rules-engine'
 import { showsIdleTitleAnchor } from './agent-state-title-anchors'
 
 const NEWER = 9999
@@ -151,5 +152,21 @@ describe('agent state rules hot reload', () => {
       )
     })
     expect(getTerminalTailSentinelMatches(lines)).toEqual([0])
+  })
+
+  it('holds on antigravity footer lines with xhigh or max effort instead of matching custom statusLine', () => {
+    const rule = '────────────────'
+    for (const effort of ['low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(
+        evaluateAgentStateRules('antigravity', {
+          readScreenLines: () => [rule, '>', rule, `gemini-3-pro · ${effort}`]
+        })?.state
+      ).toBe('hold')
+    }
+    expect(
+      evaluateAgentStateRules('antigravity', {
+        readScreenLines: () => [rule, '>', rule, 'custom status line']
+      })?.state
+    ).toBe('idle')
   })
 })

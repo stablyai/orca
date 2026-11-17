@@ -28,6 +28,18 @@ vi.mock('./native-linux-credentials', () => ({
   hasAntigravityLinuxSecretService: vi.fn(async () => false)
 }))
 
+import type * as NativeFileCredentials from './native-file-credentials'
+
+vi.mock('./native-file-credentials', async (importActual) => {
+  const actual = await importActual<typeof NativeFileCredentials>()
+  return {
+    ...actual,
+    isAntigravityContainerOrWslHost: vi.fn(() => false)
+  }
+})
+
+import { isAntigravityContainerOrWslHost } from './native-file-credentials'
+
 describe('execution-host native credential authority', () => {
   it('performs a real isolated file write/readback and detects a stale before-write credential', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agy-backend-test-'))
@@ -57,6 +69,7 @@ describe('execution-host native credential authority', () => {
     const originalEnv = process.env
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     process.env = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' }
+    vi.mocked(isAntigravityContainerOrWslHost).mockReturnValue(false)
     try {
       const root = join(dir, '.gemini', 'antigravity-cli')
       mkdirSync(join(root, 'cache'), { recursive: true })
@@ -74,7 +87,14 @@ describe('execution-host native credential authority', () => {
       // When Secret Service IS reachable, the fallback marker remains ambiguous and must throw.
       vi.mocked(hasAntigravityLinuxSecretService).mockResolvedValue(true)
       await expect(backend.read()).rejects.toThrow('fallback marker')
+
+      // Container/WSL hosts intentionally select the file backend before marker/Secret Service checks.
+      vi.mocked(isAntigravityContainerOrWslHost).mockReturnValue(true)
+      expect((await createAntigravityHostCredentialBackend(dir).read())?.identity?.subject).toBe(
+        'b'
+      )
     } finally {
+      vi.mocked(isAntigravityContainerOrWslHost).mockReturnValue(false)
       process.env = originalEnv
       platformSpy.mockRestore()
       rmSync(dir, { recursive: true, force: true })

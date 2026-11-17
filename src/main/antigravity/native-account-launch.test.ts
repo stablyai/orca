@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   hasSecretService: vi.fn(async (_env?: NodeJS.ProcessEnv) => false),
+  isContainerOrWsl: vi.fn(() => false),
   prepareForLaunch: vi.fn(async () => {}),
   homeDir: '',
   vaultPath: ''
@@ -36,6 +37,16 @@ vi.mock('./native-linux-credentials', () => ({
   hasAntigravityLinuxSecretService: (env?: NodeJS.ProcessEnv) => mocks.hasSecretService(env)
 }))
 
+import type * as NativeFileCredentials from './native-file-credentials'
+
+vi.mock('./native-file-credentials', async (importActual) => {
+  const actual = await importActual<typeof NativeFileCredentials>()
+  return {
+    ...actual,
+    isAntigravityContainerOrWslHost: () => mocks.isContainerOrWsl()
+  }
+})
+
 import { prepareAntigravityAccountForLaunch } from './native-account-launch'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 
@@ -51,6 +62,7 @@ describe('prepareAntigravityAccountForLaunch', () => {
     originalEnv = process.env
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     mocks.hasSecretService.mockReset()
+    mocks.isContainerOrWsl.mockReset().mockReturnValue(false)
     mocks.prepareForLaunch.mockReset()
   })
 
@@ -86,6 +98,19 @@ describe('prepareAntigravityAccountForLaunch', () => {
     ).rejects.toThrow('different credential authority')
 
     expect(mocks.prepareForLaunch).not.toHaveBeenCalled()
+  })
+
+  it('uses file credential authority on container or WSL hosts without probing Secret Service', async () => {
+    process.env = { HOME: tempDir, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' }
+    mocks.isContainerOrWsl.mockReturnValue(true)
+
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      env: { HOME: tempDir, SSH_CONNECTION: '1.2.3.4 1234 5.6.7.8 22' }
+    })
+
+    expect(mocks.hasSecretService).not.toHaveBeenCalled()
+    expect(mocks.prepareForLaunch).toHaveBeenCalledTimes(1)
   })
 
   it('keeps host agy loginCommand separated from managed Antigravity runtime spec', () => {
