@@ -1,14 +1,24 @@
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { OrchestrationDb } from '../orchestration-db'
 import { pruneSettledChatOutputCopies } from './settled-chat-output-copy-prune'
+import {
+  deleteExpiredOrchestrationRows,
+  deleteRetiredRun,
+  EXPIRED_ROW_SWEEPS,
+  listRetiredRunCandidates,
+  type RunPartyLiveness
+} from './settled-run-retention'
 
 const MINUTE = 60_000
-const PRUNE_INTERVAL_MS = 6 * 60 * MINUTE
+const PRUNE_INTERVAL_MS = 60 * MINUTE
+// Runs examined per page, kept or not.
+const RUNS_PER_PAGE = 64
+const EXPIRED_ROWS_PER_STEP = 256
 // Bound each minute's reclaim, as the chat journal does.
 const RECLAIM_PAGES_PER_PASS = 1024
 const RECLAIM_PAGES_PER_STEP = 16
 
-/** Prunes settled internal history every six hours and returns free pages, at a tenth of the thread. */
+/** Prunes settled internal history every hour and returns free pages, at a tenth of the thread. */
 export class OrchestrationDbMaintenance {
   private readonly stopped = new AbortController()
   private timer: NodeJS.Timeout | undefined
@@ -16,7 +26,8 @@ export class OrchestrationDbMaintenance {
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
-    private readonly chatIsReadable: (dispatchId: string) => boolean
+    private readonly chatIsReadable: (dispatchId: string) => boolean,
+    private readonly runPartyLiveness: RunPartyLiveness
   ) {}
 
   start(): void {
@@ -63,6 +74,14 @@ export class OrchestrationDbMaintenance {
         }
         after = page.next
       }
+      try {
+        if (!(await this.retireSettledRuns())) {
+          return
+        }
+      } catch (error) {
+        // Recorded anyway, so a lasting failure is retried hourly, not every minute.
+        console.warn('[orchestration] settled Run retention failed', error)
+      }
       // Persisted so a restart does not rescan before the interval.
       this.recordPrune()
     }
@@ -74,6 +93,46 @@ export class OrchestrationDbMaintenance {
         }
       }
     }
+  }
+
+  /** False when stopped mid-way. */
+  private async retireSettledRuns(): Promise<boolean> {
+    const db = this.orchestrationDb
+    for (let after: string | null = ''; after !== null;) {
+      const from: string = after
+      const page = await this.slice(() => listRetiredRunCandidates(db, from, RUNS_PER_PAGE))
+      if (!page) {
+        return false
+      }
+      for (const runId of page.retired) {
+        const step = await this.slice(() => {
+          try {
+            deleteRetiredRun(db, runId, this.runPartyLiveness)
+          } catch (error) {
+            // One Run that cannot go must not hold back the others; the next pass retries it.
+            console.warn('[orchestration] settled Run retention failed', { runId, error })
+          }
+          return true
+        })
+        if (!step) {
+          return false
+        }
+      }
+      after = page.next
+    }
+    for (let sweep = 0; sweep < EXPIRED_ROW_SWEEPS; sweep++) {
+      for (let after: number | null = 0; after !== null;) {
+        const from: number = after
+        const next = await this.slice(() =>
+          deleteExpiredOrchestrationRows(db, sweep, from, EXPIRED_ROWS_PER_STEP)
+        )
+        if (next === undefined) {
+          return false
+        }
+        after = next
+      }
+    }
+    return true
   }
 
   private pruneIsDue(): boolean {

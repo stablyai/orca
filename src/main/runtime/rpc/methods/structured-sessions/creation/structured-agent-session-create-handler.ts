@@ -1,4 +1,4 @@
-import type { StructuredSessionSurface } from '../../../../agent-session/structured-agent-session-close'
+import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'

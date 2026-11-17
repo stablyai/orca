@@ -6,7 +6,7 @@ import type {
 import { getBranchCompare } from '../../../git/source-control/comparisons/branch-compare'
 import { getCommitCompare } from '../../../git/source-control/comparisons/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import { validateFullGitObjectId } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'

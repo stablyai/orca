@@ -1,4 +1,4 @@
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from './activity/terminal-portal/activity-terminal-portal'
 import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'

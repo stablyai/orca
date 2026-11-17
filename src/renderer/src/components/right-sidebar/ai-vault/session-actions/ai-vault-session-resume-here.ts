@@ -96,7 +96,6 @@ export function resumeAiVaultSessionHere(args: {
       confirmLabel: translate('components.native-chat.resumeCommand.replace', 'Replace'),
       confirmVariant: 'destructive',
       initialFocus: 'confirm',
-      compact: true,
       ignoresOpeningGesture: true,
       signal
     })

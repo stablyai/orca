@@ -1,7 +1,7 @@
 import type { Store } from '../../../persistence/loading-store/store'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import {
   assertWslUncPathRunning,
   noteWslDistroWokenForPath,

@@ -8,7 +8,7 @@ const RENDERER = 'src/renderer/src/'
 const WATCHERS = `${RENDERER}components/terminal-pane/parking/output-watchers/`
 const ROOTS = new Map([
   [
-    `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts`,
+    `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts`,
     ['createTerminalProviderSnapshotBoundPtyIdsSelector']
   ],
   [`${RENDERER}components/use-terminal-watcher-effects.ts`, ['useTerminalWatcherEffects']],
@@ -17,7 +17,10 @@ const ROOTS = new Map([
     `${RENDERER}components/terminal-parking-pass-candidates.ts`,
     ['collectTerminalParkingPassCandidates']
   ],
-  [`${RENDERER}components/terminal/split-group-mount.ts`, ['anyMountedWorktreeHasLayout']],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/split-group-mount.ts`,
+    ['anyMountedWorktreeHasLayout']
+  ],
   [
     `${RENDERER}components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.ts`,
     ['useParkedTerminalWatcherSynchronization']
@@ -124,8 +127,8 @@ function isColdResyncCall(node, source) {
 const STORE_BOUNDARIES = new Set([`${RENDERER}store/index.ts`, `${RENDERER}store.ts`])
 // Resource delivery and startup recovery are separate entry points, not parking input discovery.
 const EFFECT_BOUNDARIES = new Set([
-  `${RENDERER}components/terminal/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
-  `${RENDERER}components/terminal/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
+  `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts#resyncUnknownSnapshot`,
+  `${RENDERER}components/terminal/workspace-mounting/use-terminal-startup-activation.ts#useTerminalStartupActivation`,
   `${WATCHERS}terminal-parked-pty-watcher.ts#startParkedPtyWatcher`,
   `${RENDERER}components/terminal-pane/parking/capture/parked-terminal-buffer-capture.ts#captureParkedTerminalBuffers`,
   `${RENDERER}lib/agent-session/resume/sleeping-agent-session-launch.ts#launchSleepingAgentSession`,

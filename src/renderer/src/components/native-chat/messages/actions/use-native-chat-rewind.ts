@@ -66,8 +66,7 @@ export function useNativeChatRewind(input: RewindInput) {
           ),
           confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
           cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
-          confirmVariant: 'destructive',
-          cancelVariant: 'ghost'
+          confirmVariant: 'destructive'
         })
       ),
     [sharedRequest]

@@ -197,8 +197,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/ipc/preflight-provider-command-selection.test.ts',
-  'src/main/ipc/preflight-runnable-local-cli.test.ts',
+  'src/main/ipc/preflight/preflight-provider-command-selection.test.ts',
+  'src/main/ipc/preflight/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
   'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
