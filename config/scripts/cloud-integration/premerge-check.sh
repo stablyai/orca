@@ -251,9 +251,36 @@ if ((${#tc_pkgs[@]})); then
     (cd "$pkg" && pnpm typecheck)
   done
 fi
-# Image or VM-script changes: boot the image twice (Docker); the second boot must be clean. Fails open without Docker.
-if ((run_tests)) && [[ -n "$(git diff --name-only "$base"...HEAD -- cloud/apps/sandbox-control/image)" ]]; then
-  bash config/scripts/cloud-integration/boot-twice-check.sh
+# Wire check: the private cloud apps (stablyai/orca-cloud: sandbox-control, billing) import this repo's src/shared and a
+# few src/main and src/cli files by path. When a PR touches those, typecheck and test the apps against this merge result,
+# so a desktop refactor can't break the Worker unseen. ORCA_CLOUD_REPO is a git repo with orca-cloud's main (the gate's
+# lanes provide it). The paths are orca-cloud's PINNED_PATHS (dev/scripts/desktop-source.mjs).
+wire_paths=(src/shared src/main/cloud-workspaces src/main/environment-providers src/main/hosted-sandbox src/main/daemon
+  src/main/filesystem src/main/runtime-downloads src/main/worker-threads src/cli/orchestration src/cli/runtime
+  src/renderer/src/components/cloud-remote-desktop/remote-desktop-page-css.ts)
+if [[ -n "$(git diff --name-only "$base"...HEAD -- "${wire_paths[@]}")" ]]; then
+  if [[ -z "${ORCA_CLOUD_REPO:-}" ]]; then
+    echo "premerge: WARNING: wire check skipped (no ORCA_CLOUD_REPO): this PR touches files the private cloud apps import" >&2
+  fi
+fi
+if [[ -n "${ORCA_CLOUD_REPO:-}" && -n "$(git diff --name-only "$base"...HEAD -- "${wire_paths[@]}")" ]]; then
+  oc=$(mktemp -d "${TMPDIR:-/tmp}/premerge-orca-cloud.XXXXXX")
+  git -C "$ORCA_CLOUD_REPO" worktree add -q --detach "$oc" "${ORCA_CLOUD_REF:-origin/main}"
+  # Keeps the merge worktree's cleanup (the EXIT trap above) and adds this one.
+  trap 'git -C "$ORCA_CLOUD_REPO" worktree remove --force "$oc" >/dev/null 2>&1 || true; git -C "$dir" worktree remove --force "$dir" >/dev/null 2>&1 || true' EXIT
+  echo "premerge: wire check against orca-cloud $(git -C "$oc" rev-parse --short=12 HEAD)"
+  node "$oc/dev/scripts/desktop-source.mjs" link "$PWD"
+  # orca-cloud's root asks for Node 26 (engine-strict); the lanes run Node 24, which these two apps support.
+  export npm_config_engine_strict=false
+  # Linked, the desktop files resolve their packages from this checkout's node_modules; orca-cloud's root packages
+  # are still needed for billing's own scripts (playwright-core).
+  (cd "$oc" && pnpm install --frozen-lockfile --filter orca-cloud >/dev/null)
+  (cd "$oc/cloud" && pnpm install --frozen-lockfile --filter '@orca-cloud/sandbox-control...' --filter '@orca-cloud/billing...' >/dev/null)
+  (cd "$oc/cloud" && pnpm --filter @orca-cloud/sandbox-control --filter @orca-cloud/billing typecheck)
+  # Their suites follow the gate's test opt-in (PREMERGE_TESTS=1); CI in orca-cloud runs them on every pin bump.
+  if ((run_tests)); then
+    (cd "$oc/cloud" && pnpm --filter @orca-cloud/sandbox-control --filter @orca-cloud/billing test)
+  fi
 fi
 if ((!run_tests)); then scope="no tests (PREMERGE_TESTS=1 runs them)"
 elif [[ "${PREMERGE_FULL:-}" == 1 ]]; then scope="the full vitest suite"; else scope="${#tests[@]} targeted test file(s)"; fi
