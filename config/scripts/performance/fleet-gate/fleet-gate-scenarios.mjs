@@ -116,15 +116,31 @@ async function streamAgentStatus({ page, userDataDir, windowMs }) {
   return { note: `${posted} hook events over ${panes.length} panes`, failed }
 }
 
+// Setup, not measured: show a seeded workspace that has a terminal, so keys take the real PTY round trip.
+async function showTerminalWorkspace(page) {
+  await page.evaluate(() => {
+    const state = window.__store.getState()
+    const withTerminal = Object.entries(state.tabsByWorktree ?? {}).find(
+      ([, tabs]) => Array.isArray(tabs) && tabs.length > 0
+    )
+    if (withTerminal && state.activeWorktreeId !== withTerminal[0]) {
+      state.setActiveWorktree(withTerminal[0])
+    }
+  })
+  await sleep(3_000)
+}
+
 async function typeIntoComposer({ page, windowMs }) {
+  await showTerminalWorkspace(page)
   const target = await page.evaluate(() => {
-    const candidates = [
-      ...document.querySelectorAll('textarea, [contenteditable="true"], .xterm-helper-textarea')
-    ]
-    const visible = candidates.find((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0
-    })
+    const visible =
+      [...document.querySelectorAll('.xterm-helper-textarea')].find(
+        (element) => element.closest('.xterm')?.getClientRects().length
+      ) ??
+      [...document.querySelectorAll('textarea, [contenteditable="true"]')].find((element) => {
+        const rect = element.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
     if (!visible) {
       return null
     }
@@ -173,6 +189,7 @@ async function switchWorkspaces({ page, windowMs }) {
   const deadline = Date.now() + windowMs
   let switches = 0
   let missed = 0
+  let firstError = null
   while (Date.now() < deadline) {
     const id = pair[switches % 2]
     try {
@@ -180,13 +197,19 @@ async function switchWorkspaces({ page, windowMs }) {
         .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
         .first()
         .click({ timeout: 5_000 })
-    } catch {
+    } catch (error) {
       missed += 1
+      firstError ??= String(error?.message ?? error)
+        .split('\n')[0]
+        .slice(0, 160)
     }
     switches += 1
     await sleep(SWITCH_INTERVAL_MS)
   }
-  return { note: `${switches - missed} switches between 2 cards`, missed }
+  return {
+    note: `${switches - missed} switches between 2 cards${firstError ? ` (first miss: ${firstError})` : ''}`,
+    missed
+  }
 }
 
 export const SCENARIOS = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fleet-scale perf gate: OLD vs NEW on a ~1,900-workspace profile clone. Usage: docs/readme/fleet-perf-gate.md.
+// Fleet-scale perf gate: OLD vs NEW on a ~1,900-workspace synthetic profile. Usage: docs/readme/fleet-perf-gate.md.
 import { _electron as electron } from '@stablyai/playwright-test'
 import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -13,22 +13,21 @@ import { installRendererProbe } from './fleet-gate-renderer-probe.mjs'
 import { compareRuns, formatTable, windowMetrics } from './fleet-gate-report.mjs'
 import { SCENARIOS } from './fleet-gate-scenarios.mjs'
 import {
-  assertFleetSeed,
-  cloneFleetSeed,
-  describeFleetSeed,
-  prepareFleetSeed
-} from './fleet-gate-seed.mjs'
+  buildSyntheticFleetSeed,
+  readFleetCensus,
+  readSeedReceipt
+} from './fleet-gate-synthetic-seed.mjs'
 
 const CACHE_ROOT =
   process.env.ORCA_FLEET_GATE_CACHE ?? path.join(os.homedir(), '.cache', 'orca-fleet-gate')
 const KEEP_BUILDS = 4
+const KEEP_SEEDS = 2
 
 function parseArgs(argv) {
   const options = {
     old: null,
     new: 'HEAD',
-    seed: process.env.ORCA_FLEET_SEED_DIR ?? path.join(CACHE_ROOT, 'seed'),
-    prepareSeed: null,
+    seed: process.env.ORCA_FLEET_SEED_DIR ?? null,
     runs: 2,
     settleMs: 120_000,
     windowMs: 30_000,
@@ -51,7 +50,6 @@ function parseArgs(argv) {
       '--old': () => (options.old = value()),
       '--new': () => (options.new = value()),
       '--seed': () => (options.seed = path.resolve(value())),
-      '--prepare-seed': () => (options.prepareSeed = path.resolve(value())),
       '--runs': () => (options.runs = Number(value())),
       '--settle-ms': () => (options.settleMs = Number(value())),
       '--window-ms': () => (options.windowMs = Number(value())),
@@ -112,22 +110,21 @@ function ensureBuild(repoRoot, sha) {
   )
   run('pnpm', ['run', 'ensure:electron-runtime'], dir, log)
   fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
-  pruneBuilds(buildsDir, new Set([dir]))
+  pruneCache(buildsDir, '.fleet-gate-built', KEEP_BUILDS, new Set([dir]))
   return dir
 }
 
-function pruneBuilds(buildsDir, keep) {
-  const builds = fs
-    .readdirSync(buildsDir, { withFileTypes: true })
+function pruneCache(parentDir, markerName, keepCount, keep) {
+  const entries = fs
+    .readdirSync(parentDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(buildsDir, entry.name))
+    .map((entry) => path.join(parentDir, entry.name))
     .map((dir) => ({
       dir,
-      mtime:
-        fs.statSync(path.join(dir, '.fleet-gate-built'), { throwIfNoEntry: false })?.mtimeMs ?? 0
+      mtime: fs.statSync(path.join(dir, markerName), { throwIfNoEntry: false })?.mtimeMs ?? 0
     }))
     .sort((a, b) => b.mtime - a.mtime)
-  for (const { dir } of builds.slice(KEEP_BUILDS)) {
+  for (const { dir } of entries.slice(keepCount)) {
     if (!keep.has(dir)) {
       fs.rmSync(dir, { recursive: true, force: true })
     }
@@ -206,7 +203,7 @@ function readWindowState() {
 }
 
 /** The session-ready app window; on timeout, writes what every window showed so one run explains the failure. */
-async function waitForAppWindow(app, { arm, sha, runDir, options, stderrTail }) {
+async function waitForAppWindow(app, { label, userDataDir, outDir, stderrTail }) {
   const consoleErrors = []
   const watch = (page) =>
     page.on('console', (message) => {
@@ -234,31 +231,27 @@ async function waitForAppWindow(app, { arm, sha, runDir, options, stderrTail }) 
   for (const page of app.windows()) {
     windows.push(await page.evaluate(readWindowState).catch((error) => ({ error: String(error) })))
   }
-  const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
   fs.mkdirSync(outDir, { recursive: true })
-  const stem = path.join(outDir, `not-ready-${arm}-${sha.slice(0, 11)}-${Date.now()}`)
+  const stem = path.join(outDir, `not-ready-${label}-${Date.now()}`)
   await app
     .windows()[0]
     ?.screenshot({ path: `${stem}.png` })
     .catch(() => {})
-  const userDataFiles = fs.readdirSync(path.join(runDir, 'user-data')).slice(0, 40)
+  const userDataFiles = fs.readdirSync(userDataDir).slice(0, 40)
   fs.writeFileSync(
     `${stem}.json`,
     `${JSON.stringify({ windows, consoleErrors, stderrTail, userDataFiles }, null, 2)}\n`
   )
-  console.log(`[fleet-gate] ${arm} never became ready: ${JSON.stringify(windows).slice(0, 600)}`)
+  console.log(`[fleet-gate] ${label} never became ready: ${JSON.stringify(windows).slice(0, 600)}`)
   console.log(
     `[fleet-gate] console errors: ${JSON.stringify(consoleErrors.slice(-5)).slice(0, 600)}`
   )
   console.log(`[fleet-gate] stderr tail: ${JSON.stringify(stderrTail.slice(-8)).slice(0, 800)}`)
-  throw new Error(
-    `${arm} ${sha.slice(0, 11)} not session-ready after ${READY_TIMEOUT_MS / 1000}s (${stem}.json)`
-  )
+  throw new Error(`${label} not session-ready after ${READY_TIMEOUT_MS / 1000}s (${stem}.json)`)
 }
 
-async function measureOnce({ arm, sha, buildDir, options, runDir }) {
-  const userDataDir = path.join(runDir, 'user-data')
-  cloneFleetSeed(options.seed, userDataDir)
+/** Launches one hidden copy on userDataDir; close() quits it (gracefully first) and is safe to call twice. */
+async function launchCopy({ buildDir, runDir, userDataDir, label, outDir }) {
   const executablePath = createRequire(path.join(buildDir, 'package.json'))('electron')
   const app = await electron.launch({
     executablePath,
@@ -266,14 +259,69 @@ async function measureOnce({ arm, sha, buildDir, options, runDir }) {
     env: isolatedEnv(runDir, userDataDir),
     timeout: 180_000
   })
-  const result = { arm, sha, windows: {}, census: null, notes: [] }
   const stderrTail = []
   app.process().stderr?.on('data', (chunk) => {
     stderrTail.push(...String(chunk).split('\n').filter(Boolean))
     stderrTail.splice(0, Math.max(0, stderrTail.length - 40))
   })
+  let closed = false
+  const close = async () => {
+    if (closed) {
+      return
+    }
+    closed = true
+    await Promise.race([
+      app.close().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 30_000))
+    ])
+    const child = app.process()
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
+  }
   try {
-    const page = await waitForAppWindow(app, { arm, sha, runDir, options, stderrTail })
+    const page = await waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
+    return { app, page, close }
+  } catch (error) {
+    await close()
+    throw error
+  }
+}
+
+/** A seed made by the OLD build, so NEW only ever opens it forward, as an upgrade would. */
+async function ensureSeed({ oldSha, oldBuild, outDir }) {
+  const seedsDir = path.join(CACHE_ROOT, 'seeds')
+  const seedDir = path.join(seedsDir, oldSha)
+  const existing = readSeedReceipt(seedDir)
+  if (existing) {
+    fs.utimesSync(path.join(seedDir, '.fleet-seed.json'), new Date(), new Date())
+    return { seedDir, receipt: existing }
+  }
+  console.log(`[fleet-gate] seeding a synthetic fleet with ${oldSha.slice(0, 12)}`)
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-fleet-seed-'))
+  try {
+    const receipt = await buildSyntheticFleetSeed({
+      seedDir,
+      corpusDir: path.join(CACHE_ROOT, 'corpus'),
+      builtBy: oldSha,
+      launch: (userDataDir) =>
+        launchCopy({ buildDir: oldBuild, runDir, userDataDir, label: 'seed', outDir })
+    })
+    console.log(`[fleet-gate] seed ${JSON.stringify(receipt)}`)
+    pruneCache(seedsDir, '.fleet-seed.json', KEEP_SEEDS, new Set([seedDir]))
+    return { seedDir, receipt }
+  } finally {
+    fs.rmSync(runDir, { recursive: true, force: true })
+  }
+}
+
+async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDir }) {
+  const userDataDir = path.join(runDir, 'user-data')
+  fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  const result = { arm, sha, windows: {}, census: null, notes: [] }
+  const label = `${arm}-${sha.slice(0, 11)}`
+  const { app, page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
+  try {
     const probeState = await installMainProbeIn(app)
     if (probeState !== 'installed') {
       result.notes.push(`main probe ${probeState}: R→M counts only send(), not invoke()`)
@@ -282,17 +330,10 @@ async function measureOnce({ arm, sha, buildDir, options, runDir }) {
     if (renderer.breakpoints === 0) {
       result.notes.push('store notify loop not found: store pubs/wakeups not measured')
     }
-    console.log(`[fleet-gate] ${arm} ${sha.slice(0, 12)} up; settling ${options.settleMs / 1000}s`)
+    console.log(`[fleet-gate] ${label} up; settling ${options.settleMs / 1000}s`)
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
-    result.census = await page.evaluate(() => {
-      const state = window.__store.getState()
-      return {
-        workspaces: Object.values(state.worktreesByRepo).flat().length,
-        tabBuckets: Object.keys(state.unifiedTabsByWorktree ?? {}).length,
-        terminalTabs: Object.values(state.tabsByWorktree ?? {}).flat().length,
-        agentStatuses: Object.keys(state.agentStatusByPaneKey ?? {}).length
-      }
-    })
+    result.census = await readFleetCensus(page)
+    await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
       const windowMs = name === 'idle' ? options.idleWindowMs : options.windowMs
       await resetMainProbe(app)
@@ -320,18 +361,11 @@ async function measureOnce({ arm, sha, buildDir, options, runDir }) {
           .map(([channel, row]) => `${channel} ${row.n}`)
       }
       console.log(
-        `[fleet-gate] ${arm} ${name}: ${JSON.stringify(result.windows[name].metrics)} ${driven.note ?? ''}`
+        `[fleet-gate] ${label} ${name}: ${JSON.stringify(result.windows[name].metrics)} ${driven.note ?? ''} top M→R ${result.windows[name].topOut.join('; ')}`
       )
     }
   } finally {
-    await Promise.race([
-      app.close().catch(() => {}),
-      new Promise((resolve) => setTimeout(resolve, 30_000))
-    ])
-    const child = app.process()
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGKILL')
-    }
+    await close()
     fs.rmSync(runDir, { recursive: true, force: true })
   }
   return result
@@ -340,13 +374,6 @@ async function measureOnce({ arm, sha, buildDir, options, runDir }) {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const repoRoot = git(process.cwd(), ['rev-parse', '--show-toplevel'])
-  if (options.prepareSeed) {
-    const prepared = await prepareFleetSeed(options.prepareSeed, options.seed)
-    console.log(
-      `[fleet-gate] seed ready at ${prepared.seedDir}; neutralized ${prepared.neutralized.join(', ') || 'nothing'}; ${JSON.stringify(prepared.census)}`
-    )
-    return
-  }
   const newSha = git(repoRoot, ['rev-parse', `${options.new}^{commit}`])
   const oldSha = git(repoRoot, [
     'rev-parse',
@@ -363,9 +390,12 @@ async function main() {
     console.log(`hot-path changes (${hot.length}): ${hot.slice(0, 10).join(', ')}`)
     return
   }
-  assertFleetSeed(options.seed)
-  const seedCensus = await describeFleetSeed(options.seed)
+  const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
+  fs.mkdirSync(outDir, { recursive: true })
   const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
+  const seed = options.seed
+    ? { seedDir: options.seed, receipt: null }
+    : await ensureSeed({ oldSha, oldBuild: builds.old, outDir })
   const shas = { old: oldSha, new: newSha }
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
@@ -378,7 +408,9 @@ async function main() {
             arm,
             sha: shas[arm],
             buildDir: builds[arm],
+            seedDir: seed.seedDir,
             options,
+            outDir,
             runDir: path.join(runsRoot, `${arm}-${runs.length}`)
           })
         )
@@ -398,12 +430,10 @@ async function main() {
   }
   const header = [
     `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${options.runs} runs each (alternating)  ${os.hostname()} ${process.platform}`,
-    `census: ${census ? `${String(census.workspaces)} workspaces, ${String(census.tabBuckets)} tab buckets, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentStatuses)} agent statuses` : 'n/a'}; seed ${String(seedCensus.chatRecords)} chat records, ${String(seedCensus.chatTabs)} chat tabs`,
+    `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
   const { text, passed } = formatTable({ rows, header, notes })
-  const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
-  fs.mkdirSync(outDir, { recursive: true })
   const stem = path.join(
     outDir,
     `fleet-gate-${oldSha.slice(0, 11)}-${newSha.slice(0, 11)}-${Date.now()}`

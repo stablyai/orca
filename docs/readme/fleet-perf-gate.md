@@ -1,6 +1,6 @@
 # Fleet perf gate
 
-A real-app OLD vs NEW check at fleet scale (~1,900 workspaces, ~1,800 chat tabs). It exists because some regressions only show when every workspace pays: an idle desktop that sends itself 143 tab-update frames per second looks fine with 10 workspaces.
+A real-app OLD vs NEW check at fleet scale (~1,900 workspaces, ~1,800 chat tabs, synthetic). It exists because some regressions only show when every workspace pays: an idle desktop that sends itself 143 tab-update frames per second looks fine with 10 workspaces.
 
 ```sh
 pnpm perf:fleet-gate --old <base-ref> [--new HEAD] [--runs 2] [--scenarios idle,typing,streaming,switch]
@@ -11,7 +11,7 @@ It is a no-op unless the change touches a hot path (main process, preload/IPC, s
 ## What it does
 
 1. Builds OLD and NEW in e2e mode, each in its own shared clone under `~/.cache/orca-fleet-gate/builds/<sha>` (cached by commit; the newest four are kept).
-2. For each run, clones the seed into a throwaway user-data dir and home, launches the copy hidden, waits for the session to load, and lets it settle (`--settle-ms`, 120 s).
+2. Seeds a synthetic fleet once per OLD commit (below). For each run, clones the seed into a throwaway user-data dir and home, launches the copy hidden, waits for the session to load, and lets it settle (`--settle-ms`, 120 s).
 3. Measures four windows: `idle` (60 s, no input), `typing` (10 keys/s into the first visible input), `streaming` (20 agent hook events/s across 10 workspaces, through the real hook endpoint) and `switch` (click between two workspace cards once a second).
 4. Runs OLD and NEW alternately (`--runs` pairs, counterbalanced) so drift on the machine hits both.
 
@@ -34,14 +34,8 @@ A metric fails when every NEW run is worse than every OLD run by more than the m
 
 ## Seed
 
-The seed is a user-data folder holding `profiles/local-default/profile-state.db` and `agent-session-domain.db`. Make one from a real profile's two database files:
-
-```sh
-pnpm perf:fleet-gate --prepare-seed <dir with profile-state.db and agent-session-domain.db> [--seed <out dir>]
-```
-
-Preparing a seed empties SSH targets, remote PTY leases, automations and bots, so a test copy never connects to real hosts or starts scheduled agents. The default seed location is `~/.cache/orca-fleet-gate/seed` (`ORCA_FLEET_SEED_DIR` overrides it). Seeds hold a real user's workspace names and chats, so keep them on team machines and out of CI.
+The gate builds its own synthetic fleet; no real user data is involved. It makes one small git repo with 1,800 linked worktrees plus 100 plain folders (`~/.cache/orca-fleet-gate/corpus`). Then it adds them through the app's own APIs, creates 1,800 chat tabs at rest (no agent process runs) and 20 terminals. The seed is built by the OLD build, so NEW opens it the way an upgrade would. It is cached per OLD commit (`seeds/<sha>`, newest two kept), and each run starts from a copy-on-write clone of it. The table header prints the census read back from the app after settling. `--seed <user-data dir>` (or `ORCA_FLEET_SEED_DIR`) measures on an existing profile instead.
 
 ## Why not CI
 
-The seed is real user data, and wall-clock rates on shared hosted runners are too noisy for 25% margins. Count contracts that need neither (`pnpm test:perf:contracts`) stay in CI.
+It needs two app builds and about 30 minutes of a quiet machine, and wall-clock rates on shared hosted runners are too noisy for 25% margins. Count contracts that need neither (`pnpm test:perf:contracts`) stay in CI.
