@@ -36,6 +36,7 @@ export function useCodexResetAction(
     supported: boolean
   } | null>(null)
   const hostAttemptRef = useRef<HostResetAttempt | null>(null)
+  const confirmedScopeRef = useRef<CodexResetCreditExpectedScope | null>(null)
   const mountedRef = useRef(true)
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -74,17 +75,21 @@ export function useCodexResetAction(
     }
   }, [menuOpen, hostEnvironmentId])
 
-  const redeemOnHost = async (environmentId: string): Promise<void> => {
-    if (!hostScope) {
+  const redeemOnHost = async (
+    environmentId: string,
+    scope: CodexResetCreditExpectedScope | null
+  ): Promise<void> => {
+    const pending = hostAttemptRef.current
+    // Why: an attempt without a reply keeps its key and scope, so the host's ledger never spends twice.
+    const attempt =
+      pending?.environmentId === environmentId
+        ? pending
+        : scope
+          ? { environmentId, idempotencyKey: createBrowserUuid(), expectedScope: scope }
+          : null
+    if (!attempt) {
       return
     }
-    const previous = hostAttemptRef.current
-    // Why: a retry after a lost reply reuses its key so the host's ledger never spends twice.
-    const attempt =
-      previous?.environmentId === environmentId &&
-      JSON.stringify(previous.expectedScope) === JSON.stringify(hostScope)
-        ? previous
-        : { environmentId, idempotencyKey: createBrowserUuid(), expectedScope: hostScope }
     hostAttemptRef.current = attempt
     await consumeHostCodexResetCredit(environmentId, {
       idempotencyKey: attempt.idempotencyKey,
@@ -93,13 +98,13 @@ export function useCodexResetAction(
     hostAttemptRef.current = null
   }
 
-  const redeem = async (): Promise<void> => {
+  const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
     if (isRedeemingReset) {
       return
     }
     setIsRedeemingReset(true)
     try {
-      await (hostEnvironmentId ? redeemOnHost(hostEnvironmentId) : consumeLocalResetCredit())
+      await (hostEnvironmentId ? redeemOnHost(hostEnvironmentId, scope) : consumeLocalResetCredit())
     } catch (error) {
       console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
     } finally {
@@ -110,10 +115,12 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
-    if (skipResetConfirm) {
-      void redeem()
+    if (skipResetConfirm || hostAttemptRef.current?.environmentId === hostEnvironmentId) {
+      void redeem(hostScope)
       return
     }
+    // Why: the confirmation names one account; a host switch while it is open must not spend another's credit.
+    confirmedScopeRef.current = hostScope
     setSkipFutureResetConfirm(false)
     setResetConfirmOpen(true)
   }
@@ -129,7 +136,7 @@ export function useCodexResetAction(
         console.error('Failed to save Codex reset confirmation preference:', error)
       }
     }
-    await redeem()
+    await redeem(confirmedScopeRef.current)
     if (mountedRef.current) {
       setResetConfirmOpen(false)
       setSkipFutureResetConfirm(false)
