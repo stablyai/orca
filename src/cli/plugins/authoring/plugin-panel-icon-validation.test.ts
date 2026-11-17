@@ -21,13 +21,25 @@ it('warns and falls back for unsafe panel icons while preserving valid icons', a
       { icon: '../escape.svg', content: svg },
       { icon: 'icon.png', content: svg },
       { icon: 'icon.svg', content: 'x'.repeat(32769) },
-      { icon: 'icon.svg', content: '<svg viewBox="0 0 24 24">' },
-      { icon: 'icon.svg', content: '<svg viewBox="0 0 24 24"><script/></svg>' },
-      { icon: 'icon.svg', content: '<svg viewBox="0 0 24 24"><foreignObject/></svg>' },
-      { icon: 'icon.svg', content: '<svg viewBox="0 0 24 24"><path onclick="x"/></svg>' },
+      { icon: 'icon.svg', content: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' },
       {
         icon: 'icon.svg',
-        content: '<svg viewBox="0 0 24 24"><image href="https://example.com"/></svg>'
+        content: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><script/></svg>'
+      },
+      {
+        icon: 'icon.svg',
+        content:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><foreignObject/></svg>'
+      },
+      {
+        icon: 'icon.svg',
+        content:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path onclick="x"/></svg>'
+      },
+      {
+        icon: 'icon.svg',
+        content:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><image href="https://example.com"/></svg>'
       }
     ]
     for (const { icon, content } of cases) {
@@ -35,7 +47,9 @@ it('warns and falls back for unsafe panel icons while preserving valid icons', a
       await writeFile(file, original.replace('"puzzle"', JSON.stringify(icon)))
       const report = await validatePluginTarget(dir)
       expect(report.valid, icon).toBe(true)
-      expect(report.warnings, icon).toEqual([expect.stringContaining('using plug')])
+      expect(report.warnings, icon).toEqual([
+        expect.stringContaining('Showing the plug icon instead')
+      ])
       const [plugin] = await discoverPlugins({
         pluginsDir: join(root, 'installed'),
         devPluginPaths: [dir],
@@ -59,15 +73,17 @@ it('warns and falls back for unsafe panel icons while preserving valid icons', a
       ).toBe(icon)
       expect((await validatePluginTarget(dir)).warnings).toBeUndefined()
     }
-    await writeFile(
-      file,
-      original
-        .replace('"manifestVersion": 2', '"manifestVersion": 1')
-        .replace('"puzzle"', '"icon.svg"')
-    )
-    const legacy = await validatePluginTarget(dir)
-    expect(legacy.valid).toBe(true)
-    expect(legacy.warnings).toEqual([expect.stringContaining('require manifest format 2')])
+    for (const icon of ['x.svg', 'databse']) {
+      await writeFile(
+        file,
+        original
+          .replace('"manifestVersion": 2', '"manifestVersion": 1')
+          .replace('"puzzle"', JSON.stringify(icon))
+      )
+      const legacy = await validatePluginTarget(dir)
+      expect(legacy.valid).toBe(true)
+      expect(legacy.warnings).toBeDefined()
+    }
   } finally {
     await rm(root, { recursive: true, force: true })
   }

@@ -83,6 +83,24 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
+export function projectPluginPanelIcon(
+  icon: string | undefined,
+  manifestVersion: number,
+  pluginKey: string,
+  contentHash: string | null,
+  index: number
+): string {
+  if (!icon) {
+    return 'plug'
+  }
+  return (
+    canonicalPluginPanelIcon(icon) ??
+    (manifestVersion === 2
+      ? pluginInstalledImageUrl(pluginKey, contentHash ?? 'dev', `panel-${index}`)
+      : 'plug')
+  )
+}
+
 export async function buildPluginList(
   service: PluginService,
   lock: PluginLockfile,
@@ -193,17 +211,13 @@ export async function buildPluginList(
         panels: plugin.manifest.contributes.panels.map((panel, index) => ({
           id: panel.id,
           title: panel.title,
-          ...(panel.icon
-            ? {
-                icon:
-                  canonicalPluginPanelIcon(panel.icon) ??
-                  pluginInstalledImageUrl(
-                    plugin.pluginKey,
-                    plugin.contentHash ?? 'dev',
-                    `panel-${index}`
-                  )
-              }
-            : {}),
+          icon: projectPluginPanelIcon(
+            panel.icon,
+            plugin.manifest.manifestVersion,
+            plugin.pluginKey,
+            plugin.contentHash,
+            index
+          ),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({

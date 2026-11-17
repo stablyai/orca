@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 import { parsePluginImageUrl } from '../../../../../shared/plugins/images/plugin-image-url'
 import { Plug } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
@@ -7,24 +7,48 @@ import { resolvePluginIconGlyph } from '../../plugins/plugin-icon-glyphs'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
+const panelIconComponents = new Map<string, PluginPanelIcon>()
+
 export function resolvePluginPanelIcon(iconName: string | undefined): PluginPanelIcon {
   const ref = iconName ? parsePluginImageUrl(iconName) : null
-  if (ref?.kind === 'installed' && /^panel-\d{1,2}$/.test(ref.slot)) {
-    return ({ size = 16, className }) =>
-      createElement('span', {
-        className,
-        style: {
-          display: 'inline-block',
-          width: size,
-          height: size,
-          backgroundColor: 'currentColor',
-          maskImage: `url("${iconName}")`,
-          maskSize: 'contain',
-          maskRepeat: 'no-repeat',
-          maskPosition: 'center'
+  if (iconName && ref?.kind === 'installed' && /^panel-\d{1,2}$/.test(ref.slot)) {
+    const cached = panelIconComponents.get(iconName)
+    if (cached) {
+      return cached
+    }
+    const url = iconName
+    const Icon: PluginPanelIcon = ({ size = 16, className }) => {
+      const [failed, setFailed] = useState(false)
+      if (failed) {
+        return createElement(Plug, { size, className })
+      }
+      return createElement(
+        'span',
+        {
+          className,
+          style: {
+            display: 'inline-block',
+            width: size,
+            height: size,
+            backgroundColor: 'currentColor',
+            maskImage: `url("${url}")`,
+            maskSize: 'contain',
+            maskRepeat: 'no-repeat',
+            maskPosition: 'center',
+            forcedColorAdjust: 'none'
+          },
+          'aria-hidden': true
         },
-        'aria-hidden': true
-      })
+        createElement('img', {
+          src: url,
+          onError: () => setFailed(true),
+          alt: '',
+          style: { display: 'none' }
+        })
+      )
+    }
+    panelIconComponents.set(url, Icon)
+    return Icon
   }
   return resolvePluginIconGlyph(iconName, Plug)
 }
@@ -38,7 +62,10 @@ export function getPluginPanelActivityItems(
     pluginKey: panel.pluginKey,
     icon: resolvePluginPanelIcon(panel.icon),
     // Manifest titles are plugin-owned and render without app-catalog translation.
-    title: `${panel.pluginName}: ${panel.title}`,
+    title: panel.title,
+    accessibleTitle: panel.title.toLowerCase().startsWith(panel.pluginName.toLowerCase())
+      ? panel.title
+      : `${panel.pluginName}: ${panel.title}`,
     shortcut: '',
     ...(panelErrors[panel.tabKey] ? { statusIndicator: 'failure' as const } : {})
   }))

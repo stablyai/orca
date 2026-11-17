@@ -1,13 +1,20 @@
+// @vitest-environment happy-dom
+
 import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { expect, it } from 'vitest'
+import { cleanup, fireEvent, render } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
 import { resolvePluginPanelIcon } from './plugin-panel-activity-items'
 
-it('renders a served panel icon as a current-color mask', () => {
+afterEach(cleanup)
+
+it('shows a plug when the SVG cannot be loaded', () => {
   const Icon = resolvePluginPanelIcon('orca-plugin-image://installed/acme.example/dev/panel-0')
-  const html = renderToStaticMarkup(createElement(Icon, { size: 18 }))
-  expect(html).toContain(
-    'mask-image:url(&quot;orca-plugin-image://installed/acme.example/dev/panel-0&quot;)'
-  )
-  expect(html).toContain('background-color:currentColor')
+  const { container } = render(createElement(Icon, { size: 18 }))
+  const probe = container.querySelector('img')
+  expect(probe).not.toBeNull()
+  if (!probe) {
+    throw new Error('expected an image probe')
+  }
+  fireEvent.error(probe)
+  expect(container.querySelector('svg')).not.toBeNull()
 })

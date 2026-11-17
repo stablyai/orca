@@ -23,6 +23,7 @@ export const PLUGIN_HOOKS_SINCE = '1.4.248'
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
+export const PLUGIN_PANEL_SVG_SINCE = '1.4.255'
 
 type PluginFieldDoc = {
   description: string

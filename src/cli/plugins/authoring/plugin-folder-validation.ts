@@ -129,8 +129,10 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
         try {
           await readPluginPanelSvg(root, panel.icon)
         } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error)
+          const detail = reason.includes('32768-byte') ? 'exceeds 32 KB' : reason
           warnings.push(
-            `contributes.panels "${panel.id}" icon: ${error instanceof Error ? error.message : String(error)}; using plug`
+            `Panel "${panel.title}": icon "${panel.icon}" isn't used (${detail}). Showing the plug icon instead.`
           )
         }
       }
@@ -139,15 +141,20 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     const panels = z
       .object({
         contributes: z
-          .object({ panels: z.array(z.object({ icon: z.unknown().optional() })).optional() })
+          .object({
+            panels: z
+              .array(z.object({ title: z.string().optional(), icon: z.unknown().optional() }))
+              .optional()
+          })
           .optional()
       })
       .safeParse(raw).data?.contributes?.panels
-    if (
-      Array.isArray(panels) &&
-      panels.some((panel) => typeof panel?.icon === 'string' && /\.svg$/i.test(panel.icon))
-    ) {
-      warnings.push('Panel SVG icons require manifest format 2; upgrade the manifest to use them')
+    for (const panel of panels ?? []) {
+      if (typeof panel.icon === 'string' && !canonicalPluginPanelIcon(panel.icon)) {
+        warnings.push(
+          `Panel "${panel.title ?? ''}": icon "${panel.icon}" isn't used (custom icons require manifest format 2). Showing the plug icon instead.`
+        )
+      }
     }
   }
   return {

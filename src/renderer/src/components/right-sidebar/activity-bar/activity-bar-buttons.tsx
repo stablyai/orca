@@ -21,6 +21,7 @@ export type ActivityBarItem = {
   pluginKey?: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
+  accessibleTitle?: string
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
@@ -45,7 +46,8 @@ function activityItemAriaLabel(
   status?: CheckStatus | null,
   t: Translate = translate
 ): string {
-  const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
+  const title = item.accessibleTitle ?? item.title
+  const base = item.shortcut ? `${title} (${item.shortcut})` : title
   return status === 'failure'
     ? `${base} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
     : status === 'cancelled'
@@ -192,7 +194,9 @@ export function ActivityBarButton({
         </button>
       </TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+        {item.shortcut
+          ? `${item.accessibleTitle ?? item.title} (${item.shortcut})`
+          : (item.accessibleTitle ?? item.title)}
       </TooltipContent>
     </Tooltip>
   )
