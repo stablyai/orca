@@ -147,5 +147,5 @@ export async function profile(
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
       version
     )
-  return { root, filename, db, launch, errors, source, readers }
+  return { root, filename, db, launch, errors, source, readers, convert: conversions.ensure }
 }

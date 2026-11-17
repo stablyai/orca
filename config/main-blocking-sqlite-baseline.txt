@@ -104,7 +104,8 @@
 12 src/main/native-chat/agent-session-journal/journal-fork-stages.ts
 4 src/main/native-chat/agent-session-journal/journal-fork-workspace.ts
 2 src/main/native-chat/agent-session-journal/journal-items-by-kind-page.ts
-34 src/main/native-chat/agent-session-journal/journal-legacy-source-proof.ts
+30 src/main/native-chat/agent-session-journal/journal-legacy-content-proof.ts
+26 src/main/native-chat/agent-session-journal/journal-legacy-source-proof.ts
 2 src/main/native-chat/agent-session-journal/journal-open-queue-withdrawal.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
 6 src/main/native-chat/agent-session-journal/journal-sql-automatic-submission-command.ts

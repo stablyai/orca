@@ -77,11 +77,11 @@ export class JournalLegacyProof {
         this.rest,
         this.frontier
       )
-      // Both sides changed a person's edits: only an original unwritten since the copy is stale.
+      // Both sides could have made a difference: only an original unwritten since the copy is stale.
       if (this.frontier.diverged && !observation.unwrittenSinceCopy) {
+        // Not saved as a refusal: either side can still change, so a later launch weighs it again.
         throw new JournalLegacyRetentionError(
-          "a chat's name, options or permission mode differ from the original",
-          'source-record-diverged'
+          "a chat's name, options, permission mode or queued text differ from the original"
         )
       }
     } catch (error) {

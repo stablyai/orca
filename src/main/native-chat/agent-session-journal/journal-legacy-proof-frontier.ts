@@ -51,6 +51,7 @@ export async function completeJournalLegacyProof(
       if (source.claims.length > 0) {
         await writer.maintain({ kind: 'legacy-claims-absorb', claims: source.claims })
       }
+      frontier.diverged ||= source.diverged
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {
         frontier.session++
@@ -101,7 +102,6 @@ export async function completeJournalLegacyProof(
       if (state.state !== 'ready') {
         throw new Error('legacy proof awaits committed conversion')
       }
-      frontier.diverged ||= source.diverged
       frontier.session++
       frontier.pending = false
     }

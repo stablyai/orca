@@ -74,10 +74,12 @@ function absorbedWal(
 }
 
 /**
- * Only settles a chat whose name, options or permission mode differ on both sides; the content
- * proof covers everything else. The copy record, with ctime (a write can put mtime back, never
- * ctime), says so exactly. A store copied before that record existed falls back to file times, and
- * an unknown creation time (0, or libuv's ctime stand-in without statx) answers no.
+ * Only settles a difference both sides could have made (a person's name, options, permission mode
+ * or queued text); the content proof covers everything else. The copy record, with ctime (a write
+ * can put mtime back, never ctime), says so exactly. A store v1.4.260/261 copied has no record and
+ * no copy-time snapshot of its records to compare with, so it falls back to the original's ctime
+ * against the store's creation; an unknown creation time (0, or libuv's ctime stand-in without
+ * statx) answers no.
  */
 async function unwrittenSinceCopy(
   domain: string,
@@ -96,7 +98,9 @@ async function unwrittenSinceCopy(
     current.wal.kind === 'nonempty' && current.wal.mtimeNs !== undefined
       ? BigInt(current.wal.mtimeNs)
       : 0n
-  return BigInt(current.main.mtimeNs) <= created && walWritten <= created
+  // ctime, not mtime: copying with preserved times or restoring a backup can put mtime back, and
+  // nothing Orca does after the copy (it only reads the original) changes ctime.
+  return BigInt(current.main.ctimeNs) <= created && walWritten <= created
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

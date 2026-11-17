@@ -100,15 +100,17 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
   await initializeJournalDomainDatabase(renamed.root)
   await renamed.launch().run()
   expect(companions(renamed.filename)).toContain(renamed.filename)
-  expect(refusal(renamed.db)).toMatchObject({ reason: 'source-record-diverged' })
+  expect(String(renamed.errors.at(-1))).toContain('differ from the original')
+  expect(refusal(renamed.db)).toBeNull()
 
-  // Text an older Orca queued after the copy that this store doesn't hold.
+  // Text an older Orca queued after the copy that this store doesn't hold, on a converted chat.
   const queued = await profile()
+  await queued.convert('unopened')
   queue(queued.filename, 'unopened', 'queued in the older Orca')
   await initializeJournalDomainDatabase(queued.root)
   await queued.launch().run()
   expect(companions(queued.filename)).toContain(queued.filename)
-  expect(refusal(queued.db)).toMatchObject({ reason: 'source-queue-unheld' })
+  expect(String(queued.errors.at(-1))).toContain('differ from the original')
 
   // Content the proof can't account for is refused, and the refusal is not re-proven.
   // The smallest possible key is still read: an empty session id sorts before every other.
@@ -240,7 +242,7 @@ it('keeps an original an older Orca renamed a chat in, even with its mtime put b
   await initializeJournalDomainDatabase(root)
   await launch().run()
   expect(companions(filename)).toContain(filename)
-  expect(refusal(db)).toMatchObject({ reason: 'source-record-diverged' })
+  expect(refusal(db)).toBeNull()
 })
 
 it('accepts an import marker for an epoch a /clear replaced', async () => {
@@ -318,4 +320,28 @@ it('backs off, with no durable commit, while the source readers stay busy', asyn
       .get()
   ).toBeUndefined()
   expect(existsSync(filename)).toBe(true)
+})
+
+it('weighs drafts and queued text from content, keeping only what only the original holds', async () => {
+  // Text waiting in a chat not converted yet converts with it, so it doesn't block retirement.
+  const unopened = await profile()
+  queue(unopened.filename, 'unopened', 'queued before the copy')
+  unopened.db.exec(
+    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v2'"
+  )
+  await initializeJournalDomainDatabase(unopened.root)
+  await unopened.launch().run()
+  expect(companions(unopened.filename)).toEqual([])
+
+  // A draft (record, no history) an older Orca renamed after the copy is still weighed.
+  const draft = await profile({
+    seed: (legacy) =>
+      legacy
+        .prepare('INSERT INTO agent_session_records VALUES(?,?)')
+        .run('draft', JSON.stringify({ sessionId: 'draft', lease: { sessionId: 'draft' } }))
+  })
+  rename(draft.filename, 'draft', 'Draft renamed in the older Orca')
+  await initializeJournalDomainDatabase(draft.root)
+  await draft.launch().run()
+  expect(companions(draft.filename)).toContain(draft.filename)
 })

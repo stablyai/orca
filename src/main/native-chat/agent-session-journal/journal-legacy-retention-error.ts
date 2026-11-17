@@ -5,8 +5,6 @@ export const LEGACY_SOURCE_REFUSALS = [
   'source-recovery',
   'source-orphan',
   'source-queue',
-  'source-queue-unheld',
-  'source-record-diverged',
   'source-queued-only-v1',
   'source-corrupt',
   'source-newer'

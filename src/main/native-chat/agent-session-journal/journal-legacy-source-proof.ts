@@ -5,7 +5,7 @@ import {
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
-import { legacySessionHold, type LegacySessionHold } from './journal-legacy-content-proof'
+import { readLegacyProofSessions, type LegacySessionHold } from './journal-legacy-content-proof'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -279,34 +279,9 @@ function readSourcePage(
       sessions: []
     }
   }
-  const rows = db
-    .prepare(
-      `SELECT session_id,workspace_id,epoch FROM journal_sessions ${cursor.after === null ? '' : 'WHERE session_id>?'} ORDER BY session_id LIMIT 32`
-    )
-    .all(...(cursor.after === null ? [] : [cursor.after]))
-  const sessions = rows.map((row) => {
-    const id = String(row.session_id)
-    const hasRows = !!db.prepare('SELECT 1 FROM journal_rows WHERE session_id=? LIMIT 1').get(id)
-    const hasQueue =
-      tables.has('queued_messages') &&
-      !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
-    const empty =
-      !hasRows &&
-      !hasQueue &&
-      (!tables.has('journal_outcome_epochs') ||
-        !db.prepare('SELECT 1 FROM journal_outcome_epochs WHERE session_id=? LIMIT 1').get(id))
-    return {
-      sessionId: id,
-      workspaceId: String(row.workspace_id),
-      epoch: String(row.epoch),
-      empty,
-      ...legacySessionHold(db, destination, id, empty, hasQueue)
-    }
-  })
+  const rows = readLegacyProofSessions(db, destination, tables, cursor.after)
   return {
-    next: rows.length
-      ? { table: 0, after: String(rows.at(-1)!.session_id) }
-      : { table: 1, after: null },
-    sessions
+    next: rows.length ? { table: 0, after: rows.at(-1)!.sessionId } : { table: 1, after: null },
+    sessions: rows
   }
 }
