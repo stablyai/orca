@@ -27,6 +27,13 @@ describe('antigravity-swarm-wire', () => {
           killed: false,
           worktree: '/tmp/wt-backend'
         },
+        monitor: {
+          conversation_id: '44444444-4444-4444-8444-444444444444',
+          model: 'gemini-3.1-flash-lite',
+          wake_mode: 'mentions',
+          last_read_seq: 3,
+          killed: false
+        },
         reviewer: {
           conversation_id: '33333333-3333-4333-8333-333333333333',
           model: 'gemini-3.1-flash',
@@ -104,9 +111,10 @@ describe('antigravity-swarm-wire', () => {
     expect(snapshot?.channels).toEqual(['main', 'api'])
     expect(snapshot?.plan?.goal?.title).toBe('Auth refactor')
 
-    // Coordinator sorts first, then alphabetical workers.
+    // Coordinator sorts first, monitor second, then alphabetical workers.
     expect(snapshot?.members.map((member) => member.name)).toEqual([
       'coordinator',
+      'monitor',
       'backend-dev',
       'reviewer'
     ])
@@ -118,6 +126,12 @@ describe('antigravity-swarm-wire', () => {
       posts: 2
     })
     expect(snapshot?.members[1]).toMatchObject({
+      name: 'monitor',
+      role: 'monitor',
+      status: 'waiting',
+      unread: 0
+    })
+    expect(snapshot?.members[2]).toMatchObject({
       name: 'backend-dev',
       role: 'worker',
       model: 'claude-sonnet-4.6',
@@ -128,7 +142,7 @@ describe('antigravity-swarm-wire', () => {
       steps: 2,
       posts: 1
     })
-    expect(snapshot?.members[2]).toMatchObject({
+    expect(snapshot?.members[3]).toMatchObject({
       name: 'reviewer',
       status: 'killed',
       killed: true

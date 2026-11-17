@@ -266,8 +266,8 @@ export function buildAntigravitySwarmSnapshot(args: {
       const role =
         typeof raw.role === 'string' && raw.role
           ? raw.role
-          : name === 'coordinator'
-            ? 'coordinator'
+          : name === 'coordinator' || name === 'monitor'
+            ? name
             : 'worker'
       const stats = postStats.get(name) ?? {
         posts: 0,
@@ -297,11 +297,10 @@ export function buildAntigravitySwarmSnapshot(args: {
         transcriptMtime: transcript?.mtime ?? 0
       }
     })
-    .sort(
-      (a, b) =>
-        (a.role === 'coordinator' ? 0 : 1) - (b.role === 'coordinator' ? 0 : 1) ||
-        a.name.localeCompare(b.name)
-    )
+    .sort((a, b) => {
+      const rank = (r: string) => (r === 'coordinator' ? 0 : r === 'monitor' ? 1 : 2)
+      return rank(a.role) - rank(b.role) || a.name.localeCompare(b.name)
+    })
 
   return {
     swarmId: args.swarmId,

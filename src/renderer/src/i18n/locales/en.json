@@ -21811,6 +21811,7 @@
         "membersHeading": "Members ({{count}})",
         "clearFilter": "All",
         "leadRole": "lead",
+        "monitorRole": "monitor",
         "openConversation": "Open {{name}} conversation",
         "stepsCount": "{{count}} steps",
         "workingCount": "{{count}} working",

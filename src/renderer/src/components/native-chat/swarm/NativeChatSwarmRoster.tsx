@@ -90,7 +90,9 @@ export function NativeChatSwarmRoster({
                 <span className="shrink-0 text-3xs uppercase text-muted-foreground">
                   {member.role === 'coordinator'
                     ? t('components.native-chat.swarm.leadRole', 'lead')
-                    : member.status}
+                    : member.role === 'monitor'
+                      ? `${t('components.native-chat.swarm.monitorRole', 'monitor')} · ${member.status}`
+                      : member.status}
                 </span>
               </button>
               {member.unread > 0 && !member.killed ? (

@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../../../../shared/execution-host'
 import type {
   AgentSessionSwarmReadResult,
   AgentSessionSwarmTranscriptResult
@@ -21,10 +21,6 @@ function failureMessage(error: unknown): string | null {
   return typeof error === 'string' && error.trim() ? error.trim() : null
 }
 
-function isHostLocalSession(location: { executionHostId: string; wslDistro: string | null }) {
-  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && !location.wslDistro
-}
-
 export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
   defineMethod({
     name: 'agentSession.swarmRead',
@@ -36,7 +32,8 @@ export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
       if (!saved) {
         return { status: 'none' }
       }
-      if (!isHostLocalSession(saved.location)) {
+      // Swarm artifacts live on the session's owning host; never read remote SSH or WSL homes from desktop fs.
+      if (!isNativeLocalLocation(saved.location)) {
         return { status: 'unsupported' }
       }
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
@@ -61,7 +58,8 @@ export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
       if (!saved) {
         return { status: 'none' }
       }
-      if (!isHostLocalSession(saved.location)) {
+      // Swarm artifacts live on the session's owning host; never read remote SSH or WSL homes from desktop fs.
+      if (!isNativeLocalLocation(saved.location)) {
         return { status: 'unsupported' }
       }
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
