@@ -395,6 +395,7 @@
       "otherDevice": "einem anderen Gerät"
     },
     "sessionOptionCopy": {
+      "none": "Keine",
       "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
       "chooseInAgentPicker": "In der Agentenauswahl auswählen…",
       "effort": "Denkaufwand",

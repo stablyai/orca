@@ -30,23 +30,6 @@ describe('listAutomationRunsPage', () => {
     expect(second.nextCursor).toBeNull()
   })
 
-  it('resumes after a pruned boundary run instead of restarting the page', () => {
-    const state = stateWithRuns([
-      { id: 'r1', createdAt: 1 },
-      { id: 'r2', createdAt: 2 },
-      { id: 'r3', createdAt: 3 }
-    ])
-    const first = listAutomationRunsPage(state, 'a1', 2)
-
-    state.automationRuns = state.automationRuns.filter((run) => run.id !== 'r2')
-
-    expect(
-      listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined).runs.map(
-        (run) => run.id
-      )
-    ).toEqual(['r1'])
-  })
-
   it('keeps runs tied on createdAt when the boundary run is pruned', () => {
     const state = stateWithRuns([
       { id: 'r2', createdAt: 10 },

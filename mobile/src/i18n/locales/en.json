@@ -3172,6 +3172,7 @@
       "showAll": "Full task list"
     },
     "sessionOptionCopy": {
+      "none": "None",
       "ultracode": "Ultracode",
       "on": "On",
       "off": "Off",

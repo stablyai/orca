@@ -65,4 +65,20 @@ describe('structured agent session event coalescer', () => {
       false
     ])
   })
+
+  it('keeps the newest prompt suggestion, a clear included, across merged batches', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+    coalescer.push({ ...batch(1), promptSuggestion: { id: 's-1', text: 'add a test' } })
+    coalescer.push(batch(2))
+    coalescer.flush()
+    coalescer.push({ ...batch(3), promptSuggestion: { id: 's-2', text: 'run it' } })
+    coalescer.push({ ...batch(4), promptSuggestion: null })
+    coalescer.flush()
+
+    expect(events.map((event) => event.type === 'batch' && event.promptSuggestion)).toEqual([
+      { id: 's-1', text: 'add a test' },
+      null
+    ])
+  })
 })

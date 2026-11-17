@@ -284,6 +284,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
     turnActivity: transportState.turnActivity,
+    promptSuggestion: transportState.promptSuggestion,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     ...structuredAgentSessionStopControl({
@@ -299,9 +300,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionSendQueues(queue),
     /** What a plain send does now, and whether its alternate would send any differently. */
-    sendFollowUp: nativeChatSendFollowUp((alternate) =>
-      structuredAgentSessionSendQueues(queue, alternate)
-    ),
+    sendFollowUp: nativeChatSendFollowUp((alt) => structuredAgentSessionSendQueues(queue, alt)),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
