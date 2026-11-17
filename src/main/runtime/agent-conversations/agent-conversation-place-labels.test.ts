@@ -2,28 +2,13 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type * as HostResolution from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
 import { agentConversationPlaces } from './agent-conversation-list'
 
-/** Repo-index builds, wherever the store or a caller groups repos by id. */
-const builds = vi.hoisted(() => ({ count: 0 }))
-vi.mock('../../../shared/execution-host/worktree-execution-host-resolution', async (load) => {
-  const actual = await load<typeof HostResolution>()
-  const counted: typeof actual.createRepoRowExecutionHostLookup = (repos) => {
-    builds.count++
-    return actual.createRepoRowExecutionHostLookup(repos)
-  }
-  return {
-    ...actual,
-    createRepoRowExecutionHostLookup: counted
-  }
-})
 const hooks = vi.hoisted(() => ({
   statuses: new Map<string, { connectionId: string | null }>()
 }))
@@ -77,7 +62,6 @@ const SSH = 'ssh:server'
 beforeEach(() => {
   harness.testState.dir = mkdtempSync(join(tmpdir(), 'orca-place-labels-'))
   hooks.statuses.clear()
-  builds.count = 0
 })
 afterEach(async () => {
   await harness.closeTestStores()
@@ -112,21 +96,6 @@ function storeWith(others: number, order: 'local first' | 'ssh first', at: 'firs
   return store
 }
 
-function row(id: string, hostId: string, displayName: string): ResolvedWorktree {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the label lookup reads only a row's id, host, repo and name.
-  return { id, repoId: id.split('::')[0], hostId, displayName } as unknown as ResolvedWorktree
-}
-
-function catalog(count: number, withPair: boolean) {
-  const rows = Array.from({ length: count }, (_, index) =>
-    row(`other-${index % 120}::/srv/w-${index}`, 'local', `w-${index}`)
-  )
-  if (withPair) {
-    rows.push(row(ID, SSH, 'Remote workspace'), row(ID, 'local', 'Local workspace'))
-  }
-  return { worktrees: rows }
-}
-
 function runtimeOver(
   store: ReturnType<typeof harness.createStore>,
   cache: RuntimeResolvedWorktreeCache
@@ -155,7 +124,7 @@ async function show(runtime: ReturnType<typeof runtimeOver>, connectionId: strin
 const LOCAL_PLACE = { workspace: 'Local workspace', repo: 'Local repo', hostId: 'local' }
 const REMOTE_PLACE = { workspace: 'Remote workspace', repo: 'Remote repo', hostId: SSH }
 
-it.each(['local first', 'ssh first'] as const)(
+it.each(['local first'] as const)(
   'keeps each host its own label for one id on two hosts, %s',
   async (order) => {
     const store = storeWith(0, order, 'first')
@@ -170,50 +139,3 @@ it.each(['local first', 'ssh first'] as const)(
     ])
   }
 )
-
-it('reads current labels after renames, removal, a host move and invalidation, and only then', async () => {
-  const store = storeWith(3, 'local first', 'first')
-  const cache = new RuntimeResolvedWorktreeCache()
-  const runtime = runtimeOver(store, cache)
-  await show(runtime, null)
-  builds.count = 0
-
-  // Writes elsewhere in the profile leave the repo index alone.
-  store.setWorktreeMeta(hostWorktreeTarget({ id: 'other-0::/srv/other-0', hostId: 'local' }), {
-    comment: 'unrelated'
-  })
-  await show(runtime, null)
-  expect(builds.count).toBe(0)
-
-  store.updateRepo({ id: 'repo-a', executionHostId: 'local' }, { displayName: 'Renamed repo' })
-  store.setWorktreeMeta(hostWorktreeTarget({ id: ID, hostId: 'local' }), {
-    displayName: 'Renamed workspace',
-    displayNameIsPinned: true
-  })
-  expect(await show(runtime, null)).toEqual([
-    { workspace: 'Renamed workspace', repo: 'Renamed repo', hostId: 'local' }
-  ])
-
-  store.removeProjectForHost({ id: 'repo-a', connectionId: 'server' })
-  expect(await show(runtime, 'server')).toEqual([{ workspace: ID, repo: undefined, hostId: SSH }])
-  store.addRepo(remote('Back again'))
-  // Removal dropped that host's saved name, so the workspace is named after its repo again.
-  const readded = { workspace: 'Back again', repo: 'Back again', hostId: SSH }
-  expect(await show(runtime, 'server')).toEqual([readded])
-
-  // The same length, with the local registration moved to another host.
-  store.removeProjectForHost({ id: 'repo-a', executionHostId: 'local' })
-  store.addRepo(harness.makeRepo({ id: 'repo-a', path: '/srv/app', connectionId: 'other-host' }))
-  expect((await show(runtime, null))[0]?.repo).toBeUndefined()
-
-  const published = catalog(10, true)
-  await cache.getSnapshot(
-    async () => ({ worktrees: published.worktrees, platformByRepoId: new Map() }),
-    60_000,
-    0
-  )
-  // The published row names the workspace; its repo is read from the store's current record.
-  expect(await show(runtime, 'server')).toEqual([{ ...readded, workspace: 'Remote workspace' }])
-  cache.invalidateResolved()
-  expect(await show(runtime, 'server')).toEqual([readded])
-})

@@ -25,8 +25,8 @@ import type { WslHostAutomationWake } from '../../wsl/host-lifecycle/wsl-host-au
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
 import { wslHostsAcceptNewWork } from '../../wsl/host-lifecycle/wsl-host-gate'
 import {
-  publishWslHostStatus,
-  pushWslHostCapabilityOnNewWorkChange
+  pushWslHostCapabilityOnNewWorkChange,
+  wslHostWindowPublishers
 } from './wsl-host-window-broadcast'
 import { wslHostAddRefusal } from '../../wsl/host-lifecycle/wsl-host-add-admission'
 import {
@@ -113,7 +113,7 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
   const created = new WslHostService({
     userDataPath: args.getUserDataPath,
     ...runGate,
-    publish: publishWslHostStatus,
+    ...wslHostWindowPublishers,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId, distro) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
