@@ -164,14 +164,21 @@ function renamedSinceBase(root) {
         cwd: root,
         encoding: 'utf8'
       }).trim()
-    return execFileSync('git', ['diff', '-M', '--name-status', '--diff-filter=R', base], {
-      cwd: root,
-      encoding: 'utf8'
-    })
-      .split('\n')
-      .map((line) => line.split('\t'))
-      .filter((parts) => parts.length === 3)
-      .map(([, from, to]) => [from, to])
+    const fields = execFileSync(
+      'git',
+      ['diff', '-M', '--name-status', '-z', '--diff-filter=R', base],
+      {
+        cwd: root,
+        encoding: 'utf8'
+      }
+    )
+      .split('\0')
+      .filter(Boolean)
+    const renames = []
+    for (let index = 0; index + 2 < fields.length; index += 3) {
+      renames.push([fields[index + 1], fields[index + 2]])
+    }
+    return renames
   } catch {
     return []
   }
@@ -184,7 +191,7 @@ export function pruneCountBaseline(root, baselinePath, header, current) {
   const baseline = parseCountBaseline(text)
   const notes = parseCountNotes(text)
   for (const [from, to] of renamedSinceBase(root)) {
-    if (baseline.has(from) && !baseline.has(to)) {
+    if (baseline.has(from) && !baseline.has(to) && !current.get(from)) {
       baseline.set(to, baseline.get(from))
       if (notes.has(from)) {
         notes.set(to, notes.get(from))

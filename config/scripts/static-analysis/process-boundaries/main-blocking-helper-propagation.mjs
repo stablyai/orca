@@ -44,14 +44,63 @@ function scanDeclarations(file, contents) {
   const functions = []
   const exportNames = new Map()
   const reexports = []
+  const imports = new Map()
+  const explicitExports = new Set()
   const exportAs = (local, exported) =>
     exportNames.set(local, [...(exportNames.get(local) ?? []), exported])
+  const targetModule = (specifier) =>
+    path.posix
+      .normalize(path.posix.join(path.posix.dirname(file), specifier))
+      .replace(/\.[cm]?[jt]sx?$/, '')
+  const reserveBinding = (name) => {
+    if (ts.isIdentifier(name)) {
+      explicitExports.add(name.text)
+    } else {
+      for (const element of name.elements) {
+        if (ts.isBindingElement(element)) {
+          reserveBinding(element.name)
+        }
+      }
+    }
+  }
   const addFunction = (name, node) => {
     functions.push({ name, start: node.getStart(source), end: node.getEnd(), ...scanBody(node) })
   }
   for (const statement of source.statements) {
     const exported = hasModifier(statement, ts.SyntaxKind.ExportKeyword)
     const isDefault = hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
+    if (
+      exported &&
+      !ts.isTypeAliasDeclaration(statement) &&
+      !ts.isInterfaceDeclaration(statement) &&
+      statement.name &&
+      ts.isIdentifier(statement.name)
+    ) {
+      explicitExports.add(isDefault ? 'default' : statement.name.text)
+    }
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text.startsWith('.') &&
+      statement.importClause &&
+      !statement.importClause.isTypeOnly
+    ) {
+      const target = targetModule(statement.moduleSpecifier.text)
+      const clause = statement.importClause
+      if (clause.name) {
+        imports.set(clause.name.text, { target, name: 'default' })
+      }
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if (!element.isTypeOnly) {
+            imports.set(element.name.text, {
+              target,
+              name: (element.propertyName ?? element.name).text
+            })
+          }
+        }
+      }
+    }
     if (ts.isFunctionDeclaration(statement) && statement.body) {
       const name = statement.name?.text ?? 'default'
       addFunction(name, statement)
@@ -60,6 +109,9 @@ function scanDeclarations(file, contents) {
       }
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
+        if (exported) {
+          reserveBinding(declaration.name)
+        }
         if (ts.isIdentifier(declaration.name) && isFunctionLike(declaration.initializer)) {
           addFunction(declaration.name.text, declaration)
           if (exported) {
@@ -83,7 +135,9 @@ function scanDeclarations(file, contents) {
       !statement.moduleSpecifier
     ) {
       for (const element of statement.exportClause.elements) {
-        exportAs((element.propertyName ?? element.name).text, element.name.text)
+        if (!element.isTypeOnly) {
+          exportAs((element.propertyName ?? element.name).text, element.name.text)
+        }
       }
     } else if (
       ts.isExportDeclaration(statement) &&
@@ -92,19 +146,36 @@ function scanDeclarations(file, contents) {
       ts.isStringLiteral(statement.moduleSpecifier) &&
       statement.moduleSpecifier.text.startsWith('.')
     ) {
-      const target = path.posix
-        .normalize(path.posix.join(path.posix.dirname(file), statement.moduleSpecifier.text))
-        .replace(/\.[cm]?[jt]sx?$/, '')
+      const target = targetModule(statement.moduleSpecifier.text)
       const names =
         statement.exportClause && ts.isNamedExports(statement.exportClause)
           ? statement.exportClause.elements
               .filter((element) => !element.isTypeOnly)
               .map((element) => [(element.propertyName ?? element.name).text, element.name.text])
           : null
-      reexports.push({ target, names })
+      if (statement.exportClause && ts.isNamespaceExport(statement.exportClause)) {
+        explicitExports.add(statement.exportClause.name.text)
+      } else {
+        reexports.push({ target, names })
+        for (const [, name] of names ?? []) {
+          explicitExports.add(name)
+        }
+      }
     }
   }
-  return { functions, exportNames, reexports }
+  for (const [local, exported] of exportNames) {
+    for (const name of exported) {
+      explicitExports.add(name)
+    }
+    const imported = imports.get(local)
+    if (imported) {
+      reexports.push({
+        target: imported.target,
+        names: exported.map((name) => [imported.name, name])
+      })
+    }
+  }
+  return { functions, exportNames, reexports, explicitExports }
 }
 
 /**
@@ -164,7 +235,6 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
       const { exportNames } = scan(file)
       const names = new Map()
       for (const [local, reaches] of marked) {
-        names.set(local, reaches)
         for (const exported of exportNames.get(local) ?? []) {
           names.set(exported, reaches)
         }
@@ -178,10 +248,14 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
       changed = false
       for (const file of barrels) {
         const own = reachesByModule.get(moduleKeys(file)[0]) ?? new Map()
-        for (const { target, names } of scan(file).reexports) {
+        const { reexports, explicitExports } = scan(file)
+        for (const { target, names } of reexports) {
           const reached = reachesByModule.get(target)
           const pairs = names ?? [...(reached?.keys() ?? [])].map((name) => [name, name])
           for (const [from, to] of pairs) {
+            if (!names && (from === 'default' || explicitExports.has(to))) {
+              continue
+            }
             if (reached?.has(from) && !own.has(to)) {
               own.set(to, reached.get(from))
               changed = true
@@ -199,6 +273,13 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
       modules: [key],
       advice: Object.fromEntries(names)
     }))
+    for (const [file, marked] of helpers) {
+      families.push({
+        modules: [moduleKeys(file)[0]],
+        advice: {},
+        localAdvice: Object.fromEntries(marked)
+      })
+    }
     const collector = createGatedCallCollector(families, 'main blocking helper')
     const uses = new Map()
     let grew = false
@@ -210,7 +291,7 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
       const reached = sites.map(({ name, position, module }) => ({
         position,
         name,
-        reaches: reachesByModule.get(module)?.get(name) ?? name
+        reaches: reachesByModule.get(module)?.get(name) ?? helpers.get(file)?.get(name) ?? name
       }))
       uses.set(file, {
         count,

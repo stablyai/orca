@@ -122,6 +122,31 @@ describe('main blocking API ratchets', () => {
     expect(uses.get('src/main/poller.ts')?.count).toBe(1)
   })
 
+  it('counts callers through locally exported imported helpers', () => {
+    const sources = new Map([
+      [
+        'src/main/impl.ts',
+        `import { readFileSync } from 'node:fs'
+        export function readConfig() { return readFileSync('config') }
+        export default function readDefault() { return readFileSync('default') }`
+      ],
+      [
+        'src/main/barrel.ts',
+        `import readDefault, { readConfig as read } from './impl'
+        export { read as load, readDefault as default }`
+      ],
+      [
+        'src/main/consumer.ts',
+        `import readDefault, { load } from './barrel'
+        load(); readDefault()`
+      ]
+    ])
+    const { uses } = collectBlockingHelperUses(sources, collectDirectBlockingSites(sources), {
+      depth: 1
+    })
+    expect(uses.get('src/main/consumer.ts')?.count).toBe(2)
+  })
+
   it('exempts modules only worker entries import', () => {
     const entry = 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
     const graph = new Map([

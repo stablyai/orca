@@ -32,6 +32,7 @@ const MAIN_BLOCKING_GRAPH_INPUTS = [
   'src/shared/',
   'src/preload/',
   'src/packages/',
+  'src/cli/',
   'config/build-plugins/',
   'config/main-blocking-worker-entries.json',
   'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs',

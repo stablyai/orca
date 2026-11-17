@@ -55,6 +55,7 @@ export function createGatedCallCollector(families, ratchetName) {
   const advice = new Map(families.flatMap((family) => Object.entries(family.advice)))
   const markers = [
     ...advice.keys(),
+    ...families.flatMap((family) => Object.keys(family.localAdvice ?? {})),
     ...families.filter((family) => family.exportPattern).map(() => 'Sync'),
     ...new Set(
       families.flatMap((family) => family.modules.map((module) => path.posix.basename(module)))
@@ -68,12 +69,17 @@ export function createGatedCallCollector(families, ratchetName) {
     }
   }
 
-  function symbolsOf(key) {
+  function symbolsOf(key, local = false) {
     const matched = familiesByModule.get(key)
     if (!matched) {
       return null
     }
-    const names = new Set(matched.flatMap((family) => Object.keys(family.advice)))
+    const names = new Set(
+      matched.flatMap((family) => [
+        ...Object.keys(family.advice),
+        ...(local ? Object.keys(family.localAdvice ?? {}) : [])
+      ])
+    )
     const patterns = matched.map((family) => family.exportPattern).filter(Boolean)
     names.has = (name) =>
       Set.prototype.has.call(names, name) ||
@@ -118,7 +124,9 @@ export function createGatedCallCollector(families, ratchetName) {
         (family.globals ?? []).map((name) => [name, new Set(Object.keys(family.advice))])
       )
     )
-    const functions = new Map([...(symbolsOf(moduleKey(file)) ?? [])].map((name) => [name, name]))
+    const functions = new Map(
+      [...(symbolsOf(moduleKey(file), true) ?? [])].map((name) => [name, name])
+    )
     // Which module each local function binding came from, so same-named exports stay distinct.
     const origins = new Map([...functions.keys()].map((name) => [name, moduleKey(file)]))
     const aliases = []

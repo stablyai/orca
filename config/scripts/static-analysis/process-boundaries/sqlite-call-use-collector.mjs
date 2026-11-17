@@ -194,7 +194,11 @@ export function collectSqliteCallSites(file, contents) {
       if (ts.isNewExpression(node)) {
         return constructor(target)
       }
-      if (callableConstructors.has(key(target)) || transactionCalls.has(key(target))) {
+      if (
+        callableConstructors.has(key(target)) ||
+        transactionCalls.has(key(target)) ||
+        transactionWrapper(target)
+      ) {
         return true
       }
       if (
