@@ -1,10 +1,12 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { JOURNAL_DOMAIN_ITEM_COLUMNS } from './journal-domain-item-read-columns'
+import type { ItemsByKindRowRead } from './journal-items-by-kind-page'
 import {
   hasJournalStoredOutput,
   hydrateJournalItemOutput,
   journalItemOutputPreview,
+  journalStoredTextBytes,
   JOURNAL_STORED_OUTPUT_WRITES,
   storeJournalItemOutput
 } from './journal-stored-output'
@@ -33,6 +35,23 @@ export function readJournalStoredRow(
 ): AgentJournalRenderItem {
   // A row that did not select the blob reads it by key, never as missing.
   return readJournalStoredItem(db, prefix, row.payload_json, row.output_blob)
+}
+
+/** A page row's size counts its stored text, which is read only if the row joins the page. */
+export function measureJournalStoredRow(
+  db: Database.Database,
+  prefix: Prefix,
+  row: { payload_json?: unknown; output_blob?: unknown }
+): ItemsByKindRowRead {
+  const json = String(row.payload_json)
+  if (!(row.output_blob instanceof Uint8Array)) {
+    return { bytes: json.length, item: () => JSON.parse(json) }
+  }
+  const parsed: AgentJournalRenderItem = JSON.parse(json)
+  return {
+    bytes: json.length + journalStoredTextBytes(parsed),
+    item: () => hydrateJournalStoredItem(db, prefix, parsed, row.output_blob)
+  }
 }
 
 /** Returns the same object when the item stores nothing, so callers can reuse its row text. */

@@ -95,6 +95,7 @@
 2 src/main/native-chat/agent-session-journal/journal-domain-text-snapshot.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-timeline-reads.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-turn-scope.ts
+20 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 10 src/main/native-chat/agent-session-journal/journal-fork-capture.ts
 30 src/main/native-chat/agent-session-journal/journal-fork-preparation.ts
 20 src/main/native-chat/agent-session-journal/journal-fork-presentation.ts

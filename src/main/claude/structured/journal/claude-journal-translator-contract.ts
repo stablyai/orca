@@ -12,7 +12,7 @@ import type {
   ClaudeContextReportTarget
 } from '../../context-usage/claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'

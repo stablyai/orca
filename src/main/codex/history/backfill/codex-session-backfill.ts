@@ -31,6 +31,7 @@ import type {
   CodexSessionBackfillPaths,
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
+import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 
 let backgroundBackfillTask: Promise<CodexSessionBackfillSummary | null> | null = null
 
@@ -240,7 +241,14 @@ async function backfillOneManagedSessionFile(
       ensuredTargetDirectories.add(targetDirectory)
     }
     linkAttempted = true
-    await link(managedSessionFilePath, systemSessionFilePath)
+    const linked = await linkCodexRolloutUnlessHeld(managedSessionFilePath, () =>
+      link(managedSessionFilePath, systemSessionFilePath)
+    )
+    if (linked === 'held') {
+      // Being deleted with its workspace; left uncertified so a kept rollout is retried.
+      summary.failedFiles += 1
+      return
+    }
     summary.linkedFiles += 1
     await auditPass.recordPublished(
       summary,

@@ -1,4 +1,4 @@
-import { readJournalStoredItem, readJournalStoredRow } from './journal-stored-output-rows'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
   readJournalHistoryItems,
@@ -8,6 +8,7 @@ import {
   type JournalHistoryPrompt
 } from './journal-history-items'
 import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
+import { readItemsByKindPage } from './journal-items-by-kind-page'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -187,16 +188,8 @@ export function readJournalDomainItems(
         )
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
-      const page = db
-        .prepare(`SELECT item.payload_json,item.output_blob FROM json_each(?) chosen
-        CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=?
-          AND item.item_id=chosen.value ORDER BY CAST(chosen.key AS INTEGER)`)
-        .all(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
-      return {
-        kind: 'items-by-kind',
-        items: page.map((row) => readJournalStoredRow(db, prefix, row)),
-        nextOrdinal: headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
-      }
+      const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
+      return { kind: 'items-by-kind', ...readItemsByKindPage(db, prefix, chosen, next) }
     }
     case 'context-floor': {
       const row = db

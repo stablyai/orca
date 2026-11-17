@@ -142,5 +142,5 @@ export function spawnClaudeConversationWorker(workerData: unknown) {
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
-  return spawnWorkerThread(entry, { workerData })
+  return spawnWorkerThread(entry, { name: 'orca-claude-rewind-transcript', workerData })
 }

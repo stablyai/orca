@@ -201,9 +201,16 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     ? null
     : (prCacheEntry?.data ?? null)
   const prCachedHasPR = prCacheEntry ? pr !== null : null
-  const hostedReview = useAppStore((s) =>
+  const hostedReviewEntryData = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
+  // A merged review cached before HEAD moved is not this branch's review; it would block Create as "already exists".
+  const hostedReview = isStaleMergedGitHubReviewForHead(
+    { data: hostedReviewEntryData },
+    activeWorktree?.head
+  )
+    ? null
+    : hostedReviewEntryData
   const linkedReviewNumber =
     activeWorktree?.linkedPR ??
     activeWorktree?.linkedGitLabMR ??

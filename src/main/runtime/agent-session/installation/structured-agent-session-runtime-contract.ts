@@ -1,9 +1,9 @@
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
-import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
+import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { StructuredAttentionMobileDelivery } from '../structured-agent-session-mobile-attention'
+import type { StructuredAttentionMobileDelivery } from '../lifecycle/structured-agent-session-mobile-attention'
 import type {
   StructuredAgentCommand,
   StructuredAgentCommandSettings
@@ -43,6 +43,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     /** Read this host's preference when a chat starts a provider process. */
     isEnabled: () => boolean
   }
+  /** Whether Pi chats refresh Orca's managed extensions in their agent dir. */
+  piManagedExtensionsEnabled?: () => boolean
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
   resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */

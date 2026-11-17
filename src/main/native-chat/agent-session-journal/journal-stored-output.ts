@@ -55,6 +55,12 @@ export function hasJournalStoredOutput(item: AgentJournalRenderItem): boolean {
   return storedMarker(bodyPayload(item.body)) !== null
 }
 
+/** The recorded length of the text an item stores outside its row, 0 when it stores none. */
+export function journalStoredTextBytes(item: AgentJournalRenderItem): number {
+  const payload = bodyPayload(item.body)
+  return payload && storedMarker(payload) ? payload.byteLength : 0
+}
+
 /** The row form and its blob, or null when this item's text stays inline. */
 export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
   item: T

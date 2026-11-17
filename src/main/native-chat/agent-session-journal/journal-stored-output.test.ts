@@ -10,6 +10,7 @@ import {
   readJournalDomainItemDetail
 } from './journal-domain-item-presentation'
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
+import { measureJournalStoredRow } from './journal-stored-output-rows'
 import type * as StoredOutput from './journal-stored-output'
 
 const switches = vi.hoisted(() => ({ writes: true }))
@@ -91,6 +92,11 @@ it('reads a saved tool output back whole, as the bounded client head, through re
   const db = chat()
   write(db, toolCall('tool', 'completed'))
   expect(stored(db, 'tool')!.blob).toBe(1)
+  // A tool-output page counts a stored row at its full size, not its preview's.
+  const row = db.prepare(`SELECT payload_json, output_blob FROM journal_items`).get()!
+  expect(measureJournalStoredRow(db, [target.sessionId, target.epoch], row).bytes).toBeGreaterThan(
+    40_011
+  )
 
   const [whole] = readTool(db)
   expect(whole!.body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
