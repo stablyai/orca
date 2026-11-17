@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Linking, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { ExternalLink, RadioTower, RotateCw } from 'lucide-react-native'
 import type { AgentSessionProviderRemoteControl } from '../../../../../src/shared/agent-session/remote-control/agent-session-provider-remote-control'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { openExternalLink } from '../../../platform/external-links/external-link'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -29,8 +30,6 @@ function stateText(link: AgentSessionProviderRemoteControl | undefined, t: Trans
         : t('chat.remoteControl.stateFailed', 'failed')
     case 'policy-disabled':
       return t('chat.remoteControl.stateOffByOrganization', 'off by your organization')
-    default:
-      return t('chat.remoteControl.stateConnecting', 'connecting…')
   }
 }
 
@@ -69,7 +68,7 @@ export function MobileNativeChatRemoteControlStrip({
           label={t('chat.remoteControl.openOnClaudeAi', 'Open on claude.ai')}
           iconOnly
           icon={<ExternalLink size={14} color={colors.textPrimary} strokeWidth={2} />}
-          onPress={() => void Linking.openURL(url)}
+          onPress={() => openExternalLink(url)}
         />
       ) : null}
       {link?.state === 'failed' ? (
