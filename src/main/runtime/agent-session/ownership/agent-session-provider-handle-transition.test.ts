@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { isPersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
-import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import {
-  recordAgentSessionProviderHandle,
-  reviseAgentSessionProviderResumePoint
-} from './agent-session-provider-handle-transition'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
+import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 function resumedLink(fence: number): AgentSessionProviderHandleLink {
   return {
@@ -56,28 +51,5 @@ describe('recordAgentSessionProviderHandle', () => {
       origin: 'created'
     })
     expect(fresh.providerHandleChain[0]?.replaces).toBeUndefined()
-  })
-})
-
-describe('reviseAgentSessionProviderResumePoint', () => {
-  const revise = (record = agentSessionRecordFixture(), leafUuid = 'leaf-2') =>
-    reviseAgentSessionProviderResumePoint({
-      record,
-      fence: record.lease.runtimeFence,
-      handle: claudeProviderHandle('provider-session-alpha-1', leafUuid),
-      now: 5_000
-    })
-
-  it('moves the head leaf in place, turn after turn, without growing the chain', () => {
-    const record = agentSessionRecordFixture()
-    const second = revise(revise(record, 'leaf-2'), 'leaf-3')
-    expect(second.providerHandleChain).toHaveLength(record.providerHandleChain.length)
-    expect(second.providerHandleChain.at(-1)).toMatchObject({
-      linkId: 'link-1',
-      origin: 'created',
-      handle: { resumeCursor: 'leaf-3' }
-    })
-    expect(second.lease.provenHandleLinkId).toBe('link-1')
-    expect(isPersistedAgentSessionRecord(encodeAgentSessionRecord(second))).toBe(true)
   })
 })

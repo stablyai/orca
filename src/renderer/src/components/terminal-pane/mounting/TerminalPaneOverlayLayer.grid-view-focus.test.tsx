@@ -71,7 +71,7 @@ vi.mock('../../native-chat/pane/routing/use-native-chat-toggle-shortcut', () => 
     mocks.chatShortcutEnabled.push(enabled)
   }
 }))
-vi.mock('../../tab-group/workspace-emptied-reaction', () => ({
+vi.mock('../../../lib/workspace/tabs/close/workspace-emptied-reaction', () => ({
   captureWorkspaceEmptiedReaction: vi.fn()
 }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })

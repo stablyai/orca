@@ -1,8 +1,8 @@
 // These selectors also reach worktree rm, so translate only with proof of the caller's distro.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { normalizeWorktreeSelectorForCaller } from './workspace-selector'
 
 const UBUNTU = 'Ubuntu-24.04'

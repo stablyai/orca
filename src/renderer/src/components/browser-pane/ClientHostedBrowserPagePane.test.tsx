@@ -1,14 +1,21 @@
 // @vitest-environment happy-dom
+import {
+  annotateBrowserPageHandles,
+  markHydratedBrowserPageHandles
+} from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { act, cleanup, render as renderWithProviders, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
+import type * as RecoveryWindow from './restored-client-hosted-recovery-window'
+import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
   publishMetadata: vi.fn(),
   createBrowserTab: vi.fn(async () => true),
   restoredPageUnrecovered: false,
+  realRecoveryWindow: false,
+  initializationAction: vi.fn(async () => {}),
   addressBar: {
     current: null as {
       value: string
@@ -37,11 +44,23 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
-vi.mock('./restored-client-hosted-recovery-window', () => ({
-  useRestoredClientHostedRecoveryWindow: () => mocks.restoredPageUnrecovered
+vi.mock('./restored-client-hosted-recovery-window', async (importOriginal) => {
+  const actual = await importOriginal<typeof RecoveryWindow>()
+  return {
+    ...actual,
+    useRestoredClientHostedRecoveryWindow: (
+      input: Parameters<typeof actual.useRestoredClientHostedRecoveryWindow>[0]
+    ) => {
+      const elapsed = actual.useRestoredClientHostedRecoveryWindow(input)
+      return mocks.realRecoveryWindow ? elapsed : mocks.restoredPageUnrecovered
+    }
+  }
+})
+vi.mock('./navigate/browser-page-initialization-action', () => ({
+  routeBrowserPageInitializationAction: mocks.initializationAction
 }))
 
-vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
+vi.mock('./assemble-chrome/address-bar/BrowserAddressBar', () => ({
   // Keep the shared bar’s own behavior out of this suite; preserve the ref targeted by pane focus rules.
   default: (props: {
     value: string
@@ -53,13 +72,23 @@ vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
   }
 }))
 
-import { useAppStore } from '@/store'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import { requestBrowserFocus } from './host-guest/browser-focus'
+import { connectedRuntimeStatus } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import { useAppStore } from '@/store/index'
+import '../../../../shared/browser/navigation/browser-url'
 import {
   installClientHostedPaneApi,
   reportClientHostedGuestMetadata
 } from './client-hosted-browser-pane-test-rig'
+import { captureBrowserInitializationDelivery } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+import '@/runtime/web-session-tabs-sync/snapshots/snapshot-api'
+import '@/runtime/web-session-tabs-sync/state'
+import '../../../../main/runtime/browser-host/leases/browser-host-lease-registry'
+import '../../../../main/runtime/browser/client-pages/runtime-browser-page-registry'
+import '../../../../main/runtime/browser/client-pages/runtime-browser-client-page-recovery'
+import '../../../../main/runtime/session-lifecycle/projection/build-runtime-client-browser-tabs'
+import '../../../../main/runtime/browser/client-pages/client-hosted-browser-page-persistence'
+import '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
 function render(ui: React.ReactElement<{ browserTab: BrowserPage }>) {
@@ -70,120 +99,120 @@ function render(ui: React.ReactElement<{ browserTab: BrowserPage }>) {
 
 describe('ClientHostedBrowserPagePane', () => {
   beforeEach(() => {
+    useAppStore.setState({ remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({}) })
     mocks.attach.mockReset()
     mocks.restoredPageUnrecovered = false
+    mocks.realRecoveryWindow = false
+    mocks.initializationAction.mockClear()
     mocks.publishMetadata.mockReset().mockResolvedValue({ status: 'published', accepted: true })
     // Download, popup and permission notices subscribe on mount; each has its own suite.
     installClientHostedPaneApi({ browser: { publishClientPageMetadata: mocks.publishMetadata } })
   })
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
 
-  it('searches non-URL address input like the local pane instead of forcing a host', () => {
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    const onUpdatePageState = vi.fn()
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={vi.fn()}
-      />
-    )
-
-    act(() => mocks.addressBar.current?.onNavigate('google maps'))
-    expect(webview.loadURL).toHaveBeenCalledWith('https://www.google.com/search?q=google%20maps')
-
-    onUpdatePageState.mockClear()
-    act(() => mocks.addressBar.current?.onNavigate('javascript:alert(1)'))
-    expect(webview.loadURL).toHaveBeenCalledTimes(1)
-    expect(onUpdatePageState).toHaveBeenCalledWith(
-      'page-a',
-      expect.objectContaining({
-        loadError: expect.objectContaining({
-          description: 'Enter a valid http(s) or localhost URL.'
-        })
+  it.each([null, { ...PLACEMENT, pageHostGeneration: 0 }])(
+    'keeps owned recovery usable beyond the legacy absence window with placement %j',
+    async (placement) => {
+      vi.useFakeTimers()
+      mocks.realRecoveryWindow = true
+      useAppStore.setState({
+        remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+          {
+            'page-a': {
+              environmentId: 'environment-a',
+              remotePageId: 'page-a',
+              restoredFromSession: true,
+              initializationPresentation: {
+                disposition: 'pending',
+                receivedFrame: 1,
+                delivery: captureBrowserInitializationDelivery('environment-a')
+              },
+              placement: placement ?? { ...PLACEMENT, pageHostGeneration: 0 }
+            }
+          },
+          ['page-a']
+        ),
+        runtimeStatusByEnvironmentId: new Map([
+          ['environment-a', connectedRuntimeStatus('runtime-a', 1)]
+        ])
       })
-    )
-  })
-
-  it('surfaces main-frame load failures and ignores aborted races', () => {
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    const onUpdatePageState = vi.fn()
-    const view = render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={vi.fn()}
-      />
-    )
-    onUpdatePageState.mockClear()
-
-    act(() =>
-      webview.dispatchEvent(
-        Object.assign(new Event('did-fail-load'), {
-          errorCode: -3,
-          errorDescription: 'ERR_ABORTED',
-          validatedURL: 'https://replaced.internal/',
-          isMainFrame: true
-        })
+      const pending = {
+        ...page(),
+        url: 'https://example.internal/saved',
+        loading: true
+      }
+      const pane = (browserTab: BrowserPage, currentPlacement = placement) => (
+        <ClientHostedBrowserPagePane
+          browserTab={browserTab}
+          workspaceId="workspace-a"
+          chromeShortcutScope="focused"
+          runtimeEnvironmentId="environment-a"
+          worktreeId="worktree-a"
+          placement={currentPlacement}
+          isActive
+          onUpdatePageState={vi.fn()}
+          onSetUrl={vi.fn()}
+        />
       )
-    )
-    expect(onUpdatePageState).not.toHaveBeenCalled()
-
-    act(() =>
-      webview.dispatchEvent(
-        Object.assign(new Event('did-fail-load'), {
-          errorCode: -105,
-          errorDescription: 'ERR_NAME_NOT_RESOLVED',
-          validatedURL: 'https://google%20maps/',
-          isMainFrame: true
-        })
+      const view = render(pane(pending))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(screen.queryByText('Reopen')).toBeNull()
+      expect(screen.getByLabelText<HTMLInputElement>('Address').value).toBe(
+        'https://example.internal/saved'
       )
-    )
-    const loadError = {
-      code: -105,
-      description: 'ERR_NAME_NOT_RESOLVED',
-      validatedUrl: 'https://google%20maps/'
+      expect(mocks.attach).not.toHaveBeenCalled()
+      act(() => screen.getByRole('button', { name: 'Stop' }).click())
+      // The restored sentinel handle supplies the exact pending owner even before placement arrives.
+      expect(mocks.initializationAction).toHaveBeenLastCalledWith(
+        expect.objectContaining({ action: { type: 'stop' } })
+      )
+      act(() =>
+        useAppStore.setState((s) => ({
+          remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+            {
+              ...s.remoteBrowserPageHandlesByPageId,
+              'page-a': {
+                ...s.remoteBrowserPageHandlesByPageId['page-a'],
+                initializationPresentation: {
+                  disposition: 'stopped',
+                  receivedFrame: 2,
+                  delivery: captureBrowserInitializationDelivery('environment-a')
+                }
+              }
+            },
+            ['page-a']
+          )
+        }))
+      )
+      const stopped = { ...pending, loading: false }
+      view.rerender(pane(stopped))
+      expect(screen.queryByText('Reopen')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Reload' })).not.toBeNull()
+      const { webview } = createWebview()
+      mocks.attach.mockReturnValue(retainedAttachment(webview))
+      act(() =>
+        useAppStore.setState((s) => ({
+          remoteBrowserPageHandlesByPageId: annotateBrowserPageHandles(
+            {
+              ...s.remoteBrowserPageHandlesByPageId,
+              'page-a': {
+                ...s.remoteBrowserPageHandlesByPageId['page-a'],
+                initializationPresentation: undefined
+              }
+            },
+            ['page-a']
+          )
+        }))
+      )
+      view.rerender(pane(stopped, PLACEMENT))
+      expect(mocks.attach).toHaveBeenCalled()
     }
-    expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false, loadError })
-    // Why: did-stop-loading follows did-fail-load and must not wipe the failure.
-    onUpdatePageState.mockClear()
-    act(() =>
-      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop', loadError, loading: false })
-    )
-    expect(onUpdatePageState).toHaveBeenCalledWith('page-a', expect.objectContaining({ loadError }))
-
-    view.rerender(
-      <ClientHostedBrowserPagePane
-        browserTab={{ ...page(), loadError }}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={vi.fn()}
-      />
-    )
-    // Reload on chrome-error:// refreshes the error page; Retry must navigate to the attempted URL.
-    act(() => screen.getByText('Retry').click())
-    expect(webview.reload).not.toHaveBeenCalled()
-    expect(webview.src).toBe(normalizeBrowserNavigationUrl(loadError.validatedUrl))
-  })
+  )
 
   it('keeps Find open across subframe settlement and closes it only on a full commit', () => {
     const { webview } = createWebview()
@@ -264,140 +293,6 @@ describe('ClientHostedBrowserPagePane', () => {
       'page-a',
       expect.objectContaining({ loading: false, loadError: null })
     )
-  })
-})
-
-describe('ClientHostedBrowserPagePane address bar parity', () => {
-  let frameCallbacks: FrameRequestCallback[] = []
-
-  beforeEach(() => {
-    frameCallbacks = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frameCallbacks.push(callback)
-      return frameCallbacks.length
-    })
-    vi.stubGlobal('cancelAnimationFrame', () => {})
-    installClientHostedPaneApi()
-    useAppStore.setState({
-      browserUrlHistory: [],
-      pendingAddressBarFocusByPageId: {},
-      pendingAddressBarFocusByTabId: {}
-    })
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.unstubAllGlobals()
-  })
-
-  function flushFrames(cycles = 8): void {
-    for (let index = 0; index < cycles; index += 1) {
-      const pending = frameCallbacks
-      frameCallbacks = []
-      for (const callback of pending) {
-        callback(0)
-      }
-    }
-  }
-
-  it('opens a new blank tab in the address bar instead of handing focus to the guest', () => {
-    const { webview, focus } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    useAppStore.setState({
-      pendingAddressBarFocusByPageId: { 'page-a': true },
-      pendingAddressBarFocusByTabId: { 'page-a': true }
-    })
-
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    act(() => flushFrames())
-
-    const input = screen.getByLabelText('Address') as HTMLInputElement
-    expect(document.activeElement).toBe(input)
-    expect(input.selectionStart).toBe(0)
-    expect(input.selectionEnd).toBe(input.value.length)
-    expect(focus).not.toHaveBeenCalled()
-  })
-
-  it('gives the guest focus back after the palette hands the address bar a turn', () => {
-    const { webview, focus, setUrl } = createWebview()
-    // Why: the attach is mocked, so place the guest where the real attach would put it.
-    document.body.appendChild(webview)
-    setUrl('https://remote.internal/path')
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    const renderPane = (isActive: boolean): React.JSX.Element => (
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive={isActive}
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    const view = render(renderPane(true))
-    act(() => flushFrames())
-    focus.mockClear()
-
-    // Cmd+J dismissal reclaims the bar repeatedly; this pane has no local load handlers to clear the latch.
-    for (let cycle = 0; cycle < 3; cycle += 1) {
-      act(() => requestBrowserFocus({ pageId: 'page-a', target: 'address-bar' }))
-      act(() => flushFrames())
-      expect(document.activeElement).toBe(screen.getByLabelText('Address'))
-      view.rerender(renderPane(false))
-      view.rerender(renderPane(true))
-      act(() => flushFrames())
-      expect(focus).toHaveBeenCalledTimes(cycle + 1)
-    }
-  })
-
-  it('takes focus off the guest itself when the chord claims the address bar', () => {
-    // Pin macOS so the Cmd+L test does not depend on the runner platform.
-    Object.defineProperty(navigator, 'userAgent', {
-      configurable: true,
-      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-    })
-    const { webview, blur, setUrl } = createWebview()
-    setUrl('https://remote.internal/path')
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    act(() => flushFrames())
-
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'l', metaKey: true, bubbles: true, cancelable: true })
-      )
-    })
-
-    // A guest owns separate WebContents focus until explicitly blurred, even after an input is focused.
-    expect(blur).toHaveBeenCalled()
-    expect(document.activeElement).toBe(screen.getByLabelText('Address'))
   })
 })
 

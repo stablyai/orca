@@ -6,7 +6,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import {
   nativeChatTextAttachmentPaths,
   chatTextAttachmentName
-} from '../../../../../../shared/native-chat-text-attachment-references'
+} from '../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
 import { NativeChatMarkdownImageOwnerContext } from '../images/native-chat-markdown-image-owner'
 

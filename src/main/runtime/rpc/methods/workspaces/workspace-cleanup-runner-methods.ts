@@ -2,7 +2,7 @@ import {
   WorkspaceCleanupPreviewParams,
   WorkspaceCleanupReportUnsavedEditorsParams,
   WorkspaceCleanupRunNowParams
-} from '../../../../../shared/rpc-contract/workspace-cleanup-runner-params'
+} from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-runner-params'
 import { requireWorkspaceCleanupRunner } from '../../../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { reportClientUnsavedEditors } from '../../../../workspaces/cleanup/workspace-cleanup-client-unsaved-editors'
 import { defineMethod } from '../../core'

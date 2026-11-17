@@ -68,6 +68,16 @@ ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
 
 If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
 
+## Agents by ID
+
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<id>`; what Copy Orca Session ID copies). Use it to find and read agents:
+
+- `ORCA agent list --json` lists agents in this host's workspaces, with `orcaSessionId`, `kind` (chat or terminal), state, workspace and last reply. A terminal agent has no ID until it first reports to Orca. Agents on other hosts are not listed; the output names those hosts and the `--environment` to use. A finished terminal agent stays listed as done while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `agent read <id>` still reads it in all these cases.
+- `ORCA agent show <id> --json` shows where one agent is (none if closed, two if resumed in two panes). A listed sleeping terminal agent shows its last state and where it wakes when its workspace is reopened.
+- `ORCA agent read <id> --json` reads what the agent said: a chat's history or a terminal agent's transcript, never its screen. It needs no running agent and never starts one. `state` describes the latest turn in this read's own history: `working` means that history shows an unfinished turn and the reply may not be there yet; a missing `state` means unknown, never done. A terminal agent that exited mid-turn may keep reading `working`; check `ORCA agent show`. `agent list`/`show` report the last state known to Orca, which may differ. A terminal agent is readable while Orca knows its transcript (open, or asleep in a workspace; on Windows, a sleeping WSL agent only once its tab is reopened).
+
+A chat keeps its ID across `/clear`; a terminal agent gets a new one. A provider's own conversation id or a `term_…` handle is refused with the ID to use. To message an agent, use `terminal send` or `orchestration send` as below; a sleeping terminal agent can't be messaged, so reopen its workspace first.
+
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.
@@ -133,6 +143,7 @@ Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
 Per-worktree visibility rules still apply.
+Use `repo set --browser-profile <id>` (ids from `tab profile list`, `default` for Default) so new browser tabs in that repo open on that profile; `inherit` clears it.
 
 Selectors:
 
@@ -165,15 +176,14 @@ Agent/setup flags:
 ORCA worktree create --name task --parent-worktree active --agent codex --prompt "hi" --json
 ORCA worktree create --name task --parent-worktree active --agent claude --setup run --json
 ORCA worktree create --name task --parent-worktree active --setup skip --json
-ORCA worktree create --name task --parent-worktree active --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
-- `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
-- `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
+- `--run-hooks` is a legacy alias for `--setup run` that also reveals the new worktree; use `--setup run` instead.
+- `--activate` and `--run-hooks` switch the user's view to the new worktree, so pass them only when the user asked to switch to it. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
 
@@ -260,6 +270,7 @@ Terminal rules:
 - A chat tab has no terminal handle, so `terminal rename` cannot rename it. Use `ORCA chat rename --session <sessionId> --name "New Name" --json` with the `sessionId` `agent launch` printed; inside a chat, omit `--session` to rename that chat.
 - `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
 - `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
+- `terminal switch` changes the terminal the user is looking at, so run it only when the user asked to switch. Commands that act on one terminal take `--terminal <handle>`, so they never need a switch.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.

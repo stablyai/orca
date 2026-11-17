@@ -1,13 +1,16 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
-import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store/index'
 import {
   guardPinnedTabClose,
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
-import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { createWorkspaceTabCloseCommands } from '@/lib/workspace/tabs/close/workspace-tab-close-commands'
 import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
-import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
+import { captureWorkspaceEmptiedReaction } from '@/lib/workspace/tabs/close/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -20,10 +23,13 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
+} from '../../../components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/workspace/floating-workspace-open-intent'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
+import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
+import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -45,6 +51,7 @@ export type WorkspaceTabCommand =
       floatingPanelOwned?: boolean
     }
   | { type: 'previous-recent'; floatingPanelOwned?: boolean }
+  | { type: 'move'; direction: -1 | 1; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -128,6 +135,33 @@ function closeFocusedSplitLanding(state: TabState): boolean {
   return true
 }
 
+/** Move the focused group's active tab past its visible neighbor; moves stop at the group's edges. */
+export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boolean {
+  if (!worktreeId) {
+    return false
+  }
+  const state = useAppStore.getState()
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  const tabId = group?.activeTabId
+  if (!group || !tabId) {
+    return false
+  }
+  // Step past visible neighbors only, so a stale order entry never swallows the move.
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId).map((ref) => ref.tabId)
+  const index = visibleTabIds.indexOf(tabId)
+  const neighborId = index === -1 ? undefined : visibleTabIds[index + direction]
+  if (!neighborId || !group.tabOrder.includes(neighborId)) {
+    return false
+  }
+  const tabOrder = group.tabOrder.filter((id) => id !== tabId)
+  tabOrder.splice(tabOrder.indexOf(neighborId) + (direction === 1 ? 1 : 0), 0, tabId)
+  reorderTabInGroup(worktreeId, { kind: 'reorder', tabId, groupId: group.id, tabOrder })
+  return true
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
@@ -206,6 +240,13 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
+  }
+  if (command.type === 'move') {
+    const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
+    return moveActiveTab(
+      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
+      command.direction
+    )
   }
   if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

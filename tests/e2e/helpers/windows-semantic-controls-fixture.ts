@@ -7,33 +7,66 @@ import { vi } from 'vitest'
 import { z } from 'zod'
 
 const execFileAsync = promisify(execFile)
-const fixtureScript = join(process.cwd(), 'tests/e2e/helpers/windows-semantic-controls-fixture.ps1')
+const helpersDir = join(process.cwd(), 'tests/e2e/helpers')
 
-const WindowsSemanticFixtureStateSchema = z.object({
+const FixtureActivationSchema = z.object({
   ready: z.boolean(),
   activations: z.number(),
   active: z.boolean(),
-  listOffset: z.number(),
-  listViewport: z.number(),
-  branchExpanded: z.boolean(),
-  level: z.number(),
   events: z.array(z.string())
 })
 
-export type WindowsSemanticFixtureState = z.infer<typeof WindowsSemanticFixtureStateSchema>
+const WindowsSemanticFixtureStateSchema = FixtureActivationSchema.extend({
+  listOffset: z.number(),
+  listViewport: z.number(),
+  branchExpanded: z.boolean(),
+  level: z.number()
+})
 
-export type WindowsSemanticFixture = {
+const WindowsFormsFixtureStateSchema = FixtureActivationSchema.extend({
+  name: z.string(),
+  notes: z.string(),
+  presses: z.number(),
+  checked: z.boolean(),
+  combo: z.string(),
+  listTop: z.number()
+})
+
+export type WindowsSemanticFixtureState = z.infer<typeof WindowsSemanticFixtureStateSchema>
+export type WindowsFormsFixtureState = z.infer<typeof WindowsFormsFixtureStateSchema>
+
+export type WindowsControlsFixture<State> = {
   app: string
   title: string
-  readState: () => Promise<WindowsSemanticFixtureState>
-  waitForState: (
-    predicate: (state: WindowsSemanticFixtureState) => boolean,
-    label: string
-  ) => Promise<WindowsSemanticFixtureState>
+  readState: () => Promise<State>
+  waitForState: (predicate: (state: State) => boolean, label: string) => Promise<State>
   close: () => Promise<void>
 }
 
-export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFixture> {
+export type WindowsSemanticFixture = WindowsControlsFixture<WindowsSemanticFixtureState>
+export type WindowsFormsFixture = WindowsControlsFixture<WindowsFormsFixtureState>
+
+// WPF window behind another app's window, recording each activation.
+export function launchWindowsSemanticFixture(): Promise<WindowsSemanticFixture> {
+  return launchWindowsControlsFixture(
+    'windows-semantic-controls-fixture.ps1',
+    WindowsSemanticFixtureStateSchema
+  )
+}
+
+// The same for a WinForms window, whose text boxes are native user32 edits.
+export function launchWindowsFormsFixture(): Promise<WindowsFormsFixture> {
+  return launchWindowsControlsFixture(
+    'windows-semantic-controls-fixture.winforms.ps1',
+    WindowsFormsFixtureStateSchema
+  )
+}
+
+async function launchWindowsControlsFixture<State extends z.infer<typeof FixtureActivationSchema>>(
+  script: string,
+  schema: z.ZodType<State>
+): Promise<WindowsControlsFixture<State>> {
+  const fixtureScript = join(helpersDir, script)
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-semantic-'))
   const statePath = join(tempDir, 'state.json')
   const title = `Orca Semantic Controls ${Date.now()}`
@@ -75,14 +108,14 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
   }
   const pid = child.pid
 
-  const readState = async (): Promise<WindowsSemanticFixtureState> => {
+  const readState = async (): Promise<State> => {
     const raw = await readFile(statePath, 'utf8')
-    return WindowsSemanticFixtureStateSchema.parse(JSON.parse(raw.replace(/^﻿/, '')))
+    return schema.parse(JSON.parse(raw.replace(/^﻿/, '')))
   }
   const waitForState = async (
-    predicate: (state: WindowsSemanticFixtureState) => boolean,
+    predicate: (state: State) => boolean,
     label: string
-  ): Promise<WindowsSemanticFixtureState> => {
+  ): Promise<State> => {
     // Why: the fixture replaces the file on every change, so a read can land between writes and throw.
     return vi.waitFor(
       async () => {

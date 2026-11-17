@@ -1,3 +1,4 @@
+import { useNativeChatViewDisconnect } from '../../pane/ownership/use-native-chat-view-disconnect'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { NativeChatRunPosition } from '../../messages/disclosure/native-chat-disclosure-store'
@@ -220,6 +221,11 @@ export function useNativeChatToolRunReaderPosition({
   // A hidden box has no geometry: hiding keeps the place (a pending landing's target), showing lands on it
   // again unless a reveal in the same commit took the box.
   const wasVisibleRef = useRef(isVisible)
+  useNativeChatViewDisconnect(() => {
+    wasVisibleRef.current = isVisibleRef.current = false
+    positionRef.current = landingRef.current?.target ?? positionRef.current
+    landingRef.current = null
+  })
   useLayoutEffect(() => {
     if (wasVisibleRef.current === isVisible) {
       return
@@ -230,7 +236,6 @@ export function useNativeChatToolRunReaderPosition({
       positionRef.current = target
       retireLanding()
     } else if (target && !followsEndRef.current && !revealedRef.current) {
-      positionRef.current = target
       landingRef.current = { target, frames: 0 }
       setHeldRowKey(target.key)
       setLandingWake((count) => count + 1)

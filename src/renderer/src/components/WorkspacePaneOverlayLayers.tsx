@@ -1,9 +1,9 @@
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from './activity/terminal-portal/activity-terminal-portal'
 import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import StructuredAgentSessionPaneOverlayLayer from './native-chat/pane/routing/StructuredAgentSessionPaneOverlayLayer'
-import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
+import AiVaultSessionDropLayer from './tab-group/drag/AiVaultSessionDropLayer'
 import type { HiddenTerminalPrewarm } from './terminal-pane/controller/terminal-pane-types'
 
 /** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */

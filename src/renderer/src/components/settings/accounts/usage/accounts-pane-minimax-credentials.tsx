@@ -10,7 +10,7 @@ import { Label } from '../../../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { UnsealedCredentialNotice } from '../../../provider-accounts/UnsealedCredentialNotice'
-import type { ProviderRateLimits } from '../../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { MiniMaxCredentialsModel } from './use-minimax-credentials'
 import {
   usageCredentialSealedElsewhere,

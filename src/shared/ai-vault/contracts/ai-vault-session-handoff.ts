@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { resolveNativeChatTranscriptAgent } from '../../native-chat/native-chat-agent-support'
 import type { AiVaultAgent } from './ai-vault-types'
 

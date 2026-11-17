@@ -12,7 +12,7 @@ import {
   type StructuredAgentSessionLiveOptions
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
 export function claudeObservedEffort(
   effort: string | null | undefined,

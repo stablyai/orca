@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -13,9 +13,9 @@ import {
   RepoIssueCommandRead,
   RepoSelector,
   RepoShow
-} from '../../../../../shared/rpc-contract/github-repo-target-params'
+} from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
-import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
+import { repoHooksCheckIsBackground } from '../../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -24,6 +24,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -33,8 +34,8 @@ import {
   RepoSetHidden,
   RepoSparsePresetSave,
   RepoUpdate
-} from '../../../../../shared/rpc-contract/repo-params'
-import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/projects/repo-params'
+import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 export const REPO_METHODS = [
   defineMethod({
@@ -225,15 +226,19 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.hooks',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    params: RepoHooksRead,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoHooks(params.repo, { createSource: params.createSource })
   }),
   defineMethod({
     name: 'repo.hooksCheck',
     permission: 'workspace',
     params: RepoHooksCheck,
     handler: async (params, { runtime }) =>
-      runtime.checkRepoHooks(params.repo, { background: repoHooksCheckIsBackground(params) })
+      runtime.checkRepoHooks(params.repo, {
+        background: repoHooksCheckIsBackground(params),
+        createSource: params.createSource
+      })
   }),
   defineMethod({
     name: 'repo.setupScriptImports',

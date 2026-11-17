@@ -1,9 +1,10 @@
 import { useAppStore } from '@/store'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
-import type { TerminalTabCloseReason } from '@/store/terminals/terminal-tab-retirement'
+import type { TerminalTabCloseReason } from '@/store/terminals/retirement/terminal-tab-retirement'
 import type { TerminalTabCloseIntent } from './terminal-tab-close-intent'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
+import { canSleepInsteadOfClosingTab } from './terminal-close-sleep-eligibility'
 import { probePtyRunningWork } from './pty-running-work-probe'
 
 export type RunningTerminalCloseGuardOptions = {
@@ -55,13 +56,14 @@ export function collectTabPtyIds(
 
 export function guardRunningTerminalClose(params: {
   terminalTabId: string
-  tabLabel: string
+  /** The workspace owning the tab; names it in the prompt and gates "Sleep workspace instead". */
+  worktreeId?: string
   /** Work the user already agreed to stop is not running work to ask about. */
   consentedPtyId?: string
   onClose: () => void
   onCancel?: () => void
 }): void {
-  const { terminalTabId, tabLabel, consentedPtyId, onClose, onCancel } = params
+  const { terminalTabId, worktreeId, consentedPtyId, onClose, onCancel } = params
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
@@ -85,10 +87,19 @@ export function guardRunningTerminalClose(params: {
       return
     }
     const copyKind = resolveBusyPtyCloseCopyKind(terminalTabId, busyPtyIds)
+    const canSleepInstead =
+      copyKind === 'agent' && worktreeId !== undefined
+        ? canSleepInsteadOfClosingTab(useAppStore.getState(), {
+            worktreeId,
+            terminalTabId,
+            busyPtyIds
+          })
+        : false
     useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
       terminalTabId,
-      tabLabel,
       copyKind,
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(canSleepInstead ? { canSleepInstead } : {}),
       onConfirm: onClose,
       ...(onCancel ? { onCancel } : {})
     })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
@@ -7,6 +7,8 @@ import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing
 import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
+import { BrowserMemorySaverSetting } from './BrowserMemorySaverSetting'
+import { getBrowserMemorySaverSearchEntry } from './browser-memory-saver-search'
 import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
@@ -31,12 +33,12 @@ import {
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
 import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
@@ -131,6 +133,10 @@ export function BrowserPane({
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
+  // Browser tabs run in this desktop app; the web client has none to free.
+  const showMemorySaver =
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, [getBrowserMemorySaverSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -253,6 +259,7 @@ export function BrowserPane({
       {showBrowserUse ? (
         <SettingsGroup>
           <BrowserUseSetup
+            hostId={selectedBrowserSessionHostId}
             onConfigureMoreBrowsers={scrollToSessionCookies}
             onOpenComputerUse={onOpenComputerUse}
           />
@@ -262,6 +269,7 @@ export function BrowserPane({
       {showHomePage ||
       showSearchEngine ||
       showDefaultZoom ||
+      showMemorySaver ||
       showUserAgent ||
       showSitePermissions ||
       showLinkRouting ||
@@ -293,6 +301,10 @@ export function BrowserPane({
               value={browserDefaultZoomLevel}
               onChange={setBrowserDefaultZoomLevel}
             />
+          ) : null}
+
+          {showMemorySaver ? (
+            <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
           {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}

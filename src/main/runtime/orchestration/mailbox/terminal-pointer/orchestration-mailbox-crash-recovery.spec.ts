@@ -34,7 +34,7 @@ describe('orchestration mailbox crash recovery', () => {
     temporaryDirectories.push(directory)
     const dbPath = join(directory, 'orchestration.db')
     const firstDb = new OrchestrationDb(dbPath)
-    const first = createRuntime(firstDb)
+    const first = await createRuntime(firstDb)
     const run = createBoundRun(firstDb, 'Enter crash Run')
     const message = insertDirectRunMessage(firstDb, run.id, 'Visible before Enter crash')
     const recordWrite = first.write as unknown as (id: string, payload: string) => unknown
@@ -63,7 +63,7 @@ describe('orchestration mailbox crash recovery', () => {
       delivered_at: null,
       pointer_enter_pending: MAILBOX_POINTER_ENTER_ATTEMPTED
     })
-    const restarted = createRuntime(restartedDb)
+    const restarted = await createRuntime(restartedDb)
     await driveToLiveIdle(restarted.runtime)
     await vi.advanceTimersByTimeAsync(500)
     const checked = await checkBoundMailbox(restarted.runtime)

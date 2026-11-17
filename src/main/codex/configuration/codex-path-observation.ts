@@ -1,5 +1,5 @@
 import { statSync, type Stats } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { readAgentStateFileSync } from './agent-state-file-reader'
 
 // Distinguish unreadable from absent before mutations; existsSync collapses both to false.

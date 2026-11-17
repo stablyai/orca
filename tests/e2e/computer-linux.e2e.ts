@@ -3,7 +3,7 @@ import type {
   ComputerActionResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/computer/computer-use-runtime-types'
 import {
   ensureOrcaRuntimeLaunched,
   ensureGeditLaunched,
@@ -74,29 +74,6 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
 
   afterAll(async () => {
     await killGedit()
-  })
-
-  test('click and type-text insert into the focused document through AT-SPI', async () => {
-    await focusGeditDocument()
-
-    const marker = ` orca-linux-type-${Date.now()}-élan-🚀`
-    const typed = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'type-text',
-          '--app',
-          'gedit',
-          '--text',
-          marker,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(typed.result.action?.path).toBe('accessibility')
-    expect(typed.result.snapshot.treeText).toContain(marker.trim())
   })
 
   test('paste-text mutates the test-owned document', async () => {

@@ -1,23 +1,27 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { getManagedAccountInlineLabel } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
-} from '../../../../../shared/agent-session/agent-session-account-usage'
-import type { CodexRateLimitResetOutcome } from '../../../../../shared/rate-limit-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
-import { ProviderIdentityCard } from '../../status-bar/ProviderIdentityCard'
-import { CodexResetConfirmation, CodexResetCredits } from '../../status-bar/CodexResetCredits'
-import { formatResetCreditExpiry, ProviderIcon } from '../../status-bar/tooltip'
+} from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
+import type { CodexRateLimitResetOutcome } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import { ProviderIdentityCard } from '../../status-bar/accounts/ProviderIdentityCard'
+import {
+  CodexResetConfirmation,
+  CodexResetCredits
+} from '../../status-bar/accounts/CodexResetCredits'
+import { formatResetCreditExpiry, ProviderIcon } from '../../status-bar/usage/provider-usage-panel'
 
 type UsageResult = Extract<AgentSessionAccountUsage, { status: 'ok' }>
 
@@ -48,7 +52,9 @@ function chatAccountLabel(account: AgentSessionUsageAccount, t: Translate = tran
     case 'system':
       return t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
     case 'managed':
-      return account.email || t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
+      return account.email
+        ? getManagedAccountInlineLabel(account)
+        : t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
     case 'shared':
       return (
         account.email || t('components.native-chat.usage.sharedAccount', 'Current shared account')

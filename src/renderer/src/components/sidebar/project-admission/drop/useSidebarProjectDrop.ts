@@ -19,12 +19,31 @@ import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
+import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
   return listWslHostWindowsPathAccess(
     state.runtimeEnvironments,
     state.settings?.experimentalWslHosts === true
   )
+}
+
+/** Routes a drop; a drive mapped to a host's distro share goes to that host, any other as before. */
+export async function routeDroppedPath(path: string): Promise<SidebarProjectDropRoute> {
+  const sharePath =
+    getWslDropHosts(useAppStore.getState()).length > 0
+      ? await resolveWslMappedDrivePath(path)
+      : null
+  // Why: re-read live state; a runtime can be focused while the drop is prepared.
+  const state = useAppStore.getState()
+  const routeArgs = {
+    focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
+    wslHosts: getWslDropHosts(state)
+  }
+  const shareRoute = sharePath ? routeSidebarProjectDrop({ ...routeArgs, path: sharePath }) : null
+  return shareRoute?.kind === 'wsl-host'
+    ? shareRoute
+    : routeSidebarProjectDrop({ ...routeArgs, path })
 }
 
 function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
@@ -86,6 +105,7 @@ export function useSidebarProjectDrop(): {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
+  const handlingDropRef = useRef(false)
   const dragDepthRef = useRef(0)
   const wslDropHosts = useMemo(
     () => getWslDropHosts({ runtimeEnvironments, settings }),
@@ -124,19 +144,17 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      // Why: re-read live state; a runtime can be focused while the drop is prepared.
-      const state = useAppStore.getState()
-      const route = routeSidebarProjectDrop({
-        path: pathResolution.path,
-        focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
-        wslHosts: getWslDropHosts(state)
-      })
-      if (refuseSidebarProjectDrop(route)) {
+      // One drop at a time: the share lookup below can take a moment.
+      if (handlingDropRef.current) {
         return
       }
-
+      handlingDropRef.current = true
       setIsHandlingDrop(true)
       try {
+        const route = await routeDroppedPath(pathResolution.path)
+        if (!mountedRef.current || refuseSidebarProjectDrop(route)) {
+          return
+        }
         const stat = await window.api.fs.stat({
           filePath: pathResolution.path,
           access: userNamedFileAccess()
@@ -172,6 +190,7 @@ export function useSidebarProjectDrop(): {
           )
         }
       } finally {
+        handlingDropRef.current = false
         if (mountedRef.current) {
           setIsHandlingDrop(false)
         }

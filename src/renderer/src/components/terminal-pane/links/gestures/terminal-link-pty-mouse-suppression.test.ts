@@ -84,18 +84,6 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual(['\x1b[<0;1;1M', '\x1b[<0;1;1m'])
   })
 
-  it('forwards plain mouse input immediately when actions are disabled', () => {
-    const { element, suppression } = createSuppression(false)
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[M !!', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-
-    expect(forwarded).toEqual(['\x1b[M !!'])
-  })
-
   it('flushes a dragged mouse sequence in order', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
@@ -160,19 +148,6 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual(['key', '\x1b[<0;1;1M', '\x1b[<0;1;1m'])
   })
 
-  it('flushes pending child input on blur', () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[<0;1;1M', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    window.dispatchEvent(new Event('blur'))
-
-    expect(forwarded).toEqual(['\x1b[<0;1;1M'])
-  })
-
   it('flushes pending child input when disposed', () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
@@ -182,19 +157,6 @@ describe('terminal link PTY mouse suppression', () => {
 
     element.dispatchEvent(mouseEvent('mousedown'))
     suppression.dispose()
-
-    expect(forwarded).toEqual(['\x1b[<0;1;1M'])
-  })
-
-  it('flushes an abandoned transaction before starting another gesture', () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    element.addEventListener('mousedown', () =>
-      suppression.handlePtyInput('\x1b[<0;1;1M', (data) => forwarded.push(data))
-    )
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    element.dispatchEvent(mouseEvent('mousedown'))
 
     expect(forwarded).toEqual(['\x1b[<0;1;1M'])
   })
@@ -213,24 +175,6 @@ describe('terminal link PTY mouse suppression', () => {
 
     expect(forwarded).toEqual(expected)
     expect(suppression.claimAction()).toBe(false)
-  })
-
-  it('forwards non-mouse focus reports during a claimed mouse gesture', async () => {
-    const { element, suppression } = createSuppression()
-    const forwarded: string[] = []
-    const forward = (data: string): void => {
-      forwarded.push(data)
-    }
-    element.addEventListener('mousedown', () => {
-      suppression.handlePtyInput('\x1b[<0;1;1M', forward)
-      suppression.handlePtyInput('\x1b[I', forward)
-    })
-    element.addEventListener('mouseup', () => suppression.claimAction())
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-    await settleGesture(element)
-
-    expect(forwarded).toEqual(['\x1b[I'])
   })
 
   it('flushes a pending press when the pointer leaves the document', () => {

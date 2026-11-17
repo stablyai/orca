@@ -4,7 +4,7 @@ import { spawnClaudeConversationWorker } from './claude-rewind-transcript'
 export async function recoverClaudeTranscript(input: {
   filePath: string
   signal: AbortSignal
-  restore: (row: Record<string, unknown>) => void
+  restore: (row: Record<string, unknown>) => void | Promise<void>
   yieldTurn: () => Promise<void>
 }): Promise<void> {
   input.signal.throwIfAborted()
@@ -29,7 +29,7 @@ export async function recoverClaudeTranscript(input: {
           void (async () => {
             for (const row of rows) {
               input.signal.throwIfAborted()
-              input.restore(row)
+              await input.restore(row)
               await input.yieldTurn()
             }
             worker.postMessage('next')

@@ -1,7 +1,7 @@
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../claude-profile-routing'
+} from '../../agent-accounts/claude/claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
 import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'

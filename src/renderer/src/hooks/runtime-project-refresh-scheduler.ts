@@ -1,4 +1,7 @@
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 
 export type RuntimeProjectRefreshSchedulerDeps = {
   refresh: (environmentId: string) => Promise<void>

@@ -24,7 +24,7 @@ vi.mock('node:fs', async (importOriginal) => ({
   existsSync: existsSyncMock
 }))
 
-vi.mock('../../../shared/app-environment', () => ({
+vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   hasAppEnvironment: () => appEnvironment.current !== null,
   getAppEnvironment: () => appEnvironment.current
 }))

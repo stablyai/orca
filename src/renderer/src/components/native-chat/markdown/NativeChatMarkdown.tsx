@@ -15,14 +15,12 @@ import CommentMarkdown, {
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
 import { createDocumentCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
-import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/native-chat-visual-directive'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
-import {
-  NativeChatMarkdownImage,
-  NativeChatMarkdownImageLinkContext
-} from '../media/images/NativeChatMarkdownImage'
+import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
+import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
@@ -80,6 +78,19 @@ function containsImage(children: ReactNode): boolean {
   )
 }
 
+// The chat's own text blocks: list items take the paragraphs' line height (the shared comment
+// renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
+const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
+  p: ({ children }) => <p className="my-2.5 first:mt-0 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="my-2.5 ml-5 list-disc space-y-0.75">{children}</ul>,
+  ol: ({ children, start }) => (
+    <ol start={start} className="my-2.5 ml-5 list-decimal space-y-0.75">
+      {children}
+    </ol>
+  ),
+  li: ({ children }) => <li className="[&>input]:pointer-events-none">{children}</li>
+}
+
 function createNativeChatImageExtension(
   visualExtension: CommentMarkdownExtension | undefined,
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
@@ -89,8 +100,9 @@ function createNativeChatImageExtension(
   return {
     ...base,
     components: {
+      ...NATIVE_CHAT_TEXT_BLOCK_COMPONENTS,
       ...base.components,
-      img: ({ src, alt }) => <NativeChatMarkdownImage src={src} alt={alt} />,
+      img: ({ src, alt }) => <NativeChatDeferredMarkdownImage src={src} alt={alt} />,
       a: (props) => {
         const renderAnchor = (children: ReactNode): ReactNode => (
           <NativeChatLinkPeek href={props.href}>

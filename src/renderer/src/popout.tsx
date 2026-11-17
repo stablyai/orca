@@ -8,14 +8,13 @@ import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopo
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
 import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { applyDocumentTheme } from './app-shell/appearance/document-theme'
-import { resolvePaintedTheme } from './app-shell/appearance/terminal-app-theme'
+import { applyStartupAppTheme, useAppThemePaint } from './app-shell/appearance/use-app-theme-paint'
 import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
 import { applyCodeFontSmoothing } from './lib/editor/appearance/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
 import { useAppStore } from './store/index'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
@@ -31,8 +30,7 @@ recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env
 installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
-function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
+function applyPopoutFonts(settings: GlobalSettings | null): void {
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
@@ -50,7 +48,8 @@ try {
 if (startupSettings) {
   useAppStore.setState({ settings: startupSettings })
 }
-applyPopoutAppearance(startupSettings)
+applyStartupAppTheme(startupSettings)
+applyPopoutFonts(startupSettings)
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -61,6 +60,7 @@ if (!rootElement) {
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
   useReduceVisualEffects(settings?.reduceVisualEffects)
+  useAppThemePaint()
 
   useEffect(() => {
     let disposed = false
@@ -88,14 +88,7 @@ function PopoutSettingsSync(): null {
   }, [])
 
   useEffect(() => {
-    applyPopoutAppearance(settings)
-    if (settings?.theme !== 'system') {
-      return
-    }
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
-    media.addEventListener('change', handleChange)
-    return () => media.removeEventListener('change', handleChange)
+    applyPopoutFonts(settings)
   }, [settings])
 
   return null

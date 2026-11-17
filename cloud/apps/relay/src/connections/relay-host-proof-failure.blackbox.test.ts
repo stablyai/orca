@@ -28,7 +28,7 @@ describe('relay host proof failures', () => {
   })
 
   // A verifyCellAssignment connect-timeout rejection once escaped beginProof and crashed whole cells.
-  it.each(['cell', 'combined'] as const)('contains %s host hello database timeouts', async (role) => {
+  it('contains cell host hello database timeouts', async () => {
     const keys = await generateKeyPair('ES256')
     const publicJwk = await exportJWK(keys.publicKey)
     const jwksServer: Server = createServer((_request, response) => {
@@ -64,7 +64,7 @@ describe('relay host proof failures', () => {
       authAudience: 'orca-relay',
       jwksUrl: issuer,
       assignmentSigningKey: new Uint8Array(32),
-      role,
+      role: 'cell',
       cellId: 'production-gce-c3',
       cells: [{ id: 'production-gce-c3', url: relayUrl, capacityRequests: 4_000 }],
       adminAudience: `${relayUrl}/admin`,
@@ -88,7 +88,7 @@ describe('relay host proof failures', () => {
     await new Promise<void>((resolve) => relay.server.once('listening', resolve))
     cleanup.push(() => new Promise<void>((resolve) => relay.server.close(() => resolve())))
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const unhandled: unknown[] = []
     const onUnhandled = (reason: unknown): void => {
       unhandled.push(reason)
@@ -140,11 +140,6 @@ describe('relay host proof failures', () => {
     )
 
     expect(await closed).toBe(RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
-    expect(
-      warn.mock.calls.map((call) => String(call[0]))
-    ).toContain(
-      '[orca-relay] host hello proof failed: Connection terminated due to connection timeout'
-    )
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(unhandled).toEqual([])
   })

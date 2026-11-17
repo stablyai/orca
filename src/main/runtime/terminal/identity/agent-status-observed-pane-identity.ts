@@ -2,7 +2,7 @@ import {
   resolveAgentStatusBinding,
   type AgentStatusRuntimeEnrichment,
   type ObservedAgentStatusPaneIdentity
-} from '../../../ipc/agent-status-ipc-boundary'
+} from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 import type { EnrichedAgentHookEventPayload } from '../../../agent-hooks/server/server-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 

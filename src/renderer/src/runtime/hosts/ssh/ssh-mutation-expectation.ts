@@ -1,6 +1,9 @@
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { resolveOwner } from '../../../lib/workspace/ownership/resolve-owner'
-import type { SshMutationExpectation } from '../../../../../shared/ssh-types'
+import type { SshMutationExpectation } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { AppState } from '@/store/types'
 
 const SSH_OWNER_CHANGED_MESSAGE =

@@ -9,7 +9,8 @@ import {
 const PRE_CHANGE_REF = 'v1.4.212'
 const SUITE_TIMEOUT_MS = 180_000
 // Both builds load a copy in the checkout cache, out of reach of `mobile/tsconfig.json`.
-const PHONE_ROW_READER = 'mobile/src/worktree/agent-row-display.ts'
+// Releases cut before the agent-lineage/ move load it from where they define it.
+const PHONE_ROW_READER = 'mobile/src/worktree/agent-lineage/agent-row-display.ts'
 
 const WORKTREE_ID = 'repo::/worktree'
 const NOW = 1_000_000

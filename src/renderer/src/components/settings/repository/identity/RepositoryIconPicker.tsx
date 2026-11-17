@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { RepoIcon } from '../../../../../../shared/repo-icon'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   normalizeRepoBadgeColor
-} from '../../../../../../shared/repo-badge-color'
+} from '../../../../../../shared/repository/appearance/repo-badge-color'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'
@@ -14,7 +14,7 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { RepositoryIconColorSection } from './RepositoryIconColorSection'
 import { RepositoryIconTabs } from './RepositoryIconTabs'

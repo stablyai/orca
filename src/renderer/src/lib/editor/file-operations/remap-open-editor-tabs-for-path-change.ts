@@ -19,8 +19,8 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators,
   relativePathInsideRoot
-} from '../../../../../shared/cross-platform-path'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+} from '../../../../../shared/file-access/cross-platform-path'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 // Share flavor-aware containment so Windows/UNC/WSL case/separator variants retarget instead of stranding tabs on renamed paths.
 

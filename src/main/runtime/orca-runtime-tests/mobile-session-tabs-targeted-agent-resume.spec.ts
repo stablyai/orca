@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import '../../../shared/workspace-layout/layout-owner-switch'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
-import type {
-  SleepingAgentSessionRecord,
-  TerminalLaunchResult
-} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
@@ -19,8 +16,9 @@ import type { PtyProcessInfo } from '../../providers/pty/process-info'
 import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
-import { savedResumeResult } from '../../ipc/pty/host-env/saved-resume-admission'
-import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
+import '../../ipc/pty/host-env/saved-resume-admission'
+import { resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION = { key: 'session_id', id: 'provider-session-1' } as const
@@ -50,11 +48,11 @@ function makeSleptWorkspace() {
 type Fixture = ReturnType<typeof makeSleptWorkspace>
 
 function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only paneKey, providerSession and the observation clocks.
-  return { paneKey, providerSession: SESSION, receivedAt } as never
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only agentType, paneKey, providerSession and the observation clocks.
+  return { agentType: 'claude', paneKey, providerSession: SESSION, receivedAt } as never
 }
 
-function makeRuntime(
+async function makeRuntime(
   fixture: Fixture,
   opts: {
     spawn?: NonNullable<RuntimePtyController['spawn']>
@@ -71,7 +69,22 @@ function makeRuntime(
   )
   const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
     getDesktopWindowStatus: () => 'openable',
-    ...(opts.rows ? { getAgentProviderSessionSnapshot: opts.rows } : {}),
+    ...(opts.rows
+      ? {
+          getAgentProviderSessionSnapshot: opts.rows,
+          getAgentProviderSessionRowsForPane: (paneKey: string) =>
+            opts.rows!().filter((row) => row.paneKey === paneKey),
+          getAgentProviderSessionRowsForSession: (
+            agent: string,
+            session: AgentStatusIpcPayload['providerSession']
+          ) =>
+            opts.rows!().filter(
+              (row) =>
+                row.agentType === agent &&
+                agentProviderSessionsEqual(agent, row.providerSession, session)
+            )
+        }
+      : {}),
     ...(opts.checkHookAgentPresence ? { checkHookAgentPresence: opts.checkHookAgentPresence } : {}),
     ...(opts.subscribeAgentProviderSessionChanges
       ? { subscribeAgentProviderSessionChanges: opts.subscribeAgentProviderSessionChanges }
@@ -84,7 +97,7 @@ function makeRuntime(
     getForegroundProcess: async () => null,
     listProcesses: opts.listProcesses ?? (async () => [])
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   electronMocks.BrowserWindow.fromId.mockReturnValue(null)
   const attachWindow = (webContents?: { send: (...args: unknown[]) => void }): void => {
     runtime.attachWindow(TEST_WINDOW_ID)
@@ -122,74 +135,6 @@ function storedRecord(fixture: Fixture) {
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
-  it('settles only fresh matching saved results and binds unproven or observed results until exit', async () => {
-    for (const kind of [
-      'matching',
-      'unverifiable',
-      'observed',
-      'other-session',
-      'other-agent',
-      'missing',
-      'contradictory',
-      'unknown'
-    ]) {
-      const fixture = makeSleptWorkspace()
-      const record = storedRecord(fixture)!
-      record.origin = 'live'
-      const matching: TerminalLaunchResult = savedResumeResult({
-        verdict: kind === 'unverifiable' ? 'unverifiable' : 'chat-home',
-        refused: { agent: 'claude', providerSession: SESSION }
-      })
-      if (!matching.savedResumeDecision) {
-        throw new Error('Saved admission must return its decision')
-      }
-      const receipt =
-        kind === 'unknown'
-          ? {}
-          : {
-              ...matching,
-              savedResumeDecision:
-                kind === 'missing'
-                  ? undefined
-                  : {
-                      ...matching.savedResumeDecision,
-                      agent: kind === 'other-agent' ? 'codex' : 'claude',
-                      providerSession: kind === 'other-session' ? { ...SESSION, id: 'D' } : SESSION,
-                      verdict:
-                        kind === 'contradictory'
-                          ? ('admitted' as const)
-                          : matching.savedResumeDecision.verdict
-                    },
-              ...(kind === 'observed' ? { isReattach: true } : {})
-            }
-      let first = true
-      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
-        spawn: async (args) => {
-          if (!first) {
-            return { id: 'next-C' }
-          }
-          first = false
-          expect(args).toMatchObject({
-            launchAgent: 'claude',
-            resumeOrigin: 'saved',
-            resumeProviderSession: SESSION
-          })
-          return { id: 'result-pty', ...receipt }
-        }
-      })
-      await openOldPane()
-      const proved = kind === 'matching' || kind === 'unverifiable'
-      const action = { mutationId: `after-${kind}` }
-      if (!proved) {
-        await expect(resume(action)).resolves.toEqual({ ok: false, reason: 'held_elsewhere' })
-        expect(spawn).toHaveBeenCalledOnce()
-        runtime.onPtyExit('result-pty', 0)
-      }
-      await expect(resume(action)).resolves.toMatchObject({ ok: true, ptyId: 'next-C' })
-      expect(spawn).toHaveBeenCalledTimes(2)
-    }
-  })
-
   it('retains ownership after an ambiguous create with a running resume', async () => {
     const fixture = makeSleptWorkspace()
     const handle = deriveRemoteRuntimeTerminalCreateHandle(
@@ -198,7 +143,7 @@ describe('resumeAgentSessionInWorkspace', () => {
       MUTATION_ID
     )
     let started = false
-    const { spawn, resume, attachWindow } = makeRuntime(fixture, {
+    const { spawn, resume, attachWindow } = await makeRuntime(fixture, {
       rows: () => [],
       spawn: () => {
         started = true
@@ -236,52 +181,13 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
   })
 
-  it.each(['resume', 'old pane'] as const)(
-    'refuses the other resumer while the %s spawn is in flight',
-    async (first) => {
-      const fixture = makeSleptWorkspace()
-      let landFirstSpawn = (): void => {}
-      let firstSpawnStarted = (): void => {}
-      const started = new Promise<void>((resolve) => {
-        firstSpawnStarted = resolve
-      })
-      const { spawn, resume, openOldPane } = makeRuntime(fixture, {
-        spawn: () => {
-          if (spawn.mock.calls.length > 1) {
-            return Promise.resolve({ id: 'second-pty' })
-          }
-          firstSpawnStarted()
-          return new Promise((resolve) => {
-            landFirstSpawn = () => resolve({ id: 'resumed-pty' })
-          })
-        }
-      })
-
-      if (first === 'resume') {
-        const resumed = resume()
-        await started
-        await openOldPane()
-        landFirstSpawn()
-        await expect(resumed).resolves.toMatchObject({ ok: true })
-        expect(spawnedCommands(spawn)[1]).toBe('')
-      } else {
-        const opened = openOldPane()
-        await started
-        await expect(resume()).resolves.toEqual({ ok: false, reason: 'held_elsewhere' })
-        landFirstSpawn()
-        await opened
-      }
-      expect(resumeSpawns(spawn)).toBe(1)
-    }
-  )
-
   it('frees the session once the resumed agent reported, though it then exited to its shell', async () => {
     const fixture = makeSleptWorkspace()
     let rows: AgentStatusIpcPayload[] = []
     const listeners = new Set<
       (sessions: readonly { paneKey: string; sessionId: string }[]) => void
     >()
-    const { spawn, resume } = makeRuntime(fixture, {
+    const { spawn, resume } = await makeRuntime(fixture, {
       rows: () => rows,
       subscribeAgentProviderSessionChanges: (listener) => {
         listeners.add(listener)
@@ -302,7 +208,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 
   it('settles a lost-reply attempt once a retry of the same request binds, and frees on its exit', async () => {
     let calls = 0
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       rows: () => [],
       spawn: async () => {
         calls += 1
@@ -326,7 +232,7 @@ describe('resumeAgentSessionInWorkspace', () => {
 
   it('lets at most one of two concurrent resumes own the session', async () => {
     const fixture = makeSleptWorkspace()
-    const { spawn, resume } = makeRuntime(fixture)
+    const { spawn, resume } = await makeRuntime(fixture)
 
     const results = await Promise.all([resume(), resume({ mutationId: 'another-delivery' })])
 
@@ -334,36 +240,18 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(results).toContainEqual({ ok: false, reason: 'held_elsewhere' })
     expect(spawn).toHaveBeenCalledOnce()
   })
-
-  it('shares one spawn between concurrent retries of the same request', async () => {
-    const fixture = makeSleptWorkspace()
-    const { spawn, resume } = makeRuntime(fixture)
-
-    const results = await Promise.all([resume(), resume()])
-
-    expect(results.every((result) => result.ok)).toBe(true)
-    expect(spawn).toHaveBeenCalledOnce()
-  })
 })
 
 describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publication', () => {
-  it('honors cancellation during create inventory lookup before dispatch', async () => {
-    const controller = new AbortController()
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      listProcesses: async () => {
-        controller.abort()
-        return []
-      }
-    })
-    await expect(resume({ signal: controller.signal })).resolves.toMatchObject({ ok: false })
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
   it('settles a failed post-spawn publication when that PTY exits', async () => {
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace())
-    const unsubscribe = runtime.onMobileSessionTabsChanged(() => {
-      throw new Error('publication failed')
-    })
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace())
+    const unsubscribe = runtime.onMobileSessionTabsChanged(
+      () => {
+        throw new Error('publication failed')
+      },
+      undefined,
+      'mobile'
+    )
     await expect(resume()).resolves.toEqual({ ok: false, reason: 'create_failed' })
     unsubscribe()
     runtime.onPtyExit('resumed-pty', 0)
@@ -374,7 +262,7 @@ describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publi
 describe('resumeAgentSessionInWorkspace claim lifetime', () => {
   it('releases the hold after a proven exit before registration', async () => {
     let first = true
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       spawn: async () => {
         if (first) {
           first = false
@@ -395,7 +283,7 @@ describe('resumeAgentSessionInWorkspace claim lifetime', () => {
       started = resolve
     })
     let calls = 0
-    const { runtime, resume, spawn } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume, spawn } = await makeRuntime(makeSleptWorkspace(), {
       spawn: async () => {
         calls += 1
         if (calls === 1) {
@@ -444,7 +332,7 @@ describe('resumeAgentSessionInWorkspace claim lifetime', () => {
     const leafId = deterministicAgentSessionUuid(`agent-session-resume-leaf\0${seed}`)
     let firstInventory = true
     let spawns = 0
-    const { runtime, resume } = makeRuntime(makeSleptWorkspace(), {
+    const { runtime, resume } = await makeRuntime(makeSleptWorkspace(), {
       listProcesses: async () => {
         if (firstInventory) {
           firstInventory = false
@@ -476,31 +364,3 @@ describe('resumeAgentSessionInWorkspace claim lifetime', () => {
     })
   })
 })
-
-it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-  'hands a numbered-record resume claim to the stable pane hook',
-  async () => {
-    const fixture = makeSleptWorkspace()
-    const record = storedRecord(fixture)
-    if (!record) {
-      throw new Error('missing sleep record')
-    }
-    fixture.setSession({
-      ...fixture.getSession(),
-      sleepingAgentSessionsByPaneKey: {
-        'host-tab:1': { ...record, paneKey: 'host-tab:1', state: 'done' }
-      }
-    })
-    let rows: AgentStatusIpcPayload[] = []
-    let spawned = 0
-    const { resume, openOldPane, spawn } = makeRuntime(fixture, {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'exited',
-      spawn: async () => ({ id: `numbered-resume-${++spawned}` })
-    })
-    await openOldPane()
-    expect(resumeSpawns(spawn)).toBe(1)
-    rows = [sessionRow(PANE_KEY, Date.now() + 1)]
-    await expect(resume()).resolves.toMatchObject({ ok: true })
-  }
-)

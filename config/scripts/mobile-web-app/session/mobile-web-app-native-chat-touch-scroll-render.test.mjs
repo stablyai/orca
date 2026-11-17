@@ -11,21 +11,25 @@ import {
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from '../preview/mobile-web-app-render-harness.mjs'
 
-// The phone's web pages must pan the transcript by touch and give a pinch to its text-size detector, not page zoom.
+// The phone's web pages must pan the transcript by touch, give a pinch to its text-size detector (not page zoom) and keep the Copy menu.
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const entry = `
 import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/MobileNativeChatPageScroll'
+import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
+import { publishPageStorage } from './src/mobile-web-shell/bridge/page-storage/page-async-storage'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
-} from './src/session/native-chat/transcript/mobile-native-chat-pinch-zoom'
+} from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
+
+// A pinch saves the size on release; accept that write as the app would.
+publishPageStorage({}, () => true, 'host', '')
 
 function Transcript() {
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   return <View style={{ height: 600, width: '100%' }}>
     <Text testID="font-scale">{fontScale}</Text>
     <GestureHandlerRootView style={{ flex: 1 }}>

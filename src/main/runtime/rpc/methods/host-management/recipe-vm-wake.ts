@@ -2,7 +2,7 @@ import {
   RECIPE_VM_WAKE_METHOD,
   RecipeVmWakeUnavailableError
 } from '../../../../../shared/remote-runtime/recipe-vm-wake'
-import { RecipeVmWakeParams } from '../../../../../shared/rpc-contract/recipe-vm-wake-params'
+import { RecipeVmWakeParams } from '../../../../../shared/rpc-contract/host-management/recipe-vm-wake-params'
 import { getRecipeVmWaker } from '../../../workspaces/sleep/recipe-vm-waker-registry'
 import { defineMethod } from '../../core'
 

@@ -43,7 +43,7 @@ vi.mock('./workspace-grid-view/WorkspaceGridViewEmptyCell', () => ({
     return null
   }
 }))
-vi.mock('./browser-pane/host-guest/browser-guest-paint-retention', () => ({
+vi.mock('./browser-pane/host-guest/retention/browser-guest-paint-retention', () => ({
   useAnyBrowserGuestNeedsPaint: () => false
 }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })

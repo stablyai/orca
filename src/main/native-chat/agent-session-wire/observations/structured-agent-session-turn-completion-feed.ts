@@ -1,6 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
@@ -9,7 +10,7 @@ import type {
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import {
   foldAgentLeadStatus,
   heldTurnCountsAsFinished
@@ -20,7 +21,10 @@ import {
 } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { StructuredAgentSessionLatestRequest } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
+import type {
+  StructuredAgentSessionStatusState,
+  StructuredAgentSessionJournalProjection
+} from './structured-agent-session-status-journal-projection'
 
 export type StructuredAgentSessionTurnCompletionSubscriber = {
   id: string
@@ -45,8 +49,10 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
   readStatusState: (
     sessionId: string,
     journal?: AgentSessionJournal
-  ) => StructuredAgentSessionStatusState | null
+  ) => Promise<StructuredAgentSessionStatusState | null>
   readChildWork: (sessionId: string) => readonly AgentChildWorkLivenessCandidate[] | undefined
+  /** The person's Skip on the chat's async questions, saved on its record. */
+  readAsyncQuestionsSkippedThrough?: (sessionId: string) => string | undefined
 }
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
@@ -92,17 +98,40 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
    * Failures reach everyone; first/historical observations and repeated identities stay silent. */
-  observe(
+  async observe(
     sessionId: string,
     journal?: AgentSessionJournal,
     options?: { historical?: boolean }
-  ): void {
+  ): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    const state = session ? this.deps.readStatusState(sessionId, journal) : null
+    const state = session ? await this.deps.readStatusState(sessionId, journal) : null
     if (!session || !state) {
       return
     }
     const cursor = (journal ?? session.journal).cursor()
+    this.observeState(sessionId, session, cursor, state, options)
+  }
+
+  /** SQL status and completion share the validated observer answer, without a second read. */
+  observeProjection(
+    sessionId: string,
+    projection: Pick<StructuredAgentSessionJournalProjection, 'epoch' | 'sequence' | 'state'>,
+    options?: { historical?: boolean }
+  ): void {
+    const session = this.deps.sessions.get(sessionId)
+    if (session) {
+      const { epoch, sequence } = projection
+      this.observeState(sessionId, session, { epoch, sequence }, projection.state, options)
+    }
+  }
+
+  private observeState(
+    sessionId: string,
+    session: CompletionFeedSession,
+    cursor: CompletionFeedCursor,
+    state: StructuredAgentSessionStatusState,
+    options?: { historical?: boolean }
+  ): void {
     const request = state.latestRequest
     const prompts = new Set(state.pendingPromptIds)
     const baseline = this.baselines.get(sessionId)
@@ -211,6 +240,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): boolean {
     if (request.outcome !== 'success' || state.summary.status === 'attention') {
       return false
+    }
+    // An open async question pauses the goal on the user, so it is news now.
+    if (
+      state.goalContinues &&
+      !structuredAgentSessionAwaitsAnswer(
+        state.summary.openAsyncQuestion,
+        this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
+      )
+    ) {
+      return true
     }
     const held = foldAgentLeadStatus({
       leadState: 'done',

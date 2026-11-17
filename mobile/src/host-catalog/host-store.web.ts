@@ -1,4 +1,4 @@
-import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
+import { readPageHostProfile } from '../mobile-web-shell/bridge/page-lifecycle/page-host-profile'
 import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { HostCatalogEntry, HostProfile } from './host-profile'
 

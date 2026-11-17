@@ -9,7 +9,6 @@ import type { CommitMessageAiSettings } from '../../../../../shared/source-contr
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { AgentLaunchPicker } from '../../agent/AgentLaunchPicker'
-import { DropdownMenuItem } from '../../ui/dropdown-menu'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -73,12 +72,15 @@ export function AiCommitPrSettingsFields({
                   'Not configured'
                 )
           }
-        >
-          <DropdownMenuItem onSelect={() => onAgentChange(CUSTOM_AGENT_ID)}>
-            <Terminal className="size-3.5" />
-            {t('auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00', 'Custom')}
-          </DropdownMenuItem>
-        </AgentLaunchPicker>
+          choices={[
+            {
+              id: CUSTOM_AGENT_ID,
+              label: t('auto.components.feature.wall.AiCommitPrSettingsCard.560d4feb00', 'Custom'),
+              icon: <Terminal className="size-3.5" />,
+              onSelect: () => onAgentChange(CUSTOM_AGENT_ID)
+            }
+          ]}
+        />
         {unsupportedAgentLabel ? (
           <p className="col-start-2 text-2xs leading-snug text-muted-foreground">
             {t(

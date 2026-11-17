@@ -10,7 +10,7 @@ import {
 } from '@/hooks/terminal-command-finished-event'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250

@@ -10,11 +10,11 @@ import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/ho
 import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
-} from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
-import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -231,8 +231,8 @@ function useNativeChatInstall(
     setRechecking(true)
     void (
       environmentId
-        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId)
-        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true })
+        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId, { userInitiated: true })
+        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true, userInitiated: true })
     )
       .then(() => {
         // Refreshes can resolve with cached agents after failure; check their explicit outcome.

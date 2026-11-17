@@ -41,9 +41,10 @@ beforeAll(async () => {
     `
 import { contextBridge, ipcRenderer } from 'electron'
 import { browserPageInteractionAndSessionsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser/browser-bridge-page-interaction-and-sessions.ts'))}
+import { browserGuestRegistrationAndDownloadsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser/browser-bridge-guest-registration-and-downloads.ts'))}
 let heldOpen = null
 contextBridge.exposeInMainWorld('probeApi', {
-  browser: { ...browserPageInteractionAndSessionsApi, onOpenLinkInOrcaTab: (callback) => browserPageInteractionAndSessionsApi.onOpenLinkInOrcaTab((event) => { heldOpen = () => callback(event) }), registerGuest: (args) => ipcRenderer.invoke('link-probe:register', args) },
+  browser: { ...browserPageInteractionAndSessionsApi, preparePageAttach: browserGuestRegistrationAndDownloadsApi.preparePageAttach, onOpenLinkInOrcaTab: (callback) => browserPageInteractionAndSessionsApi.onOpenLinkInOrcaTab((event) => { heldOpen = () => callback(event) }), registerGuest: (args) => ipcRenderer.invoke('link-probe:register', args) },
   fixture: {
     open: (event) => ipcRenderer.invoke('link-probe:open', event),
     pending: () => heldOpen !== null,
@@ -180,11 +181,4 @@ describe('production link bridge, store and mounted guest', () => {
     expect(await page.evaluate('window.probeApi.fixture.guests()')).toEqual([])
     expect(receipts.some((receipt) => receipt.path === '/removed-page')).toBe(false)
   })
-
-  it.todo(
-    'rejects removed source tabs, profile switches and deleted profiles without a tab, mount, default fallback or destination request'
-  )
-  it.todo(
-    'validates main-owned document/registration claims during delayed IPC consumption, async validation and deferred mount'
-  )
 })

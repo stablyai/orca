@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { Stats } from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
 

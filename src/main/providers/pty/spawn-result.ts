@@ -3,10 +3,10 @@ import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/t
 import type { TerminalLaunchResult } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
-import type { OpenCodeCliCapabilities } from '../../../shared/opencode-cli-version'
+import type { OpenCodeCliCapabilities } from '../../../shared/agent-launch/startup/opencode-cli-version'
 
 export type PtySpawnResult = TerminalLaunchResult & {
   /** Execution-host probe; absent on older hosts and reattachments. */

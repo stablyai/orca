@@ -2,14 +2,14 @@ import { useEffect } from 'react'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   agentsWithSavedModelPick,
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
   hostReadsSavedModelCatalogsOnly
-} from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
@@ -27,7 +27,7 @@ import {
   subscribeLocalRuntimeCapabilitiesKnown
 } from '../../hosts/capabilities/local-runtime-capabilities'
 import { localStructuredChatsInUse } from '../local-sessions/local-structured-chats'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
 
 const LOCAL = { kind: 'local' } as const
