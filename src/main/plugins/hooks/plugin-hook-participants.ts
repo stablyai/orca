@@ -9,7 +9,11 @@ import {
   runPluginHookChain,
   type PluginHookChainOutcome
 } from '../../../shared/plugins/workers/plugin-hook-chain'
-import { setPluginHookRunner, type PluginHookRunner } from './plugin-hook-dispatch'
+import {
+  setPluginHookRunner,
+  type PluginHookMatch,
+  type PluginHookRunner
+} from './plugin-hook-dispatch'
 import type { PluginService } from '../plugin-service'
 import { setAgentToolHookTerminalResolver } from '../../agent-hooks/tool-events/agent-tool-call-reader'
 import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
@@ -26,7 +30,8 @@ export type PluginHookHostContext = Pick<
  *  development folders in the order they were added. */
 export function pluginHookParticipants(
   event: PluginHookName,
-  context: Pick<PluginHookHostContext, 'plugins' | 'isRuntimeApproved'>
+  context: Pick<PluginHookHostContext, 'plugins' | 'isRuntimeApproved'>,
+  match?: PluginHookMatch
 ): ValidDiscoveredPlugin[] {
   const listed = context
     .plugins()
@@ -34,7 +39,9 @@ export function pluginHookParticipants(
       (plugin): plugin is ValidDiscoveredPlugin =>
         !isInvalidDiscoveredPlugin(plugin) &&
         plugin.manifest.main !== undefined &&
-        plugin.manifest.contributes.hooks.some((hook) => hook.event === event) &&
+        plugin.manifest.contributes.hooks.some(
+          (hook) => hook.event === event && (match?.(hook) ?? true)
+        ) &&
         context.isRuntimeApproved(plugin)
     )
   const installed = listed
@@ -59,10 +66,11 @@ function isSamePluginStillEnabled(
 
 export function createPluginHookRunner(context: PluginHookHostContext): PluginHookRunner {
   return {
-    wants: (event) => context.isEnabled() && pluginHookParticipants(event, context).length > 0,
-    run: (event, payload): Promise<PluginHookChainOutcome> => {
+    wants: (event, match) =>
+      context.isEnabled() && pluginHookParticipants(event, context, match).length > 0,
+    run: (event, payload, match): Promise<PluginHookChainOutcome> => {
       const participants = new Map(
-        pluginHookParticipants(event, context).map((plugin) => [plugin.pluginKey, plugin])
+        pluginHookParticipants(event, context, match).map((plugin) => [plugin.pluginKey, plugin])
       )
       const workers = new Map<string, PluginWorkerHandle>()
       return runPluginHookChain({
@@ -100,7 +108,7 @@ export function createPluginHookRunner(context: PluginHookHostContext): PluginHo
           participants
             .get(pluginKey)
             ?.manifest.contributes.hooks.some(
-              (hook) => hook.event === event && hook.onError === 'deny'
+              (hook) => hook.event === event && (match?.(hook) ?? true) && hook.onError === 'deny'
             ) === true
       })
     }

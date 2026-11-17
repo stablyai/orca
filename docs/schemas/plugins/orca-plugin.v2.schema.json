@@ -792,6 +792,27 @@
             "pass",
             "deny"
           ]
+        },
+        "launchKinds": {
+          "description": "For `agent.launch.before` only: which starts Orca waits on this plugin for. `new` is a fresh launch, `resume` an earlier session continued in a new terminal (e.g. the Resume action), `restore` Orca reopening a session it saved for a pane (at start, when a sleeping pane wakes, or on restart). Without the field a plugin sees `new` only; a list replaces that default, so `[\"resume\"]` alone stops it running on new launches. A resume or restore that Orca can tell only reattaches to a running session starts no process and is not hooked (best effort: a session that exits during the start is not re-checked). On `resume` and `restore` Orca keeps its own command (a changed `command` is ignored and logged) and applies `env`; the kind comes from the caller, so a plugin that enforces a command policy there must deny rather than rewrite.",
+          "x-orca-since": "1.4.262",
+          "examples": [
+            [
+              "new",
+              "resume",
+              "restore"
+            ]
+          ],
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "new",
+              "resume",
+              "restore"
+            ]
+          }
         }
       },
       "required": [

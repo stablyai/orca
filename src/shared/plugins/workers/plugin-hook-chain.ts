@@ -37,25 +37,35 @@ function withinDeadline<T>(work: Promise<T>, deadlineMs: number, what = 'timed o
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer))
 }
 
-/** Applies only the fields the hook lets plugins change, then rechecks the whole payload. */
+/** Applies only the fields the hook lets plugins change, then rechecks the whole payload. A field this
+ *  payload keeps fixed (`frozen`) keeps its value, and a change to it is named in `kept`. */
 function applyChange(
   event: PluginHookName,
   current: unknown,
   changed: unknown
-): { ok: true; payload: unknown } | { ok: false; reason: string } {
+): { ok: true; payload: unknown; kept: string[] } | { ok: false; reason: string } {
   const spec = PLUGIN_HOOK_SPECS[event]
   if (!isPluginJsonObject(current) || !isPluginJsonObject(changed)) {
     return { ok: false, reason: 'next() was given something other than the event object' }
   }
+  const frozen: readonly string[] = 'frozen' in spec ? spec.frozen(current) : []
   const candidate: Record<string, unknown> = { ...current }
+  const kept: string[] = []
   for (const key of spec.mutable) {
-    if (Object.hasOwn(changed, key)) {
-      candidate[key] = changed[key]
+    if (!Object.hasOwn(changed, key)) {
+      continue
     }
+    if (frozen.includes(key)) {
+      if (changed[key] !== current[key]) {
+        kept.push(key)
+      }
+      continue
+    }
+    candidate[key] = changed[key]
   }
   const parsed = spec.payload.safeParse(candidate)
   return parsed.success
-    ? { ok: true, payload: parsed.data }
+    ? { ok: true, payload: parsed.data, kept }
     : { ok: false, reason: parsed.error.issues[0]?.message ?? 'invalid change' }
 }
 
@@ -117,6 +127,12 @@ export async function runPluginHookChain(
       const change = applyChange(event, current, decision.data.payload)
       if (change.ok) {
         current = change.payload
+        if (change.kept.length > 0) {
+          input.log(
+            pluginKey,
+            `hook ${event}: ${change.kept.join(', ')} not changed: fixed for this event`
+          )
+        }
       } else {
         input.log(pluginKey, `hook ${event}: change ignored: ${change.reason}`)
       }

@@ -1,5 +1,6 @@
 import { PluginCliError } from '../../../shared/plugins/approval/plugin-cli-approval'
 import {
+  hookEntriesFor,
   isPluginHookName,
   PLUGIN_HOOK_NAMES,
   type PluginHookName
@@ -70,6 +71,13 @@ export async function firePluginDevHook(input: {
       'The host API reference lists every hook event.'
     ])
   }
+  // As production: an agent.launch.before entry runs only for the launch kinds it lists.
+  const entries = hookEntriesFor(plugin.manifest.contributes.hooks, event, parsed.data)
+  if (entries.length === 0) {
+    throw refuse(`${plugin.pluginKey} does not run ${event} for this launchKind.`, [
+      'Add the kind to the hook entry\'s launchKinds (the default is ["new"]), then reload.'
+    ])
+  }
   let worker: PluginWorkerHandle | null = null
   const outcome = await runPluginHookChain({
     event,
@@ -83,8 +91,7 @@ export async function firePluginDevHook(input: {
       worker ? worker.runHook(event, current, timeoutMs) : Promise.reject(new Error('no worker')),
     log: (pluginKey, line) => service.eventDelivery.logWarning(pluginKey)(line),
     now: () => performance.now(),
-    failsClosed: () =>
-      plugin.manifest.contributes.hooks.some((h) => h.event === event && h.onError === 'deny')
+    failsClosed: () => entries.some((h) => h.onError === 'deny')
   })
   return {
     pluginKey: plugin.pluginKey,

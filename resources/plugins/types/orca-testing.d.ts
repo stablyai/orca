@@ -255,9 +255,16 @@ declare module 'orca/testing' {
     events?: readonly string[]
     /** Commands it may register; defaults to the manifest's `contributes.commands`. */
     commands?: readonly string[]
-    /** Hooks Orca runs through it (a name, or `{ event, onError }`); defaults to the manifest's
-     *  `contributes.hooks`. */
-    hooks?: readonly (string | { event: string; onError?: 'pass' | 'deny' })[]
+    /** Hooks Orca runs through it (a name, or `{ event, onError, launchKinds }`); defaults to the
+     *  manifest's `contributes.hooks`. */
+    hooks?: readonly (
+      | string
+      | {
+          event: string
+          onError?: 'pass' | 'deny'
+          launchKinds?: readonly ('new' | 'resume' | 'restore')[]
+        }
+    )[]
   }
   /** What a hook chain decided: Orca goes on with `event` (as changed), or a handler refused. */
   export type HookDecision<H extends PluginHookName> =

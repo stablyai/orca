@@ -22,7 +22,10 @@ export async function spawnPtyFromRuntimeController(
   const outcome = await runPtySpawn({
     state: ctx,
     prepare: async () => {
-      ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+      // An adopted pane is already running: no process starts, so no launch to hook (as the ipc path).
+      if (!ctx.preAdoptedStablePane) {
+        ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+      }
       await prepareRuntimePtySpawn(ctx)
       await buildRuntimePtySpawnOptions(ctx)
     },
