@@ -20638,7 +20638,11 @@
         "turnDiffsTitle": "Durchgangsänderungen",
         "turnDiffsCopy": "Zeigt unter der Antwort die in jedem Durchgang geänderten Dateien mit Zeilenzahlen an.",
         "turnDiffsSearchChangedFiles": "geänderte Dateien",
-        "turnDiffsSearchEdits": "Änderungen"
+        "turnDiffsSearchEdits": "Änderungen",
+        "promptSuggestionsTitle": "Vorgeschlagene Prompts",
+        "promptSuggestionsCopy": "Nachdem Claude geantwortet hat, erscheint sein Vorschlag für deine nächste Nachricht im leeren Eingabefeld. Drücke Tab, um ihn zu übernehmen. Jeder Vorschlag ist eine zusätzliche Anfrage, die auf deine Claude-Nutzung angerechnet wird.",
+        "promptSuggestionsSearchNext": "nächster Prompt",
+        "promptSuggestionsSearchGhost": "Geistertext"
       },
       "voice": {
         "dictationLanguage": {

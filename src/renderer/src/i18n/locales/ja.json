@@ -20516,18 +20516,13 @@
         "unavailable": "このページのプレビューはありません。"
       },
       "usageLimitActions": {
-        "continueNow": "今すぐ続ける",
-        "leadIn": "待たずにこのチャットを続ける：",
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
-        "openSetting": "上限がリセットされたら自動的に続ける",
-        "cancelled": "Orca はこのチャットを自動的には続けません。",
-        "scheduled": "Orca は {{time}} にこのチャットを続けます。",
-        "cancel": "続けない"
+        "scheduled": "Orca は {{time}} にこのチャットを続けます。"
       },
       "settings": "チャット設定",
       "textAttachmentPreview": {
@@ -21092,7 +21087,11 @@
         "turnDiffsTitle": "ターンの差分",
         "turnDiffsCopy": "各ターンで変更したファイルを行数とともに応答の下に表示します。",
         "turnDiffsSearchChangedFiles": "変更されたファイル",
-        "turnDiffsSearchEdits": "編集"
+        "turnDiffsSearchEdits": "編集",
+        "promptSuggestionsTitle": "プロンプトの提案",
+        "promptSuggestionsCopy": "Claude が返信すると、次のメッセージの候補が空のメッセージ欄に表示されます。Tab キーで入力できます。候補ごとに追加のリクエストが発生し、Claude の使用量に含まれます。",
+        "promptSuggestionsSearchNext": "次のプロンプト",
+        "promptSuggestionsSearchGhost": "ゴーストテキスト"
       },
       "voice": {
         "dictationLanguage": {

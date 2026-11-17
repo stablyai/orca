@@ -11,10 +11,10 @@ export type AuthoritativeWindowDouble = {
 
 // A guest the page stream keeps painting while it streams.
 export function createStreamedGuest(): RendererPublicationThrottleTarget &
-  Pick<Electron.WebContents, 'isLoading'> {
+  Pick<Electron.WebContents, 'isLoadingMainFrame'> {
   return {
     isDestroyed: () => false,
-    isLoading: () => false,
+    isLoadingMainFrame: () => false,
     setBackgroundThrottling: vi.fn(),
     capturePage: vi.fn(async () => null)
   }

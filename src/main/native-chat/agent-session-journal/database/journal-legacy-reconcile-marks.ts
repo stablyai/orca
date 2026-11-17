@@ -91,12 +91,18 @@ const COPY_SOURCE = journalLegacyCopySourceKey('')
  * the mapping founds them empty. Conversion here clears the mapping, so only those remain.
  */
 export function strandedCopies(db: Database.Database): [original: string, copy: string][] {
-  return db
-    .prepare(`SELECT m.value AS original, substr(m.key, ?3) AS copy FROM agent_session_store_meta m
-      JOIN journal_chat_state s ON s.session_id=substr(m.key, ?3) AND s.epoch IS NOT NULL
-      WHERE m.key>?1 AND m.key<?2`)
-    .all(COPY_SOURCE, prefixEnd(COPY_SOURCE), COPY_SOURCE.length + 1)
-    .map((row) => [String(row.original), String(row.copy)])
+  const mapped = db
+    .prepare('SELECT key, value FROM agent_session_store_meta WHERE key>? AND key<?')
+    .all(COPY_SOURCE, prefixEnd(COPY_SOURCE))
+  if (mapped.length === 0) {
+    return []
+  }
+  const founded = db.prepare(
+    'SELECT 1 FROM journal_chat_state WHERE session_id=? AND epoch IS NOT NULL'
+  )
+  return mapped
+    .map((row): [string, string] => [String(row.value), String(row.key).slice(COPY_SOURCE.length)])
+    .filter(([, copy]) => founded.get(copy) !== undefined)
 }
 
 /** An original chat whose current epoch saved no row has nothing to keep. */

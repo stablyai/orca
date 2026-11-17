@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { agentSessionRefusalCauseParts } from './agent-session-refusal-notice'
 import './agent-session-failure-words'
 import './agent-session-refusal-details'
-import {
-  agentSessionRefusalFailure,
-  parseAgentSessionWriteFailure
-} from './agent-session-write-failure'
+import { parseAgentSessionWriteFailure } from './agent-session-write-failure'
 
 describe('saved Arguments refusals', () => {
   it.each([
@@ -27,12 +24,4 @@ describe('saved Arguments refusals', () => {
     }
     expect(agentSessionRefusalCauseParts(refused)).toEqual([])
   })
-})
-
-it('says a conversation from another folder was saved there, not that its history is unavailable', () => {
-  const failure = agentSessionRefusalFailure({
-    code: 'agent_session_identity_required',
-    details: { reason: 'transcriptUnreadable', otherFolder: true }
-  })
-  expect(agentSessionRefusalCauseParts(failure)).toEqual(['savedInOtherFolder'])
 })

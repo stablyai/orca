@@ -64,18 +64,17 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = {
-    changed: !unchanged,
-    kept,
-    forced,
-    baselines: [],
-    compares: [],
-    failures: []
-  }
+  const pass: Pass = { kept, forced, baselines: [], compares: [], failures: [] }
   const source = openJournalLegacySource(sourcePath)
-  let complete: boolean
+  let complete = true
   try {
-    complete = absorbChats(source, db, pass, !(unchanged && kept))
+    if (unchanged) {
+      // The original wrote nothing since the copy, so each chat is as shown here.
+      pass.baselines = missingBaselines(source, db).filter(([id]) => !forced.has(id))
+      complete = forced.size === 0 || absorbChats(source, db, pass, false)
+    } else {
+      complete = absorbChats(source, db, pass, true)
+    }
   } finally {
     source.close()
   }
@@ -111,7 +110,6 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
-  changed: boolean
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
   /** Chats that get a copy whatever their revision shows. */
@@ -137,8 +135,31 @@ type Adoption = {
 }
 
 /**
+ * A baseline is the original's revision when it was read. A write changes the original's identity
+ * for good, so while it still matches the saved receipt, no write followed any baseline here.
+ */
+function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
+  return originalChatIds(source, 'any')
+    .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
+    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+}
+
+/** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
+function originalChatIds(source: Database.Database, order: 'saved' | 'any'): string[] {
+  return source
+    .prepare(
+      order === 'saved'
+        ? 'SELECT session_id FROM agent_session_records ORDER BY rowid'
+        : 'SELECT session_id FROM agent_session_records'
+    )
+    .all()
+    .map((row) => String(row.session_id))
+}
+
+/**
  * False only when a storage failure stopped the pass. A chat that fails otherwise is recorded with its
- * error and taken as absorbed, so one bad chat can't rerun the pass at every launch.
+ * error and taken as absorbed, so one bad chat can't rerun the pass at every launch. Without a walk,
+ * only chats due a copy are visited.
  */
 function absorbChats(
   source: Database.Database,
@@ -152,12 +173,7 @@ function absorbChats(
       insertClaims(db, sessionId, claims)
     }
   })
-  const chats = walk
-    ? source
-        .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
-        .all()
-        .map((row) => String(row.session_id))
-    : [...pass.forced.keys()]
+  const chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
   for (const id of chats) {
     let revision: string | undefined
     const added = adoption.added.length
@@ -232,13 +248,14 @@ function absorbChat(
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
-  // A file copied before revisions were kept has none to compare. An original as copied wrote
-  // nothing since; otherwise a chat this file cataloged but hasn't converted converts from the
-  // current original, so nothing is hidden. The copy cataloged every chat with history, so one it
-  // didn't is new, unless it has none: then it may have been deleted here.
+  // A file copied before revisions were kept has none to compare. A chat this file cataloged but
+  // hasn't converted converts from the current original, so nothing is hidden. The copy cataloged
+  // every chat with history, so one it didn't is new, unless it has none: then it may have been
+  // deleted here.
   if (
     shown === undefined &&
-    (!pass.changed || (!converted && (chat !== undefined || (!pass.kept && revision === 'null'))))
+    !converted &&
+    (chat !== undefined || (!pass.kept && revision === 'null'))
   ) {
     pass.baselines.push([id, revision])
     return
