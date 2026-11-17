@@ -8,6 +8,7 @@ import type {
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { resolveJournalWriterStoreMutation } from './journal-writer-store-mutation'
 import { markJournalChatForgotten } from './journal-forgotten-chats'
+import { absorbForgottenJournalLegacyChat } from './database/journal-legacy-compare'
 
 export function applyJournalWriterStoreEffect(
   db: Database.Database,
@@ -29,6 +30,7 @@ export function applyJournalWriterStoreEffect(
   const { input } = effect.mutation
   if (input.kind === 'command' && input.command.kind === 'forget-idle' && resolved.value === true) {
     markJournalChatForgotten(db, input.command.sessionId)
+    absorbForgottenJournalLegacyChat(db, input.command.sessionId)
   }
   return {
     kind: 'store',

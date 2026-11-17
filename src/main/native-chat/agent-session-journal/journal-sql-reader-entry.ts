@@ -15,7 +15,6 @@ import {
   openJournalLegacySource
 } from './database/journal-legacy-source'
 import { compareJournalLegacyChat } from './database/journal-legacy-compare'
-import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
 
@@ -122,16 +121,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       }
       case 'legacy-compare': {
         const source = openOriginal()
-        let result: Extract<JournalSqlReaderReply, { type: 'legacy-compare' }>['result'] = null
-        try {
-          result = source ? compareJournalLegacyChat(source, db, operation.sessionId) : null
-        } catch (error) {
-          // The chat's own failure is its answer; the caller records it rather than retrying.
-          if (isSqliteStorageFailure(error) || isSqliteCorruption(error)) {
-            throw error
-          }
-          result = { error: error instanceof Error ? error.message : String(error) }
-        }
+        const result = source ? compareJournalLegacyChat(source, db, operation.sessionId) : null
         reply({ type: 'legacy-compare', id, result })
         break
       }

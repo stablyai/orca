@@ -37,6 +37,8 @@ export class JournalSqlConversions {
       boundary,
       () => this.closed,
       (error, sessionId) => warnLegacy('comparing', sessionId, error)
+    ).catch((error: unknown) =>
+      console.warn('[agent-session-journal] comparing chats an older Orca saved stopped', error)
     )
   }
 

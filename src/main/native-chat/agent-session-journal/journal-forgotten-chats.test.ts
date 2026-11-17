@@ -149,6 +149,25 @@ it('deletes an idle chat with its tab, then every journal row in background page
   expect(count(db, "journal_chat_state WHERE session_id='kept-chat'")).toBe(1)
 })
 
+it('takes the revision a chat awaiting its older-Orca compare waited on, so no copy brings it back', () => {
+  const db = journal()
+  db.prepare(
+    `DELETE FROM agent_session_store_meta WHERE key='journal.legacy-revision:gone-chat'`
+  ).run()
+  db.prepare(
+    `INSERT INTO agent_session_store_meta VALUES('journal.legacy-compare:gone-chat','["legacy",4]')`
+  ).run()
+  expect(forget(db)).toBe(true)
+  expect(count(db, "agent_session_store_meta WHERE key LIKE 'journal.legacy-compare:%'")).toBe(0)
+  expect(
+    db
+      .prepare(
+        "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-revision:gone-chat'"
+      )
+      .get()?.value
+  ).toBe('["legacy",4]')
+})
+
 const refusals: {
   name: string
   gone?: Partial<AgentSessionRecord>

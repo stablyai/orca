@@ -1,4 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
+import { isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
 import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
 import {
@@ -31,20 +32,29 @@ export function pendingJournalLegacyCompares(
 /**
  * Whether this file already holds every item of the original chat. Runs on a reader, one chat per
  * idle step, and stops at the first item this chat never held. Its unit is the chat's restore,
- * the same one converting that chat takes; an interrupted compare restarts that chat.
+ * the same one converting that chat takes; an interrupted compare restarts that chat. Only the
+ * original's failures are the chat's answer; this file's own failures throw and stay pending.
  */
 export function compareJournalLegacyChat(
   source: Database.Database,
   db: Database.Database,
   sessionId: string
-): { revision: string; held: boolean } {
-  const imported = prepareJournalDomainImport(source, sessionId)
-  if (!imported) {
-    return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: true }
-  }
-  return {
-    revision: imported.sourceRevision ?? 'null',
-    held: heldEveryItem(db, sessionId, imported.pages)
+): { revision: string; held: boolean } | { error: string } {
+  const held = heldItems(db, sessionId)
+  try {
+    const imported = prepareJournalDomainImport(source, sessionId)
+    if (!imported) {
+      return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: true }
+    }
+    return {
+      revision: imported.sourceRevision ?? 'null',
+      held: heldEveryItem(held, imported.pages)
+    }
+  } catch (error) {
+    if (isSqliteStorageFailure(error)) {
+      throw error
+    }
+    return { error: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -75,12 +85,8 @@ export function settleJournalLegacyCompare(
  * Removing an item here leaves its tombstone, so every item this chat converted stays held, at
  * its converted revision or a later one.
  */
-function heldEveryItem(
-  db: Database.Database,
-  id: string,
-  pages: Iterable<JournalDomainImportPage>
-): boolean {
-  const held = new Map(
+function heldItems(db: Database.Database, id: string): Map<string, number> {
+  return new Map(
     db
       .prepare(`SELECT item_id AS id, MAX(revision) AS revision FROM (
           SELECT item_id, revision FROM journal_items WHERE session_id=?1
@@ -89,6 +95,12 @@ function heldEveryItem(
       .all(id, Number.MAX_SAFE_INTEGER)
       .map((row) => [String(row.id), Number(row.revision)])
   )
+}
+
+function heldEveryItem(
+  held: Map<string, number>,
+  pages: Iterable<JournalDomainImportPage>
+): boolean {
   for (const page of pages) {
     if (
       page.kind === 'items' &&
@@ -98,4 +110,18 @@ function heldEveryItem(
     }
   }
   return true
+}
+
+/**
+ * A forgotten chat takes the revision its compare or copy waited on, so an older Orca's unchanged
+ * copy never brings it back.
+ */
+export function absorbForgottenJournalLegacyChat(db: Database.Database, sessionId: string): void {
+  for (const prefix of [JOURNAL_LEGACY_COMPARE, JOURNAL_LEGACY_COPY_DUE]) {
+    const revision = readMeta(db, `${prefix}${sessionId}`)
+    if (revision !== undefined) {
+      deleteMeta(db, `${prefix}${sessionId}`)
+      recordJournalLegacyChatRevision(db, sessionId, revision)
+    }
+  }
 }

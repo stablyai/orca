@@ -1,6 +1,6 @@
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
-import { isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 /**
  * Converted chats an older Orca may have continued, with no revision to compare, are compared one
@@ -26,22 +26,37 @@ export async function compareJournalLegacyChatsWhenIdle(
       if (!(await boundary())) {
         return
       }
-      let result: Awaited<ReturnType<JournalSqlReaderPool['compareLegacyChat']>>
-      try {
-        result = await readers.compareLegacyChat(compare.sessionId)
-      } catch (error) {
-        report(error, compare.sessionId)
-        // Stopping or contention leaves it for the next launch; a chat whose compare took its
-        // reader down is absorbed with its error, never retried into the same crash.
-        if (stopped() || isSqliteStorageFailure(error)) {
-          continue
-        }
-        result = { error: error instanceof Error ? error.message : String(error) }
-      }
+      const result = await compareOnce(readers, compare.sessionId, stopped, report)
       if (result && ('error' in result || result.revision === compare.revision)) {
         await writer.maintain({ kind: 'legacy-compare-settle', ...compare, ...result })
       }
     }
     after = page.compares.at(-1)!.sessionId
+  }
+}
+
+/**
+ * This file's own failures, contention and stopping leave the compare for the next launch. A reader
+ * that exits gets one retry, since another request may have taken it down; a second exit is this
+ * chat's, absorbed with its error so it never reruns into the same crash.
+ */
+async function compareOnce(
+  readers: Pick<JournalSqlReaderPool, 'compareLegacyChat'>,
+  sessionId: string,
+  stopped: () => boolean,
+  report: (error: unknown, sessionId: string) => void
+): Promise<Awaited<ReturnType<JournalSqlReaderPool['compareLegacyChat']>>> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await readers.compareLegacyChat(sessionId)
+    } catch (error) {
+      report(error, sessionId)
+      if (stopped() || isSqliteStorageFailure(error) || isSqliteCorruption(error)) {
+        return null
+      }
+      if (attempt > 0) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    }
   }
 }
