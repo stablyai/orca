@@ -42,7 +42,8 @@ function userComposingError(): BrowserError {
 
 export async function guardPaneFocusForAgentInput(
   renderer: WebContents,
-  browserPageId: string
+  browserPageId: string,
+  guestWebContentsId: number
 ): Promise<() => void> {
   const token = randomUUID()
   const startedAt = performance.now()
@@ -65,7 +66,12 @@ export async function guardPaneFocusForAgentInput(
     }
     const timer = setTimeout(() => finish('unavailable'), PANE_READY_TIMEOUT_MS)
     ipcMain.on(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL, onReady)
-    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, { browserPageId, token, active: true })
+    renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, {
+      browserPageId,
+      guestWebContentsId,
+      token,
+      active: true
+    })
   })
   let released = false
   const release = (): void => {
@@ -74,7 +80,12 @@ export async function guardPaneFocusForAgentInput(
     }
     released = true
     if (!renderer.isDestroyed()) {
-      renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, { browserPageId, token, active: false })
+      renderer.send(AGENT_INPUT_FOCUS_GUARD_CHANNEL, {
+        browserPageId,
+        guestWebContentsId,
+        token,
+        active: false
+      })
     }
   }
   if (answer !== 'ready') {

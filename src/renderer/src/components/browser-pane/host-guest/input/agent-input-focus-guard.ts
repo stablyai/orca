@@ -1,3 +1,5 @@
+import { findAttachedBrowserClientPageWebview } from '../client-pages/browser-client-page-renderer-installation'
+import { readBrowserGuestId } from '../metadata/browser-guest-metadata-cache'
 import { webviewRegistry } from '../webview-registry'
 
 // Main brackets agent guest input; restore the user’s element afterward because guest/CDP focus would otherwise retain their keyboard.
@@ -73,17 +75,33 @@ export function watchUserComposition(): () => void {
 /** Refuses the input while the user composes; otherwise holds their focus until the input ends. */
 export function beginAgentInputFocusGuard(
   browserPageId: string,
+  guestWebContentsId: number,
   token: string
 ): 'ready' | 'composing' {
   if (isUserComposing()) {
     return 'composing'
   }
-  guardUserFocus(browserPageId, token)
+  guardUserFocus(browserPageId, guestWebContentsId, token)
   return 'ready'
 }
 
-function guardUserFocus(browserPageId: string, token: string): void {
-  const webview = webviewRegistry.get(browserPageId)
+// A parked pane webview or a staged This-device page can share the page id of the guest main drives.
+function findDrivenWebview(
+  browserPageId: string,
+  guestWebContentsId: number
+): Electron.WebviewTag | null {
+  const paneWebview = webviewRegistry.get(browserPageId)
+  if (paneWebview) {
+    const paneGuestId = readBrowserGuestId(paneWebview)
+    if (paneGuestId === null || paneGuestId === guestWebContentsId) {
+      return paneWebview
+    }
+  }
+  return findAttachedBrowserClientPageWebview(browserPageId, guestWebContentsId)
+}
+
+function guardUserFocus(browserPageId: string, guestWebContentsId: number, token: string): void {
+  const webview = findDrivenWebview(browserPageId, guestWebContentsId)
   if (!webview) {
     return
   }

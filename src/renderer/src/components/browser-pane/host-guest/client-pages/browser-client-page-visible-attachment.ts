@@ -26,6 +26,23 @@ export function findBrowserClientRetainedPageForAttachment(
   return undefined
 }
 
+export function findBrowserClientRetainedAttachedWebview(
+  pages: Map<string, RetainedPage>,
+  browserPageId: string,
+  webContentsId: number
+): Electron.WebviewTag | null {
+  for (const page of pages.values()) {
+    if (
+      page.status === 'attached' &&
+      page.identity.browserPageId === browserPageId &&
+      page.webContentsId === webContentsId
+    ) {
+      return page.webview
+    }
+  }
+  return null
+}
+
 export function attachBrowserClientRetainedPage(
   page: RetainedPage | undefined,
   pages: Map<string, RetainedPage>,

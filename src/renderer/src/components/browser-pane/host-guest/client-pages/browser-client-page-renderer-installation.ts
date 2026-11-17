@@ -12,6 +12,7 @@ type RendererPageRegistry = {
     container: HTMLElement
   ): BrowserClientPageVisibleAttachment
   dispose(): void
+  findAttachedWebview(browserPageId: string, webContentsId: number): Electron.WebviewTag | null
   getMemoryProfile(): BrowserClientPageRendererMemoryProfile
   mountPage(page: BrowserClientPageRendererRequest['page']): Promise<{ webContentsId: number }>
   rekeyPage(
@@ -28,6 +29,13 @@ export function attachBrowserClientPageToViewport(
   container: HTMLElement
 ): BrowserClientPageVisibleAttachment | null {
   return activeRendererPageRegistry?.attachPage?.(page, container) ?? null
+}
+
+export function findAttachedBrowserClientPageWebview(
+  browserPageId: string,
+  webContentsId: number
+): Electron.WebviewTag | null {
+  return activeRendererPageRegistry?.findAttachedWebview(browserPageId, webContentsId) ?? null
 }
 
 type RendererRequestSubscriber = (
