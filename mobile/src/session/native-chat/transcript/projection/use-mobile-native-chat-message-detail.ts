@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useReducer } from 'react'
 import {
+  createStreamedTextRowProjection,
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
   isTextBlock,
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -23,12 +28,13 @@ export function useMobileNativeChatMessageDetail(
   const cache = useMemo(
     () => ({
       live: true,
-      raw: new Set<NativeChatMessage>(),
+      current: messages,
       entries: new Map<NativeChatMessage, NativeChatMessage>()
     }),
     [client, sessionId]
   )
   const [revision, refresh] = useReducer((revision: number) => revision + 1, 0)
+  const base = rowsBesideStreamedText(messages)
   useEffect(() => {
     cache.live = true
     return () => {
@@ -37,20 +43,35 @@ export function useMobileNativeChatMessageDetail(
     }
   }, [cache])
   useEffect(() => {
-    cache.raw = new Set(messages)
+    const retained = new Set(base)
     for (const raw of cache.entries.keys()) {
-      if (!cache.raw.has(raw)) {
+      if (!retained.has(raw)) {
         cache.entries.delete(raw)
       }
     }
-  }, [cache, messages])
-  const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages])
-  const raw = (id: string): NativeChatMessage | undefined => byId.get(id)
+  }, [cache, base])
+  const byId = useMemo(() => new Map(base.map((message, index) => [message.id, index])), [base])
+  const raw = (id: string): NativeChatMessage | undefined => {
+    const index = byId.get(id)
+    return index === undefined ? undefined : messages[index]
+  }
+  const project = useMemo(
+    () =>
+      createStreamedTextRowProjection(
+        (message: NativeChatMessage) => cache.entries.get(message) ?? message
+      ),
+    [cache, revision]
+  )
+  const changed = streamedTextReplacementIndexes(base, messages) ?? []
+  for (const index of changed) {
+    const prior = cache.current[index]
+    if (prior && prior !== messages[index]) {
+      cache.entries.delete(prior)
+    }
+  }
+  cache.current = messages
   return {
-    messages: useMemo(
-      () => messages.map((message) => cache.entries.get(message) ?? message),
-      [cache, messages, revision]
-    ),
+    messages: project(messages),
     detail:
       source === null
         ? null
@@ -77,7 +98,7 @@ export function useMobileNativeChatMessageDetail(
               if (!projected?.blocks.some(isTextBlock)) {
                 throw new Error('Message unavailable')
               }
-              if (cache.live && cache.raw.has(original)) {
+              if (cache.live && cache.current[byId.get(id) ?? -1] === original) {
                 cache.entries.set(original, projected)
                 refresh()
               }

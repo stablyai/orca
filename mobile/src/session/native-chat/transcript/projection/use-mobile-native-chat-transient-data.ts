@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import {
+  noteStreamedTextRevision,
+  streamedTextReplacementIndexes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
   buildMobileNativeChatTransientData,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
@@ -34,6 +38,24 @@ export function projectMobileNativeChatTransientData(
   input: Input,
   before?: MobileNativeChatTransientProjection
 ): MobileNativeChatTransientProjection {
+  const replacements = before && streamedTextReplacementIndexes(before.input.folded, input.folded)
+  if (
+    before &&
+    replacements &&
+    before.input.streaming === input.streaming &&
+    before.input.pending === input.pending &&
+    before.input.imagePreviewsByMessageId === input.imagePreviewsByMessageId
+  ) {
+    if (replacements.length === 0) {
+      return { ...before, input }
+    }
+    const data = before.data.slice()
+    for (const index of replacements) {
+      data[index] = input.folded[index]!
+    }
+    noteStreamedTextRevision(data, before.data, replacements)
+    return { ...before, input, data }
+  }
   const previews = new Map<NativeChatMessage, Preview>()
   const folded = input.folded.map((source) => {
     const urls = input.imagePreviewsByMessageId?.[source.id]

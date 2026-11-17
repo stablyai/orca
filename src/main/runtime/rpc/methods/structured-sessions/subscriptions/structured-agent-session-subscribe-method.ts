@@ -33,6 +33,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
       projectLiveItem: appends?.item,
+      hasTextAppendBase: appends?.hasBase,
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
       id: subscriptionId,

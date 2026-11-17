@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { withoutPullRequestEventMessages } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-pull-request-event'
+import { isPullRequestEventMessage } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-pull-request-event'
+import { createStreamedTextRowProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { projectMobileNativeChatMessages } from './mobile-native-chat-projection'
 
 /** The rows the chat draws. CI result lines leave after projection, so a setting flip rebuilds nothing. */
@@ -12,9 +13,16 @@ export function useMobileNativeChatProjection(
   showsCiResultLines: boolean
 ): NativeChatMessage[] {
   const rows = useProjectedRows(messages, agent, scope)
+  const hideCiRows = useMemo(
+    () =>
+      createStreamedTextRowProjection((row: NativeChatMessage) =>
+        isPullRequestEventMessage(row) ? null : row
+      ),
+    []
+  )
   return useMemo(
-    () => (showsCiResultLines ? rows : withoutPullRequestEventMessages(rows)),
-    [rows, showsCiResultLines]
+    () => (showsCiResultLines ? rows : hideCiRows(rows)),
+    [rows, showsCiResultLines, hideCiRows]
   )
 }
 

@@ -18,6 +18,7 @@ import {
   type MobileNativeChatProjectionSource
 } from './mobile-native-chat-projection-sources'
 import { projectMobileNativeChatTail } from './mobile-native-chat-projection-tail'
+import { projectMobileNativeChatText } from './mobile-native-chat-projection-text'
 import {
   buildNativeChatFoldUnits,
   type NativeChatFoldUnit as Unit
@@ -42,6 +43,10 @@ export function projectMobileNativeChatMessages(
 ): MobileNativeChatProjection {
   if (previous && (previous.agent !== agent || previous.sources.size !== previous.input.length)) {
     previous = undefined
+  }
+  const text = previous && projectMobileNativeChatText(input, previous)
+  if (text) {
+    return text
   }
   const tail = previous && projectMobileNativeChatTail(input, agent, previous)
   if (tail) {

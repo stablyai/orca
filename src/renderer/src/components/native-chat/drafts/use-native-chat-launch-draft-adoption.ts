@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
@@ -30,7 +31,7 @@ export function useNativeChatLaunchDraftSignal(args: {
   // Keep the signal pane-agnostic so losing ownership after a split cannot strand an adopted copy.
   const launchDraft = useAppStore((s) => s.nativeChatLaunchDraftByTabId[args.terminalTabId] ?? null)
   const paneLaunchDraft = launchDraft?.agent === args.agent ? launchDraft : null
-  const messages = args.session.messages
+  const messages = rowsBesideStreamedText(args.session.messages)
   // In-flight or awaiting messages may not be this session’s history; defer baseline capture as mobile does, and never re-offer an already-submitted prefill.
   const transcriptLoading = isNativeChatTranscriptUnsettled(args.session.readPhase)
   // Capture settled user turns to survive host clock skew; an in-flight baseline would mistake backfill for submission.

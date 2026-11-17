@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatComposerHandle } from '../../../composer/native-chat-composer-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { returnMessageToComposer } from '../../structured/delivery/structured-agent-session-message-hand-back'
@@ -41,7 +42,7 @@ export function useNativeChatPendingDelivery(args: {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { paneKey, agent, composerRef, workingEpoch } = args
-  const { messages } = args.session
+  const messages = rowsBesideStreamedText(args.session.messages)
   const sessionId = args.session.sessionId ?? null
   // Without a sessionId, ready is an unread placeholder.
   const readEmptySessionId =

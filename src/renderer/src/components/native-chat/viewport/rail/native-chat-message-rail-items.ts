@@ -6,6 +6,10 @@ import {
 } from '../../../../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import {
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** Ticks up to this count sit at the roomy pitch; past it they pack tight. */
 export const NATIVE_CHAT_RAIL_ROOMY_TICKS = 20
@@ -64,6 +68,89 @@ export function nativeChatRailReplyPreview(
       ? undefined
       : nativeChatTurnReplyPreviews(messages, turnKeys, turnKey).get(turnKey)
   return loaded ?? item?.reply ?? ''
+}
+
+/** An open preview follows revised reply rows without searching loaded history each frame. */
+export function createNativeChatRailReplyPreview() {
+  let held:
+    | {
+        base: readonly NativeChatMessage[]
+        keys: NativeChatRailTurnRows['turnKeys']
+        items: readonly NativeChatRailItem[]
+        id: string
+        turnKey: string | undefined
+        indexes: number[]
+        previews: Map<number, string>
+        messages: readonly NativeChatMessage[]
+        newest: number | undefined
+        fallback: string
+      }
+    | undefined
+  return (
+    rows: NativeChatRailTurnRows,
+    items: readonly NativeChatRailItem[],
+    id: string
+  ): string => {
+    const { messages, turnKeys } = rows
+    const base = rowsBesideStreamedText(messages)
+    if (
+      !held ||
+      held.base !== base ||
+      held.keys !== turnKeys ||
+      held.items !== items ||
+      held.id !== id
+    ) {
+      const row = base.findIndex((message) => message.id === id)
+      const item = items.find((candidate) => candidate.id === id)
+      const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
+      const indexes: number[] = []
+      base.forEach((message, index) => {
+        if (turnKey !== undefined && turnKeys[index] === turnKey && message.role === 'assistant') {
+          indexes.push(index)
+        }
+      })
+      held = {
+        base,
+        keys: turnKeys,
+        items,
+        id,
+        turnKey,
+        indexes,
+        previews: new Map(),
+        messages: base,
+        newest: undefined,
+        fallback: item?.reply ?? ''
+      }
+      for (const index of indexes) {
+        const preview = nativeChatTurnReplyPreviews([base[index]!], [turnKey]).get(turnKey!)
+        if (preview) {
+          held.previews.set(index, preview)
+          held.newest = index
+        }
+      }
+    }
+    for (const index of streamedTextReplacementIndexes(held.messages, messages) ?? []) {
+      if (turnKeys[index] !== held.turnKey || messages[index]!.role !== 'assistant') {
+        continue
+      }
+      const preview = nativeChatTurnReplyPreviews([messages[index]!], [held.turnKey]).get(
+        held.turnKey!
+      )
+      if (preview) {
+        held.previews.set(index, preview)
+        if (held.newest === undefined || index > held.newest) {
+          held.newest = index
+        }
+      } else {
+        held.previews.delete(index)
+        if (held.newest === index) {
+          held.newest = held.indexes.findLast((at) => held!.previews.has(at))
+        }
+      }
+    }
+    held.messages = messages
+    return held.newest === undefined ? held.fallback : held.previews.get(held.newest)!
+  }
 }
 
 export function buildNativeChatRailItems(

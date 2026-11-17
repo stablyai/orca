@@ -30,17 +30,18 @@ export function createLiveTextPublication(
   ) => StructuredAgentSessionSinkAdmission,
   target: () => StructuredAgentSessionEventTarget | null,
   read: () => readonly AgentJournalRenderItem[],
-  interested = () => target() !== null && target()?.hasLiveTextSubscribers?.() !== false
-): () => StructuredAgentSessionSinkAdmission {
-  return () =>
-    !interested()
+  interested = (appendOnly: boolean) =>
+    target() !== null && target()?.hasLiveTextSubscribers?.(appendOnly) !== false
+): (appendOnly?: boolean) => StructuredAgentSessionSinkAdmission {
+  return (appendOnly = false) =>
+    !interested(appendOnly)
       ? { accepted: true }
       : submit({
           bytes: 1,
-          publicationKey: 'live-text',
+          publicationKey: `live-text:${appendOnly}`,
           run: (bound) => {
             if (target() === bound) {
-              bound.publishLiveText?.(read)
+              bound.publishLiveText?.(read, appendOnly)
             }
           }
         })

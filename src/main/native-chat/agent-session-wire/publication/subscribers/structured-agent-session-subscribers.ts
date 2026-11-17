@@ -7,10 +7,7 @@ import type {
   AgentSessionSubscribersHooks
 } from './agent-session-subscribe-input'
 
-import type {
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnActivity
-} from '../../../../../shared/agent-session/agent-session-wire'
+import type * as wire from '../../../../../shared/agent-session/agent-session-wire'
 import {
   emitSubscriberFrame,
   subscriberCommandsChanged
@@ -47,7 +44,7 @@ export class AgentSessionSubscribers {
     (subscriber, journal) =>
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
-  private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  private readonly activityBySession = new Map<string, wire.AgentSessionTurnActivity>()
   readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
     subscribers: (sessionId) => this.subscribers(sessionId),
     send: (subscriber, event) => this.enqueue(subscriber, () => this.emit(subscriber, event())),
@@ -57,8 +54,10 @@ export class AgentSessionSubscribers {
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
-  hasLiveTextSubscribers = (sessionId: string): boolean =>
-    this.subscribers(sessionId).some((subscriber) => subscriber.projectLiveItem !== undefined)
+  hasLiveTextSubscribers = (sessionId: string, appendOnly = false): boolean =>
+    this.subscribers(sessionId).some(
+      (subscriber) => !appendOnly || subscriber.projectLiveItem !== undefined
+    )
 
   subscriberCountForTests = (sessionId: string): number => this.bySession.get(sessionId)?.size ?? 0
 
@@ -122,7 +121,7 @@ export class AgentSessionSubscribers {
   publish(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: wire.AgentSessionTurnActivity | null
   ): void {
     rememberLatestPerSession(this.activityBySession, sessionId, activity)
     this.deliverFrames(sessionId, journal, activity)
@@ -136,10 +135,10 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     fence: number,
     read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
+    appendOnly = false,
     targets = this.subscribers(sessionId)
   ): void => {
-    // Released readers keep the durable cadence; only append readers opt into live windows.
-    for (const subscriber of targets.filter((target) => target.projectLiveItem)) {
+    for (const subscriber of targets.filter((target) => !appendOnly || target.projectLiveItem)) {
       // Read at emission, so text never trails a durable frame queued ahead of it.
       this.enqueue(subscriber, () =>
         publishSubscriberLiveText(this.deliveryPort(), {
@@ -147,6 +146,7 @@ export class AgentSessionSubscribers {
           journal,
           fence,
           items: typeof read === 'function' ? read() : read,
+          appendOnly,
           subscribers: [subscriber],
           hostNow: this.now()
         })
@@ -164,7 +164,7 @@ export class AgentSessionSubscribers {
   deliverFrames(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null,
+    activity?: wire.AgentSessionTurnActivity | null,
     queueChanged = true
   ): void {
     const hostNow = this.now()
@@ -267,7 +267,7 @@ export class AgentSessionSubscribers {
   /** Dead transports must not obscure durable mutation outcomes or poison later publications. */
   private async emit(
     subscriber: Subscriber,
-    event: AgentSessionSubscribeEvent,
+    event: wire.AgentSessionSubscribeEvent,
     options?: Parameters<SubscriberDeliveryPort['emit']>[2],
     hooks = this.hooks
   ): Promise<void> {

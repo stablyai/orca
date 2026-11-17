@@ -9,7 +9,7 @@ import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
   NATIVE_CHAT_RAIL_ROOMY_TICKS,
-  nativeChatRailReplyPreview,
+  createNativeChatRailReplyPreview,
   nativeChatRailTickCapacity,
   selectNativeChatRailTicks,
   type NativeChatRailItem,
@@ -182,8 +182,8 @@ export function useNativeChatMessageRail({
     },
     [scheduleRead]
   )
-  const previewReply =
-    previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)
+  const replyPreview = useMemo(() => createNativeChatRailReplyPreview(), [])
+  const previewReply = previewId === null ? '' : replyPreview(turnRows, items, previewId)
 
   return useMemo(
     () => ({

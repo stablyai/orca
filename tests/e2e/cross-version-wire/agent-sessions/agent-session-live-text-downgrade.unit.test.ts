@@ -28,14 +28,19 @@ const clientModules = prepareReleaseFixtures(releases, async (ref) => {
 })
 
 // Exercise the registered RPC method and publisher, not a hand-written fallback encoder.
-test.each([
-  { label: 'older desktop', kind: 'runtime' as const, release: releases[0]!, append: false },
-  { label: 'older phone', kind: 'mobile' as const, release: releases[1]!, append: false },
-  { label: 'current desktop', kind: 'runtime' as const, release: null, append: true },
-  { label: 'current phone', kind: 'mobile' as const, release: null, append: true }
-])(
-  '$label preserves text with negotiated live appends or durable whole-item fallback',
-  async ({ kind, release, append }) => {
+test.each(
+  [
+    { label: 'older desktop', kind: 'runtime' as const, release: releases[0]!, append: false },
+    { label: 'older phone', kind: 'mobile' as const, release: releases[1]!, append: false },
+    { label: 'current desktop', kind: 'runtime' as const, release: null, append: true },
+    { label: 'current phone', kind: 'mobile' as const, release: null, append: true }
+  ].flatMap((client) => [
+    { ...client, appendOnly: true },
+    { ...client, appendOnly: false }
+  ])
+)(
+  '$label preserves text (append-only lane=$appendOnly)',
+  async ({ kind, release, append, appendOnly }) => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-live-text-wire-'))
     const journals = createTrackedJournalOpener()
     let close = () => {}
@@ -128,8 +133,8 @@ test.each([
       for (const text of ['hello world', 'hello world!']) {
         delivered = Promise.withResolvers<AgentSessionSubscribeEvent>()
         live = [liveRow(text)]
-        subscribers.publishLiveText('session-1', journal, 1, () => live)
-        if (!append) {
+        subscribers.publishLiveText('session-1', journal, 1, () => live, appendOnly)
+        if (!append && appendOnly) {
           continue
         }
         const event = await delivered.promise
@@ -144,7 +149,7 @@ test.each([
           }
         }
       }
-      if (!append) {
+      if (!append && appendOnly) {
         // Legacy readers get no below-growth-gate frames; the next durable save remains whole.
         delivered = Promise.withResolvers<AgentSessionSubscribeEvent>()
         await journal.appendItem(

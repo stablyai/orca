@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatDockedTaskList } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-state'
 import { NativeChatTaskList } from './NativeChatTaskList'
@@ -8,6 +9,7 @@ export function NativeChatDockedTaskList({
 }: {
   messages: readonly NativeChatMessage[]
 }): React.JSX.Element | null {
+  messages = rowsBesideStreamedText(messages)
   const list = useMemo(() => nativeChatDockedTaskList(messages), [messages])
   if (!list) {
     return null

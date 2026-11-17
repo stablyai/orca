@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { render, renderHook } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -15,6 +15,36 @@ import { useNativeChatTurnDiffs } from '../../tools/diffs/use-native-chat-turn-d
 import { createNativeChatWaitingSlotProjection } from './native-chat-transcript-slot-selection'
 import { createNativeChatCiRowProjection } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { createNativeChatStreamedTranscript } from './native-chat-streamed-transcript'
+import { NativeChatDockedTaskList } from '../../tools/tasks/NativeChatDockedTaskList'
+import { NativeChatTranscriptItems } from '../../viewport/virtualization/NativeChatTranscriptItems'
+import { createNativeChatRailReplyPreview } from '../../viewport/rail/native-chat-message-rail-items'
+import type { NativeChatTranscriptWindow } from '../../viewport/virtualization/use-native-chat-transcript-window'
+
+const noop = () => {}
+const emptyWindow: NativeChatTranscriptWindow = {
+  virtualItems: [],
+  totalSize: 0,
+  scrollMargin: 0,
+  sizerRef: noop,
+  measureRow: noop,
+  alignToViewportTop: noop,
+  isAlignPending: () => false,
+  cancelAlign: noop,
+  releaseEndPin: noop,
+  scrollToEnd: noop,
+  restoreScrollOffset: noop,
+  consumeProgrammaticScroll: () => false,
+  reconcileReaderScroll: noop
+}
+const context = {
+  expandSignal: false,
+  revealedDiff: null,
+  taskListPredecessors: new Map(),
+  expandedTurnIds: new Set<string>(),
+  onToggleExpandedTurn: noop,
+  onScrollMessageToTop: noop,
+  onRevealDiff: noop
+}
 
 it.each([128, 1280])(
   'touches only changed content through the desktop transcript at %s rows',
@@ -79,6 +109,7 @@ it.each([128, 1280])(
           line: { tailRow: 'activity', thinking: false }
         })
         return {
+          messages: shown,
           ...split(transcript.slots, items, false, submissions, { latestTurn, working: true }),
           turnKeys: turns.turnKeys,
           turnDiffs
@@ -87,11 +118,44 @@ it.each([128, 1280])(
       { initialProps: { messages } }
     )
     const before = result.current
+    const preview = createNativeChatRailReplyPreview()
+    const railItems = [{ id: 'row-0', slotIndex: 0, text: 'words', hasImages: false }]
+    expect(preview({ messages, turnKeys: before.turnKeys }, railItems, 'row-0')).toBe('words')
+    const loadedMessageIds = new Set(messages.map((message) => message.id))
+    for (const slot of before.slots) {
+      if (slot.kind === 'message') {
+        const message = slot.message
+        Object.defineProperty(slot, 'message', {
+          enumerable: true,
+          get: () => {
+            reads++
+            return message
+          }
+        })
+      }
+    }
+    const children = () => (
+      <>
+        <NativeChatDockedTaskList messages={result.current.messages} />
+        <NativeChatTranscriptItems
+          slots={result.current.slots}
+          loadedMessageIds={loadedMessageIds}
+          context={context}
+          window={emptyWindow}
+          forwardGesture={noop}
+        />
+      </>
+    )
+    const mounted = render(children())
     reads = 0
     const next = messages.slice()
     next[size - 1] = row(size - 1, 'words extended')
     noteStreamedTextRevision(next, messages, [size - 1])
     rerender({ messages: next })
+    mounted.rerender(children())
+    expect(preview({ messages: next, turnKeys: result.current.turnKeys }, railItems, 'row-0')).toBe(
+      'words extended'
+    )
     expect(reads).toBeLessThan(80)
     expect(result.current.slots.at(-1)).toMatchObject({
       message: { blocks: [{ type: 'text', text: 'words extended' }] }
@@ -100,6 +164,7 @@ it.each([128, 1280])(
     expect(result.current.turnKeys).toBe(before.turnKeys)
     expect(result.current.turnDiffs).toBe(before.turnDiffs)
     expect(rowsBesideStreamedText(result.current.slots)).toBe(rowsBesideStreamedText(before.slots))
+    mounted.unmount()
   }
 )
 
@@ -128,7 +193,10 @@ it('keeps generated previews and response-control height when completed answer w
     turnKeys: ['turn', 'turn'],
     liveTurnKey: undefined,
     receipts: new Map(),
-    turnStatuses: { active: null, completedByTurn: { turn: { workedSeconds: 1 } } },
+    turnStatuses: {
+      active: null,
+      completedByTurn: { turn: { workedSeconds: 1, startedAt: 1, thinking: false } }
+    },
     expandedTurnKeys: new Set(['turn']),
     turnDiffs: new Map(),
     isWorking: false,

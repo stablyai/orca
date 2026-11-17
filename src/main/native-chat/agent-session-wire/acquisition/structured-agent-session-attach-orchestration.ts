@@ -259,10 +259,17 @@ async function runAttachUnderAbort(
           publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
           publishPromptSuggestion: (suggestion) =>
             context.subscribers.promptSuggestions.publish(sessionId, suggestion),
-          hasLiveTextSubscribers: () => context.subscribers.hasLiveTextSubscribers(sessionId),
-          publishLiveText: (read) => {
+          hasLiveTextSubscribers: (appendOnly) =>
+            context.subscribers.hasLiveTextSubscribers(sessionId, appendOnly),
+          publishLiveText: (read, appendOnly) => {
             if (context.sessions.get(sessionId)?.journal === attached.journal) {
-              context.subscribers.publishLiveText(sessionId, attached.journal, fence, read)
+              context.subscribers.publishLiveText(
+                sessionId,
+                attached.journal,
+                fence,
+                read,
+                appendOnly
+              )
             }
           },
           observeSettledTurns: (listener) =>

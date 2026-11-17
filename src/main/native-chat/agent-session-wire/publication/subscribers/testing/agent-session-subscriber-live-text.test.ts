@@ -23,6 +23,129 @@ const row = (itemId: string, revision: number, text: string): AgentJournalRender
   body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
 })
 
+it.each([
+  { count: 8, tool: false },
+  { count: 9, tool: false },
+  { count: 12, tool: false },
+  { count: 16, tool: true },
+  { count: 17, tool: true }
+])(
+  'decodes every live frame with $count concurrent replies (tool append=$tool)',
+  async ({ count, tool }) => {
+    const rules = tool ? { toolOutputAppend: 1 as const } : {}
+    const limit = tool ? 16 : 8
+    const journal = await journals.open({
+      stateDirectory: fixture.root,
+      identity: {
+        sessionId: 'session',
+        workspaceId: 'workspace',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread')
+      }
+    })
+    const identities = Array.from({ length: count }, (_, ordinal) => ({
+      provider: 'codex' as const,
+      threadId: 'thread',
+      turnId: 'turn',
+      ordinal
+    }))
+    for (const identity of identities) {
+      await journal.appendItem(identity, row('', 1, 'x').body, {
+        fence: 1,
+        turnScope: { kind: 'thread' }
+      })
+    }
+    let saved = await readTestJournalItems(journal)
+    const tokens = saved.map(() => ({}))
+    let length = 1
+    let cachedLength = -1
+    let cached: AgentJournalRenderItem[] = []
+    const read = () => {
+      if (cachedLength === length) {
+        return cached
+      }
+      cachedLength = length
+      cached = saved.map((item, index) => {
+        const next = { ...item, body: row('', 1, 'x'.repeat(length)).body }
+        noteAgentSessionTextAppendSource(next, {
+          identity: tokens[index]!,
+          length,
+          jsonBytes: length,
+          suffix: (from) => 'x'.repeat(length - from)
+        })
+        return next
+      })
+      return cached
+    }
+    const subscribers = new AgentSessionSubscribers({ readLiveText: read })
+    const reader = createAgentSessionTextAppendReader(rules)
+    const frames: AgentSessionSubscribeEvent[] = []
+    let delivered = Promise.withResolvers<void>()
+    const send = sendingTextAppends((wire) => {
+      expect(reader(wire)).not.toBeNull()
+      frames.push(wire)
+      delivered.resolve()
+    }, rules)
+    const close = subscribers.open({
+      id: 'client',
+      sessionId: 'session',
+      journal,
+      fence: 1,
+      projectLiveItem: send.item,
+      hasTextAppendBase: send.hasBase,
+      emit: send
+    })
+    await delivered.promise
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    frames.length = 0
+    for (let index = 0; index < 20; index++) {
+      length += 200
+      delivered = Promise.withResolvers<void>()
+      subscribers.publishLiveText('session', journal, 1, read, true)
+      await delivered.promise
+    }
+    expect(frames).toHaveLength(20)
+    for (const event of frames) {
+      expect(event.type).toBe('batch')
+      if (event.type === 'batch') {
+        expect(event.batch.items.length).toBe(Math.min(count, limit))
+        expect(event.batch.items.every((item) => 'textAppend' in item)).toBe(true)
+        expect(JSON.stringify(event).length).toBeLessThan(10000)
+      }
+    }
+    delivered = Promise.withResolvers<void>()
+    await journal.appendItem(identities[0]!, row('', 1, 'x'.repeat(length)).body, {
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })
+    saved = await readTestJournalItems(journal)
+    cachedLength = -1
+    subscribers.publish('session', journal)
+    await delivered.promise
+    expect(send.hasBase(saved[0]!.itemId)).toBe(true)
+    length += 1
+    delivered = Promise.withResolvers<void>()
+    subscribers.publishLiveText('session', journal, 1, read, true)
+    await delivered.promise
+    // A newly admitted whole row precedes retained bases in source order. Sending it first
+    // would evict a base needed by a later suffix in this same frame.
+    saved = [{ ...saved[0]!, itemId: 'new-reply' }, ...saved]
+    tokens.unshift({})
+    length += 1
+    delivered = Promise.withResolvers<void>()
+    subscribers.publishLiveText('session', journal, 1, read, true)
+    await delivered.promise
+    const mixed = frames.at(-1)!
+    expect(mixed.type).toBe('batch')
+    if (mixed.type === 'batch') {
+      expect(mixed.batch.items.at(-1)!.itemId).toBe('new-reply')
+      expect(mixed.batch.items.slice(0, -1).every((item) => 'textAppend' in item)).toBe(true)
+    }
+    close()
+  }
+)
+
 it('gives a durable row the newer live text of its own revision only', () => {
   const durable = [row('reply', 2, 'saved'), row('other', 1, 'kept')]
   const items = withSubscriberLiveText(

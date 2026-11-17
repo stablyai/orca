@@ -51,7 +51,7 @@ export class StructuredAgentSessionLiveTextRows {
   }
 
   publish(): void {
-    this.sink.publishLiveText?.()
+    this.sink.publishLiveText?.(true)
   }
 
   forget(key: string): void {

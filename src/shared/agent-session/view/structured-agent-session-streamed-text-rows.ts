@@ -121,7 +121,11 @@ export function createStreamedTextRowProjection<T, U>(
   project: (row: T, index: number) => U | null
 ) {
   let held: { base: readonly T[]; rows: U[]; at: Map<number, number> } | null = null
+  let latest: { input: readonly T[]; rows: U[] } | undefined
   return (items: readonly T[]): U[] => {
+    if (latest?.input === items) {
+      return latest.rows
+    }
     const base = rowsBesideStreamedText(items)
     if (held?.base !== base) {
       const rows: U[] = []
@@ -137,6 +141,7 @@ export function createStreamedTextRowProjection<T, U>(
     }
     const indexes = streamedTextReplacementIndexes(base, items) ?? []
     if (!indexes.length) {
+      latest = { input: items, rows: held.rows }
       return held.rows
     }
     const rows = held.rows.slice()
@@ -150,6 +155,7 @@ export function createStreamedTextRowProjection<T, U>(
       }
     }
     noteStreamedTextRevision(rows, held.rows, changed)
+    latest = { input: items, rows }
     return rows
   }
 }

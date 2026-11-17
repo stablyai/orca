@@ -153,6 +153,7 @@ export async function publishSubscriberLiveText(
     items: readonly AgentJournalRenderItem[]
     subscribers: readonly Subscriber[]
     hostNow: number
+    appendOnly?: boolean
   }
 ): Promise<void> {
   const { sessionId, journal, fence, items, subscribers, hostNow } = input
@@ -170,13 +171,25 @@ export async function publishSubscriberLiveText(
     const sent = subscriber.liveSent
     // Live rows get the same per-row bounds a durable read gives this subscriber.
     const { form } = subscriberHistoryReader(subscriber)
-    const rows: SubscriberLiveRow[] = []
+    const rows = new Map<string, SubscriberLiveRow>()
     const fresh: AgentJournalRenderItem[] = []
     for (const source of items) {
       const prior = sent?.get(source.itemId)
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
       const before = prior && agentSessionTextAppendSource(prior.source)
       const after = agentSessionTextAppendSource(source)
+      if (
+        input.appendOnly &&
+        prior &&
+        subscriber.hasTextAppendBase?.(source.itemId) === false &&
+        before &&
+        after &&
+        before.identity === after.identity &&
+        before.length <= after.length
+      ) {
+        rows.set(source.itemId, prior)
+        continue
+      }
       const clippedUnchanged =
         prior?.sent.shortened &&
         before &&
@@ -208,15 +221,17 @@ export async function publishSubscriberLiveText(
       // A clipped append cannot be decoded; send the ordinary bounded item instead.
       const wire = 'textAppend' in projected && fitted !== projected ? form(source).item : fitted
       const row = prior?.source === source ? prior : { source, sent: wire }
-      rows.push(row)
+      rows.set(source.itemId, row)
       if (row !== prior && row.sent !== prior?.sent && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)
       }
     }
-    subscriber.liveSent = new Map(rows.map((row) => [row.source.itemId, row]))
+    subscriber.liveSent = rows
     if (fresh.length === 0) {
       continue
     }
+    // Appends consume existing bases before whole rows can evict them.
+    fresh.sort((a, b) => Number('textAppend' in b) - Number('textAppend' in a))
     await port.emit(
       subscriber,
       {

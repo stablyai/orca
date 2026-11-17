@@ -76,7 +76,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     read(epoch: string): readonly AgentJournalRenderItem[]
     flush(): void
   }): () => void
-  publishLiveText?(): StructuredAgentSessionSinkAdmission
+  publishLiveText?(appendOnly?: boolean): StructuredAgentSessionSinkAdmission
   observeExit?: exits.StructuredAgentSessionExitObservation['record']
   /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
   observeRootExit?: exits.StructuredAgentSessionRootExitReceipt['observe']
@@ -166,9 +166,9 @@ export type StructuredAgentSessionEventTarget = {
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
   publishPromptSuggestion?: (suggestion: AgentSessionPromptSuggestion | null) => void
-  hasLiveTextSubscribers?: () => boolean
+  hasLiveTextSubscribers?: (appendOnly?: boolean) => boolean
   /** `read` runs only when someone is subscribed. */
-  publishLiveText?: (read: () => readonly AgentJournalRenderItem[]) => void
+  publishLiveText?: (read: () => readonly AgentJournalRenderItem[], appendOnly?: boolean) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }

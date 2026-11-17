@@ -155,7 +155,9 @@ export function sendingTextAppends<R>(
   rules: TextAppendRules
 ): ((event: AgentSessionSubscribeEvent) => R) & {
   item: (item: AgentJournalRenderItem) => AgentJournalRenderItem
+  hasBase: (itemId: string) => boolean
 } {
+  let hasBase = (_itemId: string): boolean => false
   let preview: (item: AgentJournalRenderItem) => AgentJournalRenderItem = (item) => item
   const mapItem = (base: TextAppendBase | undefined, item: AgentJournalRenderItem) => {
     if ('textAppend' in item) {
@@ -182,10 +184,12 @@ export function sendingTextAppends<R>(
     return mapped
   }
   const send = textAppendStream(rules, mapItem, (readBase) => {
+    hasBase = (itemId) => readBase(itemId) !== undefined
     preview = (item) => mapItem(readBase(item.itemId), item)
   })
   return Object.assign((event: AgentSessionSubscribeEvent) => emit(send(event) ?? event), {
-    item: (item: AgentJournalRenderItem) => preview(item)
+    item: (item: AgentJournalRenderItem) => preview(item),
+    hasBase
   })
 }
 

@@ -1,3 +1,4 @@
+import { rowsBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
@@ -22,6 +23,7 @@ export function useNativeChatInteractivePromptCard({
   transcriptSettled: boolean
   transcriptAsk?: AskPrompt | null
 }): InteractivePromptCard {
+  messages = rowsBesideStreamedText(messages)
   const interactivePrompt = useAgentStatus(paneKey)?.interactivePrompt ?? null
   // Read toolName only beside a prompt for parser dispatch; ordinary tool changes would rerender the whole pane.
   const interactiveToolName = useAppStore((s) => {

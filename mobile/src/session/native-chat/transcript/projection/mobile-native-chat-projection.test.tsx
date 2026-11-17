@@ -4,8 +4,122 @@ import type {
   NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { projectMobileNativeChatMessages } from './mobile-native-chat-projection'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession,
+  type StructuredAgentSessionState
+} from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
+import { useMobileStructuredTranscript } from '../ingestion/use-mobile-structured-transcript'
+import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
+import { useMobileNativeChatProjection } from './use-mobile-native-chat-projection'
+import { useMobileNativeChatTransientData } from './use-mobile-native-chat-transient-data'
+import { Harness, Result } from '../turn-state/use-mobile-native-chat-turn-disclosure.test-fixture'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+const NO_OPTIMISTIC: [] = []
+const NO_PENDING: [] = []
+
+function Pipeline({ state }: { state: StructuredAgentSessionState }) {
+  const transcript = useMobileStructuredTranscript('codex', state, NO_OPTIMISTIC, 'session')
+  const detail = useMobileNativeChatMessageDetail(transcript.messages, null)
+  const folded = useMobileNativeChatProjection(detail.messages, 'codex', ['session'], false)
+  const messages = useMobileNativeChatTransientData(
+    { folded, pending: NO_PENDING, streaming: null },
+    'session'
+  )
+  return createElement(Harness, {
+    messages,
+    enabled: true,
+    isWorking: true,
+    turnJournal: {
+      items: transcript.transcriptItems,
+      submissions: state.submissions,
+      latestTurn: state.latestTurn
+    }
+  })
+}
+
+it.each([128, 1280])('keeps the complete structured phone pipeline local at %s rows', (size) => {
+  let reads = 0
+  const items = Array.from({ length: size }, (_, index) => {
+    const body = {
+      kind: 'message' as const,
+      role: index === 0 ? ('user' as const) : ('assistant' as const),
+      blocks: [{ type: 'text' as const, text: 'words' }]
+    }
+    return {
+      itemId: `row-${index}`,
+      sequence: index + 1,
+      revision: 1,
+      observedAt: index,
+      get body() {
+        reads++
+        return body
+      }
+    }
+  })
+  let state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+    type: 'history-page',
+    page: {
+      sessionId: 'session',
+      epoch: 'epoch',
+      direction: 'tail',
+      items,
+      removedItemIds: [],
+      submissions: [],
+      window: {
+        oldest: { epoch: 'epoch', sequence: 1 },
+        newest: { epoch: 'epoch', sequence: size },
+        nextCursor: null
+      },
+      liveCursor: { epoch: 'epoch', sequence: size },
+      hasOlder: false,
+      hasNewer: false
+    }
+  })
+  let renderer: ReactTestRenderer | undefined
+  try {
+    act(() => {
+      renderer = create(createElement(Pipeline, { state }))
+    })
+    const before = renderer!.root.findByType(Result).props.disclosure
+    reads = 0
+    for (const index of [size - 2, size - 1, size - 2]) {
+      state = reduceStructuredAgentSession(state, {
+        type: 'event',
+        event: structuredClone({
+          type: 'batch',
+          sessionId: 'session',
+          batch: {
+            cursor: state.cursor!,
+            removedItemIds: [],
+            submissions: [],
+            items: [
+              {
+                ...items[index]!,
+                body: {
+                  kind: 'message',
+                  role: 'assistant',
+                  blocks: [{ type: 'text', text: 'words extended' }]
+                }
+              }
+            ]
+          }
+        })
+      })
+      act(() => renderer!.update(createElement(Pipeline, { state })))
+    }
+    const after = renderer!.root.findByType(Result).props.disclosure
+    expect(after.listMessages.at(-1)?.blocks).toEqual([{ type: 'text', text: 'words extended' }])
+    expect(after.listMessages[0]).toBe(before.listMessages[0])
+    expect(after.presentation.turnKeys).toBe(before.presentation.turnKeys)
+    expect(reads).toBeLessThan(180)
+  } finally {
+    act(() => renderer?.unmount())
+  }
+})
 function row(
   id: string,
   role: NativeChatMessage['role'],

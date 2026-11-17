@@ -15,6 +15,7 @@ import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subs
 
 export type AgentSessionSubscribeInput = {
   projectLiveItem?: (item: AgentJournalRenderItem) => AgentJournalRenderItem
+  hasTextAppendBase?: (itemId: string) => boolean
   commandsOnRequest?: boolean
   id: string
   sessionId: string
@@ -38,6 +39,7 @@ export type AgentSessionSubscribeInput = {
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type Subscriber = {
   projectLiveItem?: (item: AgentJournalRenderItem) => AgentJournalRenderItem
+  hasTextAppendBase?: (itemId: string) => boolean
   id: string
   emit: AgentSessionSubscriberEmit
   end?: (cause: unknown) => void

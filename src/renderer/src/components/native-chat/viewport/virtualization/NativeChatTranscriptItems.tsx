@@ -3,7 +3,10 @@ import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
 } from '../../messages/rows/NativeChatTranscriptRow'
-import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
+import {
+  nativeChatSlotKey,
+  nativeChatSlotKeys
+} from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import {
   useNativeChatTimedRows,
@@ -38,7 +41,7 @@ export function NativeChatTranscriptItems({
   /** A reader gesture a row's visual frame took before the transcript could see it. */
   forwardGesture: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
-  const rowKeys = useMemo(() => slots.map(nativeChatSlotKey), [slots])
+  const rowKeys = nativeChatSlotKeys(slots)
   const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   const placed = useNativeChatTimedRows(slots, timedRows)
   const rowContext = useMemo(
