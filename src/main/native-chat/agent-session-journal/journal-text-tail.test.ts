@@ -186,3 +186,21 @@ it('a crash keeps every save; the next open folds it, even with writes off, and 
   expect(tailRows(opened.db)).toBe(0)
   opened.db.close()
 })
+
+it('a save that ends inside a character is never the base of an append', async () => {
+  const db = new Database(store())
+  const { commit } = messageFixture(db)
+  const base = `${'x'.repeat(400)}${'y'.repeat(10)}`
+  await commit(message('x'.repeat(400)))
+  await commit(message(`${'x'.repeat(400)}yyyyy`))
+  await commit(message(base))
+  // A byte snapshot cut mid-emoji decodes to U+FFFD where the emoji's first half will be.
+  const cut = new TextDecoder().decode(
+    new TextEncoder().encode(`${base}😀`).subarray(0, base.length + 3)
+  )
+  await commit(message(cut))
+  const text = `${base}😀 more`
+  await commit(message(text))
+  expect(readText(db).detail).toEqual([{ type: 'text', text }])
+  db.close()
+})

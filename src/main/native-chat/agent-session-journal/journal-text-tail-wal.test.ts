@@ -78,7 +78,7 @@ it(
 
 /** Rows and saved text each statement over the tail table or the folded text hands back. */
 function countTailReads(db: Database.Database) {
-  const reads = { statements: 0, tailRows: 0, foldedChars: 0 }
+  const reads = { statements: 0, tailRows: 0, foldedChars: 0, sql: new Set<string>() }
   const wrapped = new WeakSet<object>()
   const prepare = db.prepare.bind(db)
   db.prepare = (sql: string) => {
@@ -89,6 +89,7 @@ function countTailReads(db: Database.Database) {
       wrapped.add(statement)
       const count = (rows: Record<string, unknown>[]) => {
         reads.statements++
+        reads.sql.add(sql)
         if (tail) {
           reads.tailRows += rows.length
         }
@@ -124,7 +125,7 @@ async function streamReads(saves: number) {
     await commit(message(text))
   }
   db.close()
-  return { saves, chars: text.length, ...reads }
+  return { saves, chars: text.length, tailRows: reads.tailRows, foldedChars: reads.foldedChars }
 }
 
 it('each save reads one tail row, and folded text once per fold', async () => {
@@ -139,7 +140,7 @@ it('each save reads one tail row, and folded text once per fold', async () => {
   }
 })
 
-it('a finished turn with no tails probes the tail table once, however many items it has', () => {
+it('a finished turn finds pending tails from the tail table, never by walking its items', () => {
   const visits = (width: number) => {
     const db = new Database(':memory:')
     const { seedItem } = messageFixture(db)
@@ -172,11 +173,24 @@ it('a finished turn with no tails probes the tail table once, however many items
     write(turn('running', 1))
     const reads = countTailReads(db)
     write(turn('completed', 2), turn('running', 1))
+    const statements = reads.statements
+    // Each tail query's plan starts at the tail table, so a wide turn adds no work.
+    const plans = [...reads.sql].map((sql) =>
+      db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => ''))
+        .map((row) => String(row.detail))
+    )
     db.close()
-    return reads.statements
+    return { statements, plans }
   }
-  expect(visits(100)).toBe(visits(1000))
-  expect(visits(1000)).toBe(1)
+  for (const width of [100, 1000]) {
+    const { statements, plans } = visits(width)
+    expect(statements).toBe(1)
+    for (const plan of plans) {
+      expect(plan[0]).toMatch(/journal_text_tail/)
+    }
+  }
 })
 
 // Timeout: the opt-in fleet bench writes about 3 GB of WAL across 47,000 commits.
