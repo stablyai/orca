@@ -2,16 +2,14 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 const NODE_RUNTIME_INCLUDE = [
-  // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
-  'tests/e2e/linear-cli-recovery.unit.test.ts',
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
-  'tests/e2e/cursor-quota-transport.unit.test.ts',
-  'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
+  'tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts',
+  'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.unit.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
@@ -113,7 +111,7 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
-  'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
+  'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
 ]
 
