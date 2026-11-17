@@ -29,7 +29,7 @@ const CAPABLE = { [RELAY_HOST_CAPABILITIES_HEADER]: `pending-conn-details, ${REL
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
-  for (const database of databases.splice(0)) await database.close()
+  for (const database of databases.splice(0)) { await database.close() }
 })
 
 function config(): RelayConfig {
