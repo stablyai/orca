@@ -44,6 +44,7 @@ export function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewIn
     ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
+    ...(pr.reviewDecision !== undefined ? { reviewDecision: pr.reviewDecision } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {})
   }
 }

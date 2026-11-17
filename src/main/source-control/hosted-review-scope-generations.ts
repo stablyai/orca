@@ -7,17 +7,24 @@ const scopeGenerations = new Map<string, number>()
 /** Eviction must never read back as the original zero generation. A monotonic floor may discard fresh data but cannot admit stale data. */
 let evictedGeneration = 0
 
+// Added to every scope, so one bump retires lookups in scopes this map has never seen.
+let globalEpoch = 0
+
 // Cache invalidation and provider reads must use the same host-scoped identity.
 export function hostedReviewRepoScope(repoPath: string, executionHostId: ExecutionHostId): string {
   return `${executionHostId}\0${repoPath}`
 }
 
 export function scopeGeneration(scope: string): number {
-  return scopeGenerations.get(scope) ?? evictedGeneration
+  return (scopeGenerations.get(scope) ?? evictedGeneration) + globalEpoch
+}
+
+export function bumpAllScopeGenerations(): void {
+  globalEpoch += 1
 }
 
 export function bumpScopeGeneration(scope: string): void {
-  const next = scopeGeneration(scope) + 1
+  const next = (scopeGenerations.get(scope) ?? evictedGeneration) + 1
   scopeGenerations.delete(scope)
   scopeGenerations.set(scope, next)
   while (scopeGenerations.size > MAX_BRANCH_MAP_ENTRIES) {
@@ -34,4 +41,5 @@ export function bumpScopeGeneration(scope: string): void {
 export function __resetHostedReviewScopeGenerationsForTests(): void {
   scopeGenerations.clear()
   evictedGeneration = 0
+  globalEpoch = 0
 }

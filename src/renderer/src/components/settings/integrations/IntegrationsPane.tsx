@@ -3,6 +3,7 @@ import {
   GiteaIntegrationCard
 } from '../../integrations/source-control/token-source-control-integration-cards'
 import { BitbucketIntegrationCard } from '../../integrations/source-control/bitbucket-integration-card'
+import { BitbucketServerIntegrationCard } from '../../integrations/source-control/bitbucket-server-integration-card'
 import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
@@ -53,6 +54,9 @@ export function IntegrationsPane(): React.JSX.Element {
           </ProviderRow>
           <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.bitbucket}>
             <BitbucketIntegrationCard />
+          </ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.bitbucketServer}>
+            <BitbucketServerIntegrationCard />
           </ProviderRow>
           <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.azuredevops}>
             <AzureDevOpsIntegrationCard />
