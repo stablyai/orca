@@ -223,4 +223,14 @@ it("steers the next agent's mail into a running turn while earlier mail is still
   })
   await handOver(ordered, 'send-before')
   expect(await claim(ordered, 'send-after')).toEqual({ kind: 'waiting' })
+
+  const burst = await fixture()
+  for (let index = 0; index < 33; index++) {
+    await mail(burst, `report-${index}`)
+  }
+  for (let index = 0; index < 32; index++) {
+    expect(await claim(burst, `send-${index}`)).toMatchObject({ kind: 'claimed' })
+    await handOver(burst, `send-${index}`)
+  }
+  expect(await claim(burst, 'send-32')).toEqual({ kind: 'waiting' })
 })

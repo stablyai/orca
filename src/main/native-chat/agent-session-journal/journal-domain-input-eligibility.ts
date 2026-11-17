@@ -69,23 +69,13 @@ export function journalDomainResolvedInputEligibility(
   }
 }
 
-/** Claude and Codex take every waiting message in at their next step, so other agents' mail the
- *  agent has not taken in yet never holds the next mail card, up to a bound below the smallest
+/** Claude and Codex take every waiting message in at their next step, so other agents' messages
+ *  the agent has not taken in yet never hold the next mail card, up to a bound below the smallest
  *  provider's limit on sends awaiting their echo. */
-function owedSendsAreMail(
-  scope: JournalSqlScope,
-  owed: readonly AgentJournalSubmission[]
-): boolean {
-  if (owed.length >= MAX_OWED_MAIL_STEERS) {
-    return false
-  }
-  const notice = scope.db
-    .prepare(`SELECT json_extract(payload_json,'$.body.from.orchestration.message')
-    AS notice FROM journal_queue_cards WHERE session_id=? AND epoch=? AND message_id=?`)
-  return owed.every(
-    (send) =>
-      send.queuedMessageId !== undefined &&
-      notice.get(scope.sessionId, scope.epoch, send.queuedMessageId)?.notice === 'mail-notice'
+function owedSendsAreFromAgents(owed: readonly AgentJournalSubmission[]): boolean {
+  return (
+    owed.length < MAX_OWED_MAIL_STEERS &&
+    owed.every((send) => send.source?.kind === 'agent' && send.queuedMessageId !== undefined)
   )
 }
 
@@ -104,7 +94,7 @@ export function selectJournalEligibleQueueCard(
     return none
   }
   const mailOnly = state.handover.length > 0
-  if (mailOnly && !(steer && owedSendsAreMail(scope, state.handover))) {
+  if (mailOnly && !(steer && owedSendsAreFromAgents(state.handover))) {
     return none
   }
   return {
