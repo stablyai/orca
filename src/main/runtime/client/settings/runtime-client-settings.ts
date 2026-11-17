@@ -80,6 +80,7 @@ export class RuntimeClientSettingsController {
       codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
       codexWorkspaceAccounts: settings.codexWorkspaceAccounts ?? {},
       claudeWorkspaceAccounts: settings.claudeWorkspaceAccounts ?? {},
+      historyResumeAccountsSupported: true,
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,

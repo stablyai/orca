@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifyWorkspaceAccountSettingsChanged } from '@/runtime/provider-accounts/observations/workspace-account-settings-changes'
 import {
   DropdownMenuLabel,
   DropdownMenuSub,
@@ -137,6 +138,7 @@ export function WorkspaceProviderAccountSubMenu({
       setSelection((previous) =>
         previous ? { ...previous, bindings: result.settings[bindingKey] ?? {} } : previous
       )
+      notifyWorkspaceAccountSettingsChanged(target)
       if (target.kind === 'local') {
         await useAppStore.getState().fetchSettings()
       }
@@ -145,9 +147,13 @@ export function WorkspaceProviderAccountSubMenu({
       )
       toast.success(
         t(
-          'workspace.account.saved',
-          '{{provider}} account saved for new sessions in this workspace.',
-          { provider: name }
+          'workspace.account.savedForNewSessions',
+          'New sessions will use {{account}}. Running sessions keep their account.',
+          {
+            account:
+              selection?.accounts.find((account) => account.id === value)?.label ??
+              t('workspace.codexAccount.inherit', 'Use host default')
+          }
         )
       )
     } catch (failure) {

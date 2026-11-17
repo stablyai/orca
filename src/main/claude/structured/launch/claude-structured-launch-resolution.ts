@@ -270,7 +270,8 @@ export function claudeStructuredLaunchPart(
       router,
       env,
       accountHome.path,
-      record.location.workspaceId
+      record.location.workspaceId,
+      providerSessionId
     )
     const launchHome = accountRecipe.home
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))

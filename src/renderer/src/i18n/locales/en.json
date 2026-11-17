@@ -15818,10 +15818,6 @@
             "monthsAgo": "{{value0}}mo ago",
             "yearsAgo": "{{value0}}y ago",
             "userRole": "You",
-            "agentRole": "Agent",
-            "toolRole": "Tool",
-            "systemRole": "System",
-            "sessionRole": "Session",
             "worktree": "Worktree",
             "prompt": "Prompt",
             "firstPrompt": "First prompt",
@@ -23762,6 +23758,11 @@
       "scannerBusy": "Too many session scans in flight. Wait a moment, then refresh.",
       "scannerMissing": "The session scanner is missing from this Orca install. Reinstalling Orca restores it.",
       "scannerStopped": "The session scanner stopped unexpectedly. Refresh to try again."
+    },
+    "accounts": {
+      "all": "All accounts",
+      "savedIn": "Saved in {{account}}",
+      "unknown": "Unidentified account"
     }
   },
   "common": {
@@ -24462,11 +24463,12 @@
     },
     "account": {
       "empty": "Add {{provider}} accounts in Settings > AI Provider Accounts.",
-      "saved": "{{provider}} account saved for new sessions in this workspace.",
       "failed": "Could not save the workspace {{provider}} account.",
       "title": "{{provider}} account",
-      "agents": "Agent accounts"
-    }
+      "agents": "Agent accounts",
+      "savedForNewSessions": "New sessions will use {{account}}. Running sessions keep their account."
+    },
+    "continuation": {}
   },
   "tabHoverCard": {
     "browser": "Browser",
@@ -26207,5 +26209,28 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "historyResume": {
+    "storageFilter": "Stored in account",
+    "chooseTitle": "Which account should continue this conversation?",
+    "unknownLast": "Orca has not recorded the account last used for this session. Choose an account for this continuation.",
+    "differentWorkspace": "The workspace account differs from the account last used. This choice applies only to this continuation.",
+    "unavailable": "Unavailable on this host or needs sign-in",
+    "lastUsed": "Last used for this session",
+    "workspaceAccount": "Workspace account",
+    "copyHint": "Using another account creates an independent continuation. The original conversation is preserved.",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "versions": "Continuations ({{count}})",
+    "lastUnknown": "Last used account not recorded",
+    "notOpened": "Not opened in Orca",
+    "original": "Original conversation",
+    "resumeWith": "Resume with {{account}}",
+    "chooseAccount": "Choose account to resume",
+    "lastUsedAccount": "Last used: {{account}}",
+    "choiceHint": "If the workspace uses another account, Orca will ask before continuing.",
+    "preparing": "Preparing continuation...",
+    "opening": "Opening session...",
+    "lastUnavailable": "The account last used is unavailable. Choose another account or sign in again in Settings."
   }
 }

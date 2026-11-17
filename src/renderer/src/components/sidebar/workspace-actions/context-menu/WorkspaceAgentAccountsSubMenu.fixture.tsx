@@ -13,7 +13,7 @@ import { WorkspaceAccountOptions } from './WorkspaceAccountOptions'
 export const accounts = defineFixture({
   width: 600,
   render: () => (
-    <div className="h-96 bg-background p-4 text-foreground">
+    <div className="h-[560px] bg-background p-4 text-foreground">
       <DropdownMenu open>
         <DropdownMenuTrigger asChild>
           <Button variant="outline">Workspace</Button>

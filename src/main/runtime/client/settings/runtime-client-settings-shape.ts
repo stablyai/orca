@@ -7,7 +7,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { WorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { SourceControlAiActionDefaults } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
-export type RuntimeClientSettings = Pick<
+export type RuntimeClientSettings = { historyResumeAccountsSupported?: boolean } & Pick<
   GlobalSettings,
   | 'defaultTuiAgent'
   | 'newWorkspaceSetupOnly'
@@ -51,13 +51,13 @@ export type RuntimeClientSettings = Pick<
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
 > & {
-  /** Always set; older hosts omit it, so clients must not write it to them (settings.update is strict). */
-  workspaceCleanupPolicy: WorkspaceCleanupRules
-  hostSettingOverrides: RuntimeHostDisplayLabelOverrides
-  sourceControlAi: RuntimeClientSourceControlAi
-  /** Models directory and microphone stay host-private. */
-  voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
-}
+    /** Always set; older hosts omit it, so clients must not write it to them (settings.update is strict). */
+    workspaceCleanupPolicy: WorkspaceCleanupRules
+    hostSettingOverrides: RuntimeHostDisplayLabelOverrides
+    sourceControlAi: RuntimeClientSourceControlAi
+    /** Models directory and microphone stay host-private. */
+    voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
+  }
 
 /** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
 export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }

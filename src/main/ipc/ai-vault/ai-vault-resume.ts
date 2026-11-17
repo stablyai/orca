@@ -1,3 +1,4 @@
+import { prepareWorkspaceAccountSessionResume } from '../../providers/accounts/workspace-account-session-resume'
 import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { ipcMain } from 'electron'
@@ -67,6 +68,9 @@ export async function prepareAiVaultSessionResume(
   if (executionHost?.kind === 'ssh') {
     return { useRealCodexHome: false }
   }
+  if (args.historyCatalog || args.commitToken) {
+    return (await prepareWorkspaceAccountSessionResume(args)) ?? { useRealCodexHome: false }
+  }
   // Resuming a session is a user act: start its stopped distro before the gated transcript reads.
   await wakeNativeChatTranscriptDistro(wslDistroForPath(args.filePath))
   if (!isWslUncPath(args.filePath)) {
@@ -79,6 +83,7 @@ export async function prepareAiVaultSessionResume(
   }
   return (
     (await copyStructuredChatConversation(args)) ??
+    (await prepareWorkspaceAccountSessionResume(args)) ??
     options.prepareSessionResume?.(args) ?? { useRealCodexHome: false }
   )
 }

@@ -33,6 +33,9 @@ export function notifyAiVaultSessionPreparationFailure(
   agent: AiVaultAgent,
   describeFailure: (message: string) => string = (message) => message
 ): void {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return
+  }
   const described = error instanceof Error ? new Error(describeFailure(error.message)) : error
   toast.error(describeAiVaultResumeFailure(described, agent))
 }

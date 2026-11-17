@@ -1,3 +1,4 @@
+import { installProviderWorkspaceSessionResume } from './workspace-account-resume-installation'
 // Keep Electron imports out: both desktop and orcad bundle these account services.
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { Store } from '../../persistence/loading-store/store'
@@ -58,6 +59,10 @@ export function createProviderAccountServices(
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  installProviderWorkspaceSessionResume(store, codexRuntimeHome, claudeRuntimeAuth, {
+    codex: () => codexAccounts.listAccounts(),
+    claude: () => claudeAccounts.listAccounts()
+  })
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)

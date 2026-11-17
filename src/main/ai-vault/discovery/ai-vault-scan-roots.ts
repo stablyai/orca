@@ -13,6 +13,7 @@ import { managedOpenCodeAccountDataDirs } from '../../opencode/accounts/opencode
 import { antigravityChatBrainDir } from '../../antigravity/antigravity-chat-home'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { prepareOpenCodeWslReaders } from '../scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
+import { AI_VAULT_AGENT_SOURCES } from './session-scanner-agent-sources'
 
 // Configure sources through the runtime service; headless serve never runs window-only IPC registration.
 export type AiVaultSessionSources = {
@@ -46,10 +47,34 @@ export async function localAiVaultScanRoots(): Promise<LocalAiVaultScanRoots> {
   return (await resolveLocalAiVaultScanRoots()).roots
 }
 
+export async function localAiVaultSessionRootDirs(agent: 'claude' | 'codex'): Promise<string[]> {
+  const { roots } = await resolveTranscriptScanRoots()
+  return AI_VAULT_AGENT_SOURCES[agent].rootDirs(roots, roots.wslHomeDirs)
+}
+
 /** `wslConfirmed` is false when no confirmed running list was read: WSL rows are then unknown, not gone. */
 export async function resolveLocalAiVaultScanRoots(): Promise<{
   roots: LocalAiVaultScanRoots
   wslConfirmed: boolean
+}> {
+  const { roots, wslConfirmed } = await resolveTranscriptScanRoots()
+  return {
+    wslConfirmed,
+    roots: {
+      ...roots,
+      opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
+      antigravityChatBrainDir: antigravityChatBrainDir(getProfileUserDataPath()),
+      wslOpenCodeReaders: await prepareOpenCodeWslReaders(roots.wslHomeDirs)
+    }
+  }
+}
+
+async function resolveTranscriptScanRoots(): Promise<{
+  wslConfirmed: boolean
+  roots: Pick<
+    LocalAiVaultScanRoots,
+    'additionalCodexSessionsDirs' | 'wslHomeDirs' | 'claudeProfileProjectsDirs' | 'executionHostId'
+  >
 }> {
   const [additionalCodexHomes, wsl] = await Promise.all([
     // Confirmed only: a stale list could name a distro that stopped; a failed probe drops WSL homes.
@@ -67,10 +92,6 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
       wslHomeDirs: wsl.homes,
       // Scanner workers have no account router; supply profile roots from this process.
       claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
-      opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
-      // The chat host's state root, as structured-session-account-home resolves it.
-      antigravityChatBrainDir: antigravityChatBrainDir(getProfileUserDataPath()),
-      wslOpenCodeReaders: await prepareOpenCodeWslReaders(wsl.homes),
       // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
       executionHostId: LOCAL_EXECUTION_HOST_ID
     }

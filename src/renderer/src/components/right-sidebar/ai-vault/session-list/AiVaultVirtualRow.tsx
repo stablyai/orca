@@ -225,6 +225,12 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
         />
       ) : (
         <VaultSessionRow
+          onResumeVersion={(version) =>
+            onResume(
+              version,
+              visibleResumeActions.worktree.worktreeId ?? resumeState?.worktreeId ?? ''
+            )
+          }
           session={row.session}
           searchHit={searchHit}
           sourceHostLabel={sourceHostLabel}
@@ -262,6 +268,10 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}
           onResume={() => {
+            if (canJumpToOriginalPane) {
+              onJumpToOriginalPane(row.session)
+              return
+            }
             if (resumeWorktreeId) {
               onResume(row.session, resumeWorktreeId)
             }
@@ -282,6 +292,10 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
               : undefined
           }
           onResumeInWorktree={() => {
+            if (canJumpToOriginalPane) {
+              onJumpToOriginalPane(row.session)
+              return
+            }
             if (searchResumeAllowed && resumeActions?.worktree.worktreeId) {
               onResume(row.session, resumeActions.worktree.worktreeId)
             }

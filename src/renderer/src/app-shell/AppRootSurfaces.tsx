@@ -17,6 +17,7 @@ import { NativeChatResumeOnRestartModal } from '../components/native-chat-recove
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
+import { HistoryResumeAccountDialogHost } from '../components/right-sidebar/ai-vault/accounts/HistoryResumeAccountDialog'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
@@ -316,7 +317,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onboardingVisible={onboardingGate.shouldRender}
       />
       <PluginInstallTrustDialogHost />
-      {/* Mount once per session; the internal gate selects pre-telemetry users (telemetry-plan.md §First-launch experience). */}
+      <HistoryResumeAccountDialogHost />
       <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />
       </OverlayBoundary>

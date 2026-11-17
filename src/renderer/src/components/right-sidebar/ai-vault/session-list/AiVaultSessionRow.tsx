@@ -1,3 +1,8 @@
+import { useHistoryAccountContext, historyAccountInfo } from '../accounts/history-account-context'
+import {
+  historyResumeActivityKey,
+  useHistoryResumeActivity
+} from '../accounts/history-resume-activity'
 import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
@@ -43,7 +48,7 @@ export function VaultSessionRow({
   worktreeInfo,
   vaultScope,
   detailsExpanded,
-  resumeDisabled,
+  resumeDisabled: originalResumeDisabled,
   resumeHidden,
   onToggleDetails,
   originalPaneTarget,
@@ -51,6 +56,7 @@ export function VaultSessionRow({
   showJumpToWorktree,
   onJumpToWorktree,
   onResume,
+  onResumeVersion,
   onContinueInNewSession,
   onResumeInNewChat,
   onResumeInNewCli,
@@ -86,6 +92,7 @@ export function VaultSessionRow({
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
+  onResumeVersion?: (session: AiVaultSession) => void
   onContinueInNewSession?: () => void
   onResumeInNewChat?: () => void
   onResumeInNewCli?: () => void
@@ -109,9 +116,26 @@ export function VaultSessionRow({
   onPick?: () => void
 }) {
   const t = useTranslate()
-  const resumeLabel = isAntigravityReferenceSession(session)
-    ? t('aiVault.continueInCli', 'Continue in CLI')
-    : defaultResumeLabel
+  const accountContext = useHistoryAccountContext()
+  const account = historyAccountInfo(
+    session,
+    accountContext.catalogs[session.executionHostId],
+    resumeActions.worktree.worktreeId ?? accountContext.workspaceId
+  )
+  const activity = useHistoryResumeActivity(
+    (state) => state.entries[historyResumeActivityKey(session)]
+  )
+  const resumeDisabled = originalResumeDisabled || Boolean(activity && activity.phase !== 'error')
+  const resumeLabel =
+    !session.structuredSession && account?.supported
+      ? account.lastAccountLabel
+        ? t('historyResume.resumeWith', 'Resume with {{account}}', {
+            account: account.lastAccountLabel
+          })
+        : t('historyResume.chooseAccount', 'Choose account to resume')
+      : isAntigravityReferenceSession(session)
+        ? t('aiVault.continueInCli', 'Continue in CLI')
+        : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const { title, forked } = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
@@ -174,7 +198,9 @@ export function VaultSessionRow({
           return
         }
         if (onPick) {
-          onPick()
+          if (!resumeDisabled) {
+            onPick()
+          }
         } else {
           onToggleDetails()
         }
@@ -251,6 +277,15 @@ export function VaultSessionRow({
           )}
         </div>
       ) : null}
+      {account && !session.structuredSession && (
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          {account.lastAccountLabel
+            ? t('historyResume.lastUsedAccount', 'Last used: {{account}}', {
+                account: account.lastAccountLabel
+              })
+            : t('historyResume.lastUnknown', 'Last used account not recorded')}
+        </p>
+      )}
       <SessionMetadata
         session={session}
         liveState={liveState}
@@ -259,14 +294,39 @@ export function VaultSessionRow({
         vaultScope={vaultScope}
         sourceHostLabel={sourceHostLabel}
       />
+      {activity && (
+        <p
+          className={
+            activity.phase === 'error'
+              ? 'mt-1 text-xs text-destructive'
+              : 'mt-1 text-xs text-muted-foreground'
+          }
+          role="status"
+        >
+          {activity.phase === 'preparing'
+            ? t('historyResume.preparing', 'Preparing continuation...')
+            : activity.phase === 'opening'
+              ? t('historyResume.opening', 'Opening session...')
+              : activity.message}
+        </p>
+      )}
       {detailsExpanded ? (
         <SessionInlineDetails
           id={detailsId}
           session={session}
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
-          resumeActions={resumeActions}
+          resumeActions={
+            resumeDisabled
+              ? {
+                  worktree: { ...resumeActions.worktree, disabled: true },
+                  newTab: { ...resumeActions.newTab, disabled: true }
+                }
+              : resumeActions
+          }
+          pending={Boolean(activity && activity.phase !== 'error')}
           onResumeInWorktree={onResumeInWorktree}
+          onResumeVersion={onResumeVersion}
           onResumeInNewTab={onResumeInNewTab}
           subagentResume={onPick ? null : subagentResume}
           onContinueInNewSession={onContinueInNewSession}

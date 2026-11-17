@@ -3,14 +3,27 @@ import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/rout
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { historyContinuationAccount } from '../../../providers/accounts/workspace-account-session-resume'
 
 /** The account a launch runs under is the current selection; the receipt records what it used. */
 export async function prepareClaudeLaunchAccount(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
   recordHome: string,
-  workspaceId?: string
+  workspaceId?: string,
+  providerSessionId?: string
 ): Promise<ClaudeAccountRecipe> {
+  const pinned = providerSessionId
+    ? await historyContinuationAccount('claude', providerSessionId)
+    : null
+  if (pinned) {
+    env.CLAUDE_CONFIG_DIR = pinned.home
+    env.ORCA_CLAUDE_PROFILE_POINTER = ''
+    env.ORCA_CLAUDE_INJECTED_CONFIG_DIR = pinned.home
+    return pinned.accountId === null
+      ? { route: 'system', home: pinned.home, configDir: pinned.home }
+      : { route: 'managed', accountId: pinned.accountId, home: pinned.home }
+  }
   const workspace = await getClaudeWorkspaceProfiles()?.resolve(
     workspaceId,
     { runtime: 'host' },

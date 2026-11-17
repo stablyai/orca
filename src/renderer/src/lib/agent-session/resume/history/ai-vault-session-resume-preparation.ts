@@ -1,3 +1,5 @@
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { AiVaultChatForkSourceSchema } from '../../../../../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
@@ -25,17 +27,23 @@ import { readIpcErrorMessage } from '../../../../runtime/errors/ipc-error'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { agentForksThroughChat } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { translate } from '@/i18n/i18n'
+import { chooseHistoryResumeAccount } from '@/components/right-sidebar/ai-vault/accounts/history-resume-choice'
 
-export function prepareAiVaultSessionForResume(session: AiVaultSession): Promise<AiVaultSession> {
-  return session.structuredSession || !aiVaultSessionNeedsResumePreparation(session)
+export function prepareAiVaultSessionForResume(
+  session: AiVaultSession,
+  workspaceId?: string
+): Promise<AiVaultSession> {
+  return session.structuredSession ||
+    (!workspaceId && !aiVaultSessionNeedsResumePreparation(session))
     ? Promise.resolve(session)
-    : prepareAiVaultSessionHome(session, false)
+    : prepareAiVaultSessionHome(session, false, false, undefined, workspaceId)
 }
 
 export function prepareAiVaultSessionForTerminalResume(
-  session: AiVaultSession
+  session: AiVaultSession,
+  workspaceId?: string
 ): Promise<AiVaultSession> {
-  return prepareAiVaultSessionHome(session, false, true)
+  return prepareAiVaultSessionHome(session, false, true, undefined, workspaceId)
 }
 
 export function prepareAiVaultSessionResumeRequest(
@@ -45,12 +53,14 @@ export function prepareAiVaultSessionResumeRequest(
 }
 
 export async function prepareAiVaultTerminalResumeRequest(
-  args: AiVaultPrepareSessionResumeArgs
+  args: AiVaultPrepareSessionResumeArgs,
+  workspaceId?: string
 ): Promise<AiVaultPrepareSessionResumeResult> {
+  args = await workspaceResumeRequest(args, workspaceId)
   try {
     return aiVaultTerminalResumeResult(
       args,
-      await prepareAiVaultSessionResumeRequest(aiVaultTerminalResumeRequest(args))
+      await executeHistoryResumeRequest(aiVaultTerminalResumeRequest(args))
     )
   } catch (error) {
     if (
@@ -148,21 +158,69 @@ async function prepareAiVaultSessionHome(
   session: AiVaultSession,
   fork: boolean,
   terminalResume = false,
-  request: ForkPreparationRequest = (args) => window.api.aiVault.prepareSessionResume(args)
+  request: ForkPreparationRequest = (args) => window.api.aiVault.prepareSessionResume(args),
+  workspaceId?: string
 ): Promise<AiVaultSession> {
   if (fork && !aiVaultSessionNeedsResumePreparation(session)) {
     return session
   }
-  const args: AiVaultPrepareSessionResumeArgs = {
-    agent: session.agent,
-    sessionId: session.sessionId,
-    filePath: session.filePath,
-    codexHome: session.codexHome,
-    executionHostId: session.executionHostId,
-    ...(fork ? { fork: true } : {})
-  }
-  const result = await (terminalResume ? prepareAiVaultTerminalResumeRequest(args) : request(args))
+  const args = await workspaceResumeRequest(
+    {
+      agent: session.agent,
+      sessionId: session.sessionId,
+      filePath: session.filePath,
+      codexHome: session.codexHome,
+      executionHostId: session.executionHostId,
+      ...(fork ? { fork: true } : {}),
+      ...(session.resumeExactVersion ? { exactVersion: true } : {})
+    },
+    workspaceId
+  )
+  const result = await (terminalResume
+    ? prepareAiVaultTerminalResumeRequest(args)
+    : executeHistoryResumeRequest(args, request))
   return aiVaultSessionAfterResumePreparation(session, result)
+}
+
+async function workspaceResumeRequest(
+  args: AiVaultPrepareSessionResumeArgs,
+  workspaceId?: string
+): Promise<AiVaultPrepareSessionResumeArgs> {
+  if (!workspaceId || (args.agent !== 'claude' && args.agent !== 'codex')) {
+    return args
+  }
+  const target = runtimeRpcTargetForAuthorityKey(args.executionHostId)
+  if (!target) {
+    return args
+  }
+  const snapshot = await callRuntimeRpc<{
+    settings: {
+      historyResumeAccountsSupported?: boolean
+    }
+  }>(target, 'settings.get', undefined)
+  return snapshot.settings.historyResumeAccountsSupported === true
+    ? {
+        ...args,
+        workspaceId,
+        preview: true
+      }
+    : args
+}
+
+async function executeHistoryResumeRequest(
+  args: AiVaultPrepareSessionResumeArgs,
+  request: ForkPreparationRequest = (input) => window.api.aiVault.prepareSessionResume(input)
+): Promise<AiVaultPrepareSessionResumeResult> {
+  const result = await request(args)
+  if (!result.resumePlan) {
+    return result
+  }
+  const plan = result.resumePlan
+  const selected = plan.needsChoice ? await chooseHistoryResumeAccount(plan) : plan.lastAccountId
+  if (selected === undefined) {
+    throw new DOMException('Resume cancelled', 'AbortError')
+  }
+  return request({ ...args, preview: false, planToken: plan.token, resumeAccountId: selected })
 }
 
 // Kimi is folder-keyed: wrong cwd rejects resume or silently opens an empty same-ID session (1.52+).

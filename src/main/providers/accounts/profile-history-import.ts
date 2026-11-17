@@ -7,8 +7,9 @@ import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 export async function copyProfileHistory(
   sourceHome: string,
   destinationHome: string,
-  names: readonly string[],
-  onFile?: (file: string) => void
+  names: readonly (string | { source: string; destination: string })[],
+  onFile?: (file: string) => void,
+  options: { skipExisting?: boolean } = {}
 ): Promise<void> {
   if (parseWslUncPath(sourceHome) || parseWslUncPath(destinationHome)) {
     throw new Error('WSL history import is not supported yet. Import credentials only.')
@@ -44,10 +45,25 @@ export async function copyProfileHistory(
     if (!entry.isFile()) {
       throw new Error('Profile history contains an unsupported file type.')
     }
-    await copyFile(from, to, constants.COPYFILE_EXCL)
+    try {
+      await copyFile(from, to, constants.COPYFILE_EXCL)
+    } catch (error) {
+      if (
+        options.skipExisting &&
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'EEXIST'
+      ) {
+        return
+      }
+      throw error
+    }
     onFile?.(from)
   }
   for (const name of names) {
-    await copy(join(source, name), join(destination, name))
+    await copy(
+      join(source, typeof name === 'string' ? name : name.source),
+      join(destination, typeof name === 'string' ? name : name.destination)
+    )
   }
 }

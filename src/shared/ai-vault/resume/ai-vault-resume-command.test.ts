@@ -6,6 +6,22 @@ import {
   buildAiVaultResumeShellCommand
 } from './ai-vault-resume-command'
 
+it.each([
+  ['posix', 'linux', "CLAUDE_CONFIG_DIR='/accounts/work home' claude --resume sid"],
+  ['powershell', 'win32', "$env:CLAUDE_CONFIG_DIR='/accounts/work home'; claude --resume sid"],
+  ['cmd', 'win32', 'set "CLAUDE_CONFIG_DIR=/accounts/work home" && claude --resume sid']
+] as const)('pins the Claude resume home in %s commands', (shell, platform, expected) => {
+  expect(
+    buildAiVaultResumeShellCommand({
+      resumeCommand: 'claude --resume sid',
+      cwd: null,
+      shell,
+      platform,
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/work home' }
+    })
+  ).toBe(expected)
+})
+
 describe('buildAiVaultResumeShellCommand env removal', () => {
   const base = {
     resumeCommand: "codex 'resume' 'sid'",

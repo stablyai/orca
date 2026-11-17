@@ -39,10 +39,22 @@ export type AiVaultResumeCommandSession = Pick<
   'agent' | 'sessionId' | 'cwd' | 'codexHome'
 > &
   Partial<
-    Pick<AiVaultSession, 'executionHostId' | 'executionHostPlatform' | 'resumeCommand' | 'filePath'>
+    Pick<
+      AiVaultSession,
+      | 'executionHostId'
+      | 'executionHostPlatform'
+      | 'resumeCommand'
+      | 'filePath'
+      | 'accountHome'
+      | 'resumeReceipt'
+    >
   >
 
 export type AiVaultResumeStartup = {
+  historyResume?: Pick<
+    AiVaultSession,
+    'agent' | 'sessionId' | 'filePath' | 'codexHome' | 'executionHostId' | 'resumeReceipt'
+  >
   agent?: AiVaultSession['agent']
   command: string
   cwd?: string
@@ -123,6 +135,14 @@ export function buildAiVaultLocalResumeStartup(
 ): AiVaultResumeStartup {
   const { session, settings, embedCwd, clearEnvNames } = args
   const { platform, codexHome, liveShell } = args.host
+  const home = session.accountHome
+  const accountHome =
+    session.agent === 'claude' &&
+    home &&
+    'variable' in home &&
+    home.variable === 'CLAUDE_CONFIG_DIR'
+      ? { variable: 'CLAUDE_CONFIG_DIR' as const, path: home.path }
+      : undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(session.filePath, platform)
   // Why: Pi resumes by transcript path, spelled for the shell it runs in (#24408).
   const localProviderSession = getAiVaultAgentProviderSession({
@@ -166,6 +186,7 @@ export function buildAiVaultLocalResumeStartup(
                 platform,
                 commandOverride: startupPlan.launchConfig.agentCommand,
                 codexHome,
+                accountHome,
                 shell: liveShell,
                 clearEnvNames
               })
@@ -174,6 +195,7 @@ export function buildAiVaultLocalResumeStartup(
                 cwd,
                 platform,
                 codexHome,
+                accountHome,
                 shell: liveShell,
                 clearEnvNames
               }),
