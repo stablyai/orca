@@ -262,7 +262,7 @@ export class ReaderSlot {
     this.recordRunning()
   }
 
-  /** Replies are FIFO, so the oldest unanswered request is the one this reader is running. */
+  /** Replies are FIFO: the oldest unanswered request is running, or answered but not yet read. */
   private recordRunning(): void {
     if (this.record === undefined) {
       return

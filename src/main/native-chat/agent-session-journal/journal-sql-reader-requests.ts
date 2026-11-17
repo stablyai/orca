@@ -3,8 +3,8 @@ import type { JournalSqlReaderOperation } from './journal-sql-reader-protocol'
 import type { ReaderSlot } from './journal-sql-reader-slot'
 
 /**
- * The read each journal reader is running, recorded on main before the reader gets it. A reader
- * that runs out of memory mid-read never replies, so its last reply can't name the read; this can.
+ * Each journal reader's oldest unanswered read, recorded on main before the reader gets it. A
+ * reader that runs out of memory mid-read never replies, so its last reply can't name the read.
  */
 export type JournalReaderRunningRequest = {
   operation: string
