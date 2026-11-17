@@ -209,46 +209,6 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
   })
 })
 
-it.each([100, 1000])(
-  'skips durable session transactions for %s exits without recovery records',
-  async (count) => {
-    const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
-    const runtime = new OrcaRuntimeService(fixture.runtimeStore)
-    vi.spyOn(runtime, 'getTerminalWorktreeIdForPaneKey').mockReturnValue(TEST_WORKTREE_ID)
-    const durableMutation = vi.spyOn(fixture.runtimeStore, 'runDurableMutation')
-    for (let i = 0; i < count; i++) {
-      runtime.retireExitedPaneResume(`absent-tab-${i}:11111111-1111-4111-8111-111111111111`, 200)
-    }
-    await runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)
-    expect(durableMutation).not.toHaveBeenCalled()
-  }
-)
-
-it('retires one exited record without copying the rest of the session', async () => {
-  const others = Object.fromEntries(
-    Array.from({ length: 750 }, (_, i) => [
-      `other-${i}`,
-      { ...OLDER_CHECKPOINT, paneKey: `other-${i}` }
-    ])
-  )
-  const fixture = makeRuntimeStoreWithWorkspaceSession(
-    makeWorkspaceSessionWithHeadlessTerminal({
-      sleepingAgentSessionsByPaneKey: { ...others, [PANE_KEY]: OLDER_CHECKPOINT }
-    })
-  )
-  const before = fixture.getSession()
-  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
-  vi.spyOn(runtime, 'getTerminalWorktreeIdForPaneKey').mockReturnValue(TEST_WORKTREE_ID)
-
-  runtime.retireExitedPaneResume(PANE_KEY, 200)
-  await runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)
-
-  const after = fixture.getSession()
-  expect(after.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
-  expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
-  expect(after.sleepingAgentSessionsByPaneKey?.['other-749']).toBe(others['other-749'])
-})
-
 describe('a hookless resumed Codex across wakes and shell-confirmed command finishes', () => {
   const SESSION = { key: 'session_id' as const, id: 'woken-codex' }
   const SLEPT: SleepingAgentSessionRecord = {

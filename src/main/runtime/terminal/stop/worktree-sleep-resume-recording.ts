@@ -15,7 +15,6 @@ import {
 } from './hook-status-resume-records'
 import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
-import { removeSleepingRecordDurably } from './sleeping-record-removal'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -45,24 +44,17 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     )
   }
 
-  /** A confirmed quit retires recovery durably before its exit evidence can expire. */
+  /** A confirmed quit retires its saved recovery, which the next coalesced save persists. */
   retireExitedPaneResume(paneKey: string, exitedAt: number): void {
     const worktreeId = this.getTerminalWorktreeIdForPaneKey(paneKey)
     if (!worktreeId) {
       return
     }
-    this.inResumeRecordOrder(() => {
-      const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
-      const existing =
-        this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
-      if (!existing || existing.updatedAt > exitedAt) {
-        return Promise.resolve()
-      }
-      return removeSleepingRecordDurably(
-        this.store,
-        hostId,
+    this.inResumeRecordOrder(async () => {
+      this.store?.retireSleepingAgentSession?.(
         paneKey,
-        (saved) => saved.updatedAt <= exitedAt
+        (saved) => saved.updatedAt <= exitedAt,
+        this.getWorkspaceSessionHostIdForWorktree(worktreeId)
       )
     }).catch((error) =>
       console.warn('[runtime] could not retire an exited agent resume record', error)

@@ -62,7 +62,7 @@ export type RuntimeStore = {
   onWorkspaceSessionOperationEnded?: Store['onWorkspaceSessionOperationEnded']
   onStateWritten?: Store['onStateWritten']
   setWorkspaceSession?: Store['setWorkspaceSession']
-  patchWorkspaceSession?: Store['patchWorkspaceSession']
+  retireSleepingAgentSession?: Store['retireSleepingAgentSession']
   getRemoteLayoutSnapshots?: Store['getRemoteLayoutSnapshots']
   readTerminalScrollbackSnapshotAsync?: Store['readTerminalScrollbackSnapshotAsync']
   statTerminalScrollbackSnapshotSize?: Store['statTerminalScrollbackSnapshotSize']
