@@ -4808,7 +4808,9 @@
       "startOfLine": "Start of line",
       "endOfLine": "End of line",
       "deleteWordBackward": "Delete word backward",
-      "clearLineBeforeCursor": "Clear line before cursor"
+      "clearLineBeforeCursor": "Clear line before cursor",
+      "displayModeLabel": "Phone/Desktop",
+      "displayMode": "Switch phone or desktop width"
     },
     "webviewEngineErrorState": {
       "status": "status {{statusCode}}",
