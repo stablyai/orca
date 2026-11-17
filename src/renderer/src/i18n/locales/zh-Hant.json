@@ -14777,8 +14777,8 @@
             "databaseCount_other": "{{value0}} 個資料庫",
             "scanning": "正在掃描 {{value0}}",
             "checking": "正在檢查 {{value0}}",
-            "scanned": "已掃描 {{value0}}",
-            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄"
+            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄",
+            "historyRefreshed": "歷史記錄已重新整理"
           },
           "run": {
             "source": {
@@ -21228,7 +21228,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已建立索引的歷史記錄中沒有符合的工作階段。請改用其他查詢或範圍。",
       "loadMore": "載入更多符合項目",
       "indexedHistory": "已建立索引的歷史記錄",
       "hostsSkipped": "未搜尋：{{value0}}",
@@ -21261,7 +21260,9 @@
         "unreachable": "無法連線",
         "scopeNotFound": "該主機上找不到搜尋範圍",
         "agentNotSupported": "不支援此代理程式"
-      }
+      },
+      "consentTranscriptIndex": "搜尋會比對工作階段詳細資料和訊息預覽。若要搜尋完整對話，請啟用全文搜尋（為本機記錄建立索引，不遮蔽內容）。配對裝置也可以搜尋這些內容。",
+      "noMatchesToShow": "沒有可顯示的符合工作階段。"
     }
   },
   "sessionHistory": {

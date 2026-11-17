@@ -14299,8 +14299,8 @@
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
             "checking": "{{value0}} 확인 중",
-            "scanned": "{{value0}} 스캔함",
-            "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨"
+            "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨",
+            "historyRefreshed": "기록을 새로고침함"
           },
           "run": {
             "source": {
@@ -21248,7 +21248,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "색인화된 기록에 일치하는 세션이 없습니다. 다른 쿼리나 범위를 시도해 보세요.",
       "loadMore": "더 많은 경기 로드",
       "indexedHistory": "색인된 기록",
       "hostsSkipped": "검색되지 않음: {{value0}}",
@@ -21281,7 +21280,9 @@
         "unreachable": "연결할 수 없음",
         "scopeNotFound": "해당 호스트에서 검색 범위를 찾을 수 없음",
         "agentNotSupported": "지원되지 않는 에이전트"
-      }
+      },
+      "consentTranscriptIndex": "검색은 세션 세부 정보와 메시지 미리보기에서 일치 항목을 찾습니다. 전체 대화를 검색하려면 전체 텍스트 검색을 켜세요(로컬 기록을 가리지 않고 색인화함). 페어링된 장치에서도 검색할 수 있습니다.",
+      "noMatchesToShow": "표시할 일치하는 세션이 없습니다."
     }
   },
   "sessionHistory": {
