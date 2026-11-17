@@ -2,7 +2,7 @@ import {
   createManagedCommandMatcher,
   hookDefinitionHasManagedCommand
 } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import {
   readHooksJson,
   readHooksJsonWithRaw
@@ -57,14 +57,6 @@ export function listLocalCodexHookConfigFiles(): string[] {
   ])
 }
 
-function readTextOrNull(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf8')
-  } catch {
-    return null
-  }
-}
-
 function isEmptyHooksFile(path: string): boolean {
   const { raw, config } = readHooksJsonWithRaw(path)
   if (raw === null || !config || Object.keys(config).some((key) => key !== 'hooks')) {
@@ -74,15 +66,15 @@ function isEmptyHooksFile(path: string): boolean {
 }
 
 /** Uninstall only: hook files Orca's removal left with nothing in them. */
-export function removeEmptiedCodexHookFiles(): void {
+export async function removeEmptiedCodexHookFiles(): Promise<void> {
   for (const home of listLocalCodexHookHomes()) {
     const hooksPath = getConfigPath(home)
     if (isEmptyHooksFile(hooksPath)) {
-      removeConfigLeftEmpty(hooksPath)
+      await removeConfigLeftEmpty(hooksPath)
     }
     const tomlPath = getCodexConfigTomlPath(home)
-    if (readTextOrNull(tomlPath)?.trim() === '') {
-      removeConfigLeftEmpty(tomlPath)
+    if ((await readFile(tomlPath, 'utf8').catch(() => null))?.trim() === '') {
+      await removeConfigLeftEmpty(tomlPath)
     }
   }
 }

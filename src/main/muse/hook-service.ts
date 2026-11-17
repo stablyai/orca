@@ -283,7 +283,7 @@ export class MuseHookService {
     }
   }
 
-  remove(): AgentHookInstallStatus {
+  async remove(): Promise<AgentHookInstallStatus> {
     const configPath = getMuseConfigPath()
     const managedHooksPath = getMuseManagedHooksPath()
     const source = readMuseSettingsSource(configPath)
@@ -300,7 +300,7 @@ export class MuseHookService {
     const pointer = source.config.managed_hooks_path
     if (pointer === managedHooksPath || (pointer === undefined && hasOrcaEnvVars(source.config))) {
       const nextText = serializeMuseSettings(source.text, undefined)
-      const emptied = isOnlyOrcaSchemaVersion(nextText) && removeConfigLeftEmpty(configPath)
+      const emptied = isOnlyOrcaSchemaVersion(nextText) && (await removeConfigLeftEmpty(configPath))
       if (source.text !== nextText && !emptied) {
         writeHooksJson(configPath, source.config, { serialized: nextText })
       }

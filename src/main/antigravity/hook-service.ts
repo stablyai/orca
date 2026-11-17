@@ -238,7 +238,7 @@ export class AntigravityHookService {
     }
   }
 
-  remove(): AgentHookInstallStatus {
+  async remove(): Promise<AgentHookInstallStatus> {
     const configPath = getConfigPath()
     const { raw, config } = readHooksJsonWithRaw(configPath)
     if (!config) {
@@ -256,7 +256,7 @@ export class AntigravityHookService {
     }
     removeInstalledConfig(config)
     // Orca creates this file; once only its bundle was in it, nothing user-owned is left.
-    if (Object.keys(config).length > 0 || !removeConfigLeftEmpty(configPath)) {
+    if (Object.keys(config).length > 0 || !(await removeConfigLeftEmpty(configPath))) {
       writeHooksJson(configPath, config)
     }
     return this.getStatus()

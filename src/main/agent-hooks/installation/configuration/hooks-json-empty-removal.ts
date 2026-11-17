@@ -1,14 +1,11 @@
-import { lstatSync, rmSync } from 'node:fs'
+import { lstat, rm } from 'node:fs/promises'
 
 /** Deletes a config Orca's removal left with nothing user-owned; false keeps a symlink or a missing file. */
-export function removeConfigLeftEmpty(configPath: string): boolean {
-  try {
-    if (lstatSync(configPath).isSymbolicLink()) {
-      return false
-    }
-  } catch {
+export async function removeConfigLeftEmpty(configPath: string): Promise<boolean> {
+  const link = await lstat(configPath).catch(() => null)
+  if (!link || link.isSymbolicLink()) {
     return false
   }
-  rmSync(configPath, { force: true })
+  await rm(configPath, { force: true })
   return true
 }

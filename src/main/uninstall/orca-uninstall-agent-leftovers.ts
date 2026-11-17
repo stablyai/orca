@@ -89,7 +89,7 @@ async function removeAgentLeftovers(
   }
   await removeOrcaConfigBackups(await backupCandidates(status))
   if (status.agent === 'codex') {
-    removeEmptiedCodexHookFiles()
+    await removeEmptiedCodexHookFiles()
   }
 }
 

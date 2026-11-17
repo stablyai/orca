@@ -70,7 +70,7 @@ export async function removeClaudeAgentViewForUninstall(): Promise<void> {
         Array.isArray(left.bindings) &&
         left.bindings.length === 0
       ) {
-        removeConfigLeftEmpty(keybindings)
+        await removeConfigLeftEmpty(keybindings)
       }
       // The writer's rolling .bak of this marker holds only Orca's own state.
       for (const path of [markerPath, `${markerPath}.bak`]) {
