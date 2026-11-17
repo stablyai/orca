@@ -28,6 +28,35 @@ const SONNET = { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: level
 // Claude's session-less listing marks no default row.
 const LISTED: AgentSessionModelCatalogResult = { origin: 'probe', fetchedAt: 1, models: [OPUS] }
 const remembered = { model: 'claude-gone', effort: 'max' }
+
+it('captures a Trae context pick and normalizes it under a standard-only model', () => {
+  const seed = { models: [], modelApply: {} }
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('trae', seed),
+    seed,
+    {
+      models: [
+        { id: 'large', label: 'Large', isDefault: true, efforts: [], supportsMaxMode: true },
+        { id: 'small', label: 'Small', isDefault: false, efforts: [], supportsMaxMode: false }
+      ],
+      current: {
+        model: 'large',
+        contextMode: 'max',
+        acceptedInputSources: { model: 'saved', contextMode: 'saved' },
+        defaulted: []
+      }
+    }
+  )
+  expect(structuredAgentSessionMessageSelection(state)).toEqual({
+    model: 'large',
+    contextMode: 'max'
+  })
+  const switched = commitStructuredAgentSessionOption(state, 'model', 'small')
+  expect(structuredAgentSessionMessageSelection(switched)).toEqual({
+    model: 'small',
+    contextMode: 'standard'
+  })
+})
 // Claude Code 2.1.302 lists plain opus and no opus[1m], which still runs.
 const CLI302 = [{ ...OPUS, id: 'opus', isDefault: true }, SONNET]
 

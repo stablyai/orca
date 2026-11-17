@@ -15,6 +15,14 @@ export function applyTraexThreadSettings(session: TraexSession, value: unknown):
   if (effort) {
     session.options.effort = effort
   }
+  if (Object.hasOwn(settings, 'modelBackendVariant')) {
+    session.reportedContextMode =
+      settings.modelBackendVariant === 'max'
+        ? 'max'
+        : settings.modelBackendVariant === null || settings.modelBackendVariant === ''
+          ? 'standard'
+          : undefined
+  }
   const collaboration = traexRecord(settings.collaborationMode)
   const mode = traexText(collaboration.mode)
   if (mode === 'plan' || mode === 'default') {

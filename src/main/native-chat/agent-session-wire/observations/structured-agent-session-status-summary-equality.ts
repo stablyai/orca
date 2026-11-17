@@ -37,6 +37,7 @@ export function structuredStatusSummariesEqual(
     a.effort === b.effort &&
     a.fastMode === b.fastMode &&
     a.serviceTier === b.serviceTier &&
+    a.contextMode === b.contextMode &&
     a.interactionMode === b.interactionMode &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&

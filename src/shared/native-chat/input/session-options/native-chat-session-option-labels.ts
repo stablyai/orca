@@ -109,6 +109,9 @@ export function nativeChatSessionChoiceLabel(
   say: NativeChatSessionOptionSay,
   optionId?: string
 ): string {
+  if (optionId === 'contextMode') {
+    return choice.label
+  }
   // `default` is only Standard inside a speed choice; other selects may use the value.
   if (optionId === 'serviceTier' && choice.value === 'default') {
     return say('standard')

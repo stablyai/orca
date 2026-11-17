@@ -1,4 +1,5 @@
 import type {
+  AgentSessionOptionCatalog,
   CatalogModel,
   CatalogOption
 } from '../catalog-providers/agent-session-option-catalog-types'
@@ -6,6 +7,7 @@ import type { AgentSessionOptionChoice } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
+import { labelFromModelId } from './model-id-label'
 
 export function structuredModelEfforts(
   model: AgentSessionOptionsResult['models'][number]
@@ -45,6 +47,28 @@ function fastModeOption(defaultValue: boolean): CatalogOption {
   }
 }
 
+function contextModeOption(
+  model: AgentSessionOptionsResult['models'][number]
+): CatalogOption | null {
+  return model.supportsMaxMode === true
+    ? {
+        id: 'contextMode',
+        label: 'Context',
+        category: 'model_config',
+        kind: {
+          type: 'select',
+          choices: [
+            { value: 'standard', label: 'Standard' },
+            { value: 'max', label: 'Max' }
+          ],
+          defaultValue: model.defaultContextMode ?? 'standard',
+          ...(model.defaultContextMode ? { defaultIsCliDefault: true as const } : {})
+        },
+        apply: {}
+      }
+    : null
+}
+
 /** The tier Codex names Fast, by label or id; the only one the single Fast toggle stands for. */
 export function isFastServiceTier(
   tier: Pick<AgentSessionOptionChoice, 'label' | 'value'>
@@ -73,6 +97,7 @@ export function discoveredModel(
   agent: AgentType
 ): CatalogModel {
   const effort = effortOption(model, agent)
+  const contextMode = contextModeOption(model)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
@@ -87,8 +112,10 @@ export function discoveredModel(
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
     ...(model.supportsAutoMode !== undefined ? { supportsAutoMode: model.supportsAutoMode } : {}),
+    ...(model.supportsMaxMode !== undefined ? { supportsMaxMode: model.supportsMaxMode } : {}),
     options: [
       ...(effort ? [effort] : []),
+      ...(contextMode ? [contextMode] : []),
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true
@@ -96,4 +123,23 @@ export function discoveredModel(
           : [])
     ]
   }
+}
+
+export function structuredAgentSessionOptionCatalog(
+  seed: AgentSessionOptionCatalog,
+  result: AgentSessionOptionsResult,
+  agent: AgentType
+): AgentSessionOptionCatalog {
+  const models = result.models.map((model) =>
+    discoveredModel(model, result.fastModeSupport?.supported === true, agent)
+  )
+  if (result.current.model && !models.some((model) => model.id === result.current.model)) {
+    models.push({
+      id: result.current.model,
+      label: labelFromModelId(result.current.model),
+      description: result.current.model,
+      options: seed.unknownModelOptions ?? []
+    })
+  }
+  return { ...seed, models, defaultModelIsCliDefault: true }
 }

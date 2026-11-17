@@ -98,7 +98,8 @@ export function traexModelOptions(
           value: effort.reasoningEffort,
           label: effort.reasoningEffort,
           description: effort.description
-        }))
+        })),
+        ...(metadata?.variants ? { supportsMaxMode: Boolean(metadata.variants.max_key) } : {})
       }
     })
 }

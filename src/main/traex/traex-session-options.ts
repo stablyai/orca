@@ -4,6 +4,7 @@ import type { TraexSession } from './traex-session'
 import { isAgentSessionInteractionMode } from '../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/protocol/agent-session-execution-options'
+import { traexContextMode } from './traex-execution-settings'
 
 export function captureTraexMessageSteeringInputs(
   session: TraexSession | undefined,
@@ -22,8 +23,18 @@ export function captureTraexMessageSteeringInputs(
   return {
     kind: 'trae',
     active: readAgentSessionExecutionOptions(session.ranOptions) ?? {},
-    defaults: readAgentSessionExecutionOptions(session.options) ?? {},
-    models: session.nativeModels.map(({ id, model }) => ({ id, model }))
+    defaults:
+      readAgentSessionExecutionOptions({
+        ...session.options,
+        contextMode: traexContextMode(session, session.options)
+      }) ?? {},
+    models: session.nativeModels.map(({ id, model, businessMetadata }) => ({
+      id,
+      model,
+      ...(businessMetadata?.variants
+        ? { supportsMaxMode: Boolean(businessMetadata.variants.max_key) }
+        : {})
+    }))
   }
 }
 
@@ -31,6 +42,7 @@ export function readTraexSessionOptions(session: TraexSession): AgentSessionOpti
   const selected = session.nativeModels.find(
     (model) => model.id === session.options.model || model.model === session.options.model
   )
+  const contextMode = traexContextMode(session, session.options)
   return {
     models: session.models,
     ...(session.models.length
@@ -39,6 +51,10 @@ export function readTraexSessionOptions(session: TraexSession): AgentSessionOpti
     current: {
       model: session.options.model,
       effort: session.options.effort,
+      ...(contextMode ? { contextMode } : {}),
+      ...(contextMode && contextMode === session.reportedContextMode
+        ? { confirmed: ['contextMode'] }
+        : {}),
       reportedPermissionMode: session.reportedPermissionMode,
       reportedModel: session.reportedModel,
       ...(session.interactionModeSupported
@@ -65,6 +81,15 @@ export async function selectTraexSessionOption(
     }
     signal?.throwIfAborted()
     session.options[key] = value
+    return
+  }
+  if (key === 'contextMode') {
+    const model = session.models.find((entry) => entry.id === session.options.model)
+    if (model?.supportsMaxMode !== true || (value !== 'standard' && value !== 'max')) {
+      throw new AgentSessionOptionRejectedError('TRAE CLI did not offer this context mode')
+    }
+    signal?.throwIfAborted()
+    session.options.contextMode = value
     return
   }
   if (key !== 'model' && key !== 'effort') {

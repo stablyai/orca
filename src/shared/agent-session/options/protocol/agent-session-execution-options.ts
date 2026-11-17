@@ -7,6 +7,7 @@ export const AgentSessionExecutionOptionsSchema = z.object({
   personality: z.string().min(1).max(64).optional(),
   fastMode: z.enum(['true', 'false']).optional(),
   serviceTier: z.string().min(1).max(64).optional(),
+  contextMode: z.enum(['standard', 'max']).optional(),
   interactionMode: z.enum(['default', 'plan']).optional()
 })
 

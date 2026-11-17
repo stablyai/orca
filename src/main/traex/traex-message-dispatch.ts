@@ -9,7 +9,7 @@ import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-w
 import { traexMessageInput } from './traex-message-input'
 import { traexRecord, traexText, traexTurnSchema, TraexRequestError } from './traex-protocol'
 import type { TraexPendingSend, TraexSession } from './traex-session'
-import { traexNativeExecutionSettings } from './traex-execution-settings'
+import { traexNativeExecutionSettings, traexContextMode } from './traex-execution-settings'
 
 type DispatchInput = Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
 
@@ -29,11 +29,16 @@ export async function dispatchTraexMessage(
   if (selected) {
     options.model = selected.id
   }
+  const contextMode = traexContextMode(session, options)
+  if (contextMode) {
+    options.contextMode = contextMode
+  }
   if (
     session.activeTurn &&
     ((options.model && options.model !== session.ranOptions.model) ||
       (options.effort && options.effort !== session.ranOptions.effort) ||
-      (options.interactionMode && options.interactionMode !== session.ranOptions.interactionMode))
+      (options.interactionMode && options.interactionMode !== session.ranOptions.interactionMode) ||
+      (options.contextMode && options.contextMode !== session.ranOptions.contextMode))
   ) {
     throw new AgentSessionOptionRejectedError('TRAE CLI model changes apply to the next turn')
   }
@@ -140,6 +145,9 @@ export async function dispatchTraexMessage(
     ranOptions: {
       ...(session.ranOptions.model ? { model: session.ranOptions.model } : {}),
       ...(session.ranOptions.effort ? { effort: session.ranOptions.effort } : {}),
+      ...(session.ranOptions.contextMode === 'standard' || session.ranOptions.contextMode === 'max'
+        ? { contextMode: session.ranOptions.contextMode }
+        : {}),
       ...(session.ranOptions.interactionMode
         ? { interactionMode: session.ranOptions.interactionMode }
         : {})

@@ -80,6 +80,10 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
     ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
+    ...(typeof row.supportsMaxMode === 'boolean' ? { supportsMaxMode: row.supportsMaxMode } : {}),
+    ...(row.defaultContextMode === 'standard' || row.defaultContextMode === 'max'
+      ? { defaultContextMode: row.defaultContextMode }
+      : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

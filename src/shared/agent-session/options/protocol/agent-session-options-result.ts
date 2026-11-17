@@ -11,7 +11,7 @@ import type { AgentSessionModelOption } from '../model-catalog/agent-session-mod
 
 export type AgentSessionAcceptedInputSources = Partial<
   Record<
-    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
+    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode' | 'contextMode',
     'saved' | 'seeded' | 'policy'
   >
 >
@@ -61,6 +61,7 @@ export type AgentSessionOptionsResult = {
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
     serviceTier?: string
+    contextMode?: 'standard' | 'max'
     /** Present only on hosts offering native Build/Plan; display alone is not accepted intent. */
     interactionMode?: 'default' | 'plan'
     /** The permission mode a start runs now; absent from a host or agent with no picker. */

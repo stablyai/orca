@@ -23,6 +23,7 @@ import { TraexChildWork } from './traex-child-work'
 import { observeTraexSessionNotification } from './traex-session-notifications'
 import { TraexSessionExtras } from './traex-session-extras'
 import { finishTraexCompaction } from './traex-session-compaction'
+import type { AgentSessionContextMode } from '../../shared/agent-session/options/model-catalog/agent-session-context-mode'
 
 export class TraexSession {
   readonly generation = randomUUID()
@@ -45,6 +46,7 @@ export class TraexSession {
   ranOptions: Record<string, string> = {}
   reportedPermissionMode: string | null = null
   reportedModel: string | undefined
+  reportedContextMode: AgentSessionContextMode | undefined
   timeline: TraexTimeline | null = null
   prompts: TraexPromptRegistry | null = null
   childWork: TraexChildWork | null = null

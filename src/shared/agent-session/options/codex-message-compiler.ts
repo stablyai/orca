@@ -1,5 +1,6 @@
 import type { AgentSessionExecutionOptions } from './protocol/agent-session-execution-options'
 import { decodeStructuredAgentSessionOptionValue } from './selection/structured-agent-session-option-codec'
+import { effectiveAgentContextMode } from './model-catalog/agent-session-context-mode'
 import {
   effectiveServiceTier,
   STANDARD_SERVICE_TIER
@@ -29,7 +30,7 @@ export type StructuredMessageSteeringInputs =
       kind: 'trae'
       active: AgentSessionExecutionOptions
       defaults: AgentSessionExecutionOptions
-      models: readonly { id: string; model: string }[]
+      models: readonly { id: string; model: string; supportsMaxMode?: boolean }[]
     }
   | { kind: 'codex-unavailable' }
   | { kind: 'codex'; compiler: CodexMessageCompilerInputs }
@@ -115,7 +116,8 @@ export function structuredMessageSteeringOptionsDiffer(
     if (model) {
       next.model = model.id
     }
-    return ['model', 'effort', 'interactionMode'].some(
+    next.contextMode = effectiveAgentContextMode(next.contextMode, model?.supportsMaxMode)
+    return (['model', 'effort', 'interactionMode', 'contextMode'] as const).some(
       (key) => next[key] !== undefined && next[key] !== input.active[key]
     )
   }

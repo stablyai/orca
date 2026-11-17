@@ -30,7 +30,18 @@ export function createTraexModelCatalogProbe(
         const model = traexText(config.model)
         const effort = traexText(config.model_reasoning_effort)
         return {
-          models,
+          models: models.map((entry) => ({
+            ...entry,
+            ...(entry.supportsMaxMode !== undefined &&
+            Object.hasOwn(config, 'model_backend_variant')
+              ? {
+                  defaultContextMode:
+                    entry.supportsMaxMode && config.model_backend_variant === 'max'
+                      ? ('max' as const)
+                      : ('standard' as const)
+                }
+              : {})
+          })),
           origin: 'probe',
           complete: true,
           ...(model ? { configured: { model, ...(effort ? { effort } : {}) } } : {})

@@ -1,8 +1,8 @@
-import type {
-  AgentSessionOptionCatalog,
-  CatalogModel
-} from './catalog-providers/agent-session-option-catalog-types'
-import { discoveredModel } from './model-catalog/structured-agent-session-discovered-model'
+import type { AgentSessionOptionCatalog } from './catalog-providers/agent-session-option-catalog-types'
+import {
+  discoveredModel,
+  structuredAgentSessionOptionCatalog
+} from './model-catalog/structured-agent-session-discovered-model'
 import {
   createStructuredAgentSessionOptionRecord,
   replaceStructuredAgentSessionAnsweredValues,
@@ -28,32 +28,12 @@ import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
 } from './protocol/agent-session-options-result'
-import { labelFromModelId } from './model-catalog/model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
 } from './selection/structured-agent-session-option-codec'
-
-export function structuredAgentSessionOptionCatalog(
-  seed: AgentSessionOptionCatalog,
-  result: AgentSessionOptionsResult,
-  agent: StructuredAgentSessionOptionRecord['agent']
-): AgentSessionOptionCatalog {
-  const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true, agent)
-  )
-  if (result.current.model && !models.some((model) => model.id === result.current.model)) {
-    models.push({
-      id: result.current.model,
-      label: labelFromModelId(result.current.model),
-      description: result.current.model,
-      options: seed.unknownModelOptions ?? []
-    })
-  }
-  return { ...seed, models, defaultModelIsCliDefault: true }
-}
 
 export type StructuredAgentSessionOptionState = {
   catalog: AgentSessionOptionCatalog | null
@@ -203,6 +183,7 @@ export function applyStructuredAgentSessionOptions(
       ...(!policyEffort && current.effort ? { effort: current.effort } : {}),
       ...(current.fastMode !== undefined ? { fastMode: current.fastMode } : {}),
       ...(current.serviceTier ? { serviceTier: current.serviceTier } : {}),
+      ...(current.contextMode ? { contextMode: current.contextMode } : {}),
       ...(current.interactionMode ? { interactionMode: current.interactionMode } : {})
     },
     (id) =>

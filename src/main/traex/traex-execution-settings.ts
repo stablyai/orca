@@ -1,10 +1,26 @@
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import type { TraexSession } from './traex-session'
 import { traexRecord } from './traex-protocol'
+import { effectiveAgentContextMode } from '../../shared/agent-session/options/model-catalog/agent-session-context-mode'
+
+export function traexContextMode(
+  session: TraexSession,
+  options: { model?: string; contextMode?: string }
+) {
+  const model = options.model ?? session.options.model
+  const selected = session.nativeModels.find((entry) =>
+    model ? entry.id === model || entry.model === model : entry.isDefault
+  )
+  const variants = selected?.businessMetadata?.variants
+  return effectiveAgentContextMode(
+    options.contextMode ?? session.reportedContextMode,
+    variants ? Boolean(variants.max_key) : undefined
+  )
+}
 
 export function traexNativeExecutionSettings(
   session: TraexSession,
-  options: { model?: string; effort?: string; interactionMode?: string }
+  options: { model?: string; effort?: string; interactionMode?: string; contextMode?: string }
 ) {
   const selected = session.nativeModels.find(
     (model) => model.id === options.model || model.model === options.model
@@ -16,11 +32,11 @@ export function traexNativeExecutionSettings(
     throw new AgentSessionOptionRejectedError('TRAE CLI modes have not been negotiated')
   }
   const model = selected?.model ?? options.model
-  const variants = selected?.businessMetadata?.variants
+  const contextMode = traexContextMode(session, options)
   return {
     ...(model ? { model } : {}),
     ...(selected?.modelProviderId ? { modelProvider: selected.modelProviderId } : {}),
-    ...(variants && !variants.max_key ? { modelBackendVariant: null } : {}),
+    ...(contextMode ? { modelBackendVariant: contextMode === 'max' ? 'max' : null } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.interactionMode && model
       ? {
@@ -39,7 +55,7 @@ export function traexNativeExecutionSettings(
 
 export async function installTraexExecutionSettings(
   session: TraexSession,
-  options: { model?: string; effort?: string; interactionMode?: string },
+  options: { model?: string; effort?: string; interactionMode?: string; contextMode?: string },
   signal?: AbortSignal
 ): Promise<void> {
   signal?.throwIfAborted()
@@ -52,11 +68,14 @@ export async function installTraexExecutionSettings(
   if (
     (settings.model && applied.model !== settings.model) ||
     (settings.effort && applied.effort !== settings.effort) ||
+    ('modelBackendVariant' in settings &&
+      applied.modelBackendVariant !== settings.modelBackendVariant) ||
     (settings.collaborationMode &&
       traexRecord(applied.collaborationMode).mode !== settings.collaborationMode.mode)
   ) {
     throw new Error('TRAE CLI did not confirm the requested execution settings')
   }
   signal?.throwIfAborted()
-  session.ranOptions = { ...session.options, ...options }
+  const contextMode = traexContextMode(session, options)
+  session.ranOptions = { ...session.options, ...options, ...(contextMode ? { contextMode } : {}) }
 }

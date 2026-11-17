@@ -83,10 +83,21 @@ export async function openTraexSession(
   }
   check()
   if (response === undefined) {
+    const { modelBackendVariant, ...selection } = traexNativeExecutionSettings(session, {
+      model: session.options.model,
+      contextMode: session.options.contextMode
+    })
+    const startupConfig = {
+      ...config,
+      ...(modelBackendVariant !== undefined
+        ? { model_backend_variant: modelBackendVariant ?? '' }
+        : {})
+    }
     response = await run(
       session.connection.request('thread/start', {
         ...settings,
-        ...traexNativeExecutionSettings(session, { model: session.options.model })
+        ...selection,
+        ...(Object.keys(startupConfig).length ? { config: startupConfig } : {})
       })
     )
   }
@@ -116,6 +127,12 @@ export async function openTraexSession(
   if (opened.reasoningEffort) {
     session.options.effort = opened.reasoningEffort
   }
+  session.reportedContextMode =
+    opened.modelBackendVariant === 'max'
+      ? 'max'
+      : opened.modelBackendVariant == null || opened.modelBackendVariant === ''
+        ? 'standard'
+        : undefined
   const sink = session.input.events
   if (!sink) {
     throw new Error('TRAE CLI chats require a journal sink')

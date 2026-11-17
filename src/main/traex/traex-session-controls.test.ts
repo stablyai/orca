@@ -16,7 +16,7 @@ let directory: string
 let journal: AgentSessionJournal
 let session: TraexSession
 let drained: () => Promise<void>
-let createSession: (options?: Record<string, string>) => TraexSession
+let createSession: (options?: Record<string, string>, previousThreadId?: string) => TraexSession
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-trae-controls-'))
@@ -40,14 +40,14 @@ beforeEach(async () => {
   drained = async () => {
     await sink.drained()
   }
-  createSession = (options = {}) =>
+  createSession = (options = {}, previousThreadId) =>
     new TraexSession(
       { identity, fence: 1, spawnToken: 'controls-spawn', events: sink.sink },
       {
         command: process.execPath,
         args: [join(import.meta.dirname, '__fixtures__', 'traex-scripted-app-server.mjs')],
         cwd: directory,
-        previousThreadId: null,
+        previousThreadId: previousThreadId ?? null,
         mayBeUnsaved: false,
         options,
         permissionMode: 'ask'
@@ -196,4 +196,65 @@ it('preserves the provider reason when a message is refused', async () => {
     state: 'rejected',
     rejection: { kind: 'providerRejected', detail: { text: 'Selected model is unavailable' } }
   })
+})
+
+it('delivers context picks and restores Max after a standard-only model', async () => {
+  session = createSession({ model: 'contract-id', contextMode: 'max' })
+  await session.open(new AbortController().signal)
+  const send = async (clientMessageId: string) => {
+    const previous = await journal.reads.newestTurn()
+    const result = await dispatchTraexMessage(session, {
+      sessionId: 'trae-controls',
+      fence: 1,
+      clientMessageId,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'context-mode' }] }
+    })
+    expect(result.state).toBe('accepted')
+    await expect
+      .poll(async () => {
+        const turn = await journal.reads.newestTurn()
+        return turn?.turnId !== previous?.turnId ? turn?.state : null
+      })
+      .toBe('completed')
+    const messages = (await readTestJournalItems(journal)).flatMap((row) =>
+      row.body.kind === 'message' && row.body.role === 'assistant'
+        ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    const receipt: unknown = JSON.parse(messages.at(-1)!)
+    return receipt
+  }
+  await session.setOption('contextMode', 'standard')
+  expect(await send('standard')).toEqual({ modelBackendVariant: null })
+  await session.setOption('contextMode', 'max')
+  expect(await send('max')).toEqual({ modelBackendVariant: 'max' })
+  await session.setOption('model', 'small-id')
+  expect(await send('small')).toEqual({ modelBackendVariant: null })
+  await expect(session.setOption('contextMode', 'max')).rejects.toThrow(
+    'TRAE CLI did not offer this context mode'
+  )
+  await session.setOption('model', 'contract-id')
+  expect(await send('max-again')).toEqual({ modelBackendVariant: 'max' })
+})
+
+it('restores the CLI context mode and keeps picks out of the running turn', async () => {
+  session = createSession({}, 'thread-trae-contract')
+  const opened = await session.open(new AbortController().signal)
+  expect(opened.reportedOptions.contextMode).toBe('max')
+  await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'running',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'context-mode-wait' }] }
+  })
+  await session.setOption('contextMode', 'standard')
+  await expect(
+    dispatchTraexMessage(session, {
+      sessionId: 'trae-controls',
+      fence: 1,
+      clientMessageId: 'changed-mode',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'context-mode' }] }
+    })
+  ).rejects.toThrow('TRAE CLI model changes apply to the next turn')
+  expect(session.readOptions().current.contextMode).toBe('standard')
 })

@@ -5,6 +5,7 @@ let turnId
 let serial = 0
 let backgroundCommand = false
 let delayedStartReply = null
+let modelBackendVariant = 'max'
 const models = [
   {
     id: 'contract-id',
@@ -60,20 +61,22 @@ createInterface({ input: process.stdin })
     if (method === 'initialize') {
       reply(id, { userAgent: 'trae-contract' })
     } else if (method === 'thread/start' || method === 'thread/resume') {
+      const startupVariant =
+        params.config && Object.hasOwn(params.config, 'model_backend_variant')
+          ? params.config.model_backend_variant || null
+          : modelBackendVariant
       const selected = models.find(
         (model) => model.id === params.model || model.model === params.model
       )
-      if (
-        selected &&
-        !selected.businessMetadata.variants.max_key &&
-        params.modelBackendVariant !== null
-      ) {
+      if (selected && !selected.businessMetadata.variants.max_key && startupVariant !== null) {
         send({ id, error: { code: -32602, message: 'Selected model does not provide Max mode' } })
         return
       }
+      modelBackendVariant = startupVariant
       reply(id, {
         thread: { id: threadId, turns: [] },
         model: selected?.model ?? 'contract-model',
+        ...(modelBackendVariant ? { modelBackendVariant } : {}),
         approvalPolicy: 'on-request',
         approvalsReviewer: 'user',
         sandbox: { type: 'readOnly' }
@@ -83,6 +86,13 @@ createInterface({ input: process.stdin })
         data: models,
         nextCursor: null
       })
+    } else if (method === 'thread/settings/update') {
+      if (Object.hasOwn(params, 'modelBackendVariant')) {
+        modelBackendVariant = params.modelBackendVariant
+      }
+      const threadSettings = { ...params, modelBackendVariant }
+      reply(id, { threadSettings })
+      notify('thread/settings/updated', { threadSettings })
     } else if (method === 'model/internalUsage/read') {
       reply(id, { usage: null, dailyUsage: null })
     } else if (method === 'account/rateLimits/read') {
@@ -124,6 +134,9 @@ createInterface({ input: process.stdin })
       if (params.input[0].text === 'model-rejected') {
         send({ id, error: { code: -32602, message: 'Selected model is unavailable' } })
         return
+      }
+      if (Object.hasOwn(params, 'modelBackendVariant')) {
+        modelBackendVariant = params.modelBackendVariant
       }
       turnId = `turn-${++serial}`
       const text = params.input[0].text
@@ -168,7 +181,11 @@ createInterface({ input: process.stdin })
         })
         return
       }
-      if (text === 'model-switch') {
+      if (text === 'context-mode') {
+        complete(JSON.stringify({ modelBackendVariant }))
+      } else if (text === 'context-mode-wait') {
+        notify('thread/settings/updated', { threadSettings: { modelBackendVariant } })
+      } else if (text === 'model-switch') {
         complete('Model switch accepted')
       } else if (text === 'permissions') {
         send({

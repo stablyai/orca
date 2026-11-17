@@ -32,7 +32,8 @@ function acceptsOptionPick(
         (value === 'own' ||
           agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true)
     : definition?.restingOptions.acceptsKey(key) === true &&
-        (key !== 'interactionMode' || isAgentSessionInteractionMode(value))
+        (key !== 'interactionMode' || isAgentSessionInteractionMode(value)) &&
+        (key !== 'contextMode' || value === 'standard' || value === 'max')
 }
 
 export function structuredAgentSessionOptionOverridesRefusal(

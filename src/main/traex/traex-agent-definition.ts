@@ -17,7 +17,8 @@ export const TRAEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     approvalEnforcement: 'provider'
   },
   restingOptions: {
-    acceptsKey: (key) => key === 'model' || key === 'effort' || key === 'interactionMode',
+    acceptsKey: (key) =>
+      key === 'model' || key === 'effort' || key === 'interactionMode' || key === 'contextMode',
     fallbackModels: () => null,
     effortDefaultsToModel: false
   }

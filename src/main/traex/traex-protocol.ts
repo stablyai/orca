@@ -26,6 +26,7 @@ export const traexThreadResponseSchema = z.looseObject({
     turns: z.array(traexTurnSchema).optional()
   }),
   model: z.string().optional(),
+  modelBackendVariant: z.string().nullish(),
   reasoningEffort: z.string().nullish()
 })
 
