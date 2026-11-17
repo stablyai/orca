@@ -65,15 +65,18 @@ export function deliverWorktreeInputAfterSetup(args: {
   startupFollowup?: WorktreeStartupFollowup
   agent: string
 }): void {
-  void waitForRequiredSetup(
-    args.ports,
-    {
-      startupPolicy: 'wait-for-setup',
-      state: args.didSpawnSetup ? 'running' : 'spawn_failed',
-      ...(args.setupTerminalHandle ? { terminalHandle: args.setupTerminalHandle } : {})
-    },
-    args.agent
-  )
+  const setup = args.terminal.isReattach
+    ? Promise.resolve()
+    : waitForRequiredSetup(
+        args.ports,
+        {
+          startupPolicy: 'wait-for-setup',
+          state: args.didSpawnSetup ? 'running' : 'spawn_failed',
+          ...(args.setupTerminalHandle ? { terminalHandle: args.setupTerminalHandle } : {})
+        },
+        args.agent
+      )
+  void setup
     .then(() => {
       if (args.draftPaste) {
         args.ports.pasteDraft(args.terminal.handle, args.draftPaste)

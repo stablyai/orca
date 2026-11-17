@@ -193,6 +193,7 @@ export async function createRuntimeFolderWorktree(args: {
   if (args.startup && (deps.terminals.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
       const launchRuntime = args.startupLaunchRuntime
+      const launchAgent = args.createdWithAgent ?? args.startup.launchAgent
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }
@@ -202,7 +203,7 @@ export async function createRuntimeFolderWorktree(args: {
         ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
-        ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(launchAgent ? { launchAgent } : {}),
         ...(launchRuntime instanceof Error
           ? { startFailure: launchRuntime }
           : launchRuntime

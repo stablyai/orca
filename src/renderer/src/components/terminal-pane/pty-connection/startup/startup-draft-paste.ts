@@ -18,12 +18,14 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       : null
     : null
   const startupSource = session.paneStartup?.resumeSource
-  const startupDraftReadyScanner = session.ownsStartupDraftPaste
-    ? createDraftPasteReadyScanner(
-        session.startupDraftAgentConfig?.draftPasteReadySignal ??
-          'render-quiet-after-bracketed-paste'
-      )
-    : null
+  const createStartupDraftReadyScanner = () =>
+    session.ownsStartupDraftPaste
+      ? createDraftPasteReadyScanner(
+          session.startupDraftAgentConfig?.draftPasteReadySignal ??
+            'render-quiet-after-bracketed-paste'
+        )
+      : null
+  let startupDraftReadyScanner = createStartupDraftReadyScanner()
   let setupAbort = new AbortController()
   let setupPtyId: string | null = null
   let earlyReadinessData = ''
@@ -163,6 +165,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     setupAbort = new AbortController()
     const abort = setupAbort
     setupPtyId = ptyId
+    startupDraftReadyScanner = createStartupDraftReadyScanner()
     startupDraftReadinessArmed = false
     earlyReadinessData = ''
     clearStartupDraftPasteTimers()

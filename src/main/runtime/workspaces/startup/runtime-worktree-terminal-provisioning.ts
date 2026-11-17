@@ -33,7 +33,7 @@ export type WorktreeProvisionTerminalOptions = Pick<
 
 export type WorktreeTerminalProvisioningHost = {
   refuseSetup?: (workspaceId: string) => void
-  bindSetupRecipe?: (workspaceId: string, recipe: SetupAttemptRecipe) => void
+  bindSetupRecipe?: (workspaceId: string, recipe: SetupAttemptRecipe) => void | (() => void)
   canSpawn: () => boolean
   createTerminal: (
     selector: string,
@@ -78,12 +78,6 @@ export async function provisionWorktreeTerminals(
   host: WorktreeTerminalProvisioningHost,
   args: WorktreeTerminalProvisioningArgs
 ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
-  if (!host.canSpawn()) {
-    if (args.setup?.waitForAgentStartup) {
-      host.refuseSetup?.(args.worktreeId)
-    }
-    return { setupSpawned: false, setupTerminalHandle: null }
-  }
   const required = args.setup?.waitForAgentStartup
     ? createSequencedSetupAgentCommands({
         runnerScriptPath: args.setup.runnerScriptPath,
@@ -93,14 +87,23 @@ export async function provisionWorktreeTerminals(
         startupCommand: ''
       })
     : undefined
-  if (required && args.setup) {
-    host.bindSetupRecipe?.(args.worktreeId, {
-      runnerScriptPath: args.setup.runnerScriptPath,
-      platform: args.setupCommandPlatform,
-      shell: args.setup.shell,
-      nonce: required.completionToken,
-      deadline: Date.now() + DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000
-    })
+  const refuseSetup =
+    required && args.setup
+      ? host.bindSetupRecipe?.(args.worktreeId, {
+          runnerScriptPath: args.setup.runnerScriptPath,
+          platform: args.setupCommandPlatform,
+          shell: args.setup.shell,
+          nonce: required.completionToken,
+          deadline: Date.now() + DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000
+        })
+      : undefined
+  if (!host.canSpawn()) {
+    if (refuseSetup) {
+      refuseSetup()
+    } else if (args.setup?.waitForAgentStartup) {
+      host.refuseSetup?.(args.worktreeId)
+    }
+    return { setupSpawned: false, setupTerminalHandle: null }
   }
   const surfacing: TerminalSurfacing = {
     ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
@@ -205,7 +208,11 @@ export async function provisionWorktreeTerminals(
     }
   }
   if (args.setup?.waitForAgentStartup && !setupSpawned) {
-    host.refuseSetup?.(args.worktreeId)
+    if (refuseSetup) {
+      refuseSetup()
+    } else {
+      host.refuseSetup?.(args.worktreeId)
+    }
   }
   return { setupSpawned, setupTerminalHandle }
 }

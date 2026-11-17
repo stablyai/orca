@@ -154,3 +154,63 @@ it.each(['replacement-success', 'replacement-failure', 'removal'] as const)(
     completion.forgetWorkspace('repo::/task')
   }
 )
+
+it.each([0, 7])('keeps a captured writer result %i with its original recipe', async (exitCode) => {
+  const completion = new SetupTerminalCompletions()
+  const refuseOriginal = completion.bindRecipe('workspace', {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix',
+    nonce: 'original',
+    deadline: Number.MAX_SAFE_INTEGER
+  })
+  const original = completion.forWorkspace('workspace')
+  const writer = completion.capture('workspace', 'original-handle', {
+    setupCompletionToken: 'original',
+    setupRequired: true,
+    sessionId: 'original-pty'
+  })
+  completion.bindRecipe('workspace', {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix',
+    nonce: 'replacement',
+    deadline: Number.MAX_SAFE_INTEGER
+  })
+  let replacementFinished = false
+  void completion.forWorkspace('workspace')?.then(() => {
+    replacementFinished = true
+  })
+  writer?.begin()
+  completion.observe('original-pty', `__ORCA_SETUP_COMPLETE__:original:${exitCode}\n`)
+  writer?.finish(true)
+  await expect(original).resolves.toEqual({ exitCode })
+  refuseOriginal()
+  await Promise.resolve()
+  expect(replacementFinished).toBe(false)
+  completion.forgetWorkspace('workspace')
+})
+
+it('keeps a surviving same-nonce writer when another capture is abandoned', async () => {
+  const completion = new SetupTerminalCompletions()
+  completion.bindRecipe('workspace', {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix',
+    nonce: 'same',
+    deadline: Number.MAX_SAFE_INTEGER
+  })
+  const abandoned = completion.capture('workspace', 'unused', {
+    setupCompletionToken: 'same',
+    setupRequired: true,
+    sessionId: 'unused-pty'
+  })
+  const survivor = completion.capture('workspace', 'live', {
+    setupCompletionToken: 'same',
+    setupRequired: true,
+    sessionId: 'live-pty'
+  })
+  survivor?.begin()
+  abandoned?.finish(false)
+  completion.observe('live-pty', '__ORCA_SETUP_COMPLETE__:same:0\n')
+  survivor?.finish(true)
+  await expect(completion.forWorkspace('workspace')).resolves.toEqual({ exitCode: 0 })
+  completion.forgetWorkspace('workspace')
+})

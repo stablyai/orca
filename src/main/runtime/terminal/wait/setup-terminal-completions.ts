@@ -1,3 +1,4 @@
+import type { SetupWorkspaceAttempt as WorkspaceAttempt } from './setup-workspace-attempt'
 import { SetupTerminalDependents } from './setup-terminal-dependents'
 import type { TerminalSetupVerdict } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { SetupAttemptRecipe } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
@@ -7,18 +8,6 @@ import { DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS } from '../../../../shared/agent-lau
 import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
 
 type SetupCompletion = { exitCode: number | null }
-type WorkspaceAttempt = {
-  completion: Promise<SetupCompletion>
-  finish: (exitCode: number | null) => void
-  bound: boolean
-  result?: SetupCompletion
-  recipe?: SetupAttemptRecipe
-  available: Promise<void>
-  publish: () => void
-  cancel: () => void
-  cancelled: boolean
-  publication?: AbortController
-}
 
 type Attempt = {
   handle: string
@@ -50,20 +39,53 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       return undefined
     }
     const ptyId = options.sessionId ?? mintPtySessionId(workspaceId)
+    const workspace = options.setupRequired ? this.claimWriter(workspaceId, token) : undefined
+    const reservation = Symbol()
+    workspace?.reservations.add(reservation)
+    let started: Attempt | undefined
     return {
       spawnOptions: { sessionId: ptyId, isNewSession: true },
-      begin: () =>
-        this.begin(ptyId, handle, token, options.setupRequired ? workspaceId : undefined),
+      begin: () => {
+        if (workspace && !this.isTracked(workspaceId, workspace)) {
+          throw new Error('Setup was canceled. Try Setup again.')
+        }
+        started ??= this.registerWriter(ptyId, handle, token, workspaceId, workspace)
+        workspace?.reservations.delete(reservation)
+      },
       finish: (spawned: boolean) => {
-        if (!spawned) {
+        workspace?.reservations.delete(reservation)
+        if (!spawned && started && this.attempts.get(ptyId) === started) {
           this.exit(ptyId, true)
           this.forget(ptyId)
+        } else if (
+          !started &&
+          workspace &&
+          !workspace.writers.size &&
+          !workspace.reservations.size
+        ) {
+          workspace.finish(null)
         }
       }
     }
   }
 
   begin(ptyId: string, handle: string, token: string, workspaceId?: string): void {
+    this.registerWriter(
+      ptyId,
+      handle,
+      token,
+      workspaceId,
+      workspaceId ? this.claimWriter(workspaceId, token) : undefined
+    )
+  }
+
+  private registerWriter(
+    ptyId: string,
+    handle: string,
+    token: string,
+    workspaceId?: string,
+    workspace?: WorkspaceAttempt
+  ): Attempt {
     this.forget(ptyId)
     const answer = Promise.withResolvers<SetupCompletion>()
     let finishWorkspace: ((exitCode: number | null) => void) | undefined
@@ -75,16 +97,19 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     const attempt: Attempt = { handle, scan: scanner.scan, completion: answer.promise, finish }
     this.attempts.set(ptyId, attempt)
     this.byHandle.set(handle, attempt)
-    if (workspaceId) {
-      let workspace = this.requiredByWorkspace.get(workspaceId)
-      if (!workspace || workspace.bound || workspace.result) {
-        workspace = this.beginWorkspace(workspaceId)
-      }
-      workspace.bound = true
+    if (workspace && workspaceId) {
       const captured = workspace
+      captured.writers.add(attempt)
       attempt.refuse = () => {
         const { cancelled, result, recipe, publication } = captured
-        if (cancelled || result?.exitCode != null || !recipe || publication) {
+        if (
+          cancelled ||
+          result?.exitCode != null ||
+          !recipe ||
+          publication ||
+          captured.writers.size > 1 ||
+          captured.reservations.size > 0
+        ) {
           return
         }
         const abort = new AbortController()
@@ -93,15 +118,44 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
           .catch(() => {})
           .finally(() => this.retireWorkspaceAttempt(workspaceId, captured))
       }
-      finishWorkspace = (exitCode) => captured.finish(exitCode)
+      finishWorkspace = (exitCode) => {
+        captured.writers.delete(attempt)
+        if (exitCode !== null || (!captured.writers.size && !captured.reservations.size)) {
+          captured.finish(exitCode)
+        }
+      }
     }
+    return attempt
   }
 
-  bindRecipe(workspaceId: string, recipe: SetupAttemptRecipe): void {
+  private isTracked(workspaceId: string, attempt: WorkspaceAttempt): boolean {
+    return (
+      this.requiredByWorkspace.get(workspaceId) === attempt ||
+      this.activeByWorkspace.get(workspaceId)?.has(attempt) === true
+    )
+  }
+
+  private claimWriter(workspaceId: string, token: string): WorkspaceAttempt {
+    const current = this.requiredByWorkspace.get(workspaceId)
+    let workspace = [current, ...(this.activeByWorkspace.get(workspaceId) ?? [])].find(
+      (attempt) => attempt && (attempt.writerToken === token || attempt.recipe?.nonce === token)
+    )
+    if (!workspace) {
+      workspace =
+        current && !current.bound && !current.result && !current.recipe
+          ? current
+          : this.beginWorkspace(workspaceId, !current)
+    }
+    workspace.bound = true
+    workspace.writerToken = token
+    return workspace
+  }
+
+  bindRecipe(workspaceId: string, recipe: SetupAttemptRecipe): () => void {
     let workspace = this.requiredByWorkspace.get(workspaceId)
     if (
       !workspace ||
-      (workspace.bound && !workspace.recipe) ||
+      (workspace.bound && !workspace.recipe && workspace.writerToken !== recipe.nonce) ||
       (workspace.recipe && workspace.recipe.nonce !== recipe.nonce) ||
       (workspace.result && !workspace.recipe)
     ) {
@@ -109,6 +163,12 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     }
     workspace.recipe ??= recipe
     workspace.publish()
+    const captured = workspace
+    return () => {
+      if (!captured.cancelled && this.isTracked(workspaceId, captured)) {
+        captured.finish(null)
+      }
+    }
   }
 
   async gate(workspaceId: string): Promise<WorkspaceAttempt | undefined> {
@@ -123,7 +183,7 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     return this.requiredByWorkspace.get(workspaceId)?.completion
   }
 
-  beginWorkspace(workspaceId: string): WorkspaceAttempt {
+  beginWorkspace(workspaceId: string, makeCurrent = true): WorkspaceAttempt {
     const answer = Promise.withResolvers<SetupCompletion>()
     let timer: ReturnType<typeof setTimeout> | undefined
     const available = Promise.withResolvers<void>()
@@ -133,6 +193,8 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       completion: answer.promise,
       bound: false,
       cancelled: false,
+      reservations: new Set(),
+      writers: new Set(),
       cancel: () => {
         workspace.cancelled = true
         workspace.publication?.abort()
@@ -164,7 +226,9 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       this.retireWorkspaceAttempt(workspaceId, workspace)
     }, DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000)
     timer.unref()
-    this.requiredByWorkspace.set(workspaceId, workspace)
+    if (makeCurrent) {
+      this.requiredByWorkspace.set(workspaceId, workspace)
+    }
     let active = this.activeByWorkspace.get(workspaceId)
     if (!active) {
       active = new Set()

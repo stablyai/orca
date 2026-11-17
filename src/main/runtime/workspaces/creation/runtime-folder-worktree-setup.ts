@@ -17,6 +17,7 @@ import type {
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {
   buildRuntimeSetupReceipt,
+  failedRuntimeSetupPreparation,
   prepareRuntimeLocalWorktreeSetup,
   resolveRuntimeSetupDecision
 } from './runtime-local-worktree-setup'
@@ -50,7 +51,11 @@ export async function prepareFolderWorktreeSetup(args: {
   }
   // Only a create someone started may start the folder's stopped WSL distro.
   if (!request.wslUserAct && (await blockedWslDistroForPath(repo.path))) {
-    return { warning: "Setup did not run because the folder's WSL distro isn't running." }
+    return failedRuntimeSetupPreparation(
+      request,
+      repo,
+      "Setup did not run because the folder's WSL distro isn't running."
+    )
   }
   try {
     return await prepareRuntimeLocalWorktreeSetup({
@@ -65,7 +70,11 @@ export async function prepareFolderWorktreeSetup(args: {
   } catch (error) {
     console.error(`[hooks] setup preparation failed for ${worktree.path}:`, error)
     const message = error instanceof Error ? error.message : String(error)
-    return { warning: `Setup did not run for this folder workspace: ${message}` }
+    return failedRuntimeSetupPreparation(
+      request,
+      repo,
+      `Setup did not run for this folder workspace: ${message}`
+    )
   }
 }
 

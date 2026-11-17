@@ -102,6 +102,8 @@ export async function createFolderWorkspace(
         setupPreparationFailure: setup.setupPreparationFailure,
         request: {
           ...args,
+          activate: false,
+          runHooks: false,
           repoSelector: repo.id,
           wslUserAct: true,
           awaitTerminalProvisioning: true,

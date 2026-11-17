@@ -33,6 +33,26 @@ export function resolveRuntimeSetupDecision(
   return request.runHooks ? 'run' : (request.setupDecision ?? 'inherit')
 }
 
+export function failedRuntimeSetupPreparation(
+  request: Parameters<typeof resolveRuntimeSetupDecision>[0],
+  repo: WorkspaceHookOwner,
+  warning: string
+): Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>> {
+  const effectiveDecision = resolveRuntimeSetupDecision(request)
+  const requiredSetup =
+    effectiveDecision !== 'skip' &&
+    shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy)
+  return {
+    effectiveDecision,
+    warning,
+    hookFound: true,
+    shouldRunSetup: true,
+    didStartInProcessSetupHook: false,
+    requiredSetup,
+    ...(requiredSetup ? { setupPreparationFailure: new Error(warning) } : {})
+  }
+}
+
 export async function prepareRuntimeLocalWorktreeSetup(args: {
   request: Pick<
     RuntimeManagedWorktreeCreateArgs,

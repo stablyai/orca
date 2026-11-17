@@ -424,6 +424,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     setupPreparationFailure: args.setupPreparationFailure,
     request: {
       ...request,
+      ...(!args.automationCreate ? { activate: false, runHooks: false } : {}),
       repoSelector: args.repo.id,
       awaitTerminalProvisioning: true,
       observeSetupCompletion: setup?.waitForAgentStartup === true,

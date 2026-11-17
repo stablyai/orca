@@ -12,6 +12,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import {
   prepareRuntimeLocalWorktreeSetup,
   buildRuntimeSetupReceipt,
+  failedRuntimeSetupPreparation,
   resolveRuntimeSetupDecision
 } from './runtime-local-worktree-setup'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -90,6 +91,7 @@ export async function prepareGroupFolderCreation(args: {
     } catch (error) {
       console.warn('[hooks] group setup preparation failed:', error)
       result.warning = 'Setup did not run. Check the group’s workspace hooks and try Setup again.'
+      prepared = failedRuntimeSetupPreparation(input, owner, result.warning)
     }
   }
   args.ports.setupPrepared?.(folderWorkspaceKey(workspace.id), prepared?.requiredSetup === true)
