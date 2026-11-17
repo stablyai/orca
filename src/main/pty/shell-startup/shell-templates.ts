@@ -70,6 +70,10 @@ export function getZshShellReadyMarkerRegistrationBlock(
     printf "${escapedMarker}"
   fi`
     : `  printf "${escapedMarker}"`
+  // err_return in a failing user widget must not end this hook before the launch runs.
+  const prevLineInitCall = supportsStartupCommand
+    ? `"\${__orca_prev_line_init_fn}" "$@" || :`
+    : `"\${__orca_prev_line_init_fn}" "$@"`
   const startupCommandBlock = supportsStartupCommand
     ? `
   if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
@@ -94,7 +98,7 @@ __orca_prompt_mark() {
 ${markerBlock}
   # Call as a function so $WIDGET remains zle-line-init for add-zle-hook-widget dispatchers.
   if [[ -n "\${__orca_prev_line_init_fn:-}" ]]; then
-    "\${__orca_prev_line_init_fn}" "$@"
+    ${prevLineInitCall}
   fi${startupCommandBlock}
 }
 zle -N zle-line-init __orca_prompt_mark`.replace(/\n\n}\n$/, '\n}\n')
@@ -123,7 +127,10 @@ ${startupCommandBlock}end`
 }
 
 // Unlinking the host's claim file is atomic, so a timed-out host fallback and this wrapper never both run the command.
-export const ZSH_STARTUP_COMMAND_CLAIM_BLOCK = `__orca_claim_startup_command() {
+export const ZSH_STARTUP_COMMAND_CLAIM_BLOCK = `# Keep the launch line and claim out of child processes, including a shell a profile execs.
+(( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )) && builtin typeset +x ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+(( \${+${POSIX_SHELL_STARTUP_CLAIM_ENV}} )) && builtin typeset +x ${POSIX_SHELL_STARTUP_CLAIM_ENV}
+__orca_claim_startup_command() {
   local __orca_claim="\${${POSIX_SHELL_STARTUP_CLAIM_ENV}-}"
   builtin unset ${POSIX_SHELL_STARTUP_CLAIM_ENV}
   [[ -n "$__orca_claim" ]] || return 0

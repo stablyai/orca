@@ -71,6 +71,11 @@ describeZsh('typing while an agent tab starts', () => {
   // Real shells; the late-marker case outlasts a shortened readiness timeout.
   it.each([
     ['the shell never reaches a line editor', 'unsetopt zle\n', undefined],
+    [
+      "the user's line-init widget fails under err_return",
+      'setopt err_return\norca_test_init() { false }\nzle -N zle-line-init orca_test_init\n',
+      undefined
+    ],
     ['shell startup outlasts the readiness timeout', 'sleep 1.5\n', 500],
     [
       'the profile execs a fresh shell',
@@ -91,4 +96,13 @@ describeZsh('typing while an agent tab starts', () => {
     },
     15_000
   )
+
+  // A real shell re-execs itself, and the host waits out the post-ready claim grace.
+  it('starts the agent exactly once when a line-init hook execs a fresh shell after the ready marker', async () => {
+    const tab = await start(
+      'orca_test_reexec() { if [[ -z "${ORCA_TEST_REEXEC:-}" ]]; then export ORCA_TEST_REEXEC=1; exec /bin/zsh -l -i; fi }\nzle -N zle-line-init orca_test_reexec\n'
+    )
+    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 10_000 })
+    expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
+  }, 15_000)
 })

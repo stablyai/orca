@@ -74,11 +74,12 @@ export async function checkPtySpawnHealth(): Promise<void> {
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const work = new TerminalCreationWork()
   let launch: PtyShellLaunchPlan | undefined
+  let startupClaimPath: string | null = null
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
     // Only a wrapped zsh can use it; the plan decides, and an unused claim is removed below.
-    const startupClaimPath =
+    startupClaimPath =
       opts.command && opts.shellReadySupported === true && process.platform !== 'win32'
         ? await createShellWrapperStartupClaim()
         : null
@@ -146,7 +147,9 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     // No shell will source a staged launch script whose spawn failed.
     if (launch?.shellWrapperStartup) {
       discardStagedStartupCommand(launch.shellWrapperStartup.staging)
-      void takeShellWrapperStartupClaim(launch.shellWrapperStartup.claimPath)
+    }
+    if (startupClaimPath) {
+      void takeShellWrapperStartupClaim(startupClaimPath)
     }
     throw error
   } finally {
