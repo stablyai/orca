@@ -40,27 +40,27 @@ export async function extractCatalogImages(
     kind: PluginImageKind,
     read: CatalogBlobReader
   ): Promise<boolean> => {
-    if (verified.has(image.sha256)) {
-      return true
-    }
-    if (rejected.has(image.sha256)) {
+    const cached = verified.get(image.sha256)
+    const key = `${kind}:${image.path}:${image.sha256}:${image.width}x${image.height}`
+    if (rejected.has(key)) {
       return false
     }
     const maxBytes = Math.min(PLUGIN_IMAGE_RULES[kind].maxBytes, budget)
-    const bytes = maxBytes > 0 ? await read(image.path, maxBytes).catch(() => null) : null
+    const bytes =
+      cached ?? (maxBytes > 0 ? await read(image.path, maxBytes).catch(() => null) : null)
     const info = bytes ? readPluginImageHeader(bytes) : 'missing'
     const ok =
       bytes !== null &&
       typeof info !== 'string' &&
-      sha256Hex(bytes) === image.sha256 &&
+      (cached !== undefined || sha256Hex(bytes) === image.sha256) &&
       info.width === image.width &&
       info.height === image.height &&
       pluginImageRuleError(kind, info, bytes.byteLength) === null
-    if (ok && bytes) {
+    if (ok && bytes && !cached) {
       budget -= bytes.byteLength
       verified.set(image.sha256, bytes)
-    } else {
-      rejected.add(image.sha256)
+    } else if (!ok) {
+      rejected.add(key)
     }
     return ok
   }
@@ -83,11 +83,23 @@ export async function extractCatalogImages(
       ...(screenshots.length ? { screenshots } : {})
     }
   }
-  const plugins: PluginMarketplace['plugins'] = []
+  const entries: PluginMarketplaceEntry[] = []
   for (const listed of marketplace.plugins) {
     const { entry, readBlob: read } = fill
       ? await fill(listed, readBlob)
       : { entry: listed, readBlob }
+    entries.push(entry)
+    // Reserve newest-release card art across the catalog before screenshots or older releases.
+    const images = entry.releases?.[0]?.images
+    if (images?.icon) {
+      await check(images.icon, 'icon', read)
+    }
+    if (images?.cover) {
+      await check(images.cover, 'cover', read)
+    }
+  }
+  const plugins: PluginMarketplace['plugins'] = []
+  for (const entry of entries) {
     if (!entry.releases) {
       plugins.push(entry)
       continue
@@ -99,7 +111,7 @@ export async function extractCatalogImages(
         continue
       }
       const { images, ...rest } = release
-      const kept = await keep(images, read)
+      const kept = await keep(images, readBlob)
       releases.push(Object.keys(kept).length ? { ...rest, images: kept } : rest)
     }
     plugins.push({ ...entry, releases })
