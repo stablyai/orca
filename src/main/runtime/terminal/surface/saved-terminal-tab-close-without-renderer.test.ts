@@ -6,6 +6,9 @@ import {
   LEAF_ID,
   PTY_ID,
   INCARNATION_ID,
+  SIBLING_INCARNATION_ID,
+  SIBLING_LEAF_ID,
+  SIBLING_PTY_ID,
   TAB_ID,
   WORKTREE_ID
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
@@ -117,6 +120,45 @@ describe('closing a saved terminal tab on a host without a renderer tab', () => 
     expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
       harness.stopAndWait.mock.invocationCallOrder[0]!
     )
+    expect(harness.stopAndWait).toHaveBeenCalledExactlyOnceWith(PTY_ID, expect.anything())
+  })
+
+  it('retires the saved tab through a handle listed before any viewer publishes it', async () => {
+    const harness = await headlessPtyTab()
+    await harness.syncEmptyGraph()
+    const listed = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (terminal) => terminal.ptyId === PTY_ID
+    )
+
+    await expect(harness.runtime.closeTerminal(listed!.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      ptyKilled: true
+    })
+
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toBeUndefined()
+    expect(harness.getSession().closedTerminalTabTombstonesByTabId?.[TAB_ID]).toBeDefined()
+    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.stopAndWait.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('closes only the recovered pane of a saved split and keeps its sibling', async () => {
+    const harness = await headlessPtyTab()
+    await harness.syncSplitFixtureGraph()
+    harness.runtime.registerPty(SIBLING_PTY_ID, WORKTREE_ID, null, {
+      tabId: TAB_ID,
+      leafId: SIBLING_LEAF_ID,
+      incarnationId: SIBLING_INCARNATION_ID
+    })
+    await harness.syncEmptyGraph()
+
+    await expect(harness.runtime.closeTerminal(recoveredHandle(harness))).resolves.toMatchObject({
+      ptyKilled: true
+    })
+
+    const layout = harness.getSession().terminalLayoutsByTabId[TAB_ID]
+    expect(layout?.ptyIdsByLeafId).toEqual({ [SIBLING_LEAF_ID]: SIBLING_PTY_ID })
+    expect(harness.getSession().closedTerminalTabTombstonesByTabId?.[TAB_ID]).toBeUndefined()
     expect(harness.stopAndWait).toHaveBeenCalledExactlyOnceWith(PTY_ID, expect.anything())
   })
 

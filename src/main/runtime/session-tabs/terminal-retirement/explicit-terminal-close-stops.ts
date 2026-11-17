@@ -159,7 +159,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
             expectedPtyCloseAuthority: closeAuthority
           })
         } catch (error) {
-          // A stop without the committed close would leave the saved tab to restore a dead process.
+          // Intentionally asymmetric: an unpublished saved tab keeps tab and process (a lone stop would restore a dead process); a published close still stops.
           if (savedTabAuthority || errorMessage(error) !== 'workspace_session_unavailable') {
             throw error
           }
