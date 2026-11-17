@@ -22,8 +22,8 @@
 1 src/renderer/src/components/automations/authoring/use-automations-page-destination-form.ts
 1 src/renderer/src/components/automations/hosts/automation-host-client.ts
 1 src/renderer/src/components/automations/use-automations-page-controller.ts
-1 src/renderer/src/components/browser-pane/ReopenBrowserPageOnServerButton.tsx
-1 src/renderer/src/components/browser-pane/browser-reopen-on-server.ts
+1 src/renderer/src/components/browser-pane/navigate/reopen-on-server/ReopenBrowserPageOnServerButton.tsx
+1 src/renderer/src/components/browser-pane/navigate/reopen-on-server/browser-reopen-on-server.ts
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-stream.ts
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-stream-activation.ts
 2 src/renderer/src/components/cmd-j/quick-action-context.ts
@@ -181,9 +181,9 @@
 1 src/renderer/src/components/terminal-pane/mounting/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal-pane/pty-connection/pane-connection-context.ts
 1 src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.ts
-1 src/renderer/src/components/terminal/terminal-tab-actions.ts
-2 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
-2 src/renderer/src/components/terminal/terminal-tab-create.ts
+1 src/renderer/src/components/terminal/tab-lifecycle/terminal-tab-actions.ts
+2 src/renderer/src/components/terminal/tab-lifecycle/terminal-tab-bulk-actions.ts
+2 src/renderer/src/components/terminal/tab-lifecycle/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 5 src/renderer/src/components/use-terminal-create-actions.ts
 3 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-controller.ts

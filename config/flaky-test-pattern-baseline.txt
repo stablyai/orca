@@ -422,7 +422,6 @@
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
-1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/workspace-cleanup/removal/use-workspace-cleanup-removal.agent-stop.test.tsx
 1 test-no-wall-clock:src/renderer/src/lib/workspace/ownership/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts

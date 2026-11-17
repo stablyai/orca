@@ -11,7 +11,7 @@ import {
 } from './browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
-import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
+import type { TerminalPrewarmStage } from './terminal/worktree-prewarm/terminal-worktree-prewarm'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
