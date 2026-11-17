@@ -103,19 +103,21 @@ export function useClientHostedBrowserPageViewport(
 
 /** The scroller and preset-sized box the guest attaches to; children such as the drawing screenshot share the guest's box. */
 export function ClientHostedBrowserPageBox({
-  box,
+  scrollerRef,
+  contentRef,
   children
 }: {
-  box: ReturnType<typeof useClientHostedBrowserPageViewport>
+  scrollerRef: RefObject<HTMLDivElement | null>
+  contentRef: RefObject<HTMLDivElement | null>
   children: ReactNode
 }): React.JSX.Element {
   return (
     <div
-      ref={box.scrollerRef}
+      ref={scrollerRef}
       data-browser-page-scroller=""
       className="scrollbar-sleek absolute inset-0 overflow-hidden"
     >
-      <div ref={box.contentRef} className="relative mx-auto">
+      <div ref={contentRef} className="relative mx-auto">
         {children}
       </div>
     </div>

@@ -1,16 +1,17 @@
-import { expect, test } from './helpers/orca-app'
-import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { launchHeadlessPairedRuntimeHost } from '../../remote/paired-runtime/client-hosts/headless-paired-runtime-host'
 import {
   launchPairedElectronClient,
   type PairedElectronClient
-} from './helpers/paired-electron-client'
+} from '../../remote/paired-runtime/client-hosts/paired-electron-client'
 import {
   openClientHostedFixturePage,
   selectPairedWorktreeGroup,
   startClientHostedMarkerFixture,
   waitForPairedWorktreeId,
   waitForRenderedClientWebview
-} from './helpers/client-hosted-browser-fixture'
+} from './client-hosted-browser-fixture'
 
 test('the ⋯ menu sizes a client-hosted page to a viewport preset and back', async ({
   testRepoPath

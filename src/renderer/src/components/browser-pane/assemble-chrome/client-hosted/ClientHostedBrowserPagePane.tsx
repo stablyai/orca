@@ -367,7 +367,12 @@ export function ClientHostedBrowserPagePane(props: Props) {
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
           {...fileDrop}
         >
-          <ClientHostedBrowserPageBox box={pageBox}>{markup.overlay}</ClientHostedBrowserPageBox>
+          <ClientHostedBrowserPageBox
+            scrollerRef={pageBox.scrollerRef}
+            contentRef={pageBox.contentRef}
+          >
+            {markup.overlay}
+          </ClientHostedBrowserPageBox>
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
             browserPageId={browserTab.id}
