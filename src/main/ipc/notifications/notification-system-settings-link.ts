@@ -1,5 +1,5 @@
 import { shell } from 'electron'
-import { getMacBundleIdentifier } from '../macos-bundle-identifier'
+import { getMacBundleIdentifier } from '../../macos-bundle-identifier'
 
 const MACOS_PACKAGED_BUNDLE_ID = 'com.stablyai.orca'
 const MACOS_NOTIFICATION_SETTINGS_URL =

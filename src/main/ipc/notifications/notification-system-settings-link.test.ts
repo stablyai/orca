@@ -6,7 +6,7 @@ const { openExternalMock, bundleIdMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ shell: { openExternal: openExternalMock } }))
-vi.mock('../macos-bundle-identifier', () => ({ getMacBundleIdentifier: bundleIdMock }))
+vi.mock('../../macos-bundle-identifier', () => ({ getMacBundleIdentifier: bundleIdMock }))
 
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 
