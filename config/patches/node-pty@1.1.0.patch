@@ -269,18 +269,9 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..1779098c54ff4be8c0d4dc9a93e96e71
                  else {
                      // Stop processing immediately on unexpected error and log
 diff --git a/lib/utils.js b/lib/utils.js
-index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c648a43df6e 100644
+index af7918b6902a105a7c49813bc0bb4d687d87a7d4..3870bba49c32a3695d3ddbbf1bca9ecb56c7d700 100644
 --- a/lib/utils.js
 +++ b/lib/utils.js
-@@ -4,7 +4,7 @@
-  * Copyright (c) 2018, Microsoft Corporation (MIT License).
-  */
- Object.defineProperty(exports, "__esModule", { value: true });
--exports.loadNativeModule = exports.assign = void 0;
-+exports.formatNativeModuleLoadError = exports.isTransientNativeModuleLoadError = exports.loadNativeModule = exports.assign = void 0;
- function assign(target) {
-     var sources = [];
-     for (var _i = 1; _i < arguments.length; _i++) {
 @@ -15,25 +15,82 @@ function assign(target) {
  }
  exports.assign = assign;
@@ -294,7 +285,6 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
      var lastError;
 +    // Orca: keep real load failures; the final miss (usually prebuilds) would otherwise hide them.
 +    var failures = [];
-+    var retried = false;
      for (var _i = 0, dirs_1 = dirs; _i < dirs_1.length; _i++) {
          var d = dirs_1[_i];
          for (var _a = 0, relative_1 = relative; _a < relative_1.length; _a++) {
@@ -305,20 +295,21 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
 -            }
 -            catch (e) {
 -                lastError = e;
-+            for (;;) {
++            var path = dir + name + ".node";
++            for (var attempt = 0;; attempt++) {
 +                try {
-+                    return { dir: dir, module: require(dir + "/" + name + ".node") };
++                    return { dir: dir, module: require(path) };
 +                }
 +                catch (e) {
 +                    lastError = e;
-+                    if (!retried && isTransientNativeModuleLoadError(e, process.platform)) {
++                    if (!isModuleNotFoundError(e)) {
++                        failures.push({ path: path, error: e, retry: attempt > 0 });
++                    }
++                    if (attempt === 0 && !retryWaitSpent.has(name) && isTransientNativeModuleLoadError(e)) {
 +                        // Orca: a freshly copied addon can be briefly held by an antivirus scan.
-+                        retried = true;
++                        retryWaitSpent.add(name);
 +                        sleepSync(NATIVE_MODULE_RETRY_DELAY_MS);
 +                        continue;
-+                    }
-+                    if (!isModuleNotFoundError(e)) {
-+                        failures.push({ path: dir + name + ".node", error: e });
 +                    }
 +                    break;
 +                }
@@ -330,6 +321,8 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
  }
  exports.loadNativeModule = loadNativeModule;
 +var NATIVE_MODULE_RETRY_DELAY_MS = 200;
++// Orca: one retry wait per module per process, so a permanent denial cannot stall every spawn.
++var retryWaitSpent = new Set();
 +function errorCode(error) {
 +    var code = error && typeof error === 'object' ? error.code : undefined;
 +    return typeof code === 'string' ? code : undefined;
@@ -340,8 +333,8 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
 +function isModuleNotFoundError(error) {
 +    return errorCode(error) === 'MODULE_NOT_FOUND';
 +}
-+function isTransientNativeModuleLoadError(error, platform) {
-+    if (platform !== 'win32') {
++function isTransientNativeModuleLoadError(error) {
++    if (process.platform !== 'win32') {
 +        return false;
 +    }
 +    var code = errorCode(error);
@@ -351,7 +344,6 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
 +    // Windows reports sharing, lock, and scanner-held denials only in the dlopen message.
 +    return /being used by another process|locked a portion of the file|access is denied/i.test(errorMessage(error));
 +}
-+exports.isTransientNativeModuleLoadError = isTransientNativeModuleLoadError;
 +function formatNativeModuleLoadError(name, dirs, failures, lastError) {
 +    var prefix = "Failed to load native module: " + name + ".node, checked: " + dirs.join(', ') + ": ";
 +    if (failures.length === 0) {
@@ -359,10 +351,9 @@ index af7918b6902a105a7c49813bc0bb4d687d87a7d4..ea01629bd60b51384481a6136db41c64
 +    }
 +    return prefix + failures.map(function (failure) {
 +        var code = errorCode(failure.error);
-+        return failure.path + (code ? " (" + code + ")" : '') + ": " + errorMessage(failure.error).trim();
++        return failure.path + (failure.retry ? ' on retry' : '') + (code ? " (" + code + ")" : '') + ": " + errorMessage(failure.error).trim();
 +    }).join('; ');
 +}
-+exports.formatNativeModuleLoadError = formatNativeModuleLoadError;
 +function sleepSync(ms) {
 +    try {
 +        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -1255,10 +1246,10 @@ index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650d
            // Stop processing immediately on unexpected error and log
            this._writeQueue.length = 0;
 diff --git a/src/utils.ts b/src/utils.ts
-index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1d40931ff 100644
+index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..f23925ec12a9c36ed78bc82b263f3d588fdc2a3e 100644
 --- a/src/utils.ts
 +++ b/src/utils.ts
-@@ -10,20 +10,86 @@ export function assign(target: any, ...sources: any[]): any {
+@@ -10,20 +10,89 @@ export function assign(target: any, ...sources: any[]): any {
  
  
  export function loadNativeModule(name: string): {dir: string, module: any} {
@@ -1271,7 +1262,6 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1
    let lastError: unknown;
 +  // Orca: keep real load failures; the final miss (usually prebuilds) would otherwise hide them.
 +  const failures: NativeModuleLoadFailure[] = [];
-+  let retried = false;
    for (const d of dirs) {
      for (const r of relative) {
        const dir = `${r}/${d}/`;
@@ -1279,19 +1269,20 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1
 -        return { dir, module: require(`${dir}/${name}.node`) };
 -      } catch (e) {
 -        lastError = e;
-+      for (;;) {
++      const path = `${dir}${name}.node`;
++      for (let attempt = 0; ; attempt++) {
 +        try {
-+          return { dir, module: require(`${dir}/${name}.node`) };
++          return { dir, module: require(path) };
 +        } catch (e) {
 +          lastError = e;
-+          if (!retried && isTransientNativeModuleLoadError(e, process.platform)) {
++          if (!isModuleNotFoundError(e)) {
++            failures.push({ path, error: e, retry: attempt > 0 });
++          }
++          if (attempt === 0 && !retryWaitSpent.has(name) && isTransientNativeModuleLoadError(e)) {
 +            // Orca: a freshly copied addon can be briefly held by an antivirus scan.
-+            retried = true;
++            retryWaitSpent.add(name);
 +            sleepSync(NATIVE_MODULE_RETRY_DELAY_MS);
 +            continue;
-+          }
-+          if (!isModuleNotFoundError(e)) {
-+            failures.push({ path: `${dir}${name}.node`, error: e });
 +          }
 +          break;
 +        }
@@ -1302,12 +1293,15 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1
 +  throw new Error(formatNativeModuleLoadError(name, dirs, failures, lastError));
 +}
 +
-+export interface NativeModuleLoadFailure {
++interface NativeModuleLoadFailure {
 +  path: string;
 +  error: unknown;
++  retry: boolean;
 +}
 +
 +const NATIVE_MODULE_RETRY_DELAY_MS = 200;
++// Orca: one retry wait per module per process, so a permanent denial cannot stall every spawn.
++const retryWaitSpent = new Set<string>();
 +
 +function errorCode(error: unknown): string | undefined {
 +  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
@@ -1322,8 +1316,8 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1
 +  return errorCode(error) === 'MODULE_NOT_FOUND';
 +}
 +
-+export function isTransientNativeModuleLoadError(error: unknown, platform: string): boolean {
-+  if (platform !== 'win32') {
++function isTransientNativeModuleLoadError(error: unknown): boolean {
++  if (process.platform !== 'win32') {
 +    return false;
 +  }
 +  const code = errorCode(error);
@@ -1334,14 +1328,14 @@ index 81a70c77a18e25c50b26f0d80aa0e8d8c2672805..8d8228a6430f178b57216c23bd7059d1
 +  return /being used by another process|locked a portion of the file|access is denied/i.test(errorMessage(error));
 +}
 +
-+export function formatNativeModuleLoadError(name: string, dirs: string[], failures: NativeModuleLoadFailure[], lastError: unknown): string {
++function formatNativeModuleLoadError(name: string, dirs: string[], failures: NativeModuleLoadFailure[], lastError: unknown): string {
 +  const prefix = `Failed to load native module: ${name}.node, checked: ${dirs.join(', ')}: `;
 +  if (failures.length === 0) {
 +    return prefix + lastError;
 +  }
 +  return prefix + failures.map(failure => {
 +    const code = errorCode(failure.error);
-+    return `${failure.path}${code ? ` (${code})` : ''}: ${errorMessage(failure.error).trim()}`;
++    return `${failure.path}${failure.retry ? ' on retry' : ''}${code ? ` (${code})` : ''}: ${errorMessage(failure.error).trim()}`;
 +  }).join('; ');
 +}
 +

@@ -1,24 +1,19 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { classifyNodePtyLoaderMessage } from './node-pty-loader-diagnosis'
 
 // Exercises the loader added by config/patches/node-pty@1.1.0.patch, not a copy of it.
 const require = createRequire(import.meta.url)
 const PATCHED_UTILS = join(dirname(require.resolve('node-pty/package.json')), 'lib', 'utils.js')
+const WIN_DIRS = 'build/orca-napi-win32-x64, build/Release, build/Debug, prebuilds/win32-x64'
+const SHARING_VIOLATION =
+  'The process cannot access the file because it is being used by another process.'
 
-type PatchedUtils = {
-  loadNativeModule: (name: string) => unknown
-  formatNativeModuleLoadError: (
-    name: string,
-    dirs: string[],
-    failures: { path: string; error: unknown }[],
-    lastError: unknown
-  ) => string
-  isTransientNativeModuleLoadError: (error: unknown, platform: string) => boolean
-}
+type LoadNativeModule = (name: string) => unknown
 
 const tempDirs: string[] = []
 
@@ -28,7 +23,7 @@ afterEach(() => {
   }
 })
 
-function loadPatchedUtilsCopy(nativeFiles: Record<string, string> = {}): PatchedUtils {
+function loadPatchedUtilsCopy(nativeFiles: Record<string, string> = {}): LoadNativeModule {
   const root = mkdtempSync(join(tmpdir(), 'orca-node-pty-load-'))
   tempDirs.push(root)
   mkdirSync(join(root, 'lib'))
@@ -37,12 +32,43 @@ function loadPatchedUtilsCopy(nativeFiles: Record<string, string> = {}): Patched
     mkdirSync(dirname(join(root, relativePath)), { recursive: true })
     writeFileSync(join(root, relativePath), contents)
   }
-  return require(join(root, 'lib', 'utils.js'))
+  const utils: { loadNativeModule: LoadNativeModule } = require(join(root, 'lib', 'utils.js'))
+  return utils.loadNativeModule
 }
 
-function loadError(utils: PatchedUtils, name: string): string {
+/** Runs the installed loader with a scripted require and a faked platform, recording retry waits. */
+function loadPatchedUtilsWithRequire(
+  platform: string,
+  fakeRequire: (path: string) => unknown
+): { loadNativeModule: LoadNativeModule; requested: string[]; waits: number[] } {
+  const requested: string[] = []
+  const waits: number[] = []
+  const moduleExports: { loadNativeModule?: LoadNativeModule } = {}
+  const wrapper = runInNewContext(
+    `(function (exports, require) {${readFileSync(PATCHED_UTILS, 'utf8')}\n})`,
+    {
+      process: { platform, arch: 'x64' },
+      Atomics: {
+        wait: (_array: unknown, _index: number, _value: number, ms: number) => waits.push(ms)
+      },
+      Error,
+      Object
+    }
+  )
+  wrapper(moduleExports, (path: string) => {
+    requested.push(path)
+    return fakeRequire(path)
+  })
+  const { loadNativeModule } = moduleExports
+  if (typeof loadNativeModule !== 'function') {
+    throw new Error('patched utils.js did not export loadNativeModule')
+  }
+  return { loadNativeModule, requested, waits }
+}
+
+function loadError(loadNativeModule: LoadNativeModule, name: string): string {
   try {
-    utils.loadNativeModule(name)
+    loadNativeModule(name)
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
   }
@@ -53,78 +79,106 @@ function dlopenError(message: string): Error {
   return Object.assign(new Error(message), { code: 'ERR_DLOPEN_FAILED' })
 }
 
+function notFound(path: string): Error {
+  return Object.assign(new Error(`Cannot find module '${path}'`), { code: 'MODULE_NOT_FOUND' })
+}
+
 describe('patched node-pty native module loader', () => {
   it('keeps the real load failure instead of the final missing prebuilds directory', () => {
-    const utils = loadPatchedUtilsCopy({ 'build/Release/broken.node': 'not a native module' })
+    const loadNativeModule = loadPatchedUtilsCopy({
+      'build/Release/broken.node': 'not a native module'
+    })
 
-    const message = loadError(utils, 'broken')
+    const message = loadError(loadNativeModule, 'broken')
 
     expect(message).toMatch(/^Failed to load native module: broken\.node, checked: /)
     expect(message).toContain('../build/Release/broken.node (ERR_DLOPEN_FAILED): ')
     expect(message).not.toContain('Cannot find module')
   })
 
-  it('keeps the original message when every candidate is missing', () => {
-    const message = loadError(loadPatchedUtilsCopy(), 'absent')
+  it('retries a Windows sharing violation once and returns the module when it then loads', () => {
+    const conpty = { name: 'conpty' }
+    let releaseAttempts = 0
+    const { loadNativeModule, requested, waits } = loadPatchedUtilsWithRequire('win32', (path) => {
+      if (path !== '../build/Release/conpty.node') {
+        throw notFound(path)
+      }
+      releaseAttempts += 1
+      if (releaseAttempts === 1) {
+        throw dlopenError(SHARING_VIOLATION)
+      }
+      return conpty
+    })
 
-    expect(message).toContain('Error: Cannot find module')
-    expect(classifyNodePtyLoaderMessage(message).reason).toBe('dependency_missing')
+    expect(loadNativeModule('conpty')).toEqual({ dir: '../build/Release/', module: conpty })
+    expect(waits).toEqual([200])
+    expect(requested.filter((path) => path === '../build/Release/conpty.node')).toHaveLength(2)
   })
 
-  it('reports each Windows load failure with its path and code', () => {
-    const utils = loadPatchedUtilsCopy()
-    const message = utils.formatNativeModuleLoadError(
-      'conpty',
-      ['build/orca-napi-win32-x64', 'build/Release', 'build/Debug', 'prebuilds/win32-x64'],
-      [
-        {
-          path: '../build/Release/conpty.node',
-          error: dlopenError(
-            'The process cannot access the file because it is being used by another process.\r\n'
-          )
-        },
-        { path: './build/Release/conpty.node', error: dlopenError('Access is denied.') }
-      ],
-      new Error('Cannot find module ./prebuilds/win32-x64//conpty.node')
-    )
+  it('reports both the first failure and the retry failure, then stops', () => {
+    const { loadNativeModule, requested, waits } = loadPatchedUtilsWithRequire('win32', (path) => {
+      throw path === '../build/Release/conpty.node'
+        ? dlopenError(SHARING_VIOLATION)
+        : notFound(path)
+    })
+
+    const message = loadError(loadNativeModule, 'conpty')
 
     expect(message).toBe(
-      'Failed to load native module: conpty.node, checked: build/orca-napi-win32-x64, build/Release, build/Debug, prebuilds/win32-x64: ' +
-        '../build/Release/conpty.node (ERR_DLOPEN_FAILED): The process cannot access the file because it is being used by another process.; ' +
-        './build/Release/conpty.node (ERR_DLOPEN_FAILED): Access is denied.'
+      `Failed to load native module: conpty.node, checked: ${WIN_DIRS}: ` +
+        `../build/Release/conpty.node (ERR_DLOPEN_FAILED): ${SHARING_VIOLATION}; ` +
+        `../build/Release/conpty.node on retry (ERR_DLOPEN_FAILED): ${SHARING_VIOLATION}`
     )
     expect(classifyNodePtyLoaderMessage(message)).toEqual({
       reason: 'load_failed',
       detail: message
     })
+    expect(waits).toEqual([200])
+    // Eight candidates plus the single retry.
+    expect(requested).toHaveLength(9)
   })
 
-  it('retries only Windows sharing, lock, and access failures', () => {
-    const utils = loadPatchedUtilsCopy()
-    const isTransient = utils.isTransientNativeModuleLoadError
+  it('keeps the first denial when the file is gone by the time of the retry', () => {
+    let releaseAttempts = 0
+    const { loadNativeModule } = loadPatchedUtilsWithRequire('win32', (path) => {
+      if (path === '../build/Release/conpty.node' && ++releaseAttempts === 1) {
+        throw dlopenError('Access is denied.')
+      }
+      throw notFound(path)
+    })
 
-    expect(
-      isTransient(
-        dlopenError(
-          'The process cannot access the file because it is being used by another process.'
-        ),
-        'win32'
-      )
-    ).toBe(true)
-    expect(
-      isTransient(
-        dlopenError(
-          'The process cannot access the file because another process has locked a portion of the file.'
-        ),
-        'win32'
-      )
-    ).toBe(true)
-    expect(isTransient(dlopenError('Access is denied.'), 'win32')).toBe(true)
-    expect(isTransient(Object.assign(new Error('busy'), { code: 'EBUSY' }), 'win32')).toBe(true)
-    expect(isTransient(dlopenError('%1 is not a valid Win32 application.'), 'win32')).toBe(false)
-    expect(
-      isTransient(Object.assign(new Error('missing'), { code: 'MODULE_NOT_FOUND' }), 'win32')
-    ).toBe(false)
-    expect(isTransient(dlopenError('Access is denied.'), 'linux')).toBe(false)
+    const message = loadError(loadNativeModule, 'conpty')
+
+    expect(message).toBe(
+      `Failed to load native module: conpty.node, checked: ${WIN_DIRS}: ` +
+        '../build/Release/conpty.node (ERR_DLOPEN_FAILED): Access is denied.'
+    )
+    expect(classifyNodePtyLoaderMessage(message).reason).toBe('load_failed')
+  })
+
+  it('spends the retry wait once per module per process', () => {
+    const { loadNativeModule, waits } = loadPatchedUtilsWithRequire('win32', (path) => {
+      throw path === '../build/Release/conpty.node'
+        ? dlopenError('Access is denied.')
+        : notFound(path)
+    })
+
+    loadError(loadNativeModule, 'conpty')
+    const second = loadError(loadNativeModule, 'conpty')
+
+    expect(waits).toEqual([200])
+    expect(second).not.toContain('on retry')
+  })
+
+  it('reports a denial outside Windows without retrying it', () => {
+    const { loadNativeModule, requested, waits } = loadPatchedUtilsWithRequire('linux', (path) => {
+      throw path === '../build/Release/pty.node' ? dlopenError('Access is denied.') : notFound(path)
+    })
+
+    expect(loadError(loadNativeModule, 'pty')).toContain(
+      '../build/Release/pty.node (ERR_DLOPEN_FAILED): Access is denied.'
+    )
+    expect(waits).toEqual([])
+    expect(requested).toHaveLength(8)
   })
 })
