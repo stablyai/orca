@@ -76,6 +76,21 @@
     "failed": "Die Datei konnte nicht geöffnet werden."
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Probiere die neuen Karten aus",
+      "dismiss": "Nicht jetzt",
+      "body": "Agentenstatus, Ungelesen-Punkte und Zusammenfassungen untergeordneter Elemente auf jeder Karte.",
+      "switchBack": "Jederzeit zurückwechseln unter <path>Arbeitsbereichsoptionen › Kartenstil</path>",
+      "switchLabel": "Kartenstil",
+      "classic": "Klassisch",
+      "new": "Neu",
+      "keep": "Neue behalten",
+      "useClassic": "Klassisch verwenden",
+      "laterToast": "Die neuen Karten jederzeit ausprobieren unter Arbeitsbereichsoptionen › Kartenstil",
+      "saveFailedToast": "Kartenstil konnte nicht gespeichert werden. Versuche es erneut.",
+      "keptTitle": "Neue Karten sind aktiv",
+      "keptBody": "Hier unter Kartenstil änderbar."
+    },
     "revealFiltered": {
       "title": "Ausgeblendeten Arbeitsbereich anzeigen?",
       "description": "Der aktive Arbeitsbereich ist in der Seitenleiste ausgeblendet. Beim Anzeigen werden nur die Filter angepasst, die ihn ausblenden.",
@@ -8056,6 +8071,9 @@
             "modeAriaLabel": "Öffnungsmodus des Agenten-Dashboards",
             "modeInWindow": "Im Fenster",
             "modePopout": "Separates Fenster"
+          },
+          "worktreeCardStyle": {
+            "title": "Kartenstil"
           }
         },
         "FloatingWorkspacePane": {

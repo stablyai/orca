@@ -86,16 +86,17 @@
       "dismiss": "Dismiss"
     },
     "worktreeCardsIntroNotice": {
-      "title": "New card style",
-      "experimental": "Experimental",
+      "title": "Try the new cards",
       "dismiss": "Not now",
-      "previewBody": "Agent status, unread dots and child summaries on every card. This is a preview of your list.",
-      "classicBody": "Back to your current cards. Flip to New to preview again.",
+      "body": "Agent status, unread dots and child summaries on every card.",
+      "switchBack": "Switch back anytime in <path>Workspace options › Card style</path>",
       "switchLabel": "Card style",
       "classic": "Classic",
       "new": "New",
       "keep": "Keep new",
+      "useClassic": "Use classic",
       "laterToast": "Try the new cards any time from Workspace options › Card style",
+      "saveFailedToast": "Couldn't save the card style. Try again.",
       "keptTitle": "New cards are on",
       "keptBody": "Change it here, under Card style."
     },
