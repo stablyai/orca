@@ -257,7 +257,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   stderrTail(): string {
     const tail = this.managed.stderrTail()
     // A full tail starts mid-line, where a credential may have lost the marker that identifies it.
-    return (tail.length < STDERR_TAIL_MAX_CHARS ? redactString(tail) : redactTextTail(tail)).trim()
+    return (
+      tail.length < STDERR_TAIL_MAX_CHARS
+        ? redactString(tail)
+        : redactTextTail(tail, this.managed.stderrInKeyBlock())
+    ).trim()
   }
 
   /** Requires advertised session listing support. */

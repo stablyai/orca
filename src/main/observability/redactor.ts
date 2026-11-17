@@ -289,8 +289,12 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
 
 /** Redacts the end of a longer text, which may begin inside a credential: drops the partial first
  *  line and a key block cut from its BEGIN marker, which no pattern could recognise any more. */
-export function redactTextTail(tail: string): string {
+export function redactTextTail(tail: string, endsInKeyBlock = false): string {
   const lines = tail.slice(tail.indexOf('\n') + 1 || tail.length)
+  // An unfinished key block whose BEGIN was cut leaves nothing outside it.
+  if (endsInKeyBlock && !lines.includes('-----BEGIN ')) {
+    return lines ? '[redacted:pem]' : ''
+  }
   const end = /-----END [A-Z ]+-----/.exec(lines)
   const begin = lines.indexOf('-----BEGIN ')
   return redactString(

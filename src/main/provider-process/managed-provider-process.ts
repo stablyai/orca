@@ -25,6 +25,8 @@ import {
   type ProviderProcessTree
 } from './provider-process-close'
 
+import { createStderrKeyBlockWatch } from './stderr-key-block-watch'
+
 export const STDERR_TAIL_MAX_CHARS = 8192
 
 export type ProviderProcessExit = {
@@ -73,6 +75,8 @@ export type ManagedProviderProcess = {
   readonly spawnAbsence: ProviderSpawnAbsence | null
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
+  /** Stderr so far ends inside a private key block: a BEGIN marker with no END after it. */
+  stderrInKeyBlock(): boolean
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
   /** A close joining one already in flight shares that close's grace. */
@@ -119,6 +123,7 @@ export function spawnManagedProviderProcess(
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderWriterClose)
   let stderrTail = ''
+  const keyBlock = createStderrKeyBlockWatch()
   let stderrLine = ''
   let lineCut = false
   const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
@@ -130,6 +135,7 @@ export function spawnManagedProviderProcess(
   }
   // Drain stderr so a full pipe cannot block the child.
   child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    keyBlock.observe(chunk)
     if (options.onStderrLine) {
       const lines = (stderrLine + chunk).split('\n')
       const pending = lines.pop() ?? ''
@@ -263,6 +269,7 @@ export function spawnManagedProviderProcess(
       return spawnAbsence()
     },
     stderrTail: () => stderrTail,
+    stderrInKeyBlock: keyBlock.open,
     get lastCloseResult() {
       return lastCloseResult
     },

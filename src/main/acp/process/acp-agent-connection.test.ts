@@ -156,6 +156,24 @@ describe('ACP process-owning connection', () => {
     expect(connection.stderrTail()).not.toContain('K9K9')
   })
 
+  it.each([
+    ['whole', ['-----BEGIN PRIVATE KEY-----\n']],
+    ['split across writes', ['-----BEG', 'IN PRIVATE KEY-----\n']]
+  ])(
+    'drops an unfinished key block the stderr tail cut from its %s BEGIN marker',
+    async (_, begin) => {
+      const { connection, child } = fixture()
+      await connection.start(start)
+      child.stderr.write('warming up\n')
+      begin.forEach((part) => child.stderr.write(part))
+      // The agent exits mid-dump: 140 body lines outgrow the 8 KiB tail and no END follows.
+      child.stderr.write(`${'K9'.repeat(32)}\n`.repeat(140))
+      child.emit('exit', 1, null)
+      child.emit('close', 1, null)
+      expect(connection.stderrTail()).toBe('[redacted:pem]')
+    }
+  )
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))
