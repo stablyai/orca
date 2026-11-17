@@ -1,4 +1,7 @@
-import { retainOpenCodeWriterTopology } from './cli-writer-observation'
+import {
+  retainOpenCodeWriterTopology,
+  retainTmuxHookWriterTopology
+} from './cli-writer-observation'
 import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import {
   buildSpoolHookBody,
@@ -146,6 +149,16 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     source: AgentHookSource,
     body: unknown,
     isReplay = false
+  ): NormalizedLocalHook {
+    const normalized = this.normalizeLocalHookPayloadFor(source, body, isReplay)
+    retainTmuxHookWriterTopology(normalized.event, body)
+    return normalized
+  }
+
+  private normalizeLocalHookPayloadFor(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay: boolean
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {

@@ -121,7 +121,7 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     tmuxPane: TMUX_HINT,
     prompt: 'In tmux'
   })
-  await server.checkAgentPresenceSince(PANE, 0)
+  // Nothing probes the pane while the client is attached; only the hook says it ran in tmux.
   let saved: SleepingAgentSessionRecord | undefined = {
     paneKey: PANE,
     worktreeId: 'wt-1',
@@ -146,7 +146,8 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
   })
   // Detach ends the outer command, while the original agent remains under its server.
   runningPane(101, ...TMUX)
-  server.retireProcessAuthority(PANE, { confirmedExit: true })
+  // The tmux client's command finished after an earlier finish retired the launch: no exit named.
+  server.retireProcessAuthority(PANE, { confirmedExit: false })
   expect(saved).toBeUndefined()
   expect(server.row()).toBeUndefined()
   // The sleep's physical stop must not promote a stale checkpoint into a pane-owned agent.

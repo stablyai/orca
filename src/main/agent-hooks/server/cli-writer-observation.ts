@@ -12,6 +12,10 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
+import {
+  readTmuxHookPane,
+  readTmuxHookPaneHint
+} from '../../../shared/agent-hook-listener/presence/tmux-client-attachment'
 
 // Execution metadata follows the conversation binding and disappears at serialization.
 export const OPEN_CODE_WRITER_TOPOLOGY = Symbol('openCodeWriterTopology')
@@ -72,6 +76,28 @@ export function tmuxCliWriterEvent<T extends AgentHookEventPayload>(row: T): T {
   const providerSession = { ...row.providerSession }
   retainTmuxWriterTopology(providerSession)
   return { ...row, providerSession }
+}
+
+/** A hook that ran inside a tmux pane reaches this pane through a client; its server outlives the
+ *  pane even after the client detaches, when the pane's foreground no longer shows tmux. A pane
+ *  that only inherited Orca's own tmux environment hosts nothing. */
+export function retainTmuxHookWriterTopology(
+  event: AgentHookEventPayload | null,
+  body: unknown,
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (!event?.providerSession || !body || typeof body !== 'object') {
+    return
+  }
+  const tmux =
+    readTmuxHookPane('tmux' in body ? body.tmux : undefined) ??
+    readTmuxHookPaneHint('tmuxPane' in body ? body.tmuxPane : undefined)
+  const inherited = readTmuxHookPaneHint(
+    env.TMUX_PANE && env.TMUX ? `${env.TMUX_PANE} ${env.TMUX.split(',')[0]}` : undefined
+  )
+  if (tmux && !(inherited?.pane === tmux.pane && inherited.socket === tmux.socket)) {
+    retainTmuxWriterTopology(event.providerSession)
+  }
 }
 
 /** A binding the pane reaches through a tmux client; a decided binding keeps its topology. */
