@@ -127,7 +127,9 @@ export function orcadClientPageCommand(
         : undefined
       const source = params.page
         ? pages.getPage(params.page)
-        : pages.listPages(workspaceId).find((page) => page.active)
+        : workspaceId !== undefined
+          ? pages.listPages(workspaceId).find((page) => page.active)
+          : undefined
       if (!source) {
         return forward(args)
       }
