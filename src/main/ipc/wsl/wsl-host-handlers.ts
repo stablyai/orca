@@ -2,7 +2,7 @@ import { canCreateWslHostService } from './wsl-host-service-availability'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 import { ipcMain } from 'electron'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import type {
   WslHostAddResult,

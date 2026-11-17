@@ -25,20 +25,23 @@ import {
   ensureDefaultFloatingWorkspacePath,
   trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd
-} from './floating-workspace-directory'
+} from './worktrees/floating-workspace-directory'
 import {
   isMarkdownDocumentName,
   markdownDocumentFromFilePath
 } from '../../shared/file-listing/markdown-document-paths'
-import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
+import { registerMacSymbolicHotkeysProbeHandler } from './keyboard/macos-symbolic-hotkeys-probe'
 import {
   registerRendererShutdownCheckpointHandler,
   type QuitResumeRecordsFor
 } from './renderer-shutdown-checkpoint'
-import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
-import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
+import { readMacKeyboardLayoutSnapshot } from './keyboard/macos-keyboard-layout-snapshot'
+import { registerMacKeyboardLayoutChangeNotifications } from './keyboard/macos-keyboard-layout-change-notifications'
 import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-state-save-delay'
-import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
+import {
+  readCommandStdout,
+  readKeyboardInputSourceId
+} from './keyboard/macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 import { resolveWslMappedDrivePath } from '../wsl/filesystem/wsl-mapped-drive-share'
