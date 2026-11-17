@@ -68,7 +68,7 @@ describe('send receipt for a terminal Orca cannot notify', () => {
           code: 'recipient_delivery_held',
           recipient,
           message: expect.stringContaining(
-            `The agent in ${RECIPIENT} can read it by running \`${command}\` in its own terminal; don't run this yourself.`
+            `The agent in ${RECIPIENT} can read it by running \`${command}\` in its own terminal; don't run this yourself or type into its terminal.`
           )
         })
       ])

@@ -1,4 +1,5 @@
 import { orchestrationCheckRunFlag } from '../formatting/message-formatting'
+import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 
 /** Why mail to a worker is not delivered right now, read from the same gates that hold it, so a send
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
@@ -69,7 +70,11 @@ export async function readMailboxDeliveryHold(
   return readers.readTerminalHold(mailbox)
 }
 
-export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
+export function describeMailboxDeliveryHold(
+  recipient: string,
+  hold: MailboxDeliveryHold,
+  receiverCli: OrchestrationCliCommand = 'orca'
+): string {
   switch (hold.kind) {
     case 'prompt':
       return `Queued. ${recipient} is at a prompt that needs a person; delivery is held while it stays open.`
@@ -86,7 +91,7 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
     case 'unsettled':
       return `Queued. ${recipient} has not settled at its prompt (an open request or question, or output still arriving); delivery waits until it does.`
     case 'unverified':
-      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. The agent in ${hold.terminal} can read it by running \`orca orchestration check${orchestrationCheckRunFlag(recipient)} --terminal ${hold.terminal}\` in its own terminal; don't run this yourself. Orca will notify it once it can verify the agent accepts input.`
+      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. The agent in ${hold.terminal} can read it by running \`${receiverCli} orchestration check${orchestrationCheckRunFlag(recipient)} --terminal ${hold.terminal}\` in its own terminal; don't run this yourself or type into its terminal. Orca will notify it once it can verify the agent accepts input; if it needs the message sooner, tell the user.`
     case 'unreachable':
       return `Queued for ${hold.terminal}, but it can't be read in that terminal: it only reads its Task's mail. Message its coordinator instead.`
     case 'not-read':
