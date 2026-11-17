@@ -181,3 +181,42 @@ it('requires a ready accepting child only while steering and rolls failed conver
     holdReason: 'send_failed'
   })
 })
+
+it("steers the next agent's mail into a running turn while earlier mail is still on its way, but never past a person's send", async () => {
+  type Fixture = ReturnType<typeof automaticSubmissionFixture>
+  const fixture = async () => {
+    const f = automaticSubmissionFixture(cleanups)
+    await f.turn()
+    return f
+  }
+  const mail = (f: Fixture, id: string) =>
+    f.enqueue(id, {
+      body: { ...automaticBody(id), from: automaticMail },
+      options: { model: 'active' },
+      deliveryMode: 'queue'
+    })
+  const claim = async (f: Fixture, id: string) => (await f.claim(id, f.prepare(100, 'owed'))).value
+  // Handed to the agent, which has not taken it in yet.
+  const handOver = (f: Fixture, id: string) =>
+    f.run({
+      kind: 'dispatch',
+      input: { clientMessageId: id, fence: 1, state: 'pending', turnScope: { kind: 'thread' } }
+    })
+
+  const agents = await fixture()
+  await mail(agents, 'first')
+  await mail(agents, 'second')
+  await agents.enqueue('person', { options: { model: 'active' } })
+  expect(await claim(agents, 'send-first')).toMatchObject({ kind: 'claimed', messageId: 'first' })
+  await handOver(agents, 'send-first')
+  expect(await claim(agents, 'send-second')).toMatchObject({ kind: 'claimed', messageId: 'second' })
+  await handOver(agents, 'send-second')
+  expect(await claim(agents, 'send-person')).toEqual({ kind: 'waiting' })
+
+  const person = await fixture()
+  await person.enqueue('person', { options: { model: 'active' } })
+  await mail(person, 'mail')
+  expect(await claim(person, 'send-person')).toMatchObject({ kind: 'claimed', messageId: 'person' })
+  await handOver(person, 'send-person')
+  expect(await claim(person, 'send-mail')).toEqual({ kind: 'waiting' })
+})

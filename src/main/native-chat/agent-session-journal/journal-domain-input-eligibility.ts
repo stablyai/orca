@@ -9,6 +9,9 @@ import {
 } from './journal-domain-submission-consume'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 
 /** Send, automatic claim and publication derive the same barriers from current SQL rows. */
 export function journalDomainInputEligibility(
@@ -28,7 +31,10 @@ export function journalDomainInputEligibility(
     work,
     prompts,
     pending: context.firstQueuedInput(),
-    handover: [...context.enteredSubmissions()].some((send) => work.owesSend(send)),
+    handover: journalHandover(
+      context,
+      [...context.enteredSubmissions()].filter((send) => work.owesSend(send))
+    ),
     activeTurnId: work.activeTurn()?.turnId
   }
 }
@@ -61,9 +67,26 @@ export function journalDomainResolvedInputEligibility(
     context,
     prompts: work.actionablePrompts,
     pending: context.firstQueuedInput(),
-    handover: work.owedEnteredSubmissions.length > 0,
+    handover: journalHandover(context, work.owedEnteredSubmissions),
     activeTurnId: work.activeTurn?.turnId
   }
+}
+
+/** Sends the agent has not taken in yet; other agents' mail alone never holds the next mail card,
+ *  since a running turn takes every waiting message in at its next step. */
+function journalHandover(
+  context: JournalSqlStatusContext,
+  owed: readonly AgentJournalSubmission[]
+): 'none' | 'mail' | 'input' {
+  if (owed.length === 0) {
+    return 'none'
+  }
+  return owed.every((send) => {
+    const body = context.item(agentJournalSubmissionKey(send.clientMessageId))?.body
+    return body?.kind === 'message' && orchestrationMailNotice(body.from) !== null
+  })
+    ? 'mail'
+    : 'input'
 }
 
 export function selectJournalEligibleQueueCard(
@@ -81,7 +104,7 @@ export function selectJournalEligibleQueueCard(
     state.blocked ||
     state.prompts.length > 0 ||
     state.pending ||
-    state.handover ||
+    (state.handover !== 'none' && !(steer && state.handover === 'mail')) ||
     (steer && !allowSteer)
   ) {
     return none
@@ -95,7 +118,8 @@ export function selectJournalEligibleQueueCard(
         now,
         steer,
         automatic: true,
-        mail: facts.mail
+        mail: facts.mail,
+        mailOnly: state.handover === 'mail'
       },
       state.context.inputHead
     ),

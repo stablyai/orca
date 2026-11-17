@@ -31,6 +31,8 @@ type JournalDomainQueueSelection = {
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
   mail?: JournalMailCustody
+  /** Only other agents' mail may join a turn that has not taken in earlier mail yet. */
+  mailOnly?: boolean
 }
 
 export type JournalDomainQueuePick =
@@ -103,6 +105,9 @@ export function nextJournalDomainQueueCard(
       }
       const mail = orchestrationMailNotice(card.body.from)
       if (steer && (card.body.command || (!mail && card.deliveryMode !== 'steer'))) {
+        continue
+      }
+      if (selection.mailOnly && !mail) {
         continue
       }
       if (pastUnavailableMail && mail) {
