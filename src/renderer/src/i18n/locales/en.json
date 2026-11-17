@@ -25499,9 +25499,9 @@
     "chatTag": "(Chat)",
     "agents": "Agents",
     "noChat": "No chat for {{agent}}",
-    "openIn": "Open as",
-    "chat": "Chat",
-    "cli": "CLI"
+    "noTerminal": "No terminal for {{agent}}",
+    "openAsChat": "Open as chat",
+    "openAsTerminal": "Open as terminal"
   },
   "automations": {
     "runFailures": {
