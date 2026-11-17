@@ -9,6 +9,8 @@ import {
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
+// A taskkill queued behind slow launches on the worker still ends, after this much extra time.
+const WORKER_TASKKILL_LAUNCH_ALLOWANCE_MS = 30_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
 // PIDs a dying worker abandons in one turn share a taskkill, so main pays one launch per worker death.
@@ -132,8 +134,8 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
       resolve(ended)
     }
     killer.once('error', (error) => {
-      if (onWorker && isAbandonedWorkerChildError(error) && !settled) {
-        // The worker died before taskkill ran; cleanup must still happen, so start it here.
+      // Only a taskkill the worker never created restarts here; one that ran may have freed the PID for reuse.
+      if (onWorker && isAbandonedWorkerChildError(error) && !killer.pid && !settled) {
         settled = true
         if (timer) {
           clearTimeout(timer)
@@ -145,10 +147,22 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
       finish(false)
     })
     killer.once('close', (code) => finish(code === 0))
-    timer = setTimeout(() => {
-      killer.kill()
-      finish(false)
-    }, WINDOWS_TREE_KILL_WAIT_MS)
+    const waitFor = (ms: number): void => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      timer = setTimeout(() => {
+        killer.kill()
+        finish(false)
+      }, ms)
+    }
+    if (onWorker) {
+      // As with a native launch, the wait starts once taskkill exists, not while it queues on the worker.
+      killer.once('spawn', () => waitFor(WINDOWS_TREE_KILL_WAIT_MS))
+      waitFor(WINDOWS_TREE_KILL_WAIT_MS + WORKER_TASKKILL_LAUNCH_ALLOWANCE_MS)
+    } else {
+      waitFor(WINDOWS_TREE_KILL_WAIT_MS)
+    }
   })
 }
 

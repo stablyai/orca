@@ -5,28 +5,40 @@ import type * as NodeChildProcess from 'node:child_process'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock, admitMock } = vi.hoisted(() => ({
+const { spawnMock, admitMock, workerTaskkill } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
-  admitMock: vi.fn(() => true)
+  admitMock: vi.fn(() => true),
+  workerTaskkill: { available: false, killers: [] as WorkerChildModule.WorkerThreadChildProcess[] }
 }))
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeChildProcess>()),
   spawn: spawnMock
 }))
-// These cases drive main's native taskkill fake; the worker-hosted route has its own capture test.
+// Most cases drive main's native taskkill fake; worker-hosted ones turn the worker on.
 vi.mock(
   '../../../worker-thread-child-process/worker-thread-child-process',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof WorkerChildModule>()),
-    canSpawnOnWorkerThread: () => false
-  })
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WorkerChildModule>()
+    return {
+      ...actual,
+      canSpawnOnWorkerThread: () => workerTaskkill.available,
+      spawnProcessOnWorkerThread: () => {
+        const killer = new actual.WorkerThreadChildProcess(99, () => true)
+        workerTaskkill.killers.push(killer)
+        return killer
+      }
+    }
+  }
 )
 vi.mock('../../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
   admitSelfInitiatedTreeKill: admitMock
 }))
 
-import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  WORKER_CHILD_ABANDONED_CODE,
+  WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
 
 const originalPlatform = process.platform
@@ -44,6 +56,8 @@ describe('Git command tree termination', () => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
     spawnMock.mockReset()
     admitMock.mockReset().mockReturnValue(true)
+    workerTaskkill.available = false
+    workerTaskkill.killers = []
   })
 
   afterEach(() => {
@@ -142,6 +156,44 @@ describe('Git command tree termination', () => {
       ['/pid', '4321', '/pid', '4322', '/t', '/f'],
       { stdio: 'ignore', windowsHide: true }
     )
+  })
+  it('starts the taskkill wait once the worker has created taskkill', async () => {
+    vi.useFakeTimers()
+    try {
+      workerTaskkill.available = true
+      const child = childWithPid(1234)
+      const pending = killSpawnedCommandTree(child)
+      const killer = workerTaskkill.killers[0]!
+      const stopKiller = vi.spyOn(killer, 'kill')
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(stopKiller).not.toHaveBeenCalled()
+      expect(child.kill).not.toHaveBeenCalled()
+
+      killer.receive({ type: 'spawn', id: 99, pid: 777 })
+      await vi.advanceTimersByTimeAsync(2_000)
+      await pending
+      expect(stopKiller).toHaveBeenCalledOnce()
+      expect(child.kill).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('does not rerun a taskkill the worker already started when the worker dies', async () => {
+    workerTaskkill.available = true
+    const child = childWithPid(1234)
+    const pending = killSpawnedCommandTree(child)
+    const killer = workerTaskkill.killers[0]!
+    killer.receive({ type: 'spawn', id: 99, pid: 777 })
+    killer.receive({
+      type: 'error',
+      id: 99,
+      error: {
+        message: 'Child process worker exited with code 1',
+        code: WORKER_CHILD_ABANDONED_CODE
+      }
+    })
+    await pending
+    expect(spawnMock).not.toHaveBeenCalled()
   })
   it('still kills the tree when the worker reports the PID after the wait', async () => {
     vi.useFakeTimers()
