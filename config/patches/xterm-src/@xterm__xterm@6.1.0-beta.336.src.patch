@@ -95,6 +95,48 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  }
  
  export interface IBrowser {
+diff --git a/src/browser/Viewport.ts b/src/browser/Viewport.ts
+index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..067e4d32b005a96dbae3281c95d6aa7f690c619b 100644
+--- a/src/browser/Viewport.ts
++++ b/src/browser/Viewport.ts
+@@ -14,6 +14,10 @@ import type { IScrollableElementChangeOptions } from './scrollable/scrollableEle
+ import { Emitter, EventUtils } from '../common/Event';
+ import { Scrollable, ScrollbarVisibility, type IScrollEvent } from './scrollable/scrollable';
+ 
++function hasMeasuredCellHeight(cellHeight: number): boolean {
++  return Number.isFinite(cellHeight) && cellHeight > 0;
++}
++
+ export class Viewport extends Disposable {
+ 
+   protected _onRequestScrollLines = this._register(new Emitter<number>());
+@@ -173,6 +177,12 @@ export class Viewport extends Disposable {
+     if (!this._renderService || this._isSyncing) {
+       return;
+     }
++    // A renderer without measured cells can't map rows to pixels; syncing now would read the
++    // scroll back as row 0/0 = NaN and poison ydisp, so wait for a render with real dimensions.
++    if (!hasMeasuredCellHeight(this._renderService.dimensions.css.cell.height)) {
++      this._needsSyncOnRender = true;
++      return;
++    }
+     // Defer DOM scroll updates during synchronized output to prevent visible
+     // scroll position flickering while the canvas content is frozen.
+     if (this._coreService.decPrivateModes.synchronizedOutput) {
+@@ -208,8 +218,12 @@ export class Viewport extends Disposable {
+     if (this._isHandlingScroll || this._suppressOnScrollHandler) {
+       return;
+     }
++    const cellHeight = this._renderService.dimensions.css.cell.height;
++    if (!hasMeasuredCellHeight(cellHeight)) {
++      return;
++    }
+     this._isHandlingScroll = true;
+-    const newRow = Math.round(e.scrollTop / this._renderService.dimensions.css.cell.height);
++    const newRow = Math.round(e.scrollTop / cellHeight);
+     const diff = newRow - this._bufferService.buffer.ydisp;
+     if (diff !== 0) {
+       this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
 index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a1770c942abe 100644
 --- a/src/browser/input/CompositionHelper.ts
@@ -1572,3 +1614,18 @@ index b3ad14ee041fac933a7f90bf66fe7985eef4beed..a0a645c42b3c8a08a699b32a46def5ed
        this.lines.maxLength = newMaxLength;
      }
  
+diff --git a/src/common/services/BufferService.ts b/src/common/services/BufferService.ts
+index 3bd1f7e42df645b1a98af7feeb316784f06d754d..3ade1393a999fbea6794a511642c58e401fc962c 100644
+--- a/src/common/services/BufferService.ts
++++ b/src/common/services/BufferService.ts
+@@ -135,6 +135,10 @@ export class BufferService extends Disposable implements IBufferService {
+    * viewport originally.
+    */
+   public scrollLines(disp: number, suppressScrollEvent?: boolean): void {
++    // A NaN ydisp never compares equal to itself, so every later sync would scroll again forever
++    if (!Number.isFinite(disp)) {
++      return;
++    }
+     const buffer = this.buffer;
+     if (disp < 0) {
+       if (buffer.ydisp === 0) {
