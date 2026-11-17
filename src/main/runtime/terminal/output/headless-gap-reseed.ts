@@ -3,6 +3,8 @@ import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
+// Past the daemon client's own request timeout, so every capture settles before its slot frees.
+const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
 // Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
 const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
 
@@ -15,7 +17,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   private readonly gapCaptureWaiters: (() => void)[] = []
 
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
-    if (!this.ptysById.has(ptyId)) {
+    if (this.ptysById.get(ptyId)?.connected === false) {
       // An exited PTY has no screen left to restore.
       this.disposeHeadlessTerminal(ptyId)
       return
@@ -71,7 +73,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           }
           state.gapReseedLastCaptureAt = Date.now()
           // Screen only: a storm repeats this, and history readers go to the provider instead.
-          const { snapshot } = await this.awaitProviderTerminalBuffer(ptyId, { scrollbackRows: 0 })
+          // Hold the slot for the whole request, not the readers' shorter wait, so late answers still land.
+          const { snapshot } = await this.awaitProviderTerminalBuffer(
+            ptyId,
+            { scrollbackRows: 0 },
+            { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS }
+          )
           // A null capture is a failed or late one: only snapshot-capable daemons send gaps.
           if (
             !snapshot ||
@@ -80,7 +87,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
           ) {
             return
           }
-          seeded = await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)
+          seeded =
+            (await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)) &&
+            // A gap during an asynchronous seed write leaves the frame behind again.
+            snapshot.seq >= (state.gapReseed?.frontier ?? frontier)
         } finally {
           this.releaseGapCaptureSlot()
         }

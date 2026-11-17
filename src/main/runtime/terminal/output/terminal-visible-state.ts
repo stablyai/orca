@@ -163,14 +163,16 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
     const state = this.headlessTerminals.get(ptyId)
-    if (!state) {
+    // A model recovering from dropped output is no evidence of the screen.
+    if (!state || state.gapReseed) {
       return null
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      state.gapReseed
     ) {
       return null
     }

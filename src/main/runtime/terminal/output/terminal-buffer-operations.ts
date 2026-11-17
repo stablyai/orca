@@ -99,6 +99,20 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
+    return this.serializeHeadlessWithProviderHistory(ptyId, opts)
+  }
+
+  /** A model reseeded screen-only after dropped output lacks the history the provider kept. */
+  protected async serializeHeadlessWithProviderHistory(
+    ptyId: string,
+    opts: { scrollbackRows?: number }
+  ): ReturnType<OrcaRuntimeWithSerializeMainTerminalBuffer['serializeMainTerminalBuffer']> {
+    if (this.headlessTerminals.get(ptyId)?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0) {
+      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+      if (providerSnapshot) {
+        return providerSnapshot
+      }
+    }
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
@@ -124,10 +138,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (restoredSnapshot) {
       return restoredSnapshot
     }
-    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
-      ...opts,
-      includeEmpty: true
-    })
+    const headlessSnapshot = await this.serializeHeadlessWithProviderHistory(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
     }
