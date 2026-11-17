@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import type { LegacyClaim } from './journal-legacy-content-proof'
 import {
@@ -116,11 +117,13 @@ export function applyJournalSqlMaintenance(
     }
     case 'legacy-originals-keep': {
       // What only the original holds for a chat both sides changed, kept verbatim before it goes.
+      // Keyed by content too, so an original retired later never replaces one kept before.
       const keep = db.prepare(
-        'INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)'
+        'INSERT OR IGNORE INTO agent_session_store_meta(key,value) VALUES(?,?)'
       )
       for (const { sessionId, value } of operation.originals) {
-        keep.run(`${JOURNAL_LEGACY_ORIGINAL}${sessionId}`, value)
+        const digest = createHash('sha256').update(value).digest('hex').slice(0, 16)
+        keep.run(`${JOURNAL_LEGACY_ORIGINAL}${sessionId}:${digest}`, value)
       }
       return true
     }

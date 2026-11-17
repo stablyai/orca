@@ -40,11 +40,19 @@ export function legacySessionHold(
   const recorded =
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)
-  if (!recorded) {
-    return { convert: true }
-  }
   const revision = journalLegacyChatRevision(source, sessionId) ?? 'null'
   const shown = meta(store, journalLegacyChatRevisionKey(sessionId))
+  if (!recorded) {
+    // Converting never replaces a chat already converted here, so history an older Orca added after
+    // that conversion would only be in the original. No reconcile reads it, so it keeps the original.
+    if (shown !== undefined && shown !== revision && converted(store, sessionId)) {
+      throw new JournalLegacyRetentionError(
+        'an original chat without a record has history this store lacks',
+        'source-history'
+      )
+    }
+    return { convert: true }
+  }
   const here = store
     .prepare(
       `SELECT EXISTS(SELECT 1 FROM agent_session_records WHERE session_id=?1) AS recorded,
@@ -53,9 +61,16 @@ export function legacySessionHold(
     )
     .get(sessionId)
   if (!here?.recorded && !here?.cataloged) {
-    // Deleted here after reading this revision (its revision key stays): the person's choice.
+    // Deleted here after reading this revision (its revision key stays): the person's choice. Text an
+    // older Orca queued in it since moves no revision, so the original's waiting text is kept.
     if (shown === revision || empty) {
-      return { convert: false }
+      return {
+        convert: false,
+        original:
+          hasQueue && unsettledQueue(source, sessionId)
+            ? originalVersion(source, sessionId)
+            : undefined
+      }
     }
     throw new JournalLegacyRetentionError('an original chat is not in this store yet')
   }
@@ -64,12 +79,14 @@ export function legacySessionHold(
     throw new JournalLegacyRetentionError('older Orca writes to a chat are not absorbed yet')
   }
   // A chat not converted yet takes its queue from the original as it is now when it converts.
-  const converted = here.epoch !== null && here.epoch !== undefined
   return {
     convert: true,
     original:
       personEditsDiffer(source, store, sessionId) ||
-      (converted && hasQueue && !queueHeld(source, store, sessionId))
+      (here.epoch !== null &&
+        here.epoch !== undefined &&
+        hasQueue &&
+        !queueHeld(source, store, sessionId))
         ? originalVersion(source, sessionId)
         : undefined
   }
@@ -219,6 +236,26 @@ function personEditsDiffer(
   return original !== undefined && original !== null && read(store) !== original
 }
 
+function converted(store: Database.Database, sessionId: string): boolean {
+  const row = store
+    .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
+    .get(sessionId)
+  return row?.epoch !== null && row?.epoch !== undefined
+}
+
+/** The original still has text waiting to send in this chat. */
+function unsettledQueue(source: Database.Database, sessionId: string): boolean {
+  for (const row of source
+    .prepare('SELECT * FROM queued_messages WHERE session_id=?')
+    .iterate(sessionId)) {
+    const queued = readStoredQueuedMessageRow(row)
+    if (!queued || isUnsettledQueuedMessage(queued)) {
+      return true
+    }
+  }
+  return false
+}
+
 /** The original's record and the text it still has waiting to send, verbatim. */
 function originalVersion(source: Database.Database, sessionId: string): string {
   const record = source
@@ -264,32 +301,61 @@ export function readLegacyProofSessions(
       ${after === null ? '' : 'WHERE ids.session_id>?'} ORDER BY ids.session_id LIMIT 32`
     )
     .all(...(after === null ? [] : [after]))
-  return rows.map((row) => {
-    const id = String(row.session_id)
-    if (row.epoch === null) {
-      return {
-        sessionId: id,
-        workspaceId: '',
-        epoch: '',
-        empty: true,
-        ...legacyRecordOnlyHold(db, store, id)
-      }
+  const page: ReturnType<typeof readLegacyProofSessions> = []
+  let bytes = 0
+  for (const row of rows) {
+    const session = readLegacyProofSession(db, store, tables, row)
+    const size = session.original?.length ?? 0
+    if (size > LEGACY_ORIGINAL_MAX_BYTES) {
+      throw new JournalLegacyRetentionError(
+        'an original chat holds more waiting text than one reply can carry',
+        'source-oversize'
+      )
     }
-    const hasRows = !!db.prepare('SELECT 1 FROM journal_rows WHERE session_id=? LIMIT 1').get(id)
-    const hasQueue =
-      tables.has('queued_messages') &&
-      !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
-    const empty =
-      !hasRows &&
-      !hasQueue &&
-      (!tables.has('journal_outcome_epochs') ||
-        !db.prepare('SELECT 1 FROM journal_outcome_epochs WHERE session_id=? LIMIT 1').get(id))
+    // Kept originals ride the reader's reply: a page ends early rather than outgrow it.
+    if (page.length > 0 && bytes + size > LEGACY_ORIGINALS_PAGE_BYTES) {
+      break
+    }
+    bytes += size
+    page.push(session)
+  }
+  return page
+}
+
+/** One reply carries at most 64 MiB; a page of originals stays well under it. */
+const LEGACY_ORIGINALS_PAGE_BYTES = 16 * 1024 * 1024
+const LEGACY_ORIGINAL_MAX_BYTES = 48 * 1024 * 1024
+
+function readLegacyProofSession(
+  db: Database.Database,
+  store: Database.Database,
+  tables: ReadonlySet<string>,
+  row: Record<string, unknown>
+): LegacySessionHold & { sessionId: string; workspaceId: string; epoch: string; empty: boolean } {
+  const id = String(row.session_id)
+  if (row.epoch === null) {
     return {
       sessionId: id,
-      workspaceId: String(row.workspace_id),
-      epoch: String(row.epoch),
-      empty,
-      ...legacySessionHold(db, store, id, empty, hasQueue)
+      workspaceId: '',
+      epoch: '',
+      empty: true,
+      ...legacyRecordOnlyHold(db, store, id)
     }
-  })
+  }
+  const hasRows = !!db.prepare('SELECT 1 FROM journal_rows WHERE session_id=? LIMIT 1').get(id)
+  const hasQueue =
+    tables.has('queued_messages') &&
+    !!db.prepare('SELECT 1 FROM queued_messages WHERE session_id=? LIMIT 1').get(id)
+  const empty =
+    !hasRows &&
+    !hasQueue &&
+    (!tables.has('journal_outcome_epochs') ||
+      !db.prepare('SELECT 1 FROM journal_outcome_epochs WHERE session_id=? LIMIT 1').get(id))
+  return {
+    sessionId: id,
+    workspaceId: String(row.workspace_id),
+    epoch: String(row.epoch),
+    empty,
+    ...legacySessionHold(db, store, id, empty, hasQueue)
+  }
 }
