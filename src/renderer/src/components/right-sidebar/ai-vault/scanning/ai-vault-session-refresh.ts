@@ -38,6 +38,8 @@ export function useAiVaultSessionRefresh(
 ): {
   error: string | null
   loading: boolean
+  /** A foreground refresh is in flight, including while a cached list is shown without a spinner. */
+  refreshing: boolean
   scopePending: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
@@ -59,6 +61,7 @@ export function useAiVaultSessionRefresh(
   const associations = useAiVaultAssociationObservation(executionHostScope)
   const associationsRef = useRef(associations)
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [failure, setFailure] = useState<{ scopeKey: string; cause: string } | null>(null)
   const [terminalScopeKey, setTerminalScopeKey] = useState<string | null>(null)
   const requestTokenRef = useRef<string>(undefined!)
@@ -172,8 +175,11 @@ export function useAiVaultSessionRefresh(
         claimAiVaultForcedRescan(true)
       }
       // Background cache hits must not flash a loading spinner on every refocus.
-      if (args.background !== true && !cachedResult) {
-        setLoading(true)
+      if (args.background !== true) {
+        setRefreshing(true)
+        if (!cachedResult) {
+          setLoading(true)
+        }
       }
       setTerminalScopeKey(null)
       const requestCurrent = () =>
@@ -218,6 +224,7 @@ export function useAiVaultSessionRefresh(
         refreshInFlightRef.current = false
         if (mountedRef.current && refreshIdRef.current === refreshId) {
           setLoading(false)
+          setRefreshing(false)
         }
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
@@ -284,6 +291,7 @@ export function useAiVaultSessionRefresh(
   return {
     error,
     loading: loading || scopePending,
+    refreshing,
     scopePending,
     refresh,
     scanResult: shown?.result ?? null,
