@@ -7,6 +7,7 @@ import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { AgentLaunchInstallPrompt } from './AgentLaunchInstallPrompt'
+import { retryAgentPickerCatalog } from './agent-launch-picker-acquisition'
 import {
   AgentPickerChoiceRows,
   AgentPickerSearchResults,
@@ -22,6 +23,7 @@ import {
   CommandGroup,
   CommandItem
 } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -108,6 +110,7 @@ export function AgentLaunchSetupPanel({
   const state = agentLaunchSetupState(entry, draft, disabled)
   const { models, currentModel, hasModels, catalogPending, catalogMessage, modelInArguments } =
     state
+  const { ownerKey } = entry
   const installed = entry.surfaces.length > 0
   const searching = Boolean(search && modelQuery.trim())
   const results = searching && search ? searchAgentPickerModels(search.entries, modelQuery) : []
@@ -120,7 +123,9 @@ export function AgentLaunchSetupPanel({
       : []
   const choices = search?.choices ?? []
   const choiceResults = searching
-    ? choices.filter((choice) => choiceMatches(choice, modelQuery))
+    ? [...(search?.searchChoices ?? []), ...choices].filter((choice) =>
+        choiceMatches(choice, modelQuery)
+      )
     : []
   const choiceList = useRef<HTMLDivElement>(null)
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
@@ -146,7 +151,8 @@ export function AgentLaunchSetupPanel({
         ? setupRowKey(resultStart)
         : undefined
       : modelRows.start,
-    searching ? '' : modelQuery
+    searching ? '' : modelQuery,
+    models.length
   )
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
@@ -190,7 +196,8 @@ export function AgentLaunchSetupPanel({
       : []
   return (
     <div
-      className="flex w-full flex-col"
+      // Why min-h-0: in a height-capped picker only the model list gives up room.
+      className="flex min-h-0 w-full flex-col"
       data-agent-launch-setup=""
       onKeyDownCapture={(event) => {
         if (isScreenSubmitShortcut(event)) {
@@ -277,10 +284,23 @@ export function AgentLaunchSetupPanel({
         {!installed && !searching ? (
           <AgentLaunchInstallPrompt entry={entry} />
         ) : (
-          <CommandList className="max-h-56 scroll-py-0" data-focus-behavior="page">
+          <CommandList className="max-h-56 min-h-0 scroll-py-0" data-focus-behavior="page">
             {catalogMessage && !searching ? (
-              <div className="px-2.5 py-2 text-xs text-muted-foreground" role="status">
-                {catalogMessage}
+              <div
+                className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground"
+                role="status"
+              >
+                <span className="min-w-0 flex-1">{catalogMessage}</span>
+                {state.catalogRetryable && ownerKey ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => retryAgentPickerCatalog(ownerKey, entry.agent)}
+                  >
+                    {t('agentPicker.retryModels', 'Retry')}
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {searching && !results.length && !agentResults.length && !choiceResults.length ? (

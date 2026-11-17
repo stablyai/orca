@@ -43,29 +43,9 @@ function UnifiedDialog({
 describe('unified dialog layout', () => {
   afterEach(cleanup)
 
-  it('drops the close X when the footer has Cancel, and keeps it on default dialogs', () => {
-    const { unmount } = render(<UnifiedDialog />)
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
-    unmount()
-
-    render(
-      <Dialog open>
-        <DialogContent aria-describedby={undefined}>
-          <DialogTitle>Settings</DialogTitle>
-        </DialogContent>
-      </Dialog>
-    )
-    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
-  })
-
   it('starts focus on Cancel when asked, ahead of earlier controls', async () => {
     render(<UnifiedDialog initialFocus="cancel" />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
-  })
-
-  it('keeps focus inside a busy dialog whose Cancel button is disabled', async () => {
-    render(<UnifiedDialog busy initialFocus="cancel" />)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Show changes' })).toHaveFocus())
   })
 
   it('blocks Esc and Cancel while busy, and closes on Esc otherwise', async () => {

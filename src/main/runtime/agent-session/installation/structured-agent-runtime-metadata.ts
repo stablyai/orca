@@ -5,7 +5,8 @@ import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
   resolveAcpLaunchCommand,
-  selectAcpHostAccountHome
+  selectAcpHostAccountHome,
+  selectAcpHostAccountHomeForCatalog
 } from '../../../acp/launch/acp-launch-command'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
@@ -105,7 +106,11 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
-              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
+              .then((env) =>
+                (purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog
+                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+              )
               .catch(() => null)
           : null
       return host ?? spec.account.resolve({ launchEnv, stateDirectory })

@@ -29,6 +29,8 @@ export type AgentLaunchSetupSearch = {
   onPickAgent: (entry: AgentPickerEntry, close: boolean) => void
   /** Rows under the card, which a search also lists. */
   choices?: readonly AgentPickerChoice[]
+  /** Choices a search lists ahead of those rows, shown elsewhere when not searching. */
+  searchChoices?: readonly AgentPickerChoice[]
 }
 
 export const choiceMatches = (choice: AgentPickerChoice, query: string) => {
