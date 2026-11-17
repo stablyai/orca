@@ -82,7 +82,7 @@ describe('send receipt for a terminal Orca cannot notify', () => {
 
     expect(result).toMatchObject({ message: { to_handle: RECIPIENT } })
     expect(result).toMatchObject(
-      heldWarning(RECIPIENT, 'orca orchestration check --terminal term_titleless')
+      heldWarning(RECIPIENT, 'orca-dev orchestration check --terminal term_titleless')
     )
   })
 
@@ -114,7 +114,7 @@ describe('send receipt for a terminal Orca cannot notify', () => {
     expect(result).toMatchObject(
       heldWarning(
         `run:${run.id}`,
-        `orca orchestration check --run ${run.id} --terminal term_titleless`
+        `orca-dev orchestration check --run ${run.id} --terminal term_titleless`
       )
     )
   })
