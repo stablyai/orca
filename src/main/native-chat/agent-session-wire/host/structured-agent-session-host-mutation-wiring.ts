@@ -61,7 +61,7 @@ export function createStructuredAgentSessionHostMutationContext(
       }
     },
     clearPromptSuggestion: (sessionId) =>
-      input.subscribers.promptSuggestions.publish(sessionId, null),
+      input.clientDelivery.subscribers.promptSuggestions.publish(sessionId, null),
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
     publishChildWork: (sessionId, evidence) =>

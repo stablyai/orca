@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionPromptSuggestion } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
 function message(
   body: Record<string, unknown>,
