@@ -1,4 +1,5 @@
 import { legacyEditorTabs } from './legacy-editor-tab-hydration'
+import { withSavedTerminalRowEntries } from './terminal-row-tab-entries'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type {
   Tab,
@@ -67,7 +68,7 @@ function pruneLayoutNodeForGroups(
 }
 
 /**
- * Tabs come from the tab bar alone; terminal rows it lacks are adopted later by reconciliation.
+ * Tabs come from the tab bar plus saved terminal rows it never listed.
  * A chat-only workspace (a project a WSL host now owns) keeps just its native chat tabs.
  */
 export function buildHydratedTabState(
@@ -84,13 +85,16 @@ export function buildHydratedTabState(
   const tabIdAliasesByWorktree: Record<string, Map<string, Map<string, string>>> = {}
   const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
-  for (const [worktreeId, tabs] of Object.entries(
-    session.unifiedTabs ?? legacyEditorTabs(session)
-  )) {
+  const savedEntries = session.unifiedTabs ?? legacyEditorTabs(session)
+  for (const worktreeId of new Set([
+    ...Object.keys(savedEntries),
+    ...Object.keys(session.tabsByWorktree)
+  ])) {
     const chatOnly = chatOnlyWorktreeIds.has(worktreeId)
     if (!validWorktreeIds.has(worktreeId) && !chatOnly) {
       continue
     }
+    const tabs = withSavedTerminalRowEntries(session, worktreeId, savedEntries[worktreeId] ?? [])
     if (tabs.length === 0) {
       continue
     }

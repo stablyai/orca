@@ -5,6 +5,7 @@ import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-group
 import { ensureWorktreeGroup, updateGroup } from './tab-group-state'
 import { sanitizeRecentTabIds } from './tab-selection-history'
 import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
+import { terminalRowTabEntry } from './terminal-row-tab-entries'
 import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds,
@@ -72,23 +73,7 @@ export function projectWorktreeTabModelReconciliation(
       ? []
       : legacyRuntimeTerminalTabs
           .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-          .map((tab) => ({
-            id: tab.id,
-            entityId: tab.id,
-            groupId: reconciliationGroup.id,
-            worktreeId,
-            contentType: 'terminal' as const,
-            label: tab.title,
-            ...(tab.quickCommandLabel?.trim()
-              ? { quickCommandLabel: tab.quickCommandLabel.trim() }
-              : {}),
-            ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
-            ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
-            customLabel: tab.customTitle,
-            color: tab.color,
-            sortOrder: tab.sortOrder,
-            createdAt: tab.createdAt
-          }))
+          .map((tab) => terminalRowTabEntry(tab, worktreeId, reconciliationGroup.id))
   const reconciledUnifiedTabs =
     restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
   const rememberedLegacyActiveTabId = state.activeTabIdByWorktree[worktreeId]
