@@ -107,9 +107,11 @@ export function NativeChatAutomationSavedRow({
       }}
     >
       <NativeChatCardFrame
+        className="native-chat-automation-receipt shadow-xs"
+        headingClassName="mb-0.5 text-2xs font-medium"
         avatar={
-          <NativeChatCardAvatar>
-            <Icon className="size-4 text-muted-foreground" aria-hidden />
+          <NativeChatCardAvatar className="native-chat-automation-receipt-avatar">
+            <Icon className="size-4 text-foreground" aria-hidden />
           </NativeChatCardAvatar>
         }
         heading={
@@ -118,7 +120,10 @@ export function NativeChatAutomationSavedRow({
             : t('components.native-chat.automationSaved.created', 'Created automation')
         }
         trailing={
-          <NativeChatMessageTimestamp timestamp={timestamp} className="text-muted-foreground" />
+          <NativeChatMessageTimestamp
+            timestamp={timestamp}
+            className="text-2xs text-muted-foreground"
+          />
         }
       >
         <div className="flex items-end justify-between gap-3">
@@ -130,10 +135,10 @@ export function NativeChatAutomationSavedRow({
             className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-foreground">
+              <span className="block truncate text-sm font-semibold text-foreground">
                 {automation.name}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-2xs text-muted-foreground">
                 {automationReceiptSummary(saved, shortened)}
               </span>
             </span>

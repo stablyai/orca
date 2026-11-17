@@ -22,7 +22,10 @@ import type { AutomationOwnerPrecondition } from '../../../../shared/automations
 import type { AutomationCardDetailsController } from './automation-card-details-controller'
 import { receiptInstant } from './automation-receipt-copy'
 import { NativeChatCardFact } from './NativeChatCardFact'
-import { automationWebhookTrigger } from '../../../../shared/automation-event-triggers'
+import {
+  automationWebhookTrigger,
+  hasAutomationSchedule
+} from '../../../../shared/automation-event-triggers'
 import { copyWebhookSecret } from '@/components/bots/webhooks/webhook-secret-copy'
 
 function whenLines(automation: Automation, effectiveZone?: string): string[] {
@@ -168,7 +171,7 @@ export function NativeChatAutomationCurrentDetails({
               <div key={line}>{line}</div>
             ))}
           </NativeChatCardFact>
-          {automation.enabled && automation.nextRunAt > 0 ? (
+          {automation.enabled && hasAutomationSchedule(automation) && automation.nextRunAt > 0 ? (
             <NativeChatCardFact label={t('components.native-chat.automationSaved.next', 'Next')}>
               {receiptInstant(automation.nextRunAt)}
             </NativeChatCardFact>

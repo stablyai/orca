@@ -6,6 +6,7 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import { makeAutomation, makeRun } from '../../automations/automations-page-fixtures'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
+import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
@@ -126,7 +127,17 @@ function Receipt({ scenario }: { scenario: Scenario }): React.JSX.Element {
   return (
     <NativeChatVisualOwnerContext.Provider value={OWNER}>
       <NativeChatDisclosureContext.Provider value={disclosures}>
-        <div className="p-4">
+        <div
+          data-native-chat-root
+          className="native-chat-appearance flex flex-col gap-5 bg-chat-canvas p-4 text-sm text-chat-foreground"
+          style={nativeChatAppearanceStyle({
+            theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+          })}
+        >
+          <p>I’ll save that automation for you.</p>
+          <p className="self-end rounded-xl border border-chat-user-border bg-chat-user-surface px-3 py-2 text-chat-foreground">
+            Sounds good, go ahead.
+          </p>
           <NativeChatAutomationSavedRow
             saved={{
               change: 'created',
@@ -137,6 +148,7 @@ function Receipt({ scenario }: { scenario: Scenario }): React.JSX.Element {
             timestamp={SAVED_AT}
             disclosureId={automation.id}
           />
+          <p>You can open it to review the settings.</p>
         </div>
       </NativeChatDisclosureContext.Provider>
     </NativeChatVisualOwnerContext.Provider>

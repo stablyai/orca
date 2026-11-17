@@ -859,6 +859,29 @@ body[data-modal-overlay-open]
   border-color: var(--notice-border);
 }
 
+.native-chat-automation-receipt {
+  --foreground: var(--chat-source-foreground);
+  --background: var(--chat-source-background);
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-mix),
+    var(--chat-source-muted-foreground)
+  );
+  background-color: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-user-mix),
+    var(--chat-canvas)
+  );
+}
+
+.native-chat-automation-receipt-avatar {
+  background-color: color-mix(
+    in srgb,
+    var(--chat-source-foreground) calc(var(--chat-user-mix) + 6%),
+    var(--chat-canvas)
+  );
+}
+
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
 :root,
 .dark,

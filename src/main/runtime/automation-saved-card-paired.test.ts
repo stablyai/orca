@@ -6,7 +6,7 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { createQueuedMessageTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { resolveRemoteConnection } from '../../cli/runtime/pairing/runtime-remote-pairing'
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { AutomationReceiptRead } from '../../shared/automations/automation-receipt-read'
@@ -45,7 +45,7 @@ it('reads a real native receipt through the paired encrypted RPC transport on it
   })
   setStructuredAgentSessionHost(rig.host)
   try {
-    recordAutomationSavedCard(sessionId, 'created', automation, undefined, () => 'UTC')
+    recordAutomationSavedCard(sessionId, 'created', automation, () => 'UTC')
     const itemId = 'orca:automation-saved%3Acollision%3A200'
     await eventually(async () =>
       expect(await rig.host.nativeAutomationReceipt(sessionId, itemId)).toMatchObject({

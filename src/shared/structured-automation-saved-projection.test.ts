@@ -100,7 +100,7 @@ const item: AgentJournalRenderItem = {
   }
 }
 
-it('round-trips the saved delta through strict storage and the desktop projection while the phone still omits the receipt', () => {
+it('round-trips the saved delta through strict storage without breaking the existing shared reader', () => {
   const stored: unknown = strictStorage(storedItem).parse(JSON.parse(JSON.stringify(item)))
   if (!isAdmissibleAgentJournalRenderItem(stored)) {
     throw new Error('Unreadable journal item')
@@ -113,7 +113,6 @@ it('round-trips the saved delta through strict storage and the desktop projectio
       }
     }
   })
-  // This is the default projection used by the actual mobile transcript; scope stays desktop-only.
   expect(projectStructuredItemToNativeChat(stored)).toBeNull()
 })
 
