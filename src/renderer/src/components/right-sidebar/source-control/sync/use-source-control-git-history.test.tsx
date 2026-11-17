@@ -273,6 +273,41 @@ describe('useSourceControlGitHistory session page', () => {
     expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
   })
 
+  it('hides an empty branch page once the base moves under an unchanged HEAD, even if the refresh fails or lands late', async () => {
+    const emptyOnB1: GitHistoryResult = { ...branchPage('x', 'h1', 'b1'), items: [] }
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(emptyOnB1)
+    const root = await mount({ headOid: 'h1', compareBaseOid: 'b1' })
+    await flush()
+    expect(latest?.gitHistoryState).toEqual({ status: 'ready', result: emptyOnB1 })
+
+    // Fetch moved origin/main (same name, same HEAD): the branch is now 1 ahead.
+    const failed = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(failed.promise)
+    await act(async () => {
+      root.render(<Probe headOid="h1" compareBaseOid="b2" />)
+    })
+    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
+    await act(async () => {
+      failed.reject(new Error('offline'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState).toEqual({ status: 'error', error: 'offline' })
+
+    const late = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(late.promise)
+    void latest?.refreshGitHistory()
+    await flush()
+    expect(latest?.gitHistoryState.result).toBeUndefined()
+    await act(async () => {
+      late.resolve(branchPage('ahead', 'h1', 'b2'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState).toEqual({
+      status: 'ready',
+      result: branchPage('ahead', 'h1', 'b2')
+    })
+  })
+
   it('keeps the newer page when an unmounted instance completes late', async () => {
     const older = deferred<GitHistoryResult>()
     mocks.getRuntimeGitHistory.mockReturnValueOnce(older.promise)
