@@ -215,34 +215,41 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('restarts a session on the next switch after its restart-all spawns were rejected', async () => {
-  spawn.mockRejectedValue(new Error('launch refused'))
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const uninstall = installCodexDetachedPaneRestartExecutor()
-  try {
-    seedRestartAllPaneOnFirstAccount()
-    await switchAccount('acct-a', 'acct-b')
-    await settle()
-    await settle()
-    expect(spawn).toHaveBeenCalledTimes(3)
+it.each([
+  { policy: 'restart-all', launches: 3 },
+  { policy: 'restart', launches: 1 }
+] as const)(
+  'under $policy, stops after $launches refused launch attempt(s) and restarts the session on the next switch',
+  async ({ policy, launches }) => {
+    spawn.mockRejectedValue(new Error('launch refused'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedRestartAllPaneOnFirstAccount()
+      setPolicy(policy)
+      await switchAccount('acct-a', 'acct-b')
+      await settle()
+      await settle()
+      expect(spawn).toHaveBeenCalledTimes(launches)
 
-    spawn.mockReset().mockResolvedValue({ id: NEW_PTY })
-    await switchAccount('acct-b', 'acct-a')
-    await settle()
-    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      spawn.mockReset().mockResolvedValue({ id: NEW_PTY })
+      await switchAccount('acct-b', 'acct-a')
+      await settle()
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
 
-    vi.mocked(toast.success).mockClear()
-    expect(await switchAccount('acct-a', 'acct-b')).toBe('handled')
-    await settle()
+      vi.mocked(toast.success).mockClear()
+      expect(await switchAccount('acct-a', 'acct-b')).toBe('handled')
+      await settle()
 
-    expect(toast.success).toHaveBeenCalledWith('accounts.claude.switchSessions.restartingOne')
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
-  } finally {
-    uninstall()
-    warn.mockRestore()
+      expect(toast.success).toHaveBeenCalledWith('accounts.claude.switchSessions.restartingOne')
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+    } finally {
+      uninstall()
+      warn.mockRestore()
+    }
   }
-})
+)
 
 const recordIn = (folder: string) => ({
   key: 'session_id' as const,
@@ -496,27 +503,34 @@ function addSecondPane(): void {
   }))
 }
 
-it('says a hook-named session was not moved when another pane holds it by its restart-all restart', async () => {
-  seedRestartAllPaneOnFirstAccount()
-  await switchAccount('acct-a', 'acct-b')
-  expect(pending()).toEqual({ [OLD_PTY]: 'claude' })
-  addSecondPane()
-  const secondKey = makePaneKey('tab-2', SECOND_LEAF)
-  useAppStore.setState((current) => ({
-    agentStatusByPaneKey: acceptedAgentStatuses([
-      ...current.agentStatusByPaneKey,
-      [
-        secondKey,
-        { ...current.agentStatusByPaneKey.get(PANE_KEY)!, paneKey: secondKey, tabId: 'tab-2' }
-      ]
-    ])
-  }))
+it.each([
+  { policy: 'restart', warnings: [] },
+  { policy: 'restart-all', warnings: [['accounts.claude.switchSessions.notMovedToOne']] }
+] as const)(
+  'under $policy, a hook-named session another pane holds at its restart is left, and only restart-all says so',
+  async ({ policy, warnings }) => {
+    seedRestartAllPaneOnFirstAccount()
+    setPolicy(policy)
+    await switchAccount('acct-a', 'acct-b')
+    expect(pending()).toEqual({ [OLD_PTY]: 'claude' })
+    addSecondPane()
+    const secondKey = makePaneKey('tab-2', SECOND_LEAF)
+    useAppStore.setState((current) => ({
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        ...current.agentStatusByPaneKey,
+        [
+          secondKey,
+          { ...current.agentStatusByPaneKey.get(PANE_KEY)!, paneKey: secondKey, tabId: 'tab-2' }
+        ]
+      ])
+    }))
 
-  await withExecutor(settle)
+    await withExecutor(settle)
 
-  expect(spawn).not.toHaveBeenCalled()
-  expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
-})
+    expect(spawn).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.warning).mock.calls).toEqual(warnings)
+  }
+)
 
 it('moves a Claude pane with no status entry and asks it once to continue, as after a cold start', () =>
   withExecutor(async () => {
