@@ -13,7 +13,7 @@ const EFFORT_RANK: ReadonlyMap<string, number> = new Map([
 const effortRank = (value: string): number | undefined => EFFORT_RANK.get(value.toLowerCase())
 
 /** Display order only: agents may report levels highest-first. Unranked entries (Default, Auto,
- *  unknown levels) keep their slots so sentinels and appended values stay where they were. */
+ *  unknown levels) keep their slots; a known level appended to a listing moves to its rank. */
 export function orderEffortLevels<T extends { value: string }>(choices: readonly T[]): T[] {
   const ranked = choices
     .filter((choice) => effortRank(choice.value) !== undefined)
