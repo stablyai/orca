@@ -228,13 +228,14 @@ export function createAgentCompletionProcessMonitor({
     },
     start: () => {
       state.pollTrackingStarted = true
+      // A newly tracked pane polls fast while its foreground identity settles.
+      state.lastPaneActivityAt = Date.now()
       scheduleNextPoll()
     },
     recordActivity: () => {
       state.lastPaneActivityAt = Date.now()
-      if (state.pollTimer === null || state.pollTimerTier === 'no-evidence') {
-        scheduleNextPoll()
-      }
+      // The scheduler replaces a slower pending timer (quiet or no-evidence) with the faster tier.
+      scheduleNextPoll()
     },
     incrementGeneration: () => {
       state.inspectionGeneration += 1

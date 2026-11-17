@@ -16,6 +16,7 @@ import {
 import { createAgentCompletionTitleObserver } from './agent-completion-title-observer'
 import { createAgentCompletionHookObserver } from './agent-completion-hook-observer'
 import { createAgentCompletionLifecycle } from './agent-completion-lifecycle'
+import type { PollCadenceTier } from './agent-completion-poll-cadence'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
@@ -50,7 +51,7 @@ export function createAgentCompletionCoordinator(
     consecutiveInspectionErrors: 0,
     pollTrackingStarted: false,
     pollTimer: null as ReturnType<typeof setTimeout> | null,
-    pollTimerTier: null as 'active' | 'idle' | 'hidden' | 'no-evidence' | null,
+    pollTimerTier: null as PollCadenceTier | null,
     lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
     pendingProcessExit: null,
