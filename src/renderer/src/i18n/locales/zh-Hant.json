@@ -76,6 +76,21 @@
     "failed": "無法開啟檔案。"
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "試試新卡片",
+      "dismiss": "暫不",
+      "body": "每張卡片都會顯示代理程式狀態、未讀圓點和子項摘要。",
+      "switchBack": "可隨時在<path>工作區選項 › 卡片樣式</path>中切換回來",
+      "switchLabel": "卡片樣式",
+      "classic": "經典",
+      "new": "新樣式",
+      "keep": "保留新樣式",
+      "useClassic": "使用經典",
+      "laterToast": "可隨時在 工作區選項 › 卡片樣式 中試用新卡片",
+      "saveFailedToast": "無法儲存卡片樣式。請再試一次。",
+      "keptTitle": "已啟用新卡片",
+      "keptBody": "可在這裡的「卡片樣式」中變更。"
+    },
     "revealFiltered": {
       "title": "顯示隱藏的工作區？",
       "description": "目前的工作區已在側邊欄中隱藏。顯示工作區時，只會調整將它隱藏的篩選條件。",
@@ -7876,6 +7891,9 @@
             "modeAriaLabel": "代理程式儀表板開啟模式",
             "modeInWindow": "視窗內",
             "modePopout": "彈出視窗"
+          },
+          "worktreeCardStyle": {
+            "title": "卡片樣式"
           }
         },
         "FloatingWorkspacePane": {

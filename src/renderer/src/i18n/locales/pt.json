@@ -460,6 +460,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Experimente os novos cartões",
+      "dismiss": "Agora não",
+      "body": "Status do agente, pontos de não lido e resumos dos filhos em cada cartão.",
+      "switchBack": "Volte quando quiser em <path>Opções do espaço de trabalho › Estilo dos cartões</path>",
+      "switchLabel": "Estilo dos cartões",
+      "classic": "Clássico",
+      "new": "Novo",
+      "keep": "Manter novo",
+      "useClassic": "Usar clássico",
+      "laterToast": "Experimente os novos cartões quando quiser em Opções do espaço de trabalho › Estilo dos cartões",
+      "saveFailedToast": "Não foi possível salvar o estilo dos cartões. Tente novamente.",
+      "keptTitle": "Os novos cartões estão ativados",
+      "keptBody": "Altere aqui, em Estilo dos cartões."
+    },
     "revealFiltered": {
       "title": "Exibir espaço de trabalho oculto?",
       "description": "O espaço de trabalho ativo está oculto na barra lateral. Exibi-lo ajustará apenas os filtros que o ocultam.",
@@ -5988,6 +6003,9 @@
             "modeAriaLabel": "Modo de abertura do Painel de Agentes",
             "modeInWindow": "Na própria janela",
             "modePopout": "Janela separada"
+          },
+          "worktreeCardStyle": {
+            "title": "Estilo dos cartões"
           }
         },
         "RuntimePairingUrlGenerator": {

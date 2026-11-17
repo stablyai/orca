@@ -22435,6 +22435,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "试试新卡片",
+      "dismiss": "暂不",
+      "body": "每张卡片都会显示智能体状态、未读圆点和子项摘要。",
+      "switchBack": "可随时在<path>工作区选项 › 卡片样式</path>中切换回来",
+      "switchLabel": "卡片样式",
+      "classic": "经典",
+      "new": "新样式",
+      "keep": "保留新样式",
+      "useClassic": "使用经典",
+      "laterToast": "可随时在 工作区选项 › 卡片样式 中试用新卡片",
+      "saveFailedToast": "无法保存卡片样式。请重试。",
+      "keptTitle": "已启用新卡片",
+      "keptBody": "可在这里的“卡片样式”中更改。"
+    },
     "worktreeCardsUpdateNotice": {
       "newLabel": "新功能",
       "title": "工作树卡片",
