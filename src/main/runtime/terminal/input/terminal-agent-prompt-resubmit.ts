@@ -11,6 +11,9 @@ import {
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
+/** dsh's launchpad can outlast the fixed submit budget on a busy host; keep pressing while it still holds our prompt. */
+const DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS = 4 * 60_000
+
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
@@ -36,7 +39,16 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     if (retryDelayMs === undefined || (!blind && !gated)) {
       return 0
     }
-    const deadline = Date.now() + held.heldBudgetMs
+    const retryStartedAt = Date.now()
+    let deadline = retryStartedAt + held.heldBudgetMs
+    // Worker dispatches stay inside the fixed budget: federated worker-start attaches for at most
+    // 100 s, so a longer wait would let the home dispatch report outcome_unknown mid-retry.
+    const launchpadExtensionMs =
+      readsLaunchDraft && options.inputKind !== 'orchestration'
+        ? DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS
+        : 0
+    // Measured from the retry start, so the cap is absolute rather than base budget plus extension.
+    const hardDeadline = Math.max(deadline, retryStartedAt + launchpadExtensionMs)
     let resubmits = 0
     let gatedResubmits = 0
     try {
@@ -64,8 +76,18 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         }
         await options.beforeWrite?.(ptyId)
         // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
-        if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
-          return resubmits
+        if (!blind) {
+          // dsh paints its launchpad before the session can submit; a busy host can outlast the fixed
+          // budget, so keep pressing while the launchpad still holds our prompt (#38131).
+          if (!(await holdsPrompt())) {
+            return resubmits
+          }
+          if (Date.now() >= deadline) {
+            if (launchpadExtensionMs === 0 || Date.now() >= hardDeadline) {
+              return resubmits
+            }
+            deadline = hardDeadline
+          }
         }
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
@@ -79,7 +101,9 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         } else {
           gatedResubmits += 1
         }
-      } while (gated && Date.now() < deadline)
+        // The body arms the hard deadline before any write, so checking it here cannot cut a
+        // launchpad that still holds the prompt off one iteration early.
+      } while (gated && Date.now() < hardDeadline)
     } catch {
       // Why: a refused retry leaves the first Enter's verdict to the verification that follows.
     }

@@ -52,7 +52,13 @@ const DSH_TURN_STARTED = '\x1b]0;⠂ 🐋 \x07\x1b]7501;state=working:app=dsh-tu
 describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   afterEach(() => vi.useRealTimers())
 
-  async function launchDsh(screen: string, acceptingEnter: number, dispatch = false) {
+  /** Launches dsh on `screen`, answering Enter `acceptingEnter` times before the turn starts. */
+  async function launchDsh(
+    screen: string,
+    acceptingEnter: number,
+    dispatch = false,
+    advanceMs = 40_000
+  ) {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       (runtime, data) => {
@@ -80,7 +86,7 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
             observationTimeoutMs: 0
           }
     )
-    await vi.advanceTimersByTimeAsync(40_000)
+    await vi.advanceTimersByTimeAsync(advanceMs)
     await expect(submission).resolves.toMatchObject({ accepted: true })
     return {
       enters: writes.filter((write) => write === '\r').length,
@@ -105,6 +111,29 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
   it('stops once the launchpad no longer holds the prompt', async () => {
     await expect(launchDsh(fixture('launchpad-empty'), Infinity)).resolves.toEqual({
       enters: 1,
+      pastes: 1
+    })
+  })
+
+  // #38131: a busy host can open dsh's session after the fixed 30 s submit budget.
+  it('keeps pressing Enter past the fixed budget while the launchpad still holds the prompt', async () => {
+    await expect(launchDsh(fixture('launchpad-draft-starting'), 45, false, 60_000)).resolves.toEqual({
+      enters: 45,
+      pastes: 1
+    })
+  })
+
+  it('stops at the four-minute hard deadline even if the launchpad still holds the prompt', async () => {
+    const at245s = await launchDsh(fixture('launchpad-draft-starting'), Infinity, false, 245_000)
+    const at300s = await launchDsh(fixture('launchpad-draft-starting'), Infinity, false, 300_000)
+    expect(at300s.enters).toBe(at245s.enters)
+    expect(at300s.enters).toBeLessThanOrEqual(241)
+  })
+
+  // Federated worker-start attaches for at most 100 s, so a dispatch keeps the fixed budget.
+  it('keeps a worker dispatch inside the fixed budget', async () => {
+    await expect(launchDsh(fixture('launchpad-draft-starting'), 45, true, 60_000)).resolves.toEqual({
+      enters: 30,
       pastes: 1
     })
   })
