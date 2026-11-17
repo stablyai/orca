@@ -142,14 +142,14 @@ type CodexAliasAccessors<T> = {
 
 /**
  * Bounded metadata must prove copy identity; unreadable or ambiguous files stay alone.
- * Each group lists the preferred copy first, then its outranked copies, so callers can retire their rows.
+ * Outranked copies are keyed by the surviving copy they fold into, so callers can retire their rows.
  */
 export async function groupCodexRolloutCopyAliases<T>(
   candidates: readonly T[],
   accessors: CodexAliasAccessors<T>,
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
-): Promise<T[][]> {
+): Promise<{ survivors: readonly T[]; outranked: ReadonlyMap<T, readonly T[]> }> {
   const groups = new Map<string, T[]>()
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
@@ -180,8 +180,8 @@ export async function groupCodexRolloutCopyAliases<T>(
     if (physical !== group) {
       const twinByInode = new Map(physical.map((kept) => [hardlinkKey(kept, accessors), kept]))
       for (const candidate of group) {
-        const key = hardlinkKey(candidate, accessors)
-        const twin = key === null ? undefined : twinByInode.get(key)
+        const inode = hardlinkKey(candidate, accessors)
+        const twin = inode === null ? undefined : twinByInode.get(inode)
         if (twin !== undefined && twin !== candidate) {
           outrankedBy.set(candidate, twin)
         }
@@ -249,13 +249,13 @@ export async function groupCodexRolloutCopyAliases<T>(
       outranked.set(preferred, [candidate])
     }
   }
-  return candidates.flatMap((candidate) => {
-    if (outrankedBy.has(candidate)) {
-      return []
-    }
-    const copies = outranked.get(candidate)
-    return [copies ? [candidate, ...copies] : [candidate]]
-  })
+  return {
+    survivors:
+      outrankedBy.size === 0
+        ? candidates
+        : candidates.filter((candidate) => !outrankedBy.has(candidate)),
+    outranked
+  }
 }
 
 function hardlinkKey<T>(candidate: T, accessors: CodexAliasAccessors<T>): string | null {

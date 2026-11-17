@@ -97,6 +97,10 @@ export async function runSessionSearchPass(
       })
       outOfTime = read.outOfTime
       left = read.left
+      // Rows retired as outranked copies are not deleted sources.
+      for (const path of read.retired) {
+        rows.delete(path)
+      }
     } catch (error) {
       if (!signal?.aborted) {
         throw error

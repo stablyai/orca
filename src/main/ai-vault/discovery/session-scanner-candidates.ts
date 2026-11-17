@@ -92,20 +92,22 @@ export async function sessionCandidatesFromDiscoveries(
       }
     }
   }
-  const candidates: SessionFileChoice[] = (
-    await groupCodexRolloutCopyAliases(
-      legacy,
-      CODEX_ALIAS_ACCESSORS,
-      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
-      options.signal
-    )
-  ).map(([preferred, ...copies]) =>
-    copies.length === 0 ? preferred : { ...preferred, outrankedCopies: copies }
+  const proven = await groupCodexRolloutCopyAliases(
+    legacy,
+    CODEX_ALIAS_ACCESSORS,
+    (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
+    options.signal
   )
+  const candidates: SessionFileChoice[] = proven.survivors.map((preferred) => {
+    const outrankedCopies = proven.outranked.get(preferred)
+    return outrankedCopies
+      ? { ...preferred, alternatives: [preferred], outrankedCopies }
+      : preferred
+  })
   for (const named of canonical.values()) {
     const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
-    const kept = group === named ? null : new Set(group)
-    const outrankedCopies = kept ? named.filter((candidate) => !kept.has(candidate)) : []
+    const outrankedCopies =
+      group === named ? [] : named.filter((candidate) => !group.includes(candidate))
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||
@@ -115,7 +117,7 @@ export async function sessionCandidatesFromDiscoveries(
     )
     candidates.push({
       ...group[0],
-      ...(group.length > 1 ? { alternatives: group } : {}),
+      ...(group.length > 1 || outrankedCopies.length > 0 ? { alternatives: group } : {}),
       ...(outrankedCopies.length > 0 ? { outrankedCopies } : {})
     })
   }
