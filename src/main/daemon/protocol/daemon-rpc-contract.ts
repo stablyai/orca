@@ -177,7 +177,7 @@ export type TerminalBufferActionRequest = {
 
 // Viewers live above the daemon on orcad; focus loss is gated by focusLossReportSupport (v56, some
 // v55), a repaint request by REPAINT_REQUEST_PROTOCOL_VERSION.
-export type ReportFocusLostRequest = {
+export type SessionNoticeRequest = {
   id: string
   type: 'reportFocusLost' | 'requestRepaint'
   payload: {
@@ -260,7 +260,7 @@ export type DaemonRequest =
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
   | TerminalBufferActionRequest
-  | ReportFocusLostRequest
+  | SessionNoticeRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest

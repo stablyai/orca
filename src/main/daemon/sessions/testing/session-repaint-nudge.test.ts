@@ -39,4 +39,26 @@ describe.skipIf(process.platform === 'win32')('session repaint nudge', () => {
     await vi.advanceTimersByTimeAsync(250)
     expect(resizes).toEqual([[120, 39]])
   })
+
+  it('starts a fresh nudge for a request after a real resize, and the old one stands down', async () => {
+    vi.useFakeTimers()
+    const nudge = new SessionRepaintNudge()
+    let grid = { cols: 120, rows: 40 }
+    const resizes: [number, number][] = []
+    const request = () =>
+      nudge.request(
+        () => grid,
+        (cols, rows) => resizes.push([cols, rows]),
+        () => true
+      )
+    request()
+    grid = { cols: 120, rows: 50 }
+    request()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(resizes).toEqual([
+      [120, 39],
+      [120, 49],
+      [120, 50]
+    ])
+  })
 })
