@@ -31,6 +31,7 @@ import {
   unbindOpenCodeSessionsOfPane,
   type OpenCodeSessionBinding
 } from './opencode-session-registry'
+import type { HermesPaneTurn } from './providers/hermes/hermes-pane-turn'
 
 /** Per-listener-instance caches needing per-PTY teardown; Orca's main process and the relay each get their own, never shared. */
 export type HookListenerState = {
@@ -67,6 +68,8 @@ export type HookListenerState = {
   claudeLaunchedBackgroundTasksByPaneKey: Map<string, ClaudeLaunchedBackgroundTasks>
   /** Compact whose completion each pane already applied, so relay duplicates can't refresh the row. */
   claudeConsumedCompactPromptIdByPaneKey: Map<string, string>
+  /** Recent prompt_ids each pane's main agent reported, newest last; orders a late UserPromptSubmit. */
+  claudeAdvancedPromptIdsByPaneKey: Map<string, string[]>
   /** Lead session_id changes retire replaced-conversation claims even without SessionStart (/clear/relaunch/resume). */
   claudeSessionOwnerByPaneKey: Map<string, string>
   /** Execution-host evidence attempts for processes acquiring a pane, by pane and process identity. */
@@ -99,14 +102,6 @@ export type HookListenerState = {
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
   /** DSH child sessions named by SubagentStart; the bridge stamps their hooks with their own session_id. */
   dshChildSessionIdsByPaneKey: Map<string, Set<string>>
-}
-
-export type HermesPaneTurn = {
-  ended: boolean
-  /** `delegate_task` children seen in this pane; they run their own turns under their own session ids. */
-  childSessionIds: Set<string>
-  /** The pane's own session, which its children's hooks must not replace. */
-  sessionId: string
 }
 
 export type GrokActiveTurn = {
@@ -148,6 +143,7 @@ export function createHookListenerState(
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
+    claudeAdvancedPromptIdsByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
     hookRootAttempts: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
@@ -220,6 +216,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   deletePaneScopedCacheEntry(state.antigravityChildWorkByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
+  state.claudeAdvancedPromptIdsByPaneKey.delete(paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeOpenToolUsesByPaneKey.delete(paneKey)
@@ -277,6 +274,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.jcodeHelperPermissionWaitByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeAdvancedPromptIdsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeOpenToolUsesByPaneKey, fromPaneKey, toPaneKey)
@@ -323,6 +321,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.jcodeHelperPermissionWaitByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
+  state.claudeAdvancedPromptIdsByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()

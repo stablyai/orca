@@ -30,6 +30,7 @@ import { readClaudeBatchSettledRequests } from '../claude-settled-permission-req
 import { withClaudeToolRequestId } from '../claude-tool-request-identity'
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
 import { routeJcodeHelperHook } from '../providers/jcode/jcode-helper-permission-wait'
+import { orderClaudeHook } from '../providers/claude/lifecycle/claude-late-prompt-submit'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(
@@ -55,13 +56,14 @@ export function normalizeHookPayload(
   }
   const {
     record,
-    eventName,
+    eventName: rawEventName,
     paneKey: stampedPaneKey,
     hookPayloadRecord,
     tabId: stampedTabId,
     worktreeId: stampedWorktreeId,
     launchToken: stampedLaunchToken
   } = envelope
+  const eventName = orderClaudeHook(state, source, stampedPaneKey, rawEventName, hookPayloadRecord)
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
