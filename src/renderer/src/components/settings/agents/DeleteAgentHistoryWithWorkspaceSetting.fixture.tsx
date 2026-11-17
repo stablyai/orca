@@ -13,9 +13,6 @@ function Setting(): React.JSX.Element {
       <DeleteAgentHistoryWithWorkspaceSetting
         hostScope={{ target: { kind: 'local' }, available: true }}
         settings={current}
-        updateSettings={(updates) =>
-          useAppStore.setState((state) => ({ settings: { ...state.settings!, ...updates } }))
-        }
       />
     </SettingsGroup>
   )

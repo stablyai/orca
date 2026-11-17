@@ -14,6 +14,10 @@ export const getDeleteAgentHistorySearchEntry = createLocalizedCatalog(() => ({
   keywords: [
     ...translateSearchKeyword('components.settings.agents.deleteHistoryWithWorkspace.chat', 'chat'),
     ...translateSearchKeyword(
+      'components.settings.agents.deleteHistoryWithWorkspace.chatHistory',
+      'delete chat history'
+    ),
+    ...translateSearchKeyword(
       'components.settings.agents.deleteHistoryWithWorkspace.transcripts',
       'transcripts'
     ),

@@ -22789,7 +22789,8 @@
           "chat": "chat",
           "transcripts": "transcripts",
           "diskSpace": "disk space",
-          "cleanup": "cleanup"
+          "cleanup": "cleanup",
+          "chatHistory": "delete chat history"
         }
       }
     },

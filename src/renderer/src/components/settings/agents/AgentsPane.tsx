@@ -69,11 +69,9 @@ export function AgentsPane({
           updateSettings={updateSettings}
           hostScope={hostScope}
         />
-        <DeleteAgentHistoryWithWorkspaceSetting
-          settings={settings}
-          updateSettings={updateSettings}
-          hostScope={hostScope}
-        />
+        {!isPairedWebClientWindow() ? (
+          <DeleteAgentHistoryWithWorkspaceSetting settings={settings} hostScope={hostScope} />
+        ) : null}
       </SettingsGroup>
       <SettingsGroup title={translateLocalExecutionHostLabel()}>
         <AgentRuntimeSetting

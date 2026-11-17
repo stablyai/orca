@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
@@ -22,15 +23,14 @@ import { getDeleteAgentHistorySearchEntry } from './delete-agent-history-search'
 /** The host that owns the workspaces deletes their chat history, so the switch reads and writes that host. */
 export function DeleteAgentHistoryWithWorkspaceSetting({
   hostScope,
-  settings,
-  updateSettings
+  settings
 }: {
   hostScope: SettingsHostScope
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
 }): React.JSX.Element {
   const t = useTranslate()
   const search = getDeleteAgentHistorySearchEntry()
+  const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
   const environmentId = runtimeTargetEnvironmentId(hostScope.target)
   const hostName = useAppStateValue((state) =>
     environmentId
@@ -42,7 +42,8 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
     owner: hostScope.target,
     settingKey: 'deleteChatHistoryWithWorkspace',
     localEnabled: settings.deleteChatHistoryWithWorkspace === true,
-    updateLocalSettings: updateSettings,
+    // The throwing variant, so a failed local save shows the toast instead of only logging.
+    updateLocalSettings: updateSettingsOrThrow,
     updateFailedMessage: t(
       'components.settings.agents.deleteHistoryWithWorkspace.updateFailed',
       "Couldn't update the setting on {{host}}.",
