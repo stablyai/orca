@@ -21496,7 +21496,6 @@
         "previewFailed": "无法检查此更改会匹配哪些工作区",
         "pinFailed": "无法保留 {{name}}",
         "rules": {
-          "title": "规则",
           "branchNote": "已合并的分支会随工作区一起删除，未合并的分支会保留",
           "recommended": "推荐",
           "inactiveDescription": "{{count}} 天没有活动",
@@ -21527,7 +21526,6 @@
         },
         "protection": {
           "title": "保护",
-          "alwaysKept": "始终保留：已固定的工作区、正在运行的智能体或终端、编辑器中未保存的更改、未提交的更改、未推送的提交",
           "keepIgnoredFiles": "保留含有被忽略文件的工作区",
           "keepIgnoredFilesDescription": ".env 和本地配置这类文件无法恢复，node_modules 和构建产物不算在内"
         },
@@ -21599,8 +21597,6 @@
           "cleanup": "清理",
           "cleanUp": "清理",
           "delete": "删除",
-          "statusDescription": "立即运行清理规则，或自行检查工作区",
-          "reviewWorkspaces": "检查工作区",
           "automatic": "自动",
           "pullRequest": "PR",
           "inactiveDescription": "若干天没有活动",
@@ -21614,19 +21610,12 @@
           "runs": "运行记录",
           "envFile": ".env"
         },
-        "cleanUpNow": "立即清理",
         "status": {
           "lastRunFailed": "上次运行（{{when}}）未能完成：{{error}}",
           "lastRunNothing": "上次运行（{{when}}）没有移除任何工作区",
           "lastRunFreed_other": "上次运行（{{when}}）移除了 {{count}} 个工作区，释放了 {{size}}",
           "lastRunRemoved_other": "上次运行（{{when}}）移除了 {{count}} 个工作区",
-          "offDetail": "开启规则之前不会移除任何内容",
-          "running": "正在清理…",
           "nextRun": "下次运行：{{when}}",
-          "on": "自动清理已开启",
-          "off": "自动清理已关闭",
-          "review": "检查工作区",
-          "turnOnHint": "开启一条规则后即可使用",
           "justNow": "刚刚",
           "inUnderAMinute": "不到一分钟后"
         },
