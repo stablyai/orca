@@ -74,7 +74,6 @@ describe.each(['none', 'actions', 'open'] as const)(
         filePath: '/tmp/site/index.html',
         worktreeId: 'wt-1'
       })
-      expect(plannedBrowserOpenMock.mock.calls[0]?.[3]).toMatchObject({ refreshReusedPage: true })
       expect(openFileForLinkMock).not.toHaveBeenCalled()
     })
 

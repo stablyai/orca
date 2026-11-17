@@ -19,7 +19,6 @@ import type { AttachBrowserPageWebviewArgs } from './attach-browser-page-webview
 import { createBrowserPageWebviewGuestSession } from './browser-page-webview-guest-session'
 import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-loading-handlers'
 import { createBrowserPageWebviewNavigationHandlers } from './browser-page-webview-navigation-handlers'
-import { observeBrowserPageMainFrameEvents } from './browser-page-main-frame-events'
 
 export function bindBrowserPageWebviewListeners({
   container,
@@ -166,7 +165,6 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
   webview.addEventListener('did-fail-load', handleFailLoad)
   webview.addEventListener('console-message', handleAnnotationViewportMessage)
-  const unobserveMainFrame = observeBrowserPageMainFrameEvents(browserTabId, webview)
 
   const unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTabId, webview, (metadata) => {
     if (!metadata || metadata.kind === 'retired') {
@@ -249,7 +247,6 @@ export function bindBrowserPageWebviewListeners({
   return () => {
     webview.removeEventListener('did-finish-load', attachedNavigationReady)
     webview.removeEventListener('did-fail-load', attachedNavigationReady)
-    unobserveMainFrame()
     unsubscribeMetadata()
     webview.removeEventListener('did-attach', handleDidAttach)
     webview.removeEventListener('dom-ready', handleDomReady)

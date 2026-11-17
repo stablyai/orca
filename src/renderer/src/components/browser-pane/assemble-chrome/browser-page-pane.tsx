@@ -250,8 +250,7 @@ export function BrowserPagePane({
     browserTab,
     webviewRef,
     retryGuestRecoveryRef,
-    onUpdatePageStateRef,
-    navigateToUrl: nav.navigateToUrl
+    onUpdatePageStateRef
   })
   useBrowserPageFindShortcuts({
     browserTabId: browserTab.id,

@@ -38,38 +38,9 @@ import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-fi
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import type { ExplicitFileOpenDestination, FileOpenFailure } from './terminal-file-open-failure'
 import { openDetectedFolder } from './terminal-folder-open'
-
-type TerminalFileOpenDeps = {
-  worktreeId: string
-  worktreePath: string
-  runtimeEnvironmentId?: string | null
-  wslDistro?: string | null
-  /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
-  openWithSystemDefault?: boolean
-  /** Routes like openWithSystemDefault, but only saves a copy of the file or folder; never opens it. */
-  downloadOnly?: boolean
-  /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
-  browserDestination?: HttpLinkDestination
-  /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
-  terminalHandle?: string | null
-  hostFileOnly?: boolean
-  /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
-  onOpenFailure?: (failure: FileOpenFailure) => void
-  /** The tab that owns the link; editor opens place themselves relative to its group. */
-  sourceTabId?: string | null
-  /** "Open in new tab": pins the source tab's group at activation, or refuses. */
-  openInSourceGroup?: boolean
-  /** Opt-in menu request; the legacy flag remains editor-only. */
-  openInSourceGroupSurface?: 'internal' | 'browser'
-  /** An explicit open button's destination: skips link routing and never falls back silently. */
-  explicitDestination?: ExplicitFileOpenDestination
-  /** An explicit 'orca-browser' open that showed no page (refused, unsupported, failed or unroutable). */
-  onBrowserOpenFailure?: () => void
-}
+import type { TerminalFileOpenDeps } from './terminal-file-open-deps'
 
 export function openDetectedFilePath(
   filePath: string,
@@ -99,9 +70,7 @@ export function openDetectedFilePath(
     refuseOpenInGroupRequest(mappedFilePath, explicitGroupRequest, isCurrentRequest)
   const explicitBrowser = deps.explicitDestination === 'orca-browser'
   const explicitEditor = deps.explicitDestination === 'editor'
-  const linkContext = deps.sourceTabId
-    ? { linkIntent, isCurrentRequest, ...(explicitBrowser ? { refreshReusedPage: true } : {}) }
-    : undefined
+  const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
   const reportBrowserOpenFailure = (): void => {
     if (isCurrentRequest()) {
       deps.onBrowserOpenFailure?.()

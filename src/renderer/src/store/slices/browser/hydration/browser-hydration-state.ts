@@ -188,7 +188,6 @@ export function projectHydratedBrowserSession(
     remoteBrowserPageHandlesByPageId:
       buildRestoredRemoteBrowserPageHandles(browserPagesByWorkspace),
     browserCertificateFailuresByPageId: {},
-    changedFileRefreshByPageId: {},
     browserAnnotationsByPageId,
     browserAnnotationMarkerIdsByPageId: {},
     browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? []),

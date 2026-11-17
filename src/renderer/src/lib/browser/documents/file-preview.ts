@@ -18,7 +18,6 @@ import {
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
 import { sideGroupPlacement } from './side-group-placement'
-import { requestChangedFilePageRefresh } from '../refresh/request-changed-file-page-refresh'
 import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -149,7 +148,6 @@ function openDocPreviewTab(
     worktreeId: string
     activate: boolean
     placementWorkspaceId?: string
-    refreshReusedPage?: boolean
   },
   placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
 ): void {
@@ -180,9 +178,6 @@ function openDocPreviewTab(
       state.setActiveBrowserTab(existing.workspaceId)
       state.setActiveBrowserPage(existing.workspaceId, existing.pageId)
     }
-    if (params.refreshReusedPage) {
-      requestChangedFilePageRefresh(existing.pageId, { kind: 'document', docLocation })
-    }
     return
   }
   state.createBrowserTab(placementWorkspaceId, ORCA_BROWSER_BLANK_URL, {
@@ -202,8 +197,6 @@ export function openFileInBrowserTab(
     clientLocal?: boolean
     linkContext?: BrowserLinkOpenContext
     onLinkOutcome?: (outcome: BrowserOpenOutcome) => void
-    /** An explicit reopen: a reused document tab re-reads the file (link opens set it on linkContext). */
-    refreshReusedPage?: boolean
   }
 ): WorkspaceFilePreviewPlan {
   const state = useAppStore.getState()

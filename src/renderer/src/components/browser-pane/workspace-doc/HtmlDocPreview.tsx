@@ -38,11 +38,6 @@ import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirm
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
-import type { ChangedFileRefreshActionResult } from '@/lib/browser/refresh/changed-file-page-refresh-driver'
-import {
-  docPreviewGuestAlive,
-  useDocPreviewChangedFileRefresh
-} from './use-doc-preview-changed-file-refresh'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
@@ -70,8 +65,6 @@ export function HtmlDocPreview({
     isActiveRef.current = isActive
   }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
-  // The attached guest's grant, set with the guest so its first commit is judged against it.
-  const grantRef = useRef<DocPreviewGrantHandle | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
@@ -259,7 +252,6 @@ export function HtmlDocPreview({
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
         setBrowserGuestVisible(previewId, isActiveRef.current)
-        grantRef.current = handle
         // Main binds the grant on first commit; tools need the attached guest pointed at it.
         setGrant(handle)
       })
@@ -273,7 +265,6 @@ export function HtmlDocPreview({
       disposed = true
       reloadRef.current = null
       webviewRef.current = null
-      grantRef.current = null
       unsubscribeFailure?.()
       unsubscribeExternalLinks?.()
       detach?.()
@@ -322,24 +313,13 @@ export function HtmlDocPreview({
     setRemintCount((count) => count + 1)
   }, [previewId])
 
-  const handleReload = useCallback((): ChangedFileRefreshActionResult => {
-    if (failureReason !== null || state === 'unavailable' || !docPreviewGuestAlive(webviewRef)) {
+  const handleReload = useCallback(() => {
+    if (failureReason !== null || state === 'unavailable') {
       handleHardReload()
-      return 'issued'
+      return
     }
-    const reload = reloadRef.current
-    reload?.()
-    return reload ? 'issued' : 'not-ready'
+    reloadRef.current?.()
   }, [failureReason, handleHardReload, state])
-
-  useDocPreviewChangedFileRefresh({
-    previewId,
-    docLocation: { kind: 'workspace-doc', worktreeId, filePath },
-    webviewRef,
-    grantRef,
-    guestFailed: isUnavailable,
-    reload: handleReload
-  })
 
   const notices = docPreviewNotices(isUnavailable, downloadBlocked, assetFailures, t)
 

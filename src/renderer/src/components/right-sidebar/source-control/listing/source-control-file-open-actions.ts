@@ -39,7 +39,6 @@ export function sourceControlFileOpenActions({
       const plan = openFileInBrowserTab({
         filePath,
         worktreeId,
-        refreshReusedPage: true,
         ...(placementWorkspaceId ? { placementWorkspaceId } : {}),
         ...(executionHostId ? { fileExecutionHostId: executionHostId } : {})
       })

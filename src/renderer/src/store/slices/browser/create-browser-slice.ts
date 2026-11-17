@@ -20,13 +20,11 @@ import { createBrowserManagedProfileActions } from './profiles/browser-managed-p
 import { createBrowserProfileImportActions } from './profiles/browser-profile-import-actions'
 import { createBrowserCookieImportActions } from './profiles/browser-cookie-import-actions'
 import { createBrowserHistoryActions } from './history/browser-history-actions'
-import { createChangedFilePageRefreshActions } from './pages/changed-file-page-refresh-actions'
 
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
   browserCertificateFailuresByPageId: {},
-  changedFileRefreshByPageId: {},
   browserAudiblePageIds: {},
   browserAudioMutedTabIds: {},
   browserAnnotationsByPageId: {},
@@ -58,7 +56,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   ...createBrowserPageConversionActions(set, get),
   ...createBrowserPageFocusActions(set, get),
   ...createBrowserPageStateActions(set, get),
-  ...createChangedFilePageRefreshActions(set),
   ...createBrowserAudioActions(set, get),
   ...createBrowserRemotePageHandleActions(set),
   ...createBrowserPageViewportActions(set),

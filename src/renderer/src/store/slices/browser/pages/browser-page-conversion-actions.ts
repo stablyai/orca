@@ -1,4 +1,3 @@
-import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { planBrowserPageConversion } from './browser-page-conversion'
 import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from './browser-page-records'
@@ -94,9 +93,6 @@ export function createBrowserPageConversionActions(
             ),
             remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
             browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
-            changedFileRefreshByPageId: omitRecordKeys(s.changedFileRefreshByPageId, [
-              plan.oldPage.id
-            ]),
             browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
             browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
           }

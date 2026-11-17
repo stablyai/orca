@@ -54,7 +54,6 @@ describe('Source Control row open actions', () => {
     expect(mocks.openFileInBrowserTab).toHaveBeenCalledWith({
       filePath: '/repo/site/index.html',
       worktreeId: 'repo-wt',
-      refreshReusedPage: true,
       placementWorkspaceId: 'folder-1',
       fileExecutionHostId: 'ssh:build-box'
     })

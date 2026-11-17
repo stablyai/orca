@@ -7,7 +7,6 @@ import {
   unregisterPersistentWebview,
   webviewRegistry
 } from '@/components/browser-pane/host-guest/webview-registry'
-import { observeBrowserPageMainFrameEvents } from '@/components/browser-pane/host-guest/lifecycle/browser-page-main-frame-events'
 
 export function attachDocPreviewWebview({
   previewId,
@@ -53,7 +52,6 @@ export function attachDocPreviewWebview({
   webview.addEventListener('console-message', onViewportMessage)
   // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
   registerPersistentWebview(previewId, webview)
-  const unobserveMainFrame = observeBrowserPageMainFrameEvents(previewId, webview)
   publishNativeChatVisualGuestTheme()
   container.appendChild(webview)
   webview.setAttribute('src', url)
@@ -61,7 +59,6 @@ export function attachDocPreviewWebview({
   return {
     webview,
     detach: () => {
-      unobserveMainFrame()
       webview.removeEventListener('did-start-loading', onLoadStarted)
       webview.removeEventListener('did-stop-loading', onLoadStopped)
       webview.removeEventListener('did-fail-load', onLoadFailed)
