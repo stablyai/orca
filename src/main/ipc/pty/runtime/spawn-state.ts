@@ -62,6 +62,8 @@ export type RuntimePtySpawnState = {
   codexSelectionTarget: CodexAccountSelectionTarget
   launchCommand: string | undefined
   claudeAuth: ClaudeRuntimeAuthPreparation | null
+  /** The env an `agent.launch.before` plugin set; applied after the host's account env. Never from the caller. */
+  pluginLaunchEnv?: Record<string, string>
   shouldPersistHostSessionBinding: boolean
   hostSessionBinding:
     | {

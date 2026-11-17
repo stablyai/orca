@@ -1,3 +1,4 @@
+import { withPluginLaunchEnv } from '../spawn/spawn-agent-launch-plugin-hook'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -18,7 +19,10 @@ import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Daemon providers bypass LocalPtyProvider environment assembly; inject the same host-local state here.
-  const baseEnvWithAuth = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
+  const baseEnvWithAuth = withPluginLaunchEnv(
+    ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env,
+    ctx.pluginLaunchEnv
+  )
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
   const verifiedPaneKey =

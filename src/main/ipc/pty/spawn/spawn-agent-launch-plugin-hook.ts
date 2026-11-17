@@ -6,6 +6,14 @@ import { pluginHookWanted, runPluginHook } from '../../../plugins/hooks/plugin-h
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-sessions/structured-session-ownership'
 import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 
+/** The host's account env is applied after the hook; the hook's own env must still win on its keys. */
+export function withPluginLaunchEnv<Env extends Record<string, string> | undefined>(
+  env: Env,
+  pluginEnv: Record<string, string> | undefined
+): Env | Record<string, string> {
+  return pluginEnv ? { ...env, ...pluginEnv } : env
+}
+
 type AgentSpawnArgs = {
   launchAgent?: TuiAgent
   command?: string
@@ -25,7 +33,7 @@ type AgentSpawnArgs = {
 export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
   args: Args,
   runtime: { ensureStructuredAgentSessionHost(): Promise<void> } | undefined
-): Promise<Args> {
+): Promise<{ args: Args; pluginEnv?: Record<string, string> }> {
   const { launchAgent, command } = args
   if (
     !launchAgent ||
@@ -35,7 +43,7 @@ export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
     args.resumeProviderSession !== undefined ||
     !pluginHookWanted('agent.launch.before')
   ) {
-    return args
+    return { args }
   }
   const kind = args.worktreeId ? workspaceKindForWorktreeId(args.worktreeId) : null
   const decided = await runPluginHook(
@@ -63,5 +71,8 @@ export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
     // wsl.exe imports only the variables WSLENV names.
     addWslEnvKeys(env, addedKeys)
   }
-  return { ...args, command: decided.command, ...(env ? { env } : {}) }
+  return {
+    args: { ...args, command: decided.command, ...(env ? { env } : {}) },
+    ...(env ? { pluginEnv: decided.env } : {})
+  }
 }
