@@ -42,10 +42,12 @@ describe('isWindowsShellAloneInJob with a shell-only job', () => {
     ]
 
     expect(
-      await isWindowsShellAloneInJob(100, 'C:\\Windows\\System32\\wsl.exe', new Set([100]), async () => [
-        wsl,
-        ...helpers
-      ])
+      await isWindowsShellAloneInJob(
+        100,
+        'C:\\Windows\\System32\\wsl.exe',
+        new Set([100]),
+        async () => [wsl, ...helpers]
+      )
     ).toBe(true)
   })
 
