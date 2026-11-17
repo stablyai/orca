@@ -138,7 +138,10 @@ export function useMonacoMarkdownAnnotations(params: {
         top,
         left: mountedEditor
           ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
-          : undefined
+          : undefined,
+        // Snapshot at open so edits above the composer or later can't re-point the note's excerpt.
+        selectedText:
+          getMarkdownReviewHighlightedText(content, { lineNumber, startLine }) || undefined
       })
     },
     onDeleteComment: (id) => {
@@ -216,8 +219,7 @@ export function useMonacoMarkdownAnnotations(params: {
           source: 'markdown',
           startLine: commentPopover.startLine,
           lineNumber: commentPopover.lineNumber,
-          // Gutter notes keep their lines' text so later edits above them can't misdirect the agent.
-          selectedText: getMarkdownReviewHighlightedText(content, commentPopover) || undefined,
+          selectedText: commentPopover.selectedText,
           body,
           side: 'modified'
         })
