@@ -15,7 +15,10 @@ import {
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
-import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import {
+  requestProgramRepaint,
+  restoreFromReattachedReadyScreen
+} from '../wait/reattached-ready-screen'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
@@ -249,15 +252,16 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   }
 
   /** A surviving process main never saw live still has its agent's last own report, which the hook
-   *  server restores across restarts. Nothing can type into the terminal while main is down, so the
-   *  report is current as long as an agent, not a shell, still holds the process. Without a report,
-   *  a screen-ruled agent's own strong ready screen speaks for it: such agents may write no title at rest. */
+   *  server restores across restarts while its writer can still be the pane's agent. Without a report,
+   *  a screen-ruled agent's strong ready screen counts once that agent repaints it: such agents may
+   *  write no title at rest, and a retained frame may be an earlier program's. */
   restoreReattachedAgentStatus(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty?.connected || pty.lastAgentStatusObservedLive) {
       return
     }
     const { incarnationId } = pty
+    const reattachedAt = Date.now()
     const generation = this.getPtyLifecycleGeneration(ptyId)
     // A respawn, an exit or a live report since the reattach decides instead.
     const isCurrent = (): boolean =>
@@ -285,6 +289,12 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           agent,
           readScreen: () => this.readCaughtUpRuledScreen(ptyId),
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          hasOutputSinceReattach: () => (pty.lastOutputAt ?? -1) >= reattachedAt,
+          requestRepaint: () =>
+            requestProgramRepaint({
+              getSize: () => this.getTerminalSize(ptyId),
+              resize: (cols, rows) => this.ptyController?.resize?.(ptyId, cols, rows) ?? false
+            }),
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })

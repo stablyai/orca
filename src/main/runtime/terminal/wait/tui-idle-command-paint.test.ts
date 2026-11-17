@@ -50,4 +50,32 @@ describe('tui-idle on an agent with no rest signal', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
+
+  it("does not take a reused pane's previous ready screen for the command now starting", async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Hermes Agent',
+      foregroundProcess: 'hermes',
+      launchAgent: 'hermes',
+      size: { cols: 80, rows: 24 },
+      data: ''
+    })
+    vi.useFakeTimers()
+    const write = (chunk: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
+    const readyScreen = '─ ready │ 3s\r\n❯ Ask me anything…\r\n'
+    write(`\x1b]133;A\x07~/repo % hermes\r\n\x1b]133;C\x07${readyScreen}`)
+    // The first Hermes exits; the shell starts a second one that has not painted yet.
+    write('\x1b]133;D;0\x07\x1b]133;A\x07~/repo % hermes\r\n\x1b]133;C\x07')
+    await runtime.readTerminal(handle, { screen: true })
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    expect(settled).not.toHaveBeenCalled()
+
+    write(readyScreen)
+    await runtime.readTerminal(handle, { screen: true })
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
 })

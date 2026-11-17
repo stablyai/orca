@@ -165,16 +165,26 @@ export function ptyTuiIdleEvidence(
   const agent = source.getPaneAgent(pty.ptyId)
   const readScreen = screenReader(source, agent, pty.ptyId)
   const record = evidenceRecord(source, pty)
+  // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
+  const readCommandPainted = () =>
+    hasTerminalAgentPainted(
+      pty,
+      paintAgent(agent, record.lastOscTitle, source.getQuietForegroundProcess?.(pty.ptyId) ?? null)
+    )
   return {
     record,
     readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    // Why the paint fence on screens: a reused pane still shows the previous agent's ready screen
+    // until the command now running paints its own.
     readPositiveBodyEvidence: () =>
       (agent !== 'qoder' &&
         agent !== 'qoder-cn' &&
         agent !== 'hermes' &&
         source.getAdoptedPtyIdleStatus(pty) === 'idle') ||
-      isKnownReadyPromptBody(waitText(), agent, readScreen, record.lastOutputAt !== null),
-    readQuietReadyBodyEvidence: () => isQuietReadyScreenBody(waitText(), agent, readScreen),
+      (isKnownReadyPromptBody(waitText(), agent, readScreen, record.lastOutputAt !== null) &&
+        readCommandPainted()),
+    readQuietReadyBodyEvidence: () =>
+      isQuietReadyScreenBody(waitText(), agent, readScreen) && readCommandPainted(),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
@@ -182,15 +192,6 @@ export function ptyTuiIdleEvidence(
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
-    // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
-    readCommandPainted: () =>
-      hasTerminalAgentPainted(
-        pty,
-        paintAgent(
-          agent,
-          record.lastOscTitle,
-          source.getQuietForegroundProcess?.(pty.ptyId) ?? null
-        )
-      )
+    readCommandPainted
   }
 }
