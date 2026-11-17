@@ -6,6 +6,7 @@ import { WORKER_SETTLED_STATES } from '../../terminal-authority/release/worker-t
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { formerlyOwnedResourceIdSql } from './worker-terminal-prior-owner-index'
 
 // Pre-v23 input and reuse cannot be proven; historical terminals remain external.
 
@@ -142,12 +143,8 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
   dispatchId: string
 ): WorkerTerminalResourceRow | undefined {
   return this.db
-    .prepare(
-      `SELECT * FROM worker_terminal_resources
-        WHERE prior_owner_dispatch_ids LIKE ?
-        ORDER BY updated_at DESC LIMIT 1`
-    )
-    .get(`%"${dispatchId}"%`) as WorkerTerminalResourceRow | undefined
+    .prepare(`SELECT * FROM worker_terminal_resources WHERE id = ${formerlyOwnedResourceIdSql('?')}`)
+    .get(dispatchId) as WorkerTerminalResourceRow | undefined
 }
 
 /** Records bounded recovery bookkeeping without changing ownership or release intent. */
