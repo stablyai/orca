@@ -7,6 +7,7 @@ import {
   type WebSocketSourceGuard
 } from '../transports/websocket/source-admission/ws-network-source-guard'
 import type { DeviceEntry } from './pairing/device-entry'
+import { ZotzTailnetOnlySourceGuard } from '../../../zotz/zotz-tailnet-source-guard'
 import {
   ensureNetworkSourceGuardSince,
   type NetworkSourcePolicyRecord
@@ -17,6 +18,8 @@ export type ServeNetworkSourceOptions = {
   // Refuse public sources now, overriding grandfathering, remembered sightings and the pairing address.
   refusePublic?: boolean
   pairingAddress: string | null
+  // Zotz server mode: refuse LAN peers too, not only public ones.
+  zotzTailnetOnly?: boolean
 }
 
 export type ServeNetworkSourcePolicy =
@@ -89,6 +92,9 @@ export function createServeNetworkSourceGuard(args: {
 }): WebSocketSourceGuard | null {
   if (!args.options || classifyNetworkSource(args.bindHost) === 'loopback') {
     return null
+  }
+  if (args.options.zotzTailnetOnly) {
+    return new ZotzTailnetOnlySourceGuard()
   }
   const policy = resolveServeNetworkSourcePolicy({
     options: args.options,

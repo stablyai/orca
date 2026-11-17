@@ -34,12 +34,17 @@ export function resolveZotzComputerAwakeMode(settings: ZotzMachineModeSettings):
   )
 }
 
-/** A server listens beyond loopback from startup, refusing public sources like `serve --refuse-public`. */
+/** A server listens beyond loopback from startup but only admits this machine and the tailnet. */
 export function zotzServerNetworkSources(
   settings: Pick<ZotzMachineModeSettings, 'zotzMachineMode'> | null | undefined
-): { allowPublic: false; refusePublic: true; pairingAddress: null } | null {
+): {
+  allowPublic: false
+  refusePublic: true
+  pairingAddress: null
+  zotzTailnetOnly: true
+} | null {
   return resolveZotzMachineMode(settings) === 'server'
-    ? { allowPublic: false, refusePublic: true, pairingAddress: null }
+    ? { allowPublic: false, refusePublic: true, pairingAddress: null, zotzTailnetOnly: true }
     : null
 }
 
