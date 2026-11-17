@@ -9,6 +9,12 @@ import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
+import {
+  claimJournalReaderRecord,
+  describeJournalReaderOperation,
+  recordJournalReaderRequest,
+  releaseJournalReaderRecord
+} from './journal-sql-reader-requests'
 
 import type {
   JournalSqlReaderOperation,
@@ -80,10 +86,13 @@ export class ReaderSlot {
   private readonly pending = new Map<
     number,
     {
+      operation: JournalSqlReaderOperation
       resolve: (response: JournalSqlReaderResult) => void
       reject: (error: Error) => void
     }
   >()
+  private record = claimJournalReaderRecord(this)
+  private runningId?: number
   failed = false
   private failure?: Error
   private conversions = 0
@@ -117,6 +126,7 @@ export class ReaderSlot {
       const pending = reply.id === undefined ? undefined : this.pending.get(reply.id)
       if (reply.id !== undefined) {
         this.pending.delete(reply.id)
+        this.recordRunning()
       }
       if (this.pending.size === 0) {
         this.worker.unref()
@@ -197,7 +207,8 @@ export class ReaderSlot {
     }
     this.worker.ref()
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      this.pending.set(id, { operation, resolve, reject })
+      this.recordRunning()
       void this.ready.promise
         .then(() => {
           if (this.pending.has(id)) {
@@ -206,6 +217,7 @@ export class ReaderSlot {
         })
         .catch((error: unknown) => {
           this.pending.delete(id)
+          this.recordRunning()
           if (this.pending.size === 0) {
             this.worker.unref()
           }
@@ -216,6 +228,8 @@ export class ReaderSlot {
   }
 
   close(): Promise<void> {
+    releaseJournalReaderRecord(this)
+    this.record = undefined
     return (this.closing ??= Promise.resolve()
       .then(() => {
         const error = new AgentSessionJournalError('journal_closed', 'journal SQL reader is closed')
@@ -241,5 +255,29 @@ export class ReaderSlot {
       pending.reject(error)
     }
     this.pending.clear()
+    this.recordRunning()
+  }
+
+  /** Replies are FIFO, so the oldest unanswered request is the one this reader is running. */
+  private recordRunning(): void {
+    if (this.record === undefined) {
+      return
+    }
+    const oldest = this.pending.entries().next().value
+    if (oldest?.[0] === this.runningId) {
+      return
+    }
+    this.runningId = oldest?.[0]
+    recordJournalReaderRequest(
+      this.record,
+      oldest
+        ? {
+            ...describeJournalReaderOperation(oldest[1].operation),
+            startedAt: Date.now(),
+            queued: this.pending.size - 1,
+            threadId: this.worker.threadId
+          }
+        : null
+    )
   }
 }
