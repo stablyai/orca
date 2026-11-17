@@ -63,7 +63,10 @@ export function soonestResetLabel(
   if (resets.length === 0) {
     return null
   }
-  const duration = formatLocalizedResetDuration(Math.min(...resets), now, intlLocale)
+  // Why: a passed reset in a stale snapshot must not hide the next pending one.
+  const pending = resets.filter((resetAt) => resetAt > now)
+  const nextReset = Math.min(...(pending.length > 0 ? pending : resets))
+  const duration = formatLocalizedResetDuration(nextReset, now, intlLocale)
   return duration === null
     ? t('auto.components.status.bar.UsageRosterPanel.resetsNow', 'Resets now')
     : t('auto.components.status.bar.UsageRosterPanel.resetsIn', 'Resets in {{duration}}', {
