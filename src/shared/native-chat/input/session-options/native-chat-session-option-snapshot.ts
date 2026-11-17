@@ -73,6 +73,7 @@ function actionForApply(
 }
 
 function optionDescriptor(args: {
+  agent: string
   option: CatalogOption
   tracked: TrackedNativeChatSessionOption | undefined
   mode: NativeChatSessionOptionMode
@@ -89,20 +90,23 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
+    const exactEffort = args.agent === 'trae' && option.id === 'effort'
     // Speed offers only the tiers the model lists, as Codex does; a config-only tier still runs.
     const choices =
-      option.id === 'serviceTier'
+      option.id === 'serviceTier' || exactEffort
         ? [...option.kind.choices]
         : choiceWithCurrent(option.kind.choices, tracked)
     if (choices.length <= 1) {
       return null
     }
-    const currentValue =
+    const requested =
       typeof tracked?.value === 'string'
         ? tracked.value
         : showDefault
           ? option.kind.defaultValue
           : undefined
+    const currentValue =
+      exactEffort && !choices.some((choice) => choice.value === requested) ? undefined : requested
     return {
       id: option.id,
       label: option.label,
@@ -113,9 +117,12 @@ function optionDescriptor(args: {
         ...(currentValue === undefined ? {} : { currentValue }),
         choices
       },
-      valueSource,
+      valueSource: exactEffort && currentValue === undefined ? 'unknown' : valueSource,
       transport: liveTransport,
       ...settable,
+      ...(args.agent === 'trae' && (option.id === 'effort' || option.id === 'contextMode')
+        ? { hideWhenUnavailable: true as const }
+        : {}),
       ...(action ? { action } : {})
     }
   }
@@ -259,6 +266,7 @@ export function nativeChatSessionOptionDescriptors(args: {
   ]
   for (const option of args.controls) {
     const descriptor = optionDescriptor({
+      agent,
       option,
       tracked: args.values[option.id],
       mode,

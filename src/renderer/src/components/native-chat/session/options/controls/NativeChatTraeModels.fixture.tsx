@@ -42,7 +42,15 @@ export const models = defineFixture({
 
 export const narrow = defineFixture({ width: 320, render: models.render })
 
-function ContextPicker({ mode }: { mode: AgentSessionContextMode }) {
+function ContextPicker({
+  mode,
+  currentEffort = 'high',
+  initialModel = 'large'
+}: {
+  mode: AgentSessionContextMode
+  currentEffort?: string
+  initialModel?: 'large' | 'small' | 'single'
+}) {
   const [state, setState] = useState(() => {
     const seed = { models: [], modelApply: {} }
     return applyStructuredAgentSessionOptions(
@@ -54,7 +62,12 @@ function ContextPicker({ mode }: { mode: AgentSessionContextMode }) {
             id: 'large',
             label: 'Large model',
             isDefault: true,
-            efforts: [],
+            defaultEffort: 'high',
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' }
+            ],
             supportsMaxMode: true
           },
           {
@@ -63,9 +76,21 @@ function ContextPicker({ mode }: { mode: AgentSessionContextMode }) {
             isDefault: false,
             efforts: [],
             supportsMaxMode: false
+          },
+          {
+            id: 'single',
+            label: 'Fixed effort model',
+            isDefault: false,
+            efforts: [{ value: 'high', label: 'High' }],
+            supportsMaxMode: false
           }
         ],
-        current: { model: 'large', contextMode: mode, confirmed: ['contextMode'] }
+        current: {
+          model: initialModel,
+          effort: currentEffort,
+          contextMode: mode,
+          confirmed: ['contextMode']
+        }
       }
     )
   })
@@ -106,4 +131,43 @@ export const narrowContext = defineFixture({
   width: 320,
   render: maxContext.render,
   interact: maxContext.interact
+})
+
+export const unlistedEffort = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" />,
+  interact: standardContext.interact
+})
+
+export const fixedOptions = defineFixture({
+  width: 320,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" initialModel="small" />,
+  interact: standardContext.interact
+})
+
+export const singleEffort = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" initialModel="single" />,
+  interact: standardContext.interact
+})
+
+export const switchToFixed = defineFixture({
+  width: 520,
+  render: maxContext.render,
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button')?.click()
+    const view = frame.ownerDocument.defaultView
+    if (!view) {
+      throw new Error('Fixture has no window')
+    }
+    await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()))
+    const choice = [...frame.ownerDocument.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Standard model')
+    )
+    if (!choice) {
+      throw new Error('Standard model choice did not open')
+    }
+    choice.click()
+    await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()))
+  }
 })

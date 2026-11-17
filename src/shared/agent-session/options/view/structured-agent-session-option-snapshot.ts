@@ -298,7 +298,12 @@ export function canSetStructuredAgentSessionOption(
   if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
-  if (id === 'permissionMode' || id === 'interactionMode' || id === 'contextMode') {
+  if (
+    id === 'permissionMode' ||
+    id === 'interactionMode' ||
+    id === 'contextMode' ||
+    (id === 'effort' && state.record.agent === 'trae')
+  ) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&

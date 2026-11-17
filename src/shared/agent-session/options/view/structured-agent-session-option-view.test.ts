@@ -14,7 +14,10 @@ import {
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
+import {
+  structuredAgentSessionOptionSnapshot,
+  canSetStructuredAgentSessionOption
+} from './structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
@@ -56,6 +59,41 @@ it('captures a Trae context pick and normalizes it under a standard-only model',
     model: 'small',
     contextMode: 'standard'
   })
+})
+
+it('admits only the Trae model’s offered efforts, including custom levels', () => {
+  const seed = { models: [], modelApply: {} }
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('trae', seed),
+    seed,
+    {
+      models: [
+        {
+          id: 'adjustable',
+          label: 'Adjustable',
+          isDefault: true,
+          efforts: levels('low', 'high', 'budget-4096')
+        },
+        { id: 'fixed', label: 'Fixed', isDefault: false, efforts: [], supportsMaxMode: false },
+        {
+          id: 'single',
+          label: 'Single',
+          isDefault: false,
+          efforts: levels('high'),
+          supportsMaxMode: false
+        }
+      ],
+      current: { model: 'adjustable', effort: 'xhigh' }
+    }
+  )
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'xhigh')).toBe(false)
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'high')).toBe(true)
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'budget-4096')).toBe(true)
+  const fixed = commitStructuredAgentSessionOption(state, 'model', 'fixed')
+  expect(canSetStructuredAgentSessionOption(fixed, 'effort', 'high')).toBe(false)
+  expect(canSetStructuredAgentSessionOption(fixed, 'contextMode', 'standard')).toBe(false)
+  const single = commitStructuredAgentSessionOption(fixed, 'model', 'single')
+  expect(canSetStructuredAgentSessionOption(single, 'effort', 'high')).toBe(false)
 })
 // Claude Code 2.1.302 lists plain opus and no opus[1m], which still runs.
 const CLI302 = [{ ...OPUS, id: 'opus', isDefault: true }, SONNET]

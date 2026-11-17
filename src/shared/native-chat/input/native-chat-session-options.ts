@@ -48,6 +48,7 @@ export type SessionOptionDescriptor = {
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean
+  hideWhenUnavailable?: true
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
