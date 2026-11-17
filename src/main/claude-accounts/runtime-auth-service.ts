@@ -53,8 +53,8 @@ export class ClaudeRuntimeAuthService {
     if (accountId === undefined) {
       return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
     }
-    if (wsl) {
-      // Host setup would hand a WSL launch an empty host folder.
+    // Host setup would hand a WSL launch an empty host folder, distro resolved or not.
+    if (wsl || this.resolveTarget(target).runtime === 'wsl') {
       throw claudeChosenAccountUnsupported()
     }
     return this.router.prepareLaunchFor(accountId)

@@ -19,6 +19,7 @@ export async function prepareSpawnClaudeAccount(input: {
   claudeAuth: ClaudeRuntimeAuthPreparation | null
 }> {
   const { target, prepareClaudeAuth, pluginAccountId } = input
+  // Also on a chosen launch: it carries the user's own folder, which the pane's `claude` function needs.
   const env = withClaudeProfileTerminalEnv(input.env, target)
   if (pluginAccountId === undefined) {
     const claudeAuth =

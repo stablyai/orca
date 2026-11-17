@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
+import { CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE } from '../../src/shared/agent-accounts/claude/claude-profile-routing'
 import { expect, test } from './helpers/orca-app'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -79,8 +80,7 @@ function savedAccount(id: string) {
   }
 }
 
-const UNKNOWN_ACCOUNT =
-  "A plugin chose a Claude account for this launch that is not one of Orca's saved accounts."
+const UNKNOWN_ACCOUNT = CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE
 
 /** The folder a launch's Claude ran on, or `refused: <reason>`; the stand-in is closed after. */
 async function launchOutcome(page: Page, command: string, worktreeId: string): Promise<string> {
@@ -108,9 +108,12 @@ async function launchOutcome(page: Page, command: string, worktreeId: string): P
     const reason = refused ?? 'no terminal'
     return reason.includes(UNKNOWN_ACCOUNT) ? 'refused: unknown account' : reason
   }
-  await expect.poll(() => existsSync(markerPath), { timeout: 30_000 }).toBe(true)
-  await page.evaluate((ptyId) => window.api.pty.kill(ptyId), id)
-  return readFileSync(markerPath, 'utf8')
+  try {
+    await expect.poll(() => existsSync(markerPath), { timeout: 30_000 }).toBe(true)
+    return readFileSync(markerPath, 'utf8')
+  } finally {
+    await page.evaluate((ptyId) => window.api.pty.kill(ptyId), id)
+  }
 }
 
 test('a launch plugin runs Claude on the saved account it chose', async ({

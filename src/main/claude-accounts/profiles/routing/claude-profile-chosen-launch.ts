@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import type { ClaudeEnvPatch } from '../../runtime-auth/environment'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
 import {
@@ -78,8 +79,13 @@ async function writeLaunchPointer(accountHome: string, target: string): Promise<
   if ((await readFile(pointer, 'utf8').catch(() => null)) !== target) {
     await mkdir(dirname(pointer), { recursive: true, mode: 0o700 })
     const staged = `${pointer}.${randomUUID()}.tmp`
-    await writeFile(staged, target, { mode: 0o600 })
-    await rename(staged, pointer)
+    try {
+      await writeFile(staged, target, { mode: 0o600 })
+      // Why the retry: on Windows a pane's `claude` function may be reading the pointer.
+      await renameFileWithWindowsRetryAsync(staged, pointer)
+    } finally {
+      await rm(staged, { force: true })
+    }
   }
   return pointer
 }

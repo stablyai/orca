@@ -19,15 +19,11 @@ export function claudeProfileSetupFailed(): AgentSessionPreSpawnError {
   })
 }
 
-// Why refuse, not fall back: the selected account would run a launch chosen for another one.
-export function claudeChosenAccountUnknown(): AgentSessionPreSpawnError {
-  return new AgentSessionPreSpawnError(new Error(CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE), {
-    reason: 'launchPreparationFailed'
-  })
+/** Plain errors: only terminal launches choose an account, and they show the message itself. */
+export function claudeChosenAccountUnknown(): Error {
+  return new Error(CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE)
 }
 
-export function claudeChosenAccountUnsupported(): AgentSessionPreSpawnError {
-  return new AgentSessionPreSpawnError(new Error(CLAUDE_CHOSEN_ACCOUNT_UNSUPPORTED_MESSAGE), {
-    reason: 'launchPreparationFailed'
-  })
+export function claudeChosenAccountUnsupported(): Error {
+  return new Error(CLAUDE_CHOSEN_ACCOUNT_UNSUPPORTED_MESSAGE)
 }

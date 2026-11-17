@@ -24,6 +24,7 @@ describe('a launch plugin choosing a Claude account', () => {
     const account = await prepareSpawnClaudeAccount({ ...launch, prepareClaudeAuth: prepare })
     expect(prepare).toHaveBeenCalledWith({ runtime: 'host' }, 'b')
     expect(account.env).toEqual({ KEEP: '1' })
+    expect(account.claudeAuth).toMatchObject({ configDir: '/accounts/b', provenance: 'profile:b' })
   })
 
   it('refuses an SSH terminal, whose host prepares its own accounts', async () => {
