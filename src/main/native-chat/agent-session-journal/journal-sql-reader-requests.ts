@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { JournalSqlReaderOperation } from './journal-sql-reader-protocol'
+import type { ReaderSlot } from './journal-sql-reader-slot'
 
 /**
  * The read each journal reader is running, recorded on main before the reader gets it. A reader
@@ -19,11 +20,11 @@ type RunningRequestSink = (reader: number, request: JournalReaderRunningRequest 
 
 /** The pool runs at most four readers; a closing reader frees its record first. */
 const READERS = 4
-const owners: (object | undefined)[] = Array.from({ length: READERS })
+const owners: (ReaderSlot | undefined)[] = Array.from({ length: READERS })
 const running: (JournalReaderRunningRequest | null)[] = Array.from({ length: READERS }, () => null)
 let sink: RunningRequestSink | undefined
 
-export function claimJournalReaderRecord(owner: object): number | undefined {
+export function claimJournalReaderRecord(owner: ReaderSlot): number | undefined {
   const index = owners.indexOf(undefined)
   if (index === -1) {
     return undefined
@@ -32,7 +33,7 @@ export function claimJournalReaderRecord(owner: object): number | undefined {
   return index
 }
 
-export function releaseJournalReaderRecord(owner: object): void {
+export function releaseJournalReaderRecord(owner: ReaderSlot): void {
   const index = owners.indexOf(owner)
   if (index !== -1) {
     recordJournalReaderRequest(index, null)
@@ -82,7 +83,10 @@ export function describeJournalReaderOperation(
     case 'conversion-prepare':
     case 'import-state':
       return { operation: operation.kind, chat: chatHash(operation.sessionId) }
-    default:
+    case 'fork-next':
+    case 'fork-release':
+    case 'conversion-page':
+    case 'conversion-release':
       return { operation: operation.kind, chat: null }
   }
 }

@@ -310,7 +310,10 @@ export class ReaderSlot {
         this.reservedChats.delete(reservationId(operation))
         return { ...described, chat }
       }
-      default:
+      case 'domain-history':
+      case 'database':
+      case 'point':
+      case 'import-state':
         return described
     }
   }
