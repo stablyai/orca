@@ -395,9 +395,11 @@ export function AccountsPane({
         recordFeatureInteraction={recordFeatureInteraction}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+    // Grok and Cursor status is read only from this desktop's own sign-in files.
+    !isRemoteAccountScope && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
+    !isRemoteAccountScope &&
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
