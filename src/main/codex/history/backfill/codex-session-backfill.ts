@@ -29,6 +29,7 @@ import type {
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
+import { isUnsupportedHardLinkError } from '../../../filesystem/hard-link-support'
 
 let backgroundBackfillTask: Promise<CodexSessionBackfillSummary | null> | null = null
 
@@ -266,7 +267,7 @@ async function backfillOneManagedSessionFile(
       ensuredTargetDirectories.delete(dirname(systemSessionFilePath))
     }
     const sourceStat = await readCodexSessionTargetStat(managedSessionFilePath)
-    if (linkAttempted && isUnsupportedHardlinkError(linkError)) {
+    if (linkAttempted && isUnsupportedHardLinkError(linkError)) {
       summary.skippedUnsupportedFilesystemFiles += 1
       await auditPass.recordDiagnostic(
         {
@@ -307,11 +308,6 @@ function isExistsError(error: unknown): boolean {
 
 function isNotFoundError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-}
-
-function isUnsupportedHardlinkError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
-  return code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS'
 }
 
 function describeError(error: unknown): string {

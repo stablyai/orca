@@ -4,6 +4,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import { isUnsupportedHardLinkError } from '../../filesystem/hard-link-support'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
 import {
@@ -51,10 +52,24 @@ export async function sweepAgentSessionAttachments(
   const onDisk = new Set(listed)
   // Put back whole: swept below like any other upload, with the kept files the restore just read.
   const putBack = new Map<string, string[]>()
+  // A filesystem without hard links refuses every upload alike, so a pass stops asking after one;
+  // the kept files stay for a later pass.
+  let linking = true
+  const linkUnlessRefused = async <T>(attempt: () => Promise<T>): Promise<T | undefined> => {
+    if (!linking) {
+      return undefined
+    }
+    try {
+      return await attempt()
+    } catch (error) {
+      linking = !isUnsupportedHardLinkError(error)
+      return undefined
+    }
+  }
   for (const uploadId of kept) {
     if (!onDisk.has(uploadId)) {
-      const restored = await restoreKeptAgentSessionAttachment(store.rootDir, uploadId, []).catch(
-        () => undefined
+      const restored = await linkUnlessRefused(() =>
+        restoreKeptAgentSessionAttachment(store.rootDir, uploadId, [])
       )
       if (restored && restored.present.length > 0) {
         listed.push(uploadId)
@@ -82,11 +97,9 @@ export async function sweepAgentSessionAttachments(
     let keptFiles = keptNow ?? []
     // A file gone again since its restore is put back again.
     if (kept.has(uploadId) && (!keptNow || keptNow.some((name) => !listing.includes(name)))) {
-      const restored = await restoreKeptAgentSessionAttachment(
-        store.rootDir,
-        uploadId,
-        present
-      ).catch(() => undefined)
+      const restored = await linkUnlessRefused(() =>
+        restoreKeptAgentSessionAttachment(store.rootDir, uploadId, listing)
+      )
       present = restored?.present ?? present
       keptFiles = restored?.kept ?? []
     }
@@ -102,12 +115,9 @@ export async function sweepAgentSessionAttachments(
     }
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
     if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS || !(await facts.markForSweep(uploadId, now))) {
-      await keepMissingAgentSessionAttachmentFiles(
-        store.rootDir,
-        uploadId,
-        present,
-        keptFiles
-      ).catch(() => {})
+      await linkUnlessRefused(() =>
+        keepMissingAgentSessionAttachmentFiles(store.rootDir, uploadId, present, keptFiles)
+      )
       continue
     }
     await remove(uploadId)
