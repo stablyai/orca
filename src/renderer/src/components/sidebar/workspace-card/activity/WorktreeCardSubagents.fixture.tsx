@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
