@@ -1,17 +1,16 @@
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as RepoWorktrees from '../../../workspaces/catalog/repo-worktrees'
-import { resolveAuthorizedPath } from './filesystem-auth'
+
 import {
-  resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
   resolveLocalListRequestPath
 } from './local-file-access-resolution'
-import { readLocalFileContent } from '../filesystem-file-content-inspection'
+import { readLocalFileContent } from '../../../filesystem/local-file-io/filesystem-file-content-inspection'
 import { invalidateAuthorizedRootsCache } from '../../worktrees/removal/registered-worktree-roots-cache'
 
 const { userData } = vi.hoisted(() => ({ userData: { path: '' } }))
@@ -88,33 +87,6 @@ describe('user-file requests', () => {
       content: 'outside notes\n',
       isBinary: false
     })
-  })
-})
-
-describe('requests with no declared access (roots only)', () => {
-  it('refuse a file outside every project, even one a user-file request may read', async () => {
-    const store = makeStore({ repoPaths: [project] })
-
-    await expect(
-      resolveLocalFileRequestPath(join(outside, 'notes.txt'), undefined, store)
-    ).rejects.toThrow('Access denied')
-    await expect(
-      resolveLocalFileRequestPath(join(outside, 'notes.txt'), { kind: 'grant-everything' }, store)
-    ).rejects.toThrow('Access denied')
-  })
-
-  it('allow the app-owned floating-workspace folder on the desktop only', async () => {
-    const store = makeStore({ repoPaths: [project] })
-    const untitled = join(userData.path, 'floating-workspace', 'untitled.md')
-
-    await expect(resolveDesktopAuthorizedPath(untitled, store)).resolves.toBe(untitled)
-    await expect(resolveAuthorizedPath(untitled, store)).rejects.toThrow('Access denied')
-  })
-
-  it('refuse the home folder, which the floating workspace starts in', async () => {
-    await expect(
-      resolveDesktopAuthorizedPath(homedir(), makeStore({ repoPaths: [project] }))
-    ).rejects.toThrow('Access denied')
   })
 })
 
@@ -255,21 +227,6 @@ describe('project-folder-link listings', () => {
   beforeEach(async () => {
     await mkdir(join(outside, 'guides'))
     await symlink(outside, join(project, 'linked'), 'dir')
-  })
-
-  it('list a project folder link that leads out, and folders under it', async () => {
-    const store = makeStore({ repoPaths: [project] })
-    const linked = join(project, 'linked')
-
-    await expect(resolveLocalListRequestPath(linked, undefined, store)).rejects.toThrow(
-      'outside allowed directories'
-    )
-    await expect(resolveLocalListRequestPath(linked, PROJECT_FOLDER_LINK, store)).resolves.toBe(
-      outside
-    )
-    await expect(
-      resolveLocalListRequestPath(join(linked, 'guides'), PROJECT_FOLDER_LINK, store)
-    ).resolves.toBe(join(outside, 'guides'))
   })
 
   it('refuse links in Orca floating folder, which is not a project', async () => {

@@ -3,12 +3,12 @@ import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNav
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as WorktreeTerminalStop } from '../../terminal/stop/worktree-terminal-stop'
 import { OrcaRuntimeWithRestoredPaneStart } from './restored-pane-materialize'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
+import type { TabActivationIntent } from '../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -16,15 +16,15 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
+import { isAutomaticTabActivation } from '../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 import { recordShownTerminalUserOpen } from '../../terminal/lifecycle/run-terminal-client-use'
-import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
+import { resolveChatTabActivation } from '../../session-tabs/chat/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot

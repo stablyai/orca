@@ -9,10 +9,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from './execution-host'
 import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 import type { Repo } from '../repository/repo-types'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
 import { getSshConnectionHealth, type EphemeralVmHostLifecycle } from './execution-host-health'

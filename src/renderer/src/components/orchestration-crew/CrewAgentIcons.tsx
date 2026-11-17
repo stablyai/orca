@@ -18,7 +18,7 @@ import {
   isOrcaSessionId,
   formatOrcaSessionAddress
 } from '../../../../shared/agent-session/identity/orca-session-address'
-import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
+import type { AgentMessageSenderView } from '../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 

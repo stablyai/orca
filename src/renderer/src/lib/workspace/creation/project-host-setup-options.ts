@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../shared/execution-host/execution-host-registry-entry'
 import { getHostHealthUnavailableDetail } from './project-host-health-detail'
 import { isHostLocalProjectId } from '../../../../../shared/project/host-setup/project-host-setup-projection'
@@ -19,7 +19,7 @@ import type { ProjectHostSetup } from '../../../../../shared/project/project-typ
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import {
   dedupeReadySetupRows,
   type SelectedProjectHostSetup

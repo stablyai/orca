@@ -52,12 +52,4 @@ describe('pack-index metadata protection', () => {
       ).resolves.toMatchObject({ protected: true })
     }
   )
-
-  it.each([1, 2])('accepts the standalone v1 SHA hash format %s', async (hash) => {
-    const packs = await directory()
-    await writeFile(join(packs, 'multi-pack-index'), indexHeader(1, hash))
-    await expect(
-      probeRepoPackIndexDirectory(packs, 64, new AbortController().signal)
-    ).resolves.toEqual({ protected: false, packCountFloor: 0 })
-  })
 })

@@ -9,7 +9,7 @@ import type { ProjectHostSetup } from '../../../../../shared/project/project-typ
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SetupDecision } from '../../../../../shared/worktree/create-types'
 import { findAutomationRepo } from '../../../../../shared/automations/ownership/automation-repo-target'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getSetupConfig } from '../../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 
 type AutomationSetupSource = {

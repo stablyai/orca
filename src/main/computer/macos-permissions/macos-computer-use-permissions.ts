@@ -4,7 +4,7 @@ import { RuntimeClientError } from '../runtime-client-error'
 import {
   COMPUTER_ERROR_CODES,
   COMPUTER_SCREEN_LOCKED_MESSAGE
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { readMacosBundleId, resetMacosTccPermission } from '../../macos-permissions/macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from '../macos-native/macos-native-provider-paths'
@@ -15,7 +15,7 @@ import type {
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../shared/computer-use-permissions-types'
+} from '../../../shared/computer/computer-use-permissions-types'
 
 const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
 

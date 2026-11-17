@@ -13,7 +13,7 @@ import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { cn } from '@/lib/class-names'
 
 type AutoRenameFailedDialogProps = {

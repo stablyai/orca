@@ -7,7 +7,10 @@ import {
 
 import { getProjectGroupSubtreeIds } from '../../../../shared/project/groups/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type {
   FolderWorkspacePathStatusCacheEntry,
   FolderWorkspacePathStatusRouteOptions

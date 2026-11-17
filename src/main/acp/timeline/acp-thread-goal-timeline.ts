@@ -3,7 +3,7 @@
 import {
   AGENT_SESSION_THREAD_GOAL_ACCOUNTING_REVISION_SECONDS,
   AGENT_SESSION_THREAD_GOAL_PRESENTATION
-} from '../../../shared/agent-session/agent-session-thread-goal'
+} from '../../../shared/agent-session/thread-goals/agent-session-thread-goal'
 import type { AgentJournalThreadGoal } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   ProviderTimelineEvent,

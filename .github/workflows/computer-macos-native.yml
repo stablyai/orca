@@ -20,7 +20,7 @@ on:
       - 'native/computer-use-windows/**'
       - 'skills/orca-computer-use/SKILL.md'
       - 'src/main/computer/**'
-      - 'src/shared/computer-use-*.ts'
+      - 'src/shared/computer/computer-use-*.ts'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * *'

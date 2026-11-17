@@ -12,7 +12,7 @@ import {
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
-import { ensureStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost } from '../installation/structured-agent-session-runtime'
 
 const TEST_HOST_ID = 'local'
 

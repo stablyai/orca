@@ -1,4 +1,4 @@
-import type { ConnectorAgent } from '../../shared/external-conversation-link'
+import type { ConnectorAgent } from '../../shared/connectors/external-conversation-link'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime
