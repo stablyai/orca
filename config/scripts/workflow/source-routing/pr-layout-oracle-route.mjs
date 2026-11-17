@@ -44,9 +44,9 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/main/runtime/terminal/output/terminal-derived-agent-facts.ts',
   'src/main/runtime/terminal/output/terminal-output-generation.ts',
   'src/main/runtime/session-graph/session-window-graph.ts',
-  'src/main/runtime/session-tabs/mobile-session-hydration.ts',
-  'src/main/runtime/session-tabs/mobile-session-reconciliation.ts',
-  'src/main/runtime/session-tabs/mobile-session-preservation.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-hydration.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-reconciliation.ts',
+  'src/main/runtime/session-tabs/restoration/mobile-session-preservation.ts',
   'src/main/runtime/workspaces/session-hosts/get-runtime-id.ts',
   'src/renderer/src/components/terminal/terminal-tab-actions.ts',
   'src/renderer/src/runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror.ts',
@@ -82,8 +82,8 @@ const RUNTIME_LAYOUT_WRITERS = [
   'src/main/runtime/workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity.ts',
   'src/main/runtime/terminal/adoption/runtime-terminal-orphan-adoption.ts',
   'src/main/runtime/terminal/adoption/adopt-terminal-orphans-from-inventory.ts',
-  'src/main/runtime/session-tabs/mobile-session-membership.ts',
-  'src/main/runtime/session-tabs/pty-backed-session-publication.ts'
+  'src/main/runtime/session-tabs/restoration/mobile-session-membership.ts',
+  'src/main/runtime/session-tabs/publication/pty-backed-session-publication.ts'
 ]
 
 // Runtime matches only the modules that create, move, close, persist or publish layout.

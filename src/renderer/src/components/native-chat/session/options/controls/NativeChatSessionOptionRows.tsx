@@ -60,6 +60,8 @@ function LevelSegment(props: {
   const shortLabel = nativeChatSessionChoiceShortLabel(choice, say, optionId)
   // What the segment's text leaves out: the full name behind an abbreviation, and the description.
   const detail = [label === shortLabel ? null : label, choice.description].filter(Boolean).join(' ')
+  // A choice with its own short text keeps its full label as the name, not only as a description.
+  const name = choice.shortLabel ? label : undefined
   if (!detail) {
     return <ToggleGroupItem value={choice.value}>{shortLabel}</ToggleGroupItem>
   }
@@ -69,7 +71,7 @@ function LevelSegment(props: {
       <TooltipTrigger asChild>
         <span className="inline-flex">
           {/* Link the full description directly; the tooltip links only its wrapper while open. */}
-          <ToggleGroupItem value={choice.value} aria-describedby={detailId}>
+          <ToggleGroupItem value={choice.value} aria-label={name} aria-describedby={detailId}>
             {shortLabel}
           </ToggleGroupItem>
           <span id={detailId} className="sr-only">

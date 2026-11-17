@@ -29,8 +29,6 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
-  'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
-  'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
@@ -118,7 +116,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
-  'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',

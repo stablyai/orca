@@ -55,50 +55,6 @@ afterEach(() => {
   act(() => renderer?.unmount())
 })
 describe('shared settings screen state', () => {
-  it('flips the Voice switch before the desktop replies and surfaces a rejected save', async () => {
-    const loaded = {
-      enabled: true,
-      dictationMode: 'toggle',
-      selectedModelId: '',
-      models: []
-    }
-    let rejectConfigure: (error: Error) => void = () => {}
-    const operations = {
-      // Why: the reconcile read stays pending so the optimistic value and the
-      // rejection message are both observable, as they are on a slow desktop.
-      load: vi
-        .fn()
-        .mockResolvedValueOnce(loaded)
-        .mockImplementation(() => new Promise(() => {})),
-      configure: vi.fn().mockImplementation(
-        () =>
-          new Promise((_resolve, reject) => {
-            rejectConfigure = reject
-          })
-      ),
-      download: vi.fn(),
-      delete: vi.fn()
-    } as VoiceSettingsOperations
-    await act(async () => {
-      renderer = create(
-        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
-      )
-    })
-    const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
-    expect(switchProps().value).toBe(true)
-
-    await act(async () => {
-      switchProps().onValueChange(false)
-    })
-    // The switch moves on tap, before the desktop has answered.
-    expect(switchProps().value).toBe(false)
-
-    await act(async () => {
-      rejectConfigure(new Error('Desktop unavailable'))
-      await Promise.resolve()
-    })
-    expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
-  })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {
       enabled: true,

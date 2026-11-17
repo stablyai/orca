@@ -1,5 +1,5 @@
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/structured-workspace-authority'
+import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
 import type { StructuredSessionWorkspaceRemovedDetails } from '../../../../../../shared/agent-session/view/open-structured-agent-session'
 // Republish an existing host-owned record's tab for history entries holding only session id; unpublished tabs disappear on sync.
 // Unlike ensure, read workspace/provider from host state so callers cannot redirect publication.
@@ -22,7 +22,7 @@ import {
 import {
   structuredSessionSurfaceIsCurrent,
   type StructuredSessionSurface
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { RevealParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'

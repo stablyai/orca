@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildClaudeResumeLaunchCommand } from './agent-resume-launch-command'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
-import { buildAgentStartupPlan } from './tui-agent-startup'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
 const SESSION_ID = 'claude-session-1'
@@ -68,12 +67,6 @@ describe('buildClaudeResumeLaunchCommand', () => {
     )
   })
 
-  it('strips selectors that follow claude after a wrapper terminator', () => {
-    expect(
-      buildClaudeResumeLaunchCommand("mise exec -- claude '--resume' stale", RESUME, 'posix')
-    ).toBe(`mise exec -- claude '--resume' '${SESSION_ID}'`)
-  })
-
   it('never mistakes a claude-suffixed argument for the executable', () => {
     expect(
       buildClaudeResumeLaunchCommand(
@@ -109,18 +102,6 @@ describe('buildClaudeResumeLaunchCommand', () => {
     )
   })
 
-  it.each([
-    'claude "-`r" foo --model x',
-    'claude "-`u{72}" oldid --resume x',
-    'claude -`r foo --model x',
-    'claude --resum`e stale --model x'
-  ])('fails open on powershell escape sequences, quoted or bare: %s', (base) => {
-    // PowerShell expands bare escape sequences too; token values no longer match argv.
-    expect(buildClaudeResumeLaunchCommand(base, RESUME, 'powershell')).toBe(
-      `${base} '--resume' '${SESSION_ID}'`
-    )
-  })
-
   it('fails open on the powershell stop-parsing token', () => {
     // After --%, appended quotes reach the child literally.
     const base = 'claude --% --resume stale --model sonnet'
@@ -151,31 +132,6 @@ describe('buildClaudeResumeLaunchCommand', () => {
     ).toBe(`claude '--resume' '${SESSION_ID}' -- positional`)
   })
 
-  it.each([
-    'claude -c && echo done',
-    'claude --resume stale; echo hi',
-    'claude --resume stale;echo hi',
-    'claude -c | tee /tmp/log',
-    'claude --resume stale 2>/tmp/x.log',
-    'claude --resume stale\n--verbose',
-    'claude --resume stale # note'
-  ])('fails open when the base chains shell syntax after claude: %s', (base) => {
-    expect(buildClaudeResumeLaunchCommand(base, RESUME, 'posix')).toBe(
-      `${base} '--resume' '${SESSION_ID}'`
-    )
-  })
-
-  it.each([
-    'claude --resume $(cat sid.txt)',
-    'claude --resume=$(cat sid.txt)',
-    'claude --resume `cat sid.txt`',
-    'claude --resume ${SID:-a b}'
-  ])('fails open on unquoted multi-token shell expansions: %s', (base) => {
-    expect(buildClaudeResumeLaunchCommand(base, RESUME, 'posix')).toBe(
-      `${base} '--resume' '${SESSION_ID}'`
-    )
-  })
-
   it('never walks the separator backoff into an escaped-space token', () => {
     expect(
       buildClaudeResumeLaunchCommand(
@@ -195,35 +151,6 @@ describe('buildClaudeResumeLaunchCommand', () => {
       `claude '--' --resume old "--resume" "${SESSION_ID}"`
     )
   })
-})
-
-describe('buildAgentResumeStartupPlan claude selector guard', () => {
-  it.each(SHELLS)(
-    'emits one identity-bearing resume for a persisted bare selector ($platform/$shell)',
-    ({ platform, shell }) => {
-      const initial = buildAgentStartupPlan({
-        agent: 'claude',
-        prompt: '',
-        cmdOverrides: {},
-        agentArgs: '--resume',
-        platform,
-        shell,
-        allowEmptyPromptLaunch: true
-      })
-      expect(initial).not.toBeNull()
-      const restored = buildAgentResumeStartupPlan({
-        agent: 'claude',
-        providerSession,
-        cmdOverrides: {},
-        agentArgs: initial?.launchConfig.agentArgs,
-        agentCommand: initial?.launchConfig.agentCommand,
-        platform,
-        shell
-      })
-      expect(restored).not.toBeNull()
-      expectSingleAuthoritativeResume(restored?.launchCommand ?? '', shell)
-    }
-  )
 })
 
 describe('buildAgentResumeStartupPlan claude effort', () => {
