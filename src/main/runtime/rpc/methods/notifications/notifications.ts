@@ -1,8 +1,10 @@
 import { createNotificationStreamFilter } from './notification-stream-policy'
 import { defineStreamingMethod, defineMethod, type RpcContext } from '../../core'
+import { isNotificationSourceEnabled } from '../../../../../shared/notifications/notification-source-gate'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   NotificationGetMissedSinceParams,
+  NotificationPushCoverageParams,
   NotificationRegisterPushParams,
   NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
@@ -29,6 +31,29 @@ export function reportDesktopPresence(
     runtime.registerSubscriptionCleanup(`desktop-presence-${connectionId}`, forget, connectionId)
   )
   return { recorded: true }
+}
+
+type PushCoverageContext = Pick<RpcContext, 'clientKind'> & {
+  runtime: Pick<OrcaRuntimeService, 'requireStore' | 'coveredMobilePushTokenDigests'>
+}
+
+/** A mirroring desktop skips the phones this host pushes itself; a phone of its own still gets the alert. */
+export function pushCoverage(
+  params: { tokenDigests: string[]; source: string; agentState?: string },
+  { runtime, clientKind }: PushCoverageContext
+): { coveredTokenDigests: string[] } {
+  // This host's own settings can keep the alert off its phones, and then the mirror must push it.
+  if (
+    clientKind !== 'runtime' ||
+    !isNotificationSourceEnabled(
+      runtime.requireStore().getSettings().notifications,
+      params.source,
+      params.agentState
+    )
+  ) {
+    return { coveredTokenDigests: [] }
+  }
+  return { coveredTokenDigests: runtime.coveredMobilePushTokenDigests(params.tokenDigests) }
 }
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
@@ -96,6 +121,12 @@ export const NOTIFICATION_METHODS = [
     permission: 'workspace',
     params: NotificationReportDesktopPresenceParams,
     handler: async (params, context) => reportDesktopPresence(params, context)
+  }),
+  defineMethod({
+    name: 'notifications.pushCoverage',
+    permission: 'workspace',
+    params: NotificationPushCoverageParams,
+    handler: async (params, context) => pushCoverage(params, context)
   }),
   defineMethod({
     name: 'notifications.registerPush',

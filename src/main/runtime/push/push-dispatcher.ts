@@ -25,7 +25,18 @@ type PushDispatcherOptions = {
   deliveryMode?: MobilePushDeliveryMode
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
+  resolveCoverage?: PushCoverageResolver
 }
+
+export type PushCoverageRequest = { tokenDigests: string[]; source: string; agentState?: string }
+
+/** Token digests of phones the alert's execution host pushes itself; empty when it pushes none. */
+export type PushCoverageResolver = (
+  executionHost: string,
+  request: PushCoverageRequest
+) => Promise<ReadonlySet<string>>
+
+const NO_COVERAGE: ReadonlySet<string> = new Set()
 
 type PushTarget = { deviceId: string; registration: MobilePushRegistration }
 
@@ -37,8 +48,10 @@ export class PushDispatcher {
   private readonly registry: PushDispatcherRegistry
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
+  private readonly resolveCoverage: PushCoverageResolver | undefined
 
   constructor(options: PushDispatcherOptions) {
+    this.resolveCoverage = options.resolveCoverage
     this.client = options.client
     this.registry = options.registry
     this.deliveryMode = options.deliveryMode ?? 'full'
@@ -63,8 +76,56 @@ export class PushDispatcher {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
+    if (!this.resolveCoverage || event.type !== 'notification' || !event.executionHost) {
+      this.send(event, NO_COVERAGE)
+      return
+    }
+    const tokenDigests = this.liveTokenDigests((registration) =>
+      allowsMobilePushDelivery(registration.filter, event)
+    )
+    if (tokenDigests.length === 0) {
+      this.send(event, NO_COVERAGE)
+      return
+    }
+    // A mirrored session's own host already pushes the phones it has; this copy is for the rest.
+    void this.resolveCoverage(event.executionHost, {
+      tokenDigests,
+      source: event.source,
+      ...(event.agentState ? { agentState: event.agentState } : {})
+    })
+      .catch((error: unknown) => {
+        console.warn('[push] Could not ask the execution host which phones it pushes:', error)
+        return NO_COVERAGE
+      })
+      .then((covered) => {
+        if (!this.stopped) {
+          this.send(event, covered)
+        }
+      })
+  }
+
+  /** The subset of these phones this host pushes; a mirroring host leaves them to it. */
+  coveredTokenDigests(tokenDigests: readonly string[]): string[] {
+    if (this.stopped || this.deliveryMode === 'disabled') {
+      return []
+    }
+    const asked = new Set(tokenDigests)
+    return this.liveTokenDigests((registration) => asked.has(registration.tokenDigest ?? ''))
+  }
+
+  private liveTokenDigests(include: (registration: MobilePushRegistration) => boolean): string[] {
+    return this.registry
+      .listDevices()
+      .flatMap(({ pushRegistration: registration }) =>
+        registration?.tokenDigest && registration.expiresAt > Date.now() && include(registration)
+          ? [registration.tokenDigest]
+          : []
+      )
+  }
+
+  private send(event: MobileNotificationEvent, covered: ReadonlySet<string>): void {
     try {
-      const plan = this.planSend(event)
+      const plan = this.planSend(event, covered)
       if (!plan) {
         return
       }
@@ -86,7 +147,8 @@ export class PushDispatcher {
   }
 
   private planSend(
-    event: MobileNotificationEvent
+    event: MobileNotificationEvent,
+    covered: ReadonlySet<string>
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
     if (event.type === 'dismiss') {
       const target = event.dismissedDelivery ?? event
@@ -123,7 +185,8 @@ export class PushDispatcher {
       if (
         !registration ||
         registration.expiresAt <= Date.now() ||
-        !allowsMobilePushDelivery(registration.filter, event)
+        !allowsMobilePushDelivery(registration.filter, event) ||
+        (registration.tokenDigest !== undefined && covered.has(registration.tokenDigest))
       ) {
         return []
       }

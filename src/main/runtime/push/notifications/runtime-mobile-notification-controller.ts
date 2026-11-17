@@ -68,6 +68,7 @@ export type MobilePushRegistrar = {
   test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
+  coveredTokenDigests(tokenDigests: readonly string[]): string[]
 }
 
 /** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */
@@ -132,6 +133,11 @@ export class RuntimeMobileNotificationController {
 
   async unregisterPushDevice(deviceId: string): Promise<{ unregistered: boolean }> {
     return (await this.pushRegistrar?.unregister(deviceId)) ?? { unregistered: false }
+  }
+
+  /** The subset of these phones this host pushes itself; empty when it pushes none. */
+  coveredPushTokenDigests(tokenDigests: readonly string[]): string[] {
+    return this.pushRegistrar?.coveredTokenDigests(tokenDigests) ?? []
   }
 
   /** `bindForget` runs for a connection without a live report, before it is recorded. */

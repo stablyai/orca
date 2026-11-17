@@ -7,7 +7,8 @@ import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { RuntimeMobileNotificationController } from './notifications/runtime-mobile-notification-controller'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import { reportDesktopPresence } from '../rpc/methods/notifications/notifications'
+import { pushCoverage, reportDesktopPresence } from '../rpc/methods/notifications/notifications'
+import { getDefaultNotificationSettings } from '../../../shared/notifications/notification-settings-defaults'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
@@ -182,4 +183,35 @@ it('expires persisted registration at seven days despite host activity and renew
   h.dispatch()
   await flush()
   expect(h.client.send).toHaveBeenCalledTimes(2)
+})
+
+it('tells a mirroring desktop which of its phones this host pushes, for alerts its settings allow', async () => {
+  const h = await pipeline()
+  const digest = new DeviceRegistry(h.path).getDevice(h.device.deviceId)?.pushRegistration
+    ?.tokenDigest
+  expect(digest).toEqual(expect.any(String))
+  const ask = (agentTaskComplete: boolean, clientKind: 'runtime' | 'mobile' = 'runtime') =>
+    pushCoverage(
+      {
+        tokenDigests: [digest!, 'phone-paired-only-with-the-mirror'],
+        source: 'agent-task-complete',
+        agentState: 'done'
+      },
+      {
+        clientKind,
+        runtime: {
+          requireStore: () =>
+            ({
+              getSettings: () => ({
+                notifications: { ...getDefaultNotificationSettings(), agentTaskComplete }
+              })
+            }) as never,
+          coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
+        }
+      }
+    ).coveredTokenDigests
+  expect(ask(true)).toEqual([digest])
+  // Finishes are off on this host, so its phones get none and the mirror must push them.
+  expect(ask(false)).toEqual([])
+  expect(ask(true, 'mobile')).toEqual([])
 })

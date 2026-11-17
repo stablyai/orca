@@ -9,7 +9,9 @@ import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-s
 import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
-import { PushDispatcher } from './push-dispatcher'
+import { PushDispatcher, type PushCoverageResolver } from './push-dispatcher'
+import { mobilePushTokenDigest } from './push-token-digest'
+import { pushTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import {
@@ -33,6 +35,8 @@ type DesktopPushServiceOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
   /** Inject the per-device registration bucket for tests. */
   registerThrottle?: PushRegisterThrottle
+  /** Asks a mirrored session's execution host which of this host's phones it pushes itself. */
+  resolveCoverage?: PushCoverageResolver
 }
 
 export class DesktopPushService {
@@ -64,7 +68,12 @@ export class DesktopPushService {
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
     this.deliveryMode = readMobilePushDeliveryMode()
-    this.dispatcher = new PushDispatcher({ client, registry, deliveryMode: this.deliveryMode })
+    this.dispatcher = new PushDispatcher({
+      client,
+      registry,
+      deliveryMode: this.deliveryMode,
+      resolveCoverage: options.resolveCoverage
+    })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??
@@ -134,27 +143,7 @@ export class DesktopPushService {
         sound: registration.filter.sound !== false
       }
     })
-    if (!result.ok) {
-      return {
-        accepted: false,
-        reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
-      }
-    }
-    const status = result.results.find(
-      (entry) => entry.registrationId === registration.registrationId
-    )?.status
-    if (status === 'queued') {
-      return { accepted: true }
-    }
-    return {
-      accepted: false,
-      reason:
-        status === 'rate_limited'
-          ? 'rate_limited'
-          : status === 'dead'
-            ? 'not_registered'
-            : 'rejected'
-    }
+    return pushTestResult(result, registration.registrationId)
   }
 
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {
@@ -208,6 +197,10 @@ export class DesktopPushService {
     return failure
       ? { registered: false, reason: failure }
       : { registered: true, registrationId: result.registrationId }
+  }
+
+  coveredTokenDigests(tokenDigests: readonly string[]): string[] {
+    return this.dispatcher.coveredTokenDigests(tokenDigests)
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
@@ -267,7 +260,8 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000
+        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
+        tokenDigest: mobilePushTokenDigest(input)
       })
       // False means the device was removed or left mobile scope while the gateway
       // call was in flight.

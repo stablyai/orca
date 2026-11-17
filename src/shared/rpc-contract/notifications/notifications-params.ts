@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
   MOBILE_PUSH_APNS_ENVIRONMENTS,
-  MOBILE_PUSH_PLATFORMS
+  MOBILE_PUSH_PLATFORMS,
+  MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS
 } from '../../notifications/mobile-push-contract'
 
 export const NotificationUnsubscribeParams = z.object({
@@ -54,3 +55,10 @@ export const NotificationsSubscribeParams = z
   .optional()
 
 export const NotificationReportDesktopPresenceParams = z.object({ away: z.boolean() })
+
+// The alert's kind lets the owning host answer only for phones its own settings would push it to.
+export const NotificationPushCoverageParams = z.object({
+  tokenDigests: z.array(z.string().min(1).max(MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS)).max(64),
+  source: z.string().min(1).max(64),
+  agentState: z.string().min(1).max(64).optional()
+})
