@@ -13,6 +13,7 @@ import type {
 } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import { supportsSupervisedProviderChildLocation } from '../../../provider-process/supervised-provider-child-location'
 import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
+import { zcodeDesktopEnvKeys } from '../launch/zcode-structured-launch-resolution'
 import { requestZcodeSkillCatalog } from './zcode-skill-catalog'
 
 // Resting zcode chats list their `/` skills over a disposable backend: the workspace-wide
@@ -67,7 +68,14 @@ async function scanZcodeAtRest(
       commandSettings: deps.resolveCommandSettings?.()
     })
     const connection = await spawnZcodeAppServerConnection(
-      { command: launch.command, args: launch.args, cwd, env: launch.env },
+      {
+        command: launch.command,
+        args: launch.args,
+        cwd,
+        env: launch.env,
+        // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
+        envToDelete: zcodeDesktopEnvKeys(environment)
+      },
       { onServerRequest: (request) => answerProbeAsk(connection, request) }
     )
     try {

@@ -5,6 +5,7 @@ import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-
 import { spawnZcodeAppServerConnection } from '../../../zcode/app-server/zcode-app-server-connection'
 import type { ZcodeAppServerConnection } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
+import { zcodeDesktopEnvKeys } from '../launch/zcode-structured-launch-resolution'
 import {
   pushZcodeAccountConfig,
   readZcodeBuiltinTable
@@ -89,7 +90,14 @@ export class ZcodeNamingRuns {
       turnSettled = resolve
     })
     const connection = await spawnZcodeAppServerConnection(
-      { command: launch.command, args: launch.args, cwd: home, env: launch.env },
+      {
+        command: launch.command,
+        args: launch.args,
+        cwd: home,
+        env: launch.env,
+        // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
+        envToDelete: zcodeDesktopEnvKeys(environment)
+      },
       {
         onServerRequest: (request) => this.answerAsk(connection, request),
         onNotification: (method, params) => {

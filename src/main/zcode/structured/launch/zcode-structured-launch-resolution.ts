@@ -63,6 +63,17 @@ export function formatZcodeModelOption(model: { providerId: string; modelId: str
  */
 export const ZCODE_INHERITED_ENV_KEEP = new Set(['ZCODE_HOME', 'ZCODE_CREDENTIAL_SECRET'])
 
+/**
+ * The inherited desktop runtime keys a zcode child must not see. The managed spawn merges the
+ * process environment beneath `launch.env`, so headless backends pass these as `envToDelete`
+ * (after the merge, deliberately — the keep set and launch-set keys survive).
+ */
+export function zcodeDesktopEnvKeys(environment: NodeJS.ProcessEnv): string[] {
+  return Object.keys(environment).filter(
+    (key) => key.startsWith('ZCODE_') && !ZCODE_INHERITED_ENV_KEEP.has(key)
+  )
+}
+
 /** Derive resume identity from the durable record; zcode pins its own account home. */
 export function zcodeStructuredLaunchPart(
   deps: ZcodeStructuredLaunchPartDeps
@@ -110,9 +121,7 @@ export function zcodeStructuredLaunchPart(
       }
     }
     const model = parseZcodeModelOption(record.options?.model ?? '')
-    const desktopEnvKeys = Object.keys(environment).filter(
-      (key) => key.startsWith('ZCODE_') && !ZCODE_INHERITED_ENV_KEEP.has(key)
-    )
+    const desktopEnvKeys = zcodeDesktopEnvKeys(environment)
     const env = { ...environment }
     for (const key of desktopEnvKeys) {
       delete env[key]

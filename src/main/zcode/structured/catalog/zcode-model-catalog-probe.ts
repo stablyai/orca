@@ -20,6 +20,7 @@ import type {
   ZcodeAppServerServerRequest
 } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
+import { zcodeDesktopEnvKeys } from '../launch/zcode-structured-launch-resolution'
 import {
   pushZcodeAccountConfig,
   readZcodeBuiltinTable
@@ -87,7 +88,15 @@ export function createZcodeModelCatalogProbe(
         let asks: ((request: ZcodeAppServerServerRequest) => void) | null = null
         let declaredModels: readonly { providerId: string; modelId: string }[] = []
         const connection = await spawnZcodeAppServerConnection(
-          { command: launch.command, args: launch.args, cwd: workspace, env: launch.env },
+          {
+            command: launch.command,
+            args: launch.args,
+            cwd: workspace,
+            env: launch.env,
+            // A desktop parent's ZCODE_* vars leak through the spawn's process-env base and flip
+            // the backend out of the protocol this probe speaks.
+            envToDelete: zcodeDesktopEnvKeys(environment)
+          },
           {
             onServerRequest: (request) => asks?.(request)
           }
@@ -116,7 +125,8 @@ export function createZcodeModelCatalogProbe(
               const push = await pushZcodeAccountConfig(
                 connection,
                 table,
-                deps.resolveChatCredentials()
+                deps.resolveChatCredentials(),
+                Math.max(1, deadline - Date.now())
               )
               // A refused push leaves only third-party models; advertising account ids the
               // backend cannot select would fake a complete catalog. An unsettled push (storage

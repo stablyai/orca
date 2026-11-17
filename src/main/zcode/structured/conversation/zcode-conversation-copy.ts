@@ -11,6 +11,7 @@ import {
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import { zcodeHeadlessLaunch } from '../launch/zcode-headless-launch'
+import { zcodeDesktopEnvKeys } from '../launch/zcode-structured-launch-resolution'
 
 // Fork a persisted zcode conversation over a short-lived app-server of its own — the source chat
 // may have no live child, and forked sessions are first-class resume targets. zcode has no rewind
@@ -55,7 +56,9 @@ async function withZcodeHeadlessConnection<T>(input: {
       command: launch.command,
       args: launch.args,
       cwd: input.environment.HOME ?? homedir(),
-      env: launch.env
+      env: launch.env,
+      // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
+      envToDelete: zcodeDesktopEnvKeys(input.environment)
     },
     { onServerRequest: (ask) => answerHeadlessAsk(connection, ask, input.credentials) }
   )

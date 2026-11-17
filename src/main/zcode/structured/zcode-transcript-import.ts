@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
   absoluteConversationStore,
   type StructuredAgentTranscriptImport
@@ -23,7 +24,12 @@ function zcodeCliStore(launchEnv: NodeJS.ProcessEnv): string | null {
 
 export const ZCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
   readableContext: { kind: 'container' },
-  conversationStore: ({ launchEnv }) => zcodeCliStore(launchEnv),
+  // The pinned account home outranks ambient ZCODE_HOME: fork/adoption lookups must read the
+  // account the record belongs to, never an env-selected other one.
+  conversationStore: ({ accountHome, launchEnv }) => {
+    const home = agentSessionAccountHomePath(accountHome)
+    return zcodeCliStore(home ? { ...launchEnv, ZCODE_HOME: home } : launchEnv)
+  },
   accountHomeCandidates: ({ selectedAccountHome }) => [selectedAccountHome],
   admitTranscriptPath: async ({ store: dbPath, transcriptPath }) =>
     transcriptPath === dbPath ? dbPath : null,
