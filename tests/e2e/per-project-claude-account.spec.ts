@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, realpathSync } from 'node:fs'
 import path from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
-import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { getTerminalContent } from './helpers/terminal'
+import { type Page, expect } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { buildFakeAgentCommandOverride } from './agents/session-fixtures/fake-agent-command-override'
+import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
+import { getTerminalContent } from './terminal/layout/terminal-pane-identity'
 
 // Covers the per-project Claude account: settings, the launch prompt, pinned launches and refusals.
 

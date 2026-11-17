@@ -125,6 +125,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
 }
 
 function hasOrchestrationRequestId(data: unknown): boolean {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: optional chaining reads only an optional field, so any data shape is safe.
   const requestId = (data as { orchestrationRequestId?: unknown } | null)?.orchestrationRequestId
   return typeof requestId === 'string'
 }
