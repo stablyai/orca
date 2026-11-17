@@ -1,4 +1,4 @@
-import { lstatSync, opendirSync, readdirSync, realpathSync } from 'node:fs'
+import { lstatSync, opendirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { parentPort } from 'node:worker_threads'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
@@ -39,18 +39,32 @@ function overBudget(walk: Walk): boolean {
   return false
 }
 
-function historyFolders(walk: Walk, home: string): string[] {
-  const folders = HISTORY_FOLDERS.map((name) => join(home, name))
+/** Home entries count toward the budget too: a home's listing is streamed like any folder. */
+function addHistoryFolders(walk: Walk, home: string, folders: string[]): boolean {
+  folders.push(...HISTORY_FOLDERS.map((name) => join(home, name)))
+  let handle
   try {
-    for (const entry of readdirSync(home, { withFileTypes: true })) {
+    handle = opendirSync(home)
+  } catch (error) {
+    noteFailure(walk, error)
+    return true
+  }
+  try {
+    for (let entry = handle.readSync(); entry; entry = handle.readSync()) {
+      if (overBudget(walk)) {
+        return false
+      }
       if (entry.isDirectory() && MERGE_PENDING_FOLDER.test(entry.name)) {
         folders.push(join(home, entry.name))
       }
     }
+    return true
   } catch (error) {
     noteFailure(walk, error)
+    return true
+  } finally {
+    handle.closeSync()
   }
-  return folders
 }
 
 /** Streams one folder's entries so the budget holds inside a huge folder too. */
@@ -61,8 +75,9 @@ function walkFolder(
   seenFiles: Set<string>,
   platform: NodeJS.Platform
 ): boolean {
-  // A queued folder replaced by a link since it was listed is not walked through.
-  if (!lstatSync(dir).isDirectory()) {
+  // Queued paths are real paths: one that no longer resolves to itself (it or a parent became a
+  // link since it was listed) is not walked through.
+  if (!lstatSync(dir).isDirectory() || realpathSync(dir) !== dir) {
     return true
   }
   const handle = opendirSync(dir)
@@ -124,7 +139,13 @@ export function measureCodexHistoryDiskUsage(
   const seenFiles = new Set<string>()
   const seenFolders = new Set<string>()
   const pending: string[] = []
-  for (const folder of homes.flatMap((home) => historyFolders(walk, home))) {
+  const folders: string[] = []
+  for (const home of homes) {
+    if (!addHistoryFolders(walk, home, folders)) {
+      return walk.usage
+    }
+  }
+  for (const folder of folders) {
     try {
       const real = realpathSync(folder)
       if (!seenFolders.has(real)) {
