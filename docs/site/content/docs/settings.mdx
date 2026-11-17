@@ -134,6 +134,8 @@ For subscription dictation, add or sign in to a ChatGPT account through **Settin
 
 If the chosen account is removed, expires, or needs a fresh login, use the existing account settings to sign in again. Dictation never picks another account automatically, scans omp credentials, or falls back to a separately billed API provider.
 
+Recordings keep the account chosen when they start, even if Voice settings change before transcription. After a phone loses a settings reply, it refreshes the host's saved state; the connection error remains visible until the next action.
+
 Paired phones need a version that supports ChatGPT account selection to show this provider in Voice settings. Older phones keep their existing speech-provider controls.
 
 Credentials remain on the host performing transcription, including when dictating from mobile or a remote client. This provider uses ChatGPT's backend transcription endpoint; account eligibility, subscription limits, rate limits, and upstream changes apply. Transcribed text goes into the existing editable composer without automatically sending the message.

@@ -65,6 +65,7 @@ export function VoicePane({
   const mountedRef = useRef(true)
   // Merge async whole-object writes into committed current settings; render snapshots could undo toggles changed during IPC and disable the microphone picker.
   const voiceSettingsRef = useRef(voiceSettings)
+  const pendingAccountWriteRef = useRef<Promise<void> | null>(null)
   useEffect(() => {
     voiceSettingsRef.current = voiceSettings
   }, [voiceSettings])
@@ -75,9 +76,17 @@ export function VoicePane({
 
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
-      const voice = { ...voiceSettingsRef.current, ...updates }
-      voiceSettingsRef.current = voice
-      updateSettings({ voice })
+      const save = (): void => {
+        const voice = { ...voiceSettingsRef.current, ...updates }
+        voiceSettingsRef.current = voice
+        updateSettings({ voice })
+      }
+      // Whole-object saves must wait for the account's committed result, including rejection.
+      if (pendingAccountWriteRef.current) {
+        void pendingAccountWriteRef.current.then(save, save)
+      } else {
+        save()
+      }
     },
     [updateSettings]
   )
@@ -309,20 +318,15 @@ export function VoicePane({
                 voiceSettings={voiceSettings}
                 onUpdateVoiceSettings={async (updates) => {
                   const voice = { ...voiceSettingsRef.current, ...updates }
-                  const previousAccountId = voiceSettingsRef.current.chatGptAccountId
-                  voiceSettingsRef.current = voice
+                  const write = useAppStore.getState().updateSettingsOrThrow({ voice })
+                  pendingAccountWriteRef.current = write
                   try {
-                    await useAppStore.getState().updateSettingsOrThrow({ voice })
-                    await refreshModelStates()
-                  } catch (error) {
-                    if (voiceSettingsRef.current.chatGptAccountId === voice.chatGptAccountId) {
-                      voiceSettingsRef.current = {
-                        ...voiceSettingsRef.current,
-                        chatGptAccountId: previousAccountId
-                      }
-                    }
-                    throw error
+                    await write
+                    voiceSettingsRef.current = { ...voiceSettingsRef.current, ...updates }
+                  } finally {
+                    pendingAccountWriteRef.current = null
                   }
+                  await refreshModelStates()
                 }}
               />
               {voiceSettings.openAiApiKeyConfigured ? (

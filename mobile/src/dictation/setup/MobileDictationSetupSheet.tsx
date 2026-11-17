@@ -37,7 +37,9 @@ type Props = {
   onReady?: () => void
 }
 
-type SetupError = { message: string } | { kind: 'load' | 'download' | 'select' | 'update' }
+type SetupError =
+  | { message: string; kind?: 'load' }
+  | { kind: 'load' | 'download' | 'select' | 'update' }
 
 function setupErrorMessage(error: SetupError, t: Translate): string {
   if ('message' in error) {
@@ -103,24 +105,32 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       const next = await fetchDictationSetup(client)
       if (!mutationPending.current && requestGeneration === generation.current) {
         setSetup(next)
-        setError(null)
+        setError((current) => (current?.kind === 'load' ? null : current))
       }
       return next.models.some(isModelInFlight)
     } catch (err) {
       if (!mutationPending.current && requestGeneration === generation.current) {
-        setError(err instanceof Error ? { message: err.message } : { kind: 'load' })
+        const loadError: SetupError =
+          err instanceof Error ? { message: err.message, kind: 'load' } : { kind: 'load' }
+        setError((current) => (current && current.kind !== 'load' ? current : loadError))
       }
       return undefined
     }
   }, [client])
 
   const polling = setup?.models.some(isModelInFlight) ?? false
-  useDictationSetupPoller({
+  const refreshNow = useDictationSetupPoller({
     visible: visible && client !== null,
     polling,
     refresh,
     intervalMs: POLL_INTERVAL_MS
   })
+  const finishMutation = useCallback(() => {
+    mutationPending.current = false
+    generation.current += 1
+    setBusy(null)
+    void refreshNow()
+  }, [refreshNow])
 
   const [wasVisible, setWasVisible] = useState(visible)
   if (wasVisible !== visible) {
@@ -146,12 +156,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         triggerError()
         setError(err instanceof Error ? { message: err.message } : { kind: 'download' })
       } finally {
-        setBusy(null)
-        mutationPending.current = false
-        generation.current += 1
+        finishMutation()
       }
     },
-    [client]
+    [client, finishMutation]
   )
 
   const handleUseModel = useCallback(
@@ -172,12 +180,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         triggerError()
         setError(err instanceof Error ? { message: err.message } : { kind: 'select' })
       } finally {
-        setBusy(null)
-        mutationPending.current = false
-        generation.current += 1
+        finishMutation()
       }
     },
-    [client, onReady]
+    [client, onReady, finishMutation]
   )
 
   const handleToggleEnabled = useCallback(
@@ -194,12 +200,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       } catch (err) {
         setError(err instanceof Error ? { message: err.message } : { kind: 'update' })
       } finally {
-        mutationPending.current = false
-        generation.current += 1
-        setBusy(null)
+        finishMutation()
       }
     },
-    [client]
+    [client, finishMutation]
   )
 
   const handleAccountChange = async (chatGptAccountId: string | null): Promise<void> => {
@@ -227,9 +231,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     } catch (err) {
       setError(err instanceof Error ? { message: err.message } : { kind: 'update' })
     } finally {
-      mutationPending.current = false
-      generation.current += 1
-      setBusy(null)
+      finishMutation()
     }
   }
 

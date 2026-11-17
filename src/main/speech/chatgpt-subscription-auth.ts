@@ -61,6 +61,7 @@ const codexAuthSchema = z.object({
   OPENAI_API_KEY: z.unknown().optional(),
   tokens: z.object({
     access_token: z.string(),
+    id_token: z.string(),
     account_id: z.string().nullable().optional()
   })
 })
@@ -70,10 +71,31 @@ const jwtHeaderSchema = z.object({
     .min(1)
     .refine((value) => value.toLowerCase() !== 'none')
 })
-const jwtPayloadSchema = z.object({
-  exp: z.number().finite().positive(),
-  'https://api.openai.com/auth': z.object({ chatgpt_account_id: z.string().optional() }).optional()
+const jwtIdentitySchema = z.object({
+  email: z.string().trim().min(1).optional(),
+  'https://api.openai.com/profile': z
+    .object({ email: z.string().trim().min(1).optional() })
+    .optional(),
+  'https://api.openai.com/auth': z
+    .object({
+      chatgpt_account_id: z.string().optional(),
+      chatgpt_user_id: z.string().trim().min(1).optional(),
+      user_id: z.string().trim().min(1).optional()
+    })
+    .optional()
 })
+const jwtPayloadSchema = jwtIdentitySchema.extend({
+  exp: z.number().finite().positive()
+})
+
+function readJwtPayload(token: string): unknown {
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
+    throw new Error('Invalid token shape')
+  }
+  const parts = token.split('.')
+  jwtHeaderSchema.parse(JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')))
+  return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+}
 
 function authError(reason: string): Error {
   return new Error(
@@ -128,6 +150,7 @@ export async function readChatGptSubscriptionHeaders(
   requireCurrentAccount(selection)
   let auth: z.infer<typeof codexAuthSchema>
   let payload: z.infer<typeof jwtPayloadSchema>
+  let identity: z.infer<typeof jwtIdentitySchema>
   try {
     auth = codexAuthSchema.parse(JSON.parse(contents))
     if (
@@ -140,27 +163,32 @@ export async function readChatGptSubscriptionHeaders(
     ) {
       throw new Error('Not subscription OAuth')
     }
-    const access = auth.tokens.access_token
-    if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(access)) {
-      throw new Error('Invalid token shape')
-    }
-    const parts = access.split('.')
-    jwtHeaderSchema.parse(JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')))
-    payload = jwtPayloadSchema.parse(
-      JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
-    )
+    payload = jwtPayloadSchema.parse(readJwtPayload(auth.tokens.access_token))
+    identity = jwtIdentitySchema.parse(readJwtPayload(auth.tokens.id_token))
   } catch {
     throw authError('has invalid ChatGPT OAuth credentials (not an API key)')
   }
   if (payload.exp * 1000 <= Date.now()) {
     throw authError('has expired')
   }
-  const claimId = payload['https://api.openai.com/auth']?.chatgpt_account_id
+  const accessClaims = payload['https://api.openai.com/auth']
+  const identityClaims = identity['https://api.openai.com/auth']
+  const claimId = accessClaims?.chatgpt_account_id
   const accountId = auth.tokens.account_id ?? claimId
+  // OpenAI's user_id is the legacy alias; OAuth sub is not the ChatGPT user identifier.
+  const accessUserId = accessClaims?.chatgpt_user_id ?? accessClaims?.user_id
+  const identityUserId = identityClaims?.chatgpt_user_id ?? identityClaims?.user_id
+  const identityEmail = identity.email ?? identity['https://api.openai.com/profile']?.email
   if (
     !accountId ||
     !/^[\x21-\x7e]{1,256}$/.test(accountId) ||
     (claimId !== undefined && claimId !== accountId) ||
+    (identityClaims?.chatgpt_account_id !== undefined &&
+      identityClaims.chatgpt_account_id !== accountId) ||
+    !accessUserId ||
+    accessUserId !== identityUserId ||
+    !identityEmail ||
+    identityEmail.toLowerCase() !== account.email?.trim().toLowerCase() ||
     !codexAuthMatchesManagedAccount(contents, account, null)
   ) {
     throw authError('has an invalid or changed account identity')

@@ -26,13 +26,18 @@ let settings: ChatGptSpeechSettings & {
   activeCodexManagedAccountId: string | null
 }
 
-function token(account: string, exp = 4_000_000_000): string {
+function token(account: string, exp = 4_000_000_000, claims: Record<string, unknown> = {}): string {
   const header = Buffer.from(JSON.stringify({ alg: 'RS256' })).toString('base64url')
   const payload = Buffer.from(
     JSON.stringify({
       exp,
+      sub: `oauth|${account}`,
       email: `${account}@example.test`,
-      'https://api.openai.com/auth': { chatgpt_account_id: account }
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: account,
+        chatgpt_user_id: `user-${account}`
+      },
+      ...claims
     })
   ).toString('base64url')
   return `${header}.${payload}.signature`
@@ -44,7 +49,7 @@ function auth(account: string, exp?: number) {
     OPENAI_API_KEY: null,
     tokens: {
       access_token: token(account, exp),
-      id_token: token(account, exp),
+      id_token: token(account, exp, { sub: `user-${account}` }),
       account_id: account
     }
   }
@@ -131,6 +136,78 @@ it.each([undefined, 'removed'])(
 )
 
 it.each([
+  { accessClaim: 'chatgpt_user_id', identityClaims: { user_id: 'user-selected' } },
+  {
+    accessClaim: 'user_id',
+    identityClaims: { chatgpt_user_id: 'user-selected', user_id: 'legacy-auth-user' }
+  }
+])(
+  'binds the bearer to the ID token through OpenAI $accessClaim, not the OAuth subject',
+  async ({ accessClaim, identityClaims }) => {
+    const credentials = auth('selected')
+    credentials.tokens.access_token = token('selected', undefined, {
+      sub: 'auth0|login-subject',
+      email: undefined,
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'selected',
+        [accessClaim]: 'user-selected'
+      }
+    })
+    credentials.tokens.id_token = token('selected', undefined, {
+      sub: 'different-id-token-subject',
+      email: undefined,
+      'https://api.openai.com/profile': { email: 'SELECTED@example.test' },
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'selected',
+        ...identityClaims
+      }
+    })
+    await writeFile(
+      join(settings.codexManagedAccounts[0].managedHomePath, 'auth.json'),
+      JSON.stringify(credentials)
+    )
+    expect((await readChatGptSubscriptionHeaders(AbortSignal.timeout(5_000))).Authorization).toBe(
+      `Bearer ${credentials.tokens.access_token}`
+    )
+  }
+)
+
+it.each([
+  {
+    tokenKind: 'access_token',
+    claims: {
+      'https://api.openai.com/auth': {
+        chatgpt_account_id: 'selected',
+        chatgpt_user_id: 'user-coworker'
+      }
+    }
+  },
+  {
+    tokenKind: 'access_token',
+    claims: { 'https://api.openai.com/auth': { chatgpt_account_id: 'selected' } }
+  },
+  {
+    tokenKind: 'id_token',
+    claims: { 'https://api.openai.com/auth': { chatgpt_account_id: 'selected' } }
+  },
+  { tokenKind: 'id_token', claims: { email: 'coworker@example.test' } }
+] as const)(
+  'rejects another or unprovable user in the selected workspace: $tokenKind $claims',
+  async ({ tokenKind, claims }) => {
+    const credentials = auth('selected')
+    credentials.tokens[tokenKind] = token('selected', undefined, claims)
+    await writeFile(
+      join(settings.codexManagedAccounts[0].managedHomePath, 'auth.json'),
+      JSON.stringify(credentials)
+    )
+    await expect(readChatGptSubscriptionHeaders(AbortSignal.timeout(5_000))).rejects.toThrow(
+      'account identity'
+    )
+    expect(await hasChatGptSubscriptionAuth()).toBe(false)
+  }
+)
+
+it.each([
   { value: JSON.stringify(auth('selected', 1)), reason: 'has expired' },
   { value: '{"private-token-never-in-errors":', reason: 'invalid ChatGPT OAuth' },
   {
@@ -162,7 +239,14 @@ it.each([
   },
   {
     value: JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: token('selected') } }),
-    reason: 'account identity'
+    reason: 'invalid ChatGPT OAuth'
+  },
+  {
+    value: JSON.stringify({
+      ...auth('selected'),
+      tokens: { ...auth('selected').tokens, id_token: 'not-a-jwt' }
+    }),
+    reason: 'invalid ChatGPT OAuth'
   },
   {
     value: JSON.stringify({
@@ -274,7 +358,7 @@ it('only advertises host accounts with safe labels and never reads WSL homes', a
   }
 })
 
-it('pins the account before readiness resolves while later captures use the new Voice selection', async () => {
+it('pins readiness and upload to the captured account even when the new selection is unavailable', async () => {
   const sentAccounts: (string | null)[] = []
   setMainHttpClient({
     proxySession: () => null,
@@ -284,30 +368,40 @@ it('pins the account before readiness resolves while later captures use the new 
     }
   })
   const models = getSpeechModelManager({ getSettings: () => settings })
-  const readiness = Promise.withResolvers<void>()
-  const getModelState = models.getModelState.bind(models)
-  vi.spyOn(models, 'getModelState').mockImplementationOnce(async (id) => {
-    await readiness.promise
-    return getModelState(id)
-  })
   const service = new SttService(models, () => {
     throw new Error('Cloud dictation must not start a recognizer')
   })
   const events = vi.fn()
   try {
     const starting = service.startDictation('chatgpt-subscription-transcribe', events)
-    settings.voice = { ...getDefaultVoiceSettings(), chatGptAccountId: 'active' }
-    readiness.resolve()
+    settings.voice = { ...getDefaultVoiceSettings(), chatGptAccountId: 'removed' }
     await starting
     service.feedAudio(new Float32Array([0.1]), 16000)
     await service.stopDictation()
+    settings.voice = { ...getDefaultVoiceSettings(), chatGptAccountId: 'active' }
     await service.startDictation('chatgpt-subscription-transcribe', events)
     service.feedAudio(new Float32Array([0.1]), 16000)
     await service.stopDictation()
     expect(sentAccounts).toEqual(['selected', 'active'])
     expect(events).toHaveBeenCalledWith({ type: 'final', text: 'dictated' })
   } finally {
-    readiness.resolve()
+    await service.stopDictation(undefined, { discard: true })
+    await service.unloadIdleModel()
+  }
+})
+
+it('does not make an unconfigured capture ready when Voice gains a valid account during startup', async () => {
+  settings.voice = { ...getDefaultVoiceSettings(), chatGptAccountId: undefined }
+  const service = new SttService(getSpeechModelManager({ getSettings: () => settings }), () => {
+    throw new Error('Cloud dictation must not start a recognizer')
+  })
+  const events = vi.fn()
+  const starting = service.startDictation('chatgpt-subscription-transcribe', events)
+  settings.voice = { ...getDefaultVoiceSettings(), chatGptAccountId: 'active' }
+  try {
+    await expect(starting).rejects.toThrow('unconfigured or the selected account was removed')
+    expect(events).not.toHaveBeenCalledWith({ type: 'ready' })
+  } finally {
     await service.stopDictation(undefined, { discard: true })
     await service.unloadIdleModel()
   }
