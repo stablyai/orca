@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { isWslHostsSettingOn } from '../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 /** Preload exposes WSL-host APIs only when this desktop launch supports them. */
 export function wslHostsAvailable(): boolean {
@@ -13,7 +14,7 @@ export function useWslHostServerFilesMissing(): boolean {
 }
 
 /**
- * Saved hosts serve their projects whatever the setting: it governs new work only (Stage 1), so
+ * Saved hosts serve their projects whatever the setting: it governs new work only, so
  * with it off a moved project stays reachable, as in serve-only.
  */
 export function selectWslHostsServing(state: {
@@ -22,7 +23,7 @@ export function selectWslHostsServing(state: {
   runtimeEnvironments?: AppState['runtimeEnvironments']
 }): boolean {
   return (
-    state.settings?.experimentalWslHosts === true ||
+    isWslHostsSettingOn(state.settings) ||
     (state.runtimeEnvironments ?? []).some(isWslHostRuntimeEnvironment)
   )
 }
@@ -35,7 +36,7 @@ export function useWslHostsEnabled(): boolean {
 
 /** Available, and the user's WSL hosts setting is on. */
 export function useWslHostsSettingOn(): boolean {
-  const settingOn = useAppStore((s) => s.settings?.experimentalWslHosts === true)
+  const settingOn = useAppStore((s) => isWslHostsSettingOn(s.settings))
   return settingOn && wslHostsAvailable()
 }
 
@@ -51,8 +52,8 @@ export function useWslHostsPaused(): boolean {
   return paused && wslHostsAvailable()
 }
 
-export function openWslHostsExperimentalSetting(): void {
+export function openWslHostsSetting(): void {
   const { openSettingsPage, openSettingsTarget } = useAppStore.getState()
   openSettingsPage()
-  openSettingsTarget({ pane: 'experimental', repoId: null, sectionId: 'wsl-hosts' })
+  openSettingsTarget({ pane: 'servers', repoId: null, sectionId: 'wsl-hosts' })
 }

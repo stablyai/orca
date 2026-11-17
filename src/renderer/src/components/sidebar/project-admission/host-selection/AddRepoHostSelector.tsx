@@ -34,7 +34,7 @@ type AddRepoHostSelectorProps = {
   onAddWslHost?: () => void
   /** Serve-only: why "Add WSL distro" is missing from the add-host menu. */
   wslHostsPausedNote?: string
-  /** Opens Experimental → WSL distros as hosts, for a WSL host listed while that is off. */
+  /** Opens Remote Orca servers → WSL distros as hosts, for a WSL host listed while that is off. */
   onOpenWslHostsSetting?: () => void
 }
 
@@ -230,8 +230,8 @@ export function AddRepoHostSelector({
                         </span>
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
                           {t(
-                            'auto.components.sidebar.AddRepoHostSelector.addWslHostDetail',
-                            'Run an Orca server inside a WSL 2 distro. Experimental.'
+                            'auto.components.sidebar.AddRepoHostSelector.addWslHostDetailNative',
+                            'Run an Orca server inside a WSL 2 distro.'
                           )}
                         </span>
                       </button>

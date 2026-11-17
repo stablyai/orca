@@ -21,7 +21,6 @@ import {
 } from '../../../sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { HostRemoveDialog } from '../../../sidebar/HostRemoveDialog'
 import {
-  openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused,
   useWslHostsEnabled,
@@ -36,7 +35,6 @@ import {
   getWslHostsTurnedOffLabel
 } from '../../../sidebar/wsl-host-row-status'
 import { wslHostStatusDetailMessage } from '../../../sidebar/wsl-host-failure-text'
-import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 import { managedServerOutcomeLabel } from '../../runtime-environments/managed-servers/managed-server-copy'
@@ -50,6 +48,7 @@ import {
 import { openWslMoveDialogFor } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveUnfinishedNotice } from '../../../wsl-move/WslMoveUnfinishedNotice'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { WslHostsEnabledSetting } from './WslHostsEnabledSetting'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
@@ -82,7 +81,7 @@ function getWslHostRowStatus(
   }
 }
 
-/** Settings → Orca servers: the WSL distros added as hosts (Windows, experimental). */
+/** Settings → Orca servers: the WSL hosts switch and the distros added as hosts (Windows). */
 export function WslHostsSection({
   onChanged
 }: {
@@ -107,8 +106,8 @@ export function WslHostsSection({
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const hosts = environments.filter(isWslHostRuntimeEnvironment)
-  // Retain disabled hosts so projects cannot appear to vanish; rows explain their idle state.
-  if (!wslHostsAvailable() || (!enabled && hosts.length === 0)) {
+  // The switch stays reachable while off; disabled hosts stay listed so projects cannot appear to vanish.
+  if (!wslHostsAvailable()) {
     return null
   }
 
@@ -134,11 +133,8 @@ export function WslHostsSection({
     <div className="scroll-mt-8 space-y-2" data-settings-section="wsl-hosts">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
-          <div className="flex items-center gap-2 text-sm font-medium">
+          <div className="text-sm font-medium">
             {t('auto.components.settings.wslHosts.title', 'WSL hosts')}
-            <Badge variant="outline">
-              {t('auto.components.settings.wslHosts.experimental', 'Experimental')}
-            </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
             {unavailableLabel ??
@@ -150,7 +146,7 @@ export function WslHostsSection({
                   ))}
           </p>
         </div>
-        {enabled && !acceptsNewWork ? null : enabled ? (
+        {acceptsNewWork ? (
           <Button
             type="button"
             variant="outline"
@@ -161,17 +157,9 @@ export function WslHostsSection({
             <Plus />
             {t('auto.components.settings.wslHosts.add', 'Add WSL distro')}
           </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={openWslHostsExperimentalSetting}
-          >
-            {t('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
-          </Button>
-        )}
+        ) : null}
       </div>
+      <WslHostsEnabledSetting />
       {hosts.length > 0 ? (
         <div className="divide-y divide-border rounded-lg border border-border bg-card">
           {hosts.map((environment) => {

@@ -18,7 +18,7 @@ import { cn } from '@/lib/class-names'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AddRemoteHostMode } from '../../host-admission/ssh/AddRemoteHostDialog'
 import {
-  openWslHostsExperimentalSetting,
+  openWslHostsSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused
 } from '../../use-wsl-hosts-enabled'
@@ -206,7 +206,7 @@ export function AddProjectHostSubmenu({
                       event.stopPropagation()
                       onSubOpenChange(false)
                       closeParentMenu()
-                      openWslHostsExperimentalSetting()
+                      openWslHostsSetting()
                     }}
                   >
                     {t('auto.components.sidebar.AddRepoHostSelector.turnOnWslHosts', 'Turn on')}
@@ -278,8 +278,8 @@ export function AddProjectHostSubmenu({
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {t(
-                          'auto.components.sidebar.AddRepoHostSelector.addWslHostDetail',
-                          'Run an Orca server inside a WSL 2 distro. Experimental.'
+                          'auto.components.sidebar.AddRepoHostSelector.addWslHostDetailNative',
+                          'Run an Orca server inside a WSL 2 distro.'
                         )}
                       </span>
                     </span>

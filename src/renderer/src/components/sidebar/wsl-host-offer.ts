@@ -11,11 +11,11 @@ import {
 } from '@/lib/files/os-open/windows-path-access'
 import { wslHostsAvailable } from './use-wsl-hosts-enabled'
 import { routeSidebarProjectDrop } from './project-admission/drop/sidebar-project-drop'
+import { isWslHostsSettingOn } from '../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 export type WslHostOfferGate = {
   /** WSL hosts can take new work here: Windows (or its e2e fake), gate open, server files shipped. */
   gateOpen: boolean
-  settingOn: boolean
   dismissed: boolean
 }
 
@@ -24,8 +24,9 @@ export function wslHostOfferDistro(path: string): string | null {
   return parseWslUncPath(path)?.distro ?? null
 }
 
+// Ignores the setting: with it on by default, an unhosted distro would otherwise land on the legacy bridge.
 export function shouldOfferWslHost(gate: WslHostOfferGate): boolean {
-  return gate.gateOpen && !gate.settingOn && !gate.dismissed
+  return gate.gateOpen && !gate.dismissed
 }
 
 export function readWslHostOfferGate(
@@ -36,7 +37,6 @@ export function readWslHostOfferGate(
   return {
     gateOpen:
       wslHostsAvailable() && state.wslHostsAcceptNewWork && state.wslHostServerFiles !== 'missing',
-    settingOn: state.settings?.experimentalWslHosts === true,
     dismissed: state.settings?.wslHostOfferDismissed === true
   }
 }
@@ -53,10 +53,7 @@ export function readExistingWslHosts(
   state: Pick<AppState, 'settings' | 'runtimeEnvironments'>
 ): WslHostWindowsPathAccess[] {
   return wslHostsAvailable()
-    ? listWslHostWindowsPathAccess(
-        state.runtimeEnvironments,
-        state.settings?.experimentalWslHosts === true
-      )
+    ? listWslHostWindowsPathAccess(state.runtimeEnvironments, isWslHostsSettingOn(state.settings))
     : []
 }
 

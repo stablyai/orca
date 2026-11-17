@@ -6911,7 +6911,6 @@
           "addRemoteServerDetail": "別のコンピュータで実行されている Orca とペアリングします。",
           "addRemoteHostDetail": "SSH ホストまたは Orca サーバー",
           "addWslHost": "WSL ディストリビューションを追加",
-          "addWslHostDetail": "WSL 2 ディストリビューション内で Orca サーバーを実行します。実験的機能。",
           "addRemoteHostDetailWithWsl": "SSH ホスト、Orca サーバー、または WSL ディストリビューション",
           "turnOnWslHosts": "オンにする"
         },
@@ -7230,8 +7229,6 @@
           "idle": "アイドル",
           "failed": "起動に失敗しました",
           "kind": "WSL ディストリビューション",
-          "turnedOff": "WSL ホストは設定 → 実験的機能でオフになっています",
-          "turnedOffShort": "設定 → 実験的機能でオフ",
           "serverFilesMissing": "このビルドの Orca は WSL ホストを実行できません (サーバーファイルが見つかりません)。",
           "serverFilesMissingShort": "このビルドは WSL ホストを実行できません",
           "removalPending": "削除が完了しませんでした",
@@ -12917,18 +12914,15 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL ディストリビューションをホストとして切り替え",
           "title": "WSL ディストリビューションをホストとして使用",
-          "description": "WSL 2 ディストリビューションをホストとして追加します。Orca はディストリビューション内でサーバーを実行するため、そこでの新規プロジェクトの git、ファイル、ターミナルは Linux 上でネイティブに動作します。",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "ディストリビューション"
         },
         "wslHosts": {
           "title": "WSL ホスト",
-          "experimental": "実験的機能",
           "description": "Orca は各ディストリビューション内でサーバーを実行します。プロジェクトを開いても、停止中のディストリビューションは起動しません。[起動] をクリックするか、新しいターミナルを開くか、ここで接続してください。",
           "add": "WSL ディストリビューションを追加",
           "connect": "接続",
-          "turnOn": "実験的機能でオンにする",
           "forceUpdate": "強制更新",
           "chip": "WSL"
         },

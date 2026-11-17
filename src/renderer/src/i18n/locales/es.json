@@ -6542,7 +6542,6 @@
           "addRemoteServerDetail": "Empareja con Orca ejecutándose en otro equipo.",
           "addRemoteHostDetail": "Host SSH o servidor Orca",
           "addWslHost": "Agregar distro WSL",
-          "addWslHostDetail": "Ejecuta un servidor Orca dentro de una distro WSL 2. Experimental.",
           "addRemoteHostDetailWithWsl": "Host SSH, servidor Orca o distro WSL",
           "turnOnWslHosts": "Activar"
         },
@@ -6880,8 +6879,6 @@
           "idle": "Inactivo",
           "failed": "No se pudo iniciar",
           "kind": "Distro WSL",
-          "turnedOff": "Los hosts WSL están desactivados en Ajustes → Experimental",
-          "turnedOffShort": "Desactivado en Ajustes → Experimental",
           "serverFilesMissing": "Esta versión de Orca no puede ejecutar hosts WSL (faltan archivos del servidor).",
           "serverFilesMissingShort": "Esta versión no puede ejecutar hosts WSL",
           "removalPending": "La eliminación no terminó"
@@ -12506,18 +12503,15 @@
         "wslHostsExperimental": {
           "toggleLabel": "Alternar distros WSL como hosts",
           "title": "Distros WSL como hosts",
-          "description": "Agrega una distro WSL 2 como host. Orca ejecuta su servidor dentro de la distro, así que git, los archivos y las terminales de los proyectos nuevos de allí se ejecutan de forma nativa en Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distro"
         },
         "wslHosts": {
           "title": "Hosts WSL",
-          "experimental": "Experimental",
           "description": "Orca ejecuta un servidor dentro de cada distro. Abrir un proyecto nunca inicia una distro detenida: haz clic en Iniciar, abre una terminal nueva o conéctala aquí.",
           "add": "Agregar distro WSL",
           "connect": "Conectar",
-          "turnOn": "Activar en Experimental",
           "forceUpdate": "Forzar actualización",
           "chip": "WSL"
         },

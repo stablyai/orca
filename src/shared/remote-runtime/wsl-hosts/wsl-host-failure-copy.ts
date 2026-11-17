@@ -1,6 +1,6 @@
 // One English table for WSL host refusals and status details: main builds the English wire text, the renderer translates by code.
 export const WSL_HOST_ADD_REFUSAL_COPY = {
-  turnedOff: 'WSL hosts are turned off in Settings → Experimental.',
+  turnedOff: 'WSL hosts are turned off in Settings → Remote Orca servers.',
   newWorkPaused:
     'Adding WSL hosts and moving projects onto them is paused in this build. Your saved WSL hosts keep working.',
   serverFilesMissing: 'This build of Orca can’t run WSL hosts (server files missing).',

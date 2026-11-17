@@ -14,6 +14,7 @@ import {
   type WslHostOffer
 } from '../../wsl-host-offer-actions'
 import { moveWslHostOfferProject } from '../../wsl-host-offer-move'
+import { isWslHostsSettingOn } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 /** Inline in the add-project flow: run the `\\wsl.localhost` path's distro as a host instead. */
 export function AddRepoWslHostOffer({
@@ -35,7 +36,7 @@ export function AddRepoWslHostOffer({
     setError(null)
     try {
       const refusal = await acceptWslHostOffer(offer, {
-        readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
+        readWslHostsSetting: () => isWslHostsSettingOn(useAppStore.getState().settings),
         updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
         addWslHost: addWslHostDistro,
         addLocalPath: (path, source) => {

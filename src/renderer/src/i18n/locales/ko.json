@@ -6310,7 +6310,6 @@
           "addRemoteServerDetail": "다른 컴퓨터에서 실행 중인 Orca와 페어링합니다.",
           "addRemoteHostDetail": "SSH 호스트 또는 Orca 서버",
           "addWslHost": "WSL 배포판 추가",
-          "addWslHostDetail": "WSL 2 배포판 안에서 Orca 서버를 실행합니다. 실험적.",
           "addRemoteHostDetailWithWsl": "SSH 호스트, Orca 서버 또는 WSL 배포판",
           "turnOnWslHosts": "켜기"
         },
@@ -6627,8 +6626,6 @@
           "idle": "유휴",
           "failed": "시작 실패",
           "kind": "WSL 배포판",
-          "turnedOff": "WSL 호스트는 설정 → 실험적에서 꺼져 있습니다",
-          "turnedOffShort": "설정 → 실험적에서 꺼짐",
           "serverFilesMissing": "이 Orca 빌드에서는 WSL 호스트를 실행할 수 없습니다(서버 파일 누락).",
           "serverFilesMissingShort": "이 빌드에서는 WSL 호스트를 실행할 수 없음",
           "removalPending": "제거가 완료되지 않음"
@@ -12223,18 +12220,15 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL 배포판을 호스트로 전환",
           "title": "호스트로 사용할 WSL 배포판",
-          "description": "WSL 2 배포판을 호스트로 추가합니다. Orca는 배포판 안에서 서버를 실행하므로, 그곳의 새 프로젝트에서 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다.",
           "keywordWsl": "wsl",
           "keywordLinux": "리눅스",
           "keywordDistro": "배포판"
         },
         "wslHosts": {
           "title": "WSL 호스트",
-          "experimental": "실험적",
           "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 프로젝트를 열어도 중지된 배포판은 시작되지 않습니다. [시작]을 클릭하거나, 새 터미널을 열거나, 여기에서 연결하세요.",
           "add": "WSL 배포판 추가",
           "connect": "연결",
-          "turnOn": "실험적에서 켜기",
           "forceUpdate": "강제 업데이트",
           "chip": "WSL"
         },

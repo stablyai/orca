@@ -6,7 +6,7 @@ import {
   type AddRemoteHostMode
 } from '../../host-admission/ssh/AddRemoteHostDialog'
 import {
-  openWslHostsExperimentalSetting,
+  openWslHostsSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused
 } from '../../use-wsl-hosts-enabled'
@@ -36,7 +36,7 @@ export function AddRepoHostSelectorSlot({
         onAddRemoteServer={() => setAddRemoteHostMode('server')}
         onAddWslHost={wslHostsAcceptNewWork ? () => setAddRemoteHostMode('wsl') : undefined}
         wslHostsPausedNote={wslHostsPaused ? getWslHostsPausedShortLabel(t) : undefined}
-        onOpenWslHostsSetting={openWslHostsExperimentalSetting}
+        onOpenWslHostsSetting={openWslHostsSetting}
       />
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
     </>

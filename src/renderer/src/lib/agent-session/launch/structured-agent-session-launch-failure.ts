@@ -23,6 +23,7 @@ import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateSourceFailedError
 } from './structured-agent-session-launch-errors'
+import { isWslHostsSettingOn } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
   /** Words that replace the refusal's generic cause: the host's sign-in guidance, or why this
@@ -38,11 +39,7 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & {
 function wslHostChatAvailable(): boolean {
   const state = useAppStore.getState()
   // Serve-only hides Add WSL distro, so the hint would point at a missing button.
-  return (
-    wslHostsAvailable() &&
-    state.settings?.experimentalWslHosts === true &&
-    state.wslHostsAcceptNewWork
-  )
+  return wslHostsAvailable() && isWslHostsSettingOn(state.settings) && state.wslHostsAcceptNewWork
 }
 
 /** Why a host said it can't run a chat in this workspace, and what to do instead. */

@@ -66,7 +66,7 @@ export function applyNewWindowsDriveProjectDefault(
     readWorktreeLinks: readMainCheckoutWorktreeLinks
   }
 ): boolean {
-  // Stage 1 is opt-in: with the WSL hosts setting off, a new project keeps today's Git.
+  // With the WSL hosts setting off, a new project keeps today's Git.
   if (!wslHostsOptedIn(state.settings)) {
     return false
   }

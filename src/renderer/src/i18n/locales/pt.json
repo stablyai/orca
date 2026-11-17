@@ -9351,19 +9351,16 @@
         "wslHostsExperimental": {
           "toggleLabel": "Alternar distribuições WSL como hosts",
           "title": "Distribuições WSL como hosts",
-          "description": "Adicione uma distribuição WSL 2 como host. O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais em novos projetos lá funcionem nativamente no Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distribuição"
         },
         "wslHosts": {
           "title": "Hosts WSL",
-          "experimental": "Experimental",
           "description": "O Orca executa um servidor dentro de cada distribuição. Abrir um projeto nunca inicia uma distribuição parada: clique em Iniciar, abra um novo terminal ou conecte-a aqui.",
           "add": "Adicionar distribuição WSL",
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",
-          "turnOn": "Ativar em Experimental",
           "chip": "WSL"
         },
         "restartServer": {
@@ -12376,7 +12373,6 @@
           "addRemoteServerDetail": "Pareie com o Orca em execução em outro computador.",
           "addRemoteHostDetail": "Host SSH ou servidor Orca",
           "addWslHost": "Adicionar distribuição WSL",
-          "addWslHostDetail": "Execute um servidor Orca em uma distribuição WSL 2. Experimental.",
           "addRemoteHostDetailWithWsl": "Host SSH, servidor Orca ou distribuição WSL",
           "turnOnWslHosts": "Ativar"
         },
@@ -13093,8 +13089,6 @@
           "idle": "Ocioso",
           "failed": "Falha ao iniciar",
           "kind": "Distribuição WSL",
-          "turnedOff": "Os hosts WSL estão desativados em Configurações → Experimental",
-          "turnedOffShort": "Desativado em Configurações → Experimental",
           "serverFilesMissing": "Esta compilação do Orca não pode executar hosts WSL (arquivos do servidor ausentes).",
           "serverFilesMissingShort": "Esta compilação não pode executar hosts WSL",
           "removalPending": "A remoção não foi concluída",

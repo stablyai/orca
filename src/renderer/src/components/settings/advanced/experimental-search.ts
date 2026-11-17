@@ -4,7 +4,6 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getEphemeralVmsSearchEntry } from '../virtual-machines/recipes/ephemeral-vms-search'
-import { getWslHostsExperimentalSearchEntry } from '../wsl/hosts/wsl-hosts-experimental-search'
 
 export const getExperimentalSearchEntry = createLocalizedCatalog(
   () =>
@@ -187,12 +186,6 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
-export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
-  (): SettingsSearchEntry[] => [
-    ...Object.values(getExperimentalSearchEntry()),
-    // Index WSL toggles only on Windows desktops that expose them.
-    ...(typeof window !== 'undefined' && window.api?.runtimeEnvironments?.wslHosts
-      ? [getWslHostsExperimentalSearchEntry()]
-      : [])
-  ]
+export const getExperimentalPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] =>
+  Object.values(getExperimentalSearchEntry())
 )

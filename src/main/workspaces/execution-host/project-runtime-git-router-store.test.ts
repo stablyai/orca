@@ -45,8 +45,8 @@ const distroFor = (cwd: string): string | undefined =>
   routeLocalGitOptions<{ cwd: string; wslDistro?: string }>({ cwd }).wslDistro
 
 describe('project runtime Git routing on the real Store', () => {
-  // Stage 1 is opt-in: the routing ships with WSL hosts and follows the user's setting both ways.
-  it('routes only while the WSL hosts setting is on, and stops when it is turned off', async () => {
+  // The routing ships with WSL hosts (on by default) and follows the user's setting both ways.
+  it('routes while the WSL hosts setting is on, and stops when it is turned off', async () => {
     const { store } = await fixture()
     store.updateSettings({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
     store.addRepo({
@@ -58,16 +58,16 @@ describe('project runtime Git routing on the real Store', () => {
       kind: 'git'
     })
     installProjectRuntimeGitRouter(store)
-    expect(isLocalGitRuntimeRouterInstalled()).toBe(false)
-    expect(distroFor(REPO)).toBeUndefined()
-
-    store.updateSettings({ experimentalWslHosts: true })
     expect(isLocalGitRuntimeRouterInstalled()).toBe(true)
     expect(distroFor(REPO)).toBe('Ubuntu')
 
     store.updateSettings({ experimentalWslHosts: false })
     expect(isLocalGitRuntimeRouterInstalled()).toBe(false)
     expect(distroFor(REPO)).toBeUndefined()
+
+    store.updateSettings({ experimentalWslHosts: true })
+    expect(isLocalGitRuntimeRouterInstalled()).toBe(true)
+    expect(distroFor(REPO)).toBe('Ubuntu')
   })
 
   // A block published while Orca runs undoes Stage 1 at once, as turning the setting off does.

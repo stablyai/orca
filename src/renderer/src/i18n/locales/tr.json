@@ -6103,7 +6103,6 @@
           "addRemoteServerDetail": "Başka bir bilgisayarda çalışan Orca ile eşleştirin.",
           "addRemoteHostDetail": "SSH sunucusu veya Orca sunucusu",
           "addWslHost": "WSL dağıtımı ekle",
-          "addWslHostDetail": "WSL 2 dağıtımı içinde Orca sunucusu çalıştırın. Deneysel.",
           "addRemoteHostDetailWithWsl": "SSH sunucusu, Orca sunucusu veya WSL dağıtımı",
           "turnOnWslHosts": "Aç"
         },
@@ -7411,8 +7410,6 @@
           "idle": "Boşta",
           "failed": "Başlatılamadı",
           "kind": "WSL dağıtımı",
-          "turnedOff": "WSL ana makineleri Ayarlar → Deneysel bölümünde kapalı",
-          "turnedOffShort": "Ayarlar → Deneysel bölümünde kapalı",
           "serverFilesMissing": "Orca'nın bu derlemesi WSL ana makinelerini çalıştıramıyor (sunucu dosyaları eksik).",
           "serverFilesMissingShort": "Bu derleme WSL ana makinelerini çalıştıramıyor",
           "removalPending": "Kaldırma tamamlanamadı"
@@ -12965,19 +12962,16 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL dağıtımlarını ana makine olarak kullanmayı aç/kapat",
           "title": "WSL dağıtımlarını ana makine olarak kullan",
-          "description": "Bir WSL 2 dağıtımını ana makine olarak ekleyin. Orca sunucusunu dağıtımın içinde çalıştırır; böylece oradaki yeni projelerde git, dosyalar ve terminaller doğrudan Linux'ta çalışır.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "dağıtım"
         },
         "wslHosts": {
           "title": "WSL ana makineleri",
-          "experimental": "Deneysel",
           "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Bir proje açmak durdurulmuş bir dağıtımı asla başlatmaz: Başlat’a tıklayın, yeni bir terminal açın veya buradan bağlanın.",
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",
-          "turnOn": "Deneysel bölümünde etkinleştir",
           "chip": "WSL"
         },
         "restartServer": {

@@ -95,6 +95,10 @@ export function prepareLoadedProfileSettings(
   if (parsed.settings?.pluginSystemDefaultedOn !== true) {
     markNeedsSave()
   }
+  // normalizeLoadedGlobalSettings applies the WSL hosts default-on rollout; persist its guard.
+  if (parsed.settings?.experimentalWslHostsDefaultedOn !== true) {
+    markNeedsSave()
+  }
   const migratedNestedWorkerMaxDepth = migrateNestedWorkerMaxDepthDefault(parsed.settings)
   if (parsed.settings?.nestedWorkerMaxDepthDefaultedToFour !== true) {
     markNeedsSave()

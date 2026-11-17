@@ -6940,7 +6940,6 @@
           "addRemoteServerDetail": "与另一台电脑上运行的 Orca 配对",
           "addRemoteHostDetail": "SSH 主机或 Orca 服务器",
           "addWslHost": "添加 WSL 发行版",
-          "addWslHostDetail": "在 WSL 2 发行版内运行 Orca 服务器，实验性",
           "addRemoteHostDetailWithWsl": "SSH 主机、Orca 服务器或 WSL 发行版",
           "turnOnWslHosts": "开启"
         },
@@ -7259,8 +7258,6 @@
           "idle": "空闲",
           "failed": "启动失败",
           "kind": "WSL 发行版",
-          "turnedOff": "WSL 主机已在设置 → 实验性中关闭",
-          "turnedOffShort": "已在设置 → 实验性中关闭",
           "serverFilesMissing": "此版本的 Orca 无法运行 WSL 主机（缺少服务器文件）",
           "serverFilesMissingShort": "此版本无法运行 WSL 主机",
           "removalPending": "移除未完成",
@@ -12970,18 +12967,15 @@
         "wslHostsExperimental": {
           "toggleLabel": "切换“WSL 发行版作为主机”",
           "title": "WSL 发行版作为主机",
-          "description": "将 WSL 2 发行版添加为主机，Orca 在发行版内运行其服务器，因此其中新项目里的 git、文件和终端都在 Linux 中原生运行",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "发行版"
         },
         "wslHosts": {
           "title": "WSL 主机",
-          "experimental": "实验性",
           "description": "Orca 在每个发行版内运行一个服务器。打开项目不会启动已停止的发行版：请点击“启动”、打开新终端，或在此连接它。",
           "add": "添加 WSL 发行版",
           "connect": "连接",
-          "turnOn": "在实验性中开启",
           "forceUpdate": "强制更新",
           "chip": "WSL"
         },

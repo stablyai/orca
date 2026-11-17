@@ -2,7 +2,7 @@ import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { openWslHostsExperimentalSetting } from '../../../sidebar/use-wsl-hosts-enabled'
+import { openWslHostsSetting } from '../../../sidebar/use-wsl-hosts-enabled'
 import {
   getWslHostsTurnedOffLabel,
   getWslHostsTurnOnLabel
@@ -50,7 +50,7 @@ export function FileExplorerTreeStatus({
         data-file-explorer-wsl-hosts-turned-off=""
       >
         <span>{getWslHostsTurnedOffLabel(t)}</span>
-        <Button size="xs" onClick={openWslHostsExperimentalSetting}>
+        <Button size="xs" onClick={openWslHostsSetting}>
           {getWslHostsTurnOnLabel(t)}
         </Button>
       </div>

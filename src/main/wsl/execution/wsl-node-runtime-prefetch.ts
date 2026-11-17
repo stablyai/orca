@@ -8,6 +8,7 @@ import {
   nodeRuntimeArchiveCachePath
 } from '../../node-runtime/pinned-runtime-materializer'
 import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
+import { isWslHostsSettingOn } from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 /** Off the startup path; the archive is about 55 MB. */
 const PREFETCH_DELAY_MS = 60_000
@@ -78,17 +79,17 @@ export function wireWslNodeRuntimePrefetch(wiring: WslNodeRuntimePrefetchWiring)
     scheduled = true
     schedule(() => {
       // Turned off during the delay: skip, and let a later turn-on schedule again.
-      if (!gateOpen() || wiring.store.getSettings().experimentalWslHosts !== true) {
+      if (!gateOpen() || !isWslHostsSettingOn(wiring.store.getSettings())) {
         scheduled = false
         return
       }
       void prefetchWslNodeRuntime(wiring)
     })
   }
-  consider(wiring.store.getSettings().experimentalWslHosts === true)
+  consider(isWslHostsSettingOn(wiring.store.getSettings()))
   wiring.store.onSettingsChanged((updates, settings) => {
     if ('experimentalWslHosts' in updates) {
-      consider(settings.experimentalWslHosts === true)
+      consider(isWslHostsSettingOn(settings))
     }
   })
 }

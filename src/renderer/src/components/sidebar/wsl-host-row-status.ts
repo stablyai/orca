@@ -63,8 +63,8 @@ export function getWslHostRowDetail(
 
 export function getWslHostsTurnedOffLabel(t: Translate = translate): string {
   return t(
-    'auto.components.sidebar.wslHostRowStatus.turnedOff',
-    'WSL hosts are turned off in Settings → Experimental'
+    'auto.components.sidebar.wslHostRowStatus.turnedOffInServers',
+    'WSL hosts are turned off in Settings → Remote Orca servers'
   )
 }
 
@@ -74,8 +74,8 @@ export function getWslHostsTurnOnLabel(t: Translate = translate): string {
 
 export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
   return t(
-    'auto.components.sidebar.wslHostRowStatus.turnedOffShort',
-    'Turned off in Settings → Experimental'
+    'auto.components.sidebar.wslHostRowStatus.turnedOffShortInServers',
+    'Turned off in Settings → Remote Orca servers'
   )
 }
 

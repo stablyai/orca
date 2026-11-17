@@ -5998,7 +5998,6 @@
           "addRemoteServerDetail": "Mit Orca auf einem anderen Computer koppeln.",
           "addRemoteHostDetail": "SSH-Host oder Orca-Server",
           "addWslHost": "WSL-Distribution hinzufügen",
-          "addWslHostDetail": "Einen Orca-Server in einer WSL 2-Distribution ausführen. Experimentell.",
           "addRemoteHostDetailWithWsl": "SSH-Host, Orca-Server oder WSL-Distribution",
           "turnOnWslHosts": "Aktivieren"
         },
@@ -7306,8 +7305,6 @@
           "idle": "Inaktiv",
           "failed": "Start fehlgeschlagen",
           "kind": "WSL-Distribution",
-          "turnedOff": "WSL-Hosts sind unter Einstellungen → Experimentell deaktiviert",
-          "turnedOffShort": "Unter Einstellungen → Experimentell deaktiviert",
           "serverFilesMissing": "Dieser Orca-Build kann keine WSL-Hosts ausführen (Serverdateien fehlen).",
           "serverFilesMissingShort": "Dieser Build kann keine WSL-Hosts ausführen",
           "removalPending": "Entfernen nicht abgeschlossen"
@@ -12851,19 +12848,16 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL-Distributionen als Hosts aktivieren oder deaktivieren",
           "title": "WSL-Distributionen als Hosts",
-          "description": "Eine WSL 2-Distribution als Host hinzufügen. Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals in dort angelegten neuen Projekten nativ unter Linux laufen.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "Distribution"
         },
         "wslHosts": {
           "title": "WSL-Hosts",
-          "experimental": "Experimentell",
           "description": "Orca führt in jeder Distribution einen Server aus. Das Öffnen eines Projekts startet eine gestoppte Distribution nie: Klicke auf „Starten“, öffne ein neues Terminal oder verbinde sie hier.",
           "add": "WSL-Distribution hinzufügen",
           "connect": "Verbinden",
           "forceUpdate": "Update erzwingen",
-          "turnOn": "Unter „Experimentell“ aktivieren",
           "chip": "WSL"
         },
         "restartServer": {
