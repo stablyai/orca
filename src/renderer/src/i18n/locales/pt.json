@@ -22969,6 +22969,13 @@
         "title": "Consulta de uso do Claude",
         "description": "Usa seu login do Claude Code para consultar o uso, os créditos e as contas inativas. Desative para usar apenas as leituras em tempo real das sessões do terminal.",
         "about": "Sobre a consulta de uso do Claude"
+      },
+      "autoSwitch": {
+        "title": "Alternar contas automaticamente",
+        "description": "Quando a conta ativa atinge o limite, o Orca alterna para a conta com mais cota restante. Desative ou priorize contas nas respectivas linhas.",
+        "threshold": "Alternar com % de uso",
+        "inRotation": "Em rotação",
+        "priority": "Prioridade (a maior é usada primeiro)"
       }
     },
     "managedData": {

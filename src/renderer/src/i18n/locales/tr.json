@@ -22133,6 +22133,13 @@
         "title": "Claude kullanımını sorgula",
         "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",
         "about": "Claude kullanım sorgulaması hakkında"
+      },
+      "autoSwitch": {
+        "title": "Hesapları otomatik değiştir",
+        "description": "Etkin hesap sınırına ulaştığında Orca, en çok kotası kalan hesaba geçer. Hesapları satırlarından devre dışı bırakabilir veya sıralayabilirsiniz.",
+        "threshold": "Kullanım yüzdesinde değiştir",
+        "inRotation": "Rotasyonda",
+        "priority": "Öncelik (yüksek olan önce kullanılır)"
       }
     },
     "managedData": {

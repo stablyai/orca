@@ -21665,6 +21665,13 @@
         "title": "Claude 用量輪詢",
         "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
         "about": "關於 Claude 用量輪詢"
+      },
+      "autoSwitch": {
+        "title": "自動切換帳戶",
+        "description": "目前帳戶達到上限時，自動切換到剩餘額度最多的帳戶。可在各帳戶所在列停用帳戶或設定優先順序。",
+        "threshold": "使用率達 % 時切換",
+        "inRotation": "參與輪替",
+        "priority": "優先順序（越高越先使用）"
       }
     },
     "managedData": {

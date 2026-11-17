@@ -23475,6 +23475,13 @@
         "title": "Claude 用量轮询",
         "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
         "about": "关于 Claude 用量轮询"
+      },
+      "autoSwitch": {
+        "title": "自动切换账户",
+        "description": "当前账户达到上限时，自动切换到剩余额度最多的账户。可在各账户所在行中停用账户或设置优先级。",
+        "threshold": "使用率达到 % 时切换",
+        "inRotation": "参与轮换",
+        "priority": "优先级（越高越先使用）"
       }
     },
     "hostSignIn": {
