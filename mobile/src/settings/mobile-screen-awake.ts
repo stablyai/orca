@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
-import { useEffect, useSyncExternalStore } from 'react'
-import { AppState } from 'react-native'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { AppState, Platform } from 'react-native'
 import { createMicrophoneScreenLock } from '../platform/audio-capture/microphone-screen-lock'
 
 const key = 'orca:keepScreenAwake'
@@ -46,37 +46,28 @@ export function useScreenAwakePreference() {
 
 export function useScreenAwake() {
   const preference = useScreenAwakePreference()
+  const [active, setActive] = useState(AppState.currentState === 'active')
+  const [focused, setFocused] = useState(true)
+
   useEffect(() => {
-    let active = AppState.currentState === 'active'
-    let focused = true
-    const update = () => {
-      if (preference && active && focused) {
-        lock.hold()
-      } else {
-        lock.release()
-      }
-    }
-    const change = AppState.addEventListener('change', (state) => {
-      active = state === 'active'
-      if (active) {
-        focused = true
-      }
-      update()
-    })
-    const blur = AppState.addEventListener('blur', () => {
-      focused = false
-      update()
-    })
-    const focus = AppState.addEventListener('focus', () => {
-      focused = true
-      update()
-    })
-    update()
+    const change = AppState.addEventListener('change', (state) => setActive(state === 'active'))
+    const blur =
+      Platform.OS === 'android' ? AppState.addEventListener('blur', () => setFocused(false)) : null
+    const focus =
+      Platform.OS === 'android' ? AppState.addEventListener('focus', () => setFocused(true)) : null
     return () => {
       change.remove()
-      blur.remove()
-      focus.remove()
+      blur?.remove()
+      focus?.remove()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (preference && active && focused) {
+      lock.hold()
+    } else {
       lock.release()
     }
-  }, [preference])
+    return () => lock.release()
+  }, [preference, active, focused])
 }

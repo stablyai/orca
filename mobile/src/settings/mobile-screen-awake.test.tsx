@@ -3,12 +3,21 @@ import { expect, it, vi } from 'vitest'
 
 const device = vi.hoisted(() => ({
   events: new Map<string, (state: string) => void>(),
-  tags: [] as string[]
+  tags: [] as string[],
+  platform: { OS: 'android' },
+  resolveStored: undefined as undefined | ((value: string | null) => void)
 }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: { getItem: async () => null, setItem: async () => {} }
+  default: {
+    getItem: () =>
+      new Promise<string | null>((resolve) => {
+        device.resolveStored = resolve
+      }),
+    setItem: async () => {}
+  }
 }))
 vi.mock('react-native', () => ({
+  Platform: device.platform,
   AppState: {
     currentState: 'active',
     addEventListener: (event: string, callback: (state: string) => void) => {
@@ -38,11 +47,23 @@ it('holds only while opted in and foreground, and releases on blur or unmount', 
   })
   expect(device.tags).toEqual([])
   await act(async () => {
-    await setScreenAwakePreference(true)
+    device.events.get('blur')?.('')
+    device.resolveStored?.('true')
+  })
+  expect(device.tags).toEqual([])
+  await act(async () => {
+    device.events.get('focus')?.('')
   })
   expect(device.tags).toEqual(['+orca-screen-awake'])
   await act(async () => {
     device.events.get('blur')?.('')
+  })
+  expect(device.tags).toEqual(['+orca-screen-awake', '-orca-screen-awake'])
+  await act(async () => {
+    await setScreenAwakePreference(false)
+  })
+  await act(async () => {
+    await setScreenAwakePreference(true)
   })
   expect(device.tags).toEqual(['+orca-screen-awake', '-orca-screen-awake'])
   await act(async () => {
@@ -64,4 +85,20 @@ it('holds only while opted in and foreground, and releases on blur or unmount', 
     root!.unmount()
   })
   expect(device.tags.slice(-2)).toEqual(['+orca-screen-awake', '-orca-screen-awake'])
+})
+
+it('subscribes only to supported app state events on iOS', async () => {
+  device.platform.OS = 'ios'
+  function Probe() {
+    useScreenAwake()
+    return null
+  }
+  let root: ReturnType<typeof create>
+  await act(async () => {
+    root = create(<Probe />)
+  })
+  expect([...device.events.keys()]).toEqual(['change'])
+  await act(async () => {
+    root!.unmount()
+  })
 })
