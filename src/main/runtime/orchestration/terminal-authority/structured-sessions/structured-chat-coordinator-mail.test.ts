@@ -87,6 +87,9 @@ describe("another agent's message in a structured chat", () => {
 
     const sent = turnText(chat.turns[0]!)
     expect(isWholeMail(sent)).toBe(true)
+    expect(sent).toContain('\nSubject: Done')
+    expect(sent).toContain('"outcome":"succeeded"')
+    expect(sent).not.toContain('orchestration check')
     const snapshot = await readTestHostJournal(host, COORDINATOR)
     const shown = snapshot.items.flatMap((item) =>
       item.body?.kind === 'message' && item.body.from?.kind === 'agent'
