@@ -39,14 +39,19 @@ describe('orca upload', () => {
   })
 
   it('resolves relative files against the caller cwd, not the runtime cwd', async () => {
+    const windows = process.platform === 'win32'
     await main(
       ['upload', '--element', '#f', '--files', './a.png, ../b.png', '--page', 'page-1'],
-      '/work/repo/sub'
+      windows ? 'C:\\work\\repo\\sub' : '/work/repo/sub'
     )
 
     expect(callMock).toHaveBeenCalledWith(
       'browser.upload',
-      expect.objectContaining({ files: ['/work/repo/sub/a.png', '/work/repo/b.png'] })
+      expect.objectContaining({
+        files: windows
+          ? ['C:\\work\\repo\\sub\\a.png', 'C:\\work\\repo\\b.png']
+          : ['/work/repo/sub/a.png', '/work/repo/b.png']
+      })
     )
   })
 })

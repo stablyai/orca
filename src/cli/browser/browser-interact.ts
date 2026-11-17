@@ -131,9 +131,8 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
       .split(',')
       .map((f) => f.trim())
       .filter(Boolean)
-      .map((f) =>
-        resolveRepoPathArgument(f, cwd, client.isRemote, 'Remote browser upload', '--files')
-      )
+      // A paired runtime's pages read workspace-relative or server paths, so those pass as typed.
+      .map((f) => (client.isRemote ? f : resolveRepoPathArgument(f, cwd, false)))
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserUploadResult>('browser.upload', {
       element,

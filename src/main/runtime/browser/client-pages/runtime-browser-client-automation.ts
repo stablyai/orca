@@ -7,6 +7,10 @@ import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/brow
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../../shared/file-access/cross-platform-path'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 
@@ -19,6 +23,7 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
   notifyWorkspace?(workspaceId: string): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
+  resolveWorkspacePath(workspaceId: string): Promise<string>
 }): Promise<ClientHostedBrowserRpcRoute> {
   const method = BrowserClientAutomationMethod.safeParse(options.method)
   if (!method.success || !isRecord(options.params)) {
@@ -72,7 +77,12 @@ export async function routeRuntimeBrowserClientAutomation(options: {
     {
       type: 'automation',
       method: method.data,
-      params: options.params,
+      params:
+        method.data === 'browser.upload'
+          ? await toWorkspaceRelativeUploadParams(options.params, () =>
+              options.resolveWorkspacePath(page.workspaceId)
+            )
+          : options.params,
       // A person's link or relayed input must not light the desktop page as agent-driven.
       agent: isAgentRpcCaller(options.caller),
       stagedResults: true
@@ -100,6 +110,34 @@ async function resolveTargetPage(
   }
   const workspace = await resolveWorkspace(params.worktree)
   return pages.listPages(workspace.id).find((page) => page.active)
+}
+
+/** The client host reads upload files by workspace-relative path; the CLI sends absolute ones. */
+async function toWorkspaceRelativeUploadParams(
+  params: Record<string, unknown>,
+  resolveWorkspacePath: () => Promise<string>
+): Promise<Record<string, unknown>> {
+  const isAbsolute = (file: unknown): file is string =>
+    typeof file === 'string' && (file.startsWith('/') || isWindowsAbsolutePathLike(file))
+  if (!Array.isArray(params.files) || !params.files.some(isAbsolute)) {
+    return params
+  }
+  const root = await resolveWorkspacePath()
+  const files = params.files.map((file: unknown) => {
+    // Older CLIs and paired callers already send workspace-relative paths.
+    if (!isAbsolute(file)) {
+      return file
+    }
+    const relative = relativePathInsideRoot(root, file)
+    if (!relative) {
+      throw new BrowserError(
+        'invalid_argument',
+        `Cannot upload ${file}: this page runs on another device, so it can only upload files inside the workspace ${root}`
+      )
+    }
+    return relative
+  })
+  return { ...params, files }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

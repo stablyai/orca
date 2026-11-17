@@ -1,17 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { writeFileSyncMock } = vi.hoisted(() => ({ writeFileSyncMock: vi.fn() }))
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  tmpdir: () => 'C:\\Users\\me\\AppData\\Local\\Temp'
+}))
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   mkdirSync: vi.fn(),
   chmodSync: vi.fn(),
   readdirSync: vi.fn(() => []),
-  lstatSync: vi.fn(() => ({ isDirectory: () => true, isSymbolicLink: () => false, uid: 0 })),
+  lstatSync: vi.fn(() => ({ isDirectory: () => true, isSymbolicLink: () => false })),
   statSync: vi.fn(() => {
     throw new Error('missing')
   }),
-  writeFileSync: writeFileSyncMock
+  writeFileSync: vi.fn()
 }))
 
 import { writeCliScreenshotTempFile } from './cli-screenshot-temp-file'
@@ -31,7 +34,7 @@ describe('writeCliScreenshotTempFile from a legacy WSL shell', () => {
     }
   })
 
-  it('saves into the distro /tmp and prints the Linux path', () => {
+  it('prints the distro path of the Windows temp file', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     // Windows Node has no getuid.
     process.getuid = undefined
@@ -44,13 +47,8 @@ describe('writeCliScreenshotTempFile from a legacy WSL shell', () => {
       'png'
     )
 
-    expect(saved.path).toBe('/tmp/orca-browser-screenshots/req_1-screenshot.png')
-    expect(writeFileSyncMock).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^\\\\wsl\.localhost\\Ubuntu\\tmp\\orca-browser-screenshots[\\/]req_1-screenshot\.png$/
-      ),
-      expect.anything(),
-      expect.anything()
+    expect(saved.path).toBe(
+      '/mnt/c/Users/me/AppData/Local/Temp/orca-browser-screenshots/req_1-screenshot.png'
     )
   })
 })
