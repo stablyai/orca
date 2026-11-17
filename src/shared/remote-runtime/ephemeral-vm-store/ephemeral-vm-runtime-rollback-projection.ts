@@ -27,7 +27,9 @@ export function projectRuntimeForRollback(
   runtime: EphemeralVmProvisionedRuntimeRecord
 ): EphemeralVmRuntimeRecord {
   const recipe = runtime.recipe
-    ? (({ checkoutMode: _checkoutMode, ...rollbackRecipe }) => rollbackRecipe)(runtime.recipe)
+    ? (({ checkoutMode: _checkoutMode, provider: _provider, ...rollbackRecipe }) => rollbackRecipe)(
+        runtime.recipe
+      )
     : undefined
   const recipeResult =
     runtime.recipeResult.schemaVersion === 2

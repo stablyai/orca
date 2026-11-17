@@ -117,7 +117,22 @@ export const FinishClaudeSignInParams = z
   .object({ accountId: z.string().min(1), ...ClaudeSignInTarget })
   .strict()
 
-export const HostAccountSignInStartParams = z.object({ provider: z.enum(['claude', 'codex']) })
+export const HostAccountSignInStartParams = z.object({
+  provider: z.enum(['claude', 'codex']),
+  // Clients send it only to hosts advertising accounts.host-sign-in-callback.v1.
+  callback: z.boolean().optional()
+})
+
+export const HostAgentSignInStatusParams = z.object({ force: z.boolean().optional() })
+
+export const HostAgentSignOutParams = z.object({ agent: z.enum(['claude', 'codex']) })
+
+export const AuthCallbackTunnelParams = z.object({ flowId: z.string().min(1).max(64) })
+
+/** A loopback port an agent on the host listens on for an OAuth redirect (never privileged ports). */
+export const LoopbackCallbackTunnelParams = z.object({
+  port: z.number().int().min(1024).max(65_535)
+})
 
 export const HostAccountSignInWaitParams = z.object({
   flowId: z.string().min(1).max(64),

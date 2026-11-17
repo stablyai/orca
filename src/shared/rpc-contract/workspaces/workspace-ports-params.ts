@@ -27,3 +27,6 @@ export const WorkspacePortKillHostParams = z.object({
   pid: requiredNumber('Missing process id'),
   port: requiredNumber('Missing port')
 })
+
+// The destination rides in each stream's Open frame; the host confines it to its own loopback.
+export const WorkspacePortForwardTunnelParams = z.object({})

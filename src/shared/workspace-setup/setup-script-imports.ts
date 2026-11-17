@@ -7,6 +7,7 @@ import { inspectDevcontainerConfig } from './setup-script-import-devcontainer'
 import { asRecord, parseJsonObject } from './setup-script-import-parsers'
 import { inspectPackageManagerSetupCandidate } from './setup-script-package-manager-suggestion'
 import type { SetupScriptImportProvider } from './setup-script-import-providers'
+import type { OrcaRunAction, OrcaRunMode } from './orca-yaml-hook-types'
 import {
   isSetupScriptImportFieldWithinLimit,
   isSetupScriptImportTextWithinLimit,
@@ -26,8 +27,19 @@ export type SetupScriptImportCandidate = {
   files: string[]
   setup: string
   archive?: string
+  /** Named run actions, in orca.yaml's `scripts.run` shape. Only Conductor supplies these today. */
+  run?: OrcaRunAction[]
+  runMode?: OrcaRunMode
+  autoRunAfterSetup?: boolean | string
   unsupportedFields?: string[]
+  /**
+   * The setup came from an Amazon Linux tool (Conductor). `translated` dnf/yum install
+   * lines now use apt-get; `checkLines` still use dnf or yum (in the setup or a script it runs).
+   */
+  ubuntuNote?: UbuntuNote
 }
+
+export type UbuntuNote = { translated: number; checkLines: string[] }
 
 export type SetupScriptImportFileRead = (relativePath: string) => Promise<string | null>
 export type SetupScriptImportFileExists = (relativePath: string) => Promise<boolean>

@@ -165,6 +165,7 @@ export function updateEphemeralVmRuntimeStatus(
       : args.sshTargetId
         ? { sshTargetId: args.sshTargetId }
         : {}),
+    ...(args.cloudAccountId ? { cloudAccountId: args.cloudAccountId } : {}),
     ...(args.recipeResult ? { recipeResult: args.recipeResult } : {}),
     updatedAt: args.updatedAt ?? Date.now()
   })

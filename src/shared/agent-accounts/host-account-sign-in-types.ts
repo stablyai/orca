@@ -20,6 +20,10 @@ export type HostAccountSignInPrompt = {
   userCode: string | null
   /** Claude shows a code after sign-in that has to come back to the host. */
   needsCode: boolean
+  /** Browser sign-in: the host login's localhost callback port, which the client forwards here. */
+  callbackPort?: number
+  /** Browser sign-in: Claude's paste-code page, a fallback that needs no forwarded callback. */
+  pasteUrl?: string
 }
 
 /** How a login running on the host reaches the person signing in elsewhere. */
@@ -28,6 +32,8 @@ export type HostAccountSignInChannel = {
   onPrompt: (prompt: HostAccountSignInPrompt) => void
   /** The code the person pasted back; rejects if the flow ends first. */
   nextCode: () => Promise<string>
+  /** Run the login's browser flow and publish its localhost callback instead of a code-only flow. */
+  callback?: boolean
 }
 
 /** One sign-in as the host reports it to the client that started it. */
@@ -72,5 +78,24 @@ export function isHostAccountSignInPage(provider: HostAccountSignInProvider, url
     return parsed.protocol === 'https:' && SIGN_IN_PAGE_HOSTS[provider].has(parsed.hostname)
   } catch {
     return false
+  }
+}
+
+export const LOCAL_CALLBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1'])
+
+/** The loopback port a sign-in page redirects back to, or null when it is not a localhost callback. */
+export function signInCallbackPort(url: string): number | null {
+  try {
+    const redirect = new URL(new URL(url).searchParams.get('redirect_uri') ?? '')
+    const port = Number(redirect.port)
+    return redirect.protocol === 'http:' &&
+      LOCAL_CALLBACK_HOSTS.has(redirect.hostname) &&
+      Number.isInteger(port) &&
+      port >= 1024 &&
+      port <= 65_535
+      ? port
+      : null
+  } catch {
+    return null
   }
 }

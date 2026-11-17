@@ -2,7 +2,12 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { AntigravityChatAuthConfigSchema } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
+import {
+  AgentConfigSyncPlanParams,
+  AgentConfigSyncPutParams
+} from '../agent-config-sync/agent-config-sync-contract'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
+import { AgentMcpSyncParams } from '../agent-mcp-sync/mcp-sync-contract'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -26,8 +31,17 @@ import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
 } from '../browser/client-hosting/desktop-browser-bridge-protocol'
+import { OrcadWorkVerdictParamsSchema } from '../hosted-sandbox/hosted-session-events'
+import {
+  LocalCommandAttachParamsSchema,
+  LocalCommandIdParamsSchema,
+  LocalCommandRequestParamsSchema,
+  LocalCommandSettleParamsSchema
+} from '../local-commands/local-command-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
+import { OrcaCloudEnrollDeviceParamsSchema } from '../orca-cloud-device-enrollment-contract'
+import { OrcadDiskUsageParamsSchema } from '../orcad-disk-usage'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -43,6 +57,7 @@ import { OrcadTerminalCensusParamsSchema } from '../remote-runtime/orcad-lifecyc
 import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing/delegated-mobile-device-contract'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingRevokeDeviceParamsSchema } from '../remote-runtime/pairing/pairing-revoke-device-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -54,6 +69,7 @@ import {
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
   AddDataAccountParams,
+  AuthCallbackTunnelParams,
   BeginClaudeSignInParams,
   ConsumeCodexResetCreditParams,
   FinishClaudeSignInParams,
@@ -61,7 +77,10 @@ import {
   HostAccountSignInFlowParams,
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
+  HostAgentSignInStatusParams,
+  HostAgentSignOutParams,
   ListAccountsParams,
+  LoopbackCallbackTunnelParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
   RenameAccountParams,
@@ -187,6 +206,13 @@ import {
   StartImageUpload
 } from './clipboard/clipboard-params'
 import {
+  CloudEnvironmentFollowBuildParams,
+  CloudEnvironmentSelectParams,
+  CloudEnvironmentSetInstallScriptParams,
+  CloudEnvironmentShowParams
+} from './cloud-environment-params'
+import { CloudSshParams } from './cloud-ssh-params'
+import {
   ComputerCapabilitiesParams,
   ComputerPermissionsStatusParams
 } from './computer/computer-params'
@@ -235,6 +261,7 @@ import {
   TapParams,
   TypeParams
 } from './emulator/emulator-params'
+import { FileArchiveCancel, FileArchiveRead, FileArchiveStart } from './files-archive-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -260,6 +287,7 @@ import {
   FilePathsExist,
   FileReadChunk,
   FileSearch,
+  FileStatMany,
   FileTreePath,
   FileUnwatch,
   ResolveTerminalPath,
@@ -650,6 +678,10 @@ import {
   SshTargetUpdate
 } from './ssh/ssh-params'
 import {
+  CheckpointItemParams,
+  CheckpointUndoParams
+} from './structured-agent-session-checkpoint-params'
+import {
   AttachmentReadParams,
   AttachmentTextReadParams,
   AttachmentUploadAppendParams,
@@ -768,6 +800,7 @@ import {
   FolderWorkspaceUpdate
 } from './workspaces/folder-workspace-params'
 import {
+  WorkspacePortForwardTunnelParams,
   WorkspacePortKillHostParams,
   WorkspacePortKillParams,
   WorkspacePortProbePageParams,
@@ -797,6 +830,11 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './workspaces/worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
+import {
+  SecretsRequestIdParamsSchema,
+  SecretsRequestParamsSchema,
+  SecretsResolveRequestParamsSchema
+} from '../secret-request-contract'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
@@ -825,6 +863,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.addClaudeFromConfigDir': AddClaudeFromConfigDirParams,
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
+  'accounts.agentSignInStatus': HostAgentSignInStatusParams,
+  'accounts.agentSignOut': HostAgentSignOutParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
   'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
   'accounts.antigravityChatAuthGet': null,
@@ -872,6 +912,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
+  'agentConfig.planSkillSync': AgentConfigSyncPlanParams,
+  'agentConfig.putSkills': AgentConfigSyncPutParams,
+  'agentConfig.syncMcpServers': AgentMcpSyncParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -879,6 +922,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.approveAutoReviewDenial': AutoReviewApprovalParams,
   'agentSession.cancel': CancelParams,
   'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
+  'agentSession.checkpointPreview': CheckpointItemParams,
+  'agentSession.checkpointRestore': CheckpointItemParams,
+  'agentSession.checkpointUndo': CheckpointUndoParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
   'agentSession.continuationContext': ContinuationContextParams,
@@ -1059,6 +1105,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'cloudEnvironment.builds': CloudEnvironmentSelectParams,
+  'cloudEnvironment.followBuild': CloudEnvironmentFollowBuildParams,
+  'cloudEnvironment.setInstallScript': CloudEnvironmentSetInstallScriptParams,
+  'cloudEnvironment.show': CloudEnvironmentShowParams,
+  'cloudEnvironment.startBuild': CloudEnvironmentSelectParams,
+  'cloudSsh.prepare': CloudSshParams,
+  'cloudSsh.tunnel': CloudSshParams,
   'computer.capabilities': ComputerCapabilitiesParams,
   'computer.click': Click,
   'computer.drag': DragOfComputerSchemasParams,
@@ -1106,6 +1159,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
   'environment.doctor': EnvironmentDoctorParams,
+  'files.archiveCancel': FileArchiveCancel,
+  'files.archiveRead': FileArchiveRead,
+  'files.archiveStart': FileArchiveStart,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1140,6 +1196,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
+  'files.statMany': FileStatMany,
   'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
   'files.watch': FileWatch,
@@ -1366,6 +1423,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
   'linkPreview.get': LinkPreviewGetParams,
+  'localCommands.attach': LocalCommandAttachParamsSchema,
+  'localCommands.request': LocalCommandRequestParamsSchema,
+  'localCommands.settle': LocalCommandSettleParamsSchema,
+  'localCommands.status': LocalCommandIdParamsSchema,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
   'managedRuntime.remove': ManagedRuntimeAgentParams,
@@ -1390,7 +1451,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.readSession': NativeChatSession,
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
+  'network.authCallbackTunnel': AuthCallbackTunnelParams,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.loopbackCallbackTunnel': LoopbackCallbackTunnelParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
@@ -1398,6 +1461,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'orcaCloud.enrollDevice': OrcaCloudEnrollDeviceParamsSchema,
+  'orcad.diskUsage': OrcadDiskUsageParamsSchema,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.abortCatalogByReference': OrcadMigrationCatalogReferenceParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,
@@ -1406,6 +1471,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orcad.migration.stageCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
+  'orcad.workVerdict': OrcadWorkVerdictParamsSchema,
   'orchestration.approvalAnswer': ApprovalAnswerParams,
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
@@ -1447,6 +1513,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.sessionAddress': SessionAddressParams,
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
+  'orchestration.turnSender': null,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerApprovalsSubscribe': WorkerApprovalsSubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
@@ -1466,6 +1533,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'pairing.revokeDevice': PairingRevokeDeviceParamsSchema,
   'plugins.catalogAdd': PluginCatalogAddParams,
   'plugins.catalogList': null,
   'plugins.catalogRemove': PluginCatalogRemoveParams,
@@ -1546,6 +1614,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
   'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
+  'secrets.request': SecretsRequestParamsSchema,
+  'secrets.requestStatus': SecretsRequestIdParamsSchema,
+  'secrets.resolveRequest': SecretsResolveRequestParamsSchema,
+  'secrets.touchRequest': SecretsRequestIdParamsSchema,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
@@ -1689,6 +1761,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
+  'workspacePorts.forwardTunnel': WorkspacePortForwardTunnelParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,

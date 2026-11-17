@@ -4,6 +4,9 @@ import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from '../remote-runtime-memory-
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
 const REMOTE_RUNTIME_BULK_READ_CONCURRENCY = 2
+// Explicit file downloads pipeline more pages than media/preview reads: at ~65 ms RTT two 512 KiB
+// pages in flight cap a 200 MB download near 9 MB/s, four clear 10 MB/s.
+const REMOTE_RUNTIME_DOWNLOAD_CONCURRENCY = 4
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_PER_SELECTOR = 256
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL = 2_048
 export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
@@ -74,10 +77,14 @@ function isLongWaitRuntimeMethod(method: string): boolean {
 function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
+    method === 'files.archiveRead' ||
     method === 'files.readDocPreviewChunk' ||
     method === 'files.readTerminalArtifactChunk'
   )
 }
+
+/** `download`: a user-started transfer that gets its own lane, so it neither starves nor is starved by previews. */
+export type RuntimeRpcCallLane = 'download'
 
 export class RuntimeRpcCallQueuePool {
   private readonly queues = new Map<string, RuntimeCallQueue>()
@@ -98,22 +105,26 @@ export class RuntimeRpcCallQueuePool {
     run: () => Promise<T>,
     retainedBytes = 0,
     signal?: AbortSignal,
-    params?: unknown
+    params?: unknown,
+    lane?: RuntimeRpcCallLane
   ): Promise<T> {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
-    const bulkRead = isBulkReadRuntimeMethod(method)
+    const download = lane === 'download'
+    const bulkRead = !download && isBulkReadRuntimeMethod(method)
     const timedPR = isTimedPRRead(method, params)
     const timedKey = `${selector}\u0000timed-pr`
-    const queueKey = isLongWaitRuntimeMethod(method)
-      ? `${selector}\u0000long-wait`
-      : bulkRead
-        ? `${selector}\u0000bulk-read`
-        : timedPR
-          ? timedKey
-          : selector
+    const queueKey = download
+      ? `${selector}\u0000download`
+      : isLongWaitRuntimeMethod(method)
+        ? `${selector}\u0000long-wait`
+        : bulkRead
+          ? `${selector}\u0000bulk-read`
+          : timedPR
+            ? timedKey
+            : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
@@ -141,11 +152,13 @@ export class RuntimeRpcCallQueuePool {
 
     const queue = this.getQueue(
       queueKey,
-      timedPR
-        ? Math.min(this.concurrency, 2)
-        : bulkRead
-          ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY)
-          : this.concurrency
+      download
+        ? Math.min(this.concurrency, REMOTE_RUNTIME_DOWNLOAD_CONCURRENCY)
+        : timedPR
+          ? Math.min(this.concurrency, 2)
+          : bulkRead
+            ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY)
+            : this.concurrency
     )
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {

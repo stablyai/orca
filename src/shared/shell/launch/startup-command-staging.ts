@@ -9,6 +9,11 @@ import {
   TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
 } from '../../agent-launch/startup/startup-line-prompt-carry'
 import { quoteStartupArg } from '../../agent-launch/startup/tui-agent-startup-shell'
+import {
+  cloudHostStagesLine,
+  cloudQuietStagedLine,
+  isCloudStagingHost
+} from './startup-command-staging-cloud'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
@@ -52,6 +57,8 @@ export function shouldStageStartupCommand(args: {
   platform: NodeJS.Platform
   /** An agent launch line Orca built with POSIX quoting, which sh can run in any shell. */
   orcaBuiltLine?: boolean
+  /** This PTY host is an Orca Cloud VM (see startup-command-staging-cloud). */
+  cloudHost?: boolean
 }): boolean {
   if (args.platform === 'win32') {
     return false
@@ -59,7 +66,9 @@ export function shouldStageStartupCommand(args: {
   const shellName = stagingShellName(args.shellPath)
   const body = stripSubmitTerminator(args.command)
   const needsStaging =
-    hasControlByte(body) || encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
+    cloudHostStagesLine(args) ||
+    hasControlByte(body) ||
+    encoder.encode(body).byteLength > TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES
   if (shellName === null) {
     // tcsh mutates backslashes/!! and nu rejects POSIX apostrophe escapes; type plain lines directly to retain foreground-job detection.
     return args.orcaBuiltLine === true && (needsStaging || /[!\\"`$]/.test(body))
@@ -85,9 +94,11 @@ export function stageStartupCommand(args: {
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
+  cloudHost?: boolean
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
-  if (!shouldStageStartupCommand({ ...args, platform })) {
+  const cloudHost = isCloudStagingHost(args.cloudHost)
+  if (!shouldStageStartupCommand({ ...args, platform, cloudHost })) {
     return { command: args.command, delivery: 'typed' }
   }
   const directory = args.directory ?? tmpdir()
@@ -102,11 +113,18 @@ export function stageStartupCommand(args: {
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
+  const { typedLine, prelude } = cloudQuietStagedLine({
+    cloudHost,
+    orcaBuiltLine: args.orcaBuiltLine,
+    shellName,
+    line: stagedScriptLine(shellName, quotedPath),
+    stagedPrefix: STAGED_STARTUP_COMMAND_PREFIX
+  })
   try {
     // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
       scriptPath,
-      `command rm -f -- ${quotedPath}\n${stripSubmitTerminator(args.command)}\n`,
+      `command rm -f -- ${quotedPath}\n${prelude}${stripSubmitTerminator(args.command)}\n`,
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
@@ -117,7 +135,7 @@ export function stageStartupCommand(args: {
     }
   }
   return {
-    command: stagedScriptLine(shellName, quotedPath),
+    command: typedLine,
     delivery: 'staged',
     scriptPath
   }

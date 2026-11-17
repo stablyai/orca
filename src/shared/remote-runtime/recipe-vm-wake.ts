@@ -47,12 +47,28 @@ export const RECIPE_VM_WAKE_METHOD = 'runtimeEnvironment.wakeRecipeVm'
 
 export const RUNTIME_ENVIRONMENT_WAKING_MESSAGE =
   "This workspace's VM is waking up. Try again in a moment."
+// Provider-neutral: "workspace", never "VM" (Orca Cloud calls its machine a sandbox).
 export const RUNTIME_ENVIRONMENT_WAKE_FAILED_MESSAGE =
-  "This workspace's VM could not wake up. Open the workspace again to retry."
+  "This workspace couldn't wake up. Open it again to retry."
 export const RUNTIME_ENVIRONMENT_SLEPT_MESSAGE =
   'This workspace was put to sleep while it was being opened.'
-export const RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE =
-  "This workspace's VM is asleep. Open the workspace to wake it."
+export const RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE = 'This workspace is asleep. Open it to wake it.'
+
+/**
+ * The host refused because the VM is still waking (it held the request as long as it would).
+ * Matches the error itself, a refused RPC response's error, and the message an IPC hop leaves.
+ */
+export function isRecipeVmWakingRefusal(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const code = 'code' in error ? error.code : undefined
+  const message = 'message' in error ? error.message : undefined
+  return (
+    code === RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE ||
+    (typeof message === 'string' && message.includes(RUNTIME_ENVIRONMENT_WAKING_MESSAGE))
+  )
+}
 
 /** Every refusal a request to a recipe VM's server can get from the host. */
 export const RECIPE_VM_REFUSAL_CODES = [

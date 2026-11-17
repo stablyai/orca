@@ -7,6 +7,7 @@ import type * as core3 from './runtime-environment-wsl-host-operations'
 import type * as core4 from './runtime-environment-resume-pairing-operations'
 import type * as core5 from './runtime-environment-store-records'
 import type * as core6 from './wsl-host-deployment-store'
+import type * as core7 from './runtime-environment-legacy-cloud-names-operations'
 
 export type EnvironmentStoreCommand =
   | { operation: 'listEnvironments'; args: Parameters<typeof core0.listEnvironments> }
@@ -95,6 +96,10 @@ export type EnvironmentStoreCommand =
       args: Parameters<typeof core5.readEnvironmentStoreRecords>
     }
   | { operation: 'readWslHostDeployments'; args: Parameters<typeof core6.readWslHostDeployments> }
+  | {
+      operation: 'renameLegacyOrcaCloudEnvironmentNames'
+      args: Parameters<typeof core7.renameLegacyOrcaCloudEnvironmentNames>
+    }
 export type EnvironmentStoreSuccess =
   | { operation: 'listEnvironments'; value: ReturnType<typeof core0.listEnvironments> }
   | {
@@ -182,6 +187,10 @@ export type EnvironmentStoreSuccess =
       value: ReturnType<typeof core5.readEnvironmentStoreRecords>
     }
   | { operation: 'readWslHostDeployments'; value: ReturnType<typeof core6.readWslHostDeployments> }
+  | {
+      operation: 'renameLegacyOrcaCloudEnvironmentNames'
+      value: ReturnType<typeof core7.renameLegacyOrcaCloudEnvironmentNames>
+    }
 export type EnvironmentStoreRequest = {
   id: number
   servingWsl: boolean

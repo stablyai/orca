@@ -42,7 +42,8 @@ const EphemeralVmRuntimeRecipeSchema = z
     suspend: z.string().min(1).optional(),
     resume: z.string().min(1).optional(),
     destroy: z.string().min(1).optional(),
-    destroyDisabled: z.boolean().optional()
+    destroyDisabled: z.boolean().optional(),
+    provider: z.literal('orca-cloud').optional()
   })
   .strict()
 
@@ -60,6 +61,11 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   connectionMode: EphemeralVmRuntimeConnectionModeSchema.optional(),
   runtimeEnvironmentId: z.string().min(1).optional(),
   sshTargetId: z.string().min(1).optional(),
+  /**
+   * Orca Cloud only: the control-plane account that owns the sandbox (`org:<id>` or `user:<id>`,
+   * see orcaCloudAccountId). Lists and keep-alive scope to the active team by it; absent until known.
+   */
+  cloudAccountId: z.string().min(1).max(256).optional(),
   status: EphemeralVmRuntimeStatusSchema,
   cleanupStatus: EphemeralVmCleanupStatusSchema,
   cleanupDisabled: z.boolean().optional(),
@@ -113,13 +119,19 @@ export type EphemeralVmRuntimeStatusPatch = {
   connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
   runtimeEnvironmentId?: string
   sshTargetId?: string | null
+  cloudAccountId?: string
   recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
   updatedAt?: number
 }
 
 /** Suspend/resume over IPC: failures come back as values so the code reaches the renderer catalog. */
 export type EphemeralVmWorkspaceLifecycleResult =
-  | { ok: true; runtime: EphemeralVmRuntimeRecord | null }
+  | {
+      ok: true
+      runtime: EphemeralVmRuntimeRecord | null
+      /** Quiet (intent) wakes only: whether the VM actually resumed; false when it was already up. */
+      resumed?: boolean
+    }
   | ({ ok: false } & EphemeralVmFailure)
 
 export const EphemeralVmRuntimeStoreSchema = z.object({

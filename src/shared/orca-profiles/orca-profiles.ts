@@ -1,3 +1,6 @@
+import type { OrcaProfileReconnectReason } from '../orca-profile-reconnect-reason'
+import type { OrcaOrgMembersRoster } from '../orca-org-roster'
+import type { OrcaOrgMemberMfaFields } from '../orca-account-mfa'
 import './constants'
 import { ORCA_BROWSER_PARTITION } from '../browser/browser-session-partition'
 import type { ExecutionHostId } from '../execution-host/execution-host'
@@ -39,6 +42,8 @@ export type OrcaCloudCapabilityFlags = Record<string, boolean>
 export type OrcaCloudCapabilities = {
   flags: OrcaCloudCapabilityFlags
   refreshedAt: number
+  /** The web console's https origin, as auth advertises it (its ticket URLs land there). */
+  consoleOrigin?: string
 }
 
 export type OrcaCloudSessionPersistence = 'none' | 'encrypted' | 'memory-only' | 'dev-plaintext'
@@ -55,6 +60,10 @@ export type OrcaProfileAuthStatus = {
   capabilities?: OrcaCloudCapabilities
   credentialError?: string
   setupMessage?: string
+  reconnectReason?: OrcaProfileReconnectReason
+  /** Set where the build or run decides whether Orca Cloud shows (dev, e2e, internal builds);
+   * absent, it follows the account's `cloud.available` capability. */
+  orcaCloudForced?: boolean
 }
 
 export type OrcaProfileSummary = {
@@ -155,6 +164,9 @@ export type TransferOrcaProfileProjectResult =
 /** A sign-in in flight; `link` is set only while the browser has not answered yet. */
 export type OrcaCloudSignInProgress = { link: string | null }
 
+/** Why a sign-in stopped, when the UI should say so ("Sign-in didn’t finish. Try again."). */
+export type OrcaCloudSignInEnd = 'timed-out'
+
 export type ConnectCurrentOrcaProfileResult =
   | {
       status: 'connected'
@@ -206,7 +218,8 @@ export type SignOutCurrentOrcaProfileResult = {
 }
 
 export type SelectOrcaProfileOrgArgs = {
-  orgId: string
+  /** null switches to the personal account (no active team). */
+  orgId: string | null
 }
 
 export type SelectOrcaProfileOrgResult =
@@ -246,11 +259,14 @@ export type RefreshCurrentOrcaProfileAuthResult =
 // Mirror the server’s fixed role enum so UI options cannot drift from accepted API values.
 export type OrcaOrgRole = 'owner' | 'admin' | 'member'
 
-export type OrcaOrgMember = {
+// Two-factor state (owners and admins only) lives in OrcaOrgMemberMfaFields.
+export type OrcaOrgMember = OrcaOrgMemberMfaFields & {
   // Provisioned teammates without sign-in have no userId; disable mutations requiring that key.
   userId: string | null
   email: string
   displayName?: string
+  /** Profile picture from the identity provider (https only); avatars fall back to initials. */
+  pictureUrl?: string
   role: OrcaOrgRole
 }
 
@@ -260,52 +276,15 @@ export type OrcaOrgPendingInvite = {
   createdAt: number
 }
 
-export type OrcaOrgMembersRoster = {
-  members: OrcaOrgMember[]
-  pendingInvites: OrcaOrgPendingInvite[]
-  viewerRole: OrcaOrgRole
-  canManageMembers: boolean
-}
+export type { OrcaOrgMembersRoster }
 
 export type OrcaProfileOrgMembersListArgs = {
   orgId: string
 }
 
-export type OrcaProfileOrgMemberInviteArgs = {
-  orgId: string
-  email: string
-  role: OrcaOrgRole
-}
-
-export type OrcaProfileOrgInviteRevokeArgs = {
-  orgId: string
-  email: string
-}
-
-export type OrcaProfileOrgMemberChangeRoleArgs = {
-  orgId: string
-  userId: string
-  role: OrcaOrgRole
-}
-
-export type OrcaProfileOrgMemberRemoveArgs = {
-  orgId: string
-  userId: string
-}
-
 export type OrcaProfileOrgMembersListResult =
   | { status: 'ok'; roster: OrcaOrgMembersRoster }
   | { status: 'unconfigured' | 'reconnect-required' }
-  | { status: 'failed'; error: string }
-
-export type OrcaOrgInviteConflictReason = 'already_member' | 'already_invited'
-export type OrcaOrgMutationInvalidReason = 'cannot_change_own_role' | 'cannot_remove_self'
-
-export type OrcaProfileOrgMemberMutationResult =
-  | { status: 'ok' }
-  | { status: 'unconfigured' | 'reconnect-required' | 'forbidden' | 'not-found' }
-  | { status: 'conflict'; reason: OrcaOrgInviteConflictReason }
-  | { status: 'invalid'; reason: OrcaOrgMutationInvalidReason }
   | { status: 'failed'; error: string }
 
 export function createDefaultLocalOrcaProfile(now: number): OrcaProfileSummary {

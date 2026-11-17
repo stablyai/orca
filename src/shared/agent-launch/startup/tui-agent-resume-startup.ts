@@ -1,4 +1,4 @@
-import { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentForkArgv, getAgentFreshSessionArgv, getAgentResumeArgv } from './agent-resume-argv'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
@@ -37,18 +37,34 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  /** First message the resumed session submits, e.g. to carry on a turn its host cut off. Only
+   *  agents whose resume takes a prompt argument (Claude, Codex) send it; others ignore it. */
+  continuePrompt?: string | null
+  /** The host proved the session has no transcript: start it fresh under its id where the agent can. */
+  freshSession?: boolean
 }): AgentStartupPlan | null {
-  const resumeArgv = args.fork
-    ? getAgentForkArgv(args.agent, args.providerSession)
-    : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
+  const freshArgv =
+    args.freshSession && !args.fork
+      ? getAgentFreshSessionArgv(args.agent, args.providerSession)
+      : null
+  const resumeArgv =
+    freshArgv ??
+    (args.fork
+      ? getAgentForkArgv(args.agent, args.providerSession)
+      : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath))
   if (!resumeArgv) {
     return null
   }
   // Codex otherwise asks for its old folder, even if deleted (#17745). Keep before resume so argv removal preserves the folder choice.
-  const argv =
+  const withCwd =
     args.agent === 'codex' && args.resumeInLaunchCwd
       ? [resumeArgv[0], '-c', 'tui.resume_cwd=current', ...resumeArgv.slice(1)]
       : resumeArgv
+  const continuePrompt = args.continuePrompt?.trim()
+  const argv =
+    continuePrompt && !args.fork && !freshArgv && RESUME_PROMPT_AGENTS.has(args.agent)
+      ? [...withCwd, continuePrompt]
+      : withCwd
   const shell = resolveStartupShell(args.platform, args.shell)
   // Why: Codex restores a resumed thread's saved permissions unless the launch passes one, so
   // replaying Orca's launch-time flag would undo a change made inside the session (#10886).
@@ -111,6 +127,12 @@ export function buildAgentResumeStartupPlan(args: {
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
 }
+
+/** Agents whose resume command accepts a positional prompt it submits on start. */
+const RESUME_PROMPT_AGENTS: ReadonlySet<ResumableTuiAgent> = new Set(['claude', 'codex'])
+
+/** What a resumed agent is told when its host went away mid-turn (restart, reboot, crash). */
+export const INTERRUPTED_TURN_CONTINUE_PROMPT = 'continue'
 
 /** WSL panes start at a UNC path while the agent reports its Linux path. */
 function isSameFolder(agentCwd: string, launchCwd: string): boolean {

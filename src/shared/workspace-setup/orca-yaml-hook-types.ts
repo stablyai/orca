@@ -5,7 +5,12 @@ export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 export type OrcaHooks = {
   scripts: {
     setup?: string // Runs after worktree is created
-    archive?: string // Runs before worktree is archived
+    /** Runs before a worktree is removed, and in an Orca Cloud VM before it is archived or deleted. */
+    archive?: string
+    run?: OrcaRunAction[] // Named run actions (dev servers, watchers), started from the Run button
+    runMode?: OrcaRunMode // Default for every action; an action's own runMode wins
+    // true runs the default action once setup succeeds; a string names the action to run.
+    autoRunAfterSetup?: boolean | string
   }
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
   issueCommand?: string // Shared default command for linked GitHub issues
@@ -18,6 +23,30 @@ export type OrcaHooks = {
 export type OrcaWorktreeDefaults = {
   // Share large rebuildable directories such as node_modules across worktrees instead of copying installs.
   sharedDirectories?: string[]
+}
+
+/**
+ * `concurrent`: the action may run in several workspaces at once.
+ * `nonconcurrent`: starting it first stops the same action running in the project's other
+ * workspaces, for projects that share one fixed port, database or container stack.
+ */
+export type OrcaRunMode = 'concurrent' | 'nonconcurrent'
+
+/** Where an action is offered: `local` checkouts, or `remote` hosts (SSH and runtime servers). */
+export type OrcaRunActionHost = 'local' | 'remote'
+
+export type OrcaRunAction = {
+  id: string
+  /** Shown on the Run button; defaults to the id with hyphens shown as spaces. */
+  name: string
+  command: string
+  /** Relative to the workspace root. */
+  cwd?: string
+  env?: Record<string, string>
+  default?: boolean
+  runMode?: OrcaRunMode
+  /** Omitted means every host. */
+  availableIn?: OrcaRunActionHost[]
 }
 
 export type OrcaDefaultTabTemplate = {
@@ -40,10 +69,27 @@ export type OrcaVmRecipe = {
   destroyDisabled?: boolean
   // Per-mode wall-clock limits; orca.yaml accepts one number for every mode or a per-mode map.
   timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
+  /** Built-in providers run in-process; the lifecycle strings are labels, never executed. */
+  provider?: OrcaVmRecipeProviderId
   // Opt-in allowlist of Orca's environment variables the scripts receive (plus a safe base set).
   // Omitted means scripts inherit the full environment.
   passEnv?: string[]
 }
+
+export type OrcaVmRecipeProviderId = 'orca-cloud'
+
+/**
+ * Whether this build and account can use Orca Cloud: `offered` adds its recipe; `needs-sign-in` and
+ * `needs-capability` let the picker show a sign-in or upsell row; `unreachable` means the build ships
+ * it but the account check failed (offline), so Run on keeps it visible and disabled;
+ * `unavailable` hides it entirely.
+ */
+export type OrcaCloudAvailability =
+  | 'offered'
+  | 'needs-sign-in'
+  | 'needs-capability'
+  | 'unreachable'
+  | 'unavailable'
 
 export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
 
@@ -64,6 +110,10 @@ export type RepoHookSettings = {
   scripts: {
     setup: string
     archive: string
+    /** This machine's own run actions (e.g. imported); an id here replaces the orca.yaml one. */
+    run?: OrcaRunAction[]
+    runMode?: OrcaRunMode
+    autoRunAfterSetup?: boolean | string
   }
 }
 
@@ -82,6 +132,7 @@ export type PersistedTrustedOrcaHookRepo = {
   archive?: PersistedTrustedOrcaHookEntry
   issueCommand?: PersistedTrustedOrcaHookEntry
   vmRecipe?: PersistedTrustedOrcaHookEntry
+  run?: PersistedTrustedOrcaHookEntry
 }
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>

@@ -19,6 +19,11 @@ export type EphemeralVmRecipeContext = {
   projectId?: string
   workspaceId?: string
   workspaceName?: string
+  /**
+   * One per user intent (a Create press): sent as the create's Idempotency-Key, so a re-fired start
+   * gets back the sandbox the first one made instead of a second one.
+   */
+  idempotencyKey?: string
   repoPath: string
   repoUrl?: string
   branch?: string

@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
@@ -57,6 +57,23 @@ describe('ephemeral VM runtime store', () => {
     tempDirs.push(userDataPath)
     return userDataPath
   }
+
+  it('keeps a built-in provider across reads while the main file stays rollback-shaped', () => {
+    const userDataPath = makeUserDataPath()
+    const recipe = {
+      id: 'cloud',
+      name: 'Orca Cloud',
+      create: 'orca-cloud create',
+      provider: 'orca-cloud' as const
+    }
+    upsertEphemeralVmRuntime(userDataPath, runtimeRecord({ recipeId: 'cloud', recipe }))
+
+    expect(listEphemeralVmRuntimes(userDataPath)[0]?.recipe?.provider).toBe('orca-cloud')
+    const main = JSON.parse(
+      readFileSync(join(userDataPath, 'orca-ephemeral-vm-runtimes.json'), 'utf8')
+    )
+    expect(main.runtimes[0].recipe.provider).toBeUndefined()
+  })
 
   it('rejects an oversized write without publishing a partial runtime record', () => {
     const userDataPath = makeUserDataPath()

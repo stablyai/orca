@@ -6,13 +6,17 @@ import {
   parseJsonObject,
   parseTomlObject
 } from './setup-script-import-parsers'
+import {
+  conductorLegacyRunScripts,
+  conductorSettingsRunScripts
+} from './setup-script-import-conductor-run'
+import { withUbuntuSetup } from './setup-script-import-conductor-ubuntu'
 
 const CONDUCTOR_SETTINGS_PATH = '.conductor/settings.toml'
 const CONDUCTOR_LOCAL_SETTINGS_PATH = '.conductor/settings.local.toml'
 const CONDUCTOR_LEGACY_CONFIG_PATH = 'conductor.json'
 
-// Run actions and per-workspace env have no Orca setup-script equivalent; list them as skipped.
-const SETTINGS_UNSUPPORTED_SCRIPT_FIELDS = ['run', 'run_mode', 'auto_run_after_setup'] as const
+// Per-workspace env has no orca.yaml equivalent (secrets import reads its names separately).
 const SETTINGS_UNSUPPORTED_ROOT_FIELDS = ['environment_variables', 'file_include_globs'] as const
 
 export async function inspectConductorConfig(
@@ -27,7 +31,10 @@ export async function inspectConductorConfig(
   const candidate =
     settings || localSettings ? buildSettingsTomlCandidate(settings, localSettings) : null
   // Conductor ignores conductor.json once settings.toml exists, so mirror that precedence.
-  return candidate ?? (settings ? null : inspectLegacyConductorJson(readFile))
+  return withUbuntuSetup(
+    candidate ?? (settings ? null : await inspectLegacyConductorJson(readFile)),
+    readFile
+  )
 }
 
 function buildSettingsTomlCandidate(
@@ -49,29 +56,18 @@ function buildSettingsTomlCandidate(
     return null
   }
   const archive = pickScript('archive')
+  const run = conductorSettingsRunScripts(scripts, localScripts)
 
   const files: string[] = []
   if (settings) {
     files.push(CONDUCTOR_SETTINGS_PATH)
   }
-  if (localSettings && (setup.fromLocal || archive.fromLocal || !settings)) {
+  if (localSettings && (setup.fromLocal || archive.fromLocal || run.fromLocal || !settings)) {
     files.push(CONDUCTOR_LOCAL_SETTINGS_PATH)
   }
 
-  const unsupportedFields = new Set<string>()
-  for (const [source, sourceScripts] of [
-    [settings, scripts],
-    [localSettings, localScripts]
-  ] as const) {
-    if (sourceScripts) {
-      for (const field of collectPresentFields(
-        sourceScripts,
-        SETTINGS_UNSUPPORTED_SCRIPT_FIELDS,
-        'scripts.'
-      )) {
-        unsupportedFields.add(field)
-      }
-    }
+  const unsupportedFields = new Set<string>(run.unsupportedFields)
+  for (const source of [settings, localSettings]) {
     if (source) {
       for (const field of collectPresentFields(source, SETTINGS_UNSUPPORTED_ROOT_FIELDS)) {
         unsupportedFields.add(field)
@@ -85,6 +81,7 @@ function buildSettingsTomlCandidate(
     files,
     setup: setup.value,
     archive: archive.value || undefined,
+    ...run.runScripts,
     unsupportedFields: [...unsupportedFields]
   }
 }
@@ -103,8 +100,9 @@ async function inspectLegacyConductorJson(
     return null
   }
 
-  const unsupportedFields = collectPresentFields(config, ['enterpriseDataPrivacy', 'runScriptMode'])
-  for (const field of ['run', 'teardown'] as const) {
+  const runScripts = conductorLegacyRunScripts(config, scripts)
+  const unsupportedFields = collectPresentFields(config, ['enterpriseDataPrivacy'])
+  for (const field of ['teardown'] as const) {
     if (normalizeSetupScriptImportCommand(scripts[field])) {
       unsupportedFields.push(`scripts.${field}`)
     }
@@ -116,6 +114,7 @@ async function inspectLegacyConductorJson(
     files: [CONDUCTOR_LEGACY_CONFIG_PATH],
     setup,
     archive: normalizeSetupScriptImportCommand(scripts.archive) || undefined,
+    ...runScripts,
     unsupportedFields
   }
 }

@@ -28,6 +28,7 @@ import type { RuntimeListingHostScope } from '../../execution-host/runtime-listi
 import type { GitWorktreeInfo, Worktree } from '../types'
 import type { WorkspaceStatusWarning } from '../../workspace/status/workspace-status-warning'
 import type { WorktreeStatus } from '../row-display/worktree-status-rollup'
+import type { EphemeralVmRuntimeStatus } from '../../remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord
@@ -144,6 +145,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** An Orca Cloud workspace, with the VM state this desktop last recorded. Old hosts omit it. */
+  orcaCloud?: { status: EphemeralVmRuntimeStatus }
   /** The owning host committed removal intent before publishing this row. */
   removalRecorded?: true
   /** See `GitWorktreeInfo.removalError`. */

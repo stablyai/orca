@@ -14,6 +14,11 @@ import type { WorkspaceMetadataSet } from '../../worktree/metadata/workspace-met
 import type { SidebarInputsChangedEvent } from '../../sidebar-list/feed/sidebar-inputs-feed-contract'
 import type { BrowserClientHostRequestEvent } from '../../browser/client-hosting/browser-client-host-request-protocol'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../workspace-cleanup/workspace-cleanup-run'
+import type {
+  SecretRequestedEvent,
+  SecretRequestSettledEvent,
+  SecretRequestUpdatedEvent
+} from '../../secret-request-contract'
 
 export type RuntimeClientEvent =
   | {
@@ -100,6 +105,10 @@ export type RuntimeClientEventStreamMessage =
   | RuntimeClientEvent
   // Addressed to this subscriber only, never broadcast.
   | BrowserClientHostRequestEvent
+  // Agent secret requests; replayed on attach while pending. Phones get no reason text.
+  | SecretRequestedEvent
+  | SecretRequestUpdatedEvent
+  | SecretRequestSettledEvent
   | { type: 'end' }
 
 export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>

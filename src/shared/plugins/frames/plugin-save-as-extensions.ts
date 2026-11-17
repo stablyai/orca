@@ -124,6 +124,7 @@ export function blockedPluginSaveAsExtension(name: string): string | null {
       .split(/[\\/]/)
       .at(-1) ?? ''
   const dot = base.lastIndexOf('.')
-  const extension = dot > 0 ? base.slice(dot + 1).toLowerCase() : ''
+  // `>= 0`: Windows treats a bare `.hta` or `.bat` as that type and runs it.
+  const extension = dot !== -1 ? base.slice(dot + 1).toLowerCase() : ''
   return PLUGIN_SAVE_AS_BLOCKED_EXTENSIONS.has(extension) ? extension : null
 }

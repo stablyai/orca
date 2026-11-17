@@ -215,8 +215,10 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const naturalWorktrees = orderedGroups.flatMap(([, group]) => group.items)
   const render = (collapsedGroups: Set<string>): Row[] => {
     const result: Row[] = []
-    if (groupBy !== 'repo') {
-      for (const creation of pendingCreations) {
+    // By project, a create sits atop its own project; one with no project here yet (a GitHub-only
+    // Orca Cloud create) sits atop the list, as in every other grouping.
+    for (const creation of pendingCreations) {
+      if (groupBy !== 'repo' || !repoMap.has(creation.repoId)) {
         result.push(buildPendingCreationRow(creation, repoMap))
       }
     }

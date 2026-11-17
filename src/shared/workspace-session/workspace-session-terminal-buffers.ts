@@ -2,7 +2,7 @@ import type { Repo } from '../repository/repo-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../workspace/identity/floating-workspace-id'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
 import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
 import { parseExecutionHostId } from '../execution-host/execution-host'
 import { ownRetainedString } from '../text/own-retained-string'
@@ -49,11 +49,11 @@ export function shouldPreserveTerminalScrollbackBuffers(
 }
 
 export function capTerminalScrollbackSessionBuffer(buffer: string): string {
-  if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
+  if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT)) {
     return buffer
   }
   return ownRetainedString(
-    clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+    clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT).text
   )
 }
 

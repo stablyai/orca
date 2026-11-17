@@ -1,0 +1,68 @@
+// Wire contract for the control plane's GitHub routes used by cloud-start onboarding
+// (cloud/apps/sandbox-control/src/github-repo-access.ts). The Worker's tests parse with these.
+import { z } from 'zod'
+
+/**
+ * GET /v1/github/repo-access?repo=: can Orca Cloud clone this repository for the account?
+ * `requested`: an owner of the org on GitHub has been asked to approve the App.
+ */
+export const HostedGithubRepoAccessResponseSchema = z.object({
+  access: z.enum(['public', 'granted', 'missing', 'requested']),
+  owner: z.string(),
+  repo: z.string().url(),
+  installUrl: z.string().url().optional(),
+  // Present only while the App isn't installed for the owner ('missing', or 'public' with no
+  // installation). true: the caller can install it on the owner (their own account, or org admin);
+  // false: another user's account, or a non-admin org member; null: unknown (no connected GitHub
+  // user, membership unreadable, or GitHub didn't answer).
+  canInstall: z.boolean().nullable().optional(),
+  // Can a workspace on this repository push? `ok`: granted. `not_installed`: the
+  // App isn't on the owner. `repo_not_selected`: it is, without this repository (configureUrl is
+  // the installation's settings page). `not_connected`: the App reaches the repository through an
+  // installation this Orca account isn't bound to. Absent from an older control plane.
+  push: z.enum(['ok', 'not_installed', 'repo_not_selected', 'not_connected']).optional(),
+  configureUrl: z.string().url().optional()
+})
+export type HostedGithubRepoAccessResponse = z.infer<typeof HostedGithubRepoAccessResponseSchema>
+
+/** GET /v1/github/repositories[?cursor=]: repositories the account's GitHub installations reach. */
+export const HostedGithubRepositoriesResponseSchema = z.object({
+  repositories: z.array(
+    z.object({
+      id: z.number().int(),
+      fullName: z.string(),
+      url: z.string().url(),
+      owner: z.string(),
+      private: z.boolean(),
+      defaultBranch: z.string().nullable(),
+      pushedAt: z.string().nullable(),
+      installationId: z.number().int()
+    })
+  ),
+  nextCursor: z.string().nullable()
+})
+export type HostedGithubRepositoriesResponse = z.infer<
+  typeof HostedGithubRepositoriesResponseSchema
+>
+
+/**
+ * GET/DELETE /v1/github/user: whether the person (not the account) connected their own GitHub,
+ * so cloud commits and pushes carry their name instead of Orca Cloud's.
+ */
+export const HostedGithubUserResponseSchema = z.union([
+  z.object({
+    connected: z.literal(true),
+    login: z.string().min(1),
+    githubUserId: z.number().int(),
+    // The connection exists but GitHub no longer honours it (expired, or refused): reconnect. Older control
+    // planes omit it.
+    reconnect: z.literal(true).optional().catch(undefined)
+  }),
+  z.object({ connected: z.literal(false) })
+])
+export type HostedGithubUser = z.infer<typeof HostedGithubUserResponseSchema>
+
+/** POST /v1/github/user/connect: the GitHub OAuth page that binds the person's GitHub identity. */
+export const HostedGithubUserConnectResponseSchema = z.object({
+  authorizeUrl: z.string().url()
+})

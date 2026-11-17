@@ -25,6 +25,8 @@ type WorkspacePortBase = {
   pid?: number
   processName?: string
   protocol: 'http' | 'https' | 'unknown'
+  /** The host's own service (the server process, or a binary under ORCA_HOST_MANAGED_LISTENER_PATHS), not a user's. */
+  hostManaged?: true
 }
 
 export type WorkspacePort =

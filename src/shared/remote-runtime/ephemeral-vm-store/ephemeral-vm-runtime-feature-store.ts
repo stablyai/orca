@@ -22,7 +22,9 @@ const EphemeralVmRuntimeFeatureEntrySchema = z
     recipeId: z.string().min(1),
     createdAt: z.number().finite(),
     recipeCheckoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
-    resultCheckoutMode: z.literal('provisioned-root').optional()
+    resultCheckoutMode: z.literal('provisioned-root').optional(),
+    // Built-in provider (Orca Cloud); rollback builds never see it, so they never run its labels.
+    recipeProvider: z.literal('orca-cloud').optional()
   })
   .strict()
 
@@ -152,7 +154,8 @@ export function featureEntryFromRuntime(
   const recipeCheckoutMode = runtime.recipe?.checkoutMode
   const resultCheckoutMode =
     runtime.recipeResult?.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
-  if (!recipeCheckoutMode && !resultCheckoutMode) {
+  const recipeProvider = runtime.recipe?.provider
+  if (!recipeCheckoutMode && !resultCheckoutMode && !recipeProvider) {
     return null
   }
   return {
@@ -160,7 +163,8 @@ export function featureEntryFromRuntime(
     recipeId: runtime.recipeId,
     createdAt: runtime.createdAt,
     ...(recipeCheckoutMode ? { recipeCheckoutMode } : {}),
-    ...(resultCheckoutMode ? { resultCheckoutMode } : {})
+    ...(resultCheckoutMode ? { resultCheckoutMode } : {}),
+    ...(recipeProvider ? { recipeProvider } : {})
   }
 }
 
@@ -189,8 +193,14 @@ function restoreRuntimeFeatures(
   }
   return EphemeralVmRuntimeRecordSchema.parse({
     ...runtime,
-    ...(runtime.recipe && feature.recipeCheckoutMode
-      ? { recipe: { ...runtime.recipe, checkoutMode: feature.recipeCheckoutMode } }
+    ...(runtime.recipe && (feature.recipeCheckoutMode || feature.recipeProvider)
+      ? {
+          recipe: {
+            ...runtime.recipe,
+            ...(feature.recipeCheckoutMode ? { checkoutMode: feature.recipeCheckoutMode } : {}),
+            ...(feature.recipeProvider ? { provider: feature.recipeProvider } : {})
+          }
+        }
       : {}),
     ...(feature.resultCheckoutMode && runtime.recipeResult
       ? {
