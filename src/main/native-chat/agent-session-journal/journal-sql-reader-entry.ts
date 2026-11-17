@@ -120,8 +120,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       }
       case 'legacy-compare': {
-        const source = openOriginal()
-        const result = source ? compareJournalLegacyChat(source, db, operation.sessionId) : null
+        const result = compareJournalLegacyChat(openOriginal, db, operation.sessionId)
         reply({ type: 'legacy-compare', id, result })
         break
       }

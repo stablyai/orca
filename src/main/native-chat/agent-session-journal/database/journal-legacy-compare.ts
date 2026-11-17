@@ -36,12 +36,16 @@ export function pendingJournalLegacyCompares(
  * original's failures are the chat's answer; this file's own failures throw and stay pending.
  */
 export function compareJournalLegacyChat(
-  source: Database.Database,
+  openSource: () => Database.Database | undefined,
   db: Database.Database,
   sessionId: string
-): { revision: string; held: boolean } | { error: string } {
+): { revision: string; held: boolean } | { error: string } | null {
   const held = heldItems(db, sessionId)
   try {
+    const source = openSource()
+    if (!source) {
+      return null
+    }
     const imported = prepareJournalDomainImport(source, sessionId)
     if (!imported) {
       return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: true }
