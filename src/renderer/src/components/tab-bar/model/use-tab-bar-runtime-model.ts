@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { buildStatusMap } from '../../../lib/source-control/paths/git-path-decoration'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -25,7 +25,7 @@ import type { GitFileStatus } from '../../../../../shared/git/status/git-status-
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')

@@ -6,12 +6,12 @@ import { PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY } from '../../../..
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '@/store/types'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import {
   getAgentDetectionTargetKeyForWorktree,
   parseAgentDetectionTargetKey,
   type AgentDetectionOwnerState
-} from '@/hooks/useAgentDetectionTarget'
+} from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import {
   getRepoExecutionHostId,

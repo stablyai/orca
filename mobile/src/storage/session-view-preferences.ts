@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
+import type { AgentLaunchSurface } from '../../../src/shared/agent-launch/contracts/agent-launch-surface'
 
 export type MobileSessionView = 'terminal' | 'chat'
 
@@ -55,6 +56,22 @@ export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
   defaultViewWriteBarrier = barrier
   void barrier.then(() => clearDefaultViewWriteBarrier(barrier))
   return write
+}
+
+const NEW_AGENT_SURFACE_KEY = 'orca:newAgentSurface'
+
+/** The Chat or CLI pick from the New Tab sheet; null until this device has made one. */
+export async function loadNewAgentSurface(): Promise<AgentLaunchSurface | null> {
+  try {
+    const raw = await AsyncStorage.getItem(NEW_AGENT_SURFACE_KEY)
+    return raw === 'chat' || raw === 'terminal' ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function saveNewAgentSurface(surface: AgentLaunchSurface | null): Promise<void> {
+  return persistMirrored(NEW_AGENT_SURFACE_KEY, surface)
 }
 
 export type SessionViewOverridesPreference = {

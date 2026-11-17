@@ -287,7 +287,8 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -1966,7 +1967,7 @@
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",
-      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
@@ -2212,7 +2213,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "textSize": "Text size"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -2227,7 +2229,7 @@
       "newTab": "New Tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "markdownNote": "Markdown Note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
@@ -2238,6 +2240,8 @@
       "copyPath": "Copy Path",
       "file": "File",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI only",
       "unsavedMarkdown": "Unsaved markdown changes",
       "draftsHint": "Copy or discard phone drafts before leaving.",
       "copyAllAndLeave": "Copy All & Leave",
@@ -2620,7 +2624,7 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "invalidUrl": "Enter a valid URL",
       "browserCreateFailed": "Failed to create browser",
       "browserUnavailable": "Browser page is not available yet.",
@@ -2839,6 +2843,7 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
       "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -3021,6 +3026,14 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Chat text",
+      "size": "Size",
+      "moreChat": "More text settings",
+      "terminalTitle": "Terminal text",
+      "pointsAndColumns": "{{points}} · {{count}} columns",
+      "moreTerminal": "More terminal settings"
     }
   },
   "chat": {
@@ -3612,6 +3625,10 @@
       "stateFailed": "failed",
       "stateOffByOrganization": "off by your organization",
       "label": "Remote Control"
+    },
+    "selectionQuote": {
+      "action": "Quote",
+      "hint": "Adds the selected text to your message as a quote"
     }
   },
   "sourceControl": {

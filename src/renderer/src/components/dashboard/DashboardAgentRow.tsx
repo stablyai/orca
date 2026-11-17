@@ -10,7 +10,7 @@ import {
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
+} from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -44,7 +44,7 @@ import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import type { CalmStatusView } from '@/hooks/use-calm-status-reveal'
+import type { CalmStatusView } from '@/runtime/hosts/connections/use-calm-status-reveal'
 import { RemoteRuntimeRecoveryCard } from '../../remote-runtime/recovery/RemoteRuntimeRecoveryCard'
 import { remoteRuntimeRecoveryCopy } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
 import {

@@ -1,7 +1,7 @@
 import { ArrowUpRight, ChevronDown, Cloud, Link2, Plus, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../LoadingSpinner'
+import { LoadingSpinner } from '../../ui/LoadingSpinner'
 import { Button } from '../../ui/button'
 import { ButtonGroup } from '../../ui/button-group'
 import {

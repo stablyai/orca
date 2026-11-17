@@ -1,4 +1,4 @@
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../../terminal-state'
 

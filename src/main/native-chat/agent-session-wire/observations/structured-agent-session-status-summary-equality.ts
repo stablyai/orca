@@ -32,6 +32,7 @@ export function structuredStatusSummariesEqual(
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
     a.launchPermissionMode === b.launchPermissionMode &&
+    a.runningPermissionMode === b.runningPermissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&

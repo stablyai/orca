@@ -10,7 +10,7 @@ import {
 import {
   createHostTerminalRuntimeStub,
   type HostTerminalRuntimeStub
-} from './cross-version-wire/host-terminal-runtime-stub'
+} from './cross-version-wire/terminal-streams/host-terminal-runtime-stub'
 
 export const MODEL_TERMINAL_HANDLE = 'terminal-1'
 

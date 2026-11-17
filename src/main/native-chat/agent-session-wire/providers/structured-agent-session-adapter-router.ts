@@ -57,6 +57,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
+
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
     Promise.resolve(true)

@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { formatShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { formatShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TabStripScrollIndicator } from '../strip/TabStripScrollIndicator'
@@ -65,6 +65,7 @@ export function TabBarCreateRowIcons({
                   type="button"
                   tabIndex={-1}
                   aria-label={item.label}
+                  data-create-row-item={item.id}
                   className={cn(
                     'flex h-7 w-9 shrink-0 items-center justify-center rounded-[7px] text-muted-foreground outline-hidden',
                     highlighted && CREATE_ROW_HIGHLIGHT_CLASS
