@@ -28,13 +28,7 @@ import {
 
 // Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
 
-type AiVaultRefreshArgs = {
-  force?: boolean
-  background?: boolean
-  reuseLoadedDepth?: boolean
-  /** A queued foreground refresh whose list is already on screen: report refreshing, skip the spinner. */
-  listShown?: boolean
-}
+type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
 
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
@@ -111,6 +105,10 @@ export function useAiVaultSessionRefresh(
   )
   const refresh = useCallback(
     async (args: AiVaultRefreshArgs = {}): Promise<void> => {
+      // Why: set at the request, not the launch, so a request queued behind another refresh counts while it waits.
+      if (args.background !== true) {
+        setRefreshing(true)
+      }
       const observation = associationsRef.current
       const associationRevision = observation.getSnapshot()
       const associationCurrent = () =>
@@ -185,11 +183,8 @@ export function useAiVaultSessionRefresh(
         claimAiVaultForcedRescan(true)
       }
       // Background cache hits must not flash a loading spinner on every refocus.
-      if (args.background !== true) {
-        setRefreshing(true)
-        if (!cachedResult && args.listShown !== true) {
-          setLoading(true)
-        }
+      if (args.background !== true && !cachedResult) {
+        setLoading(true)
       }
       setTerminalScopeKey(null)
       const requestCurrent = () =>
@@ -234,18 +229,18 @@ export function useAiVaultSessionRefresh(
         refreshInFlightRef.current = false
         if (mountedRef.current && refreshIdRef.current === refreshId) {
           setLoading(false)
-          setRefreshing(false)
+          // A queued foreground request is still outstanding until its own refresh settles.
+          setRefreshing(pendingRefreshRef.current && pendingForegroundRef.current)
         }
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
           const force = pendingForceRef.current
-          // Spinner-free if every queued caller was background or already showing a list; foreground if any caller was.
-          const silent = pendingBackgroundRef.current
-          const foreground = pendingForegroundRef.current
+          // The queued refresh is background-only if every queued caller was.
+          const background = pendingBackgroundRef.current
           pendingForceRef.current = false
           pendingBackgroundRef.current = true
           pendingForegroundRef.current = false
-          void refresh({ force, background: !foreground, listShown: foreground && silent })
+          void refresh({ force, background })
         }
       }
       // Read changing scope through refs; recursion requires a stable refresh identity.
