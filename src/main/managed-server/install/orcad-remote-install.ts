@@ -17,6 +17,9 @@ import type { OrcadHostTransport } from './orcad-host-transport'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock, type InstallLockWait } from './remote-install-lock'
+import { installLockFenceStatement } from './remote-install-lock-holder-commands'
+import { startInstallLockHolder, type InstallLockHolder } from './remote-install-lock-holder'
+import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/remote-runtime/relay/relay-install-lock-name'
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
 import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../activation/orcad-held-fence-tokens'
 import { exitedOwnLockProof } from '../activation/orcad-exited-own-lock'
@@ -93,6 +96,7 @@ export async function installOrcadBundle(
     // SSH keeps its bounded wait: a slow live upload elsewhere never refreshes the lock's age.
     ...(options.localWslHost
       ? {
+          probeExitedHolder: true,
           waitThroughStaleTakeover: true,
           onWait: (wait: InstallLockWait) => {
             waited = true
@@ -106,57 +110,91 @@ export async function installOrcadBundle(
   }
 
   let preserveInstallLock = false
+  let holder: InstallLockHolder | null = null
+  let conn: OrcadHostTransport = options.conn
+  let signal = options.signal
   try {
+    const held = await holdInstallLock(options, remoteDir, owner)
+    if (held) {
+      ;({ holder, conn, signal } = held)
+    }
     // A sibling may have completed deployment while this client waited for the lock.
     if (
-      await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
-        signal: options.signal
+      await isRemoteInstallComplete(conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
+        signal
       })
     ) {
       return 'reused'
     }
-    await uploadRemoteInstallDirectory(
-      options.conn,
-      options.localOrcadDir,
-      remoteDir,
-      options.host,
-      {
-        signal: options.signal
-      }
-    )
+    await uploadRemoteInstallDirectory(conn, options.localOrcadDir, remoteDir, options.host, {
+      signal
+    })
     if (options.host.os !== 'win32') {
       await execCommand(
-        options.conn,
+        conn,
         executablePermissionsCommand(options.host, remoteDir, options.target),
         {
           wrapCommand: options.host.commandDialect !== 'powershell',
-          signal: options.signal
+          signal
         }
       )
     }
     await writeRemoteInstallFile(
-      options.conn,
+      conn,
       options.host,
       joinRemotePath(options.host, remoteDir, ORCAD_INSTALL_MODEL.versionFilename),
       fullVersion,
-      { signal: options.signal }
+      { signal }
     )
-    await finalizeInstall(options.conn, remoteDir, options.host, {
-      signal: options.signal,
-      releaseLock: false
-    })
+    await finalizeInstall(conn, remoteDir, options.host, { signal, releaseLock: false })
     return 'uploaded'
   } catch (error) {
     preserveInstallLock = isUnconfirmedSshCommandTermination(error)
     throw error
   } finally {
-    if (!preserveInstallLock) {
-      // Retain ownership proof if interrupted cleanup cannot confirm lock removal.
-      // Token-checked: a cleanup that runs after a takeover leaves the successor's lock alone.
-      if (await abandonInstall(options.conn, remoteDir, options.host, owner)) {
-        forgetHeldOrcadFence(token)
+    try {
+      if (!preserveInstallLock) {
+        // Retain ownership proof if interrupted cleanup cannot confirm lock removal.
+        // Token-checked: a cleanup that runs after a takeover leaves the successor's lock alone.
+        if (await abandonInstall(conn, remoteDir, options.host, owner)) {
+          forgetHeldOrcadFence(token)
+        }
       }
+    } finally {
+      // After cleanup: a lock left behind is then reclaimable once its last fenced command ends.
+      holder?.release()
     }
+  }
+}
+
+/** WSL: back the lock with a guest kernel lock so a contender can prove this install gone, and
+ * fence every install command on it. Null keeps today's unbacked lock. */
+async function holdInstallLock(
+  options: {
+    conn: OrcadHostTransport
+    host: RemoteHostPlatform
+    localWslHost?: boolean
+    signal?: AbortSignal
+  },
+  remoteDir: string,
+  owner: { fileName: string; token: string }
+): Promise<{ holder: InstallLockHolder; conn: OrcadHostTransport; signal: AbortSignal } | null> {
+  const withFence = options.conn.withCommandFence
+  if (!options.localWslHost || !withFence || options.host.os === 'win32') {
+    return null
+  }
+  const lockDir = joinRemotePath(options.host, remoteDir, RELAY_INSTALL_LOCK_NAME)
+  const holder = await startInstallLockHolder(options.conn, lockDir, owner, options.signal)
+  if (!holder) {
+    return null
+  }
+  // A holder lost mid-install ends this install: its lock is now reclaimable.
+  const lost = new AbortController()
+  void holder.lost.then(() => lost.abort(new Error('The install lock holder exited.')))
+  return {
+    holder,
+    conn: withFence.call(options.conn, installLockFenceStatement(lockDir, owner)),
+    signal: options.signal ? AbortSignal.any([options.signal, lost.signal]) : lost.signal
   }
 }
 

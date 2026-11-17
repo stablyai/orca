@@ -12,7 +12,12 @@ import {
 } from './remote-install-lock-commands'
 import type { InstallLockExitedOwner } from './remote-install-lock-exited-owner'
 import {
+  tryTakeOverExitedHolder,
+  type HolderTakeoverState
+} from './remote-install-lock-holder-takeover'
+import {
   getRemoteHostPlatform,
+  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
 } from '../../ssh/remote-host/ssh-remote-platform'
@@ -24,6 +29,8 @@ const INSTALL_LOCK_POLL_MS = 1_000
 const INSTALL_LOCK_STALE_RECHECK_MS = 60_000
 // Give holders at least one full install step before the waiter gives up.
 const INSTALL_LOCK_TIMEOUT_MS = REMOTE_INSTALL_TIMEOUT_MS
+// A gone holder must read gone twice this far apart before takeover.
+const INSTALL_LOCK_HOLDER_PROBE_MS = 5_000
 // A holder's step may outlive its timeout; leave room before takeover.
 export const INSTALL_LOCK_STALE_MS = 20 * 60_000
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
@@ -99,6 +106,8 @@ export async function acquireInstallLock(
     waitThroughStaleTakeover?: boolean
     /** Reported at each stale recheck while another holder keeps the lock. */
     onWait?: (wait: InstallLockWait) => void
+    /** POSIX: take over a flock-backed lock whose holder and fenced commands are all gone. */
+    probeExitedHolder?: boolean
   }
 ): Promise<void> {
   const lockDir = joinRemotePath(host, remoteRelayDir, options?.lockName ?? RELAY_INSTALL_LOCK_NAME)
@@ -128,6 +137,9 @@ export async function acquireInstallLock(
   let lastCommandError: unknown
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   let lastWaitLogAt = Number.NEGATIVE_INFINITY
+  let lastHolderProbeAt = Number.NEGATIVE_INFINITY
+  const holderTakeover: HolderTakeoverState = { gone: null }
+  const probedOwner = options?.probeExitedHolder ? options.owner : undefined
   while (true) {
     // Recover crashed GC claims rather than polling them forever.
     if (relayGcClaim) {
@@ -155,6 +167,28 @@ export async function acquireInstallLock(
       lastCommandError = err
     }
     if (
+      probedOwner &&
+      !isWindowsRemoteHost(host) &&
+      Date.now() - lastHolderProbeAt >= INSTALL_LOCK_HOLDER_PROBE_MS
+    ) {
+      lastHolderProbeAt = Date.now()
+      const steal = await tryTakeOverExitedHolder(
+        conn,
+        host,
+        lockDir,
+        probedOwner,
+        holderTakeover,
+        INSTALL_LOCK_STALE_SECONDS,
+        options?.signal
+      )
+      if (steal) {
+        console.warn(`[ssh] Stealing ${stealReason(steal)} install lock at ${lockDir}`)
+        if (await keptAfterGcRecheck()) {
+          return
+        }
+      }
+    }
+    if (
       options?.allowStaleTakeover !== false &&
       Date.now() - lastStaleCheckAt >= INSTALL_LOCK_STALE_RECHECK_MS
     ) {
@@ -178,11 +212,7 @@ export async function acquireInstallLock(
       )
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
-        const reason = steal.trim().endsWith('REBOOT_OK')
-          ? 'previous-boot'
-          : steal.trim().endsWith('EXITED_OWNER_OK')
-            ? 'exited-owner'
-            : 'stale'
+        const reason = stealReason(steal)
         if (exitedOwner && reason === 'exited-owner') {
           options?.exitedOwner?.reclaimed(exitedOwner.token)
         }
@@ -225,6 +255,17 @@ export async function acquireInstallLock(
     }
     await waitForInstallLockPoll(options?.signal)
   }
+}
+
+function stealReason(steal: string): string {
+  const result = steal.trim()
+  if (result.endsWith('REBOOT_OK')) {
+    return 'previous-boot'
+  }
+  if (result.endsWith('EXITED_OWNER_OK')) {
+    return 'exited-owner'
+  }
+  return result.endsWith('HOLDER_EXITED_OK') ? 'exited-holder' : 'stale'
 }
 
 export type InstallLockExitedOwnerProof = {
