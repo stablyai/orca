@@ -71,6 +71,18 @@ describe('Store', () => {
     ])
   })
 
+  it('reports the sibling a durable update derives, so the settings file gets it too', async () => {
+    const store = await createStore()
+    const persisted: Record<string, unknown>[] = []
+    store.onSettingsPersisted((changed) => persisted.push(changed))
+
+    await store.updateSettingsAndFlush({ terminalLinkClickBehavior: 'open' })
+
+    expect(persisted).toEqual([
+      { terminalLinkClickBehavior: 'open', terminalLinkActionPopoverEnabled: false }
+    ])
+  })
+
   it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
     const store = await createStore()
     store.updateSettings({ workspaceDir: '/Users/me/dev' })

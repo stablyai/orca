@@ -28,15 +28,23 @@ export function registerSettingsFileHandlers(
   ipcMain.handle('settings-file:get-status', () => sync?.getStatus() ?? disabledStatus())
 
   ipcMain.handle('settings-file:create', async () => {
-    return sync ? await sync.createFromCurrentSettings() : disabledStatus()
+    if (!sync) {
+      throw new Error('Settings file sync is unavailable.')
+    }
+    return await sync.createFromCurrentSettings()
   })
 
   ipcMain.handle('settings-file:open', async () => {
     const { path } = sync?.getStatus() ?? disabledStatus()
-    const exists = await access(path).then(
-      () => true,
-      () => false
-    )
-    return exists ? await shell.openPath(path) : ''
+    try {
+      await access(path)
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      if (code === 'ENOENT') {
+        return ''
+      }
+      return error instanceof Error ? error.message : String(error)
+    }
+    return await shell.openPath(path)
   })
 }

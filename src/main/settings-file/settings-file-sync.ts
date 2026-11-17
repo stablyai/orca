@@ -11,6 +11,7 @@ import {
 import { collectNonDefaultPortableSettings } from './settings-file-reconcile'
 import { createStoreReconciler } from './settings-file-store-reconciler'
 import { startRefreshSweep, type RefreshSweep } from './settings-file-refresh-sweep'
+import { createSettingsFileTaskQueue } from './settings-file-task-queue'
 import { createSettingsFileStatusTracker } from './settings-file-status'
 import type {
   SettingsFileStatus,
@@ -23,6 +24,7 @@ const DEFAULT_DEBOUNCE_MS = 400
 const BUSY_RETRY_BASE_MS = 500
 const BUSY_RETRY_MAX_MS = 8_000
 const BUSY_MAX_RETRIES = 5
+const CHANGED_MAX_RETRIES = 3
 
 function hashText(text: string): string {
   return createHash('sha256').update(text).digest('hex')
@@ -43,18 +45,8 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
   let watching: SettingsFileWatching | null = null
   let closing = false
   let disposed = false
-  let queue: Promise<void> = Promise.resolve()
-
   // Applies and flushes must not interleave, or a flush could write over values an apply is mid-way through.
-  const enqueue = (task: () => Promise<void>): Promise<void> => {
-    const run = queue.then(task).catch((error) => {
-      log.warn(
-        `settings file task failed: ${error instanceof Error ? error.message : String(error)}`
-      )
-    })
-    queue = run
-    return run
-  }
+  const enqueue = createSettingsFileTaskQueue(log)
 
   const readFileOrFail = async (): Promise<SettingsFileRead | null> => {
     try {
@@ -110,7 +102,7 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
     flushTimer.unref?.()
   }
 
-  async function flushDirty(): Promise<void> {
+  async function flushDirty(changedRetries = 0): Promise<void> {
     if (disposed || dirty.size === 0) {
       return
     }
@@ -150,7 +142,17 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
       return
     }
     if (text !== read.text) {
-      const result = await writeSettingsFile(filePath, text)
+      const result = await writeSettingsFile(filePath, text, read.text)
+      if (result.kind === 'changed') {
+        // Edited externally mid-write: re-read, merge that edit, and patch the dirty keys again.
+        if (changedRetries < CHANGED_MAX_RETRIES) {
+          return flushDirty(changedRetries + 1)
+        }
+        if (!closing) {
+          scheduleFlush()
+        }
+        return
+      }
       if (result.kind === 'missing') {
         lastHandledTextHash = null
         busyRetries = 0
@@ -273,11 +275,12 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
 
   return {
     start: async () => {
+      // Subscribe first so UI changes made while the first read is slow are kept and written back.
+      unsubscribe = store.onSettingsPersisted(onSettingsPersisted)
       await enqueue(applyFile)
       if (closing) {
         return
       }
-      unsubscribe = store.onSettingsPersisted(onSettingsPersisted)
       const created = createSettingsFileWatching({
         filePath,
         watchFile: deps.watchFile,

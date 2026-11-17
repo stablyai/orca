@@ -21,6 +21,9 @@ export function createSettingsFileWatching(args: {
   const linkWatch = watchFile(args.filePath, args.onChange, args.onError)
   let targetPath: string | null = null
   let targetWatch: RebindingFileWatch | null = null
+  let closed = false
+  // Rebinds run one at a time so overlapping calls cannot each open a watch and leak one.
+  let rebinding: Promise<void> = Promise.resolve()
 
   const closeTarget = async (): Promise<void> => {
     const current = targetWatch
@@ -29,28 +32,36 @@ export function createSettingsFileWatching(args: {
     await current?.close()
   }
 
+  const rebindOnce = async (): Promise<void> => {
+    let nextTarget: string | null = null
+    try {
+      // The link's own watch already covers a regular file.
+      if ((await lstat(args.filePath)).isSymbolicLink()) {
+        nextTarget = await realpath(args.filePath)
+      }
+    } catch {
+      nextTarget = null
+    }
+    if (closed || nextTarget === targetPath) {
+      return
+    }
+    await closeTarget()
+    if (nextTarget !== null && !closed) {
+      targetPath = nextTarget
+      targetWatch = watchFile(nextTarget, args.onChange, args.onError)
+    }
+  }
+
   return {
-    rebindTarget: async () => {
-      let nextTarget: string | null = null
-      try {
-        // The link's own watch already covers a regular file.
-        if ((await lstat(args.filePath)).isSymbolicLink()) {
-          nextTarget = await realpath(args.filePath)
-        }
-      } catch {
-        nextTarget = null
-      }
-      if (nextTarget === targetPath) {
-        return
-      }
-      await closeTarget()
-      if (nextTarget !== null) {
-        targetPath = nextTarget
-        targetWatch = watchFile(nextTarget, args.onChange, args.onError)
-      }
+    rebindTarget: () => {
+      const run = rebinding.then(rebindOnce)
+      rebinding = run.catch(() => {})
+      return run
     },
     refreshLink: () => linkWatch.refresh(),
     close: async () => {
+      closed = true
+      await rebinding
       await closeTarget()
       await linkWatch.close()
     }

@@ -44,8 +44,9 @@ export function publishSettingsUpdate(
   if (Object.keys(changedUpdates).length === 0) {
     return
   }
+  // Persisted listeners are isolated from each other, so they run before ones that may throw.
+  operations.notifySettingsPersisted(changedUpdates, options.origin)
   if (options.notifyListeners === true) {
     operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
   }
-  operations.notifySettingsPersisted(changedUpdates, options.origin)
 }
