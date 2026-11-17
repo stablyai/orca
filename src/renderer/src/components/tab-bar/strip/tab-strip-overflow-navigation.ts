@@ -25,6 +25,7 @@ import {
 } from './tab-strip-slot-geometry'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
+import { revealFirstUnmountedTabStripSlot } from './tab-strip-window'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -183,10 +184,11 @@ export function useTabStripOverflowNavigation({
       }
       const knownIds = new Set([...readTabStripSlotIds(el)].filter((id) => !deferred.has(id)))
       const offscreenOpened = findOffscreenOpenedTabStripSlot(el, knownIds)
-      if (!offscreenOpened) {
+      if (offscreenOpened) {
+        revealTabStripSlot(el, offscreenOpened)
+      } else if (!revealFirstUnmountedTabStripSlot(el, slotIdsRef.current, deferred)) {
         return
       }
-      revealTabStripSlot(el, offscreenOpened)
       stickToEndRef.current = isTabStripScrolledToEnd(el)
       updateTabStripOverflowState()
       recordScrollAnchor()
@@ -251,6 +253,9 @@ export function useTabStripOverflowNavigation({
           const offscreenOpened = findOffscreenOpenedTabStripSlot(strip, prev.tabIds)
           if (offscreenOpened) {
             revealTabStripSlot(strip, offscreenOpened)
+          } else {
+            const opened = [...tabIds].filter((id) => !prev.tabIds.has(id))
+            revealFirstUnmountedTabStripSlot(strip, slotIdsRef.current, opened)
           }
         }
         stickToEndRef.current = isTabStripScrolledToEnd(strip)

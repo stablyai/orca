@@ -24,4 +24,14 @@ describe('tab strip window', () => {
       { kind: 'tabs', start: 999, end: 1000 }
     ])
   })
+
+  it('clamps a range left over from before tabs closed', () => {
+    expect(buildTabStripSegments(119, { start: 96, end: 120 }, [])).toEqual([
+      { kind: 'gap', start: 0, end: 96 },
+      { kind: 'tabs', start: 96, end: 119 }
+    ])
+    expect(buildTabStripSegments(1, { start: 4992, end: 5024 }, [0])).toEqual([
+      { kind: 'tabs', start: 0, end: 1 }
+    ])
+  })
 })

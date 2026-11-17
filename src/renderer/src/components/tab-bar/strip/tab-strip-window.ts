@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
+import { findTabStripSlot } from './tab-strip-slot-geometry'
 
 /** Overflowing tabs sit at their 144px minimum (tab-width-rules.ts), so unmounted runs need no measuring. */
 export const TAB_STRIP_WINDOW_SLOT_PX = 144
@@ -35,10 +36,12 @@ export function buildTabStripSegments(
   range: TabStripRange | null,
   keptIndices: readonly number[]
 ): TabStripSegment[] {
-  if (range === null) {
+  // Why clamp: the range follows scroll in a layout effect, so the render that closes tabs still holds the old one.
+  if (range === null || count < TAB_STRIP_WINDOW_MIN_TABS) {
     return count > 0 ? [{ kind: 'tabs', start: 0, end: count }] : []
   }
-  const runs: [number, number][] = [[range.start, range.end]]
+  const end = Math.min(range.end, count)
+  const runs: [number, number][] = [[Math.min(range.start, end), end]]
   for (const index of keptIndices) {
     if (index >= 0 && index < count) {
       runs.push([index, index + 1])
@@ -117,11 +120,15 @@ function slotIdOf(strip: HTMLElement, target: EventTarget | null): string | null
 }
 
 /** The slot holding focus (rename input, keyboard focus), kept mounted so scrolling never drops it. */
-export function useFocusedTabStripSlotId(stripRef: RefObject<HTMLElement | null>): string | null {
+export function useFocusedTabStripSlotId(
+  stripRef: RefObject<HTMLElement | null>,
+  windowed: boolean
+): string | null {
   const [focusedSlotId, setFocusedSlotId] = useState<string | null>(null)
   useLayoutEffect(() => {
     const el = stripRef.current
-    if (!el) {
+    if (!el || !windowed) {
+      setFocusedSlotId(null)
       return
     }
     const onFocusIn = (event: FocusEvent): void => setFocusedSlotId(slotIdOf(el, event.target))
@@ -133,6 +140,32 @@ export function useFocusedTabStripSlotId(stripRef: RefObject<HTMLElement | null>
       el.removeEventListener('focusin', onFocusIn)
       el.removeEventListener('focusout', onFocusOut)
     }
-  }, [stripRef])
+  }, [stripRef, windowed])
   return focusedSlotId
+}
+
+/** Scroll the first opened tab a windowed strip hasn't mounted into view by its index; false when none. */
+export function revealFirstUnmountedTabStripSlot(
+  strip: HTMLElement,
+  slotIds: readonly string[],
+  openedIds: Iterable<string>
+): boolean {
+  if (slotIds.length < TAB_STRIP_WINDOW_MIN_TABS) {
+    return false
+  }
+  for (const id of openedIds) {
+    const index = slotIds.indexOf(id)
+    if (index === -1 || findTabStripSlot(strip, id)) {
+      continue
+    }
+    const left = index * TAB_STRIP_WINDOW_SLOT_PX
+    const right = left + TAB_STRIP_WINDOW_SLOT_PX
+    if (left < strip.scrollLeft) {
+      strip.scrollLeft = left
+    } else if (right > strip.scrollLeft + strip.clientWidth) {
+      strip.scrollLeft = right - strip.clientWidth
+    }
+    return true
+  }
+  return false
 }

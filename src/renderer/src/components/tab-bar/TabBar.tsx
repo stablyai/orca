@@ -130,7 +130,10 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     itemProjection.orderedItems.length,
     tabStripNavigation.subscribeToStripResize
   )
-  const focusedSlotId = useFocusedTabStripSlotId(tabStripNavigation.tabStripRef)
+  const focusedSlotId = useFocusedTabStripSlotId(
+    tabStripNavigation.tabStripRef,
+    tabStripRange !== null
+  )
   const activeDragVisibleTabId = useActiveDragVisibleTabId()
   const { orderedItems, sortableIds, activeVisibleTabId } = itemProjection
   const tabStripWindow = useMemo(() => {
