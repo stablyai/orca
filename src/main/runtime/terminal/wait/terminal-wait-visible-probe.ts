@@ -164,6 +164,9 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
   }
 
   async waitForTerminalSetup(handle: string, agent: string, signal?: AbortSignal): Promise<void> {
+    if (!this.setupTerminalCompletions.hasDependents()) {
+      return
+    }
     const ptyId = this.getTerminalPtyIdForHandle(handle)
     if (ptyId) {
       await this.waitForPtySetup(ptyId, agent, signal)

@@ -17,6 +17,10 @@ export class SetupTerminalDependents {
   private readonly dependentIdsByWorkspace = new Map<string, Set<string>>()
   constructor(private readonly changed: (ptyId: string, verdict: TerminalSetupVerdict) => void) {}
 
+  hasDependents(): boolean {
+    return this.dependents.size > 0
+  }
+
   status(ptyId: string): TerminalSetupVerdict {
     return this.dependents.get(ptyId)?.verdict ?? { dependencyId: null, state: 'ready' }
   }
