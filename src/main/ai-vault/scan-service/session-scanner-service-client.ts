@@ -10,7 +10,6 @@ import {
   aiVaultServiceErrorText,
   attachAiVaultServiceChild,
   cancelAiVaultServiceCall,
-  clearAiVaultServiceCall,
   createAiVaultServicePendingCall,
   createAiVaultServiceReadyWaiter,
   rejectAiVaultServiceCall,
@@ -22,7 +21,7 @@ import {
   type AiVaultServiceReadyWaiter
 } from './session-scanner-service-client-state'
 import {
-  noteAiVaultServiceScanProgress,
+  answerAiVaultServiceCall,
   sendAiVaultServiceCall,
   type AiVaultServiceScanListener
 } from './session-scanner-service-request-deadline'
@@ -32,11 +31,10 @@ import {
   isAiVaultServiceChildMessage,
   type AiVaultSessionSearchInit,
   type AiVaultServiceRequest,
-  type AiVaultServiceRequestBody,
-  type AiVaultServiceResultValue
+  type AiVaultServiceRequestBody
 } from './session-scanner-service-protocol'
 import { forwardWslDistroNotesToChild } from './session-scanner-service-wsl-notes'
-import { recordAiVaultServiceExit } from './session-scanner-service-exit'
+import { AiVaultServiceOutOfMemoryRecovery } from './session-scanner-service-oom-recovery'
 
 export class AiVaultScannerServiceClient {
   private child: ChildProcess | null = null
@@ -49,10 +47,7 @@ export class AiVaultScannerServiceClient {
   private readonly restartPolicy = new AiVaultServiceRestartPolicy()
   private readonly sessionSearch = new AiVaultServiceSessionSearchHold()
   private disposed = false
-  private ranOutOfMemory = false
-  private readonly awaitingExit = new Set<AiVaultServicePendingCall>()
-  // Set from a fault until the dead child says whether it ran out of heap; the next spawn needs that.
-  private exitVerdict: PromiseWithResolvers<void> | null = null
+  private readonly outOfMemory = new AiVaultServiceOutOfMemoryRecovery()
 
   private readonly stopForwardingWslNotes = forwardWslDistroNotesToChild(() => this.child)
 
@@ -127,20 +122,18 @@ export class AiVaultScannerServiceClient {
     this.restartPolicy.dispose()
     this.idleRetirement.clear()
     const error = new Error('AI Vault service client was disposed.')
-    for (const call of [...this.active.values(), ...this.queue, ...this.awaitingExit]) {
+    for (const call of [...this.active.values(), ...this.queue]) {
       rejectAiVaultServiceCall(call, error)
     }
     this.active.clear()
     this.queue.length = 0
-    this.awaitingExit.clear()
-    this.exitVerdict?.resolve()
-    this.exitVerdict = null
+    this.outOfMemory.rejectAll(error)
     this.invalidations.rejectAll(error)
     this.retireChild()
   }
 
   private pump(): void {
-    if (this.restartPolicy.restartScheduled || this.exitVerdict) {
+    if (this.restartPolicy.restartScheduled || this.outOfMemory.pendingVerdict) {
       return
     }
     for (const lane of ['cache', 'interactive'] as const) {
@@ -195,8 +188,9 @@ export class AiVaultScannerServiceClient {
   }
 
   private ensureChild(): Promise<ChildProcess> {
-    if (this.exitVerdict) {
-      return this.exitVerdict.promise.then(() =>
+    const verdict = this.outOfMemory.pendingVerdict
+    if (verdict) {
+      return verdict.then(() =>
         this.disposed
           ? Promise.reject(new Error('AI Vault service client was disposed.'))
           : this.ensureChild()
@@ -214,7 +208,7 @@ export class AiVaultScannerServiceClient {
     }
     let child: ChildProcess
     try {
-      child = this.options.processFactory({ afterOutOfMemory: this.ranOutOfMemory })
+      child = this.options.processFactory({ afterOutOfMemory: this.outOfMemory.afterOutOfMemory })
     } catch (error) {
       this.restartPolicy.recordFault(() => this.pump())
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
@@ -258,23 +252,10 @@ export class AiVaultScannerServiceClient {
       return
     }
     const call = [...this.active.values()].find((entry) => entry.request.id === message.id)
-    if (!call) {
-      return
+    if (call && answerAiVaultServiceCall(call, message)) {
+      this.active.delete(call.lane)
+      this.pump()
     }
-    if (message.type === 'progress') {
-      noteAiVaultServiceScanProgress(call, message.work)
-      return
-    }
-    this.active.delete(call.lane)
-    clearAiVaultServiceCall(call)
-    if (!call.cancelled) {
-      if (message.type === 'error') {
-        call.reject(new Error(message.message))
-      } else {
-        call.resolve((message as { value: AiVaultServiceResultValue['value'] }).value)
-      }
-    }
-    this.pump()
   }
 
   private cancel(call: AiVaultServicePendingCall): void {
@@ -305,53 +286,13 @@ export class AiVaultScannerServiceClient {
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()
-    // A scan that exhausted the heap would exhaust it again; hold it until the exit says why.
-    // Retired children were alive at the fault; one that runs out of heap while retiring is not rerun.
-    const held =
-      this.ranOutOfMemory || retire
-        ? []
-        : active.filter((call) => call.sent && call.request.operation === 'scan')
-    for (const call of held) {
-      this.awaitingExit.add(call)
-    }
-    const verdict = retire ? null : Promise.withResolvers<void>()
-    this.exitVerdict = verdict ?? this.exitVerdict
-    recordAiVaultServiceExit(child, error, (outOfMemory) => {
-      this.ranOutOfMemory ||= outOfMemory
-      if (verdict) {
-        if (this.exitVerdict === verdict) {
-          this.exitVerdict = null
-        }
-        verdict.resolve()
-      }
-      this.settleHeldCalls(held, error, outOfMemory)
-    })
-    for (const call of active) {
-      if (!held.includes(call)) {
-        this.retryStartOrReject(call, error)
-      }
+    const unheld = this.outOfMemory.onFault(child, error, active, retire, this.queue, () =>
+      this.pump()
+    )
+    for (const call of unheld) {
+      this.retryStartOrReject(call, error)
     }
     this.invalidations.rejectAll(error)
-  }
-
-  private settleHeldCalls(
-    held: AiVaultServicePendingCall[],
-    error: Error,
-    outOfMemory: boolean
-  ): void {
-    for (const call of held.toReversed()) {
-      if (!this.awaitingExit.delete(call)) {
-        continue
-      }
-      if (outOfMemory && !call.cancelled) {
-        // The replacement child never saw this request; cancelling it there must not await an ack.
-        call.sent = false
-        this.queue.unshift(call)
-      } else {
-        rejectAiVaultServiceCall(call, error)
-      }
-    }
-    this.pump()
   }
 
   private scheduleIdleIfNeeded(): void {
