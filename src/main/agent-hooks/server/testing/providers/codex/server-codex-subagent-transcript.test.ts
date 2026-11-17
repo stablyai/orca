@@ -86,7 +86,8 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
       await vi.advanceTimersByTimeAsync(1_000)
-      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+      // The poll reads rollouts off the main thread, so its result lands after the tick.
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined())
     } finally {
       server.stop()
     }

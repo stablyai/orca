@@ -42,6 +42,7 @@ import {
   setCodexMainAgentTurnState
 } from './codex-state'
 import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
+import { isPolledCodexStopPayload } from './codex-ended-turn-event'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -213,7 +214,7 @@ export function normalizeCodexEvent(
       reconcileCodexSubagentReviewer(transcriptState, transcriptPath)
     }
   }
-  if (transcriptPath && !agentId) {
+  if (transcriptPath && !agentId && !isPolledCodexStopPayload(hookPayload)) {
     reconcileCodexSubagentTranscript(
       getOrCreateCodexSubagentTranscriptState(state, paneKey),
       getOrCreateCodexSubagentRoster(state, paneKey),

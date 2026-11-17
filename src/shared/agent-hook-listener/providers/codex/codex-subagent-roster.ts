@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -8,7 +9,11 @@ import {
 } from '../../../agent-status/contracts/agent-status-field-normalization'
 import type { AgentSubagentSnapshot } from '../../../agent-status/contracts/agent-status-subagent-snapshot'
 
-import { readCodexSubagentIdentity } from './codex-subagent-identity'
+import {
+  readCodexSubagentIdentity,
+  readCodexSubagentIdentityAsync,
+  type CodexSubagentIdentity
+} from './codex-subagent-identity'
 import { usableAgentChildLabel } from '../../../agent-status/presentation/agent-child-row-name'
 import {
   agentChildWorkLiveness,
@@ -76,28 +81,29 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
 
 const IDENTITY_IO_RETRY_MS = 5_000
 
-/** Returns whether the child's name changed, so a poll that only recovered identity still publishes. */
-export function enrichCodexSubagentIdentity(
+/** The child owed a read of `transcriptPath`, or undefined when no read is due. */
+function identityReadTarget(
   roster: CodexSubagentRoster,
   id: string,
   transcriptPath: string | undefined
-): boolean {
+): TrackedCodexSubagent | undefined {
   const child = roster.get(id.trim())
   if (!child || !transcriptPath || child.identityTranscriptPath === transcriptPath) {
-    return false
+    return undefined
   }
   if (child.identityMissKey === transcriptPath) {
-    return false
+    return undefined
   }
   child.identityPendingPath = transcriptPath
-  if ((child.identityRetryAt ?? 0) > Date.now()) {
-    return false
-  }
-  const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
-  if (child.identityMissKey === missKey) {
-    return false
-  }
-  const identity = readCodexSubagentIdentity(transcriptPath, id.trim())
+  return (child.identityRetryAt ?? 0) > Date.now() ? undefined : child
+}
+
+function applyIdentityRead(
+  child: TrackedCodexSubagent,
+  missKey: string,
+  transcriptPath: string,
+  identity: CodexSubagentIdentity
+): boolean {
   if (identity === 'unreadable') {
     child.identityRetryAt = Date.now() + IDENTITY_IO_RETRY_MS
     return false
@@ -120,6 +126,28 @@ export function enrichCodexSubagentIdentity(
     normalizeOptionalField(identity.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH) ??
     child.description
   return child.description !== previous
+}
+
+/** Returns whether the child's name changed, so a poll that only recovered identity still publishes. */
+export function enrichCodexSubagentIdentity(
+  roster: CodexSubagentRoster,
+  id: string,
+  transcriptPath: string | undefined
+): boolean {
+  const child = identityReadTarget(roster, id, transcriptPath)
+  if (!child || !transcriptPath) {
+    return false
+  }
+  const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
+  if (child.identityMissKey === missKey) {
+    return false
+  }
+  return applyIdentityRead(
+    child,
+    missKey,
+    transcriptPath,
+    readCodexSubagentIdentity(transcriptPath, id.trim())
+  )
 }
 
 /** Queue an unnamed child's own rollout for the bounded identity retries. */
@@ -146,8 +174,7 @@ export function hasPendingCodexSubagentIdentity(roster: CodexSubagentRoster | un
 const IDENTITY_RETRIES_PER_POLL = 8
 const identityRetryCursors = new WeakMap<CodexSubagentRoster, number>()
 
-/** Retry unnamed children's own rollouts a few per poll, taking turns; a relay restart can leave no parent transcript to drive this. */
-export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster): boolean {
+function pendingIdentityTurn(roster: CodexSubagentRoster): [string, TrackedCodexSubagent][] {
   const pending = [...roster].filter(([, child]) => child.identityPendingPath !== undefined)
   const start = (identityRetryCursors.get(roster) ?? 0) % Math.max(pending.length, 1)
   const turn = [...pending.slice(start), ...pending.slice(0, start)].slice(
@@ -155,14 +182,55 @@ export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster)
     IDENTITY_RETRIES_PER_POLL
   )
   identityRetryCursors.set(roster, start + turn.length)
-  let changed = false
-  for (const [id, child] of turn) {
+  return turn
+}
+
+type CodexSubagentIdentityRead = {
+  id: string
+  child: TrackedCodexSubagent
+  transcriptPath: string
+  missKey: string
+  identity: CodexSubagentIdentity
+}
+
+/** Reads a few unnamed children's own rollouts per poll, taking turns, off the main thread; a relay restart can leave no parent transcript to drive this. */
+export async function readPendingCodexSubagentIdentities(
+  roster: CodexSubagentRoster
+): Promise<CodexSubagentIdentityRead[]> {
+  const reads: CodexSubagentIdentityRead[] = []
+  // Sequential reads keep one file operation per pane in flight.
+  for (const [id, pending] of pendingIdentityTurn(roster)) {
     // A task path the parent rollout supplied meanwhile outranks the child's own header.
-    if (usableAgentChildLabel(child.description)) {
-      child.identityPendingPath = undefined
+    if (usableAgentChildLabel(pending.description)) {
+      pending.identityPendingPath = undefined
       continue
     }
-    changed = enrichCodexSubagentIdentity(roster, id, child.identityPendingPath) || changed
+    const transcriptPath = pending.identityPendingPath
+    const child = identityReadTarget(roster, id, transcriptPath)
+    if (!child || !transcriptPath) {
+      continue
+    }
+    const missKey = `${transcriptPath}:${await transcriptFileSizeAsync(transcriptPath)}`
+    if (child.identityMissKey === missKey) {
+      continue
+    }
+    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim())
+    reads.push({ id, child, transcriptPath, missKey, identity })
+  }
+  return reads
+}
+
+/** Returns whether a child's name changed; reads for children a hook retired or re-pointed meanwhile are dropped. */
+export function applyPendingCodexSubagentIdentities(
+  roster: CodexSubagentRoster,
+  reads: readonly CodexSubagentIdentityRead[]
+): boolean {
+  let changed = false
+  for (const { id, child, transcriptPath, missKey, identity } of reads) {
+    if (roster.get(id.trim()) !== child || child.identityPendingPath !== transcriptPath) {
+      continue
+    }
+    changed = applyIdentityRead(child, missKey, transcriptPath, identity) || changed
   }
   return changed
 }
@@ -170,6 +238,14 @@ export function retryPendingCodexSubagentIdentities(roster: CodexSubagentRoster)
 function transcriptFileSize(transcriptPath: string): number | null {
   try {
     return statSync(transcriptPath).size
+  } catch {
+    return null
+  }
+}
+
+async function transcriptFileSizeAsync(transcriptPath: string): Promise<number | null> {
+  try {
+    return (await stat(transcriptPath)).size
   } catch {
     return null
   }

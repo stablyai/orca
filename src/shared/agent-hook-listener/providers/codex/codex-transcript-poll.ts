@@ -1,29 +1,63 @@
 import { record } from './codex-rollout-jsonl-cursor'
 import {
+  applyPendingCodexSubagentIdentities,
   hasPendingCodexSubagentIdentity,
-  retryPendingCodexSubagentIdentities
+  readPendingCodexSubagentIdentities,
+  type CodexSubagentRoster
 } from './codex-subagent-roster'
 import {
+  applyCodexSubagentTranscriptReads,
   codexTranscriptTurnEnd,
-  reconcileCodexSubagentTranscript
+  readCodexSubagentTranscript,
+  type CodexSubagentTranscriptReads,
+  type CodexSubagentTranscriptState
 } from './codex-subagent-transcript'
 import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
+import { polledCodexStopPayload } from './codex-ended-turn-event'
 
-/** Poll new host rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. */
+export type CodexTranscriptPollReads = {
+  roster: CodexSubagentRoster
+  transcript?: CodexSubagentTranscriptState
+  transcriptReads?: CodexSubagentTranscriptReads
+  identities: Awaited<ReturnType<typeof readPendingCodexSubagentIdentities>>
+}
+
+/** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
+export async function readCodexTranscriptPoll(
+  state: HookListenerState,
+  paneKey: string
+): Promise<CodexTranscriptPollReads> {
+  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const transcriptReads = transcript?.parent.filePath
+    ? await readCodexSubagentTranscript(transcript)
+    : undefined
+  return {
+    roster,
+    transcript,
+    transcriptReads,
+    identities: await readPendingCodexSubagentIdentities(roster)
+  }
+}
+
+/** Apply polled rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. Callers apply only while `original` is still the pane's row. */
 export function pollCodexTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
   body: unknown,
-  env: string
+  env: string,
+  reads: CodexTranscriptPollReads
 ): AgentHookEventPayload | undefined {
   const roster = getOrCreateCodexSubagentRoster(state, original.paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(original.paneKey)
+  const applyIdentities = (): boolean =>
+    reads.roster === roster && applyPendingCodexSubagentIdentities(roster, reads.identities)
   if (!transcript?.parent.filePath) {
-    const named = retryPendingCodexSubagentIdentities(roster)
+    const named = applyIdentities()
     // Without a parent rollout, keep polling only while a child's own rollout still owes its name.
     const payload = named
       ? buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {})
@@ -33,12 +67,11 @@ export function pollCodexTranscriptStatus(
     }
     return hasPendingCodexSubagentIdentity(roster) ? original : undefined
   }
-  const reconciled = reconcileCodexSubagentTranscript(
-    transcript,
-    roster,
-    transcript.parent.filePath
-  )
-  const changed = retryPendingCodexSubagentIdentities(roster) || reconciled
+  const reconciled =
+    reads.transcript === transcript && reads.transcriptReads !== undefined
+      ? applyCodexSubagentTranscriptReads(transcript, roster, reads.transcriptReads)
+      : false
+  const changed = applyIdentities() || reconciled
   const lead = state.codexLeadStateByPaneKey.get(original.paneKey)
   const interrupted = transcript.rootTurn.interrupted && lead?.state !== 'done'
   const envelope = record(body)
@@ -53,12 +86,12 @@ export function pollCodexTranscriptStatus(
       ...envelope,
       hook_event_name: undefined,
       hookEventName: undefined,
-      payload: {
+      payload: polledCodexStopPayload({
         hook_event_name: 'Stop',
         ...(lead.sessionId ? { session_id: lead.sessionId } : {}),
         turn_id: lead.turnId,
         transcript_path: transcript.parent.filePath
-      }
+      })
     }
     return normalizeHookPayload(state, 'codex', stop, env) ?? undefined
   }

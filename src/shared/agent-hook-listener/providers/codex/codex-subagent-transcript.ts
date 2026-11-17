@@ -1,10 +1,14 @@
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 
 import {
+  applyJsonlCursorBytes,
   readJsonlCursor,
+  readJsonlCursorBytes,
   readTranscriptDirectory,
+  readTranscriptDirectoryAsync,
   record,
   type JsonlCursor,
+  type JsonlCursorBytes,
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
 
@@ -76,26 +80,24 @@ function childDayDirectory(parentPath: string, startedAt: number): string | unde
   )
 }
 
+function childTranscriptDirectories(parentPath: string, startedAt: number): string[] {
+  const parentDir = dirname(parentPath)
+  const childDir = childDayDirectory(parentPath, startedAt)
+  return childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
+}
+
 function resolveChildTranscript(
   parentPath: string,
   threadId: string,
   startedAt: number,
-  entriesByDirectory: Map<string, string[]>
+  entriesFor: (directory: string) => string[] | undefined
 ): string | undefined {
   if (!SAFE_THREAD_ID.test(threadId)) {
     return undefined
   }
   const suffix = `-${threadId}.jsonl`
-  const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
-  const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
-  for (const directory of directories) {
-    let entries = entriesByDirectory.get(directory)
-    if (!entries) {
-      entries = readTranscriptDirectory(directory)
-      entriesByDirectory.set(directory, entries)
-    }
-    const fileName = entries.find((entry) => entry.endsWith(suffix))
+  for (const directory of childTranscriptDirectories(parentPath, startedAt)) {
+    const fileName = entriesFor(directory)?.find((entry) => entry.endsWith(suffix))
     if (fileName) {
       return join(directory, fileName)
     }
@@ -216,32 +218,39 @@ export function hasTrackedCodexTranscriptSubagents(
   return Boolean(state && state.subagents.size > 0)
 }
 
-export function reconcileCodexSubagentTranscript(
+/** Resets per-session state when the parent rollout changes; undefined for an unusable path. */
+function beginCodexTranscriptReconcile(
   state: CodexSubagentTranscriptState,
   roster: CodexSubagentRoster,
   transcriptPath: string | undefined
-): boolean {
+): { path: string; changed: boolean } | undefined {
   const normalizedPath = normalizedTranscriptPath(transcriptPath)
   if (!normalizedPath) {
-    return false
+    return undefined
   }
-  let changed = false
-  if (state.parent.filePath !== normalizedPath) {
-    for (const id of state.subagents.keys()) {
-      finishCodexSubagent(roster, id)
-    }
-    changed = true
-    state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
-    state.rootTurn = { interrupted: false }
-    state.turnEnds.clear()
-    state.subagents.clear()
-    state.reviewerCursorsByPath.clear()
-    state.reviewersByPath.clear()
-    // Why: a different rollout is a different session, so its predecessor's reviewer is void.
-    state.approvalsReviewer = undefined
+  if (state.parent.filePath === normalizedPath) {
+    return { path: normalizedPath, changed: false }
   }
-  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
-  changed ||=
+  for (const id of state.subagents.keys()) {
+    finishCodexSubagent(roster, id)
+  }
+  state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
+  state.rootTurn = { interrupted: false }
+  state.turnEnds.clear()
+  state.subagents.clear()
+  state.reviewerCursorsByPath.clear()
+  state.reviewersByPath.clear()
+  // Why: a different rollout is a different session, so its predecessor's reviewer is void.
+  state.approvalsReviewer = undefined
+  return { path: normalizedPath, changed: true }
+}
+
+function applyCodexParentTranscript(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  parentRecords: JsonRecord[] | undefined
+): boolean {
+  const changed =
     Boolean(parentRecords?.length) ||
     (parentRecords === undefined && state.approvalsReviewer !== undefined)
   reconcileCodexTranscriptTurn(state.rootTurn, parentRecords ?? [])
@@ -290,18 +299,27 @@ export function reconcileCodexSubagentTranscript(
       tracked.startedAt
     )
   }
-  const entriesByDirectory = new Map<string, string[]>()
+  return changed
+}
+
+/** `deferred` skips a child whose rollout was not read this pass. */
+type ChildTranscriptReader = (
+  id: string,
+  tracked: TrackedTranscriptSubagent
+) => JsonRecord[] | undefined | 'deferred'
+
+function applyCodexChildTranscripts(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  readChild: ChildTranscriptReader
+): boolean {
+  let changed = false
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
-    if (!tracked.filePath) {
-      tracked.filePath = resolveChildTranscript(
-        normalizedPath,
-        id,
-        tracked.startedAt,
-        entriesByDirectory
-      )
+    const records = readChild(id, tracked)
+    if (records === 'deferred') {
+      continue
     }
-    const records = readJsonlCursor(tracked, isCodexStatusTranscriptLine)
     changed ||= Boolean(records?.length)
     if (!records) {
       // Why: a rollout that never appears (or is deleted) has no completion event, so time-box it instead of leaking a working row.
@@ -328,4 +346,103 @@ export function reconcileCodexSubagentTranscript(
     state.subagents.delete(id)
   }
   return changed
+}
+
+export function reconcileCodexSubagentTranscript(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  transcriptPath: string | undefined
+): boolean {
+  const begun = beginCodexTranscriptReconcile(state, roster, transcriptPath)
+  if (!begun) {
+    return false
+  }
+  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+  let changed = applyCodexParentTranscript(state, roster, parentRecords) || begun.changed
+  const entriesByDirectory = new Map<string, string[]>()
+  const entriesFor = (directory: string): string[] => {
+    let entries = entriesByDirectory.get(directory)
+    if (!entries) {
+      entries = readTranscriptDirectory(directory)
+      entriesByDirectory.set(directory, entries)
+    }
+    return entries
+  }
+  changed =
+    applyCodexChildTranscripts(state, roster, (id, tracked) => {
+      tracked.filePath ??= resolveChildTranscript(begun.path, id, tracked.startedAt, entriesFor)
+      return readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+    }) || changed
+  return changed
+}
+
+/** New rollout bytes read off the main thread; nothing in the transcript state moves until they are applied. */
+export type CodexSubagentTranscriptReads = {
+  parent: JsonlCursor
+  parentBytes: JsonlCursorBytes | undefined
+  childBytes: Map<TrackedTranscriptSubagent, JsonlCursorBytes | undefined>
+}
+
+export async function readCodexSubagentTranscript(
+  state: CodexSubagentTranscriptState
+): Promise<CodexSubagentTranscriptReads> {
+  const parent = state.parent
+  const parentPath = parent.filePath
+  const reads: CodexSubagentTranscriptReads = {
+    parent,
+    parentBytes: await readJsonlCursorBytes(parent),
+    childBytes: new Map()
+  }
+  if (!parentPath) {
+    return reads
+  }
+  const entriesByDirectory = new Map<string, string[]>()
+  // Sequential reads keep one file operation per pane in flight.
+  for (const [id, tracked] of [...state.subagents]) {
+    if (!tracked.filePath) {
+      for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
+        if (!entriesByDirectory.has(directory)) {
+          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory))
+        }
+      }
+      tracked.filePath ??= resolveChildTranscript(parentPath, id, tracked.startedAt, (directory) =>
+        entriesByDirectory.get(directory)
+      )
+    }
+    reads.childBytes.set(tracked, await readJsonlCursorBytes(tracked))
+  }
+  return reads
+}
+
+/** Applies reads in one synchronous step; cursors a hook-driven read moved meanwhile are re-read next poll. Children found by these reads are read next poll. */
+export function applyCodexSubagentTranscriptReads(
+  state: CodexSubagentTranscriptState,
+  roster: CodexSubagentRoster,
+  reads: CodexSubagentTranscriptReads
+): boolean {
+  if (state.parent !== reads.parent) {
+    return false
+  }
+  const parentRecords = applyJsonlCursorBytes(
+    reads.parent,
+    reads.parentBytes,
+    isCodexStatusTranscriptLine
+  )
+  if (parentRecords === 'stale') {
+    return false
+  }
+  const changed = applyCodexParentTranscript(state, roster, parentRecords)
+  return (
+    applyCodexChildTranscripts(state, roster, (_id, tracked) => {
+      if (!reads.childBytes.has(tracked)) {
+        return 'deferred'
+      }
+      const records = applyJsonlCursorBytes(
+        tracked,
+        reads.childBytes.get(tracked),
+        isCodexStatusTranscriptLine
+      )
+      return records === 'stale' ? 'deferred' : records
+    }) || changed
+  )
 }

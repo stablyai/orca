@@ -8,6 +8,7 @@ import {
   statSync,
   type Stats
 } from 'node:fs'
+import { open, readdir, stat, type FileHandle } from 'node:fs/promises'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
@@ -25,34 +26,41 @@ export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
 
+type JsonlFirstRecord = JsonRecord | 'pending' | 'unreadable' | undefined
+
+// Nonblocking open prevents a FIFO from stalling the reader before the descriptor check.
+const FIRST_RECORD_OPEN_FLAGS =
+  constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
+
+function parseJsonlFirstRecord(buffer: Buffer, bytesRead: number): JsonlFirstRecord {
+  const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
+  if (newline === -1) {
+    return bytesRead < buffer.length ? 'pending' : undefined
+  }
+  return record(JSON.parse(buffer.toString('utf8', 0, newline)))
+}
+
+function firstRecordError(error: unknown): JsonlFirstRecord {
+  if (error instanceof SyntaxError) {
+    return undefined
+  }
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+    ? 'pending'
+    : 'unreadable'
+}
+
 /** 'pending' while the file or its first line is unwritten; 'unreadable' on other I/O failures; undefined once the line is final. */
-export function readJsonlFirstRecord(
-  filePath: string
-): JsonRecord | 'pending' | 'unreadable' | undefined {
+export function readJsonlFirstRecord(filePath: string): JsonlFirstRecord {
   let fd: number | undefined
   try {
-    // Nonblocking open prevents a FIFO from stalling hook handling before the descriptor check.
-    fd = openSync(
-      filePath,
-      constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
-    )
+    fd = openSync(filePath, FIRST_RECORD_OPEN_FLAGS)
     if (!fstatSync(fd).isFile()) {
       return undefined
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
-    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0)
-    const newline = buffer.subarray(0, bytesRead).indexOf(0x0a)
-    if (newline === -1) {
-      return bytesRead < buffer.length ? 'pending' : undefined
-    }
-    return record(JSON.parse(buffer.toString('utf8', 0, newline)))
+    return parseJsonlFirstRecord(buffer, readSync(fd, buffer, 0, buffer.length, 0))
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      return undefined
-    }
-    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
-      ? 'pending'
-      : 'unreadable'
+    return firstRecordError(error)
   } finally {
     if (fd !== undefined) {
       closeSync(fd)
@@ -60,11 +68,49 @@ export function readJsonlFirstRecord(
   }
 }
 
-/** Undefined distinguishes unreadable/vanished files from no new lines; lineFilter rejects raw substrings before JSON.parse. */
-export function readJsonlCursor(
-  cursor: JsonlCursor,
-  lineFilter?: (line: string) => boolean
-): JsonRecord[] | undefined {
+/** Off-thread twin of readJsonlFirstRecord for main-process polls. */
+export async function readJsonlFirstRecordAsync(filePath: string): Promise<JsonlFirstRecord> {
+  let handle: FileHandle | undefined
+  try {
+    handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
+    if (!(await handle.stat()).isFile()) {
+      return undefined
+    }
+    const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    return parseJsonlFirstRecord(buffer, bytesRead)
+  } catch (error) {
+    return firstRecordError(error)
+  } finally {
+    await handle?.close().catch(() => {})
+  }
+}
+
+/** New bytes read against a cursor position; applying them to a cursor that has since moved is refused. */
+export type JsonlCursorBytes = {
+  filePath: string
+  offset: number
+  carry: string
+  /** Where unread bytes begin: the cursor offset, or 0 after the file shrank. */
+  from: number
+  start: number
+  bytes: Buffer
+}
+
+const NO_BYTES = Buffer.alloc(0)
+
+function planJsonlRead(
+  cursor: JsonlCursor & { filePath: string },
+  size: number
+): JsonlCursorBytes & { length: number } {
+  const from = size < cursor.offset ? 0 : cursor.offset
+  const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
+  const start = size - from > length ? size - length : from
+  const { filePath, offset, carry } = cursor
+  return { filePath, offset, carry, from, start, length, bytes: NO_BYTES }
+}
+
+function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undefined {
   if (!cursor.filePath) {
     return undefined
   }
@@ -77,21 +123,15 @@ export function readJsonlCursor(
   if (!stats.isFile()) {
     return undefined
   }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
+  const plan = planJsonlRead({ ...cursor, filePath: cursor.filePath }, stats.size)
+  if (plan.length === 0) {
+    return plan
   }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
+  const buffer = Buffer.allocUnsafe(plan.length)
   let fd: number | undefined
   try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
+    fd = openSync(plan.filePath, 'r')
+    return { ...plan, bytes: buffer.subarray(0, readSync(fd, buffer, 0, plan.length, plan.start)) }
   } catch {
     return undefined
   } finally {
@@ -99,10 +139,70 @@ export function readJsonlCursor(
       closeSync(fd)
     }
   }
-  const skippedPrefix = start !== cursor.offset
-  const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
+}
+
+/** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished. */
+export async function readJsonlCursorBytes(
+  cursor: JsonlCursor
+): Promise<JsonlCursorBytes | undefined> {
+  if (!cursor.filePath) {
+    return undefined
+  }
+  const snapshot = { ...cursor, filePath: cursor.filePath }
+  let size: number
+  try {
+    const stats = await stat(snapshot.filePath)
+    if (!stats.isFile()) {
+      return undefined
+    }
+    size = stats.size
+  } catch {
+    return undefined
+  }
+  const plan = planJsonlRead(snapshot, size)
+  if (plan.length === 0) {
+    return plan
+  }
+  let handle: FileHandle | undefined
+  try {
+    // Why: open per read, never held, so a replaced rollout is always read at its current path.
+    handle = await open(plan.filePath, 'r')
+    const buffer = Buffer.allocUnsafe(plan.length)
+    const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
+    return { ...plan, bytes: buffer.subarray(0, bytesRead) }
+  } catch {
+    return undefined
+  } finally {
+    await handle?.close().catch(() => {})
+  }
+}
+
+/** Advances the cursor past read bytes; 'stale' when another reader moved it since they were read. */
+export function applyJsonlCursorBytes(
+  cursor: JsonlCursor,
+  read: JsonlCursorBytes | undefined,
+  lineFilter?: (line: string) => boolean
+): JsonRecord[] | undefined | 'stale' {
+  if (!read) {
+    return undefined
+  }
+  if (
+    cursor.filePath !== read.filePath ||
+    cursor.offset !== read.offset ||
+    cursor.carry !== read.carry
+  ) {
+    return 'stale'
+  }
+  const carry = read.from === read.offset ? read.carry : ''
+  if (read.bytes.length === 0) {
+    cursor.offset = read.from
+    cursor.carry = carry
+    return []
+  }
+  const skippedPrefix = read.start !== read.from
+  const content = `${skippedPrefix ? '' : carry}${read.bytes.toString('utf8')}`
   const lines = content.split('\n')
-  cursor.offset = start + bytesRead
+  cursor.offset = read.start + read.bytes.length
   cursor.carry = lines.pop() ?? ''
   if (skippedPrefix) {
     lines.shift()
@@ -127,15 +227,33 @@ export function readJsonlCursor(
   return records
 }
 
-export function readTranscriptDirectory(directory: string): string[] {
-  let entries: string[]
+/** Undefined distinguishes unreadable/vanished files from no new lines; lineFilter rejects raw substrings before JSON.parse. */
+export function readJsonlCursor(
+  cursor: JsonlCursor,
+  lineFilter?: (line: string) => boolean
+): JsonRecord[] | undefined {
+  const records = applyJsonlCursorBytes(cursor, readJsonlCursorBytesSync(cursor), lineFilter)
+  return records === 'stale' ? [] : records
+}
+
+function boundTranscriptDirectory(entries: string[]): string[] {
+  return entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES
+    ? entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
+    : entries
+}
+
+export async function readTranscriptDirectoryAsync(directory: string): Promise<string[]> {
   try {
-    entries = readdirSync(directory)
+    return boundTranscriptDirectory(await readdir(directory))
   } catch {
     return []
   }
-  if (entries.length > TRANSCRIPT_DIRECTORY_MAX_ENTRIES) {
-    entries = entries.slice(-TRANSCRIPT_DIRECTORY_MAX_ENTRIES)
+}
+
+export function readTranscriptDirectory(directory: string): string[] {
+  try {
+    return boundTranscriptDirectory(readdirSync(directory))
+  } catch {
+    return []
   }
-  return entries
 }

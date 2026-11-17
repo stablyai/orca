@@ -1,5 +1,9 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
-import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
+import {
+  pollCodexTranscriptStatus,
+  readCodexTranscriptPoll,
+  type CodexTranscriptPollReads
+} from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   hasPendingAgentResultText,
@@ -155,21 +159,41 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
   }
 
-  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
-    const { source, body, original } = poll
-    // Recheck ownership at callback time; newer events supersede this payload even if children remain.
-    if (
-      paneKey !== original.paneKey ||
-      !this.server ||
-      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
-    ) {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void | Promise<void> {
+    if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
+    if (poll.source !== 'codex') {
+      this.applyTranscriptPoll(paneKey, poll, undefined)
+      return
+    }
+    // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
+    return readCodexTranscriptPoll(this.state, paneKey).then((reads) => {
+      if (this.ownsTranscriptPoll(paneKey, poll)) {
+        this.applyTranscriptPoll(paneKey, poll, reads)
+      }
+    })
+  }
+
+  // Recheck ownership at callback time; newer events supersede this payload even if children remain.
+  private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
+    return (
+      paneKey === original.paneKey &&
+      Boolean(this.server) &&
+      this.state.lastStatusByPaneKey.get(original.paneKey) === original
+    )
+  }
+
+  private applyTranscriptPoll(
+    paneKey: string,
+    poll: TranscriptPoll,
+    codexReads: CodexTranscriptPollReads | undefined
+  ): void {
+    const { source, body, original } = poll
     const logOffset = source === 'muse' ? museLogOffset(this.state, paneKey) : undefined
-    const normalized =
-      source === 'codex'
-        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
-        : normalizeHookPayload(this.state, source, body, this.env)
+    const normalized = codexReads
+      ? pollCodexTranscriptStatus(this.state, original, body, this.env, codexReads)
+      : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }

@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import {
+  applyJsonlCursorBytes,
+  readJsonlCursor,
+  readJsonlCursorBytes,
+  type JsonlCursor
+} from './codex-rollout-jsonl-cursor'
 
 const directories: string[] = []
 
@@ -44,4 +50,35 @@ for (const path of ${JSON.stringify([fifo, link, directory])}) {
       expect(result.code, result.stderr).toBe(0)
     }
   )
+})
+
+// Adapted from Pr1p's cursor tests in #43587.
+describe('readJsonlCursorBytes', () => {
+  const rollout = (contents: string): { path: string; cursor: JsonlCursor } => {
+    const directory = mkdtempSync(join(tmpdir(), 'codex-rollout-cursor-'))
+    directories.push(directory)
+    const path = join(directory, 'rollout.jsonl')
+    writeFileSync(path, contents)
+    return { path, cursor: { filePath: path, offset: 0, carry: '' } }
+  }
+
+  it('reads appended, split and recreated rollouts across polls', async () => {
+    const { path, cursor } = rollout('{"a":1}\n{"a":')
+    const poll = async () => applyJsonlCursorBytes(cursor, await readJsonlCursorBytes(cursor))
+    expect(await poll()).toEqual([{ a: 1 }])
+    expect(await poll()).toEqual([])
+    appendFileSync(path, '2}\n')
+    expect(await poll()).toEqual([{ a: 2 }])
+    // Shorter than the consumed offset, so the cursor must treat it as a recreated file.
+    writeFileSync(path, '{}\n')
+    expect(await poll()).toEqual([{}])
+  })
+
+  it('refuses bytes read before another reader advanced the cursor', async () => {
+    const { cursor } = rollout('{"a":1}\n')
+    const bytes = await readJsonlCursorBytes(cursor)
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 1 }])
+    expect(applyJsonlCursorBytes(cursor, bytes)).toBe('stale')
+    expect(cursor.offset).toBe(8)
+  })
 })
