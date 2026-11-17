@@ -21,21 +21,25 @@ const WslMoveRequestSchema = z.object({
     .max(10_000)
     .optional(),
   mappedDrives: WslMappedDrivesSchema.optional(),
-  previewRefusedRepoIds: Ids.optional()
+  previewMoving: z.object({ repoIds: Ids, folderWorkspaceIds: Ids }).optional()
 })
 
-/** What a start sends back from the preview it starts: its drives and the repos it refused. */
+/**
+ * What a start sends back from the preview it starts: its drives and what it showed moving. With
+ * no ready preview it names no rows, so main reports every row it leaves on a changed drive.
+ */
 export function wslMoveStartFieldsOf(
   preview: WslMovePreview | null
-): Required<Pick<WslMoveRequest, 'mappedDrives' | 'previewRefusedRepoIds'>> {
+): Pick<WslMoveRequest, 'mappedDrives' | 'previewMoving'> {
   return preview?.outcome === 'ready'
     ? {
         mappedDrives: preview.mappedDrives ?? [],
-        previewRefusedRepoIds: preview.refused
-          .filter((row) => row.kind === 'repo')
-          .map((row) => row.id)
+        previewMoving: {
+          repoIds: preview.repoIds,
+          folderWorkspaceIds: preview.folderWorkspaceIds
+        }
       }
-    : { mappedDrives: [], previewRefusedRepoIds: [] }
+    : { mappedDrives: [] }
 }
 
 export function parseWslMoveRequest(value: unknown): WslMoveRequest | null {

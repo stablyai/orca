@@ -303,13 +303,7 @@ export async function prepareWslMove(
     return changedDrives
   }
   const droppedForDrives = expectedMappedDrives
-    ? wslMoveStartDroppedProjects(
-        catalog,
-        drives.mappedDrives,
-        expectedMappedDrives,
-        plan,
-        request.previewRefusedRepoIds ?? []
-      )
+    ? wslMoveStartDroppedProjects(catalog, request, drives.mappedDrives, expectedMappedDrives, plan)
     : []
   const scope: WslMoveTerminalScope = {
     workspaceIds: exported.workspaceIds,

@@ -116,16 +116,56 @@ export function wslMoveStartDriveRefusal(
     : { outcome: 'refused', code: 'wsl_move_scope_changed', detail: 'mapped-drives-changed' }
 }
 
+type WslMoveIds = { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] }
+
 /**
- * A whole-distro start's projects that the preview could show but this start leaves, because
- * their drive now points elsewhere (or no longer answers): named in the result, never silent.
+ * The projects this start leaves that the preview showed moving and the request asked for, so
+ * none goes unreported. A request without the preview's rows (an older window) falls back to the
+ * local rows on a drive that changed since the preview.
  */
-export function wslMoveDroppedForDrives(
+export function wslMoveStartDroppedProjects(
   catalog: WslMoveCatalogRows,
+  request: Pick<WslMoveRequest, 'repoIds' | 'folderWorkspaceIds' | 'previewMoving'>,
   fresh: readonly WslMappedDrive[],
   expected: readonly WslMappedDrive[],
-  moving: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] }
+  moving: WslMoveIds
 ): WslMoveDroppedProject[] {
+  const asked: WslMoveIds | null =
+    request.repoIds || request.folderWorkspaceIds
+      ? { repoIds: request.repoIds ?? [], folderWorkspaceIds: request.folderWorkspaceIds ?? [] }
+      : null
+  const previewed = request.previewMoving ?? null
+  const onChanged = changedDriveRows(fresh, expected)
+  const left = (
+    kind: keyof WslMoveIds,
+    id: string,
+    row: { path: string; orcadRetained?: unknown }
+  ) =>
+    !moving[kind].includes(id) &&
+    (!asked || asked[kind].includes(id)) &&
+    (previewed ? previewed[kind].includes(id) : onChanged(row))
+  return [
+    ...catalog.repos
+      .filter((repo) => isLocalWslMoveRow(repo) && left('repoIds', repo.id, repo))
+      .map((repo) => ({ kind: 'repo' as const, id: repo.id, name: repo.displayName })),
+    ...catalog.folderWorkspaces
+      .filter(
+        (folder) =>
+          isLocalWslMoveRow(folder) &&
+          left('folderWorkspaceIds', folder.id, {
+            path: folder.folderPath,
+            orcadRetained: folder.orcadRetained
+          })
+      )
+      .map((folder) => ({ kind: 'folder' as const, id: folder.id, name: folder.name }))
+  ]
+}
+
+/** Whether a row sits on a drive that maps elsewhere (or no longer answers) since the preview. */
+function changedDriveRows(
+  fresh: readonly WslMappedDrive[],
+  expected: readonly WslMappedDrive[]
+): (row: { path: string; orcadRetained?: unknown }) => boolean {
   const changed = new Set(
     expected
       .filter((seen) => {
@@ -134,37 +174,6 @@ export function wslMoveDroppedForDrives(
       })
       .map((drive) => drive.letter.toUpperCase())
   )
-  const onChanged = (row: { path: string; orcadRetained?: unknown }): boolean =>
-    // A retained row was moved earlier; it isn't this start's to leave.
-    !row.orcadRetained && changed.has(wslMoveDriveLetterOf(row.path) ?? '')
-  return [
-    ...catalog.repos
-      .filter((repo) => isLocalWslMoveRow(repo) && !moving.repoIds.includes(repo.id))
-      .filter((repo) => onChanged(repo))
-      .map((repo) => ({ kind: 'repo' as const, id: repo.id, name: repo.displayName })),
-    ...catalog.folderWorkspaces
-      .filter(
-        (folder) => isLocalWslMoveRow(folder) && !moving.folderWorkspaceIds.includes(folder.id)
-      )
-      .filter((folder) =>
-        onChanged({ path: folder.folderPath, orcadRetained: folder.orcadRetained })
-      )
-      .map((folder) => ({ kind: 'folder' as const, id: folder.id, name: folder.name }))
-  ]
-}
-
-/**
- * `wslMoveDroppedForDrives`, less the repos the preview itself listed as refused: it showed those
- * with their reason, never as moving. Every other project this start leaves is reported.
- */
-export function wslMoveStartDroppedProjects(
-  catalog: WslMoveCatalogRows,
-  fresh: readonly WslMappedDrive[],
-  expected: readonly WslMappedDrive[],
-  moving: { repoIds: readonly string[]; folderWorkspaceIds: readonly string[] },
-  previewRefusedRepoIds: readonly string[]
-): WslMoveDroppedProject[] {
-  return wslMoveDroppedForDrives(catalog, fresh, expected, moving).filter(
-    (project) => project.kind !== 'repo' || !previewRefusedRepoIds.includes(project.id)
-  )
+  // A retained row was moved earlier; it isn't this start's to leave.
+  return (row) => !row.orcadRetained && changed.has(wslMoveDriveLetterOf(row.path) ?? '')
 }

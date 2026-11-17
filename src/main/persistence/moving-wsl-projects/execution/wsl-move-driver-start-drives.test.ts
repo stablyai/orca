@@ -178,3 +178,44 @@ describe('a repo the Git-for-Windows check refuses', () => {
     })
   })
 })
+
+describe('the projects a start names as left behind', () => {
+  it('leaves out a repo the preview refused for another reason', async () => {
+    rig.world.repos = [
+      project('repo-1', UNC),
+      { ...project('repo-w', 'W:\\home\\dev\\other'), displayName: 'other' },
+      { ...project('repo-mixed', 'W:\\home\\dev\\mixed'), worktreeBasePath: 'C:\\trees' }
+    ]
+    const preview = await previewWslMove(rig.world.deps, { distro: 'Ubuntu' })
+    expect(preview).toMatchObject({
+      outcome: 'ready',
+      repoIds: ['repo-1', 'repo-w'],
+      refused: [{ kind: 'repo', id: 'repo-mixed', reason: 'mixed-locations' }]
+    })
+    shares = { W: { share: '\\\\wsl.localhost\\Debian' } }
+    const result = await moveProjectsToWslHost(rig.world.deps, {
+      distro: 'Ubuntu',
+      ...wslMoveStartFieldsOf(preview)
+    })
+    expect(result).toMatchObject({
+      outcome: 'moved',
+      droppedForMappedDrives: [{ kind: 'repo', id: 'repo-w', name: 'other' }]
+    })
+    expect(result.outcome === 'moved' ? result.droppedForMappedDrives : null).toHaveLength(1)
+  })
+
+  it('leaves out a repo the start did not pick', async () => {
+    rig.world.repos = [project('repo-1', UNC), project('repo-w', 'W:\\home\\dev\\other')]
+    const preview = await previewWslMove(rig.world.deps, { distro: 'Ubuntu' })
+    expect(preview).toMatchObject({ outcome: 'ready', repoIds: ['repo-1', 'repo-w'] })
+    shares = { W: { share: '\\\\wsl.localhost\\Debian' } }
+    const result = await moveProjectsToWslHost(rig.world.deps, {
+      distro: 'Ubuntu',
+      repoIds: ['repo-1'],
+      folderWorkspaceIds: [],
+      ...wslMoveStartFieldsOf(preview)
+    })
+    expect(result).toMatchObject({ outcome: 'moved' })
+    expect(result).not.toHaveProperty('droppedForMappedDrives')
+  })
+})

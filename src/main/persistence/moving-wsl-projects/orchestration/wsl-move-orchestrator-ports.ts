@@ -46,8 +46,8 @@ export type WslMoveOrchestratorPorts = {
   start: (
     distro: string,
     stillWanted: () => boolean,
-    /** The preview's mapped drives (refused if they map elsewhere by now) and refused repos. */
-    fromPreview: Required<Pick<WslMoveRequest, 'mappedDrives' | 'previewRefusedRepoIds'>>
+    /** The preview's mapped drives (refused if they map elsewhere by now) and what it showed moving. */
+    fromPreview: Pick<WslMoveRequest, 'mappedDrives' | 'previewMoving'>
   ) => Promise<WslMoveResult>
   finishedMove: (distro: string) => WslMoveFinishedMove | null
   /** R38: reads the registry and, when ready, the host's catalog; never boots the distro. */
