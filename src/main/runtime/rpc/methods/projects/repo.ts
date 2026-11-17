@@ -6,8 +6,8 @@ import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from '../workspaces/folder-workspace'
 import {
-  includesQualifiedSearchRefs,
-  projectRepoSearchRefsForClient
+  projectRepoSearchRefsForClient,
+  repoSearchRefSelectorForm
 } from './repo-search-ref-projection'
 import {
   RepoIssueCommandRead,
@@ -211,7 +211,7 @@ export const REPO_METHODS = [
         params.repo,
         params.query,
         params.limit,
-        includesQualifiedSearchRefs(clientCapabilities)
+        repoSearchRefSelectorForm(clientCapabilities)
       ]
       if (params.namespace !== undefined) {
         searchArgs.push(params.namespace)

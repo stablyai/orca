@@ -1,17 +1,33 @@
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
-import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import {
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+} from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeRepoSearchRefs } from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 
 import { isQualifiedBaseRef } from '../../../../git/refs/resolution/base-ref-search-selector'
+import type { RepoSearchRefSelectorForm } from '../../../../git/refs/resolution/legacy-ref-selectors'
 
-export function includesQualifiedSearchRefs(
+function includesQualifiedSearchRefs(
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ): boolean {
   return (
     clientCapabilities === undefined ||
     clientCapabilities.includes(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
   )
+}
+
+export function repoSearchRefSelectorForm(
+  clientCapabilities: readonly RuntimeCapability[] | undefined
+): RepoSearchRefSelectorForm {
+  if (
+    clientCapabilities === undefined ||
+    clientCapabilities.includes(REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY)
+  ) {
+    return 'canonical'
+  }
+  return includesQualifiedSearchRefs(clientCapabilities) ? 'git-short' : 'unqualified'
 }
 
 export function projectRepoSearchRefsForClient(
