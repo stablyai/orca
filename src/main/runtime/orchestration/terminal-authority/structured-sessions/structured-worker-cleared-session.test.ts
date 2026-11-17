@@ -3,6 +3,7 @@ import { agentSessionConversationView } from '../../../../../shared/agent-sessio
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -22,6 +23,8 @@ const {
   resolveStructuredWorkerAuthority,
   resolveStructuredWorkerIdentityForSession
 } = await import('./structured-worker-authority')
+const { applyAgentSessionRestartAdjudication } =
+  await import('../../../agent-session/ownership/agent-session-restart-lease-transitions')
 const { structuredSessionMailTarget } =
   await import('../../mailbox/routing/structured-session-mail-target')
 const { structuredSessionMailReach } =
@@ -127,6 +130,8 @@ let failHideOf: string | null = null
 const closed: string[] = []
 const historyAsked: string[] = []
 const journalAsked: string[] = []
+/** What the host's owner probe answers for unreconciled leases during restart reconciliation. */
+let restartProbe: AgentSessionOwnerProbe = { outcome: 'reservation-unused' }
 
 /** The clear of the minted session as the host commits it: stop with evidence, found, move tab. */
 function commitClear(): void {
@@ -187,7 +192,20 @@ function installHost(): void {
         getVisibleSessionTabIndex: () => ({ present: tabIndexPresent, sessionIds: visibleTabs }),
         getSessionTabId: () => null
       },
+      probeOwner: async () => restartProbe,
       logger: { warn: () => {} }
+    },
+    // Restart reconciliation as the real host runs it: probe each unreconciled lease and adjudicate.
+    reconcileRestartLeases: async () => {
+      for (const [id, record] of records) {
+        if (!record.lease.unreconciled) {
+          continue
+        }
+        records.set(
+          id,
+          applyAgentSessionRestartAdjudication({ record, probe: restartProbe, now: 99 })
+        )
+      }
     },
     getSessionTabId: (id: string) => (visibleTabs.includes(id) ? `agent-session:${id}` : null),
     hasSession: (id: string) => open.has(id) || children.has(id),
@@ -335,6 +353,7 @@ beforeEach(() => {
   journals.clear()
   unreadable.clear()
   open.clear()
+  restartProbe = { outcome: 'reservation-unused' }
   tabIndexPresent = true
   clearDuringClose = false
   failHideOf = null
@@ -612,5 +631,77 @@ describe('a running session that cannot be verified is refused, never declared e
     const identity = registerWorker()
     expect(observeStructuredWorker(identity).status).toBe('unverifiable')
     await expectRefused(identity, 'session_caller_host_boundary')
+  })
+})
+
+describe('an abandoned structured worker whose start reservation stranded (#43039)', () => {
+  /** What a crash or abandonment between reservation and owner commit leaves behind. */
+  function installStrandedReservation(): void {
+    const record = located({
+      ...agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: MINTED,
+          runtimeFence: 2,
+          handoffStage: 'new-owner-proving',
+          handoffOperationId: 'op-start-1',
+          provenHandleLinkId: null,
+          ownerProcess: null,
+          reservedSpawnToken: 'spawn-stranded',
+          claimStatus: 'reserved',
+          unreconciled: true,
+          deathEvidence: null
+        })
+      ),
+      providerHandleChain: []
+    })
+    installSessions([record], [])
+  }
+
+  async function abandonStrandedWorker(): Promise<{ receipt: unknown; dispatchId: string }> {
+    const identity = registerWorker()
+    const { call } = rpcRuntime(db)
+    const dispatchId = startWorkerDispatch(db, identity, 'epoch-crashed')
+    expect(db.abandonWorkerDispatch(dispatchId, 'epoch-crashed').disposition).toBe('abandoned')
+    return {
+      receipt: await call('orchestration.workerRelease', { dispatch: dispatchId }),
+      dispatchId
+    }
+  }
+
+  it('settles released once reconciliation proves the reservation unused', async () => {
+    installStrandedReservation()
+    restartProbe = { outcome: 'reservation-unused' }
+    const { receipt, dispatchId } = await abandonStrandedWorker()
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    expect(records.get(MINTED)?.lease.deathEvidence).toMatchObject({
+      detail: 'reservation never spawned'
+    })
+  })
+
+  it('settles released when the host cannot scan for the spawn token at all', async () => {
+    installStrandedReservation()
+    restartProbe = { outcome: 'indeterminate', reason: 'host could not enumerate spawn tokens' }
+    const { receipt, dispatchId } = await abandonStrandedWorker()
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    // No death evidence existed; the release settled on the adjudicated, nameless lease instead.
+    expect(records.get(MINTED)?.lease.deathEvidence).toBeNull()
+    expect(records.get(MINTED)?.lease.claimStatus).toBe('released')
+  })
+
+  it('stays retained when the probe observed a live token-bearing process', async () => {
+    installStrandedReservation()
+    restartProbe = {
+      outcome: 'indeterminate',
+      reason: 'reservation spawn token is live on 1 process(es)'
+    }
+    const { receipt, dispatchId } = await abandonStrandedWorker()
+    expect(receipt).toMatchObject({
+      state: 'retained',
+      reason: 'identity_unproven',
+      processAction: 'none'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
   })
 })

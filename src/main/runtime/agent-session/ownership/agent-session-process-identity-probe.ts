@@ -263,6 +263,9 @@ export async function probeAgentSessionProcessIdentity(args: {
   return { outcome: 'identity-matched', matchedOn }
 }
 
+const RESERVATION_SPAWN_TOKEN_LIVE_REASON = 'reservation spawn token is live on'
+const RESERVATION_PROVIDER_ACTIVE_REASON = 'provider saw activity after the reservation'
+
 /** Unrecorded reservations need positive no-start proof: neither token-bearing processes nor later provider activity. */
 export async function probeAgentSessionReservation(args: {
   spawnToken: string
@@ -276,7 +279,7 @@ export async function probeAgentSessionReservation(args: {
   if (pids.length > 0) {
     return {
       outcome: 'indeterminate',
-      reason: `reservation spawn token is live on ${pids.length} process(es)`
+      reason: `${RESERVATION_SPAWN_TOKEN_LIVE_REASON} ${pids.length} process(es)`
     }
   }
   const providerActivity = await args.hasProviderActivitySinceReservation().catch(() => null)
@@ -284,6 +287,18 @@ export async function probeAgentSessionReservation(args: {
     return { outcome: 'indeterminate', reason: 'provider activity since reservation is unknown' }
   }
   return providerActivity
-    ? { outcome: 'indeterminate', reason: 'provider saw activity after the reservation' }
+    ? { outcome: 'indeterminate', reason: RESERVATION_PROVIDER_ACTIVE_REASON }
     : { outcome: 'reservation-unused' }
+}
+
+/** Whether a reservation probe observed signs of life (a token-bearing process or provider
+ *  activity); enumeration and observation failures prove nothing either way. */
+export function agentSessionReservationProbeObservedLife(
+  probe: AgentSessionOwnerProbe | null | undefined
+): boolean {
+  return (
+    probe?.outcome === 'indeterminate' &&
+    (probe.reason.startsWith(RESERVATION_SPAWN_TOKEN_LIVE_REASON) ||
+      probe.reason === RESERVATION_PROVIDER_ACTIVE_REASON)
+  )
 }

@@ -19,6 +19,35 @@ import {
   WorkerRetainParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredSessionReleaseSettled } from '../../../../orchestration/terminal-authority/structured-sessions/structured-session-release-settlement'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import { agentSessionReservationProbeObservedLife } from '../../../../agent-session/ownership/agent-session-process-identity-probe'
+import type { AgentSessionOwnerProbe } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+
+/** Reconcile a settled structured worker's session lease before release judges it: an abandoned
+ *  start can strand a reservation that no chat flow ever re-adjudicates (#43039). Probe the
+ *  stranded reservation first — eviction clears the spawn token its life evidence depends on. */
+async function reconcileStructuredSessionLease(
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  sessionId: string
+): Promise<AgentSessionOwnerProbe | null> {
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return null
+  }
+  const record = host.deps.store.getRecord(sessionId)
+  const stranded =
+    record !== null &&
+    record.lease.unreconciled === true &&
+    record.lease.ownerProcess === null &&
+    record.lease.claimStatus === 'reserved'
+  const probe = stranded && record ? await host.deps.probeOwner?.(record) : undefined
+  await host.reconcileRestartLeases?.()
+  return probe ?? null
+}
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineOrchestrationMethod({
@@ -56,18 +85,31 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
-        const processIncarnation = resource?.process_incarnation
-        if (
-          processIncarnation &&
-          (await runtime.inspectTerminalProcessIncarnationLiveness(
-            processIncarnation,
-            resource.host_scope
-          )) === 'exited'
-        ) {
+        const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(
+          resource?.process_incarnation
+        )
+        const strandedReservationProbe = structuredSessionId
+          ? await reconcileStructuredSessionLease(runtime, structuredSessionId)
+          : null
+        const liveness = resource?.process_incarnation
+          ? await runtime.inspectTerminalProcessIncarnationLiveness(
+              resource.process_incarnation,
+              resource.host_scope
+            )
+          : null
+        // A stopped/abandoned structured worker settles when its session is proven dead, or when
+        // its reconciled lease names nothing that could still run and the probe saw no life.
+        const settleDead =
+          liveness === 'exited' ||
+          (requested.reason === 'identity_unproven' &&
+            structuredSessionId !== null &&
+            !agentSessionReservationProbeObservedLife(strandedReservationProbe) &&
+            structuredSessionReleaseSettled(structuredSessionId))
+        if (resource?.process_incarnation && settleDead) {
           const reconciled = db.settleDeadWorkerTerminalRelease({
             requestingDispatchId: params.dispatch,
             resourceId: resource.id,
-            processIncarnation
+            processIncarnation: resource.process_incarnation
           })
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
