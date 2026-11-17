@@ -19,11 +19,57 @@ function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): numbe
   return count
 }
 
+/** True when no row was added, removed, re-hosted, or (un)archived; only touched rows are read. */
+function sameLiveRows(
+  next: AppState['worktreesByRepo'],
+  previous: AppState['worktreesByRepo']
+): boolean {
+  const repoIds = Object.keys(next)
+  if (repoIds.length !== Object.keys(previous).length) {
+    return false
+  }
+  return repoIds.every((repoId) => {
+    const rows = next[repoId]
+    const previousRows = previous[repoId]
+    if (rows === previousRows) {
+      return true
+    }
+    if (!previousRows || rows.length !== previousRows.length) {
+      return false
+    }
+    return rows.every((row, index) => {
+      const before = previousRows[index]
+      return (
+        row === before ||
+        (row.id === before.id &&
+          row.hostId === before.hostId &&
+          row.isArchived === before.isArchived)
+      )
+    })
+  })
+}
+
+/** Live-row counter for sort settling; a title-only write reuses the last count instead of rescanning every row. */
+export function createLiveWorktreeCounter(): (
+  worktreesByRepo: AppState['worktreesByRepo']
+) => number {
+  let counted: AppState['worktreesByRepo'] | null = null
+  let count = 0
+  return (worktreesByRepo) => {
+    if (!counted || !sameLiveRows(worktreesByRepo, counted)) {
+      count = countLiveWorktrees(worktreesByRepo)
+    }
+    counted = worktreesByRepo
+    return count
+  }
+}
+
 /** Call once from inside the store's state creator, passing its `api`. */
 export function installSettledSortEpoch(
   api: Pick<StoreApi<AppState>, 'setState' | 'subscribe'>
 ): void {
   let settleState = INITIAL_SORT_SETTLE_STATE
+  const countLive = createLiveWorktreeCounter()
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const dispatch = (event: SortSettleEvent): void => {
@@ -50,7 +96,7 @@ export function installSettledSortEpoch(
       kind: 'write',
       change:
         epochBumped || rowsChanged
-          ? { epochBumped, liveCount: countLiveWorktrees(selectWorktreesByRepo(state)) }
+          ? { epochBumped, liveCount: countLive(selectWorktreesByRepo(state)) }
           : null,
       settled: state.settledSortEpoch === state.sortEpoch,
       sortBy: state.sortBy,
