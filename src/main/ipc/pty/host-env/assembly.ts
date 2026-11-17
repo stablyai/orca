@@ -178,7 +178,8 @@ export function buildPtyHostEnv(
     // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
-        materializeDefaultHome: explicitPiAgentKind === 'pi'
+        materializeDefaultHome: explicitPiAgentKind === 'pi',
+        cliOnPath: opts.agentsOnPath?.has('pi') === true
       })
       Object.assign(baseEnv, piEnv)
       exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
@@ -187,6 +188,7 @@ export function buildPtyHostEnv(
     if (shouldInstallOmpExtensions && shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp', {
         materializeDefaultHome: explicitPiAgentKind === 'omp',
+        cliOnPath: opts.agentsOnPath?.has('omp') === true,
         // WSL loads the host-rooted managed extension through drvfs; guest storage stays separate.
         ...(opts.isWsl
           ? { configDirName: '.omp' }
