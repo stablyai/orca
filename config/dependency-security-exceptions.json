@@ -60,7 +60,7 @@
     "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
     "expires": "2026-12-20",
     "patch": {
-      "path": "../config/patches/picomatch@4.0.7.patch",
+      "path": "patches/picomatch@4.0.7.patch",
       "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
     }
   },
