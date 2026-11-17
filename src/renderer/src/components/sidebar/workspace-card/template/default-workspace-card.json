@@ -97,7 +97,7 @@
                   "el": "Row",
                   "when": "vars.newStyle",
                   "props": {
-                    "push": true,
+                    "push": "=!vars.titleIndicators",
                     "keep": true,
                     "align": "center",
                     "gap": "sm",
