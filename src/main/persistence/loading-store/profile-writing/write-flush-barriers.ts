@@ -18,6 +18,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'githubCachePersistenceDisabled'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
+  | 'githubCacheRows'
   | 'lastDurableWriteGeneration'
   | 'pendingProfileFlushes'
   | 'pendingProfileMaintenance'
