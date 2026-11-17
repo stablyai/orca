@@ -243,6 +243,10 @@ export class AccountMoveHolds {
       if (open?.has(id) && this.deps.sessions.has(id)) {
         continue
       }
+      if (edge === 'dispatch') {
+        // Seen closed: a later read that finds it open again puts it back.
+        this.onDispatch.delete(id)
+      }
       this.stale(id, edge === 'account' ? 'account' : 'work')
       this.wakeOrRelease(id)
     }

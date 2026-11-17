@@ -270,6 +270,22 @@ it('still continues a usage-limited worker whose open Dispatch waits on that con
   await chat.sweep(15_000)
   // Its Dispatch closes only once the worker continues; holding the continue would never end.
   await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
+
+  // Nothing is left held for it: later Dispatch events, each in its own tick, read and wake nothing.
+  chat.closeDispatch()
+  await new Promise((settled) => setImmediate(settled))
+  const wake = vi.spyOn(rig!.host.collaboratorsForTests().conversationDelivery.loop, 'wake')
+  const events = async (count: number) => {
+    const before = chat.dispatchReads()
+    for (let i = 0; i < count; i++) {
+      chat.unrelatedDispatchChanges(1)
+      await new Promise((settled) => setImmediate(settled))
+    }
+    return chat.dispatchReads() - before
+  }
+  expect(await events(10)).toBe(0)
+  expect(await events(100)).toBe(0)
+  expect(wake).not.toHaveBeenCalled()
 })
 
 it('lets go of the hold once the person deletes the message it held', async () => {

@@ -72,7 +72,11 @@ export async function admitStructuredAgentSessionSend(
         continuation ? { reader: 'sweep' } : undefined
       )
   // A limited worker's open Dispatch waits on its own continue: holding that would never end.
-  const transition = continuation && move?.waitsFor === 'dispatch' ? null : move
+  const passes = continuation && move?.waitsFor === 'dispatch'
+  if (passes) {
+    context.accountMoveSettled?.(ctx.sessionId, 'sweep')
+  }
+  const transition = passes ? null : move
   if (transition) {
     ctx.logger.warn('holding a send until the chat can move to the account it now uses', {
       scope: 'account-transition',
