@@ -104,7 +104,7 @@ export function SelectionAddToChatPopover({
         )
       }
     }
-    const onKeyUp = (): void => offer(null)
+    const onSelectionEnd = (): void => offer(null)
     const onSelectionChange = (): void => {
       selectionChanged = true
       if (offered !== null && readLatestQuotable(root)?.text !== offered) {
@@ -114,7 +114,8 @@ export function SelectionAddToChatPopover({
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('selectionchange', onSelectionChange)
     window.addEventListener('mouseup', onMouseUp)
-    document.addEventListener('keyup', onKeyUp)
+    document.addEventListener('keyup', onSelectionEnd)
+    document.addEventListener('touchend', onSelectionEnd)
     window.addEventListener('blur', close)
     const removeResizeListener = addViewportSizeChangeListener(close)
     return () => {
@@ -122,7 +123,8 @@ export function SelectionAddToChatPopover({
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('selectionchange', onSelectionChange)
       window.removeEventListener('mouseup', onMouseUp)
-      document.removeEventListener('keyup', onKeyUp)
+      document.removeEventListener('keyup', onSelectionEnd)
+      document.removeEventListener('touchend', onSelectionEnd)
       window.removeEventListener('blur', close)
       removeResizeListener()
     }

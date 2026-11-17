@@ -8,6 +8,10 @@ import type {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
+import { SelectionAddToChatPopover } from '../../native-chat/selection-quotes/SelectionAddToChatPopover'
+import { openAddToChatMenuAt } from '../../native-chat/selection-quotes/add-to-chat-point-menu'
+import { formatNativeChatQuote } from '../../native-chat/selection-quotes/native-chat-quote-selection'
+import { readPdfChatSelection } from './pdf-chat-selection'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
@@ -40,6 +44,8 @@ type PdfViewerProps = {
   /** The file's size, which pdf.js needs to read `src` by range. */
   byteSize?: number
   filePath: string
+  sourceWorktreeId?: string | null
+  sourceRelativePath?: string | null
   // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
   preferenceKey?: string | null
   // Omit scroll memory for diff/conflict surfaces that can mount several viewers on the same path.
@@ -49,6 +55,8 @@ type PdfViewerProps = {
 export default function PdfViewer(props: PdfViewerProps): JSX.Element {
   const identity = JSON.stringify([
     props.filePath,
+    props.sourceWorktreeId ?? null,
+    props.sourceRelativePath ?? null,
     props.preferenceKey ?? null,
     props.scrollCacheKey ?? null
   ])
@@ -60,6 +68,8 @@ function PdfDocumentViewer({
   src,
   byteSize,
   filePath,
+  sourceWorktreeId = null,
+  sourceRelativePath = null,
   preferenceKey = null,
   scrollCacheKey = null
 }: PdfViewerProps): JSX.Element {
@@ -195,6 +205,24 @@ function PdfDocumentViewer({
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+      <SelectionAddToChatPopover
+        key={src ?? cleanedContent}
+        rootRef={viewerDivRef}
+        enabled={sourceWorktreeId !== null && sourceRelativePath !== null && pdfError === null}
+        readQuotable={(root) =>
+          sourceRelativePath === null ? null : readPdfChatSelection(root, sourceRelativePath)
+        }
+        onAdd={(text, button) =>
+          sourceWorktreeId &&
+          openAddToChatMenuAt({
+            worktreeId: sourceWorktreeId,
+            quote: formatNativeChatQuote(text),
+            launchSource: 'native_chat',
+            x: button.left,
+            y: button.bottom
+          })
+        }
+      />
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
         {/* PDFViewer needs absolute positioning; isolate pdf.js DOM from Preflight with all:revert, then apply layout on the inner container. */}
