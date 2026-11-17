@@ -19763,6 +19763,7 @@
         "availableAfterSessionStarts": "会话开始后可用",
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
+          "none": "无",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",

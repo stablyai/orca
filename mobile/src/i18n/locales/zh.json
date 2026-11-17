@@ -430,6 +430,7 @@
       "otherDevice": "其他设备"
     },
     "sessionOptionCopy": {
+      "none": "无",
       "availableAfterSessionStarts": "会话开始后可用",
       "chooseInAgentPicker": "在智能体选择器中选择…",
       "effort": "推理强度",

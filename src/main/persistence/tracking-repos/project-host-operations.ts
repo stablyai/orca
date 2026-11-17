@@ -48,12 +48,17 @@ export type ProjectHostMutationOperations = {
 export class ProjectHostPersistenceOperations {
   /** Repo rows by id, for keyed reads; dropped by every `repos` write and rebuilt on next use. */
   private repoIndex: { source: Repo[]; lookup: RepoRowExecutionHostLookup<Repo> } | null = null
+  /** Hydrated rows, dropped with the index; reads at sidebar polling rates must not re-sanitize every repo. */
+  private hydratedRows = new WeakMap<Repo, Repo>()
+  private hydratedList: { source: Repo[]; rows: Repo[] } | null = null
 
   constructor(private readonly operations: ProjectHostMutationOperations) {}
 
-  /** A write changed the repo collection (membership, order or a row's host). */
+  /** A write changed the repo collection or any row's fields; every row edit must save `repos`. */
   invalidateRepoIndex(): void {
     this.repoIndex = null
+    this.hydratedRows = new WeakMap()
+    this.hydratedList = null
   }
 
   /** The repo registered under `id` on `hostId`, by key: never a pass over every registration. */
@@ -66,7 +71,16 @@ export class ProjectHostPersistenceOperations {
       }
     }
     const repo = this.repoIndex.lookup.byHost(id, hostId)
-    return repo ? this.hydrateRepo(repo) : undefined
+    return repo ? this.readHydratedRepo(repo) : undefined
+  }
+
+  private readHydratedRepo(repo: Repo): Repo {
+    let hydrated = this.hydratedRows.get(repo)
+    if (!hydrated) {
+      hydrated = this.hydrateRepo(repo)
+      this.hydratedRows.set(repo, hydrated)
+    }
+    return hydrated
   }
 
   private get state(): PersistedState {
@@ -105,7 +119,14 @@ export class ProjectHostPersistenceOperations {
   }
 
   getRepos(): Repo[] {
-    return this.state.repos.map((repo) => this.hydrateRepo(repo))
+    // A replaced collection is a new array, even with no write notice.
+    if (this.hydratedList?.source !== this.state.repos) {
+      this.hydratedList = {
+        source: this.state.repos,
+        rows: this.state.repos.map((repo) => this.readHydratedRepo(repo))
+      }
+    }
+    return [...this.hydratedList.rows]
   }
 
   getProjects(): Project[] {
@@ -237,7 +258,7 @@ export class ProjectHostPersistenceOperations {
 
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
-    return repo ? this.hydrateRepo(repo) : undefined
+    return repo ? this.readHydratedRepo(repo) : undefined
   }
 
   /** Store probed usernames by exact repo/host; renderer patches cannot author this cache. Returns whether hydration changed. */

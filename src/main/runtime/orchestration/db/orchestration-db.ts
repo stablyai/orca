@@ -21,6 +21,7 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
+import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -54,6 +55,7 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     refreshOutstandingDeliveryTrigger(this.db)
+    installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
       ['federation_relay_items', ['answer_sender_report']]

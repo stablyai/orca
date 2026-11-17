@@ -19444,6 +19444,7 @@
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
         "optionUpdateFailed": "Impossible de mettre à jour l'option",
         "optionValue": {
+          "none": "Aucun",
           "fast": "Rapide",
           "minimal": "Minimal",
           "low": "Basse",

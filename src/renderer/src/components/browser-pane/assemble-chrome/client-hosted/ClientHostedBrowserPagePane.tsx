@@ -38,6 +38,7 @@ import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-bro
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
@@ -140,11 +141,9 @@ export function ClientHostedBrowserPagePane(props: Props) {
       .getState()
       .browserPagesByWorkspace[workspaceId]?.find((page) => page.id === browserTab.id)
   )
-  const getAgentCursorHost = useCallback(
-    () => webviewRef.current?.parentElement ?? null,
-    [webviewRef]
-  )
+  const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
+  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, viewportRef)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
@@ -373,6 +372,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
           ref={viewportRef}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
+          {...fileDrop}
         >
           {markup.overlay}
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
