@@ -1,5 +1,7 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '../../../types'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/lineage/workspace-lineage-graph'
 
 export type ReplacedWorktreeRow = { before: Worktree; after: Worktree }
 
@@ -25,11 +27,18 @@ function inlineWorkspaceLineageOf(
   return row.workspaceLineage
 }
 
-/** True when a replacement cannot change folder-parent resolution: same structure and same inline folder edge. */
+const NO_PROJECTED_LINEAGE: Readonly<Record<string, WorktreeLineage>> = {}
+
+/** True when a replacement cannot change lineage resolution: same structure, runtime owner, inline folder edge, and inline lineage. */
 export function sameWorktreeLineageInputs(row: Worktree, before: Worktree): boolean {
   return (
     sameWorktreeStructure(row, before) &&
-    inlineWorkspaceLineageOf(row) === inlineWorkspaceLineageOf(before)
+    // The runtime owner picks the lineage store a folder parent resolves in.
+    row.runtimeOwnerEnvironmentId === before.runtimeOwnerEnvironmentId &&
+    inlineWorkspaceLineageOf(row) === inlineWorkspaceLineageOf(before) &&
+    // With no projected record, lineage readers fall back to the row's own inline lineage.
+    getProjectedWorktreeLineage(row, NO_PROJECTED_LINEAGE) ===
+      getProjectedWorktreeLineage(before, NO_PROJECTED_LINEAGE)
   )
 }
 

@@ -22,7 +22,12 @@ import {
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import {
+  selectCrossStoreFolderChildrenById,
+  selectSidebarLineageParentIdentities
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { OWN_LINEAGE_STORE_KEY } from '../../../../shared/worktree/lineage/cross-store-lineage-resolution'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -47,6 +52,24 @@ vi.mock('@/components/workspace-surface-projection', async (importOriginal) => {
 })
 
 const TITLE = 'Triage assigned issues prs'
+
+function folderWorkspace(id: string): FolderWorkspace {
+  return {
+    id,
+    projectGroupId: 'group-1',
+    name: 'Folder',
+    folderPath: '/folder',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
+}
 const CHAT_TABS = 100
 
 /** Counts full walks of an index, which is how a copy reads it. */
@@ -498,4 +521,228 @@ describe('applyLocalPinnedDisplayName', () => {
     const parents = selectSidebarLineageParentIdentities(useAppStore.getState())
     expect(parents?.has(getWorktreeHostIdentity(withFolderParent))).toBe(true)
   })
+
+  it('re-resolves folder parents when only the runtime owner changes', () => {
+    const child: Worktree = { ...row(18, 0, false, () => {}), repoId: 'repo-18' }
+    const withFolderParent = {
+      ...child,
+      workspaceLineage: {
+        parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+        parentInstanceId: null,
+        childInstanceId: 'instance-18-0'
+      }
+    }
+    useAppStore.setState({
+      repos: [repo('repo-18')],
+      worktreesByRepo: { 'repo-18': [withFolderParent] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folderWorkspace('folder-1')],
+      workspaceLineageByChildKey: {},
+      crossStoreLineageByStoreKey: {},
+      worktreeLineageById: {}
+    })
+    const identity = getWorktreeHostIdentity(withFolderParent)
+    expect(selectSidebarLineageParentIdentities(useAppStore.getState())?.has(identity)).toBe(true)
+
+    const runtimeOwned = { ...withFolderParent, runtimeOwnerEnvironmentId: 'env-1' }
+    useAppStore.setState({ worktreesByRepo: { 'repo-18': [runtimeOwned] } })
+    // A cold resolution files the row under env-1's store, where folder-1 is not listed.
+    expect(
+      selectSidebarLineageParentIdentities(useAppStore.getState())?.has(identity) ?? false
+    ).toBe(false)
+  })
+
+  it('keeps the winning copy in the lineage index when a discarded copy moves', () => {
+    const rows = Array.from({ length: 4 }, (_, index) => row(17, index, false, () => {}))
+    const winner: Worktree = { ...rows[0] }
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-17': [...rows, winner] },
+      detectedWorktreesByRepo: {}
+    })
+    const identity = getWorktreeHostIdentity(winner)
+    expect(getLineageAncestorIndex(useAppStore.getState().worktreesByRepo).get(identity)).toBe(
+      winner
+    )
+
+    const discarded: Worktree = { ...rows[0], path: '/elsewhere', instanceId: 'instance-other' }
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-17': [discarded, ...rows.slice(1), winner] }
+    })
+    const latest = useAppStore.getState().worktreesByRepo
+    expect(getIndexedAllWorktrees(latest).find(({ id }) => id === winner.id)).toBe(winner)
+    expect(getLineageAncestorIndex(latest).get(identity)?.path).toBe('/work/w0')
+  })
+
+  it('keeps the current copy in the lineage index when only a discarded copy is retitled', () => {
+    const old: Worktree = { ...row(19, 0, false, () => {}), instanceId: 'instance-old' }
+    const current: Worktree = { ...old, instanceId: 'instance-current' }
+    const child = row(19, 1, false, () => {})
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-19': [old, current, child] },
+      detectedWorktreesByRepo: {}
+    })
+    const identity = getWorktreeHostIdentity(current)
+    getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+
+    useAppStore.setState({
+      worktreesByRepo: { 'repo-19': [{ ...old, displayName: 'Old renamed' }, current, child] }
+    })
+    const index = getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+    expect(index.get(identity)?.instanceId).toBe('instance-current')
+    const lineageById: Record<string, WorktreeLineage> = {
+      [child.id]: {
+        worktreeId: child.id,
+        worktreeInstanceId: 'instance-19-1',
+        parentWorktreeId: current.id,
+        parentWorktreeInstanceId: 'instance-current',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 0
+      }
+    }
+    expect(
+      getSidebarLineageParentsByIdentity(lineageById, index).get(getWorktreeHostIdentity(child))
+        ?.instanceId
+    ).toBe('instance-current')
+  })
+
+  it('re-resolves parents when only a row inline lineage moves', () => {
+    const [a, b, c] = Array.from({ length: 3 }, (_, index) => row(20, index, false, () => {}))
+    const inlineLineage = (parent: Worktree): WorktreeLineage => ({
+      worktreeId: c.id,
+      worktreeInstanceId: 'instance-20-2',
+      parentWorktreeId: parent.id,
+      parentWorktreeInstanceId: parent.instanceId ?? '',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 0
+    })
+    // A real folder edge on A keeps the selector resolving instead of returning undefined.
+    const aInFolder = {
+      ...a,
+      workspaceLineage: {
+        parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+        parentInstanceId: null,
+        childInstanceId: 'instance-20-0'
+      }
+    }
+    const cUnderA = { ...c, lineage: inlineLineage(a) }
+    useAppStore.setState({
+      repos: [repo('repo-20')],
+      worktreesByRepo: { 'repo-20': [aInFolder, b, cUnderA] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folderWorkspace('folder-1')],
+      workspaceLineageByChildKey: {},
+      crossStoreLineageByStoreKey: {},
+      worktreeLineageById: {}
+    })
+    const cIdentity = getWorktreeHostIdentity(c)
+    expect(selectSidebarLineageParentIdentities(useAppStore.getState())?.get(cIdentity)).toBe(
+      getWorktreeHostIdentity(a)
+    )
+
+    const cUnderB = { ...cUnderA, lineage: inlineLineage(b) }
+    useAppStore.setState({ worktreesByRepo: { 'repo-20': [aInFolder, b, cUnderB] } })
+    expect(selectSidebarLineageParentIdentities(useAppStore.getState())?.get(cIdentity)).toBe(
+      getWorktreeHostIdentity(b)
+    )
+  })
+
+  it.each([750, 7500])('a title pin resolves no folder children among %i rows', (size) => {
+    let hostReads = 0
+    const rows = Array.from({ length: size }, (_, index) => {
+      const worktree = row(size + 2, index, false, () => {})
+      // Row 0 is renamed; count only the other rows' host reads, which resolution does per row.
+      Object.defineProperty(worktree, 'hostId', {
+        get: () => {
+          if (index !== 0) {
+            hostReads++
+          }
+          return undefined
+        }
+      })
+      return worktree
+    })
+    const repoId = `repo-${size + 2}`
+    // A saved edge to a folder in a store that is not available resolves to no child.
+    const childKey = worktreeWorkspaceKey(rows[5].id)
+    useAppStore.setState({
+      repos: [repo(repoId)],
+      worktreesByRepo: { [repoId]: rows },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folderWorkspace('folder-1')],
+      workspaceLineageByChildKey: {},
+      worktreeLineageById: {},
+      crossStoreLineageByStoreKey: {
+        [OWN_LINEAGE_STORE_KEY]: {
+          [childKey]: {
+            childWorkspaceKey: childKey,
+            childInstanceId: `instance-${size + 2}-5`,
+            parent: {
+              installationId: 'unavailable-store',
+              workspaceKey: folderWorkspaceKey('folder-1'),
+              instanceId: 'folder-1'
+            },
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt: 0
+          }
+        }
+      }
+    })
+    const warm = selectCrossStoreFolderChildrenById(useAppStore.getState())
+    expect(warm.size).toBe(0)
+    // The cold resolution does read every other row.
+    expect(hostReads).toBeGreaterThanOrEqual(size - 1)
+    hostReads = 0
+
+    applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: TITLE })
+    expect(selectCrossStoreFolderChildrenById(useAppStore.getState())).toBe(warm)
+    expect(hostReads).toBe(0)
+  })
+
+  it.each([750, 7500])(
+    'a title pin reuses the hidden-project ancestor map among %i rows',
+    (size) => {
+      const rows = Array.from({ length: size - 1 }, (_, index) =>
+        row(size + 3, index, false, () => {})
+      )
+      const repoId = `repo-${size + 3}`
+      const hiddenRow: Worktree = {
+        ...row(size + 3, size, false, () => {}),
+        id: 'repo-hidden::/work/h',
+        repoId: 'repo-hidden',
+        path: '/work/h'
+      }
+      const hiddenRepo: Repo = { ...repo('repo-hidden'), hiddenAt: 1 }
+      useAppStore.setState({
+        repos: [repo(repoId), hiddenRepo],
+        worktreesByRepo: { [repoId]: rows, 'repo-hidden': [hiddenRow] },
+        detectedWorktreesByRepo: {},
+        folderWorkspaces: [],
+        crossStoreLineageByStoreKey: {},
+        workspaceLineageByChildKey: {},
+        worktreeLineageById: {}
+      })
+      const repoMap = new Map([
+        [repoId, repo(repoId)],
+        ['repo-hidden', hiddenRepo]
+      ])
+      const visible = (): Worktree[] =>
+        computeVisibleWorktrees(useAppStore.getState().worktreesByRepo, [], {
+          ...buildVisibleWorktreeOptionsFromState(useAppStore.getState(), repoMap),
+          showSleepingWorkspaces: true
+        })
+      expect(visible().some(({ id }) => id === hiddenRow.id)).toBe(false)
+      const ancestorWalks = countIterations(
+        getLineageAncestorIndex(useAppStore.getState().worktreesByRepo)
+      )
+
+      applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: TITLE })
+      const shown = visible()
+      expect(shown.find(({ id }) => id === rows[0].id)?.displayName).toBe(TITLE)
+      expect(shown.some(({ id }) => id === hiddenRow.id)).toBe(false)
+      expect(ancestorWalks()).toBe(0)
+    }
+  )
 })

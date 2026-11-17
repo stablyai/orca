@@ -16,7 +16,11 @@ import {
   pickFolderLineageRecord,
   readInlineFolderLineage
 } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
-import { getIndexedAllWorktrees, getWorktreeLineageKey } from '../listing/worktree-catalog-index'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById,
+  getWorktreeLineageKey
+} from '../listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -171,8 +175,18 @@ type FolderChildrenInputs = CrossStoreLineageInputs & Pick<AppState, 'folderWork
 
 const NO_FOLDER_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
 
-let lastFolderChildrenCall: {
+type FolderChildRef = { id: string; identity: string }
+
+const NO_FOLDER_CHILD_REFS: ReadonlyMap<string, readonly FolderChildRef[]> = new Map()
+
+let lastFolderChildRefs: {
   inputs: readonly unknown[]
+  refs: ReadonlyMap<string, readonly FolderChildRef[]>
+} | null = null
+
+let lastFolderChildrenCall: {
+  refs: ReadonlyMap<string, readonly FolderChildRef[]>
+  catalog: AppState['worktreesByRepo']
   result: ReadonlyMap<string, readonly Worktree[]>
 } | null = null
 
@@ -181,19 +195,50 @@ let lastFolderChildrenCall: {
 export function selectCrossStoreFolderChildrenById(
   state: FolderChildrenInputs
 ): ReadonlyMap<string, readonly Worktree[]> {
-  // The result holds child rows, so a title write must recompute it.
-  const inputs = [
-    ...resolutionInputs(state),
-    selectWorktreesByRepo(state),
-    selectFolderWorkspaces(state)
-  ]
+  // Resolution keys on lineage inputs, not titles; a title write only swaps in the current child rows.
+  const inputs = [...resolutionInputs(state), selectFolderWorkspaces(state)]
+  const previousRefs = lastFolderChildRefs
+  const refs =
+    previousRefs && inputs.every((input, index) => input === previousRefs.inputs[index])
+      ? previousRefs.refs
+      : resolveFolderChildRefs(state)
+  lastFolderChildRefs = { inputs, refs }
+  if (refs.size === 0) {
+    return NO_FOLDER_CHILDREN
+  }
+  const worktreesByRepo = selectWorktreesByRepo(state)
   const previous = lastFolderChildrenCall
-  if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
+  if (previous?.refs === refs && previous.catalog === worktreesByRepo) {
     return previous.result
   }
-  const result = resolveFolderChildren(state)
-  lastFolderChildrenCall = { inputs, result }
+  const result = new Map<string, readonly Worktree[]>()
+  for (const [folderId, children] of refs) {
+    const rows = children.flatMap(({ id, identity }) =>
+      getIndexedWorktreesById(worktreesByRepo, id).filter(
+        (row) => getWorktreeHostIdentity(row) === identity
+      )
+    )
+    if (rows.length > 0) {
+      result.set(folderId, rows)
+    }
+  }
+  lastFolderChildrenCall = { refs, catalog: worktreesByRepo, result }
   return result
+}
+
+function resolveFolderChildRefs(
+  state: FolderChildrenInputs
+): ReadonlyMap<string, readonly FolderChildRef[]> {
+  const children = resolveFolderChildren(state)
+  if (children.size === 0) {
+    return NO_FOLDER_CHILD_REFS
+  }
+  return new Map(
+    [...children].map(([folderId, rows]) => [
+      folderId,
+      rows.map((row) => ({ id: row.id, identity: getWorktreeHostIdentity(row) }))
+    ])
+  )
 }
 
 function resolveFolderChildren(

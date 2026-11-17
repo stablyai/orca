@@ -69,6 +69,7 @@ export function computeVisibleWorktrees(
       getIndexedWorktreesById(worktreesByRepo, ancestor.id).find(
         (row) => getWorktreeHostIdentity(row) === getWorktreeHostIdentity(ancestor)
       ) ?? ancestor,
+    hiddenProjects: opts.hiddenProjects,
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
     facts: buildDesktopWorkspaceRowFactReader(opts),

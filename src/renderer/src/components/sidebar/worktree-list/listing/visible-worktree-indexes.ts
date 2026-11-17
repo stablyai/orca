@@ -1,8 +1,11 @@
-import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   replacedWorktreeRows,
-  sameWorktreeStructure,
+  sameWorktreeLineageInputs,
   type ReplacedWorktreeRow
 } from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -34,7 +37,7 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   const previous = previousRows && lineageAncestorIndexCache.get(previousRows)
   const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const lineage =
-    (previous && replaced && overlayLineageIndex(previous, replaced)) ||
+    (previous && replaced && overlayLineageIndex(previous, replaced, worktreesByRepo)) ||
     lineageView(buildLineageAncestorIndex(worktreesByRepo), new Map())
   lineageAncestorIndexCache.set(worktreesByRepo, lineage)
   lastLineageRows = new WeakRef(worktreesByRepo)
@@ -55,13 +58,18 @@ function lineageView(
 /** Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was. Values may carry an older title. Null asks for a rebuild. */
 function overlayLineageIndex(
   previous: LineageIndex,
-  replaced: readonly ReplacedWorktreeRow[]
+  replaced: readonly ReplacedWorktreeRow[],
+  worktreesByRepo: WorktreesByRepo
 ): LineageIndex | null {
   // The indexed row may be an older revision than `before` (a kept title write), so compare against it.
   const moved = replaced.flatMap(({ before, after }) => {
     const identity = getWorktreeHostIdentity(before)
     const indexed = previous.index.get(identity)
-    return indexed && !sameWorktreeStructure(after, indexed) ? [{ identity, after }] : []
+    return indexed &&
+      !sameWorktreeLineageInputs(after, indexed) &&
+      isKeptRow(worktreesByRepo, after)
+      ? [{ identity, after }]
+      : []
   })
   // Title-only writes keep the index object so lineage caches keyed on it still hit; display reads current rows.
   if (moved.length === 0) {
@@ -76,6 +84,14 @@ function overlayLineageIndex(
     }
   }
   return overlay.size > MAX_LINEAGE_OVERLAY ? null : lineageView(previous.base, overlay)
+}
+
+/** Same-host copies of one id collapse to the last one; a discarded earlier copy must not reach the index. */
+function isKeptRow(worktreesByRepo: WorktreesByRepo, row: Worktree): boolean {
+  const identity = getWorktreeHostIdentity(row)
+  return getIndexedWorktreesById(worktreesByRepo, row.id).some(
+    (kept) => kept === row && getWorktreeHostIdentity(kept) === identity
+  )
 }
 
 function buildLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
