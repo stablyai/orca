@@ -1,14 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { DEFAULT_AUTO_SWITCH_THRESHOLD } from '../../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import { useTranslate } from '@/i18n/use-translate'
-import { Input } from '../../../ui/input'
+import { CommitNumberInput } from './commit-number-input'
 import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-
-export function clampThreshold(value: number): number {
-  return Math.min(99.9, Math.max(50, value))
-}
 
 export function ClaudeAutoSwitchSetting({
   settings,
@@ -38,21 +34,17 @@ export function ClaudeAutoSwitchSetting({
         <Label>{title}</Label>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <Input
-        type="number"
+      <CommitNumberInput
         min={50}
         max={99.9}
-        step={1}
+        allowEmpty={false}
         className="h-7 w-16"
         aria-label={t('accounts.claude.autoSwitch.threshold', 'Switch at % used')}
         value={auto.threshold}
         disabled={!auto.enabled}
-        onChange={(event) => {
-          const value = Number(event.target.value)
-          if (Number.isFinite(value)) {
-            updateSettings({ claudeAutoSwitch: { ...auto, threshold: clampThreshold(value) } })
-          }
-        }}
+        onCommit={(threshold) =>
+          updateSettings({ claudeAutoSwitch: { ...auto, threshold: threshold ?? auto.threshold } })
+        }
       />
       <Switch
         checked={auto.enabled}

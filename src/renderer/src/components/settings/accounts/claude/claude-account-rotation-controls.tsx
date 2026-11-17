@@ -1,8 +1,7 @@
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Translate } from '@/i18n/use-translate'
-import { Input } from '../../../ui/input'
 import { Switch } from '../../../ui/switch'
-import { clampThreshold } from './claude-auto-switch-setting'
+import { CommitNumberInput } from './commit-number-input'
 
 export function ClaudeAccountRotationControls({
   accountId,
@@ -29,31 +28,27 @@ export function ClaudeAccountRotationControls({
         aria-label={t('accounts.claude.autoSwitch.inRotation', 'In rotation')}
         onCheckedChange={(inRotation) => save({ disabled: !inRotation })}
       />
-      <Input
-        type="number"
+      <CommitNumberInput
         min={50}
         max={99.9}
+        allowEmpty
         className="h-6 w-16"
         title={t('accounts.claude.autoSwitch.threshold', 'Switch at % used')}
         placeholder={String(settings.claudeAutoSwitch.threshold)}
-        value={rule.threshold ?? ''}
-        onChange={(event) => {
-          const value = event.target.value === '' ? undefined : Number(event.target.value)
-          save({ threshold: value === undefined ? undefined : clampThreshold(value) })
-        }}
+        value={rule.threshold}
+        onCommit={(threshold) => save({ threshold })}
       />
-      <Input
-        type="number"
+      <CommitNumberInput
         min={0}
         max={1000}
+        allowEmpty
         className="h-6 w-16"
         title={t('accounts.claude.autoSwitch.priority', 'Priority (higher is used first)')}
         placeholder="0"
-        value={rule.priority ?? ''}
-        onChange={(event) => {
-          const value = Number(event.target.value)
-          save({ priority: Number.isFinite(value) ? Math.min(1000, Math.max(0, value)) : 0 })
-        }}
+        value={rule.priority}
+        onCommit={(priority) =>
+          save({ priority: priority === undefined ? undefined : Math.round(priority) })
+        }
       />
     </div>
   )

@@ -23,7 +23,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
-import { pickAutoSwitchTarget } from '../../claude-accounts/selection/claude-auto-switch'
+import { createClaudeAutoSwitch } from '../../claude-accounts/selection/claude-auto-switch'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -216,40 +216,13 @@ export function createProviderAccountServices(
       }))
   })
   // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
-  let lastAutoSwitchAt = 0
-  let autoSwitching = false
-  rateLimits.onStateChange((state) => {
-    const settings = store.getSettings()
-    const auto = settings.claudeAutoSwitch
-    const activeId = normalizeClaudeRuntimeSelection(settings).host
-    // The cooldown stops a stale reading from bouncing between accounts.
-    if (!auto?.enabled || !activeId || autoSwitching || Date.now() - lastAutoSwitchAt < 60_000) {
-      return
-    }
-    const target = pickAutoSwitchTarget({
-      activeId,
-      active: state.claude,
-      inactive: state.inactiveClaudeAccounts,
-      accountIds: settings.claudeManagedAccounts
-        .filter((account) => account.managedAuthRuntime !== 'wsl')
-        .map((account) => account.id),
-      rotation: settings.claudeAccountRotation ?? {},
-      defaultThreshold: auto.threshold
+  rateLimits.onStateChange(
+    createClaudeAutoSwitch({
+      getSettings: () => store.getSettings(),
+      listAccounts: () => claudeAccounts.listAccounts(),
+      select: (accountId) => claudeAccounts.selectAccount(accountId)
     })
-    if (!target) {
-      return
-    }
-    autoSwitching = true
-    claudeAccounts
-      .selectAccount(target)
-      .then(() => {
-        lastAutoSwitchAt = Date.now()
-      })
-      .catch((error: unknown) => console.warn('[claude-accounts] Auto-switch failed:', error))
-      .finally(() => {
-        autoSwitching = false
-      })
-  })
+  )
   rateLimits.start({ fetchImmediately: false })
   return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }
 }
