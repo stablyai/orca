@@ -287,6 +287,7 @@
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
   --worktree-sidebar: #f5f5f5;
+  --worktree-sidebar-band: rgb(0 0 0 / 0.03);
   --worktree-sidebar-foreground: #0a0a0a;
   --worktree-sidebar-accent: #eaeaea;
   --worktree-sidebar-accent-foreground: #171717;
@@ -407,6 +408,7 @@
   --chart-5: var(--color-blue-800);
   /* Mirror light mode’s lifted worktree sidebar above the dark canvas. */
   --worktree-sidebar: #2a2a2a;
+  --worktree-sidebar-band: rgb(255 255 255 / 0.035);
   --worktree-sidebar-foreground: #f0f0f0;
   --worktree-sidebar-accent: #353535;
   --worktree-sidebar-accent-foreground: #f0f0f0;
@@ -1761,6 +1763,11 @@ html.native-shell .app-layout {
   overflow-y: auto;
   overflow-x: hidden;
   transition: width 200ms ease;
+}
+
+/* Alternating project-section band so adjacent groups read apart in the worktree tree. */
+.worktree-section-band {
+  background: var(--worktree-sidebar-band);
 }
 
 /* Light sidebar-accent/40 disappears on the panel; lift nested hover without overpowering workspace cards. */
