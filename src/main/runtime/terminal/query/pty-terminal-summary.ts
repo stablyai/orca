@@ -32,6 +32,7 @@ import type {
 import { readTerminalTail } from '../output/tail/terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
   protected abstract bindPtyIncarnationHandle(
@@ -155,6 +156,9 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
 
   /** The PTY a runtime or window-pane handle names; a reloading graph is unknown, not gone, so it throws. */
   getTerminalPtyIdForHandle(handle: string): string | null {
+    if (isStructuredWorkerHandle(handle)) {
+      return null
+    }
     try {
       return this.getTerminalPtyForHandle(handle).pty.ptyId
     } catch (error) {

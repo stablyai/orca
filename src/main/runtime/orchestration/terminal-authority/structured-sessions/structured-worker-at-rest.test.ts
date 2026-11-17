@@ -119,6 +119,29 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
     return dispatch
   }
 
+  it.each([100, 1000])(
+    'skips terminal Setup inspection for an at-rest worker among %s visible chats',
+    async (count) => {
+      const dispatch = dispatchWorker()
+      const tabs = [...Array.from({ length: count }, (_, index) => `chat-${index}`), SESSION]
+      const host = installHost(record({ claimStatus: 'released' }), tabs)
+      const inventory = vi.spyOn(host, 'getPersistedVisibleSessionTabIndex')
+      const { OrcaRuntimeService } = await import('../../../orca-runtime')
+      const runtime = new OrcaRuntimeService()
+      runtime.setOrchestrationDb(db)
+      runtime.attachWindow(1)
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+      await expect(
+        runtime.waitForTerminalSetup(
+          db.getWorkerTerminalResourceByOwner(dispatch.id)!.terminal_handle,
+          'Codex'
+        )
+      ).resolves.toBeUndefined()
+      expect(inventory).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps a worker at rest after its dispatch settles a group recipient, until its tab goes (P2-19 ii)', () => {
     const dispatch = dispatchWorker()
     db.markWorkerDispatchReady(dispatch.id)

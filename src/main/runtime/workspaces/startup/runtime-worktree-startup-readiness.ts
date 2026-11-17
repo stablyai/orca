@@ -42,7 +42,7 @@ export function pasteWorktreeStartupDraftWhenReady(
 ): void {
   void waitForWorktreeStartupDraft(host, handle, draft.agent)
     .then((ptyId) => {
-      if (!ptyId) {
+      if (!ptyId || host.getPtyId(handle) !== ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
