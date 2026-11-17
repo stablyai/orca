@@ -52,6 +52,22 @@ async function run(): Promise<void> {
   ])
   for (const [proxyRules, expected] of [
     [
+      'direct://,proxy.example:8080',
+      [
+        'DIRECT;PROXY proxy.example:8080',
+        'DIRECT;PROXY proxy.example:8080',
+        'DIRECT;PROXY proxy.example:8080'
+      ]
+    ],
+    [
+      'http=direct://,proxy.example:8080',
+      ['DIRECT;PROXY proxy.example:8080', 'DIRECT', 'DIRECT;PROXY proxy.example:8080']
+    ],
+    [
+      'http=direct://;http=proxy.example:8080',
+      ['DIRECT;PROXY proxy.example:8080', 'DIRECT', 'DIRECT;PROXY proxy.example:8080']
+    ],
+    [
       'http=direct://;socks=socks://127.0.0.1:1080',
       ['DIRECT', 'SOCKS5 127.0.0.1:1080', 'SOCKS5 127.0.0.1:1080']
     ],
@@ -66,13 +82,65 @@ async function run(): Promise<void> {
     assert.deepEqual(await resolve(), ['DIRECT', 'DIRECT', 'DIRECT'])
   }
   for (const [proxyRules, expected] of [
-    ['direct://,proxy.example:8080', 'DIRECT;PROXY proxy.example:8080'],
+    ['direct://,DIRECT://', 'DIRECT;DIRECT'],
     ['http=direct://;socks=direct://', 'DIRECT']
   ] as const) {
     const config: ProxyConfig = { mode: 'fixed_servers', proxyRules }
     await sess.setProxy(config)
     assert.deepEqual(await resolve(), [expected, expected, expected])
     assert.deepEqual(fromElectronProxyConfig(config), { mode: 'direct' })
+  }
+  const httpSetting = {
+    mode: 'fixed_servers',
+    rules: { proxyForHttp: { scheme: 'http', host: 'first.invalid', port: 8080 } }
+  }
+  const singleSetting = {
+    mode: 'fixed_servers',
+    rules: { singleProxy: { scheme: 'http', host: 'first.invalid', port: 8080 } }
+  }
+  for (const [proxyRules, expected, setting, projected] of [
+    [
+      'http=first.invalid:8080;http=second.invalid:8081',
+      [
+        'PROXY first.invalid:8080;PROXY second.invalid:8081',
+        'DIRECT',
+        'PROXY first.invalid:8080;PROXY second.invalid:8081'
+      ],
+      httpSetting,
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080']
+    ],
+    [
+      'http=first.invalid:8080;http=direct://',
+      ['PROXY first.invalid:8080;DIRECT', 'DIRECT', 'PROXY first.invalid:8080;DIRECT'],
+      httpSetting,
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080']
+    ],
+    [
+      'http=first.invalid:8080;stray.invalid:8082',
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080'],
+      httpSetting,
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080']
+    ],
+    [
+      'unknown=ignored.invalid:8888;http=first.invalid:8080',
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080'],
+      httpSetting,
+      ['PROXY first.invalid:8080', 'DIRECT', 'PROXY first.invalid:8080']
+    ],
+    [
+      'first.invalid:8080;http=second.invalid:8081',
+      ['PROXY first.invalid:8080', 'PROXY first.invalid:8080', 'PROXY first.invalid:8080'],
+      singleSetting,
+      ['PROXY first.invalid:8080', 'PROXY first.invalid:8080', 'PROXY first.invalid:8080']
+    ]
+  ] as const) {
+    const config: ProxyConfig = { mode: 'fixed_servers', proxyRules }
+    await sess.setProxy(config)
+    assert.deepEqual(await resolve(), expected, proxyRules)
+    const value = fromElectronProxyConfig(config)
+    assert.deepEqual(value, setting, proxyRules)
+    await sess.setProxy(toElectronProxyConfig(browserExtensionProxyConfigSchema.parse(value)))
+    assert.deepEqual(await resolve(), projected, proxyRules)
   }
   const nativeRules = 'http=direct://;socks=socks://127.0.0.1:1080'
   app.commandLine.appendSwitch('proxy-server', nativeRules)

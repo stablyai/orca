@@ -81,6 +81,39 @@ export function browserExtensionProxyBaseline(): ProxyConfig {
     : { mode: 'system' }
 }
 
+function nativeProxyRuleLists(proxyRules: string) {
+  type RuleKey = Exclude<keyof z.infer<typeof proxyRulesSchema>, 'bypassList'>
+  const lists = new Map<RuleKey, string[]>()
+  let perProtocol = false
+  for (const entry of proxyRules
+    .split(';')
+    .map((rule) => rule.trim())
+    .filter(Boolean)) {
+    const parts = entry.split('=').filter(Boolean)
+    if (parts.length < 2) {
+      if (!perProtocol) {
+        lists.set('singleProxy', [entry])
+        break
+      }
+      continue
+    }
+    perProtocol = true
+    for (let index = 0; index + 1 < parts.length; index += 2) {
+      const protocol = parts[index].trim()
+      const key = Object.entries({
+        http: 'proxyForHttp',
+        https: 'proxyForHttps',
+        ftp: 'proxyForFtp',
+        socks: 'fallbackProxy'
+      } as const).find(([name]) => name === protocol)?.[1]
+      if (key) {
+        lists.set(key, [...(lists.get(key) ?? []), parts[index + 1]])
+      }
+    }
+  }
+  return lists
+}
+
 export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionProxyConfig {
   if (config.mode === 'pac_script') {
     return browserExtensionProxyConfigSchema.parse({
@@ -97,14 +130,20 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
   let hasDirectRule = false
   const server = (list: string, defaultScheme = 'http') => {
     // Chrome's ProxyRules expose one server per scheme, not the native failover list.
-    const uri = list
+    const candidates = list
       .split(',')
       .map((entry) => entry.trim())
-      .find(Boolean)
+      .filter(Boolean)
+    const uri = candidates[0]
     if (!uri) {
       return undefined
     }
     if (/^direct:\/\/$/i.test(uri)) {
+      if (candidates.some((candidate) => !/^direct:\/\/$/i.test(candidate))) {
+        throw new Error(
+          'Native DIRECT and proxy routes cannot be represented by chrome.proxy fixed_servers'
+        )
+      }
       hasDirectRule = true
       return undefined
     }
@@ -117,29 +156,8 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
     })
   }
   const rules: z.infer<typeof proxyRulesSchema> = {}
-  for (const entry of config.proxyRules
-    .split(';')
-    .map((rule) => rule.trim())
-    .filter(Boolean)) {
-    const match = /^(http|https|ftp|socks)\s*=(.*)$/s.exec(entry)
-    if (!match) {
-      rules.singleProxy = server(entry)
-    } else {
-      const key = {
-        http: 'proxyForHttp',
-        https: 'proxyForHttps',
-        ftp: 'proxyForFtp',
-        socks: 'fallbackProxy'
-      }[match[1]]
-      if (
-        key === 'proxyForHttp' ||
-        key === 'proxyForHttps' ||
-        key === 'proxyForFtp' ||
-        key === 'fallbackProxy'
-      ) {
-        rules[key] = server(match[2], key === 'fallbackProxy' ? 'socks4' : 'http')
-      }
-    }
+  for (const [key, list] of nativeProxyRuleLists(config.proxyRules)) {
+    rules[key] = server(list.join(','), key === 'fallbackProxy' ? 'socks4' : 'http')
   }
   if (hasDirectRule) {
     if (Object.values(rules).some(Boolean)) {
