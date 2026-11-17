@@ -17,6 +17,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { retireStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
   deleteStructuredLaunchStateIfCurrent,
@@ -154,8 +155,10 @@ export function trackLaunchSettlement(
       const failure = structuredLaunchFailure(error)
       if (failure) {
         state.failure = failure
+        delete state.errorText
       } else {
         delete state.failure
+        state.errorText = readIpcErrorDetail(error)
       }
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
         settleStructuredLaunchRefusal(state)

@@ -226,3 +226,57 @@ describe('a message sent to a chat whose start failed', () => {
     )
   })
 })
+
+describe('a blank chat whose first start never answers', () => {
+  const hung = launchIntent('session-hung')
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.useFakeTimers()
+    localStorage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentSessionSendsForTests()
+    mocks.retryIntent.mockImplementation((intent: StructuredAgentSessionLaunchIntent) => intent)
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([publishedSnapshot()])
+    mocks.callRuntimeRpc.mockResolvedValue({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+  })
+
+  it('stops waiting on it, and the next message restarts it and goes out', async () => {
+    mocks.createIntent.mockReturnValueOnce(hung)
+    mocks.launch.mockReturnValueOnce(new Promise<Receipt>(() => {}))
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-blank' })
+    await flushLaunchSettlement()
+    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, hung.sessionId)).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, hung.sessionId)).toBe(
+      'visibility-unknown'
+    )
+
+    let publish = (_receipt: Receipt): void => {}
+    mocks.launch.mockReturnValueOnce(new Promise<Receipt>((resolve) => (publish = resolve)))
+    const delivery = relaunchFailedStructuredAgentSessionWithMessage(
+      WORKTREE_ID,
+      hung.sessionId,
+      'hi'
+    )
+    expect(delivery).not.toBeNull()
+    await flushLaunchSettlement()
+    expect(mocks.launch).toHaveBeenCalledTimes(2)
+
+    publish({ sessionId: hung.sessionId, fence: 1 })
+    await expect(delivery).resolves.toEqual({ delivered: true, failureNotified: false })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'agentSession.send',
+      expect.objectContaining({
+        body: expect.objectContaining({ blocks: [{ type: 'text', text: 'hi' }] })
+      })
+    )
+    vi.useRealTimers()
+  })
+})

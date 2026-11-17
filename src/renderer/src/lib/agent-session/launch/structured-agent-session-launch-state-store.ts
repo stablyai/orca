@@ -25,6 +25,8 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   /** The host's refusal behind the last failed attempt, worded beside Retry. Absent when the
    *  failure named none. */
   failure?: StructuredLaunchFailure
+  /** What the last failed attempt's error said when the host gave no refusal, shown apart and copyable. */
+  errorText?: string
   selection: StructuredLaunchSelection
   /** A host list showed the chat, so its create reply needs no protection from older lists. */
   hostListed?: true
