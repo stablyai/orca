@@ -44,7 +44,6 @@ export class AcpStructuredOptions {
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private buildMode = 'default'
-  private buildModePinned = false
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
   private isBuiltin: (command: AvailableCommand) => boolean = () => false
@@ -111,7 +110,6 @@ export class AcpStructuredOptions {
   ): void {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
-    this.buildModePinned = false
     const mode = this.select('mode')?.currentValue
     this.buildMode = mode && mode !== 'plan' ? mode : 'default'
     this.resolvesConfig = origin === 'new'
@@ -167,7 +165,7 @@ export class AcpStructuredOptions {
         this.unobservedCurrent.delete('effort')
       }
       const mode = this.select('mode')?.currentValue
-      if (!this.buildModePinned && mode && mode !== 'plan') {
+      if (mode && mode !== 'plan') {
         this.buildMode = mode
       }
       const appliedMode = this.appliedInput.get('interactionMode')
@@ -237,8 +235,9 @@ export class AcpStructuredOptions {
   }
 
   adoptBuildMode(mode: string): void {
-    this.buildMode = mode
-    this.buildModePinned = true
+    if (mode !== 'plan') {
+      this.buildMode = mode
+    }
   }
 
   write(key: string, value: string): AcpOptionWrite | null {

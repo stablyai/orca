@@ -485,4 +485,79 @@ describe('Antigravity auto and native plan execution modes', () => {
     ])
     agent.reply(secondPrompt, { stopReason: 'end_turn' })
   })
+
+  it('updates build-mode baseline when live mode changes mid-session after startup permission mode', async () => {
+    const { rig, host } = await openHostRig({
+      spec: ANTIGRAVITY_LAUNCH_SPEC,
+      deps: {
+        resolveLaunch: async () => ({
+          spec: HOST_SPEC,
+          command: '/usr/local/bin/agy',
+          prefixArgs: [],
+          args: ['acp'],
+          cwd: '/workspace',
+          env: {},
+          envToDelete: [],
+          fullAccess: false,
+          resume: null
+        })
+      },
+      script: scriptAgyModes(['default', 'accept-edits', 'auto', 'plan'])
+    })
+    await host.attach(
+      CALLER,
+      hostTestAttachParams(null, {
+        provider: 'antigravity',
+        agent: 'antigravity',
+        options: { permissionMode: 'ask' },
+        accountHome: antigravityHostAccountHome('/Users/neo'),
+        providerHandle: undefined
+      })
+    )
+    await send(host, 'Start in ask mode')
+    const firstPrompt = await rig.frame('session/prompt', 0)
+    const { agent } = rig.child()
+    agent.reply(firstPrompt, { stopReason: 'end_turn' })
+    await waitFor(async () => {
+      const live = await host.readOptions(HOST_SESSION)
+      expect(live.current.reportedPermissionMode).toBe('ask')
+    })
+
+    // Mid-session live mode changes to `auto` outside Orca's own option writes.
+    agent.notify('session/update', {
+      sessionId: PROVIDER_SESSION,
+      update: {
+        sessionUpdate: 'config_option_update',
+        configOptions: agyModeConfigOptions(['default', 'accept-edits', 'auto', 'plan'], 'auto')
+      }
+    })
+    await waitFor(async () => {
+      const live = await host.readOptions(HOST_SESSION)
+      expect(live.current.reportedPermissionMode).toBe('auto')
+    })
+
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key: 'interactionMode', value: 'plan' }),
+        key: 'interactionMode',
+        value: 'plan'
+      })
+    ).toMatchObject({ ok: true })
+    await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2))
+
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key: 'interactionMode', value: 'default' }),
+        key: 'interactionMode',
+        value: 'default'
+      })
+    ).toMatchObject({ ok: true })
+    await waitFor(() =>
+      expect(framesOf(rig.child(), 'session/set_config_option').map((f) => f.params)).toEqual([
+        expect.objectContaining({ configId: 'mode', value: 'default' }),
+        expect.objectContaining({ configId: 'mode', value: 'plan' }),
+        expect.objectContaining({ configId: 'mode', value: 'auto' })
+      ])
+    )
+  })
 })
