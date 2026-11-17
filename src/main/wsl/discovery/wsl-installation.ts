@@ -14,11 +14,14 @@ const WSL_SERVICE_NAMES = ['WSLService', 'LxssManager'] as const
 const SERVICE_QUERY_TIMEOUT_MS = 5_000
 // sc.exe exits with the Win32 error; only this one proves the service is not registered.
 const ERROR_SERVICE_DOES_NOT_EXIST = 1060
+// Hardened hosts deny sc.exe on every call; don't re-spawn it on each running-list read.
+const UNKNOWN_INSTALLATION_TTL_MS = 60_000
 
 export type WslInstallation = 'present' | 'absent' | 'unknown'
 
 let installation: WslInstallation | null = null
 let installationProbe: Promise<WslInstallation> | null = null
+let unknownUntilMs = 0
 
 function serviceQuerySpec(name: string): ProcessSpec {
   return {
@@ -52,7 +55,10 @@ function rememberInstallation(found: WslInstallation): WslInstallation {
   // An unknown sc.exe failure must stay retryable and must not hide a real WSL install.
   if (found !== 'unknown') {
     installation = found
+  } else {
+    unknownUntilMs = Date.now() + UNKNOWN_INSTALLATION_TTL_MS
   }
+  // Confirmed absence lasts for the session: installing WSL while Orca runs needs a restart.
   if (found === 'absent') {
     latchWslNotInstalled()
   }
@@ -99,24 +105,29 @@ export function peekWslInstallation(): WslInstallation | null {
   return installation
 }
 
+function cachedInstallation(): WslInstallation | null {
+  if (installation) {
+    return installation
+  }
+  return Date.now() < unknownUntilMs ? 'unknown' : null
+}
+
 /** Synchronous read for listWslDistros. Absent is cached for the process lifetime. */
 export function readWslInstallationSync(): WslInstallation {
   if (process.platform !== 'win32') {
     return 'absent'
   }
-  if (installation) {
-    return installation
-  }
-  return queryServicesSync()
+  return cachedInstallation() ?? queryServicesSync()
 }
 
-/** Shared probe. Absent is cached for the process lifetime; unknown is not. */
+/** Shared probe. Absent is cached for the process lifetime; unknown only briefly. */
 export function readWslInstallation(): Promise<WslInstallation> {
   if (process.platform !== 'win32') {
     return Promise.resolve('absent')
   }
-  if (installation) {
-    return Promise.resolve(installation)
+  const cached = cachedInstallation()
+  if (cached) {
+    return Promise.resolve(cached)
   }
   if (installationProbe) {
     return installationProbe
@@ -133,12 +144,14 @@ export function readWslInstallation(): Promise<WslInstallation> {
 export function _resetWslInstallationForTests(): void {
   installation = null
   installationProbe = null
+  unknownUntilMs = 0
   _resetWslNotInstalledLatchForTests()
 }
 
 export function _setWslInstallationForTests(value: WslInstallation | null): void {
   installation = value
   installationProbe = null
+  unknownUntilMs = 0
   _resetWslNotInstalledLatchForTests()
   if (value === 'absent') {
     latchWslNotInstalled()

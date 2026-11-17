@@ -131,4 +131,65 @@ describe('WSL is not installed', () => {
     expect(isWslNotInstalledLatched()).toBe(false)
     expect(calls.filter(isWslExe).length).toBe(1)
   })
+
+  function answerServices(codes: Record<string, number | null>): ProcessSpec[] {
+    const calls: ProcessSpec[] = []
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
+      calls.push(spec)
+      const code = codes[spec.args?.[1] ?? '']
+      return code === undefined
+        ? exited('', 1060)
+        : { ...exited('', code), timedOut: code === null }
+    })
+    return calls
+  }
+
+  it.each([
+    ['WSLService', { WSLService: 0, LxssManager: 1060 }],
+    ['LxssManager', { WSLService: 1060, LxssManager: 0 }]
+  ])('reports present when only %s is registered', async (_name, codes) => {
+    answerServices(codes)
+    await withPlatformAsync('win32', async () => {
+      await expect(readWslInstallation()).resolves.toBe('present')
+    })
+    expect(isWslNotInstalledLatched()).toBe(false)
+  })
+
+  it('reports unknown when one service is missing and the other query times out', async () => {
+    answerServices({ WSLService: 1060, LxssManager: null })
+    await withPlatformAsync('win32', async () => {
+      await expect(readWslInstallation()).resolves.toBe('unknown')
+    })
+    expect(isWslNotInstalledLatched()).toBe(false)
+  })
+
+  it('reuses an unknown answer briefly, then asks sc.exe again', async () => {
+    vi.useFakeTimers()
+    const calls = answerServices({ WSLService: 5, LxssManager: 5 })
+    await withPlatformAsync('win32', async () => {
+      await expect(readWslInstallation()).resolves.toBe('unknown')
+      const first = calls.length
+      expect(first).toBeGreaterThan(0)
+      await expect(readWslInstallation()).resolves.toBe('unknown')
+      expect(calls.length).toBe(first)
+      await vi.advanceTimersByTimeAsync(60_001)
+      await expect(readWslInstallation()).resolves.toBe('unknown')
+      expect(calls.length).toBe(first * 2)
+    })
+  })
+
+  it('keeps failed running-list reads to one sc.exe pair while sc.exe is denied', async () => {
+    const calls: ProcessSpec[] = []
+    runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
+      calls.push(spec)
+      return isServiceQuery(spec) ? exited('', 5) : exited('', 1)
+    })
+    await withPlatformAsync('win32', async () => {
+      for (let read = 0; read < 10; read++) {
+        await listRunningWslDistrosAsync().catch(() => [])
+      }
+    })
+    expect(calls.filter(isServiceQuery).length).toBeLessThanOrEqual(2)
+    expect(calls.filter(isWslExe).length).toBe(1)
+  })
 })
