@@ -180,8 +180,15 @@ export class AgentHookResultRetryScheduler {
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
     return readCodexTranscriptPoll(this.host.state, paneKey).then((reads) => {
-      if (this.ownsTranscriptPoll(paneKey, poll)) {
-        this.applyTranscriptPoll(paneKey, poll, reads)
+      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
+      const current = this.transcriptPollScheduler.peek(paneKey)
+      const owner = this.ownsTranscriptPoll(paneKey, poll)
+        ? poll
+        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+          ? current
+          : undefined
+      if (owner) {
+        this.applyTranscriptPoll(paneKey, owner, reads)
       }
     })
   }

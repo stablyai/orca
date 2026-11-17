@@ -22,6 +22,96 @@ export type JsonlCursor = {
 
 export type JsonRecord = Record<string, unknown>
 
+/** Rollout reads done off the main thread before a hook is normalized; the synchronous readers use them instead of blocking. */
+export type PrefetchedRolloutReads = {
+  cursors: { filePath: string; offset: number; carry: string; read: JsonlCursorBytes | undefined }[]
+  firstRecords: Map<string, JsonlFirstRecord>
+  sizes: Map<string, number | null>
+}
+
+let prefetched: PrefetchedRolloutReads | undefined
+
+export function createPrefetchedRolloutReads(): PrefetchedRolloutReads {
+  return { cursors: [], firstRecords: new Map(), sizes: new Map() }
+}
+
+export function withPrefetchedRolloutReads<T>(
+  reads: PrefetchedRolloutReads | undefined,
+  run: () => T
+): T {
+  const previous = prefetched
+  prefetched = reads
+  try {
+    return run()
+  } finally {
+    prefetched = previous
+  }
+}
+
+/** Prefetches a cursor's next read; a sync read at the same position consumes it once. */
+export async function prefetchJsonlCursor(
+  reads: PrefetchedRolloutReads,
+  cursor: JsonlCursor
+): Promise<void> {
+  const { filePath, offset, carry } = cursor
+  if (filePath) {
+    reads.cursors.push({ filePath, offset, carry, read: await readJsonlCursorBytes(cursor) })
+  }
+}
+
+/** Prefetches a rollout's size, and its first record when `wantsHead(size)` says a read is due. */
+export async function prefetchRolloutHead(
+  reads: PrefetchedRolloutReads,
+  filePath: string,
+  wantsHead: (size: number | null) => boolean
+): Promise<void> {
+  const size = await rolloutFileSizeAsync(filePath)
+  reads.sizes.set(filePath, size)
+  if (wantsHead(size)) {
+    reads.firstRecords.set(filePath, await readJsonlFirstRecordAsync(filePath))
+  }
+}
+
+/** Inside a prefetch scope, a read nobody prefetched is deferred to the async poll instead of blocking. */
+export function rolloutCursorReadDeferred(cursor: JsonlCursor): boolean {
+  return (
+    prefetched !== undefined &&
+    !prefetched.cursors.some(
+      (entry) =>
+        entry.filePath === cursor.filePath &&
+        entry.offset === cursor.offset &&
+        entry.carry === cursor.carry
+    )
+  )
+}
+
+export function rolloutHeadReadDeferred(filePath: string): boolean {
+  return prefetched !== undefined && !prefetched.firstRecords.has(filePath)
+}
+
+export function rolloutReadsPrefetched(): boolean {
+  return prefetched !== undefined
+}
+
+export function rolloutFileSize(filePath: string): number | null {
+  if (prefetched?.sizes.has(filePath)) {
+    return prefetched.sizes.get(filePath) ?? null
+  }
+  try {
+    return statSync(filePath).size
+  } catch {
+    return null
+  }
+}
+
+export async function rolloutFileSizeAsync(filePath: string): Promise<number | null> {
+  try {
+    return (await stat(filePath)).size
+  } catch {
+    return null
+  }
+}
+
 export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
@@ -51,6 +141,9 @@ function firstRecordError(error: unknown): JsonlFirstRecord {
 
 /** 'pending' while the file or its first line is unwritten; 'unreadable' on other I/O failures; undefined once the line is final. */
 export function readJsonlFirstRecord(filePath: string): JsonlFirstRecord {
+  if (prefetched?.firstRecords.has(filePath)) {
+    return prefetched.firstRecords.get(filePath)
+  }
   let fd: number | undefined
   try {
     fd = openSync(filePath, FIRST_RECORD_OPEN_FLAGS)
@@ -95,6 +188,8 @@ export type JsonlCursorBytes = {
   from: number
   start: number
   bytes: Buffer
+  /** The open or read failed after a size was seen; a shrink still resets the cursor. */
+  failed?: true
 }
 
 const NO_BYTES = Buffer.alloc(0)
@@ -113,6 +208,16 @@ function planJsonlRead(
 function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undefined {
   if (!cursor.filePath) {
     return undefined
+  }
+  const index =
+    prefetched?.cursors.findIndex(
+      (entry) =>
+        entry.filePath === cursor.filePath &&
+        entry.offset === cursor.offset &&
+        entry.carry === cursor.carry
+    ) ?? -1
+  if (prefetched && index >= 0) {
+    return prefetched.cursors.splice(index, 1)[0].read
   }
   let stats: Stats
   try {
@@ -133,7 +238,7 @@ function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undef
     fd = openSync(plan.filePath, 'r')
     return { ...plan, bytes: buffer.subarray(0, readSync(fd, buffer, 0, plan.length, plan.start)) }
   } catch {
-    return undefined
+    return { ...plan, failed: true }
   } finally {
     if (fd !== undefined) {
       closeSync(fd)
@@ -171,7 +276,7 @@ export async function readJsonlCursorBytes(
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
     return { ...plan, bytes: buffer.subarray(0, bytesRead) }
   } catch {
-    return undefined
+    return { ...plan, failed: true }
   } finally {
     await handle?.close().catch(() => {})
   }
@@ -194,6 +299,11 @@ export function applyJsonlCursorBytes(
     return 'stale'
   }
   const carry = read.from === read.offset ? read.carry : ''
+  if (read.failed) {
+    cursor.offset = read.from
+    cursor.carry = carry
+    return undefined
+  }
   if (read.bytes.length === 0) {
     cursor.offset = read.from
     cursor.carry = carry

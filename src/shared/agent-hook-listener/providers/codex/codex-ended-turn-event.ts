@@ -25,14 +25,3 @@ export function codexHookEventForEndedTurn(
   return leadTurnId && leadTurnId !== turnId ? undefined : 'Stop'
 }
 
-const polledStopPayloads = new WeakSet<object>()
-
-/** A Stop the transcript poll built from rollout records it just read; its normalization must not re-read the rollout on the main thread. */
-export function polledCodexStopPayload<T extends object>(payload: T): T {
-  polledStopPayloads.add(payload)
-  return payload
-}
-
-export function isPolledCodexStopPayload(payload: object): boolean {
-  return polledStopPayloads.has(payload)
-}

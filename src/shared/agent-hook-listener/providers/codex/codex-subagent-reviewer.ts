@@ -1,6 +1,10 @@
 import { extname, isAbsolute } from 'node:path'
 
-import { readJsonlCursor, type JsonRecord } from './codex-rollout-jsonl-cursor'
+import {
+  readJsonlCursor,
+  rolloutCursorReadDeferred,
+  type JsonRecord
+} from './codex-rollout-jsonl-cursor'
 import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
 import type { CodexSubagentTranscriptState } from './codex-subagent-transcript'
 
@@ -78,6 +82,9 @@ export function reconcileCodexSubagentReviewer(
     }
     cursor = { filePath: normalizedPath, offset: 0, carry: '' }
     state.reviewerCursorsByPath.set(normalizedPath, cursor)
+  }
+  if (rolloutCursorReadDeferred(cursor)) {
+    return
   }
   const records = readJsonlCursor(cursor, isCodexStatusTranscriptLine)
   if (records === undefined) {

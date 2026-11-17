@@ -1,4 +1,8 @@
-import { record } from './codex-rollout-jsonl-cursor'
+import {
+  createPrefetchedRolloutReads,
+  record,
+  withPrefetchedRolloutReads
+} from './codex-rollout-jsonl-cursor'
 import {
   applyPendingCodexSubagentIdentities,
   hasPendingCodexSubagentIdentity,
@@ -17,7 +21,6 @@ import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
-import { polledCodexStopPayload } from './codex-ended-turn-event'
 
 export type CodexTranscriptPollReads = {
   roster: CodexSubagentRoster
@@ -26,22 +29,45 @@ export type CodexTranscriptPollReads = {
   identities: Awaited<ReturnType<typeof readPendingCodexSubagentIdentities>>
 }
 
+// Why: a stalled open holds a libuv thread; cap poll reads across panes so other async file work keeps moving.
+const MAX_CONCURRENT_POLL_READS = 2
+let pollReadsInFlight = 0
+const pollReadQueue: (() => void)[] = []
+
+async function withPollReadSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (pollReadsInFlight >= MAX_CONCURRENT_POLL_READS) {
+    await new Promise<void>((resolve) => pollReadQueue.push(resolve))
+  }
+  pollReadsInFlight += 1
+  try {
+    return await run()
+  } finally {
+    pollReadsInFlight -= 1
+    pollReadQueue.shift()?.()
+  }
+}
+
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
-export async function readCodexTranscriptPoll(
+export function readCodexTranscriptPoll(
   state: HookListenerState,
   paneKey: string
 ): Promise<CodexTranscriptPollReads> {
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
-  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
-  const transcriptReads = transcript?.parent.filePath
-    ? await readCodexSubagentTranscript(transcript)
-    : undefined
-  return {
-    roster,
-    transcript,
-    transcriptReads,
-    identities: await readPendingCodexSubagentIdentities(roster)
-  }
+  return withPollReadSlot(async () => {
+    const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+    const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+    const transcriptReads = transcript?.parent.filePath
+      ? await readCodexSubagentTranscript(
+          transcript,
+          () => state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+        )
+      : undefined
+    return {
+      roster,
+      transcript,
+      transcriptReads,
+      identities: await readPendingCodexSubagentIdentities(roster)
+    }
+  })
 }
 
 /** Apply polled rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. Callers apply only while `original` is still the pane's row. */
@@ -86,14 +112,19 @@ export function pollCodexTranscriptStatus(
       ...envelope,
       hook_event_name: undefined,
       hookEventName: undefined,
-      payload: polledCodexStopPayload({
+      payload: {
         hook_event_name: 'Stop',
         ...(lead.sessionId ? { session_id: lead.sessionId } : {}),
         turn_id: lead.turnId,
         transcript_path: transcript.parent.filePath
-      })
+      }
     }
-    return normalizeHookPayload(state, 'codex', stop, env) ?? undefined
+    // The poll just read this rollout; its replayed Stop must not reopen it on the main thread.
+    return (
+      withPrefetchedRolloutReads(createPrefetchedRolloutReads(), () =>
+        normalizeHookPayload(state, 'codex', stop, env)
+      ) ?? undefined
+    )
   }
   if (!changed && !interrupted) {
     return original

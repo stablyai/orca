@@ -1,5 +1,8 @@
-import { statSync } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import {
+  rolloutFileSize,
+  rolloutFileSizeAsync,
+  rolloutHeadReadDeferred
+} from './codex-rollout-jsonl-cursor'
 
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -128,6 +131,25 @@ function applyIdentityRead(
   return child.description !== previous
 }
 
+/** Whether a hook for this child would read its rollout header; `size` refines it once known. */
+export function codexSubagentIdentityReadDue(
+  roster: CodexSubagentRoster | undefined,
+  id: string,
+  transcriptPath: string,
+  size?: number | null
+): boolean {
+  const child = roster?.get(id.trim())
+  if (!child) {
+    return true
+  }
+  return (
+    child.identityTranscriptPath !== transcriptPath &&
+    child.identityMissKey !== transcriptPath &&
+    (child.identityRetryAt ?? 0) <= Date.now() &&
+    (size === undefined || child.identityMissKey !== `${transcriptPath}:${size}`)
+  )
+}
+
 /** Returns whether the child's name changed, so a poll that only recovered identity still publishes. */
 export function enrichCodexSubagentIdentity(
   roster: CodexSubagentRoster,
@@ -135,10 +157,11 @@ export function enrichCodexSubagentIdentity(
   transcriptPath: string | undefined
 ): boolean {
   const child = identityReadTarget(roster, id, transcriptPath)
-  if (!child || !transcriptPath) {
+  // A head nobody prefetched stays pending for the poll's off-thread retry.
+  if (!child || !transcriptPath || rolloutHeadReadDeferred(transcriptPath)) {
     return false
   }
-  const missKey = `${transcriptPath}:${transcriptFileSize(transcriptPath)}`
+  const missKey = `${transcriptPath}:${rolloutFileSize(transcriptPath)}`
   if (child.identityMissKey === missKey) {
     return false
   }
@@ -210,7 +233,7 @@ export async function readPendingCodexSubagentIdentities(
     if (!child || !transcriptPath) {
       continue
     }
-    const missKey = `${transcriptPath}:${await transcriptFileSizeAsync(transcriptPath)}`
+    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath)}`
     if (child.identityMissKey === missKey) {
       continue
     }
@@ -230,25 +253,14 @@ export function applyPendingCodexSubagentIdentities(
     if (roster.get(id.trim()) !== child || child.identityPendingPath !== transcriptPath) {
       continue
     }
+    // Parent records applied this poll may have named the child; its task path outranks the header.
+    if (usableAgentChildLabel(child.description)) {
+      child.identityPendingPath = undefined
+      continue
+    }
     changed = applyIdentityRead(child, missKey, transcriptPath, identity) || changed
   }
   return changed
-}
-
-function transcriptFileSize(transcriptPath: string): number | null {
-  try {
-    return statSync(transcriptPath).size
-  } catch {
-    return null
-  }
-}
-
-async function transcriptFileSizeAsync(transcriptPath: string): Promise<number | null> {
-  try {
-    return (await stat(transcriptPath)).size
-  } catch {
-    return null
-  }
 }
 
 /** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */

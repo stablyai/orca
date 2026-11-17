@@ -7,6 +7,8 @@ import { createHookListenerState, type HookListenerState } from '../../listener-
 import { seedLegacyAgentStatusForTests } from '../../legacy-agent-status-test-seed'
 import { normalizeAndAccept, PANE_KEY } from '../../normalization/agent-hook-listener-test-harness'
 import { pollCodexTranscriptStatus, readCodexTranscriptPoll } from './codex-transcript-poll'
+import { prefetchCodexHookRolloutReads } from './codex-hook-rollout-prefetch'
+import { withPrefetchedRolloutReads } from './codex-rollout-jsonl-cursor'
 
 const syncFs = vi.hoisted(() => ({ recording: false, calls: [] as string[] }))
 
@@ -108,6 +110,33 @@ describe('Codex transcript poll', () => {
     expect(stop?.hookEventName).toBe('Stop')
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.subagents).toBeUndefined()
+    expect(syncFs.calls).toEqual([])
+  })
+
+  it('applies a root hook from rollout reads prefetched off the main thread', async () => {
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    writeFileSync(
+      parentPath,
+      event({ type: 'task_started', turn_id: 'turn-1' }) +
+        event({
+          type: 'sub_agent_activity',
+          occurred_at_ms: 1234,
+          agent_thread_id: CHILD_ID,
+          kind: 'started'
+        })
+    )
+    const hook = {
+      hook_event_name: 'PostToolUse',
+      session_id: 'root-session',
+      turn_id: 'turn-1',
+      transcript_path: parentPath,
+      tool_name: 'shell'
+    }
+    syncFs.recording = true
+    const reads = await prefetchCodexHookRolloutReads(state, { paneKey: PANE_KEY, payload: hook })
+    const status = withPrefetchedRolloutReads(reads, () => normalizeAndAccept(state, 'codex', hook))
+    syncFs.recording = false
+    expect(status?.payload.subagents).toMatchObject([{ id: CHILD_ID, state: 'working' }])
     expect(syncFs.calls).toEqual([])
   })
 })

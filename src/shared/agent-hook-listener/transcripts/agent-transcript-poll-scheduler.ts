@@ -24,7 +24,7 @@ type TranscriptWakeup<T> = {
 /** One deadline timer; root-only sessions use targeted file events with a sparse safety probe. An async poll keeps one read in flight per key and schedules its next tick only after it settles. */
 export class AgentTranscriptPollScheduler<T> {
   private readonly entries = new Map<string, TranscriptWakeup<T>>()
-  private readonly inFlight = new Set<string>()
+  private readonly inFlight = new Map<string, TranscriptWakeup<T>>()
   private readonly deadlines: CodexSubagentPollScheduler<TranscriptWakeup<T>>
 
   constructor(
@@ -47,7 +47,7 @@ export class AgentTranscriptPollScheduler<T> {
         pending = this.onDue(key, entry.value)
       } finally {
         if (pending) {
-          this.inFlight.add(key)
+          this.inFlight.set(key, entry)
           void pending
             .catch((error: unknown) => {
               console.error('[agent-hooks] transcript poll failed:', error)
@@ -61,7 +61,9 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   private settle(key: string, entry: TranscriptWakeup<T>): void {
-    this.inFlight.delete(key)
+    if (this.inFlight.get(key) === entry) {
+      this.inFlight.delete(key)
+    }
     const current = this.entries.get(key)
     if (current?.dueWhileInFlight) {
       // A wake or newer hook came due mid-read; run again at the normal cadence instead of the sparse probe.
@@ -153,11 +155,14 @@ export class AgentTranscriptPollScheduler<T> {
       return
     }
     this.entries.delete(key)
+    // A read that never settles must not stall the pane's next poll forever.
+    this.inFlight.delete(key)
     this.deadlines.clear(key)
     entry.watcher?.dispose()
   }
 
   clearAll(): void {
+    this.inFlight.clear()
     this.deadlines.clearAll()
     for (const entry of this.entries.values()) {
       entry.watcher?.dispose()

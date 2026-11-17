@@ -1,0 +1,127 @@
+import { readFirstString } from '../../interactive-tool'
+import type { HookListenerState } from '../../listener-state'
+import { readString } from '../../tool-input-preview'
+import {
+  createPrefetchedRolloutReads,
+  prefetchJsonlCursor,
+  prefetchRolloutHead,
+  record,
+  type PrefetchedRolloutReads
+} from './codex-rollout-jsonl-cursor'
+import { codexSubagentIdentityReadDue } from './codex-subagent-roster'
+import {
+  normalizedTranscriptPath,
+  prefetchCodexSubagentTranscript
+} from './codex-subagent-transcript'
+
+function hookPayload(body: unknown): Record<string, unknown> | undefined {
+  const raw = record(body)?.payload
+  if (typeof raw !== 'string') {
+    return record(raw)
+  }
+  try {
+    return record(JSON.parse(raw))
+  } catch {
+    return undefined
+  }
+}
+
+async function prefetchParent(
+  reads: PrefetchedRolloutReads,
+  state: HookListenerState,
+  paneKey: string,
+  parentPath: string | undefined
+): Promise<void> {
+  const path = normalizedTranscriptPath(parentPath)
+  if (!path) {
+    return
+  }
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  if (transcript?.parent.filePath === path) {
+    await prefetchCodexSubagentTranscript(transcript, reads)
+    return
+  }
+  // A new or replaced parent rollout is read from the top.
+  await prefetchJsonlCursor(reads, { filePath: path, offset: 0, carry: '' })
+}
+
+/** Reads off the main thread the rollouts this Codex hook's normalization would read, so it never opens a live rollout synchronously (#43539). */
+export async function prefetchCodexHookRolloutReads(
+  state: HookListenerState,
+  body: unknown
+): Promise<PrefetchedRolloutReads> {
+  const reads = createPrefetchedRolloutReads()
+  const paneKey = record(body)?.paneKey
+  const payload = hookPayload(body)
+  if (typeof paneKey !== 'string' || !payload) {
+    return reads
+  }
+  const eventName = readFirstString(payload, ['hook_event_name', 'hookEventName'])
+  const agentId = readString(payload, 'agent_id')
+  const transcriptPath = readFirstString(payload, ['transcript_path', 'transcriptPath'])
+  const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  if (!agentId) {
+    // A root SessionStart resets the pane and reads nothing.
+    if (eventName !== 'SessionStart') {
+      await prefetchParent(reads, state, paneKey, transcriptPath)
+    }
+    return reads
+  }
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  if (transcriptPath && codexSubagentIdentityReadDue(roster, agentId, transcriptPath)) {
+    await prefetchRolloutHead(reads, transcriptPath, (size) =>
+      codexSubagentIdentityReadDue(roster, agentId, transcriptPath, size)
+    )
+  }
+  if (eventName === 'SubagentStart') {
+    const parentPath =
+      transcript?.parent.filePath ??
+      state.lastStatusByPaneKey.get(paneKey)?.providerSession?.transcriptPath
+    await prefetchParent(reads, state, paneKey, parentPath)
+  } else if (eventName === 'PermissionRequest' && transcriptPath) {
+    if (transcript?.parent.filePath === transcriptPath) {
+      await prefetchParent(reads, state, paneKey, transcriptPath)
+    } else {
+      const path = normalizedTranscriptPath(transcriptPath)
+      const cursor = path
+        ? (transcript?.reviewerCursorsByPath.get(path) ?? { filePath: path, offset: 0, carry: '' })
+        : undefined
+      if (cursor) {
+        await prefetchJsonlCursor(reads, cursor)
+      }
+    }
+  }
+  return reads
+}
+
+/** Prefetches Codex hooks per pane in arrival order, so a slow read cannot let a later hook's status overtake an earlier one. */
+export class CodexHookRolloutPrefetcher {
+  private readonly tails = new Map<string, Promise<void>>()
+
+  /** Call `release` once the hook is normalized and applied. */
+  async prefetch(
+    state: HookListenerState,
+    body: unknown
+  ): Promise<{ reads: PrefetchedRolloutReads; release: () => void }> {
+    const paneKey = record(body)?.paneKey
+    const key = typeof paneKey === 'string' ? paneKey : ''
+    const previous = this.tails.get(key)
+    let release!: () => void
+    const turn = new Promise<void>((resolve) => {
+      release = () => {
+        if (this.tails.get(key) === turn) {
+          this.tails.delete(key)
+        }
+        resolve()
+      }
+    })
+    this.tails.set(key, turn)
+    try {
+      await previous
+      return { reads: await prefetchCodexHookRolloutReads(state, body), release }
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
+}

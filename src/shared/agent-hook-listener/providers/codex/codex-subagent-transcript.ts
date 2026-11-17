@@ -3,11 +3,15 @@ import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import {
   applyJsonlCursorBytes,
   readJsonlCursor,
+  prefetchJsonlCursor,
   readJsonlCursorBytes,
   readTranscriptDirectory,
   readTranscriptDirectoryAsync,
   record,
+  rolloutCursorReadDeferred,
+  rolloutReadsPrefetched,
   type JsonlCursor,
+  type PrefetchedRolloutReads,
   type JsonlCursorBytes,
   type JsonRecord
 } from './codex-rollout-jsonl-cursor'
@@ -157,7 +161,7 @@ function readChildModel(records: JsonRecord[]): string | undefined {
   return model
 }
 
-function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
+export function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
   const normalizedPath = transcriptPath?.trim()
   return normalizedPath && isAbsolute(normalizedPath) && extname(normalizedPath) === '.jsonl'
     ? normalizedPath
@@ -357,8 +361,11 @@ export function reconcileCodexSubagentTranscript(
   if (!begun) {
     return false
   }
-  const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
-  let changed = applyCodexParentTranscript(state, roster, parentRecords) || begun.changed
+  let changed = begun.changed
+  if (!rolloutCursorReadDeferred(state.parent)) {
+    const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
+    changed = applyCodexParentTranscript(state, roster, parentRecords) || changed
+  }
   const entriesByDirectory = new Map<string, string[]>()
   const entriesFor = (directory: string): string[] => {
     let entries = entriesByDirectory.get(directory)
@@ -370,8 +377,13 @@ export function reconcileCodexSubagentTranscript(
   }
   changed =
     applyCodexChildTranscripts(state, roster, (id, tracked) => {
+      if (!tracked.filePath && rolloutReadsPrefetched()) {
+        return 'deferred'
+      }
       tracked.filePath ??= resolveChildTranscript(begun.path, id, tracked.startedAt, entriesFor)
-      return readJsonlCursor(tracked, isCodexStatusTranscriptLine)
+      return rolloutCursorReadDeferred(tracked)
+        ? 'deferred'
+        : readJsonlCursor(tracked, isCodexStatusTranscriptLine)
     }) || changed
   return changed
 }
@@ -383,22 +395,24 @@ export type CodexSubagentTranscriptReads = {
   childBytes: Map<TrackedTranscriptSubagent, JsonlCursorBytes | undefined>
 }
 
-export async function readCodexSubagentTranscript(
-  state: CodexSubagentTranscriptState
-): Promise<CodexSubagentTranscriptReads> {
+/** Visits the parent cursor, then each child's after resolving its rollout path asynchronously, one at a time. */
+async function visitCodexTranscriptCursors(
+  state: CodexSubagentTranscriptState,
+  visit: (cursor: JsonlCursor) => Promise<void>,
+  current: () => boolean
+): Promise<void> {
   const parent = state.parent
   const parentPath = parent.filePath
-  const reads: CodexSubagentTranscriptReads = {
-    parent,
-    parentBytes: await readJsonlCursorBytes(parent),
-    childBytes: new Map()
-  }
+  await visit(parent)
   if (!parentPath) {
-    return reads
+    return
   }
   const entriesByDirectory = new Map<string, string[]>()
-  // Sequential reads keep one file operation per pane in flight.
   for (const [id, tracked] of [...state.subagents]) {
+    // A replaced session or pane makes the rest of this batch unappliable; stop opening its rollouts.
+    if (state.parent !== parent || !current() || state.subagents.get(id) !== tracked) {
+      return
+    }
     if (!tracked.filePath) {
       for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
         if (!entriesByDirectory.has(directory)) {
@@ -409,9 +423,39 @@ export async function readCodexSubagentTranscript(
         entriesByDirectory.get(directory)
       )
     }
-    reads.childBytes.set(tracked, await readJsonlCursorBytes(tracked))
+    await visit(tracked)
   }
+}
+
+export async function readCodexSubagentTranscript(
+  state: CodexSubagentTranscriptState,
+  current: () => boolean
+): Promise<CodexSubagentTranscriptReads> {
+  const reads: CodexSubagentTranscriptReads = {
+    parent: state.parent,
+    parentBytes: undefined,
+    childBytes: new Map()
+  }
+  await visitCodexTranscriptCursors(state, async (cursor) => {
+    const bytes = await readJsonlCursorBytes(cursor)
+    if (cursor === reads.parent) {
+      reads.parentBytes = bytes
+    } else {
+      reads.childBytes.set(cursor as TrackedTranscriptSubagent, bytes)
+    }
+  }, current)
   return reads
+}
+
+export function prefetchCodexSubagentTranscript(
+  state: CodexSubagentTranscriptState,
+  reads: PrefetchedRolloutReads
+): Promise<void> {
+  return visitCodexTranscriptCursors(
+    state,
+    (cursor) => prefetchJsonlCursor(reads, cursor),
+    () => true
+  )
 }
 
 /** Applies reads in one synchronous step; cursors a hook-driven read moved meanwhile are re-read next poll. Children found by these reads are read next poll. */
