@@ -85,12 +85,14 @@ it('orcad resolves workspace scopes through its scope catalog', async () => {
       settings: { workspaceDir: '/workspaces', nestWorkspaces: false }
     })
   })
+  const claudeProjectsDir = join(harness.root, 'scoped-claude')
   const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   await writeClaudeTranscript(
-    join(harness.roots.claudeProjectsDir, 'project', `${id}.jsonl`),
+    join(claudeProjectsDir, 'project', `${id}.jsonl`),
     ['scopedhostterm'],
     id
   )
+  localAiVaultScanRoots.mockResolvedValue({ ...harness.roots, claudeProjectsDir })
   const response = await searchSessionService(
     {
       query: 'scopedhostterm',
