@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import type { Project } from '../../../../shared/project-types'
-import { createTestStore } from './store-test-helpers'
+import type { Project } from '../../../../shared/project/project-types'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 it('rejects unapplied templates from older hosts and accepts an explicit reset', async () => {
   const project: Project = {

@@ -1,4 +1,4 @@
-import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
+import type { Project, ProjectUpdateArgs } from '../../../../../shared/project/project-types'
 import { TaskPromptTemplateSetting } from '../TaskPromptTemplateSetting'
 
 export function RepositoryTaskPromptTemplateSetting({

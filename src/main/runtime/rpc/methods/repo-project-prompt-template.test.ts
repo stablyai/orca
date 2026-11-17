@@ -1,6 +1,6 @@
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { makeRequest, repoDispatcher } from './repo-rpc.test-fixture'
+import { makeRequest, repoDispatcher } from './projects/repo-rpc.test-fixture'
 
 describe('project prompt template RPC', () => {
   it('updates and resets project prompt templates through the runtime contract', async () => {
