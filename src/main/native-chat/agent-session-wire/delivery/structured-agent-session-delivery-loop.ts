@@ -199,7 +199,7 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
-    if ((await this.deps.retireOutgrownChild(sessionId, undefined, oldest)).kind === 'kept') {
+    if ((await this.deps.retireOutgrownChild(sessionId, undefined, oldest)).kind === 'withheld') {
       return this.stop(sessionId)
     }
     const child = this.deps.sessions.get(sessionId)?.child
@@ -264,7 +264,7 @@ export class StructuredAgentSessionDeliveryLoop {
     if (waited) {
       // Verify awaited-child identity before rechecking launch permissions.
       const outgrown = await this.deps.retireOutgrownChild(sessionId, undefined, next)
-      if (outgrown.kind === 'kept' || session.child !== awaitedChild) {
+      if (outgrown.kind === 'withheld' || session.child !== awaitedChild) {
         return 'continue'
       }
     }

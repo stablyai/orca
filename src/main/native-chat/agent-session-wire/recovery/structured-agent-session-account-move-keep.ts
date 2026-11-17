@@ -6,16 +6,17 @@ import type { StructuredAgentSessionHostSession } from '../host/structured-agent
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 /** Keeps the person's unsent `next` as the queue's first card, so the agent on the old account
- *  never takes it and the mail behind it can still reach that agent. True once it is kept. */
+ *  never takes it and the mail behind it can still reach that agent. A send that is not the
+ *  person's is left to deliver; a failed keep leaves the send pending for the next pass. */
 export async function keepStructuredAgentSessionSendForAccountMove(
   sessionId: string,
   journal: StructuredAgentSessionHostSession['journal'],
   fence: number,
   next: AgentJournalSubmission,
   logger: StructuredAgentSessionLogger
-): Promise<boolean> {
+): Promise<'kept' | 'failed' | 'not-persons'> {
   if (next.source?.kind !== USER_MESSAGE_SOURCE.kind || next.queuedMessageId !== undefined) {
-    return false
+    return 'not-persons'
   }
   const only = { clientMessageId: next.clientMessageId, fence: next.fence }
   try {
@@ -32,12 +33,11 @@ export async function keepStructuredAgentSessionSendForAccountMove(
     })
   }
   const kept = (await journal.reads.submission(next.clientMessageId))?.dispatchState === 'rejected'
-  if (kept) {
-    logger.warn('holding a send until the chat can move to the account it now uses', {
-      scope: 'account-transition',
-      sessionId,
-      kept: next.clientMessageId
-    })
-  }
-  return kept
+  logger.warn(
+    kept
+      ? 'holding a send until the chat can move to the account it now uses'
+      : 'withholding a send from the old account until it can be kept',
+    { scope: 'account-transition', sessionId, send: next.clientMessageId }
+  )
+  return kept ? 'kept' : 'failed'
 }

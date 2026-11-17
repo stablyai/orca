@@ -32,6 +32,8 @@ export type StructuredAgentSessionAccountTransitionRead = (
   }
 ) => Promise<StructuredAgentSessionAccountTransition | null>
 
+const KEEP_RETRY_MS = 5_000
+
 export function createStructuredAgentSessionOutgrownChildHost(input: {
   deps: StructuredAgentSessionHostDeps
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
@@ -106,20 +108,22 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         now,
         logger: deps.logger
       })
+      if (outcome.kind !== 'deferred' || !outcome.transition || !next || !session) {
+        return outcome
+      }
       // Owed work showed up only after the send was accepted: it must not reach the old account.
-      return outcome.kind === 'deferred' &&
-        outcome.transition &&
-        next &&
-        session &&
-        (await keepStructuredAgentSessionSendForAccountMove(
-          sessionId,
-          session.journal,
-          structuredAgentSessionConversationFence(deps.store, sessionId),
-          next,
-          deps.logger
-        ))
-        ? { kind: 'kept' }
-        : outcome
+      const kept = await keepStructuredAgentSessionSendForAccountMove(
+        sessionId,
+        session.journal,
+        structuredAgentSessionConversationFence(deps.store, sessionId),
+        next,
+        deps.logger
+      )
+      if (kept === 'failed') {
+        // Nothing else may wake a send left pending; try again shortly, never in a tight loop.
+        setTimeout(() => input.wake(sessionId), KEEP_RETRY_MS).unref?.()
+      }
+      return kept === 'not-persons' ? outcome : { kind: 'withheld' }
     },
     accountTransition: (async (sessionId, options) => {
       const session = sessions.get(sessionId)

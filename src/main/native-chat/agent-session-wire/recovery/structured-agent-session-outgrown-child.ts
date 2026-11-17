@@ -155,8 +155,9 @@ export type StructuredAgentSessionOutgrownChild =
   | { kind: 'retired' }
   /** `transition` is absent when only the launch mode or model changed. */
   | { kind: 'deferred'; transition?: StructuredAgentSessionAccountTransition }
-  /** The person's send went back to the queue to wait for the account move. */
-  | { kind: 'kept' }
+  /** The person's send is not handed to the old child: it went back to the queue, or keeping it
+   *  failed and the next delivery pass tries again. */
+  | { kind: 'withheld' }
 
 type AccountTransitionDeps = {
   work: OutgrownChildWorkReads

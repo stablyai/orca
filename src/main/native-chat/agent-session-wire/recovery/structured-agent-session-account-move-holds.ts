@@ -75,6 +75,10 @@ export class AccountMoveHolds {
     if (hold && hold.stale !== 'account') {
       hold.stale = level
     }
+    if (level === 'account') {
+      // A read begun before the selection changed may not install the move it saw.
+      this.reading.delete(sessionId)
+    }
   }
 
   observe(

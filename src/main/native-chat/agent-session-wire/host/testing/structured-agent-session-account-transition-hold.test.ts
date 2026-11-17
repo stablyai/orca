@@ -296,3 +296,31 @@ it('takes a send back from the old account when its work shows up only after the
   expect(chat.dispatchedTo('raced')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })
+
+it('never hands the old account a send it could not keep, and delivers it on the new one', async () => {
+  const chat = await chatOnAccountA()
+  chat.switchTo('/homes/b')
+  const journal = rig!.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const write = journal.write.bind(journal)
+  let failed = 0
+  vi.spyOn(journal, 'write').mockImplementation(async (operation, ...rest) => {
+    if (
+      operation.kind === 'hold-unsent' &&
+      operation.hold.cause === 'accountMove' &&
+      failed++ === 0
+    ) {
+      throw new Error('disk full')
+    }
+    return write(operation, ...rest)
+  })
+  chat.onNextAccountRead(() => chat.background([devServer()]))
+  const sent = rig!.send('unkept')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(() => expect(failed).toBeGreaterThan(0))
+  expect(chat.dispatchedTo('unkept')).toEqual([])
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(chat.dispatchedTo('unkept')).toHaveLength(1))
+  expect(chat.dispatchedTo('unkept')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
