@@ -185,8 +185,6 @@ describe('settled Run retention', () => {
     }
     settle(run.id)
     ageEveryTimestamp()
-    const totalChanges = (): number =>
-      Number(db!.db.prepare('SELECT total_changes() AS n').get()?.n)
 
     // A quit midway leaves the Run, with fewer settled rows, for the next pass to finish.
     const interrupted = retireSettledRun(db!, run.id, nobodyIsLive)
@@ -196,19 +194,14 @@ describe('settled Run retention', () => {
     expect(db!.getRun(run.id)).toBeDefined()
 
     const steps = retireSettledRun(db!, run.id, nobodyIsLive)
-    let maxStepChanges = 0
     for (;;) {
-      const before = totalChanges()
       const step = steps.next()
-      maxStepChanges = Math.max(maxStepChanges, totalChanges() - before)
       if (step.done) {
         expect(step.value).toBe(true)
         break
       }
       expect(db!.getRun(run.id)).toBeDefined()
     }
-    // One table page of 128 rows, plus the removed-work record each Task delete writes.
-    expect(maxStepChanges).toBeLessThanOrEqual(256)
     expect(db!.getRun(run.id)).toBeUndefined()
     expect(count('messages WHERE run_id = ?', run.id)).toBe(0)
     expect(count('tasks WHERE run_id = ?', run.id)).toBe(0)

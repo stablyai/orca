@@ -2,18 +2,22 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { projectionMutationTriggers } from '../projection-mutation-triggers'
 
 const table = 'run_retirement'
-const watched = (key: string) => `INSERT OR IGNORE INTO temp.${table}_dirty(key)
- SELECT ${key} WHERE EXISTS (SELECT 1 FROM temp.${table}_tracked WHERE key = ${key});`
+// Trigger bodies may not qualify the tables they write; a TEMP trigger finds its TEMP tables first.
+const watched = (key: string) => `INSERT OR IGNORE INTO ${table}_dirty(key)
+ SELECT ${key} WHERE EXISTS (SELECT 1 FROM ${table}_tracked WHERE key = ${key});`
 const byRun = (column: string) => (row: string) => watched(`'run:' || ${row}.${column}`)
 const byDispatch =
   (...columns: string[]) =>
   (row: string) =>
     columns.map((column) => watched(`'dispatch:' || ${row}.${column}`)).join(' ')
-const byParent = (parent: string, column: string) => (row: string) =>
-  watched(`'run:' || (SELECT run_id FROM ${parent} WHERE id = ${row}.${column})`)
+const byPrincipal = (row: string) => watched(`'principal:' || ${row}.principal_id`)
+const byMessage = (row: string) =>
+  watched(`'run:' || (SELECT run_id FROM messages WHERE id = ${row}.message_id)`)
 
-// Every row a retirement deletes or reads to keep a Run, keyed to its Run or to one of its Dispatches.
-// Dispatch keys are taken when the watch starts, so they still match once the Dispatches are deleted.
+// Every row a retirement deletes or reads to keep a Run, keyed to its Run, one of its Dispatches or
+// legacy principals, or a mailbox. Dispatch and principal keys are taken when the watch starts, so
+// they still match once those rows are deleted. A message's child is keyed by its mailbox as well,
+// since its message may already be gone.
 const WATCHED_TABLES = [
   { table: 'runs', mark: byRun('id') },
   ...[
@@ -48,18 +52,14 @@ const WATCHED_TABLES = [
   },
   {
     table: 'message_dispatch_provenance',
-    mark: (row: string) =>
-      `${byDispatch('dispatch_id')(row)} ${byParent('messages', 'message_id')(row)}`
-  },
-  { table: 'structured_mail_sends', mark: byParent('messages', 'message_id') },
-  {
-    table: 'legacy_operation_receipts',
-    mark: byParent('legacy_compatibility_principals', 'principal_id')
+    mark: (row: string) => `${byDispatch('dispatch_id')(row)} ${byMessage(row)}`
   },
   {
-    table: 'legacy_mail_receipts',
-    mark: byParent('legacy_compatibility_principals', 'principal_id')
+    table: 'structured_mail_sends',
+    mark: (row: string) => `${byMessage(row)} ${watched(`${row}.mailbox_handle`)}`
   },
+  { table: 'legacy_operation_receipts', mark: byPrincipal },
+  { table: 'legacy_mail_receipts', mark: byPrincipal },
   {
     table: 'structured_pointer_operations',
     mark: (row: string) => watched(`${row}.mailbox_handle`)
@@ -80,7 +80,7 @@ function install(db: OrchestrationDb): void {
       table,
       WATCHED_TABLES,
       '',
-      `EXISTS (SELECT 1 FROM temp.${table}_tracked)`
+      `EXISTS (SELECT 1 FROM ${table}_tracked)`
     )}`)
   installed.add(db)
 }
@@ -92,7 +92,9 @@ export function watchRetiringRun(db: OrchestrationDb, runId: string): void {
   db.db.prepare(`INSERT INTO temp.${table}_tracked VALUES ('run:' || ?)`).run(runId)
   db.db
     .prepare(
-      `INSERT INTO temp.${table}_tracked SELECT 'dispatch:' || id FROM dispatch_contexts WHERE run_id = ?`
+      `INSERT INTO temp.${table}_tracked
+         SELECT 'dispatch:' || id FROM dispatch_contexts WHERE run_id = ?1
+         UNION SELECT 'principal:' || id FROM legacy_compatibility_principals WHERE run_id = ?1`
     )
     .run(runId)
 }
