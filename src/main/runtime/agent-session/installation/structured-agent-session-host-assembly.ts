@@ -10,6 +10,7 @@ import {
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-naming'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { scheduleNativeChatVisualsSweep } from '../../../native-chat/conversation-files/native-chat-visuals-sweep'
+import { schedulePerChatJournalFileSweep } from '../../../native-chat/agent-session-journal/journal-per-chat-file-sweep'
 import type { InstalledRuntime } from './structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from '../records/agent-session-recovery-capsule'
 import type { OpenedAgentSessionRecordStore } from '../records/agent-session-record-store-slot'
@@ -119,6 +120,7 @@ export async function installOnJournal(
     | undefined
   let stopTurnAttention: (() => void) | undefined
   let stopVisualsSweep: (() => void) | undefined
+  let stopPerChatJournalSweep: (() => void) | undefined
   let stopCommands: (() => void) | undefined
   let detachCatalog: (() => void) | undefined
   try {
@@ -136,6 +138,11 @@ export async function installOnJournal(
       stateDirectory: deps.stateDirectory,
       store,
       journalDatabase,
+      logger: deps.logger
+    })
+    stopPerChatJournalSweep = schedulePerChatJournalFileSweep({
+      stateDirectory: deps.stateDirectory,
+      listHeldSessionIds: () => (store.readOnly ? null : store.listHeldSessionIds()),
       logger: deps.logger
     })
     stopVisualsSweep = deps.nativeChatVisuals
@@ -158,6 +165,7 @@ export async function installOnJournal(
     detachCatalog?.()
     stopCommands?.()
     stopVisualsSweep?.()
+    stopPerChatJournalSweep?.()
     await providerNaming.stop()
     throw error
   }
@@ -173,6 +181,7 @@ export async function installOnJournal(
       detachCatalog?.()
       stopCommands?.()
       stopVisualsSweep?.()
+      stopPerChatJournalSweep?.()
       return namingStopped
     }
   }
