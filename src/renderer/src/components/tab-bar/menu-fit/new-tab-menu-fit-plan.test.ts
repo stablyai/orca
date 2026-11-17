@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planNewTabMenuFit, tipFootprintAt } from './new-tab-menu-fit-plan'
+import { planNewTabMenuFit } from './new-tab-menu-fit-plan'
 
 const ROW = 36
 const rows = (count: number): number => count * ROW
@@ -75,28 +75,5 @@ describe('planNewTabMenuFit', () => {
     expect(
       planNewTabMenuFit({ available: 269, chrome: 120, tip: 0, natural: rows(16), row: ROW })
     ).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 126 })
-  })
-})
-
-describe('tipFootprintAt', () => {
-  it('reuses a hidden tip height only at the width it was measured', () => {
-    expect(tipFootprintAt({ height: 81, width: 188 }, 188)).toBe(81)
-    expect(tipFootprintAt({ height: 81, width: 188 }, 286)).toBeNull()
-    expect(tipFootprintAt(null, 286)).toBeNull()
-  })
-
-  it('lets a tip yielded at a narrow width come back once the menu widens', () => {
-    const input = { available: 280, chrome: 120, natural: rows(16), row: ROW }
-    // Narrow: the tip wraps to 81px and yields.
-    const narrow = tipFootprintAt({ height: 81, width: 188 }, 188) ?? 0
-    expect(planNewTabMenuFit({ ...input, tip: narrow }).tipHidden).toBe(true)
-    // Wider: the stale height is dropped, so the tip is shown and measured again (49px) and stays.
-    const wide = tipFootprintAt({ height: 81, width: 188 }, 286) ?? 0
-    expect(planNewTabMenuFit({ ...input, tip: wide }).tipHidden).toBe(false)
-    expect(planNewTabMenuFit({ ...input, tip: 49 })).toEqual({
-      tipHidden: false,
-      mode: 'peek',
-      listMaxHeight: 90
-    })
   })
 })

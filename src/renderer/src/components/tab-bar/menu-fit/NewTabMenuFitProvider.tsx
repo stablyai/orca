@@ -9,8 +9,6 @@ import {
   fadeScrollPadding,
   planNewTabMenuFit,
   sameNewTabMenuFitPlan,
-  tipFootprintAt,
-  type TipFootprint,
   type NewTabMenuFitMode,
   type NewTabMenuFitPlan
 } from './new-tab-menu-fit-plan'
@@ -61,12 +59,10 @@ export function NewTabMenuFitProvider({
   const [box, setBox] = useState<HTMLDivElement | null>(null)
   const [list, setList] = useState<HTMLDivElement | null>(null)
   const [tip, setTip] = useState<HTMLElement | null>(null)
-  const [tipEligible, setTipEligible] = useState(false)
+  // Once the tip gives its room to the list it stays hidden until the menu next opens.
+  const [tipYielded, setTipYielded] = useState(false)
   const [layout, setLayout] = useState<FitLayout | null>(null)
   const [fadeVisible, setFadeVisible] = useState(false)
-  // Kept while the tip is yielded or a search unmounts it, so hiding it can't change the plan;
-  // dropped when the menu width changes, since the tip wraps differently there.
-  const tipFootprint = useRef<TipFootprint | null>(null)
   const placedSide = useRef<string | null>(null)
   const mode = layout?.plan.mode ?? null
 
@@ -85,35 +81,25 @@ export function NewTabMenuFitProvider({
       wrapper.style.getPropertyValue('--radix-popper-available-height')
     )
     if (list && Number.isFinite(available)) {
-      const tipMounted = tip?.isConnected ? tip : null
-      // Outer width: a scrollbar the tip itself causes must not count as a width change.
-      const width = content.offsetWidth
-      if (tipMounted) {
-        // The slot is a flow-root box, so its height includes the tip's own margin.
-        tipFootprint.current = { height: tipMounted.offsetHeight, width }
-      }
-      const footprint = tipFootprintAt(tipFootprint.current, width)
-      if (footprint === null) {
-        tipFootprint.current = null
-      }
+      // The slot is a flow-root box, so its height includes the tip's own margin.
+      const tipHeight = tip?.isConnected ? tip.offsetHeight : 0
       const row = list.querySelector<HTMLElement>('[role="menuitem"]')?.offsetHeight || FALLBACK_ROW
-      const chrome =
-        box.offsetHeight +
-        verticalFrame(content) -
-        list.offsetHeight -
-        (tipMounted ? tipMounted.offsetHeight : 0)
+      const chrome = box.offsetHeight + verticalFrame(content) - list.offsetHeight - tipHeight
       const next: FitLayout = {
         row,
         plan: planNewTabMenuFit({
           // Why floor and -1: offsetHeight rounds, and a 1px overshoot would make the menu scroll too.
           available: Math.floor(available) - 1,
           chrome,
-          tip: tipEligible ? (footprint ?? 0) : 0,
+          tip: tipHeight,
           natural: list.scrollHeight,
           row
         })
       }
       planMode = next.plan.mode
+      if (next.plan.tipHidden && tipHeight > 0) {
+        setTipYielded(true)
+      }
       setLayout((current) => (sameLayout(current, next) ? current : next))
     }
     // Content can grow or shrink without a scroll event, so the fade is re-checked on every pass.
@@ -157,14 +143,6 @@ export function NewTabMenuFitProvider({
   }, [box, list, tip])
 
   useEffect(() => {
-    // A tip that is gone for good (kept, dismissed, hidden, customized away) frees its room.
-    if (!tipEligible) {
-      tipFootprint.current = null
-    }
-    measure()
-  }, [tipEligible])
-
-  useEffect(() => {
     const scroller = scrollerFor(mode, box, list)
     if (!scroller) {
       return
@@ -188,10 +166,9 @@ export function NewTabMenuFitProvider({
     }),
     [layout, fadeVisible]
   )
-  const tipHidden = layout?.plan.tipHidden ?? false
   const tipRoom = useMemo<NewTabMenuTipRoom>(
-    () => ({ tipHidden, registerTip: setTip, reportTipEligible: setTipEligible }),
-    [tipHidden]
+    () => ({ tipHidden: tipYielded, registerTip: setTip }),
+    [tipYielded]
   )
 
   return (
