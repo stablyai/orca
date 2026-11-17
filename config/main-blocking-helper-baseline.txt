@@ -513,7 +513,7 @@
 3 src/main/git/command-runner/process-capture/exec-file-capture.ts
 1 src/main/git/command-runner/process-capture/worker-exec-file.ts
 1 src/main/git/command-runner/process-capture/wsl-process-group-termination.ts
-22 src/main/git/repositories/discovery/repo-detection.ts
+23 src/main/git/repositories/discovery/repo-detection.ts # main-checkout root lookup moved here from local-repo-registration.ts, which dropped to 1
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 2 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/git/worktrees/catalog/wsl-worktree-git-path.ts
@@ -647,7 +647,7 @@
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
 2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
-2 src/main/ipc/repos/local-repo-registration.ts
+1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
 1 src/main/ipc/repos/nested-repo-scan-ipc.ts
 2 src/main/ipc/repos/project-host-setup-handlers.ts
