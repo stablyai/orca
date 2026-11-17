@@ -31,7 +31,7 @@ export async function holdTerminalInputCustody<T>(
     signal?: AbortSignal
     outlivesRenderer?: true
   },
-  use: (custody: TerminalInputCustody) => Promise<T>
+  deliver: (custody: TerminalInputCustody) => Promise<T>
 ): Promise<T> {
   if (getPtyTerminalState(target) === 'exited') {
     throw buildPtyTerminalWaitExitError(target)
@@ -85,7 +85,7 @@ export async function holdTerminalInputCustody<T>(
     }
   }
   try {
-    return await use({ target, stop, assertLive, assertOriginal })
+    return await deliver({ target, stop, assertLive, assertOriginal })
   } finally {
     stop.abort()
     signal?.removeEventListener('abort', onAbort)
