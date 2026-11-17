@@ -20,6 +20,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -104,6 +105,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showTerminalLayout}
         onClose={() => setShowTerminalLayout(false)}
       />
+      <MobileSessionTextSizeSheet controller={controller} />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
