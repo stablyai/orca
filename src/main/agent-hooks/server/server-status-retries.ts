@@ -1,4 +1,5 @@
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
+import { pollAntigravityTranscriptStatus } from '../../../shared/agent-hook-listener/providers/antigravity/antigravity-transcript-poll'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
@@ -127,7 +128,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
       return
     }
     if (!shouldPollHookTranscript(this.state, source, original)) {
@@ -169,7 +170,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const normalized =
       source === 'codex'
         ? pollCodexTranscriptStatus(this.state, original, body, this.env)
-        : normalizeHookPayload(this.state, source, body, this.env)
+        : source === 'antigravity'
+          ? pollAntigravityTranscriptStatus(this.state, original)
+          : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
     }
