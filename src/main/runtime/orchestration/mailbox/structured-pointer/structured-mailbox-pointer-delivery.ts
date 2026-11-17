@@ -1,4 +1,4 @@
-/** Chats queue each message as its own card, one per turn behind work/questions (shown whole, sent as a pointer); terminals keep the PTY pointer lane. */
+/** Chats queue whole mail one per turn behind work/questions; terminals keep the PTY pointer lane. */
 
 import type { MessageRow } from '../../db/orchestration-records'
 import type { OrchestrationDb } from '../../db/orchestration-db'

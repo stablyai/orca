@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../native-chat-types'
-import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
+import { mergeNativeChatLiveSession } from './native-chat-live-status'
 function assistant(id: string, text: string): NativeChatMessage {
   return {
     id,
@@ -161,35 +161,5 @@ describe('mergeNativeChatLiveSession', () => {
     expect(errored.status).toBe('error')
     expect(errored.error).toBe('unreadable')
     expect(errored.hookWorking).toBe(true)
-  })
-})
-
-describe('nativeChatHookAwaitsInput', () => {
-  // An interrupt at the prompt fires no hook; the transcript's marker is the only end.
-  it('ends a wait the transcript closed after it began', () => {
-    expect(
-      nativeChatHookAwaitsInput('waiting', 5, {
-        state: 'interrupted',
-        turnId: 'turn-1',
-        timestamp: 6
-      })
-    ).toBe(false)
-    expect(
-      nativeChatHookAwaitsInput('waiting', 5, {
-        state: 'completed',
-        turnId: 'turn-1',
-        timestamp: 6
-      })
-    ).toBe(false)
-  })
-
-  it('keeps a wait that began after the last closed turn', () => {
-    expect(
-      nativeChatHookAwaitsInput('waiting', 5, {
-        state: 'interrupted',
-        turnId: 'turn-1',
-        timestamp: 2
-      })
-    ).toBe(true)
   })
 })

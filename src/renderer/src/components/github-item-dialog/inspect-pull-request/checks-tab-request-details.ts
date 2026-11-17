@@ -10,7 +10,7 @@ import {
   beginGitHubChecksTabDetails,
   settleGitHubChecksTabDetails,
   type CheckDetailsLoadState
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { translate } from '@/i18n/i18n'

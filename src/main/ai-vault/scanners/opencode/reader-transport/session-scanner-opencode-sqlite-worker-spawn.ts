@@ -41,7 +41,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-opencode-sqlite-reader' })
 }
 
 let sharedClient: OpenCodeSqliteWorkerClient | null = null

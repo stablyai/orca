@@ -56,12 +56,7 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
   const command = wrapPosixHookCommand(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
-    // Outside an Orca pane, skip the script's shell and python3 start on every agy event.
-    {
-      fallbackStdout: getAntigravityNoOpStdout(event.eventName),
-      requiredEnvVar: 'ORCA_PANE_KEY',
-      stdinMayStayOpen: true
-    }
+    { fallbackStdout: getAntigravityNoOpStdout(event.eventName), stdinMayStayOpen: true }
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
   return `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}${command}`)}`

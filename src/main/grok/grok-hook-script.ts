@@ -21,10 +21,9 @@ export function getGrokManagedScriptPath(): string {
 }
 
 export function getGrokManagedCommand(scriptPath: string): string {
-  // POSIX can gate before spawning because Orca injects ORCA_PANE_KEY only into panes it owns.
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): string {

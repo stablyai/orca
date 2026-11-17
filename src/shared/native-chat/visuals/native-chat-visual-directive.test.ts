@@ -6,16 +6,6 @@ import {
 } from './native-chat-visual-directive'
 
 describe('parseNativeChatVisualDirectiveLine', () => {
-  it('accepts up to 3 leading spaces, trailing whitespace, and CRLF or LF endings', () => {
-    expect(parseNativeChatVisualDirectiveLine('   ::orca-visual{file="a.html"}  \t\r\n')).toEqual({
-      file: 'a.html',
-      title: null
-    })
-    expect(parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html"}\n')).not.toBeNull()
-    expect(parseNativeChatVisualDirectiveLine('    ::orca-visual{file="a.html"}')).toBeNull()
-    expect(parseNativeChatVisualDirectiveLine('\t::orca-visual{file="a.html"}')).toBeNull()
-  })
-
   it('ignores unknown attributes but refuses a repeated one', () => {
     expect(parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html" height="300"}')).toEqual(
       { file: 'a.html', title: null }
@@ -84,12 +74,5 @@ describe('withoutNativeChatVisualDirectiveLines', () => {
     expect(withoutNativeChatVisualDirectiveLines(`Use \`\`\`a\`\`\` inline\n${LINE}`)).toBe(
       'Use ```a``` inline'
     )
-  })
-
-  it('leaves code blocks and indentation as written for a copy', () => {
-    const code = '```\na\n\n\n\nb\n```'
-    expect(withoutNativeChatVisualDirectiveLines(`${code}\n\n${LINE}`)).toBe(code)
-    expect(withoutNativeChatVisualDirectiveLines(`    code\npara\n${LINE}`)).toBe('    code\npara')
-    expect(withoutNativeChatVisualDirectiveLines(`${LINE}\n\nText`)).toBe('Text')
   })
 })

@@ -19,8 +19,22 @@ import {
 } from './runtime-remote-file-download'
 
 /** True when this client's OS can open the file in place; any other file is downloaded first. */
-export function isClientLocalRuntimeFile(source: RuntimeFileReadArgs): boolean {
+export function isClientLocalRuntimeFile(
+  source: Pick<RuntimeFileReadArgs, 'target' | 'connectionId'>
+): boolean {
   return source.target.kind === 'local' && !source.connectionId
+}
+
+/** Saves an SSH or paired-host file to a path the user picks; null for a file already on this client. */
+export async function downloadRuntimeFileToClient(
+  source: RuntimeFileReadArgs
+): Promise<RuntimeFileDownloadResult | null> {
+  const { filePath, connectionId } = source
+  const remote = rangeReadTarget(source)
+  if (remote) {
+    return downloadPairedHostFile(source, remote)
+  }
+  return connectionId ? window.api.fs.downloadFile({ filePath, connectionId }) : null
 }
 
 /**
@@ -29,15 +43,9 @@ export function isClientLocalRuntimeFile(source: RuntimeFileReadArgs): boolean {
  * False when no app opened it; a cancelled save dialog counts as handled.
  */
 export async function openRuntimeFileWithDefaultApp(source: RuntimeFileReadArgs): Promise<boolean> {
-  const { filePath, connectionId } = source
-  const remote = rangeReadTarget(source)
-  let download: RuntimeFileDownloadResult
-  if (remote) {
-    download = await downloadPairedHostFile(source, remote)
-  } else if (connectionId) {
-    download = await window.api.fs.downloadFile({ filePath, connectionId })
-  } else {
-    return window.api.shell.openFilePath(filePath, LOCAL_EXECUTION_HOST_ID)
+  const download = await downloadRuntimeFileToClient(source)
+  if (!download) {
+    return window.api.shell.openFilePath(source.filePath, LOCAL_EXECUTION_HOST_ID)
   }
   if (download.canceled) {
     return true

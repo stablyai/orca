@@ -5,7 +5,10 @@ import {
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
-import { formatWorktreeRemovalError, isOrphanCompatiblePreflightError } from '../../worktree-logic'
+import {
+  formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError
+} from '../paths/worktree-logic'
 
 export async function assertRegisteredLocalWorktreePreflight(
   repoPath: string,

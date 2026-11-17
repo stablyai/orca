@@ -3,7 +3,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { useTranslate } from '@/i18n/use-translate'
 import { linearLabelCountLabel } from './linear-attribute-count-labels'
 import { ChevronDown, LoaderCircle, Check, UserRound, FolderKanban, Tag } from 'lucide-react'
-import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+import { LinearPriorityIcon } from '@/components/task-page/linear/issues/linear-priority-icon'
 export function TaskPageLinearIssueAttributes({
   model
 }: {
