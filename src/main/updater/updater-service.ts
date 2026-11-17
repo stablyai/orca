@@ -14,8 +14,10 @@ import type { ReleaseBuildListOptions } from './releases/updater-release-build-c
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
 import { isZotzUpdaterEnabled, showZotzUpdatesDisabledNotice } from './zotz-updater-policy'
+import { registerZotzUpdateActions } from './zotz-update-automation'
 
 const updater = new UpdaterSetup()
+registerZotzUpdateActions({ download: () => downloadUpdate(), install: () => quitAndInstall() })
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
   return updater.resolveUpdateInstallMode(isServeMode)
