@@ -6,15 +6,19 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { SqliteSessionAgent } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { TranscriptMessage } from '../../../transcripts/session-transcript-consumers'
+
+/** Session stores the reader serves besides OpenCode 1; absent means OpenCode 1. */
+export type SqliteReaderAgent = Exclude<SqliteSessionAgent, 'opencode'>
 
 export type OpenCodeSqliteListRequest = {
   id: number
   kind: 'list'
   dbPaths: readonly string[]
   limit: number | null
-  agent?: 'opencode2' | 'zcode'
+  agent?: SqliteReaderAgent
   /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
   scopePaths?: readonly string[]
 }
@@ -26,7 +30,7 @@ export type OpenCodeSqliteParseRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
-  agent?: 'opencode2' | 'zcode'
+  agent?: SqliteReaderAgent
 }
 
 // Separate capture requests keep full-transcript response types distinct from preview-only parses.
@@ -36,7 +40,7 @@ export type OpenCodeSqliteCaptureRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
-  agent?: 'opencode2' | 'zcode'
+  agent?: SqliteReaderAgent
 }
 
 export type OpenCodeNativeChatReadRequest = {
