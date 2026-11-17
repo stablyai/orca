@@ -6,7 +6,7 @@ import {
   removeManagedRuntime
 } from '@/runtime/hosts/installation/managed-runtime-install-status'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import { LoadingSpinner } from '../LoadingSpinner'
+import { LoadingSpinner } from '../ui/LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import {

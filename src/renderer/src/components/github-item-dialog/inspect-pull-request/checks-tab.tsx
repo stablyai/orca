@@ -1,4 +1,4 @@
-import { PRCheckEmptyDetails } from '@/components/pr-check-empty-details'
+import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -10,7 +10,7 @@ import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
   toggleGitHubChecksTabExpandedKey
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
@@ -33,7 +33,7 @@ import {
   getCheckCounts,
   getOverallCheckCounts,
   getChecksSummaryLabel
-} from '@/components/pr-check-counts'
+} from '@/components/github/pr-check-counts'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { getChecksTabSummaryPresentation } from './checks-tab-summary'

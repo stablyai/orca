@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/index'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { useTranslate } from '@/i18n/use-translate'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,

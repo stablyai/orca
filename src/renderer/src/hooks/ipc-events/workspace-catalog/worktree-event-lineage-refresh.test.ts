@@ -40,9 +40,12 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }))
-vi.mock('@/components/worktree-base-fallback-notice', () => ({
-  requestWorktreeBaseFallbackNotice: vi.fn()
-}))
+vi.mock(
+  '@/components/sidebar/workspace-creation/base-ref-update/worktree-base-fallback-notice',
+  () => ({
+    requestWorktreeBaseFallbackNotice: vi.fn()
+  })
+)
 
 beforeEach(() => {
   vi.clearAllMocks()

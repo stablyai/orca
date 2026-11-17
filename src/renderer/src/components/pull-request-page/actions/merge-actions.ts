@@ -16,7 +16,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-items/wor
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'
-import type { GitHubPRMergeStatePresentation } from '@/components/github-pr-merge-state'
+import type { GitHubPRMergeStatePresentation } from '@/components/github/github-pr-merge-state'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function changePullRequestState(args: {
