@@ -95,7 +95,7 @@ function launch(caller: Partial<RpcContext>, prompt?: string, delivery = 'submit
 }
 
 async function child(sessionId = SESSION) {
-  await eventually(() =>
+  await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeTruthy()
   )
   const current = rig.host.collaboratorsForTests().sessions.get(sessionId)!.child!
@@ -119,7 +119,7 @@ async function endChild(sessionId = SESSION) {
     codexStartFailure(new CodexAppServerExitError('codex app-server connection ended'))
   )
   openEnded.delete(current.acquisitionGeneration)
-  await eventually(() =>
+  await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeNull()
   )
 }
