@@ -30,6 +30,34 @@ describe('chat rename CLI', () => {
     vi.unstubAllEnvs()
   })
 
+  it('saves on and off on the chat, reads without a choice, and refuses an unknown action', async () => {
+    const { client, call } = chatClient(false)
+    call.mockResolvedValue({
+      id: 'req-rc',
+      ok: true,
+      result: { status: 'ok', choice: 'on', live: true },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const run = (action?: string) =>
+      CHAT_HANDLERS['chat remote-control']({
+        flags: new Map([['session', 'chat-7'], ...(action ? [['action', action] as const] : [])]),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+
+    await run('on')
+    await run('off')
+    await run()
+    await expect(run('maybe')).rejects.toThrow('Unknown action "maybe"')
+
+    expect(call.mock.calls).toEqual([
+      ['agentSession.providerRemoteControl', { sessionId: 'chat-7', choice: 'on' }],
+      ['agentSession.providerRemoteControl', { sessionId: 'chat-7', choice: 'off' }],
+      ['agentSession.providerRemoteControl', { sessionId: 'chat-7' }]
+    ])
+  })
+
   it('never sends this machine’s chat id to a paired host', async () => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'chat-7')
     const { client, call } = chatClient(true)
