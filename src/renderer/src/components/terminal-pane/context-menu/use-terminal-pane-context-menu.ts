@@ -69,7 +69,8 @@ export function useTerminalPaneContextMenu({
   onAgentSessionForkReady,
   onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
-  rightClickToPaste
+  rightClickToPaste,
+  clipboardImageEnterHold
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
 
@@ -93,6 +94,7 @@ export function useTerminalPaneContextMenu({
     fallbackCwd,
     onPasteError,
     forceBracketedMultilineTextPaste,
+    clipboardImageEnterHold,
     resolveMenuPane
   })
 

@@ -19,6 +19,10 @@ import { useAppStore } from '@/store/index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import type {
+  ClipboardImagePasteEnterHold,
+  ClipboardImageUploadToken
+} from './clipboard-image-paste-enter-hold'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -28,6 +32,7 @@ export type TerminalPaneMenuPasteContext = {
   cwd?: string
   forceBracketedMultilineTextPaste: boolean
   onPasteError: (message: string) => void
+  clipboardImageEnterHold: ClipboardImagePasteEnterHold
 }
 
 const isPanePasteTargetMounted = (
@@ -98,6 +103,8 @@ export const pasteTerminalPaneMenuClipboard = async (
     return
   }
   const { tabId, worktreeId, forceBracketedMultilineTextPaste, onPasteError } = context
+  // Only the operation that started an image upload may settle it; text pastes leave the hold alone.
+  let uploadToken: ClipboardImageUploadToken | null = null
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
@@ -139,8 +146,17 @@ export const pasteTerminalPaneMenuClipboard = async (
     onImagePasteError: (error) => {
       const detail = error instanceof Error ? error.message : String(error)
       onPasteError(`Image paste failed: ${detail}`)
+    },
+    onImagePasteUploadStart: () => {
+      uploadToken = context.clipboardImageEnterHold.noteImageUploadStart(pane.id)
     }
   })
+  if (uploadToken) {
+    context.clipboardImageEnterHold.settleImageUpload(
+      uploadToken,
+      result.status === 'pasted' && result.kind === 'image-path'
+    )
+  }
   if (result.status !== 'pasted') {
     return
   }

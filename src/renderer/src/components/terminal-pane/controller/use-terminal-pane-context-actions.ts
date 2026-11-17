@@ -2,10 +2,15 @@ import { usePaneTitleRenameActions } from '../titles/use-pane-title-rename-actio
 import { useCallback, useEffect } from 'react'
 import { useTerminalPaneContextMenu } from '../context-menu/use-terminal-pane-context-menu'
 import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
+import type { UseTerminalPaneContextMenuDeps } from '../context-menu/terminal-pane-context-menu-types'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { useVisibleTerminalQuickCommandHosts } from '@/hooks/use-visible-terminal-quick-command-hosts'
 
-export function useTerminalPaneContextActions(controller: TerminalPaneMountedController) {
+/** The paste listeners attach the shared image-paste Enter hold to the controller before this hook runs. */
+type TerminalPaneContextActionsController = TerminalPaneMountedController &
+  Pick<UseTerminalPaneContextMenuDeps, 'clipboardImageEnterHold'>
+
+export function useTerminalPaneContextActions(controller: TerminalPaneContextActionsController) {
   const {
     cancelPendingRenameFrames,
     clearPaneScrollback,
@@ -35,6 +40,7 @@ export function useTerminalPaneContextActions(controller: TerminalPaneMountedCon
     renameValue,
     renamingPaneId,
     rightClickToPaste,
+    clipboardImageEnterHold,
     setAgentSessionContinuation,
     setAgentSessionFork,
     setRenamingPaneId,
@@ -81,7 +87,8 @@ export function useTerminalPaneContextActions(controller: TerminalPaneMountedCon
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    clipboardImageEnterHold
   })
   const {
     executionHostId: quickCommandExecutionHostId,

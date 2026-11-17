@@ -11,6 +11,7 @@ export function createTerminalPaneMenuPaste({
   fallbackCwd,
   onPasteError,
   forceBracketedMultilineTextPaste,
+  clipboardImageEnterHold,
   resolveMenuPane
 }: Pick<
   UseTerminalPaneContextMenuDeps,
@@ -21,6 +22,7 @@ export function createTerminalPaneMenuPaste({
   | 'fallbackCwd'
   | 'onPasteError'
   | 'forceBracketedMultilineTextPaste'
+  | 'clipboardImageEnterHold'
 > & { resolveMenuPane: () => ManagedPane | null }) {
   const pasteResolvedPane = async (
     source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
@@ -33,7 +35,8 @@ export function createTerminalPaneMenuPaste({
         worktreeId,
         cwd: fallbackCwd,
         forceBracketedMultilineTextPaste,
-        onPasteError
+        onPasteError,
+        clipboardImageEnterHold
       },
       resolveMenuPane(),
       source

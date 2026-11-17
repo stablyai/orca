@@ -4,6 +4,7 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import type { ClipboardImagePasteEnterHold } from '../input/paste/clipboard-image-paste-enter-hold'
 
 export type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -24,6 +25,7 @@ export type UseTerminalPaneContextMenuDeps = {
   onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
   forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
+  clipboardImageEnterHold: ClipboardImagePasteEnterHold
 }
 
 /** Copy Orca Session ID's click: resolve on the pane's host, then hand focus back to that pane. */
