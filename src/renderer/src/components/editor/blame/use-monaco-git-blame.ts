@@ -174,19 +174,6 @@ export function useMonacoGitBlame(params: {
       // Invalidate any pending reply first, including when no target resolves below.
       loads.generation += 1
       const generation = loads.generation
-      // Only the focused or front editor runs git: hidden worktrees and other splits stay mounted.
-      if (!ed.hasTextFocus() && !(isFrontFile(useAppStore.getState()) && isActivePane())) {
-        if (reason === 'headMoved' && loadedRef.current) {
-          // Hide the old baseline now; a visible split or the status bar would otherwise keep it.
-          loading = true
-          loadedRef.current = null
-          mapping = null
-          update()
-        }
-        loadOwed = true
-        return
-      }
-      loadOwed = false
       const state = useAppStore.getState()
       const file = openFileById(state.openFiles, fileId)
       const target = file ? resolveGitBlameTarget(state, file) : null
@@ -204,6 +191,13 @@ export function useMonacoGitBlame(params: {
         mapping = null
         update()
       }
+      // Only the focused or front editor runs git: hidden worktrees and other splits stay mounted.
+      // `headKey` is set above so a deferred editor still sees HEAD move.
+      if (!ed.hasTextFocus() && !(isFrontFile(state) && isActivePane())) {
+        loadOwed = true
+        return
+      }
+      loadOwed = false
       const known = loadedRef.current
       const sameFile =
         known !== null &&
