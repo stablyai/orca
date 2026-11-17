@@ -16,6 +16,7 @@ import {
 } from './worker-send-ledger'
 import type { WorkerThreadRole } from './worker-thread-roles'
 import { observeWorkerThreads } from './worker-thread-spawn'
+import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 
 /**
  * The main thread and every worker share one V8 pointer cage (~3.25 GB measured on Electron 43):
@@ -98,6 +99,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   heaps.sort((a, b) => b.heap - a.heap)
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   annotateCrashReport(mainHeap, total, heaps, ledger)
+  noteMainCageHeap(total, mainHeap)
   if (total >= BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),

@@ -6,7 +6,8 @@ const MAX_FUNCTION_NAME_LENGTH = 48
 const MAX_FILE_NAME_LENGTH = 64
 // Drop whole caller frames before the breadcrumb string cap can truncate a frame.
 const MAX_STACK_TEXT_LENGTH = 225
-const BUNDLE_FILE_NAME = /^[\w.-]+\.[cm]?js$/
+// Main's shared bundle chunks sit one folder down.
+const BUNDLE_FILE_NAME = /^(?:chunks\/)?[\w.-]+\.[cm]?js$/
 const CODE_IDENTIFIER = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
 // V8 runtime frames without scripts use labels such as (GC) and (V8 API).
 const RUNTIME_LABEL = /^\([A-Za-z0-9 _-]{1,24}\)$/
