@@ -1984,6 +1984,24 @@ jobs:
               }
             }
 
+            # Every shipped Windows binary, not only the staged list: Smart App Control refuses to load any unsigned one.
+            $payloadSummaryPath = Join-Path $env:RUNNER_TEMP 'payload-signatures-summary.json'
+            $payloadStderrPath = Join-Path $env:RUNNER_TEMP 'payload-signatures-stderr.txt'
+            Remove-Item -LiteralPath $payloadSummaryPath, $payloadStderrPath -Force -ErrorAction SilentlyContinue
+            $payloadOutput = @(node config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs $root --summary $payloadSummaryPath 2> $payloadStderrPath)
+            $payloadExitCode = $LASTEXITCODE
+            # The runner exits with the last native exit code; keep the fail-open path from failing on it.
+            $global:LASTEXITCODE = 0
+            $payloadOutput | ForEach-Object { $report.Add($_); Write-Host $_ }
+            if ($payloadExitCode -eq 1) {
+              $failures.Add('the installer payload ships Windows binaries without a SignPath or Microsoft signature (listed above, with how to allow a vendor)')
+            } elseif ($payloadExitCode -ne 0) {
+              $payloadStderr = if (Test-Path -LiteralPath $payloadStderrPath) { (Get-Content -LiteralPath $payloadStderrPath -Raw).Trim() } else { '' }
+              # The catch below persists this message as the evidence verdict.
+              throw "The whole-payload signature check could not run (exit code $payloadExitCode): $payloadStderr"
+            }
+            $payloadChecked = (Get-Content -LiteralPath $payloadSummaryPath -Raw | ConvertFrom-Json).checked
+
             Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($failures.Count -gt 0) {
               $failures | ForEach-Object { Write-Host "::warning::$_" }
@@ -1997,8 +2015,8 @@ jobs:
               Add-GateEvidence "VERDICT: FAILED — $message"
               Add-GateSummary "FAILED — $message"
             } else {
-              # Use report, not extracted targets: it also includes the embedded uninstaller.
-              $ok = "All $($report.Count) checked binaries are signed by SignPath Foundation."
+              # The payload count covers every staged and required target; add the embedded uninstaller.
+              $ok = "All $($payloadChecked + 1) checked Windows binaries carry a trusted signature: SignPath Foundation for staged and required files, SignPath Foundation or Microsoft for the rest."
               Add-GateEvidence "VERDICT: PASSED — $ok"
               Add-GateSummary "PASSED — $ok"
               Write-Host $ok

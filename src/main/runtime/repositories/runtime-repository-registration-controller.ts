@@ -17,7 +17,7 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'

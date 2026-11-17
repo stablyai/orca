@@ -5,20 +5,20 @@ import {
   planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
   revealActivationDeferredTabs
-} from './terminal/background-terminal-worktree-mount'
+} from './terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   holdTerminalTabsForStartup,
   releaseStartupTerminalTabHold
-} from './terminal/startup-terminal-tab-hold'
+} from './terminal/workspace-mounting/startup-terminal-tab-hold'
 import { hasRegisteredRuntimeTerminalTab } from '../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout } from './terminal/split-group-mount'
+import { anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout } from './terminal/workspace-mounting/split-group-mount'
 import { isParkRestorableTerminalPty } from './terminal-pane/parking/retention/terminal-hidden-view-parking'
 import './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { terminalProviderAllowsParking } from './terminal/terminal-provider-snapshot-capability'
+import { terminalProviderAllowsParking } from './terminal/provider-snapshots/terminal-provider-snapshot-capability'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
-import { isUnboundRestoredTerminalTab } from './terminal/unbound-restored-terminal-tab'
+import { isUnboundRestoredTerminalTab } from './terminal/workspace-mounting/unbound-restored-terminal-tab'
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
   const {

@@ -1,4 +1,4 @@
-import type { useProjectGroupSetup } from './use-project-group-setup'
+import type { useProjectGroupSetup } from './workspace-setup/use-project-group-setup'
 import type { FolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type {

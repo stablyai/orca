@@ -135,7 +135,7 @@ test('panel consent enables real local transcript search; clearing restores hist
   await orcaPage.getByRole('radio', { name: 'All', exact: true }).click()
   const input = orcaPage.getByRole('textbox', { name: 'Search sessions', exact: true })
   await input.fill('nebulariver')
-  await expect(orcaPage.getByText('Enable full-text search?', { exact: false })).toBeVisible()
+  await expect(orcaPage.getByRole('button', { name: 'Enable', exact: true })).toBeVisible()
   const cdp = await orcaPage.context().newCDPSession(orcaPage)
   async function screenshot(name: string) {
     const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
@@ -190,9 +190,7 @@ test('panel consent enables real local transcript search; clearing restores hist
   await expect(title).toHaveCount(0)
   await expect(orcaPage.locator('mark')).toHaveCount(0)
   await input.fill('nothingmatchesprseven')
-  await expect(
-    orcaPage.getByText('No matching sessions in the indexed history.', { exact: false })
-  ).toBeVisible()
+  await expect(orcaPage.getByText('No matching sessions to show.', { exact: true })).toBeVisible()
   await screenshot('empty.png')
   await input.press('Escape')
   await expect(input).toHaveValue('')

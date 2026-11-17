@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { StructuredSessionSurfaceRuntime } from '../../../agent-session/structured-agent-session-close'
+import type { StructuredSessionSurfaceRuntime } from '../../../agent-session/lifecycle/structured-agent-session-close'
 
 export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
   Pick<

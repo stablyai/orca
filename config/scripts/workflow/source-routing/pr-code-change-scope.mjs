@@ -107,7 +107,6 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
-  'src/main/pty/shell-startup/codex-no-daemon-binary-contract',
   'src/main/pty/shell-startup/codex-shell-launch-preflight',
   'src/shared/shell/launch/agents/codex-shell-function',
   'src/main/codex/history/index/codex-index-heal-binary-contract',
@@ -183,7 +182,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat/native-chat-visual-shell'
+  'src/shared/native-chat/visuals/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {

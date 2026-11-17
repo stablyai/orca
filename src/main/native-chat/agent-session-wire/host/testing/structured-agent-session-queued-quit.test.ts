@@ -34,7 +34,18 @@ it.each([undefined, 'kill-delivered'] as const)(
 
     const resumed = await host.restartResume.continueAfterRestart([SESSION], 'modal')
     expect(resumed.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
-    await vi.waitFor(() => expect(dispatch.mock.calls.length).toBeGreaterThanOrEqual(3))
+    try {
+      await vi.waitFor(() => expect(dispatch.mock.calls.length).toBeGreaterThanOrEqual(3))
+    } catch (error) {
+      throw new Error(
+        JSON.stringify({
+          dispatches: dispatch.mock.calls.map(([request]) => request),
+          journal: await readTestHostJournal(host, SESSION),
+          record: host.deps.store.getRecord(SESSION)
+        }),
+        { cause: error }
+      )
+    }
     const sent = dispatch.mock.calls.map((call) => JSON.stringify(call[0]))
     expect(sent[0]).not.toContain('card')
     expect(sent[1]).toContain(QUEUED_BEFORE_QUIT[0])

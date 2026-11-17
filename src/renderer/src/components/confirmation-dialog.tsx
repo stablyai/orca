@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { DialogCancel } from '@/components/ui/dialog-parts'
 import {
   ConfirmationDialogContext,
   type ConfirmationDialogContextValue,
@@ -35,6 +36,8 @@ export function ConfirmationDialogProvider({
   const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  const firstInputRef = useRef<HTMLInputElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
@@ -50,9 +53,22 @@ export function ConfirmationDialogProvider({
   }
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
-  const Icon = displayedRequest?.options.icon
-  const compact = displayedRequest?.options.compact === true
-  const buttonSize = compact ? 'sm' : 'default'
+  const options = displayedRequest?.options
+  // Why Cancel: the "Don't ask again" checkbox now comes first, and Enter must not confirm by accident.
+  const initialFocus = options?.initialFocus ?? (options?.fields ? undefined : 'cancel')
+  const activeRequestId = activeRequest?.id
+  useLayoutEffect(() => {
+    if (activeRequestId === undefined) {
+      return
+    }
+    const target =
+      initialFocus === 'confirm'
+        ? confirmButtonRef.current
+        : initialFocus === 'cancel'
+          ? (cancelButtonRef.current ?? confirmButtonRef.current)
+          : firstInputRef.current
+    target?.focus()
+  }, [activeRequestId, initialFocus])
   const guarded = displayedRequest?.options.ignoresOpeningGesture === true
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
   const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
@@ -138,10 +154,9 @@ export function ConfirmationDialogProvider({
         onOpenChange={(open) => !open && settleActiveRequest(false)}
       >
         <DialogContent
-          surface={displayedRequest?.options.surface}
-          showCloseButton={false}
-          size={compact ? 'compact' : 'default'}
-          className={cn('sm:max-w-md', Icon && 'gap-6')}
+          size="confirm"
+          surface={options?.surface}
+          initialFocus={initialFocus === 'cancel' ? 'cancel' : undefined}
           onInteractOutside={(event) => {
             if (guarded) {
               event.preventDefault()
@@ -154,36 +169,24 @@ export function ConfirmationDialogProvider({
             }
           }}
         >
-          <div className={cn(Icon && 'flex items-start gap-4')}>
-            {Icon && (
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
-                <Icon className="size-5" aria-hidden="true" />
-              </div>
-            )}
-            <DialogHeader className={cn(Icon && 'min-w-0 gap-2 text-left')}>
-              <DialogTitle size={compact ? 'compact' : 'default'}>
-                {displayedRequest?.options.title}
-              </DialogTitle>
-              {displayedRequest?.options.description ? (
-                // Callers pass multi-line descriptions (e.g. one path per line).
-                <DialogDescription
-                  size={compact ? 'compact' : 'default'}
-                  className={cn(
-                    'whitespace-pre-line',
-                    displayedRequest.options.descriptionClassName
-                  )}
-                >
-                  {displayedRequest.options.description}
-                </DialogDescription>
-              ) : null}
-            </DialogHeader>
-          </div>
-          {displayedRequest?.options.fields ? (
+          <DialogHeader>
+            <DialogTitle>{options?.title}</DialogTitle>
+            {options?.description ? (
+              // Callers pass multi-line descriptions (e.g. one path per line) and their own wrapping.
+              <DialogDescription>
+                <span className={cn('block whitespace-pre-line', options.descriptionClassName)}>
+                  {options.description}
+                </span>
+              </DialogDescription>
+            ) : null}
+          </DialogHeader>
+          {options?.fields ? (
             <div className="space-y-3">
-              {displayedRequest.options.fields.inputs.map((field) => (
+              {options.fields.inputs.map((field, index) => (
                 <div key={field.id} className="space-y-2">
                   <Label htmlFor={`confirmation-dialog-field-${field.id}`}>{field.label}</Label>
                   <Input
+                    ref={index === 0 ? firstInputRef : undefined}
                     id={`confirmation-dialog-field-${field.id}`}
                     type={field.type ?? 'text'}
                     autoComplete={field.autoComplete}
@@ -205,34 +208,29 @@ export function ConfirmationDialogProvider({
               ))}
             </div>
           ) : null}
-          {displayedRequest?.options.dontAskAgain ? (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="confirmation-dialog-dont-ask-again"
-                checked={dontAskAgain}
-                onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-              />
-              <Label
-                htmlFor="confirmation-dialog-dont-ask-again"
-                className="text-sm font-normal text-foreground/80"
-              >
-                {displayedRequest.options.dontAskAgain.label ??
-                  t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
-              </Label>
-            </div>
-          ) : null}
           <DialogFooter
-            className={cn(
-              Icon && '-mx-6 -mb-6 rounded-b-lg border-t border-border bg-muted/30 px-6 py-4'
-            )}
+            start={
+              options?.dontAskAgain ? (
+                <>
+                  <Checkbox
+                    id="confirmation-dialog-dont-ask-again"
+                    checked={dontAskAgain}
+                    onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+                  />
+                  <Label htmlFor="confirmation-dialog-dont-ask-again" variant="dialog-muted">
+                    {options.dontAskAgain.label ??
+                      t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+                  </Label>
+                </>
+              ) : null
+            }
           >
-            {displayedRequest?.options.acknowledgeOnly ? null : (
-              <Button
-                type="button"
-                variant={displayedRequest?.options.cancelVariant ?? 'outline'}
-                size={buttonSize}
+            {options?.acknowledgeOnly ? null : (
+              <DialogCancel
+                ref={cancelButtonRef}
                 onKeyDown={ignoreRepeatedKey}
                 onClick={(event) => {
+                  event.preventDefault()
                   if (!isFreshClick(event)) {
                     return
                   }
@@ -240,15 +238,15 @@ export function ConfirmationDialogProvider({
                   settleActiveRequest(false)
                 }}
               >
-                {displayedRequest?.options.cancelLabel ??
+                {options?.cancelLabel ??
                   t('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
-              </Button>
+              </DialogCancel>
             )}
             <Button
               ref={confirmButtonRef}
               type="button"
-              variant={displayedRequest?.options.confirmVariant ?? 'default'}
-              size={buttonSize}
+              size="sm"
+              variant={options?.confirmVariant ?? 'default'}
               onKeyDown={ignoreRepeatedKey}
               onClick={(event) => {
                 if (isFreshClick(event)) {
@@ -256,8 +254,7 @@ export function ConfirmationDialogProvider({
                 }
               }}
             >
-              {displayedRequest?.options.confirmLabel ??
-                t('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
+              {options?.confirmLabel}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,6 +3,7 @@ import {
   useAppStateView,
   useAppStateViewActive
 } from '@/store/retained-views/app-state-view'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -20,7 +21,7 @@ import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { QuickLaunchAgentMenuItems } from '@/components/agent/launch-menu/AgentMenuItems'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import {
@@ -110,6 +111,7 @@ export function ReviewNotesSendMenuContent({
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
         state.agentStatusEpoch
       ]
       if (shallow(inputs, nextInputs)) {

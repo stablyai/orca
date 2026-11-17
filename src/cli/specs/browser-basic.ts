@@ -21,7 +21,8 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['open-url'],
     summary: 'Open a URL on the paired client that hosts this terminal',
     usage: 'orca open-url --url <url> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree'],
+    notes: ['`orca <http(s) url>` is shorthand, so headless terminals can use orca as BROWSER.']
   },
   {
     path: ['snapshot'],

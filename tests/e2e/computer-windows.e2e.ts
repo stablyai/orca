@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -175,6 +177,90 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       expect(await countMagentaPixelRatio(screenshotPath)).toBeLessThan(0.01)
     } finally {
       await closeWindowFixture(cover)
+    }
+  })
+
+  test('a window id keeps its window when another window of the app becomes the main one', async () => {
+    // A topmost second window comes first in z-order, so Process.MainWindowHandle moves to it.
+    const fixture = await launchWindowFixture(
+      [
+        "$form.Text = 'orca-e2e-target'",
+        '$button = New-Object System.Windows.Forms.Button',
+        "$button.Text = 'Target press'",
+        "$button.Add_Click({ $form.Text = 'orca-e2e-pressed' })",
+        '$form.Controls.Add($button)',
+        "$targetPath = Join-Path $PSScriptRoot 'target-window'"
+      ].join('\n'),
+      [
+        '$second = New-Object System.Windows.Forms.Form',
+        "$second.Text = 'orca-e2e-second'",
+        '$second.TopMost = $true',
+        '$second.Show()',
+        '[IO.File]::WriteAllText($targetPath, [string][int64]$form.Handle)'
+      ].join('; ')
+    )
+    try {
+      const targetPath = join(fixture.dir, 'target-window')
+      await vi.waitFor(() => expect(existsSync(targetPath)).toBe(true), {
+        timeout: 15_000,
+        interval: 100
+      })
+      const targetWindowId = Number(await readFile(targetPath, 'utf8'))
+      const main = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'get-app-state',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(main.snapshot.window.title).toBe('orca-e2e-second')
+      const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'get-app-state',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--window-id',
+            String(targetWindowId),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(state.snapshot.window.id).toBe(targetWindowId)
+      expect(state.snapshot.window.title).toBe('orca-e2e-target')
+      const button = findRoleIndex(
+        state.snapshot.treeText,
+        /^\s*(\d+)\s+button Target press(?:,|$)/m
+      )
+      expect(button, state.snapshot.treeText).toBeGreaterThanOrEqual(0)
+      const pressed = parseJsonOutput<{ result: ComputerActionResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'click',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--window-id',
+            String(targetWindowId),
+            '--element-index',
+            String(button),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(pressed.action?.path).toBe('accessibility')
+      expect(pressed.snapshot.window.id).toBe(targetWindowId)
+      expect(pressed.snapshot.window.title).toBe('orca-e2e-pressed')
+    } finally {
+      await closeWindowFixture(fixture)
     }
   })
 

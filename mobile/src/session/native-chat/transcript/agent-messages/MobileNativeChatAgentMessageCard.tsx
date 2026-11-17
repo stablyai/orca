@@ -1,15 +1,16 @@
+import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { memo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
-import { agentMessageSendersShown } from '../../../../../../src/shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
+import { agentMessageSendersShown } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy,
   type AgentMessageHeading
-} from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
 import { MobileAgentIcon } from '../../../../components/icons/MobileAgentIcon'
@@ -23,7 +24,6 @@ import { useMobileAgentMessageView } from './mobile-agent-message-context'
 import { MobileAgentMessageSenders } from './MobileAgentMessageSenders'
 import { MobileNativeChatMessageTime } from '../messages/MobileNativeChatMessageTime'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
-import { CHAT_PROSE_SCALE } from '../messages/mobile-native-chat-message-styles'
 
 type AgentMessageCardProps = {
   message: NativeChatMessage
@@ -44,6 +44,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
 }: AgentMessageCardProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const prose = useNativeChatProseText(fontScale)
   const text = mobileNativeChatDisplayCopyText(message)
   const [open, setOpen] = useMobileNativeChatDisclosure(`agent-message:${message.id}`, false)
   const headings: Record<AgentMessageHeading, string> = {
@@ -110,7 +111,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
           <MobileNativeChatMarkdown
             content={text}
             rangeSelectable
-            textScale={CHAT_PROSE_SCALE * fontScale}
+            {...prose}
             onLongPress={onLongPress}
           />
           {status}

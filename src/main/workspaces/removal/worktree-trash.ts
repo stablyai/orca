@@ -4,7 +4,10 @@ import { lstat, readdir, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { removeHostTree } from '../../filesystem/host-tree-removal'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { computeWorkspaceRoot, getWorktreePathSettings } from '../../ipc/worktree-logic'
+import {
+  computeWorkspaceRoot,
+  getWorktreePathSettings
+} from '../../ipc/worktrees/paths/worktree-logic'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'

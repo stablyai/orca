@@ -3,7 +3,7 @@ import {
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
-import { forgetRetiredWaiter } from '../claude-structured-dispatch-waiters'
+import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
@@ -13,8 +13,8 @@ import type {
   ClaudeLateDispatchOutcome,
   ClaudeSession
 } from '../claude-structured-session-state'
-import { readClaudeFrameString } from '../claude-structured-init-proof'
-import { claudeDispatchContentKey } from '../claude-structured-dispatch-content'
+import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
+import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void

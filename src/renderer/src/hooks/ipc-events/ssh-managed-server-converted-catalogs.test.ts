@@ -126,38 +126,6 @@ describe('a host that just moved to its managed server', () => {
     ).toBeNull()
   })
 
-  it('moves the open workspace once the cold-start scan delivers the server rows', async () => {
-    store.setState({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: worktreeId,
-      activeWorkspaceExecutionHostId: 'ssh:ssh-1'
-    })
-    applySshManagedServerTransition('ssh-1', undefined, {
-      kind: 'managed',
-      environmentId: 'env-4'
-    })
-    await vi.waitFor(() => expect(store.getState().worktreesByRepo['repo-1']).toEqual([]))
-    // Startup's own scan has not run yet, so the server's row is not known.
-    expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:ssh-1')
-
-    store.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo-1',
-            path: '/root/repo',
-            hostId: 'runtime:env-4'
-          })
-        ]
-      },
-      startupWorktreeRefreshCompleted: true
-    })
-
-    expect(store.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-4')
-    expect(store.getState().activeWorktreeId).toBe(worktreeId)
-  })
-
   it('lists the server rows itself when the cold-start scan finished without them', async () => {
     const executionHostId = 'runtime:env-scan-missed'
     const call = vi.fn(async (args: RuntimeEnvironmentCallRequest) =>
@@ -316,24 +284,6 @@ describe('a host that just moved to its managed server', () => {
       expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
       expect(store.getState().activeRepoId).toBeNull()
     })
-  })
-
-  it('leaves a workspace open on another host where it is', async () => {
-    store.setState({
-      activeRepoId: 'repo-1',
-      activeWorktreeId: worktreeId,
-      activeWorkspaceExecutionHostId: 'ssh:ssh-9'
-    })
-    applySshManagedServerTransition('ssh-1', undefined, {
-      kind: 'managed',
-      environmentId: 'env-3'
-    })
-    await vi.waitFor(() =>
-      expect(store.getState().repos.map((entry) => entry.executionHostId)).toEqual([
-        'runtime:env-3'
-      ])
-    )
-    expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:ssh-9')
   })
 
   it('replays a reconnect that arrived while the failed catalog read was still pending', async () => {

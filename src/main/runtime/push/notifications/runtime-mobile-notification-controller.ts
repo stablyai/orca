@@ -10,7 +10,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status/contracts
 import type {
   StructuredAttentionOrigin,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,

@@ -1,11 +1,9 @@
-import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
+import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/class-names'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
@@ -14,85 +12,65 @@ import {
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { agentPickerEntryOptions } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { formatKeybinding } from '../../../../shared/keybindings/formatting'
-
-export function agentLaunchSetupArgumentsNote(
-  label: string,
-  options: ReturnType<typeof agentPickerEntryOptions>,
-  noModelFlag: boolean,
-  t: Translate = translate
-) {
-  const composed = options.some((option) => option.apply.composedIntoModel)
-  const noOptionFlag = options.some(
-    (option) => !option.apply.cli?.length && !option.apply.composedIntoModel
-  )
-  return noModelFlag || noOptionFlag
-    ? t(
-        'agentPicker.chatChoicesNote',
-        '{{agent}} model or effort choices without a CLI flag apply to chats.',
-        { agent: label }
-      )
-    : composed
-      ? t(
-          'agentPicker.composedChoicesNote',
-          '{{agent}} effort and speed choices are included in the model argument.',
-          { agent: label }
-        )
-      : undefined
-}
 
 export type AgentLaunchSetupFooterHandle = { launch: (surface: AgentPickerSurface) => void }
 
-/** Chat and Terminal live on the setup popover. The filled button is the one Enter commits. */
+/** Chat and Terminal split the row. The filled button is the one Enter commits. */
 export function AgentLaunchSurfaceButtons({
   entry,
+  surfaces = agentPickerButtonOrder(entry),
+  verb,
   disabled,
-  terminalBlocked,
+  unavailable,
   primary,
-  prominent,
   onSelect
 }: {
   entry: AgentPickerEntry
+  surfaces?: readonly AgentPickerSurface[]
+  verb: 'launch' | 'open'
   disabled?: boolean
-  terminalBlocked?: boolean
+  /** Why a surface can't be chosen now; its button is disabled. */
+  unavailable?: Partial<Record<AgentPickerSurface, string>>
   primary: AgentPickerSurface
-  /** Launch is the popover's main action, so its buttons split the full row. */
-  prominent?: boolean
   onSelect: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const platform = getShortcutPlatform()
   const surfaceIcon = (surface: AgentPickerSurface) =>
     surface === 'chat' ? <MessageSquare /> : <SquareTerminal />
+  const surfaceLabel = (surface: AgentPickerSurface) =>
+    verb === 'open'
+      ? surface === 'chat'
+        ? t('agentPicker.openAsChat', 'Open as chat')
+        : t('agentPicker.openAsTerminal', 'Open as terminal')
+      : surface === 'chat'
+        ? t('agentPicker.launchChat', 'Launch chat')
+        : t('agentPicker.launchTerminal', 'Launch terminal')
   return (
-    <div className={cn('grid max-w-full auto-cols-fr grid-flow-col gap-2', prominent && 'w-full')}>
-      {agentPickerButtonOrder(entry).map((next) => {
+    <div className="grid w-full max-w-full auto-cols-fr grid-flow-col gap-2">
+      {surfaces.map((next) => {
         const isPrimary = next === primary
-        const label =
-          next === 'chat'
-            ? t('agentPicker.launchChat', 'Launch chat')
-            : t('agentPicker.launchTerminal', 'Launch terminal')
+        const label = surfaceLabel(next)
+        const reason = unavailable?.[next]
         return (
           <Button
             key={next}
             type="button"
-            size={prominent ? 'sm' : 'xs'}
+            size="sm"
             className="min-w-0 w-full"
             aria-label={label}
             aria-keyshortcuts={
               isPrimary ? 'Enter' : platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter'
             }
-            disabled={disabled || (next === 'terminal' && terminalBlocked)}
-            aria-description={
-              next === 'terminal' && terminalBlocked ? terminalPendingLabel(t) : undefined
-            }
-            title={next === 'terminal' && terminalBlocked ? terminalPendingLabel(t) : undefined}
+            disabled={disabled || reason !== undefined}
+            aria-description={reason}
+            title={reason}
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >
-            {prominent ? surfaceIcon(next) : null}
-            <span className={cn('truncate', prominent && 'mr-auto')}>{label}</span>
+            {surfaceIcon(next)}
+            <span className="mr-auto truncate">{label}</span>
             <span aria-hidden="true">
               <ShortcutKeyCombo
                 keys={formatKeybinding(isPrimary ? 'Enter' : 'Mod+Enter', platform)}
@@ -123,6 +101,7 @@ export function AgentLaunchSetupFooter({
   terminalBlocked?: boolean
   onLaunch: (surface: AgentPickerSurface, prompt?: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
   const surface = useRef(entry.defaultSurface)
@@ -138,7 +117,7 @@ export function AgentLaunchSetupFooter({
   return (
     <>
       <div
-        className="px-3 pt-1.5 pb-2"
+        className="border-t border-border px-2 pt-2 pb-2"
         onKeyDownCapture={(event) => {
           if (event.key === 'Enter') {
             surface.current = entry.defaultSurface
@@ -156,13 +135,13 @@ export function AgentLaunchSetupFooter({
           }
         />
       </div>
-      <div className="flex items-center px-3 pb-3">
+      <div className="flex items-center px-2 pb-2">
         <AgentLaunchSurfaceButtons
           entry={entry}
           disabled={disabled}
+          verb="launch"
           primary={entry.defaultSurface}
-          prominent
-          terminalBlocked={terminalBlocked}
+          unavailable={terminalBlocked ? { terminal: terminalPendingLabel(t) } : undefined}
           onSelect={launch}
         />
       </div>

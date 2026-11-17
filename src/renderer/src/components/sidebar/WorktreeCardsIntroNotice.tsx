@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, Sparkles, X } from 'lucide-react'
+import { useEffect } from 'react'
+import { Check, LoaderCircle, RotateCcw, Sparkles, X } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PopoverArrow, PopoverContent } from '@/components/ui/popover'
+import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorktreeCardsIntroChoice } from '@/store/slices/ui/ui-slice-contract-contextual'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import {
-  trackWorktreeCardsIntroAction,
-  trackWorktreeCardStyleChanged
-} from './worktree-card-style-telemetry'
+import { trackWorktreeCardsIntroAction } from './worktree-card-style-telemetry'
+import { keepNewWorktreeCards, useWorktreeCardsKeepPending } from './worktree-cards-intro-keep'
+import { WorktreeCardStyleTiles } from './WorktreeCardStyleTiles'
+import { WorktreeCardsIntroPanel } from './WorktreeCardsIntroPanel'
 
 const KEPT_HINT_MS = 8000
 
@@ -60,184 +61,120 @@ function useWorktreeCardsIntroNotice(): WorktreeCardsIntroChoice | null {
   return saved === false ? choice : null
 }
 
-function CardStyleSwitch({
-  value,
-  onChange
-}: {
-  value: WorktreeCardsIntroChoice
-  onChange: (value: WorktreeCardsIntroChoice) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const refs = useRef<Record<WorktreeCardsIntroChoice, HTMLButtonElement | null>>({
-    classic: null,
-    new: null
-  })
-  const options: { value: WorktreeCardsIntroChoice; label: string }[] = [
-    {
-      value: 'classic',
-      label: t('sidebar.worktreeCardsIntroNotice.classic', 'Classic')
-    },
-    { value: 'new', label: t('sidebar.worktreeCardsIntroNotice.new', 'New') }
-  ]
-  const select = (next: WorktreeCardsIntroChoice): void => {
-    onChange(next)
-    refs.current[next]?.focus()
-  }
-  return (
-    <div
-      role="radiogroup"
-      aria-label={t('sidebar.worktreeCardsIntroNotice.switchLabel', 'Card style')}
-      className="relative isolate grid shrink-0 grid-cols-2 rounded-md bg-background/15 p-0.5"
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-          event.preventDefault()
-          select('classic')
-        } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-          event.preventDefault()
-          select('new')
-        }
-      }}
-    >
-      {/* Why one sliding thumb: the selection moves instead of blinking between two buttons. */}
-      <span
-        aria-hidden="true"
-        className={cn(
-          'absolute inset-y-0.5 left-0.5 -z-10 w-[calc(50%-2px)] rounded-[5px] bg-background/25 shadow-xs transition-transform duration-200 ease-out motion-reduce:transition-none dark:bg-foreground',
-          value === 'new' && 'translate-x-full'
-        )}
-      />
-      {options.map((option) => {
-        const checked = option.value === value
-        return (
-          <button
-            key={option.value}
-            ref={(node) => {
-              refs.current[option.value] = node
-            }}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            tabIndex={checked ? 0 : -1}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'h-[18px] min-w-11 rounded-[5px] px-1.5 text-2xs font-medium transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              checked ? 'opacity-100' : 'opacity-60 hover:opacity-85'
-            )}
-          >
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
+const HEADING_ID = 'worktree-cards-intro-notice-heading'
 
 export function WorktreeCardsIntroNotice(): React.JSX.Element | null {
   const t = useTranslate()
   const choice = useWorktreeCardsIntroNotice()
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const [saving, setSaving] = useState(false)
+  const saving = useWorktreeCardsKeepPending()
   if (choice === null) {
     return null
   }
   const store = useAppStore.getState
-  const dismiss = (): void => {
-    trackWorktreeCardsIntroAction('dismissed', choice)
-    store().setWorktreeCardsIntroChoice(null)
-    toast(
-      t(
-        'sidebar.worktreeCardsIntroNotice.laterToast',
-        'Try the new cards any time from Workspace options › Card style'
-      )
-    )
-  }
-  const keep = (): void => {
+  const dismiss = (withToast: boolean): void => {
+    // Why: Keep new is the commitment point; nothing may answer Classic while its write is in flight.
     if (saving) {
       return
     }
-    setSaving(true)
-    // Why no local close: the saved setting closes the note, so a failed save leaves it open to retry.
-    void updateSettings({ experimentalNewWorktreeCardStyle: true }).then(() => {
-      setSaving(false)
-      if (useAppStore.getState().settings?.experimentalNewWorktreeCardStyle === true) {
-        trackWorktreeCardsIntroAction('kept', 'new')
-        trackWorktreeCardStyleChanged(true, 'intro_note')
-        store().setWorktreeCardsIntroKeptHintOpen(true)
-      }
-    })
+    trackWorktreeCardsIntroAction('dismissed', choice)
+    store().setWorktreeCardsIntroChoice(null)
+    if (withToast) {
+      toast(
+        t(
+          'sidebar.worktreeCardsIntroNotice.laterToast',
+          'Try the new cards any time from Workspace options › Card style'
+        )
+      )
+    }
   }
+  // Why no local close: the saved setting closes the note, so a failed save leaves it open to retry.
+  const keep = (): void => void keepNewWorktreeCards()
   return (
-    // Why inverted: like a tooltip, it must stand apart from the sidebar it sits on.
-    <section
-      aria-labelledby="worktree-cards-intro-notice-heading"
-      className="@container relative mx-2 mt-1 mb-3.5 shrink-0 rounded-lg bg-foreground/90 p-2.5 text-background shadow-floating"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.stopPropagation()
-          dismiss()
-        }
-      }}
-    >
-      <div className="flex min-w-0 items-center gap-1.5">
-        <Sparkles aria-hidden="true" className="size-3 shrink-0 text-unread-inverse" />
-        <p
-          id="worktree-cards-intro-notice-heading"
-          className="flex-1 text-xs font-semibold leading-snug whitespace-nowrap"
-        >
-          {t('sidebar.worktreeCardsIntroNotice.title', 'New card style')}
+    <WorktreeCardsIntroPanel labelledBy={HEADING_ID} onEscape={() => dismiss(true)}>
+      <div className="flex items-center gap-2">
+        <Sparkles aria-hidden="true" className="size-3.5 shrink-0 text-unread" />
+        <p id={HEADING_ID} className="min-w-0 flex-1 text-sm font-semibold leading-snug">
+          {t('sidebar.worktreeCardsIntroNotice.title', 'Try the new cards')}
         </p>
-        <span className="shrink-0 text-2xs opacity-55 @max-[13rem]:hidden">
-          {t('sidebar.worktreeCardsIntroNotice.experimental', 'Experimental')}
-        </span>
         <Button
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
           className="-my-1 -mr-1"
-          onClick={dismiss}
+          onClick={() => dismiss(true)}
+          aria-disabled={saving || undefined}
           aria-label={t('sidebar.worktreeCardsIntroNotice.dismiss', 'Not now')}
         >
           <X className="size-3.5" />
         </Button>
       </div>
-      <p className="mt-0.5 mb-2.5 text-xs leading-snug opacity-70">
-        {choice === 'new'
-          ? t(
-              'sidebar.worktreeCardsIntroNotice.previewBody',
-              'Agent status, unread dots and child summaries on every card. This is a preview of your list.'
-            )
-          : t(
-              'sidebar.worktreeCardsIntroNotice.classicBody',
-              'Back to your current cards. Flip to New to preview again.'
-            )}
+      <p className="mt-1 mb-3 leading-snug text-muted-foreground">
+        {t(
+          'sidebar.worktreeCardsIntroNotice.body',
+          'Agent status, unread dots and child summaries on every card.'
+        )}
       </p>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <CardStyleSwitch
-          value={choice}
-          onChange={(next) => {
-            if (next === choice) {
-              return
-            }
-            trackWorktreeCardsIntroAction('flipped', next)
-            store().setWorktreeCardsIntroChoice(next)
-          }}
-        />
-        {choice === 'new' ? (
-          <button
-            type="button"
-            onClick={keep}
-            disabled={saving}
-            className="ml-auto h-[22px] shrink-0 rounded-md bg-background px-2 text-2xs font-semibold whitespace-nowrap text-foreground outline-none transition-opacity hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {t('sidebar.worktreeCardsIntroNotice.keep', 'Keep new')}
-          </button>
-        ) : null}
-      </div>
-      {/* Why a clipped triangle, not a rotated square: overlapping the translucent note would double its tint. */}
-      <span
-        aria-hidden="true"
-        className="absolute top-full left-4 h-[5px] w-2.5 bg-foreground/90 [clip-path:polygon(0_0,100%_0,50%_100%)]"
+      <WorktreeCardStyleTiles
+        value={choice}
+        disabled={saving}
+        onChange={(next) => {
+          if (next === choice || saving) {
+            return
+          }
+          trackWorktreeCardsIntroAction('flipped', next)
+          store().setWorktreeCardsIntroChoice(next)
+        }}
       />
-    </section>
+      <p className="mt-3 flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+        <RotateCcw aria-hidden="true" className="mt-px size-3 shrink-0" />
+        <span>
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'sidebar.worktreeCardsIntroNotice.switchBack',
+              'Switch back anytime in <path>Workspace options › Card style</path>'
+            )}
+            components={{
+              path: <span className="font-semibold whitespace-nowrap text-foreground" />
+            }}
+          />
+        </span>
+      </p>
+      <div className="mt-3.5 flex flex-wrap justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7"
+          onClick={() => dismiss(true)}
+          aria-disabled={saving || undefined}
+        >
+          {t('sidebar.worktreeCardsIntroNotice.dismiss', 'Not now')}
+        </Button>
+        {choice === 'new' ? (
+          // Why aria-disabled, not disabled: the pressed button keeps focus while the save runs.
+          <Button
+            size="sm"
+            className="h-7"
+            onClick={keep}
+            aria-disabled={saving || undefined}
+            aria-busy={saving || undefined}
+          >
+            {/* Why equal side slots: the spinner appears without changing the button's width. */}
+            <span className="grid grid-cols-[12px_auto_12px] items-center gap-1">
+              <span aria-hidden="true" className="flex">
+                {saving ? (
+                  <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
+                ) : null}
+              </span>
+              {t('sidebar.worktreeCardsIntroNotice.keep', 'Keep new')}
+            </span>
+          </Button>
+        ) : (
+          <Button size="sm" className="h-7" onClick={() => dismiss(false)}>
+            {t('sidebar.worktreeCardsIntroNotice.useClassic', 'Use classic')}
+          </Button>
+        )}
+      </div>
+    </WorktreeCardsIntroPanel>
   )
 }
 
