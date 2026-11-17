@@ -18,7 +18,7 @@ const harness: Harness = vi.hoisted(() => ({
 
 // Why the mocks: this proves only the subscriber's per-workspace ordering. The hook server's row
 // store and the move logic are exercised by the sync and runtime tests, so both are stubbed here.
-vi.mock('./server', () => ({
+vi.mock('./server/agent-hook-server', () => ({
   agentHookServer: {
     subscribeEnrichedStatus: (cb: (enriched: EnrichedAgentHookEventPayload) => void) => {
       harness.subscriber = cb
