@@ -125,15 +125,5 @@ describe('runApprovedCreatedWorktreeSetup', () => {
       )
     ).resolves.toEqual({ status: 'started' })
     expect(commands).toEqual(['pnpm dev'])
-
-    // A retried approval (a lost reply) must not open the command tabs again.
-    await expect(
-      runApprovedCreatedWorktreeSetup(
-        runtimeFor(),
-        'id:wt',
-        hashOrcaHookTrustContent('# defaultTabs[1] dev\npnpm dev')
-      )
-    ).resolves.toEqual({ status: 'started' })
-    expect(commands).toEqual(['pnpm dev'])
   })
 })

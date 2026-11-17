@@ -56,22 +56,13 @@ export function createMayRunSetup(
   return decision === 'run' || (decision === 'inherit' && runPolicy !== 'skip-by-default')
 }
 
-/**
- * The decision a create sends and whether its setup needs a trust check. A create landing in
- * another repo than the selected one ignores that repo's setup choice and policy: it inherits
- * its own and is always checked unless skipped.
- */
-export function createSetupDecision(args: {
+/** Whether a create's setup needs a trust check. One landing in another repo is checked unless skipped, as the selected repo's policy says nothing about it. */
+export function createSetupNeedsTrustCheck(args: {
   sameRepo: boolean
-  override?: 'run' | 'skip'
-  chosen: 'inherit' | 'run' | 'skip'
+  decision: 'inherit' | 'run' | 'skip'
   runPolicy: 'ask' | 'run-by-default' | 'skip-by-default' | undefined
-}): { decision: 'inherit' | 'run' | 'skip'; mayRun: boolean } {
-  const decision = args.override ?? (args.sameRepo ? args.chosen : 'inherit')
-  return {
-    decision,
-    mayRun: createMayRunSetup(decision, args.sameRepo ? args.runPolicy : undefined)
-  }
+}): boolean {
+  return args.sameRepo ? createMayRunSetup(args.decision, args.runPolicy) : args.decision !== 'skip'
 }
 
 /** What a create sends once its setup is approved: a hash pins the run to the shown content. */
