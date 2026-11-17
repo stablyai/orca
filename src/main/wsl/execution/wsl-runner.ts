@@ -50,6 +50,8 @@ export type WslSpec = WslCommand & {
   signal?: AbortSignal
   /** Guest stdin, so secrets stay off the command line; the command must fit argv delivery. */
   input?: string
+  /** wsl.exe for the command (not the environment probe) exists. */
+  onSpawn?: () => void
 }
 
 export type WslResult = {
@@ -181,7 +183,8 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     input: delivery === 'stdin' ? spec.script : spec.input,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes,
-    signal: spec.signal
+    signal: spec.signal,
+    onSpawn: spec.onSpawn
   })
 
   return {
