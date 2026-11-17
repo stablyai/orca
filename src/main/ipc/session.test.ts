@@ -38,12 +38,14 @@ function harness() {
     store.freezeWrites()
     rmSync(directory, { recursive: true, force: true })
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: window-owned session:patch never reads the runtime.
   registerSessionHandlers(store, {} as OrcaRuntimeService)
   const handler = vi
     .mocked(ipcMain.handle)
     .mock.calls.find(([channel]) => channel === 'session:patch')![1]
   // IPC hands main a fresh copy of every argument.
   const patch = (args: WorkspaceSessionPatch): unknown =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler ignores its IPC event.
     handler({} as never, structuredClone(args), HOST)
   return { store, patch }
 }
@@ -76,7 +78,12 @@ describe('session:patch', () => {
   it('writes a patch a WSL move hold dropped once the hold lifts', () => {
     const { store, patch } = harness()
     patch(activeTab('tab-1'))
-    setWslMoveReloadableWindow(() => ({ isDestroyed: () => false }) as never)
+    setWslMoveReloadableWindow(() => ({
+      isDestroyed: () => false,
+      reload: () => {},
+      allowUnload: () => () => {},
+      onLoadedOrGone: () => () => {}
+    }))
     cleanups.push(() => setWslMoveReloadableWindow(() => null))
     holdWslMoveWindowWritesForCommit()
     patch(activeTab('tab-2'))

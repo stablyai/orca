@@ -61,21 +61,19 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   const patchRepeats = new WindowSessionPatchRepeats((hostId) => store.getWorkspaceSession(hostId))
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    if (isFenced(hostId)) {
-      return
-    }
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      store.patchWorkspaceSession(patchForMain(args, hostId), hostId)
-      return
-    }
-    if (patchRepeats.isRepeat(args, hostId)) {
+    const windowOwned = !ORCA_LAYOUT_OWNER_IS_MAIN
+    if (isFenced(hostId) || (windowOwned && patchRepeats.isRepeat(args, hostId))) {
       return
     }
     store.patchWorkspaceSession(
-      windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch'),
+      windowOwned
+        ? windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch')
+        : patchForMain(args, hostId),
       hostId
     )
-    patchRepeats.noteApplied(args, hostId)
+    if (windowOwned) {
+      patchRepeats.noteApplied(args, hostId)
+    }
   })
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.
