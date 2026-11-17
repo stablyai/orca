@@ -193,6 +193,69 @@ function isolatedEnv(runDir, userDataDir) {
   }
 }
 
+const READY_TIMEOUT_MS = 300_000
+
+function readWindowState() {
+  return {
+    url: location.href,
+    hasApi: Boolean(window.api),
+    hasStore: Boolean(window.__store),
+    ready: window.__store?.getState().workspaceSessionReady ?? null,
+    text: (document.body?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 300)
+  }
+}
+
+/** The session-ready app window; on timeout, writes what every window showed so one run explains the failure. */
+async function waitForAppWindow(app, { arm, sha, runDir, options, stderrTail }) {
+  const consoleErrors = []
+  const watch = (page) =>
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text().slice(0, 300))
+        consoleErrors.splice(0, Math.max(0, consoleErrors.length - 20))
+      }
+    })
+  await app.firstWindow({ timeout: 180_000 })
+  app.windows().forEach(watch)
+  app.on('window', watch)
+  const deadline = Date.now() + READY_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    for (const page of app.windows()) {
+      const ready = await page
+        .evaluate(() => window.__store?.getState().workspaceSessionReady === true)
+        .catch(() => false)
+      if (ready) {
+        return page
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+  }
+  const windows = []
+  for (const page of app.windows()) {
+    windows.push(await page.evaluate(readWindowState).catch((error) => ({ error: String(error) })))
+  }
+  const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
+  fs.mkdirSync(outDir, { recursive: true })
+  const stem = path.join(outDir, `not-ready-${arm}-${sha.slice(0, 11)}-${Date.now()}`)
+  await app
+    .windows()[0]
+    ?.screenshot({ path: `${stem}.png` })
+    .catch(() => {})
+  const userDataFiles = fs.readdirSync(path.join(runDir, 'user-data')).slice(0, 40)
+  fs.writeFileSync(
+    `${stem}.json`,
+    `${JSON.stringify({ windows, consoleErrors, stderrTail, userDataFiles }, null, 2)}\n`
+  )
+  console.log(`[fleet-gate] ${arm} never became ready: ${JSON.stringify(windows).slice(0, 600)}`)
+  console.log(
+    `[fleet-gate] console errors: ${JSON.stringify(consoleErrors.slice(-5)).slice(0, 600)}`
+  )
+  console.log(`[fleet-gate] stderr tail: ${JSON.stringify(stderrTail.slice(-8)).slice(0, 800)}`)
+  throw new Error(
+    `${arm} ${sha.slice(0, 11)} not session-ready after ${READY_TIMEOUT_MS / 1000}s (${stem}.json)`
+  )
+}
+
 async function measureOnce({ arm, sha, buildDir, options, runDir }) {
   const userDataDir = path.join(runDir, 'user-data')
   cloneFleetSeed(options.seed, userDataDir)
@@ -204,15 +267,13 @@ async function measureOnce({ arm, sha, buildDir, options, runDir }) {
     timeout: 180_000
   })
   const result = { arm, sha, windows: {}, census: null, notes: [] }
+  const stderrTail = []
+  app.process().stderr?.on('data', (chunk) => {
+    stderrTail.push(...String(chunk).split('\n').filter(Boolean))
+    stderrTail.splice(0, Math.max(0, stderrTail.length - 40))
+  })
   try {
-    const page = await app.firstWindow({ timeout: 180_000 })
-    await page.waitForFunction(
-      () => window.__store?.getState().workspaceSessionReady === true,
-      null,
-      {
-        timeout: 300_000
-      }
-    )
+    const page = await waitForAppWindow(app, { arm, sha, runDir, options, stderrTail })
     const probeState = await installMainProbeIn(app)
     if (probeState !== 'installed') {
       result.notes.push(`main probe ${probeState}: R→M counts only send(), not invoke()`)
@@ -289,7 +350,9 @@ async function main() {
   const newSha = git(repoRoot, ['rev-parse', `${options.new}^{commit}`])
   const oldSha = git(repoRoot, [
     'rev-parse',
-    options.old ? `${options.old}^{commit}` : git(repoRoot, ['merge-base', 'origin/main', newSha])
+    options.old
+      ? `${String(options.old)}^{commit}`
+      : git(repoRoot, ['merge-base', 'origin/main', newSha])
   ])
   const hot = hotPathChanges(oldSha, newSha, repoRoot)
   if (hot.length === 0 && !options.force) {
@@ -335,7 +398,7 @@ async function main() {
   }
   const header = [
     `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${options.runs} runs each (alternating)  ${os.hostname()} ${process.platform}`,
-    `census: ${census ? `${census.workspaces} workspaces, ${census.tabBuckets} tab buckets, ${census.terminalTabs} terminal tabs, ${census.agentStatuses} agent statuses` : 'n/a'}; seed ${seedCensus.chatRecords} chat records, ${seedCensus.chatTabs} chat tabs`,
+    `census: ${census ? `${String(census.workspaces)} workspaces, ${String(census.tabBuckets)} tab buckets, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentStatuses)} agent statuses` : 'n/a'}; seed ${String(seedCensus.chatRecords)} chat records, ${String(seedCensus.chatTabs)} chat tabs`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
   const { text, passed } = formatTable({ rows, header, notes })
