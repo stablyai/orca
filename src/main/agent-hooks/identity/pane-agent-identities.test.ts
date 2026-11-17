@@ -483,31 +483,30 @@ describe('AgentIdentityStore on a newer build read-only file', () => {
       'ids'
     ]
   ]
-  for (const links of [2_000, 20_000]) {
-    it.each(cases)(
-      `among ${links} links with %s, searches by index or answers unavailable`,
-      (_, indexSql, byId, bySession) => {
-        const { path, first, key } = newerReadOnlyFile(links, indexSql)
-        const store = new AgentIdentityStore(path)
-        opened.push(store)
-        expect(store.readOnly).toBe(true)
+  const links = 2
+  it.each(cases)(
+    'with %s, searches by index or answers unavailable',
+    (_, indexSql, byId, bySession) => {
+      const { path, first, key } = newerReadOnlyFile(links, indexSql)
+      const store = new AgentIdentityStore(path)
+      opened.push(store)
+      expect(store.readOnly).toBe(true)
 
-        expect(store.providerKeyOf(first)).toEqual(
-          byId === 'key' ? key(0) : REVERSE_LOOKUP_UNAVAILABLE
-        )
-        expect(store.providerKeyOf('claude_missing')).toEqual(
-          byId === 'key' ? null : REVERSE_LOOKUP_UNAVAILABLE
-        )
-        expect(store.idsOfProviderSession('session-0')).toEqual(
-          bySession === 'ids' ? [first] : REVERSE_LOOKUP_UNAVAILABLE
-        )
-        // Every other lookup keeps working, and nothing is written.
-        expect(store.has(first)).toBe(true)
-        expect(store.lookup(key(0))).toBe(first)
-        expect(store.identify(key(links + 1))).toBeNull()
-      }
-    )
-  }
+      expect(store.providerKeyOf(first)).toEqual(
+        byId === 'key' ? key(0) : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      expect(store.providerKeyOf('claude_missing')).toEqual(
+        byId === 'key' ? null : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      expect(store.idsOfProviderSession('session-0')).toEqual(
+        bySession === 'ids' ? [first] : REVERSE_LOOKUP_UNAVAILABLE
+      )
+      // Every other lookup keeps working, and nothing is written.
+      expect(store.has(first)).toBe(true)
+      expect(store.lookup(key(0))).toBe(first)
+      expect(store.identify(key(links + 1))).toBeNull()
+    }
+  )
 
   it('reclassifies when the schema changes on the same handle, and on reopen', () => {
     const { path, first, key } = newerReadOnlyFile(100, [

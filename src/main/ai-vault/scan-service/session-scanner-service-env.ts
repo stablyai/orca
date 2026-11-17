@@ -32,8 +32,11 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'COPILOT_HOME',
   'DEVIN_HOME',
   'GROK_HOME',
+  'HERMES_HOME',
   'KIMI_CODE_HOME',
   'KIRO_HOME',
+  // Hermes' Windows installs live in %LOCALAPPDATA%\hermes.
+  'LOCALAPPDATA',
   'OMP_CODING_AGENT_DIR',
   'OMP_PROFILE',
   'OPENCLAW_STATE_DIR',

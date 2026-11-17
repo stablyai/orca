@@ -40,7 +40,8 @@ describe('legacy host navigation through inventory reconstruction', () => {
     setSession(saved)
     electronMocks.webContents.fromId.mockReturnValue({
       isDestroyed: () => false,
-      isLoading: () => false
+      isLoading: () => false,
+      isLoadingMainFrame: () => false
     })
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(async () => ({ browserPageId: 'unused' })),

@@ -83,13 +83,14 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.agentIssueList',
     permission: 'workspace',
     params: LinearIssueList,
-    handler: async (params, { runtime }) => runtime.linearIssueListForAgents(params)
+    handler: async (params, { runtime, signal }) => runtime.linearIssueListForAgents(params, signal)
   }),
   defineMethod({
     name: 'linear.agentProjectList',
     permission: 'workspace',
     params: LinearProjectList,
-    handler: async (params, { runtime }) => runtime.linearProjectListForAgents(params)
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearProjectListForAgents(params, signal)
   }),
   defineMethod({
     name: 'linear.resolveCurrentIssue',

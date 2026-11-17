@@ -209,7 +209,11 @@ type AgentSessionRefusalFactsByCode = {
   agent_session_ownership_unknown: ConversationOwnerFacts
   agent_session_conflict: ConversationOwnerFacts
   execution_owner_reconciling: NoFacts
-  agent_session_identity_required: NoFacts
+  agent_session_identity_required: {
+    /** On `transcriptUnreadable`: the conversation ran in another folder, so no retry opens it here.
+     *  A fact, not a reason, so released clients still read the refusal as before. */
+    otherFolder?: true
+  }
   agent_session_operation_conflict: NoFacts
   agent_session_operation_expired: NoFacts
   agent_session_operation_capacity: NoFacts
@@ -308,7 +312,12 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
       : {}),
     ...(agentInstallation ? { agentInstallation } : {}),
     ...(codexInstallation ? { codexInstallation } : {}),
-    ...(expiredAttachments ? { expiredAttachments } : {})
+    ...(expiredAttachments ? { expiredAttachments } : {}),
+    ...(code === 'agent_session_identity_required' &&
+    value.reason === 'transcriptUnreadable' &&
+    value.otherFolder === true
+      ? { otherFolder: true }
+      : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
   return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined

@@ -132,3 +132,13 @@ export type RuntimeManagedWorktreeCreateArgs = {
     }
   }
 }
+
+export type RuntimeLocalWorktreeCreateCandidate = {
+  effectiveRequestedName: string
+  requestedDisplayName?: string
+  displayNameKind: CreateWorktreeArgs['displayNameKind']
+  effectiveSanitizedName: string
+  branchName: string
+  checkoutExistingBranch: boolean
+  worktreePath: string
+}

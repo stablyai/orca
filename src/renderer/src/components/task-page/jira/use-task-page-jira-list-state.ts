@@ -39,7 +39,6 @@ import {
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { useTaskPageJiraProjectScope } from './filters/use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
@@ -54,13 +53,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     () =>
       ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId),
     [accountBackedTaskSourceHostId, jiraTaskSourceContext]
-  )
-  const jiraProjectScope = useTaskPageJiraProjectScope(
-    model.repos,
-    model.selectedRepos,
-    model.pageData.preselectedRepoId,
-    model.accountBackedTaskSourceHostId,
-    selectedJiraSiteId
   )
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
@@ -217,7 +209,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     ...quickFilters,
     jiraStatusCatalog,
     setJiraStatusCatalog,
-    ...jiraProjectScope,
     jiraIssues,
     setJiraIssues,
     jiraLoading,

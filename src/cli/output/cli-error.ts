@@ -15,6 +15,7 @@ import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connectio
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import { stripClaudePinnedLaunchMarker } from '../../shared/claude/claude-pinned-launch-error'
+import { linearNotConnectedRecovery } from '../linear/linear-not-connected-recovery'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
@@ -34,6 +35,9 @@ function contextRecovery(error: unknown, context: CliErrorContext): ContextRecov
       worktree: context.worktreeSelector,
       remoteServerSelected: context.remoteServerSelected
     })
+  }
+  if (code === 'linear_not_connected') {
+    return linearNotConnectedRecovery(context.remoteServer)
   }
   // A remote handle sent locally looks stale rather than missing a flag.
   if (
@@ -121,11 +125,8 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
 }
 
 function hasOrchestrationRequestId(data: unknown): boolean {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    typeof (data as { orchestrationRequestId?: unknown }).orchestrationRequestId === 'string'
-  )
+  const requestId = (data as { orchestrationRequestId?: unknown } | null)?.orchestrationRequestId
+  return typeof requestId === 'string'
 }
 
 function formatRuntimeUnavailableError(message: string, error: RuntimeClientError): string {

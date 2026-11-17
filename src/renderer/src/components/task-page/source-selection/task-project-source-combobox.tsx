@@ -280,7 +280,8 @@ export default function TaskProjectSourceCombobox({
               const selectedProject = isTaskProjectGroupSelected(group, selected)
               const selectedSource = getSelectedTaskProjectSource(group, selected)
               const detail = getProjectDetail(group, selected, showHostLabels, getRepoHostLabel, t)
-              const hasSourceMenu = hasMultipleTaskProjectHostsInGroup(group)
+              const hasSourceMenu = group.sources.length > 1
+              const showSourceHostLabels = hasMultipleTaskProjectHostsInGroup(group)
               return (
                 <div
                   key={group.projectKey}
@@ -381,7 +382,9 @@ export default function TaskProjectSourceCombobox({
                                 />
                                 <div className="min-w-0 flex-1">
                                   <div className="truncate text-xs">
-                                    {getRepoHostLabel?.(source) ?? source.displayName}
+                                    {showSourceHostLabels
+                                      ? (getRepoHostLabel?.(source) ?? source.displayName)
+                                      : source.displayName}
                                   </div>
                                   <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                                     {sourceDetail}

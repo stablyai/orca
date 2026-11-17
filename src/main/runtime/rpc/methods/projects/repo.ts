@@ -105,6 +105,13 @@ export const REPO_METHODS = [
         context
       )
   }),
+  // Older hosts answer method_not_found; clients then fall back to <host home>/orca/projects.
+  defineMethod({
+    name: 'repo.defaultCreateParent',
+    permission: 'workspace',
+    params: null,
+    handler: (_params, { runtime }) => ({ parentPath: runtime.getDefaultCreateProjectParent() })
+  }),
   defineMethod({
     name: 'repo.gitAvailable',
     permission: 'workspace',
