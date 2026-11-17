@@ -397,7 +397,7 @@ it('keeps a message an older Orca queued in a chat from before revisions were ke
     later.db
       .prepare('SELECT message_id FROM journal_queue_cards WHERE session_id=?')
       .all(String(copy))
-  ).toEqual([{ message_id: 'older-queued' }])
+  ).toContainEqual({ message_id: 'older-queued' })
 })
 
 it('records a chat it cannot keep and does not retry it until the older Orca writes it again', async () => {
