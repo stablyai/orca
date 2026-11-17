@@ -32,9 +32,15 @@ it('does not add the desktop surface to a standalone CLI', () => {
   ).toEqual(['app-server', '--stdio'])
 })
 
-it('publishes the resolved chat program with its environment overlay', () => {
+it('publishes the resolved chat program with its environment overlay', async () => {
   expect(
-    resolveZcodeChatProgram({ PATH: '/usr/bin' }, {}, { resolveInvocation: () => desktop })
+    await resolveZcodeChatProgram(
+      { PATH: '/usr/bin' },
+      {},
+      {
+        resolveInvocation: async () => desktop
+      }
+    )
   ).toEqual({
     command: '/opt/ZCode/zcode',
     prefixArgs: ['/opt/ZCode/resources/glm/zcode.cjs'],

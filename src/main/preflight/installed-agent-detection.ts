@@ -126,7 +126,7 @@ export async function detectInstalledAgents(
   if (wslTarget || !detected.includes('zcode')) {
     return detected
   }
-  const invocation = resolveZcodeCliInvocation({
+  const invocation = await resolveZcodeCliInvocation({
     pathEnv: process.env.PATH ?? process.env.Path
   })
   return zcodeDesktopTerminalRefusal(invocation)

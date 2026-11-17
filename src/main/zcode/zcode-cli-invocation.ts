@@ -37,8 +37,10 @@ export type ResolveZcodeCliInvocationOptions = {
   officialRuntime?: ZcodeOfficialRuntimeDeps
 }
 
-export function assertZcodeTerminalInvocation(options: ResolveZcodeCliInvocationOptions): void {
-  const refusal = zcodeDesktopTerminalRefusal(resolveZcodeCliInvocation(options))
+export async function assertZcodeTerminalInvocation(
+  options: ResolveZcodeCliInvocationOptions
+): Promise<void> {
+  const refusal = zcodeDesktopTerminalRefusal(await resolveZcodeCliInvocation(options))
   if (refusal) {
     throw new Error(refusal)
   }
@@ -122,9 +124,9 @@ function desktopInvocation(
 }
 
 /** Resolve the executable and prefix args for a ZCode CLI or Desktop bundle. */
-export function resolveZcodeCliInvocation(
+export async function resolveZcodeCliInvocation(
   options: ResolveZcodeCliInvocationOptions = {}
-): ZcodeCliInvocation {
+): Promise<ZcodeCliInvocation> {
   const override = options.commandSettings?.agentCmdOverrides?.zcode?.trim()
   if (override) {
     const parsed = parseOverride(override, options)
@@ -133,7 +135,7 @@ export function resolveZcodeCliInvocation(
     }
     const official =
       parsed.prefixArgs.length === 0
-        ? resolveZcodeOfficialRuntime(parsed.command, options.officialRuntime ?? {})
+        ? await resolveZcodeOfficialRuntime(parsed.command, options.officialRuntime ?? {})
         : null
     return official
       ? desktopInvocation(official.electron, official.bundle, official.builtinProviderConfig)
@@ -150,7 +152,7 @@ export function resolveZcodeCliInvocation(
     homePath: options.homePath,
     platform: options.platform
   })
-  const official = resolveZcodeOfficialRuntime(command, options.officialRuntime ?? {})
+  const official = await resolveZcodeOfficialRuntime(command, options.officialRuntime ?? {})
   if (official) {
     return desktopInvocation(official.electron, official.bundle, official.builtinProviderConfig)
   }
@@ -163,7 +165,7 @@ export function resolveZcodeCliInvocation(
     })
   }
 
-  const conventional = probeZcodeOfficialRuntimes([], {
+  const conventional = await probeZcodeOfficialRuntimes([], {
     home: options.homePath,
     platform: options.platform,
     ...options.officialRuntime

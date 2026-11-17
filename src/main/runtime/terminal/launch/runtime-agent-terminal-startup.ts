@@ -133,7 +133,7 @@ export async function resolveAgentTerminalCreateOptions(
       terminalWindowsWslDistro: runtime.pty.terminalWindowsWslDistro
     })
   ) {
-    assertZcodeTerminalInvocation({
+    await assertZcodeTerminalInvocation({
       commandSettings: store.getSettings(),
       pathEnv: process.env.PATH ?? process.env.Path
     })

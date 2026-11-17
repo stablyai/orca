@@ -220,6 +220,7 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
 
   it.each([
     { requested: '1', deleted: false, expected: '1' },
+    { requested: '0', deleted: false, expected: null },
     { requested: undefined, deleted: false, expected: null },
     { requested: '1', deleted: true, expected: null }
   ])(

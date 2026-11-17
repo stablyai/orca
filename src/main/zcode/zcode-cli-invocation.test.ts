@@ -4,14 +4,14 @@ import { resolveZcodeCliInvocation, assertZcodeTerminalInvocation } from './zcod
 const DESKTOP_FILES = new Set(['/opt/ZCode/zcode', '/opt/ZCode/resources/glm/zcode.cjs'])
 const officialRuntime = {
   platform: 'linux' as const,
-  existsSync: (path: string): boolean => DESKTOP_FILES.has(path),
-  realpathSync: (path: string): string => path
+  exists: async (path: string): Promise<boolean> => DESKTOP_FILES.has(path),
+  realpath: async (path: string): Promise<string> => path
 }
 
 describe('resolveZcodeCliInvocation', () => {
-  it('runs a Desktop bundle through its Electron executable as Node', () => {
+  it('runs a Desktop bundle through its Electron executable as Node', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         resolveCommand: () => 'zcode',
         officialRuntime
       })
@@ -23,9 +23,9 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('keeps a standalone CLI as the command', () => {
+  it('keeps a standalone CLI as the command', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         resolveCommand: () => '/home/test/.local/bin/zcode',
         officialRuntime
       })
@@ -37,14 +37,14 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('preserves a quoted multi-token Command override', () => {
+  it('preserves a quoted multi-token Command override', async () => {
     expect(
-      resolveZcodeCliInvocation({
+      await resolveZcodeCliInvocation({
         commandSettings: {
           agentCmdOverrides: { zcode: 'node "/home/test/ZCode CLI/zcode.cjs"' }
         },
         resolveCommand: (command) => (command === 'node' ? '/usr/bin/node' : command),
-        officialRuntime: { ...officialRuntime, existsSync: () => false }
+        officialRuntime: { ...officialRuntime, exists: async () => false }
       })
     ).toMatchObject({
       command: '/usr/bin/node',
@@ -53,15 +53,15 @@ describe('resolveZcodeCliInvocation', () => {
     })
   })
 
-  it('refuses a Desktop bundle for terminal launches only', () => {
-    expect(() =>
+  it('refuses a Desktop bundle for terminal launches only', async () => {
+    await expect(
       assertZcodeTerminalInvocation({ resolveCommand: () => 'zcode', officialRuntime })
-    ).toThrow(/terminal TUI/)
-    expect(() =>
+    ).rejects.toThrow(/terminal TUI/)
+    await expect(
       assertZcodeTerminalInvocation({
         resolveCommand: () => '/usr/local/bin/zcode',
-        officialRuntime: { ...officialRuntime, existsSync: () => false }
+        officialRuntime: { ...officialRuntime, exists: async () => false }
       })
-    ).not.toThrow()
+    ).resolves.toBeUndefined()
   })
 })

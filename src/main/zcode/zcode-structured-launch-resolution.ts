@@ -30,14 +30,14 @@ export type ZcodeStructuredLaunchPartDeps = {
   resolveInvocation?: typeof resolveZcodeCliInvocation
 }
 
-function resolveInvocation(
+async function resolveInvocation(
   environment: Record<string, string>,
   commandSettings: StructuredAgentCommandSettings,
   deps: ZcodeStructuredLaunchPartDeps
-): ZcodeCliInvocation {
+): Promise<ZcodeCliInvocation> {
   const pathEnv = environment.PATH ?? environment.Path
   const homePath = environment.HOME ?? environment.USERPROFILE
-  return (deps.resolveInvocation ?? resolveZcodeCliInvocation)({
+  return await (deps.resolveInvocation ?? resolveZcodeCliInvocation)({
     commandSettings,
     ...(pathEnv ? { pathEnv } : {}),
     ...(homePath ? { homePath } : {})
@@ -65,7 +65,7 @@ export function zcodeStructuredLaunchPart(
       throw new Error(`zcode sessions pin ${pinned}, not ${accountHome.variable}`)
     }
     const environment = await basis.environment()
-    const invocation = resolveInvocation(environment, basis.commandSettings(), deps)
+    const invocation = await resolveInvocation(environment, basis.commandSettings(), deps)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     return {
       launch: {
@@ -85,12 +85,12 @@ export function zcodeStructuredLaunchPart(
 }
 
 /** The app-server program an installed Desktop app or standalone CLI exposes. */
-export function resolveZcodeChatProgram(
+export async function resolveZcodeChatProgram(
   environment: Record<string, string>,
   commandSettings: StructuredAgentCommandSettings,
   deps: ZcodeStructuredLaunchPartDeps = {}
-): { command: string; prefixArgs: string[]; env: Record<string, string> } {
-  const invocation = resolveInvocation(environment, commandSettings, deps)
+): Promise<{ command: string; prefixArgs: string[]; env: Record<string, string> }> {
+  const invocation = await resolveInvocation(environment, commandSettings, deps)
   return {
     command: invocation.command,
     prefixArgs: [...invocation.prefixArgs],

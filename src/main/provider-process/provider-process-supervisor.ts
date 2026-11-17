@@ -242,7 +242,8 @@ export function supervisedPosixLaunch(
   for (const key of [...PROVIDER_ONLY_NODE_ENV_KEYS, 'ELECTRON_RUN_AS_NODE'] as const) {
     const value = supervisorEnv[key]
     delete supervisorEnv[key]
-    if (value !== undefined) {
+    // Only a request to run as Node travels on; anything else would re-open the provider's mode.
+    if (value !== undefined && (key !== 'ELECTRON_RUN_AS_NODE' || value === '1')) {
       nodeEnv[key] = value
     }
   }

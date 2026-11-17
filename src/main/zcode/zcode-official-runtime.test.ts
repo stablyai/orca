@@ -12,12 +12,16 @@ const MACOS_INSTALL = new Set([
   '/Applications/ZCode.app/Contents/Resources/config/provider/zcode-builtin.json'
 ])
 
+const installed = (files: Set<string>) => ({
+  exists: async (path: string): Promise<boolean> => files.has(path),
+  realpath: async (path: string): Promise<string> => path
+})
+
 describe('zcode official runtime discovery', () => {
-  it('resolves a desktop executable to its bundled CLI and provider config', () => {
+  it('resolves a desktop executable to its bundled CLI and provider config', async () => {
     expect(
-      resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
-        existsSync: (path) => LINUX_INSTALL.has(path),
-        realpathSync: (path) => path,
+      await resolveZcodeOfficialRuntime('/opt/ZCode/zcode', {
+        ...installed(LINUX_INSTALL),
         platform: 'linux'
       })
     ).toEqual({
@@ -27,11 +31,10 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('resolves macOS app and Windows per-user layouts', () => {
+  it('resolves macOS app and Windows per-user layouts', async () => {
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => MACOS_INSTALL.has(path),
-        realpathSync: (path) => path,
+      await probeZcodeOfficialRuntimes([], {
+        ...installed(MACOS_INSTALL),
         platform: 'darwin'
       })
     ).toMatchObject({
@@ -44,9 +47,8 @@ describe('zcode official runtime discovery', () => {
       'C:\\Users\\test\\AppData\\Local\\Programs\\ZCode\\resources\\glm\\zcode.cjs'
     ])
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => windowsInstall.has(path),
-        realpathSync: (path) => path,
+      await probeZcodeOfficialRuntimes([], {
+        ...installed(windowsInstall),
         platform: 'win32',
         home: 'C:\\Users\\test',
         localAppData: 'C:\\Users\\test\\AppData\\Local'
@@ -57,16 +59,16 @@ describe('zcode official runtime discovery', () => {
     })
   })
 
-  it('does not mistake a standalone CLI or a root without zcode.cjs for Desktop', () => {
+  it('does not mistake a standalone CLI or a root without zcode.cjs for Desktop', async () => {
     expect(
-      resolveZcodeOfficialRuntime('/usr/local/bin/zcode', {
-        existsSync: (path) => path === '/usr/local/bin/zcode',
-        realpathSync: (path) => path
+      await resolveZcodeOfficialRuntime('/usr/local/bin/zcode', {
+        exists: async (path) => path === '/usr/local/bin/zcode',
+        realpath: async (path) => path
       })
     ).toBeNull()
     expect(
-      probeZcodeOfficialRuntimes([], {
-        existsSync: (path) => path === '/opt/ZCode/zcode',
+      await probeZcodeOfficialRuntimes([], {
+        exists: async (path) => path === '/opt/ZCode/zcode',
         platform: 'linux'
       })
     ).toBeNull()

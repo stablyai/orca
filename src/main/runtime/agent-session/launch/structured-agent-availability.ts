@@ -94,7 +94,7 @@ async function observeChatProgram(
   try {
     settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
-    const { command, env } = chatProgram.resolve(shellEnv, settings)
+    const { command, env } = await chatProgram.resolve(shellEnv, settings)
     if (isAbsolute(command)) {
       return 'available'
     }

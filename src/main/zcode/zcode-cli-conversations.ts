@@ -1,7 +1,7 @@
 // How a ZCode chat adopts its CLI's recorded conversation, and how it owns the Session History
 // rows that conversation is listed under.
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   directoryTranscriptImport,
@@ -16,7 +16,11 @@ const ZCODE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   accountHomeCandidates: ({ selectedAccountHomePath }) => [selectedAccountHomePath],
   // ZCode's conversation lives in its own SQLite store, which the adapter reads back through
   // `session/resume`, so the database's presence is the adoption proof.
-  findTranscript: async ({ store }) => (existsSync(store) ? store : null)
+  findTranscript: async ({ store }) =>
+    access(store).then(
+      () => store,
+      () => null
+    )
 })
 
 const ZCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
