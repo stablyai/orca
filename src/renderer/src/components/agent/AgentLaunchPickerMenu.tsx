@@ -2,9 +2,16 @@ import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
+import { Fragment, useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
-import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { useHermesProfiles } from '@/hooks/useHermesProfiles'
+import { HermesProfileMenuItems } from './HermesProfileMenuItems'
+import { projectAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-profile'
+import { withHermesProfileArgs } from '../../../../shared/hermes-profiles'
 import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
@@ -110,6 +117,26 @@ export function AgentLaunchPickerMenu({
   choices?: readonly AgentPickerChoice[]
 }) {
   const t = useTranslate()
+  const localHermes =
+    mode !== 'select' &&
+    model?.state === 'settled' &&
+    model.pickerContext?.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const hermesProfiles = useHermesProfiles(localHermes)
+  const launchHermesProfile = (entry: AgentPickerEntry, profile: string) => {
+    const settings = model?.state === 'settled' ? model.pickerContext?.settings : undefined
+    const baseArgs = projectAgentLaunchProfile('hermes', settings, { target: 'terminal' }).args
+    const draft: AgentPickerDraft = {
+      agent: 'hermes',
+      surface: 'terminal',
+      choices: {},
+      arguments: withHermesProfileArgs(baseArgs, profile)
+    }
+    return runLaunch(
+      { kind: 'cli', agent: 'hermes', executionHostId: entry.rows[0]?.executionHostId },
+      draft,
+      entry
+    )
+  }
   useRetiredAgentPickerDrafts(entries, draftScope, mode, setupDisabled)
   const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
@@ -231,7 +258,7 @@ export function AgentLaunchPickerMenu({
           ) : null}
           {visible.map((entry) => {
             const source = draftForEntry?.(entry)
-            return (
+            const row = (
               <AgentPickerMenuRow
                 key={entry.agent}
                 draftScope={draftScope}
@@ -251,6 +278,21 @@ export function AgentLaunchPickerMenu({
                 onSetDefault={onSetDefault}
                 shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
               />
+            )
+            return entry.agent === 'hermes' &&
+              mode !== 'select' &&
+              entry.surfaces.includes('terminal') &&
+              hermesProfiles.profiles.length > 0 ? (
+              <Fragment key={entry.agent}>
+                {row}
+                <HermesProfileMenuItems
+                  snapshot={hermesProfiles}
+                  disabled={disabled || terminalBlocked}
+                  onSelect={(profile) => launchHermesProfile(entry, profile)}
+                />
+              </Fragment>
+            ) : (
+              row
             )
           })}
           {setups.map((setup) => {

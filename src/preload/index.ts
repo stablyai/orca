@@ -41,6 +41,7 @@ import { localhostWorktreeLabelsApi } from './api/workspaces/localhost-worktree-
 import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
+import { hermesProfilesApi } from './api/hermes-profiles-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
 import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
@@ -151,6 +152,7 @@ const api = {
   keybindings: keybindingsApi,
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
+  hermesProfiles: hermesProfilesApi,
   cli: cliApi,
   orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,
