@@ -4,12 +4,13 @@ export type WorkerThreadChildSpec = {
   args: string[]
   cwd?: string
   env?: Record<string, string | undefined>
+  windowsVerbatimArguments?: boolean
   terminationBarrier?: true
 }
 
 export type WorkerThreadChildRequest =
   | { type: 'spawn'; id: number; spec: WorkerThreadChildSpec }
-  | { type: 'stdin-write'; id: number; data: string }
+  | { type: 'stdin-write'; id: number; data: string | Uint8Array }
   | { type: 'stdin-end'; id: number }
   | { type: 'output-consumed'; id: number; bytes: number }
   | { type: 'stop-owned-group'; id: number }
