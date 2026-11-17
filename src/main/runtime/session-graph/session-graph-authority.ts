@@ -75,7 +75,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
     this.refreshWritableFlags()
     this.releaseUnseededPhoneFrames()
   }
@@ -96,7 +96,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.terminalWaiters.rejectAll('terminal_handle_stale')
+    this.terminalWaiters.rejectRendererBound('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
     this.releaseUnseededPhoneFrames()
