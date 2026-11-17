@@ -1,8 +1,7 @@
-import { EventEmitter } from 'node:events'
+import { EventEmitter, once } from 'node:events'
 import { Duplex, PassThrough, Readable, Writable } from 'node:stream'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { ProviderChild, ProviderOwnerProcess } from './provider-child'
-import { providerOwnerLaunched } from './provider-child'
 import { ignoreProviderTransportError, notifyProviderChild } from './provider-child'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import { publishProviderOwnership, providerOwnershipDirectory } from './provider-ownership-journal'
@@ -133,9 +132,11 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {
-    const launchError = this.raw.pid === undefined ? await providerOwnerLaunched(this.raw) : null
-    if (launchError) {
-      throw await (this.failure ?? launchError)
+    if (this.raw.pid === undefined) {
+      // A hosted launch reports its PID later; a failed spawn rejects with its error.
+      await once(this.raw, 'spawn').catch(async (error: Error) => {
+        throw await (this.failure ?? error)
+      })
     }
     if (!bootstrap || !this.gate || !this.control || !this.raw.pid) {
       throw new Error('Provider bootstrap control pipes are unavailable')

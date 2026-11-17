@@ -22,6 +22,7 @@ vi.mock('../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
 
 function hostClient(spawns: HostedProviderSpawn[]): DaemonClient {
   const identity = { pid: process.pid, providerSpawn: true as const }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launcher uses only these client methods.
   return {
     getDaemonIdentity: () => identity,
     ensureConnectedWithin: async () => {},
@@ -37,7 +38,6 @@ function hostClient(spawns: HostedProviderSpawn[]): DaemonClient {
       }
       return {}
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launcher uses only these client methods.
   } as unknown as DaemonClient
 }
 

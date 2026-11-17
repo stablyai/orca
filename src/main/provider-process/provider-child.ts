@@ -34,14 +34,6 @@ export type ProviderChild = Pick<
 export type ProviderOwnerProcess = Pick<ChildProcess, 'pid' | 'stdout' | 'stderr'> &
   EventEmitter & { readonly stdio?: readonly (Readable | Writable | null | undefined)[] }
 
-/** A hosted launch reports its PID later; a failed spawn reports only its error. */
-export function providerOwnerLaunched(raw: ProviderOwnerProcess): Promise<Error | null> {
-  return new Promise((resolve) => {
-    raw.once('spawn', () => resolve(null))
-    raw.once('error', resolve)
-  })
-}
-
 /** Native children expose `pid` only once the CLI runs; a failed launch leaves it unset. */
 export async function awaitProviderChildSpawn(child: ProviderChild): Promise<void> {
   await child.ready?.catch(() => {})
