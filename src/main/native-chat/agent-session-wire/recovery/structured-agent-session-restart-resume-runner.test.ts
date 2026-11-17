@@ -1,0 +1,27 @@
+import type * as Os from 'node:os'
+import { expect, it, vi } from 'vitest'
+
+// A many-core host: the cap, not the core count, must bound a restart burst.
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof Os>()),
+  availableParallelism: () => 32
+}))
+
+it('starts at most six restart continuations at once on a many-core host', async () => {
+  const { StructuredAgentSessionResumeAdmission } =
+    await import('./structured-agent-session-restart-resume-runner')
+  const admission = new StructuredAgentSessionResumeAdmission()
+  let running = 0
+  let peak = 0
+  await Promise.all(
+    Array.from({ length: 25 }, (_, index) =>
+      admission.run(`session-${index}`, 'restart', async () => {
+        running += 1
+        peak = Math.max(peak, running)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        running -= 1
+      })
+    )
+  )
+  expect(peak).toBe(6)
+})

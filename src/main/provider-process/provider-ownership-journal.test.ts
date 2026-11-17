@@ -173,3 +173,53 @@ it('retries unverifiable launch reads but still refuses a definite parent mismat
     `leader ppid 1 != ${process.pid}`
   )
 })
+
+it('publishes a burst of 25 launches whose first reads are all unverifiable at once', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-provider-proof-burst-'))
+  const directory = join(root, 'provider-processes')
+  state.failWrite = false
+  const launches = Array.from({ length: 25 }, (_, index) => ({
+    leader: 910000 + index * 2,
+    watcher: 910001 + index * 2
+  }))
+  const wrongParentLeader = launches[7].leader
+  // Hold every first leader read until all 25 are in flight, as a restart burst does, then fail each once.
+  const firstReads = new Set<number>()
+  let releaseBurst: () => void = () => {}
+  const burst = new Promise<void>((resolve) => {
+    releaseBurst = resolve
+  })
+  state.read = async (pid) => {
+    const launch = launches.find((entry) => entry.leader === pid)
+    if (launch && !firstReads.has(pid)) {
+      firstReads.add(pid)
+      if (firstReads.size === launches.length) {
+        releaseBurst()
+      }
+      await burst
+      return 'unverifiable'
+    }
+    const watcherOf = launches.find((entry) => entry.watcher === pid)
+    const ppid = watcherOf ? watcherOf.leader : pid === wrongParentLeader ? 1 : process.pid
+    return { pid, ppid, pgid: pid, startedAt: '1234', startResolution: 'clock-tick' }
+  }
+
+  const results = await Promise.allSettled(
+    launches.map(({ leader, watcher }) =>
+      publishProviderOwnership(directory, 'test-boot', leader, watcher)
+    )
+  )
+
+  expect(firstReads.size).toBe(25)
+  const refused = results.flatMap((result, index) =>
+    result.status === 'rejected' ? [{ index, message: String(result.reason) }] : []
+  )
+  expect(refused).toEqual([
+    { index: 7, message: expect.stringContaining(`leader ppid 1 != ${process.pid}`) }
+  ])
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      await result.value.remove()
+    }
+  }
+})
