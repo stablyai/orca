@@ -11,9 +11,12 @@ import {
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  isTerminalLeafId,
+  makePaneKey
+} from '../../../../../shared/workspace-layout/stable-pane-id'
 
 /**
  * Whether sleeping the workspace, instead of closing this tab, keeps every busy agent resumable.

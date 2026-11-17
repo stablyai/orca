@@ -4,7 +4,7 @@ import { revalidateTerminalCloseSleep } from './terminal-close-sleep'
 
 const probe = vi.hoisted(() => vi.fn())
 let state: AppState
-vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('./pty-running-work-probe', () => ({ probePtyRunningWork: probe }))
 
 const leaf = '11111111-1111-4111-8111-111111111111'
