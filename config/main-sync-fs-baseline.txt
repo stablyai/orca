@@ -3,7 +3,6 @@
 # Startup-only or one-shot uses are fine to keep; per-RPC, per-spawn, per-focus or per-poll uses are the target.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
-# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
 1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
 2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
 6 src/main/agent-hooks/installation/configuration/hooks-json-write.ts

@@ -719,7 +719,7 @@
 1 src/main/linear/issues/context/read-issue-context.ts
 1 src/main/linear/issues/issue-relation-write.ts
 6 src/main/linear/issues/linear-issue-comments.ts
-6 src/main/linear/issues/linear-issue-listing.ts
+4 src/main/linear/issues/linear-issue-listing.ts
 6 src/main/linear/issues/linear-issue-lookups.ts
 4 src/main/linear/issues/linear-issue-mutations.ts
 2 src/main/linear/issues/linear-issue-write-support.ts
@@ -779,7 +779,7 @@
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-35 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
+40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
 1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
 4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
