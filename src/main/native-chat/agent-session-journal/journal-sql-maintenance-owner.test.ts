@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { JournalSqlActivity } from './journal-sql-activity'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
+import type { JournalSqlDatabaseRead } from './journal-sql-database-read'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -10,6 +11,7 @@ afterEach(() => {
 it('keeps periodic cleanup running while a retirement proof waits on a paused conversion', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   const checks: string[] = []
+  const errors: unknown[] = []
   const activity = new JournalSqlActivity()
   const maintenance = new JournalSqlBackgroundMaintenance(
     {
@@ -21,21 +23,28 @@ it('keeps periodic cleanup running while a retirement proof waits on a paused co
       }
     },
     {
-      database: async (operation) =>
+      database: async (operation: JournalSqlDatabaseRead) =>
         operation.kind === 'forgotten-chats'
           ? { kind: 'forgotten-chats', sessionIds: [] }
-          : { kind: 'retired-heads', heads: [], through: null }
+          : operation.kind === 'sessions'
+            ? { kind: 'sessions', sessionIds: [] }
+            : { kind: 'retired-heads', heads: [], through: null }
     },
     { ensure: async () => null },
     activity,
-    (error) => {
-      throw error
-    }
+    (error) => errors.push(error)
   )
-  // A live chat pauses the proof's conversion; it settles only once that chat goes idle.
+  // As in production, the retirement runs inside the maintenance loop and its proof waits on a
+  // conversion that a live chat pauses; only servicing inside that wait keeps cleanup going.
   const release = activity.hold()
   const conversion = Promise.withResolvers<string>()
-  const waiting = maintenance.serviceWhile(conversion.promise)
+  let proofWait: Promise<string> | undefined
+  maintenance.legacy = {
+    run: async () => {
+      proofWait ??= maintenance.serviceWhile(conversion.promise)
+      await proofWait
+    }
+  }
   void maintenance.start()
   const compactionChecks = () => checks.filter((kind) => kind === 'compaction-state').length
   for (let minute = 0; minute < 10; minute++) {
@@ -45,10 +54,11 @@ it('keeps periodic cleanup running while a retirement proof waits on a paused co
       await new Promise((resolve) => setImmediate(resolve))
     }
   }
-  // Every periodic tick runs while the conversion stays paused.
   expect(compactionChecks()).toBe(10)
   conversion.resolve('epoch')
-  await expect(waiting).resolves.toBe('epoch')
+  await expect(proofWait).resolves.toBe('epoch')
   maintenance.stop()
+  await maintenance.settled()
   release()
+  expect(errors).toEqual([])
 })
