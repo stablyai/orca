@@ -18,10 +18,13 @@ export type JournalReaderRunningRequest = {
 
 type RunningRequestSink = (reader: number, request: JournalReaderRunningRequest | null) => void
 
-/** The pool runs at most four readers; a closing reader frees its record first. */
-const READERS = 4
-const owners: (ReaderSlot | undefined)[] = Array.from({ length: READERS })
-const running: (JournalReaderRunningRequest | null)[] = Array.from({ length: READERS }, () => null)
+/** The pool's reader limit; a closing reader frees its record before its replacement claims one. */
+export const JOURNAL_SQL_READERS = 4
+const owners: (ReaderSlot | undefined)[] = Array.from({ length: JOURNAL_SQL_READERS })
+const running: (JournalReaderRunningRequest | null)[] = Array.from(
+  { length: JOURNAL_SQL_READERS },
+  () => null
+)
 let sink: RunningRequestSink | undefined
 
 export function claimJournalReaderRecord(owner: ReaderSlot): number | undefined {
