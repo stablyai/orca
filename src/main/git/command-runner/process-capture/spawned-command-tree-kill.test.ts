@@ -159,7 +159,7 @@ describe('Git command tree termination', () => {
       { stdio: 'ignore', windowsHide: true }
     )
   })
-  it('starts the taskkill wait once the worker has created taskkill', async () => {
+  it('awaits a taskkill queued on a live worker, with no main rerun, and starts its wait once it exists', async () => {
     vi.useFakeTimers()
     try {
       workerTaskkill.available = true
@@ -168,9 +168,10 @@ describe('Git command tree termination', () => {
       const pending = killSpawnedCommandTree(child)
       const killer = workerTaskkill.killers[0]!
       const stopKiller = vi.spyOn(killer, 'kill')
-      await vi.advanceTimersByTimeAsync(10_000)
+      await vi.advanceTimersByTimeAsync(120_000)
       expect(stopKiller).not.toHaveBeenCalled()
       expect(rootKill).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
 
       killer.receive({ type: 'spawn', id: 99, pid: 777 })
       await vi.advanceTimersByTimeAsync(2_000)
