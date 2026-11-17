@@ -77,3 +77,25 @@ export function BrowserLinkRoutingExistingTabSetting({
     />
   )
 }
+
+// Why: one entry point for both link-opening toggles keeps BrowserPane under its max-lines budget.
+export function BrowserLinkOpeningToggles({
+  settings,
+  updateSettings,
+  showBackground,
+  showExistingTab
+}: BrowserLinkOpeningToggleProps<BrowserLinkOpeningToggleKey> & {
+  showBackground: boolean
+  showExistingTab: boolean
+}): React.JSX.Element {
+  return (
+    <>
+      {showBackground ? (
+        <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+      {showExistingTab ? (
+        <BrowserLinkRoutingExistingTabSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+    </>
+  )
+}

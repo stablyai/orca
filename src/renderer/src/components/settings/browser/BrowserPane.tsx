@@ -13,10 +13,7 @@ import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './routing/BrowserLinkRoutingModifierSetting'
-import {
-  BrowserLinkRoutingBackgroundSetting,
-  BrowserLinkRoutingExistingTabSetting
-} from './routing/BrowserLinkRoutingBackgroundSetting'
+import { BrowserLinkOpeningToggles } from './routing/BrowserLinkRoutingBackgroundSetting'
 import { BrowserTerminalLinkActionsSetting } from './routing/BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './routing/BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './routing/BrowserClientHostedRemoteSetting'
@@ -333,19 +330,12 @@ export function BrowserPane({
             />
           ) : null}
 
-          {showLinkRoutingBackground ? (
-            <BrowserLinkRoutingBackgroundSetting
-              settings={settings}
-              updateSettings={updateSettings}
-            />
-          ) : null}
-
-          {showLinkRoutingExistingTab ? (
-            <BrowserLinkRoutingExistingTabSetting
-              settings={settings}
-              updateSettings={updateSettings}
-            />
-          ) : null}
+          <BrowserLinkOpeningToggles
+            settings={settings}
+            updateSettings={updateSettings}
+            showBackground={showLinkRoutingBackground}
+            showExistingTab={showLinkRoutingExistingTab}
+          />
         </SettingsGroup>
       ) : null}
 
