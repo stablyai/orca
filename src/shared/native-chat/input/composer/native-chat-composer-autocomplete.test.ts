@@ -110,10 +110,12 @@ describe('skill picker scope retention', () => {
       skill({ name: 'not-loaded', sourceKind: 'bundled', skillFilePath: '/bundle/absent/SKILL.md' })
     ]
     const sessionSkills = [
-      ...skills.filter((item) => item.name !== 'not-loaded').map((item) => ({
-        name: item.name,
-        path: item.skillFilePath
-      })),
+      ...skills
+        .filter((item) => item.name !== 'not-loaded')
+        .map((item) => ({
+          name: item.name,
+          path: item.skillFilePath
+        })),
       { name: 'reported-only' }
     ]
     const items = buildNativeChatPickerItems([], skills, '', '/', sessionSkills)
