@@ -1,0 +1,5 @@
+{
+  "_comment": "Public build defaults. Orca Cloud shows only for an account with the cloud.available capability. Service URLs not listed here use the app's built-in production defaults; ORCA_BUILD_* at build time or the matching ORCA_* variables at run time override them.",
+  "billingApiUrl": "https://billing.orca.dev",
+  "cloudSandboxUrl": "https://sandbox.orca.dev"
+}
