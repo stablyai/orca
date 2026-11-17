@@ -354,6 +354,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
+  /** The session gained its first, or lost its last, reader that shows prompt suggestions. */
+  promptSuggestionInterestChanged?(sessionId: string, wanted: boolean): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(
     sessionId: string,

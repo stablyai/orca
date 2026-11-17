@@ -76,6 +76,15 @@ export function decideWebSessionTabsSnapshot(
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+  const sameVersion =
+    current?.publicationEpoch === snapshot.publicationEpoch &&
+    current.snapshotVersion === snapshot.snapshotVersion
+  const follows = snapshot.navigationIntent === 'follow'
+  if (sameVersion && follows && current.followApplied) {
+    return WEB_SESSION_TABS_FRAME_OUTRANKED
+  }
+  // Ordinary publication can project a new selection before its one-shot follow arrives.
+  const unconsumedFollow = sameVersion && follows && !current.followApplied
   const currentSharesPublicationLineage = Boolean(
     current &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
@@ -107,7 +116,8 @@ export function decideWebSessionTabsSnapshot(
     comparePublicationVersions &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch) &&
     snapshot.snapshotVersion <= current.snapshotVersion &&
-    !isExactCurrentReplay
+    !isExactCurrentReplay &&
+    !unconsumedFollow
   ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
@@ -119,7 +129,8 @@ export function decideWebSessionTabsSnapshot(
   }
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
-    snapshotVersion: snapshot.snapshotVersion
+    snapshotVersion: snapshot.snapshotVersion,
+    ...(follows || (sameVersion && current.followApplied) ? { followApplied: true as const } : {})
   })
   trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
