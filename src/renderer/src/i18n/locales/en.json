@@ -18643,6 +18643,10 @@
                 }
               }
             }
+          },
+          "BrowserExtensionSidePanelDock": {
+            "close": "Close side panel",
+            "resize": "Resize side panel"
           }
         },
         "webauthn": {
