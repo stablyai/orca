@@ -20516,18 +20516,13 @@
         "unavailable": "このページのプレビューはありません。"
       },
       "usageLimitActions": {
-        "continueNow": "今すぐ続ける",
-        "leadIn": "待たずにこのチャットを続ける：",
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
-        "openSetting": "上限がリセットされたら自動的に続ける",
-        "cancelled": "Orca はこのチャットを自動的には続けません。",
-        "scheduled": "Orca は {{time}} にこのチャットを続けます。",
-        "cancel": "続けない"
+        "scheduled": "Orca は {{time}} にこのチャットを続けます。"
       },
       "settings": "チャット設定",
       "textAttachmentPreview": {

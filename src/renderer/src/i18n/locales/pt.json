@@ -21687,18 +21687,13 @@
         "unavailable": "Nenhuma visualização para esta página."
       },
       "usageLimitActions": {
-        "continueNow": "Continuar agora",
-        "leadIn": "Continue este bate-papo sem esperar:",
         "switchAccount": "Trocar de conta",
         "addAccount": "Adicionar conta…",
         "accountUnavailable": "Este chat não pode ser transferido para outra conta. Passe-o para outro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Não foi possível cancelar a continuação automática. Tente novamente.",
-        "openSetting": "Continuar automaticamente quando os limites forem redefinidos",
-        "cancelled": "Orca não continuará este bate-papo automaticamente.",
-        "scheduled": "Orca continuará este bate-papo às {{time}}.",
-        "cancel": "Não continue"
+        "scheduled": "Orca continuará este bate-papo às {{time}}."
       },
       "creationChatNotOpened": "O worktree está pronto, mas o chat não pôde ser aberto. Tente abri-lo novamente com sua mensagem.",
       "usage": {
