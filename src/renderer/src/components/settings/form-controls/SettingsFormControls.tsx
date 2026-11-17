@@ -217,6 +217,22 @@ export function SettingsBadge({
   )
 }
 
+/** Inline, so a wrapping title carries its badge with it instead of squeezing the title. */
+export function SettingsTitleWithBadge({
+  title,
+  badge
+}: {
+  title: React.ReactNode
+  badge?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <span className="leading-snug">
+      {title}
+      {badge ? <SettingsBadge className="ml-2 align-middle">{badge}</SettingsBadge> : null}
+    </span>
+  )
+}
+
 type SettingsSubsectionHeaderProps = {
   title: React.ReactNode
   description?: React.ReactNode

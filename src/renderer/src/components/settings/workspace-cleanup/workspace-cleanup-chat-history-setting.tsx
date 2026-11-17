@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../ui/dialog'
-import { SettingsBadge, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSwitchRow, SettingsTitleWithBadge } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -71,12 +71,10 @@ export function WorkspaceCleanupChatHistorySetting({
       <SearchableSetting {...search}>
         <SettingsSwitchRow
           label={
-            <span className="inline-flex items-center gap-2">
-              {search.title}
-              <SettingsBadge>
-                {t('components.settings.workspaceCleanup.rules.recommended', 'Recommended')}
-              </SettingsBadge>
-            </span>
+            <SettingsTitleWithBadge
+              title={search.title}
+              badge={t('components.settings.workspaceCleanup.rules.recommended', 'Recommended')}
+            />
           }
           description={
             setting.state === 'unsupported'
