@@ -9,6 +9,8 @@ import {
   fadeScrollPadding,
   planNewTabMenuFit,
   sameNewTabMenuFitPlan,
+  tipFootprintAt,
+  type TipFootprint,
   type NewTabMenuFitMode,
   type NewTabMenuFitPlan
 } from './new-tab-menu-fit-plan'
@@ -62,8 +64,9 @@ export function NewTabMenuFitProvider({
   const [tipEligible, setTipEligible] = useState(false)
   const [layout, setLayout] = useState<FitLayout | null>(null)
   const [fadeVisible, setFadeVisible] = useState(false)
-  // Kept while the tip is yielded or a search unmounts it, so hiding it can't change the plan.
-  const tipFootprint = useRef<number | null>(null)
+  // Kept while the tip is yielded or a search unmounts it, so hiding it can't change the plan;
+  // dropped when the menu width changes, since the tip wraps differently there.
+  const tipFootprint = useRef<TipFootprint | null>(null)
   const placedSide = useRef<string | null>(null)
   const mode = layout?.plan.mode ?? null
 
@@ -83,9 +86,15 @@ export function NewTabMenuFitProvider({
     )
     if (list && Number.isFinite(available)) {
       const tipMounted = tip?.isConnected ? tip : null
+      // Outer width: a scrollbar the tip itself causes must not count as a width change.
+      const width = content.offsetWidth
       if (tipMounted) {
         // The slot is a flow-root box, so its height includes the tip's own margin.
-        tipFootprint.current = tipMounted.offsetHeight
+        tipFootprint.current = { height: tipMounted.offsetHeight, width }
+      }
+      const footprint = tipFootprintAt(tipFootprint.current, width)
+      if (footprint === null) {
+        tipFootprint.current = null
       }
       const row = list.querySelector<HTMLElement>('[role="menuitem"]')?.offsetHeight || FALLBACK_ROW
       const chrome =
@@ -99,7 +108,7 @@ export function NewTabMenuFitProvider({
           // Why floor and -1: offsetHeight rounds, and a 1px overshoot would make the menu scroll too.
           available: Math.floor(available) - 1,
           chrome,
-          tip: tipEligible ? (tipFootprint.current ?? 0) : 0,
+          tip: tipEligible ? (footprint ?? 0) : 0,
           natural: list.scrollHeight,
           row
         })

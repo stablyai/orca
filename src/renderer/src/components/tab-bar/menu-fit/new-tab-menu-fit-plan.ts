@@ -54,6 +54,13 @@ export function planNewTabMenuFit({
   return { tipHidden: true, mode: 'menu', listMaxHeight: null }
 }
 
+export type TipFootprint = { height: number; width: number }
+
+/** A hidden tip's measured height only holds at the menu width it was measured at. */
+export function tipFootprintAt(cache: TipFootprint | null, width: number): number | null {
+  return cache && cache.width === width ? cache.height : null
+}
+
 export function sameNewTabMenuFitPlan(a: NewTabMenuFitPlan, b: NewTabMenuFitPlan): boolean {
   return a.tipHidden === b.tipHidden && a.mode === b.mode && a.listMaxHeight === b.listMaxHeight
 }
