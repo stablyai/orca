@@ -11,7 +11,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
-import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+import {
+  cachedDeleteStatusIsTrustworthy,
+  orderDeleteWorktreeStatusHydrationTargets
+} from './delete-worktree-dirty-change-counts'
 
 /** Routes a delete target's git reads to its owning host; null when no host can serve it. */
 export function resolveDeleteTargetGitContext(
@@ -90,7 +93,15 @@ export function useDeleteWorktreeStatusHydration({
           )
         }))
       const existingStatus = target.hostId ? undefined : gitStatusByWorktree[target.id]
-      if (existingStatus) {
+      // #43678: a kept-last-known status whose last read failed proves nothing — the fresh
+      // check below publishes null (unavailable) or real entries instead of the stale list.
+      if (
+        existingStatus &&
+        cachedDeleteStatusIsTrustworthy({
+          hostId: target.hostId,
+          readError: currentState.gitStatusReadErrorByWorktree[target.id]
+        })
+      ) {
         publish(existingStatus)
         continue
       }

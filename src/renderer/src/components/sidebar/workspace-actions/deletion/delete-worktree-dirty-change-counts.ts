@@ -13,6 +13,19 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 
 export type DeleteWorktreeChangeCheckState = 'checking' | 'complete' | 'unavailable'
 
+/**
+ * A cached git status is only trustworthy for this dialog when its last read succeeded: the
+ * store keeps the last known list when a read fails, so a removed folder's stale clean list
+ * would otherwise render as "No uncommitted changes" (#43678). Host-qualified targets have no
+ * local cache to trust and always fetch fresh.
+ */
+export function cachedDeleteStatusIsTrustworthy(target: {
+  hostId?: string
+  readError?: unknown
+}): boolean {
+  return !target.hostId && target.readError === undefined
+}
+
 type DeleteWorktreeStatusInput<Entry> = {
   deleteTargets: readonly Worktree[]
   gitStatusByWorktree: Record<string, readonly Entry[] | undefined>
