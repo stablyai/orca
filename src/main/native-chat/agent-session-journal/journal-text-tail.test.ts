@@ -204,3 +204,33 @@ it('a save that ends inside a character is never the base of an append', async (
   expect(readText(db).detail).toEqual([{ type: 'text', text }])
   db.close()
 })
+
+it('never appends onto a saved lone surrogate that reads back as U+FFFD', async () => {
+  const db = new Database(store())
+  const { commit } = messageFixture(db)
+  const base = 'x'.repeat(400)
+  await commit(message(`${base}\ud83d`))
+  const text = `${base}� more`
+  await commit(message(text))
+  expect(readText(db).detail).toEqual([{ type: 'text', text }])
+  db.close()
+})
+
+it('opens a store whose tail table predates later columns, and keeps streaming into it', async () => {
+  const path = store()
+  const old = new Database(path)
+  old.exec(`CREATE TABLE journal_text_tail (session_id TEXT NOT NULL, epoch TEXT NOT NULL,
+    item_id TEXT NOT NULL, seq INTEGER NOT NULL, text TEXT NOT NULL,
+    PRIMARY KEY(session_id, epoch, item_id, seq)) WITHOUT ROWID`)
+  old.close()
+  const db = new Database(path)
+  const { commit } = messageFixture(db)
+  let text = 'word '.repeat(100)
+  for (let save = 0; save < 4; save++) {
+    text += `more ${save} `
+    await commit(message(text))
+  }
+  expect(tailRows(db)).toBeGreaterThan(0)
+  expect(readText(db).detail).toEqual([{ type: 'text', text }])
+  db.close()
+})

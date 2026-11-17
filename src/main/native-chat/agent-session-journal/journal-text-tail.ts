@@ -94,10 +94,6 @@ function tailSkeleton(item: AgentJournalRenderItem, block: { text: string }): st
   })
 }
 
-function isHighSurrogate(code: number): boolean {
-  return code >= 0xd800 && code <= 0xdbff
-}
-
 function textHash(text: string): string {
   // UTF-16 code units, so a lone surrogate never hashes like U+FFFD.
   return createHash('sha256').update(text, 'utf16le').digest('base64')
@@ -174,8 +170,6 @@ export function appendJournalTextTail(
     !saved ||
     skeleton !== saved.skeleton ||
     block.text.length < saved.chars ||
-    // Never split a surrogate pair between the saved text and the new row.
-    isHighSurrogate(block.text.charCodeAt(saved.chars - 1)) ||
     block.text.length - saved.foldedChars >= saved.foldedChars ||
     textHash(block.text.slice(0, saved.chars)) !== saved.hash
   ) {
