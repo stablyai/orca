@@ -264,6 +264,20 @@ export function buildRuntimeMobileAgentStatus(
   // Date it by title evidence, not lastOutputAt, or every output byte outranks clients' live status.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
   const agentType = ownerAgent ?? undefined
+  // A non-zero exit with no working/permission status outranks the lingering title: the pane's
+  // process ended badly (e.g. a launch whose CLI is missing dies 127 with an idle title left
+  // behind), and a `done` row derived from the title alone would overstate that as a clean
+  // finish. Suppress the row; a new incarnation clears the exit code and normal derivation
+  // resumes (#7047).
+  if (
+    pty != null &&
+    pty.lastExitCode !== null &&
+    pty.lastExitCode !== 0 &&
+    pty.lastAgentStatus !== 'working' &&
+    pty.lastAgentStatus !== 'permission'
+  ) {
+    return {}
+  }
   return {
     agentStatus: {
       state:
