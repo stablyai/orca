@@ -155,9 +155,10 @@ export function revealFirstUnmountedTabStripSlot(
   if (slotIds.length < TAB_STRIP_WINDOW_MIN_TABS) {
     return false
   }
-  for (const id of openedIds) {
-    const index = slotIds.indexOf(id)
-    if (index === -1 || findTabStripSlot(strip, id)) {
+  // One pass over the order: opened ids can include tabs that already closed again.
+  const opened = new Set(openedIds)
+  for (let index = 0; index < slotIds.length && opened.size > 0; index++) {
+    if (!opened.delete(slotIds[index]) || findTabStripSlot(strip, slotIds[index])) {
       continue
     }
     const left = index * TAB_STRIP_WINDOW_SLOT_PX
