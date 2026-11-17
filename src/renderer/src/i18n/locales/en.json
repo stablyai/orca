@@ -22780,7 +22780,7 @@
           "updateFailed": "Couldn't update the setting on {{host}}.",
           "recommended": "Recommended",
           "unsupported": "Update Orca on {{host}} to use this setting there.",
-          "confirmTitle": "Delete chat history from deleted workspaces?",
+          "confirmTitle": "Delete agent history from deleted workspaces?",
           "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "cancel": "Cancel",
           "turnOn": "Turn on",

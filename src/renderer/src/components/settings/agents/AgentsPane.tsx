@@ -39,6 +39,8 @@ type AgentSettingProps = {
 type AgentsPaneProps = AgentSettingProps & {
   /** Host whose agent launch settings and detected agents the pane shows. */
   hostScope: SettingsHostScope
+  /** Settings > Agents only; the New Workspace composer's Agents dialog leaves out this destructive switch. */
+  showDeleteAgentHistory?: boolean
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -49,6 +51,7 @@ export function AgentsPane({
   settings,
   updateSettings,
   hostScope,
+  showDeleteAgentHistory = false,
   wslSupportedPlatform,
   wslAvailable,
   wslDistros,
@@ -69,7 +72,7 @@ export function AgentsPane({
           updateSettings={updateSettings}
           hostScope={hostScope}
         />
-        {!isPairedWebClientWindow() ? (
+        {showDeleteAgentHistory && !isPairedWebClientWindow() ? (
           <DeleteAgentHistoryWithWorkspaceSetting settings={settings} hostScope={hostScope} />
         ) : null}
       </SettingsGroup>

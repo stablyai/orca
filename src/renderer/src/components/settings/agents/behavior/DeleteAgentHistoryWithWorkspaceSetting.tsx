@@ -90,7 +90,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
             <DialogTitle>
               {t(
                 'components.settings.agents.deleteHistoryWithWorkspace.confirmTitle',
-                'Delete chat history from deleted workspaces?'
+                'Delete agent history from deleted workspaces?'
               )}
             </DialogTitle>
             <DialogDescription>
