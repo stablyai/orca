@@ -173,15 +173,19 @@ export function writeJournalTextPayload(
   )
 }
 
-/** Folds every tail of one chat, or of the whole store, into its payload. */
-function foldJournalTextTails(db: Database.Database, chat?: Prefix): void {
+/** Folds every tail in the store, or only those of one finished turn's items. */
+function foldJournalTextTails(
+  db: Database.Database,
+  turn?: { sessionId: string; epoch: string; turnItemId: string }
+): void {
   const items = (
-    chat
+    turn
       ? db
-          .prepare(
-            'SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail WHERE session_id=? AND epoch=?'
-          )
-          .all(...chat)
+          .prepare(`SELECT DISTINCT tail.session_id,tail.epoch,tail.item_id FROM journal_text_tail tail
+            JOIN journal_items item ON item.session_id=tail.session_id AND item.epoch=tail.epoch
+              AND item.item_id=tail.item_id
+            WHERE tail.session_id=? AND tail.epoch=? AND item.turn_item_id=?`)
+          .all(turn.sessionId, turn.epoch, turn.turnItemId)
       : db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
   ).map((row) => ({
     prefix: [String(row.session_id), String(row.epoch)] as const,
@@ -208,14 +212,15 @@ function foldJournalTextTails(db: Database.Database, chat?: Prefix): void {
   }
 }
 
-/** A finished turn's streams are done, including those that ended without a last save. */
+/** A finished turn's own streams are done, including those that ended without a last save.
+ *  Thread-scoped streams that outlive the turn keep their tail. */
 export function foldJournalTurnTextTails(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   item: AgentJournalRenderItem
 ): void {
   if ((readAgentJournalTurn(item.body)?.state ?? 'running') !== 'running') {
-    foldJournalTextTails(db, [target.sessionId, target.epoch])
+    foldJournalTextTails(db, { ...target, turnItemId: item.itemId })
   }
 }
 

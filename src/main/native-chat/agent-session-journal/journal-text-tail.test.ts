@@ -106,10 +106,10 @@ it('saves only appended text, reads it whole, and folds at the size bound, a rew
   expect(tailRows(db)).toBe(0)
   expect(folded(db)).toBe(text)
 
-  // A stream that ends without a last save folds when its turn finishes.
+  // A stream that ends without a last save folds when its turn finishes; a thread-scoped one
+  // that outlives the turn keeps its tail.
   text += ' and after'
   await commit(message(text))
-  expect(tailRows(db)).toBe(1)
   const turn = (state: 'running' | 'completed') => ({
     itemId: 'turn',
     revision: state === 'running' ? 1 : 2,
@@ -117,23 +117,27 @@ it('saves only appended text, reads it whole, and folds at the size bound, a rew
     observedAt: 1,
     body: { kind: 'turn' as const, turnId: 'turn', state }
   })
-  runJournalTransaction(db, () =>
-    writeJournalDomainCurrentItem(db, target, {
-      item: turn('running'),
-      hidden: false,
-      ownerFence: 1
-    })
-  )
+  const writeTurn = (state: 'running' | 'completed') =>
+    runJournalTransaction(db, () =>
+      writeJournalDomainCurrentItem(db, target, { item: turn(state), hidden: false, ownerFence: 1 })
+    )
+  writeTurn('running')
+  const reply = (body: string) => {
+    const step = message(body, 'turn-reply')
+    return {
+      ...step,
+      options: { ...step.options, turnScope: { kind: 'turn' as const, turnItemId: 'turn' } }
+    }
+  }
+  let replyText = 'reply '.repeat(100)
+  await commit(reply(replyText))
+  replyText += 'more'
+  await commit(reply(replyText))
+  expect(tailRows(db)).toBe(2)
+  writeTurn('completed')
   expect(tailRows(db)).toBe(1)
-  runJournalTransaction(db, () =>
-    writeJournalDomainCurrentItem(db, target, {
-      item: turn('completed'),
-      hidden: false,
-      ownerFence: 1
-    })
-  )
-  expect(tailRows(db)).toBe(0)
-  expect(folded(db)).toBe(text)
+  expect(folded(db)).not.toBe(text)
+  expect(readText(db).detail).toEqual([{ type: 'text', text }])
   db.close()
 })
 
