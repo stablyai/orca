@@ -1,49 +1,88 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 
+const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
+// Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
+const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
 
-/** After the provider drops output, rebuild main's model from its snapshot; until then readers see a restoring screen, never the torn suffix. */
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms).unref?.())
+
+/** After the provider drops output, rebuild main's model from its snapshot; until then the screen is restoring, never the torn suffix. */
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
+  private gapCapturesInFlight = 0
+  private readonly gapCaptureWaiters: (() => void)[] = []
+
   protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
-    const frontier = this.getPtyOutputSequence(ptyId)
-    const pending = this.headlessTerminals.get(ptyId)
-    if (pending?.gapReseedEndSeq !== undefined) {
-      // One capture per PTY: a later gap only raises the frontier the snapshot must reach.
-      pending.gapReseedEndSeq = frontier
+    if (!this.ptysById.has(ptyId)) {
+      // An exited PTY has no screen left to restore.
+      this.disposeHeadlessTerminal(ptyId)
       return
     }
-    this.startGapReseed(ptyId, frontier, 0)
+    const frontier = this.getPtyOutputSequence(ptyId)
+    const current = this.headlessTerminals.get(ptyId)
+    if (current?.gapReseed) {
+      // One recovery per PTY: a later gap only raises the frontier its snapshot must reach.
+      current.gapReseed.frontier = frontier
+      return
+    }
+    this.startGapReseed(ptyId, frontier, 0, current?.gapReseedLastCaptureAt)
   }
 
-  private startGapReseed(ptyId: string, frontier: number, attempt: number): void {
+  /** Execution-context correction mid-recovery restarts recovery, keeping the frontier and the restoring screen. */
+  protected override replaceHeadlessTerminalAfterExecutionContextChange(
+    ptyId: string,
+    retryLateSeed = true
+  ): void {
+    const current = this.headlessTerminals.get(ptyId)
+    if (current?.gapReseed) {
+      this.startGapReseed(ptyId, current.gapReseed.frontier, 0, current.gapReseedLastCaptureAt)
+      return
+    }
+    super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
+  }
+
+  private startGapReseed(
+    ptyId: string,
+    frontier: number,
+    attempt: number,
+    lastCaptureAt: number | undefined
+  ): void {
     const state = this.replaceHeadlessTerminalForProviderSeed(ptyId)
-    state.gapReseedEndSeq = frontier
-    // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; delivery treats the screen as restoring.
+    state.gapReseed = { frontier }
+    state.gapReseedLastCaptureAt = lastCaptureAt
+    // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; readers treat the screen as restoring.
     this.headlessHydrationState.set(ptyId, 'pending')
-    let outcome: 'seeded' | 'retry' | 'unavailable' = 'retry'
+    let seeded = false
     state.writeChain = state.writeChain
       .then(async () => {
+        const wait = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
+        if (wait > 0) {
+          await delay(wait)
+        }
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        // Screen only: a storm repeats this, and history readers go to the provider instead.
-        const { snapshot, late } = await this.awaitProviderTerminalBuffer(ptyId, {
-          scrollbackRows: 0
-        })
-        if (this.headlessTerminals.get(ptyId) !== state) {
-          return
-        }
-        if (!snapshot) {
-          outcome = late ? 'retry' : 'unavailable'
-          return
-        }
-        // A capture that began before the latest gap still holds the dropped span's hole.
-        if (snapshot.seq < (state.gapReseedEndSeq ?? frontier)) {
-          return
-        }
-        if (await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)) {
-          state.historyFromProvider = true
-          outcome = 'seeded'
+        await this.acquireGapCaptureSlot()
+        try {
+          if (this.headlessTerminals.get(ptyId) !== state) {
+            return
+          }
+          state.gapReseedLastCaptureAt = Date.now()
+          // Screen only: a storm repeats this, and history readers go to the provider instead.
+          const { snapshot } = await this.awaitProviderTerminalBuffer(ptyId, { scrollbackRows: 0 })
+          // A null capture is a failed or late one: only snapshot-capable daemons send gaps.
+          if (
+            !snapshot ||
+            this.headlessTerminals.get(ptyId) !== state ||
+            snapshot.seq < (state.gapReseed?.frontier ?? frontier)
+          ) {
+            return
+          }
+          seeded = await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)
+        } finally {
+          this.releaseGapCaptureSlot()
         }
       })
       .catch(() => {
@@ -53,22 +92,47 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        if (outcome === 'retry') {
-          // Stay restoring; back off so a slow daemon or a sustained storm cannot loop captures.
-          const delay =
-            attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
-          const timer = setTimeout(() => {
-            if (this.headlessTerminals.get(ptyId) === state) {
-              this.startGapReseed(ptyId, state.gapReseedEndSeq ?? frontier, attempt + 1)
-            }
-          }, delay)
-          timer.unref?.()
+        if (seeded) {
+          this.finishGapReseed(ptyId, state)
           return
         }
-        state.gapReseedEndSeq = undefined
-        this.headlessHydrationState.set(ptyId, 'done')
-        // Seeded, or a provider without snapshots: the live model is the best there is, as before.
-        this.providerSnapshotPreferredPtys.delete(ptyId)
+        // Stay restoring; back off so a slow daemon or a sustained storm cannot loop captures.
+        const backoff =
+          attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
+        setTimeout(() => {
+          if (this.headlessTerminals.get(ptyId) === state && state.gapReseed) {
+            this.startGapReseed(
+              ptyId,
+              state.gapReseed.frontier,
+              attempt + 1,
+              state.gapReseedLastCaptureAt
+            )
+          }
+        }, backoff).unref?.()
       })
+  }
+
+  private finishGapReseed(ptyId: string, state: RuntimeHeadlessTerminal): void {
+    state.gapReseed = undefined
+    state.historyFromProvider = true
+    this.headlessHydrationState.set(ptyId, 'done')
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+  }
+
+  private async acquireGapCaptureSlot(): Promise<void> {
+    if (this.gapCapturesInFlight < GAP_RESEED_MAX_CONCURRENT_CAPTURES) {
+      this.gapCapturesInFlight++
+      return
+    }
+    await new Promise<void>((resolve) => this.gapCaptureWaiters.push(resolve))
+  }
+
+  private releaseGapCaptureSlot(): void {
+    const next = this.gapCaptureWaiters.shift()
+    if (next) {
+      next()
+    } else {
+      this.gapCapturesInFlight--
+    }
   }
 }

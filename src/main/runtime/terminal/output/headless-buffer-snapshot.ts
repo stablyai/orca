@@ -45,7 +45,8 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       (this.ptysById.get(ptyId)?.connected === true
         ? undefined
         : this.headlessExitHolds.get(ptyId)?.exited)
-    if (!state) {
+    // A model still recovering from dropped output must not stand in for the screen.
+    if (!state || state.gapReseed) {
       return null
     }
     await state.writeChain

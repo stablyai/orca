@@ -54,8 +54,10 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
     const received = this.getPtyOutputSequence(ptyId)
     // A model behind received output could vouch for a screen Claude has already changed.
+    const state = this.headlessTerminals.get(ptyId)
     return (
-      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      state?.outputSequence === received &&
+      !state.gapReseed &&
       this.trustDialogStatus.claimChoice(ptyId, prompt, received)
     )
   }
@@ -230,7 +232,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     outputObservedAt: number
   ): void {
     const pty = this.ptysById.get(ptyId)
-    if (!pty || this.headlessTerminals.get(ptyId) !== state) {
+    // A screen still recovering from dropped output is no evidence for dialogs or failures.
+    if (!pty || this.headlessTerminals.get(ptyId) !== state || state.gapReseed) {
       return
     }
     const command = this.terminalSpawnCommandsByPtyId.get(ptyId)

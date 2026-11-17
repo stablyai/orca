@@ -129,18 +129,19 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
     getSize: () => grid,
     serializeProviderBuffer: async () => snapshots[Math.min(captures++, 1)]
   })
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
   try {
     runtime.onPtyData('pty-stale', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-stale', 9)
     runtime.onPtyData('pty-stale', 'tail', 2)
-    await vi.waitFor(() => expect(captures).toBe(2))
-    for (let i = 0; i < 5; i++) {
-      await new Promise((resolve) => setImmediate(resolve))
-    }
+    // Captures are paced a second apart.
+    await vi.advanceTimersByTimeAsync(5_000)
+    vi.useRealTimers()
     const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-stale')
     expect(captures).toBe(2)
     expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
   } finally {
+    vi.useRealTimers()
     await runtime.onPtyExit('pty-stale', 0)
   }
 })

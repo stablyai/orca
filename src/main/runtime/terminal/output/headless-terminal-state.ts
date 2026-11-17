@@ -141,9 +141,18 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!this.terminalCwdByPtyId.has(ptyId)) {
       this.recordOsc7MetadataForPty(ptyId, data)
     }
+    // Parse at the captured grid: a resize during capture would otherwise wrap the frame.
+    const grid = state.emulator.getAppliedSize()
+    if (grid.cols !== snapshot.cols || grid.rows !== snapshot.rows) {
+      state.emulator.resize(snapshot.cols, snapshot.rows)
+    }
     await state.emulator.write(data)
     if (this.headlessTerminals.get(ptyId) !== state) {
       return false
+    }
+    const ptySize = this.getTerminalSize(ptyId)
+    if (ptySize && (ptySize.cols !== snapshot.cols || ptySize.rows !== snapshot.rows)) {
+      state.emulator.resize(ptySize.cols, ptySize.rows)
     }
     if (snapshot.cwd !== undefined) {
       state.emulator.setCwd(snapshot.cwd)

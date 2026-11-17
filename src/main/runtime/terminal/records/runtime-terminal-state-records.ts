@@ -180,8 +180,10 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedEscapeTail?: string
   /** A provider snapshot seed: queued live bytes at/below `seq` are not rewritten; `escapeTail` precedes the first uncovered byte. */
   providerSeed?: { seq: number; escapeTail: string; queryCarry: string }
-  /** While a dropped-output reseed is in flight: the gap end its snapshot must reach. */
-  gapReseedEndSeq?: number
+  /** While recovering from dropped output: the gap end a provider snapshot must reach before the screen is trusted. */
+  gapReseed?: { frontier: number }
+  /** When the last dropped-output capture started, carried across attempts to pace them. */
+  gapReseedLastCaptureAt?: number
   /** Seeded screen-only after dropped output, so history comes from the provider. */
   historyFromProvider?: boolean
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
