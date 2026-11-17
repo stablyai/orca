@@ -10,10 +10,13 @@ vi.mock('../../../store', async () => {
   const { createTestStore } = await import('../../../store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
-vi.mock('../../../components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications', () => ({
-  observeAgentHookCompletionForNotification: vi.fn(),
-  syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
-}))
+vi.mock(
+  '../../../components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications',
+  () => ({
+    observeAgentHookCompletionForNotification: vi.fn(),
+    syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
+  })
+)
 const NOW = 1_800_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = `tab-1:${LEAF}`

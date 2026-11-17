@@ -17,10 +17,13 @@ vi.mock('../../../store', async () => {
   return { useAppStore: createTestStore() }
 })
 // The lanes are replaced by direct restatements below; only admission is under test.
-vi.mock('../../../components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications', () => ({
-  observeAgentHookCompletionForNotification: vi.fn(),
-  syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
-}))
+vi.mock(
+  '../../../components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications',
+  () => ({
+    observeAgentHookCompletionForNotification: vi.fn(),
+    syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
+  })
+)
 vi.mock('../../../store/github/refresh/stale-worktree-refresh-actions', () => ({
   createStaleWorktreeRefreshActions: () => ({ refreshGitHubForWorktreeIfStale: vi.fn() })
 }))
