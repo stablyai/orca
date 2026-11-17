@@ -1,7 +1,7 @@
 // A person's send that only now finds the old account still busy goes back to the queue.
 
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 

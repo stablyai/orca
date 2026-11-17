@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   createQueuedMessageTestRig,
