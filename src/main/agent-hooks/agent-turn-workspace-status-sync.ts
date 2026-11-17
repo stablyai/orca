@@ -1,12 +1,12 @@
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { AgentTurnOutcome } from '../../shared/agent-turn-outcome'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../shared/worktree/types'
 import {
   WORKSPACE_STATUS_IN_REVIEW_ID,
   WORKSPACE_STATUS_TODO_ID,
   getDefaultWorkspaceStatusId,
   isWorkspaceStatusId
-} from '../../shared/workspace-statuses'
+} from '../../shared/workspace/status/workspace-statuses'
 
 /**
  * Opt-in board behaviour: a session's turn boundary moves its workspace card between the

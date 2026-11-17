@@ -116,24 +116,24 @@ export default function WorkspaceKanbanSettingsMenu({
           <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5 hover:bg-worktree-sidebar-accent/70">
             <span className="min-w-0 space-y-0.5">
               <span className="block text-[12px] font-medium leading-4 text-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorkspaceKanbanSettingsMenu.06b8804b1d',
                   'Sync board status with agent turns'
                 )}
               </span>
               <span className="block text-[11px] leading-4 text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorkspaceKanbanSettingsMenu.cb0f7605af',
                   'Moves a workspace to In review when its agent finishes a turn and back to In progress when a new turn starts.'
                 )}
               </span>
             </span>
-            <SettingsSwitch
+            <Switch
               checked={syncWorkspaceStatusFromAgentTurns}
-              onChange={() =>
+              onCheckedChange={() =>
                 onSyncWorkspaceStatusFromAgentTurnsChange(!syncWorkspaceStatusFromAgentTurns)
               }
-              ariaLabel={translate(
+              aria-label={t(
                 'auto.components.sidebar.WorkspaceKanbanSettingsMenu.06b8804b1d',
                 'Sync board status with agent turns'
               )}

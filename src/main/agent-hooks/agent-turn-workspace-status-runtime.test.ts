@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   WORKSPACE_STATUS_IN_REVIEW_ID,
   cloneDefaultWorkspaceStatuses
-} from '../../shared/workspace-statuses'
+} from '../../shared/workspace/status/workspace-statuses'
 import type { WorkspaceStatus } from '../../shared/worktree/types'
 
 // Why only these fields: the binding reads exactly this projection of the wire row, so the
@@ -20,7 +20,7 @@ const { statusSnapshotRows }: { statusSnapshotRows: { current: SnapshotRow[] } }
 )
 
 // Why the mock: the binding test proves which host the write lands on, not the hook server's row store.
-vi.mock('./server', () => ({
+vi.mock('./server/agent-hook-server', () => ({
   agentHookServer: { getStatusSnapshot: () => statusSnapshotRows.current }
 }))
 

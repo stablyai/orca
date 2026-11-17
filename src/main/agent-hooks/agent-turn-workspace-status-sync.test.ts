@@ -12,9 +12,9 @@ import {
   WORKSPACE_STATUS_TODO_ID,
   cloneDefaultWorkspaceStatuses,
   getDefaultWorkspaceStatusId
-} from '../../shared/workspace-statuses'
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { AgentTurnOutcome } from '../../shared/agent-turn-outcome'
+} from '../../shared/workspace/status/workspace-statuses'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../shared/worktree/types'
 
 const WORKTREE_ID = 'tab:tab-1'
