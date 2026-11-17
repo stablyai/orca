@@ -89,14 +89,14 @@ export const PR_E2E_SOURCE_ROUTES = [
       isProductSource(file) &&
       (file ===
         'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
-        file === 'src/renderer/src/hooks/worktree-file-change-event.ts')
+        file === 'src/renderer/src/runtime/files/watching/worktree-file-change-event.ts')
   },
   {
     id: 'ssh.orcad-editor-watch-recovery',
     specs: ['tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/hooks\/(?:useEditorExternalWatch|editor-runtime-file-watch)\.ts$/.test(
+      /^(?:src\/renderer\/src\/hooks\/useEditorExternalWatch\.ts|src\/renderer\/src\/components\/editor\/external-changes\/watching\/editor-runtime-file-watch\.ts)$/.test(
         file
       )
   },
@@ -352,7 +352,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/tab-bar\/TabBarQuickCommandsMenu\.tsx|src\/renderer\/src\/hooks\/use-terminal-quick-command-hosts\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:pty-transport\/ipc\/pty-transport|pty-transport\/ipc\/terminal-pty-pre-spawn-e2e-barrier)\.ts|src\/renderer\/src\/components\/terminal-pane\/pty-connection\/(?:connect-pane-pty|spawn\/fresh-spawn-start|lifecycle\/active-pane-pty-binding|notifications\/terminal-bell-completion-arbitration|input\/terminal-input-activity|host-ownership\/pane-transport-bootstrap|emulation\/(?:pane-capability-replies|pane-mode-2031-state)|geometry\/pane-viewport-claim|lifecycle\/pty-input-recovery)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:TerminalPane|use-terminal-pane-lifecycle)\.tsx?|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
+      /^(?:src\/renderer\/src\/components\/tab-bar\/TabBarQuickCommandsMenu\.tsx|src\/renderer\/src\/lib\/terminal\/quick-commands\/use-terminal-quick-command-hosts\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:pty-transport\/ipc\/pty-transport|pty-transport\/ipc\/terminal-pty-pre-spawn-e2e-barrier)\.ts|src\/renderer\/src\/components\/terminal-pane\/pty-connection\/(?:connect-pane-pty|spawn\/fresh-spawn-start|lifecycle\/active-pane-pty-binding|notifications\/terminal-bell-completion-arbitration|input\/terminal-input-activity|host-ownership\/pane-transport-bootstrap|emulation\/(?:pane-capability-replies|pane-mode-2031-state)|geometry\/pane-viewport-claim|lifecycle\/pty-input-recovery)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:TerminalPane|use-terminal-pane-lifecycle)\.tsx?|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
         file
       )
   },
@@ -388,7 +388,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/terminal-parked-cli-split.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/window\/attach-main-window-services\.ts|src\/preload\/(?:index|api\/ui-command-event-api)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-pane-split-request-routing|use-terminal-pane-lifecycle|use-terminal-tab-cold-parking)\.ts|src\/renderer\/src\/hooks\/ipc-events\/terminal-ui-routing-ipc-bridge\.ts)$/.test(
+      /^(?:src\/main\/window\/attach-main-window-services\.ts|src\/preload\/(?:index|api\/ui-command-event-api)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-pane-split-request-routing|use-terminal-pane-lifecycle|use-terminal-tab-cold-parking)\.ts|src\/renderer\/src\/hooks\/ipc-events\/terminal\/terminal-ui-routing-ipc-bridge\.ts)$/.test(
         file
       )
   },

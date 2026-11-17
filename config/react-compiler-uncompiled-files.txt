@@ -15,7 +15,7 @@ src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-rev
 src/renderer/src/components/task-page/jira/Content.tsx
 src/renderer/src/components/task-page/jira/listing/use-task-page-jira-list-projection.ts
 src/renderer/src/components/task-page/jira/use-task-page-jira-list-state.ts
-src/renderer/src/hooks/use-integration-provider-status-refresh.ts
+src/renderer/src/runtime/hosts/observations/use-integration-provider-status-refresh.ts
 
 # structuredSessionSelectionAuthority/Controller read module state the selection lifetime replaces (live-read-in-memo-block).
 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-option-state.ts

@@ -8,7 +8,7 @@ import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-ch
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'

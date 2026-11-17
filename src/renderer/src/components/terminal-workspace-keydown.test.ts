@@ -3,7 +3,7 @@
 import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../hooks/ipc-tab-switch'
+import '../lib/workspace/tabs/ipc-tab-switch'
 import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
@@ -61,7 +61,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal)
 }))
 
 vi.mock('../store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('../hooks/ipc-tab-switch', () => ({
+vi.mock('../lib/workspace/tabs/ipc-tab-switch', () => ({
   handleSwitchRecentTab: vi.fn(),
   handleSwitchTab: vi.fn(),
   handleSwitchTabAcrossAllTypes: vi.fn(),

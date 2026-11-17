@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { formatShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { formatShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TabStripScrollIndicator } from '../strip/TabStripScrollIndicator'

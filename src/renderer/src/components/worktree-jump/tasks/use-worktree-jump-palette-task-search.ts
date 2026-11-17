@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskItems } from '@/lib/work-items/github/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'

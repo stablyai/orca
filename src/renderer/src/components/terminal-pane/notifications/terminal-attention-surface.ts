@@ -17,7 +17,7 @@ import {
   isCurrentKnownPaneKey,
   isCurrentLivePaneKey
 } from './terminal-notification-liveness'
-import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>

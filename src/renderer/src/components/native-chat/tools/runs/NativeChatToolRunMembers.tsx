@@ -10,7 +10,7 @@ import {
   useState
 } from 'react'
 import { cn } from '@/lib/class-names'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import {
   distanceFromBottom,

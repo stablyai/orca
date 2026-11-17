@@ -11,7 +11,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useMobileSidebarOnboardingBadge } from './mobile-sidebar-onboarding-badge'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'

@@ -10,7 +10,7 @@ import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/res
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
+import { measureVirtualRowRetainingHiddenSize } from '@/lib/list-interaction/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
