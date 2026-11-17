@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeSetResult } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeSetResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
