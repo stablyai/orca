@@ -156,7 +156,10 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
     const onSpawn = (): void => {
       detach()
       clearTimeout(timer)
-      void startTreeKill(child).then(settle)
+      // Abandonment after a late PID waits on this kill, not on the PID wait that already gave up.
+      const kill = startTreeKill(child)
+      workerTreeKills.set(child, kill)
+      void kill.then(settle)
     }
     const onClose = (): void => {
       detach()

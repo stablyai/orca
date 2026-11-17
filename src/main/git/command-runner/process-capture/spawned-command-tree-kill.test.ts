@@ -151,6 +151,15 @@ describe('Git command tree termination', () => {
         stdio: 'ignore',
         windowsHide: true
       })
+      let released = false
+      const abandoned = killAbandonedWorkerChildTree(child).then(() => {
+        released = true
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(released).toBe(false)
+      expect(spawnMock).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(2_000)
+      await abandoned
     } finally {
       vi.useRealTimers()
     }
