@@ -11,7 +11,7 @@ import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
 import {
   claimJournalReaderRecord,
-  describeJournalReaderOperation,
+  JournalReaderReservedChats,
   recordJournalReaderRequest,
   type JournalReaderRunningRequest,
   releaseJournalReaderRecord
@@ -94,8 +94,7 @@ export class ReaderSlot {
   >()
   private record?: number
   private running?: { id: number; queued: number; request: JournalReaderRunningRequest }
-  /** A fork or conversion reservation's later steps name the chat its first step opened. */
-  private readonly reservedChats = new Map<number, string | null>()
+  private readonly reservedChats = new JournalReaderReservedChats()
   failed = false
   private failure?: Error
   private conversions = 0
@@ -282,7 +281,7 @@ export class ReaderSlot {
       id === this.running?.id
         ? { ...this.running.request, queued }
         : {
-            ...this.describe(id, operation),
+            ...this.reservedChats.describe(id, operation),
             startedAt: Date.now(),
             queued,
             threadId: this.worker.threadId
@@ -290,41 +289,4 @@ export class ReaderSlot {
     this.running = { id, queued, request }
     recordJournalReaderRequest(this.record, request)
   }
-
-  private describe(
-    id: number,
-    operation: JournalSqlReaderOperation
-  ): Pick<JournalReaderRunningRequest, 'operation' | 'chat'> {
-    const described = describeJournalReaderOperation(operation)
-    switch (operation.kind) {
-      case 'fork-prepare':
-      case 'conversion-prepare':
-        this.reservedChats.set(id, described.chat)
-        return described
-      case 'fork-next':
-      case 'conversion-page':
-        return { ...described, chat: this.reservedChat(operation) }
-      case 'fork-release':
-      case 'conversion-release': {
-        const chat = this.reservedChat(operation)
-        this.reservedChats.delete(reservationId(operation))
-        return { ...described, chat }
-      }
-      case 'domain-history':
-      case 'database':
-      case 'point':
-      case 'import-state':
-        return described
-    }
-  }
-
-  private reservedChat(
-    operation: { preparationId: number } | { conversionId: number }
-  ): string | null {
-    return this.reservedChats.get(reservationId(operation)) ?? null
-  }
-}
-
-function reservationId(operation: { preparationId: number } | { conversionId: number }): number {
-  return 'preparationId' in operation ? operation.preparationId : operation.conversionId
 }

@@ -91,6 +91,42 @@ export function describeJournalReaderOperation(
   }
 }
 
+/** A fork or conversion reservation's later steps name the chat its first step opened. */
+export class JournalReaderReservedChats {
+  private readonly chats = new Map<number, string | null>()
+
+  describe(
+    id: number,
+    operation: JournalSqlReaderOperation
+  ): Pick<JournalReaderRunningRequest, 'operation' | 'chat'> {
+    const described = describeJournalReaderOperation(operation)
+    switch (operation.kind) {
+      case 'fork-prepare':
+      case 'conversion-prepare':
+        this.chats.set(id, described.chat)
+        return described
+      case 'fork-next':
+      case 'conversion-page':
+        return { ...described, chat: this.chats.get(reservationId(operation)) ?? null }
+      case 'fork-release':
+      case 'conversion-release': {
+        const chat = this.chats.get(reservationId(operation)) ?? null
+        this.chats.delete(reservationId(operation))
+        return { ...described, chat }
+      }
+      case 'domain-history':
+      case 'database':
+      case 'point':
+      case 'import-state':
+        return described
+    }
+  }
+}
+
+function reservationId(operation: { preparationId: number } | { conversionId: number }): number {
+  return 'preparationId' in operation ? operation.preparationId : operation.conversionId
+}
+
 function chatHash(sessionId: string): string {
   return createHash('sha256').update(sessionId).digest('hex').slice(0, 8)
 }
