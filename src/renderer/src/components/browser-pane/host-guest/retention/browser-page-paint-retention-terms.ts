@@ -1,7 +1,7 @@
 import {
   isBrowserPageMobileDriven,
   onBrowserDriverChange
-} from '../../../../runtime/browser/ownership/browser-mobile-driver-state'
+} from '../../../../runtime/browser/ownership/browser-mobile-driver-store'
 import {
   isBrowserPageRemotelyViewed,
   onBrowserRemoteViewerChange
@@ -9,7 +9,7 @@ import {
 import {
   isBrowserAutomationVisible,
   onBrowserAutomationVisibilityChange
-} from './browser-automation-visibility'
+} from './browser-automation-visibility-store'
 
 // Centralize all paint-retention terms so new signals cannot silently miss a container gate.
 export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
