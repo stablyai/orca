@@ -339,6 +339,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
           await server.reconcilePaneProcessExit(PANE_KEY)
         } else if (status === 'listing') {
           // An inventory refresh (`orca worktree ps`) re-mints the restored surface's receipt.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected receipt minter the listing path calls.
           const internals = runtime as unknown as {
             ptysById: Map<string, unknown>
             rememberRestoredOrchestrationAuthority(pty: unknown, handle: string, id: string): void

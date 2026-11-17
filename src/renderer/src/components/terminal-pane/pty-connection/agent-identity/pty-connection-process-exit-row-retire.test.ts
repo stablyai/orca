@@ -279,9 +279,9 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       await flushAsyncTicks()
 
       // Main owns retirement; a process exit requests its proof rather than deleting recovery here.
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id).toBe(
-        'quit-session'
-      )
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        providerSession: { id: 'quit-session' }
+      })
       expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
       // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
       expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])

@@ -28,6 +28,8 @@ const read = () => server.getStatusSnapshotForPane(PANE)[0]
 
 beforeEach(async () => {
   _internals.resetCachesForTests()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000_000)
   home = mkdtempSync(join(tmpdir(), 'orca-sleep-status-'))
   stopping = false
   placed = true
@@ -70,6 +72,28 @@ it('accepts a genuine providerless completion after stop intent and preserves it
   server.retireSleepingPaneOnSpawn(PANE)
   expect(read()).toBeUndefined()
 })
+
+const agentHook = (agent: 'claude' | 'codex', event: string, pid: number, source = 'resume') =>
+  postHookEvent(
+    server,
+    buildBody(
+      { hook_event_name: event, session_id: `${agent}-session`, source, prompt: 'Finished work' },
+      {
+        agentProcess: JSON.stringify({ pid, platform: process.platform, startTime: `birth-${pid}` })
+      }
+    ),
+    `/hook/${agent}`
+  )
+
+async function sleepPane(agent: 'claude' | 'codex', id: string, pid: number): Promise<void> {
+  pty = { id, birth: `birth-${id}` }
+  stopping = true
+  if (agent === 'claude') {
+    await agentHook(agent, 'SessionEnd', pid)
+  }
+  expect(server.settleTerminalPaneSleep(PANE, pty.id, pty.birth)).toBe(true)
+  stopping = false
+}
 
 it.each(['claude', 'codex'] as const)(
   'keeps %s Done through sleep, idle wake and sleep again',

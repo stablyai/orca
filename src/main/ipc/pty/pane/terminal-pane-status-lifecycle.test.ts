@@ -107,7 +107,7 @@ it.each([
         ...(census ? { childProcessEvidence: census } : {})
       })
     })
-    // SAFETY: This binding's exit probe only reads these two runtime capabilities.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this exit probe only reads these two runtime capabilities.
     const runtime = {
       resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
       getLaunchStatementForPaneKey: () => currentLaunch
