@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
@@ -40,8 +40,13 @@ type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
 
 /** Reveal the displayed agent's worktree with its configured shortcut, including modifier double taps. */
 function useAgentTerminalRevealShortcut(reveal: () => void): void {
+  const detectorRef = useRef<ModifierDoubleTapDetector | null>(null)
+  const revealRef = useRef(reveal)
+  useLayoutEffect(() => {
+    revealRef.current = reveal
+  }, [reveal])
   useEffect(() => {
-    const doubleTapDetector = new ModifierDoubleTapDetector()
+    const doubleTapDetector = (detectorRef.current ??= new ModifierDoubleTapDetector())
     const detectDoubleTap = (event: KeyboardEvent, type: 'keyDown' | 'keyUp') =>
       doubleTapDetector.process(
         toModifierDoubleTapEvent({
@@ -78,7 +83,7 @@ function useAgentTerminalRevealShortcut(reveal: () => void): void {
       }
       event.preventDefault()
       event.stopPropagation()
-      reveal()
+      revealRef.current()
     }
     const handleKeyUp = (event: KeyboardEvent): void => {
       detectDoubleTap(event, 'keyUp')
@@ -89,7 +94,7 @@ function useAgentTerminalRevealShortcut(reveal: () => void): void {
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('keyup', handleKeyUp, true)
     }
-  }, [reveal])
+  }, [])
 }
 
 function AgentTerminalFrame({

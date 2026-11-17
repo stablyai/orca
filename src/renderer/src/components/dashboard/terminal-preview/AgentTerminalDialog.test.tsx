@@ -121,19 +121,23 @@ describe('AgentTerminalDialog', () => {
     expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
   })
 
-  it('opens the displayed agent worktree with a double-tap modifier shortcut', () => {
+  it('opens the displayed agent worktree when its card refreshes between double taps', () => {
     useAppStore.setState({
       keybindings: { 'dashboard.openWorktree': ['DoubleTap+Ctrl'] }
     })
     function Host() {
       const [open, setOpen] = useState(true)
+      const [currentCard, setCurrentCard] = useState(card())
       const [revealedWorktree, setRevealedWorktree] = useState<string | null>(null)
       return (
         <>
           {revealedWorktree ? <p>Revealed {revealedWorktree}</p> : null}
+          <button onClick={() => setCurrentCard((current) => ({ ...current, stateChangedAt: 1 }))}>
+            Refresh card
+          </button>
           {open ? (
             <AgentTerminalPanel
-              card={card()}
+              card={currentCard}
               onOpenChange={setOpen}
               onReveal={(args) => setRevealedWorktree(args.worktreeId)}
             />
@@ -147,6 +151,7 @@ describe('AgentTerminalDialog', () => {
 
     fireEvent.keyDown(preview, tap)
     fireEvent.keyUp(preview, tap)
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh card' }))
     fireEvent.keyDown(preview, tap)
 
     expect(screen.getByText('Revealed w1')).toBeInTheDocument()
