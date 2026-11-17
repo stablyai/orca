@@ -6,7 +6,7 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
+import { checkThenCleanUpCodexHistory } from './codex-account-history-cleanup'
 import {
   hasIncompleteHostCodexIndexHeal,
   isCodexAccountHistoryWorkStopping,
@@ -185,7 +185,7 @@ export class CodexAccountHistoryPasses {
     this.busyRetries.set(key, timer)
   }
 
-  // Hashing a large history must not delay a launch: a starting pass stops it after one file.
+  // Hashing and deleting must not delay a launch: a starting pass stops them after one file.
   private checkOwed(): void {
     if (this.checking || this.activePasses > 0 || isCodexAccountHistoryWorkStopping()) {
       return
@@ -202,7 +202,7 @@ export class CodexAccountHistoryPasses {
       }
     }
     this.checking = true
-    void checkCodexHistoryLeftBehind({
+    void checkThenCleanUpCodexHistory({
       accountHome: request.accountHome,
       storeHome: getSystemCodexHomePath(),
       shouldStop: () => this.activePasses > 0 || isCodexAccountHistoryWorkStopping()

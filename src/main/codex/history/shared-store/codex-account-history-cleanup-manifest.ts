@@ -8,10 +8,11 @@ import { withFileTransactionLock } from '../../../filesystem/file-transaction-lo
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { listRolloutTwinPairs, rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
+import { MANIFEST_VERSION, isCurrentManifest } from './codex-account-history-cleanup-manifest-shape'
 
 /**
  * In each account home: the old data sharing left behind, for a later release to delete once the
- * store has proven itself. This release deletes none of it.
+ * store has proven itself; `cleanUpCodexHistoryLeftBehind` deletes only what it proved redundant.
  */
 export const HISTORY_CLEANUP_MANIFEST = '.orca-history-cleanup.json'
 /** One form of a rollout whose other form the store holds, kept out so it holds one. */
@@ -20,11 +21,10 @@ export const SET_ASIDE_ROLLOUTS_DIR = '.orca-set-aside-rollouts'
 export const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
 export const CODEX_DATABASE_FILE = /\.sqlite(?:-wal|-shm)?$/
 
-const MANIFEST_VERSION = 1
 const HISTORY_FOLDERS = ['sessions', 'archived_sessions']
 
 /** `path` is relative to its home with `/` separators. */
-type FileFacts = { path: string; bytes: number; mtimeMs: number }
+export type FileFacts = { path: string; bytes: number; mtimeMs: number }
 
 export type ContentCheck = {
   at: string
@@ -42,7 +42,7 @@ export type LeftBehindRollout = FileFacts & {
   check: ContentCheck | null
 }
 
-type CodexHistoryCleanupManifest = {
+export type CodexHistoryCleanupManifest = {
   version: typeof MANIFEST_VERSION
   storeHome: string
   /** The first and latest fully shared pass (about one per Orca run) since sharing was off. */
@@ -127,42 +127,6 @@ export async function readManifest(
   return isCurrentManifest(parsed) ? parsed : null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isFileFacts(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.path === 'string' &&
-    typeof value.bytes === 'number' &&
-    typeof value.mtimeMs === 'number'
-  )
-}
-
-// Every field a later pass or the cleanup release reads; anything else is rebuilt from disk.
-function isLeftBehindRollout(value: unknown): boolean {
-  return (
-    isFileFacts(value) &&
-    isRecord(value) &&
-    (value.storePath === null || typeof value.storePath === 'string') &&
-    (value.check === null || (isRecord(value.check) && isFileFacts(value.check.store)))
-  )
-}
-
-function isCurrentManifest(value: unknown): value is CodexHistoryCleanupManifest {
-  return (
-    isRecord(value) &&
-    value.version === MANIFEST_VERSION &&
-    typeof value.sharedPasses === 'number' &&
-    Array.isArray(value.rollouts) &&
-    value.rollouts.every(isLeftBehindRollout) &&
-    Array.isArray(value.databases) &&
-    value.databases.every(isFileFacts) &&
-    Array.isArray(value.storeTwinPairs)
-  )
-}
-
 async function writeManifest(
   accountHome: string,
   manifest: CodexHistoryCleanupManifest
@@ -181,20 +145,16 @@ async function writeManifest(
 // One read-modify-write at a time per home (a pass and its background check).
 const manifestUpdates = new Map<string, Promise<void>>()
 
-export function updateManifest(
-  accountHome: string,
-  update: (current: CodexHistoryCleanupManifest | null) => Promise<CodexHistoryCleanupManifest>
-): Promise<void> {
+/** Runs `work` while no pass or check in any process reads or writes this home's manifest. */
+export function withManifestLock<T>(accountHome: string, work: () => Promise<T>): Promise<T> {
   // The file lock covers other processes too: each WSL pass and check is its own guest helper.
   const run = (manifestUpdates.get(accountHome) ?? Promise.resolve()).then(() =>
-    withFileTransactionLock(join(accountHome, HISTORY_CLEANUP_MANIFEST), async () => {
-      const current = await readManifest(accountHome)
-      if (current !== 'newer') {
-        await writeManifest(accountHome, await update(current))
-      }
-    })
+    withFileTransactionLock(join(accountHome, HISTORY_CLEANUP_MANIFEST), work)
   )
-  const settled = run.catch(() => {})
+  const settled = run.then(
+    () => {},
+    () => {}
+  )
   manifestUpdates.set(accountHome, settled)
   void settled.then(() => {
     if (manifestUpdates.get(accountHome) === settled) {
@@ -202,6 +162,24 @@ export function updateManifest(
     }
   })
   return run
+}
+
+export function updateManifest(
+  accountHome: string,
+  /** Null leaves the manifest as it is. */
+  update: (
+    current: CodexHistoryCleanupManifest | null
+  ) => Promise<CodexHistoryCleanupManifest | null>
+): Promise<void> {
+  return withManifestLock(accountHome, async () => {
+    const current = await readManifest(accountHome)
+    if (current !== 'newer') {
+      const next = await update(current)
+      if (next) {
+        await writeManifest(accountHome, next)
+      }
+    }
+  })
 }
 
 export function sameFacts(left: FileFacts, right: FileFacts | null): boolean {

@@ -16,7 +16,7 @@ import {
   type LeftBehindRollout
 } from './codex-account-history-cleanup-manifest'
 
-async function contentSha256(path: string): Promise<string> {
+export async function contentSha256(path: string): Promise<string> {
   const hash = createHash('sha256')
   const raw = createReadStream(path, { highWaterMark: 1024 * 1024 })
   const digest = async (content: AsyncIterable<Buffer>): Promise<void> => {
