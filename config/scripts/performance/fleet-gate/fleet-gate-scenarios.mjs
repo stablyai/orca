@@ -192,7 +192,31 @@ async function typeIntoComposer({ page, windowMs }) {
   return { note: `${typed} keys into ${target}` }
 }
 
+// Same check as the workspace-switch paint benchmark: a full-window fixed layer above z 40 swallows card clicks.
+async function dismissOverlays(page) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const blocked = await page.evaluate(() =>
+      [...document.querySelectorAll('body *')].some((element) => {
+        const rect = element.getBoundingClientRect()
+        if (rect.width < innerWidth * 0.9 || rect.height < innerHeight * 0.9) {
+          return false
+        }
+        const style = getComputedStyle(element)
+        return (
+          style.position === 'fixed' && style.pointerEvents !== 'none' && Number(style.zIndex) >= 40
+        )
+      })
+    )
+    if (!blocked) {
+      return
+    }
+    await page.keyboard.press('Escape')
+    await sleep(200)
+  }
+}
+
 async function switchWorkspaces({ page, windowMs }) {
+  await dismissOverlays(page)
   const pair = await page.evaluate(() => {
     const active = window.__store.getState().activeWorktreeId
     const ids = []
@@ -223,9 +247,14 @@ async function switchWorkspaces({ page, windowMs }) {
         .click({ timeout: 5_000 })
     } catch (error) {
       missed += 1
-      firstError ??= String(error?.message ?? error)
-        .split('\n')[0]
-        .slice(0, 160)
+      const lines = String(error?.message ?? error).split('\n')
+      firstError ??= (
+        lines.find((line) =>
+          /intercepts|not visible|not stable|outside of the viewport|detached/.test(line)
+        ) ?? lines[0]
+      )
+        .trim()
+        .slice(0, 200)
     }
     switches += 1
     await sleep(SWITCH_INTERVAL_MS)

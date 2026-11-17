@@ -307,8 +307,10 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir }) {
     env: isolatedEnv(runDir, userDataDir),
     timeout: 180_000
   })
+  // Captured now: app.process() throws once the app object is closed.
+  const child = app.process()
   const stderrTail = []
-  app.process().stderr?.on('data', (chunk) => {
+  child.stderr?.on('data', (chunk) => {
     stderrTail.push(...String(chunk).split('\n').filter(Boolean))
     stderrTail.splice(0, Math.max(0, stderrTail.length - 40))
   })
@@ -322,7 +324,6 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir }) {
       app.close().catch(() => {}),
       new Promise((resolve) => setTimeout(resolve, 30_000))
     ])
-    const child = app.process()
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL')
     }
