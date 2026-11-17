@@ -19,8 +19,15 @@ export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
   version: 2
 }
 
+// Controls keep the spots they had before they could be reordered: display mode and paste lead, the modifiers follow Tab.
 function builtInIds(): string[] {
-  return TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
+  return [
+    'displayMode',
+    'paste',
+    ...TERMINAL_ACCESSORY_KEYS.flatMap((key) =>
+      key.id === 'tab' ? ['tab', 'shift', 'ctrl', 'alt'] : [key.id]
+    )
+  ]
 }
 
 function defaultPreference(
