@@ -22,4 +22,13 @@ describe('resolveRepoPathArgument from a legacy WSL shell', () => {
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\shot.png'
     )
   })
+
+  it('reads a /mnt drive path as the Windows drive path', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu'
+
+    expect(
+      resolveRepoPathArgument('/mnt/c/Users/me/shot.png', '\\\\wsl$\\Ubuntu\\home', false)
+    ).toBe('C:\\Users\\me\\shot.png')
+  })
 })

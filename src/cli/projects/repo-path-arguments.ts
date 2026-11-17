@@ -1,5 +1,9 @@
-import { resolve as resolvePath, win32 } from 'node:path'
-import { isWslUncPath, toWindowsWslUncPath } from '../../shared/file-access/wsl-paths'
+import { posix, resolve as resolvePath, win32 } from 'node:path'
+import {
+  isWslUncPath,
+  toWindowsWslDrivePath,
+  toWindowsWslUncPath
+} from '../../shared/file-access/wsl-paths'
 import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import { RuntimeClientError } from '../runtime/connection/types'
 
@@ -20,14 +24,14 @@ export function resolveRepoPathArgument(
 ): string {
   if (!isRemote) {
     const wslDistro = getWslCallerDistro(cwd)
-    // A Linux absolute path from a WSL shell names a distro file; a UNC cwd already resolves it.
-    if (
-      wslDistro &&
-      !isWslUncPath(cwd) &&
-      inputPath.startsWith('/') &&
-      !inputPath.startsWith('//')
-    ) {
-      return win32.resolve(toWindowsWslUncPath('/', wslDistro), inputPath)
+    // A Linux absolute path from a WSL shell names a distro file, even when cwd is a drive path.
+    if (wslDistro && inputPath.startsWith('/') && !inputPath.startsWith('//')) {
+      const linuxPath = posix.normalize(inputPath)
+      // WSL refuses drive mounts over UNC, and a UNC cwd keeps its \\wsl$ or \\wsl.localhost spelling.
+      return (
+        toWindowsWslDrivePath(linuxPath) ??
+        win32.resolve(isWslUncPath(cwd) ? cwd : toWindowsWslUncPath('/', wslDistro), linuxPath)
+      )
     }
     return resolvePath(cwd, inputPath)
   }

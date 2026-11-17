@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
@@ -123,21 +124,30 @@ async function toWorkspaceRelativeUploadParams(
     return params
   }
   const root = await resolveWorkspacePath()
-  const files = params.files.map((file: unknown) => {
+  const files = []
+  for (const file of params.files as unknown[]) {
     // Older CLIs and paired callers already send workspace-relative paths.
     if (!isAbsolute(file)) {
-      return file
+      files.push(file)
+      continue
     }
-    const relative = relativePathInsideRoot(root, file)
+    // The CLI's cwd is physical, so a workspace saved under a symlink only matches once resolved.
+    const relative =
+      relativePathInsideRoot(root, file) ||
+      relativePathInsideRoot(await realpathOrSelf(root), await realpathOrSelf(file))
     if (!relative) {
       throw new BrowserError(
         'invalid_argument',
         `Cannot upload ${file}: this page runs on another device, so it can only upload files inside the workspace ${root}`
       )
     }
-    return relative
-  })
+    files.push(relative)
+  }
   return { ...params, files }
+}
+
+function realpathOrSelf(path: string): Promise<string> {
+  return realpath(path).catch(() => path)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
