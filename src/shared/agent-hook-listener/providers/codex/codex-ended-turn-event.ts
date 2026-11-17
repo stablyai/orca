@@ -24,4 +24,3 @@ export function codexHookEventForEndedTurn(
   const leadTurnId = state.codexLeadStateByPaneKey.get(paneKey)?.turnId
   return leadTurnId && leadTurnId !== turnId ? undefined : 'Stop'
 }
-

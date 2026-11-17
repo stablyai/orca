@@ -42,7 +42,7 @@ import {
   setCodexMainAgentTurnState
 } from './codex-state'
 import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
-import { reviewerEvidenceDeferred } from './codex-rollout-jsonl-cursor'
+import { reviewerEvidenceDeferred } from './codex-rollout-prefetch-scope'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,

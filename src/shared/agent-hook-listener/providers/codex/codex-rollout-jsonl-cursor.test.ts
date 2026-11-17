@@ -3,11 +3,8 @@ import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import {
-  applyJsonlCursorBytes,
-  readJsonlCursorBytes,
-  type JsonlCursor
-} from './codex-rollout-jsonl-cursor'
+import { readJsonlCursorBytes } from './codex-rollout-async-reads'
+import { applyJsonlCursorBytes, type JsonlCursor } from './codex-rollout-jsonl-format'
 
 const directories: string[] = []
 
@@ -67,6 +64,7 @@ describe('readJsonlCursorBytes', () => {
     const late = await readJsonlCursorBytes(cursor)
     expect(applyJsonlCursorBytes(cursor, early)).toEqual([{ a: 1 }])
     expect(applyJsonlCursorBytes(cursor, late)).toEqual([{ a: 2 }])
-    expect(applyJsonlCursorBytes(cursor, early)).toBe('stale')
+    // Bytes the cursor has fully consumed yield nothing, never a replay.
+    expect(applyJsonlCursorBytes(cursor, early)).toEqual([])
   })
 })

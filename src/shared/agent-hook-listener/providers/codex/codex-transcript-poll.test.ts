@@ -8,9 +8,12 @@ import { seedLegacyAgentStatusForTests } from '../../legacy-agent-status-test-se
 import { normalizeAndAccept, PANE_KEY } from '../../normalization/agent-hook-listener-test-harness'
 import { pollCodexTranscriptStatus, readCodexTranscriptPoll } from './codex-transcript-poll'
 import { prefetchCodexHookRolloutReads } from './codex-hook-rollout-prefetch'
-import { withPrefetchedRolloutReads } from './codex-rollout-jsonl-cursor'
+import { withPrefetchedRolloutReads } from './codex-rollout-prefetch-scope'
 
-const syncFs = vi.hoisted(() => ({ recording: false, calls: [] as string[] }))
+const syncFs = vi.hoisted((): { recording: boolean; calls: string[] } => ({
+  recording: false,
+  calls: []
+}))
 
 // Record every synchronous node:fs call so the poll can prove it never blocks the main thread.
 vi.mock('node:fs', async (importOriginal) => {
@@ -22,7 +25,7 @@ vi.mock('node:fs', async (importOriginal) => {
         if (syncFs.recording) {
           syncFs.calls.push(name)
         }
-        return (value as (...a: unknown[]) => unknown)(...args)
+        return Reflect.apply(value, actual, args)
       }
     }
   }

@@ -1,8 +1,5 @@
-import {
-  rolloutFileSize,
-  rolloutFileSizeAsync,
-  rolloutHeadReadDeferred
-} from './codex-rollout-jsonl-cursor'
+import { statSync } from 'node:fs'
+import { prefetchedRolloutSize, rolloutHeadReadDeferred } from './codex-rollout-prefetch-scope'
 
 import {
   AGENT_MODEL_MAX_LENGTH,
@@ -12,11 +9,7 @@ import {
 } from '../../../agent-status/contracts/agent-status-field-normalization'
 import type { AgentSubagentSnapshot } from '../../../agent-status/contracts/agent-status-subagent-snapshot'
 
-import {
-  readCodexSubagentIdentity,
-  readCodexSubagentIdentityAsync,
-  type CodexSubagentIdentity
-} from './codex-subagent-identity'
+import { readCodexSubagentIdentity, type CodexSubagentIdentity } from './codex-subagent-identity'
 import { usableAgentChildLabel } from '../../../agent-status/presentation/agent-child-row-name'
 import {
   agentChildWorkLiveness,
@@ -27,7 +20,7 @@ const CODEX_SUBAGENT_ID_MAX_LENGTH = 64
 
 export type CodexSubagentRoster = Map<string, TrackedCodexSubagent>
 
-type TrackedCodexSubagent = {
+export type TrackedCodexSubagent = {
   agentType?: string
   description?: string
   model?: string
@@ -85,7 +78,7 @@ export function finishCodexSubagent(roster: CodexSubagentRoster, id: string): vo
 const IDENTITY_IO_RETRY_MS = 5_000
 
 /** The child owed a read of `transcriptPath`, or undefined when no read is due. */
-function identityReadTarget(
+export function identityReadTarget(
   roster: CodexSubagentRoster,
   id: string,
   transcriptPath: string | undefined
@@ -101,7 +94,7 @@ function identityReadTarget(
   return (child.identityRetryAt ?? 0) > Date.now() ? undefined : child
 }
 
-function applyIdentityRead(
+export function applyIdentityRead(
   child: TrackedCodexSubagent,
   missKey: string,
   transcriptPath: string,
@@ -194,80 +187,16 @@ export function hasPendingCodexSubagentIdentity(roster: CodexSubagentRoster | un
   return [...(roster?.values() ?? [])].some((child) => child.identityPendingPath !== undefined)
 }
 
-const IDENTITY_RETRIES_PER_POLL = 8
-const identityRetryCursors = new WeakMap<CodexSubagentRoster, number>()
-
-function pendingIdentityTurn(roster: CodexSubagentRoster): [string, TrackedCodexSubagent][] {
-  const pending = [...roster].filter(([, child]) => child.identityPendingPath !== undefined)
-  const start = (identityRetryCursors.get(roster) ?? 0) % Math.max(pending.length, 1)
-  const turn = [...pending.slice(start), ...pending.slice(0, start)].slice(
-    0,
-    IDENTITY_RETRIES_PER_POLL
-  )
-  identityRetryCursors.set(roster, start + turn.length)
-  return turn
-}
-
-type CodexSubagentIdentityRead = {
-  id: string
-  child: TrackedCodexSubagent
-  transcriptPath: string
-  missKey: string
-  identity: CodexSubagentIdentity
-}
-
-/** Reads a few unnamed children's own rollouts per poll, taking turns, off the main thread; a relay restart can leave no parent transcript to drive this. */
-export async function readPendingCodexSubagentIdentities(
-  roster: CodexSubagentRoster,
-  current: () => boolean
-): Promise<CodexSubagentIdentityRead[]> {
-  const reads: CodexSubagentIdentityRead[] = []
-  // Sequential reads keep one file operation per pane in flight.
-  for (const [id, pending] of pendingIdentityTurn(roster)) {
-    if (!current()) {
-      break
-    }
-    // A task path the parent rollout supplied meanwhile outranks the child's own header.
-    if (usableAgentChildLabel(pending.description)) {
-      pending.identityPendingPath = undefined
-      continue
-    }
-    const transcriptPath = pending.identityPendingPath
-    const child = identityReadTarget(roster, id, transcriptPath)
-    if (!child || !transcriptPath) {
-      continue
-    }
-    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath)}`
-    if (!current()) {
-      break
-    }
-    if (child.identityMissKey === missKey) {
-      continue
-    }
-    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim())
-    reads.push({ id, child, transcriptPath, missKey, identity })
+function rolloutFileSize(filePath: string): number | null {
+  const prefetchedSize = prefetchedRolloutSize(filePath)
+  if (prefetchedSize) {
+    return prefetchedSize.size
   }
-  return reads
-}
-
-/** Returns whether a child's name changed; reads for children a hook retired or re-pointed meanwhile are dropped. */
-export function applyPendingCodexSubagentIdentities(
-  roster: CodexSubagentRoster,
-  reads: readonly CodexSubagentIdentityRead[]
-): boolean {
-  let changed = false
-  for (const { id, child, transcriptPath, missKey, identity } of reads) {
-    if (roster.get(id.trim()) !== child || child.identityPendingPath !== transcriptPath) {
-      continue
-    }
-    // Parent records applied this poll may have named the child; its task path outranks the header.
-    if (usableAgentChildLabel(child.description)) {
-      child.identityPendingPath = undefined
-      continue
-    }
-    changed = applyIdentityRead(child, missKey, transcriptPath, identity) || changed
+  try {
+    return statSync(filePath).size
+  } catch {
+    return null
   }
-  return changed
 }
 
 /** Update only an existing child’s model, preserving lifecycle so late discovery cannot resurrect finished children. */

@@ -1,10 +1,7 @@
 import { extname, isAbsolute } from 'node:path'
-import {
-  readJsonlFirstRecord,
-  readJsonlFirstRecordAsync,
-  record,
-  type JsonRecord
-} from './codex-rollout-jsonl-cursor'
+import { readJsonlFirstRecordAsync } from './codex-rollout-async-reads'
+import { readJsonlFirstRecord } from './codex-rollout-jsonl-cursor'
+import { type JsonRecord, record } from './codex-rollout-jsonl-format'
 import { codexSubagentPathLabel } from './codex-agent-path'
 
 function text(value: unknown): string | undefined {

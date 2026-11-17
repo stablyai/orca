@@ -1,19 +1,21 @@
+import { record } from './codex-rollout-jsonl-format'
 import {
   createPrefetchedRolloutReads,
-  record,
   withPrefetchedRolloutReads
-} from './codex-rollout-jsonl-cursor'
+} from './codex-rollout-prefetch-scope'
+import { hasPendingCodexSubagentIdentity, type CodexSubagentRoster } from './codex-subagent-roster'
 import {
   applyPendingCodexSubagentIdentities,
-  hasPendingCodexSubagentIdentity,
   readPendingCodexSubagentIdentities,
-  type CodexSubagentRoster
-} from './codex-subagent-roster'
+  type CodexSubagentIdentityRead
+} from './codex-subagent-identity-reads'
 import {
   applyCodexSubagentTranscriptReads,
-  codexTranscriptTurnEnd,
   readCodexSubagentTranscript,
-  type CodexSubagentTranscriptReads,
+  type CodexSubagentTranscriptReads
+} from './codex-subagent-transcript-reads'
+import {
+  codexTranscriptTurnEnd,
   type CodexSubagentTranscriptState
 } from './codex-subagent-transcript'
 import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
@@ -26,7 +28,7 @@ export type CodexTranscriptPollReads = {
   roster?: CodexSubagentRoster
   transcript?: CodexSubagentTranscriptState
   transcriptReads?: CodexSubagentTranscriptReads
-  identities: Awaited<ReturnType<typeof readPendingCodexSubagentIdentities>>
+  identities: CodexSubagentIdentityRead[]
 }
 
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */

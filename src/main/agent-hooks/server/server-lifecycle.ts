@@ -2,7 +2,6 @@ import {
   AgentHookStartup,
   listenForAgentHooks
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
@@ -22,63 +21,10 @@ import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
-import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
-import { CodexHookRolloutPrefetcher } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
+import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
-  private readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
-
-  /** Normalizes and applies one local hook; returns the row that owns its tool call, if any. */
-  private ingestLocalHook(source: AgentHookSource, aliasedBody: unknown): NormalizedLocalHook['event'] {
-    const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-    if (source === 'muse' && !normalized.event) {
-      this.rearmIgnoredMuseHook(aliasedBody)
-    }
-    const statusDisposition = normalized.event
-      ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-          source,
-          hookEventName: normalized.event.hookEventName,
-          isReplay: normalized.event.isReplay,
-          hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-          launchToken: normalized.event.launchToken
-        })
-      : 'suppress'
-    let toolCallOwner: NormalizedLocalHook['event'] = null
-    if (normalized.event && statusDisposition !== 'suppress') {
-      const restartedAuthority =
-        statusDisposition === 'restart' && source === 'omp'
-          ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
-          : undefined
-      const event =
-        statusDisposition === 'restart'
-          ? {
-              ...normalized.event,
-              launchToken: undefined,
-              ...(restartedAuthority
-                ? {
-                    ...restartedAuthority,
-                    tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
-                  }
-                : {})
-            }
-          : normalized.event
-      if (statusDisposition === 'restart') {
-        // A new session must not inherit the retired one's observation order.
-        this.observations.rebind(event.paneKey)
-      }
-      this.recordCurrentAuthorityObservation(event)
-      toolCallOwner = event
-      const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
-      if (enriched) {
-        this.checkAgentPresenceAfterHook(event, enriched)
-        this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-        this.scheduleTranscriptPoll(source, aliasedBody, enriched)
-      }
-    }
-    return toolCallOwner
-  }
 
   start(options?: HookServerStartOptions): Promise<void> {
     return this.startup.start((isCurrent) => this.startListener(options, isCurrent))

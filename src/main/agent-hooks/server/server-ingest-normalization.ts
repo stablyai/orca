@@ -1,4 +1,5 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import {
   buildSpoolHookBody,
@@ -23,12 +24,17 @@ import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 import {
-  withPrefetchedRolloutReads,
-  type PrefetchedRolloutReads
-} from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
-import { prefetchCodexHookRolloutReadsWithin } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
+  type PrefetchedRolloutReads,
+  withPrefetchedRolloutReads
+} from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
+import {
+  CodexHookRolloutPrefetcher,
+  prefetchCodexHookRolloutReadsWithin
+} from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
+
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
@@ -180,6 +186,59 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       event,
       onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
     }
+  }
+
+  /** Normalizes and applies one local hook; returns the row that owns its tool call, if any. */
+  protected ingestLocalHook(
+    source: AgentHookSource,
+    aliasedBody: unknown
+  ): NormalizedLocalHook['event'] {
+    const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+    if (source === 'muse' && !normalized.event) {
+      this.rearmIgnoredMuseHook(aliasedBody)
+    }
+    const statusDisposition = normalized.event
+      ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+          source,
+          hookEventName: normalized.event.hookEventName,
+          isReplay: normalized.event.isReplay,
+          hasExplicitPrompt: normalized.event.hasExplicitPrompt,
+          launchToken: normalized.event.launchToken
+        })
+      : 'suppress'
+    let toolCallOwner: NormalizedLocalHook['event'] = null
+    if (normalized.event && statusDisposition !== 'suppress') {
+      const restartedAuthority =
+        statusDisposition === 'restart' && source === 'omp'
+          ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
+          : undefined
+      const event =
+        statusDisposition === 'restart'
+          ? {
+              ...normalized.event,
+              launchToken: undefined,
+              ...(restartedAuthority
+                ? {
+                    ...restartedAuthority,
+                    tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
+                  }
+                : {})
+            }
+          : normalized.event
+      if (statusDisposition === 'restart') {
+        // A new session must not inherit the retired one's observation order.
+        this.observations.rebind(event.paneKey)
+      }
+      this.recordCurrentAuthorityObservation(event)
+      toolCallOwner = event
+      const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
+      if (enriched) {
+        this.checkAgentPresenceAfterHook(event, enriched)
+        this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+        this.scheduleTranscriptPoll(source, aliasedBody, enriched)
+      }
+    }
+    return toolCallOwner
   }
 
   // Spool records are durable replay evidence, not a live observation.

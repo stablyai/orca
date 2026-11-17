@@ -2,18 +2,16 @@ import { readFirstString } from '../../interactive-tool'
 import { parseAgentHookJson } from '../../request-body'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
+import { record } from './codex-rollout-jsonl-format'
 import {
   createPrefetchedRolloutReads,
+  type PrefetchedRolloutReads,
   prefetchJsonlCursor,
-  prefetchRolloutHead,
-  record,
-  type PrefetchedRolloutReads
-} from './codex-rollout-jsonl-cursor'
+  prefetchRolloutHead
+} from './codex-rollout-prefetch-scope'
 import { codexSubagentIdentityReadDue } from './codex-subagent-roster'
-import {
-  normalizedTranscriptPath,
-  prefetchCodexSubagentTranscript
-} from './codex-subagent-transcript'
+import { normalizedTranscriptPath } from './codex-rollout-paths'
+import { prefetchCodexSubagentTranscript } from './codex-subagent-transcript-reads'
 
 // Mirrors parseHookEnvelope's reading so the prefetch keys match what normalization reads.
 function hookPayload(body: unknown): Record<string, unknown> | undefined {
