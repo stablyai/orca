@@ -788,7 +788,8 @@
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
+3 src/main/native-chat/agent-session-journal/database/journal-legacy-adopted-tabs.ts
+38 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
 1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
 4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
