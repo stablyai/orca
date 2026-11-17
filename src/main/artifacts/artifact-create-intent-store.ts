@@ -11,7 +11,10 @@ import {
   bestEffortFsyncDirectory,
   bestEffortFsyncDirectorySync
 } from '../../shared/secure-storage/secure-file'
-import { writeArtifactFileWhileCurrent } from './artifact-guarded-secure-write'
+import {
+  serializeArtifactFileChange,
+  writeArtifactFileWhileCurrent
+} from './artifact-guarded-secure-write'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
@@ -172,34 +175,37 @@ export async function getOrCreateArtifactCreateIntent(
   if (artifactIntentRequestByteLength(sourceKey, body) > ARTIFACT_MAX_REQUEST_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
-  const existing = getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
-  if (existing) {
-    return existing
-  }
-  const directory = ensureIntentDirectory(profileId, userDataPath)
-  removeTemporaryIntents(directory)
-  const pendingCount = readdirSync(directory).filter((name) => name.endsWith('.json')).length
-  if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
-    throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
-  }
-  const intent: ArtifactCreateIntent = {
-    version: 1,
-    sourceKey,
-    scope,
-    idempotencyKey,
-    body
-  }
-  const serializedIntent = JSON.stringify(intent, null, 2)
-  if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
-    throw new Error('Artifact create recovery record exceeds the supported size.')
-  }
-  await writeArtifactFileWhileCurrent(
-    intentPath(profileId, userDataPath, sourceKey, scope),
-    serializedIntent,
-    true,
-    assertCurrent
-  )
-  return intent
+  // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
+  return serializeArtifactFileChange(intentDirectory(profileId, userDataPath), async () => {
+    const existing = getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
+    if (existing) {
+      return existing
+    }
+    const directory = ensureIntentDirectory(profileId, userDataPath)
+    removeTemporaryIntents(directory)
+    const pendingCount = readdirSync(directory).filter((name) => name.endsWith('.json')).length
+    if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
+      throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
+    }
+    const intent: ArtifactCreateIntent = {
+      version: 1,
+      sourceKey,
+      scope,
+      idempotencyKey,
+      body
+    }
+    const serializedIntent = JSON.stringify(intent, null, 2)
+    if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
+      throw new Error('Artifact create recovery record exceeds the supported size.')
+    }
+    await writeArtifactFileWhileCurrent(
+      intentPath(profileId, userDataPath, sourceKey, scope),
+      serializedIntent,
+      true,
+      assertCurrent
+    )
+    return intent
+  })
 }
 
 export async function removeArtifactCreateIntent(

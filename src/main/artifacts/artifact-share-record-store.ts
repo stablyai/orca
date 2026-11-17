@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  writeDurableSecureJsonFile,
-  writeSecureJsonFile
-} from '../../shared/secure-storage/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   serializeArtifactFileChange,
   writeArtifactFileWhileCurrent
@@ -149,9 +146,7 @@ function readRecords(
     lifecycleNonce: typeof parsed.lifecycleNonce === 'string' ? parsed.lifecycleNonce : '',
     shares: pruned.shares
   }
-  if (pruned.changed || shareEntries.length !== Object.keys(validShares).length) {
-    writeSecureJsonFile(path, records)
-  }
+  // Readers never write: a change persists the pruned rows in its own serialized write.
   return records
 }
 

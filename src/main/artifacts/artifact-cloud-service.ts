@@ -138,7 +138,6 @@ export class ArtifactCloudService {
               rateLimitReplay: auth.rateLimitReplay
             }
           )
-          auth.assertCurrent()
           await refreshArtifactShareRecordExpiration(
             auth.profileId,
             this.userDataPath,
@@ -172,7 +171,6 @@ export class ArtifactCloudService {
         return this.publisher.runForSlug(record.slug, auth, async () => {
           auth.assertCurrent()
           await deleteArtifactRequest(apiUrl, token, `/${record.slug}`, auth, record.editToken)
-          auth.assertCurrent()
           await removeArtifactShareRecords(
             auth.profileId,
             this.userDataPath,
@@ -190,7 +188,6 @@ export class ArtifactCloudService {
       this.publisher.runForSlug(id, auth, async () => {
         auth.assertCurrent()
         await deleteArtifactRequest(apiUrl, token, `/${encodeURIComponent(id)}`, auth)
-        auth.assertCurrent()
         await removeArtifactShareRecords(
           auth.profileId,
           this.userDataPath,

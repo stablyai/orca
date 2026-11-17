@@ -149,7 +149,6 @@ export class ArtifactPublisher {
           if (!(error instanceof OrcaCloudRequestError) || error.statusCode !== 404) {
             throw error
           }
-          auth.assertCurrent()
           await removeArtifactShareRecords(
             auth.profileId,
             this.userDataPath,
@@ -196,7 +195,6 @@ export class ArtifactPublisher {
         body: artifactWriteBody(request),
         rateLimitReplay: auth.rateLimitReplay
       })
-      auth.assertCurrent()
       await refreshArtifactShareRecordExpiration(
         auth.profileId,
         this.userDataPath,
@@ -251,7 +249,6 @@ export class ArtifactPublisher {
       }
       throw error
     }
-    auth.assertCurrent()
     await saveArtifactShareRecord(
       auth.profileId,
       this.userDataPath,
