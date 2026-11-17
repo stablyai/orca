@@ -111,7 +111,10 @@ function notForwardedReason(method: string): string {
   if (method === 'browser.upload' || method === 'browser.download') {
     return "An SSH host can't move files between the desktop and its browser tabs."
   }
-  if (method === 'browser.clipboardRead' || method === 'browser.clipboardWrite') {
+  if (method === 'browser.clipboardRead') {
+    return "An SSH host can't read the desktop clipboard."
+  }
+  if (method === 'browser.clipboardWrite') {
     return "An SSH host can't use the desktop clipboard. Use orca type or orca fill instead."
   }
   if (method === 'browser.exec') {
