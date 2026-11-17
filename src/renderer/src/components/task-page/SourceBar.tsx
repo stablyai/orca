@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
-import { LinearScopeSelector } from '@/components/linear-scope-selector'
+import { LinearScopeSelector } from '@/components/task-page/source-selection/linear-scope-selector'
 import { TaskPageSourceIconButton } from './SourceIconButton'
 import { TaskPagePluginSourceButtons } from './plugin/PluginSourceButtons'
 import {

@@ -9,7 +9,7 @@ import {
 import { getOrCreateQuietRevalidateState } from '@/components/task-page/github/refresh/task-page-github-work-item-quiet-state'
 import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-types'
 import { useAppStore } from '@/store/index'
-import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
+import { useTaskPageGitHubWorkItemMutation } from '@/components/task-page/github/mutations/useTaskPageGitHubWorkItemMutation'
 import { rebuildSoftHiddenKeysFromPendingAndSticky } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-composition'
 import { getTaskPageRepoSourceContext } from '../../../../lib/work-items/task-repo-source-context'
 import { useTaskPageSourceDisplay } from '../../use-task-page-source-display'

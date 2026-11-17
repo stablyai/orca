@@ -24,26 +24,21 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
-  'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
-  'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
-  'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
-  'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
-  'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
-  'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
+
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
   'src/main/acp/session/acp-structured-session-adapter.test.ts',
   'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
   'src/main/pi/rpc/rpc-turn-races.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
+
   'src/main/runtime/construction/orca-runtime.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
@@ -59,7 +54,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
@@ -67,8 +61,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/text/own-retained-string.test.ts',
-  'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
   // Worker TypeScript loads through node:module registerHooks, which Bun lacks.
@@ -115,20 +107,14 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
   'src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts',
-  'src/main/ipc/settings-delayed-response.test.ts',
-  'src/main/ipc/session-window-view-save.test.ts',
-  'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
-  'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
-  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
-  'src/main/ipc/notifications-external-acknowledgement.test.ts'
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

@@ -166,6 +166,9 @@ export function OrcaUninstallFooter({
   }
   const running = phase === 'running'
   let hint = t('settings.uninstall.keeps', 'Projects, worktrees and Orca settings stay.')
+  if (plan?.terminalDaemon) {
+    hint = `${hint} ${t('settings.uninstall.closesTerminals', 'Open terminals will close.')}`
+  }
   if (plan?.otherOrcaBuildName) {
     hint = `${hint} ${t(
       'settings.uninstall.keepsShared',

@@ -5,7 +5,7 @@ import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
   seedPtySpawnSize
-} from '../spawn-options-assembly'
+} from '../spawn/spawn-options-assembly'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 /** Carries deletions to provider-owned environments, including persistent older daemons. */

@@ -7,7 +7,15 @@ export function terminalDocumentDouble() {
   const terminal: TerminalDocumentTerminal = {
     cols: 80,
     rows: 24,
-    options: { theme: {}, minimumContrastRatio: 3, fontSize: 13 },
+    options: {
+      theme: {},
+      minimumContrastRatio: 3,
+      fontSize: 13,
+      fontFamily: 'monospace',
+      fontWeight: '300',
+      fontWeightBold: '500',
+      lineHeight: 1
+    },
     buffer: {
       active: {
         length: 1,

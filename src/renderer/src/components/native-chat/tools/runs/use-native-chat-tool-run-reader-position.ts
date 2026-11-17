@@ -1,6 +1,6 @@
 import { useNativeChatViewDisconnect } from '../../pane/ownership/use-native-chat-view-disconnect'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import type { NativeChatRunPosition } from '../../messages/disclosure/native-chat-disclosure-store'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 import { ROW_KEY_ATTRIBUTE } from './use-native-chat-tool-run-pins'

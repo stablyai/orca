@@ -114,11 +114,7 @@
       "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
-      "defaultText": "標準（100%）",
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "largeText": "大（125%）",
-      "largerText": "特大（150%）",
-      "largestText": "最大 (200%)",
       "leaveAppDescription": "スマートフォンでターミナルを使用している間、Orca は画面に合わせてターミナルを縮小します。アプリを閉じたり別のアプリに切り替えたりしたときに、スマートフォンサイズを維持して対話型 CLI ツールのレイアウトを保つか、デスクトップのサイズに戻すかを設定します。デスクトップのバナーにある「復元する」で、いつでも手動でサイズを戻せます。",
       "leaveAppHeading": "アプリを離れたとき",
       "noPairedDesktops": "ペアリング済みのデスクトップはまだありません。ペアリングすると、ターミナルの動作を設定できます。",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
       "restoreHost": "「{{name}}」のサイズ復元",
-      "smallerText": "小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "テキストサイズ",
-      "textSizeDescription": "ターミナルのテキストサイズを調整します。小さくすると左右に余白を残しながら多くの列を表示でき、大きくすると表示できる列が減ります。横にドラッグして表示範囲を移動できます。ターミナル上でピンチ操作をして拡大・縮小すると、この設定も更新されます。このデバイスの表示にのみ適用され、デスクトップのターミナルは変わりません。",
-      "textSizeHeading": "テキストサイズ",
-      "textSizePickerTitle": "ターミナルのテキストサイズ",
       "title": "ターミナル"
     }
   },
@@ -908,7 +898,8 @@
       "copyCode": "コードをコピーする",
       "openImage": "画像を開く",
       "wrapLines": "行を折り返す",
-      "disableLineWrap": "行の折り返しを無効にする"
+      "disableLineWrap": "行の折り返しを無効にする",
+      "codeLabel": "コード"
     },
     "markdownCallout": {
       "note": "メモ",
@@ -1011,7 +1002,6 @@
       "clearSearch": "検索をクリア"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "description": "このリポジトリの orca.yaml は、ワークスペースの起動前に実行されます。このリポジトリを信頼できる場合にのみ実行してください。",
       "dontRun": "実行しない",
       "newScriptLabel": "新しいセットアップスクリプト",
@@ -3911,27 +3901,19 @@
       "reconnecting": "再接続中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "creating": "作成中…",
       "directoriesLabel": "ディレクトリ",
       "directories_one": "{{count}} 個のディレクトリ",
       "directories_other": "{{count}} 個のディレクトリ",
-      "dontRun": "実行しない",
       "editSparsePreset": "スパースプリセットを編集",
       "nameLabel": "名前",
       "namePlaceholder": "レンダラー UI",
-      "newSetupScript": "新しいセットアップスクリプト",
       "newSparsePreset": "新しいスパースプリセット",
-      "runHooks": "フックを実行する",
       "runSetupAndCreate": "セットアップを実行して作成",
-      "runSetupTitle": "{{name}} のセットアップを実行しますか?",
-      "setupChangedTitle": "{{name}} のセットアップスクリプトが変更されました",
-      "setupScript": "セットアップスクリプト",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
       "setupTitle": "セットアップスクリプトを実行しますか?",
       "skipSetupAndCreate": "セットアップをスキップして作成",
-      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。",
-      "trustSubtitle": "このリポジトリの orca.yaml は、ワークスペースの起動前にコンピュータ上で実行されます。このリポジトリを信頼できる場合のみ実行してください。"
+      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。"
     },
     "worktreeCreateRetry": {
       "createFailed": "ワークスペースの作成に失敗しました"

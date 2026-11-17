@@ -13,7 +13,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/notifications/notification-test-delivery'
-import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { getNotificationSoundOptions } from '@/components/notifications/notification-sound-options'
 import {
   MacNotificationPermissionCard,
   useMacNotificationPermissionState

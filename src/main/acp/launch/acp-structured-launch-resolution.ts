@@ -33,8 +33,8 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import {
   nothingExchangedOn,
-  type AcpSavedSessionReads
-} from '../session/acp-structured-resume-history'
+  type SavedProviderTurnReads
+} from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
@@ -61,7 +61,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  savedSession: AcpSavedSessionReads
+  savedSession: SavedProviderTurnReads
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   inheritedEnv?: NodeJS.ProcessEnv

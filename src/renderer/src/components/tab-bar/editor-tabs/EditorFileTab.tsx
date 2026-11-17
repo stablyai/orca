@@ -10,7 +10,7 @@ import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-l
 import { renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'

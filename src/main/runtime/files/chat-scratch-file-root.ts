@@ -8,7 +8,7 @@ import {
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { nativeChatScratchRootFor } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
-import { getFloatingWorkspaceFileRoots } from '../../ipc/floating-workspace-directory'
+import { getFloatingWorkspaceFileRoots } from '../../ipc/worktrees/floating-workspace-directory'
 
 const PATH_SELECTOR_PREFIX = 'path:'
 const SCRATCH_FOLDER_NAME = /^[0-9a-f]{32}$/

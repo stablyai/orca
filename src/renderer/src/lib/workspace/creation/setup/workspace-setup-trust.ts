@@ -22,7 +22,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
   ownerHostId: ExecutionHostId | undefined,
   isCancelled: () => boolean,
   signal?: AbortSignal,
-  createSource?: SetupHooksCreateSource
+  createSource?: SetupHooksCreateSource,
+  context: 'workspace' | 'vm' = 'workspace'
 ): Promise<
   | ({ setupDecision: T | 'skip' | 'run'; trustDecision: 'run' | 'skip' } & ApprovedSetupHashes)
   | 'cancelled'
@@ -36,7 +37,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
       undefined,
       isCancelled,
       signal,
-      createSource
+      createSource,
+      context
     ),
     isCancelled
   )
