@@ -20,6 +20,8 @@ export function runOnceWorkerReportsPid(
   if (child.closed) {
     return Promise.resolve(true)
   }
+  // Every caller is stopping the run: a launch still queued behind others is dropped before it starts.
+  child.cancelPendingSpawn()
   return new Promise((resolve) => {
     const settle = (result: boolean): void => {
       clearTimeout(timer)
