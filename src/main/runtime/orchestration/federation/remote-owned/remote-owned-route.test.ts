@@ -280,6 +280,27 @@ describe('commands about a worker a paired server owns', () => {
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
   })
 
+  it("records the agent the server's start receipt names in its launch", async () => {
+    answers['orchestration.workerStart'] = [
+      {
+        result: {
+          dispatchId: 'ctx_b1',
+          run: { id: 'run_on_b' },
+          state: 'ready',
+          launch: { requested: { agent: null }, effective: { agent: 'codex' } }
+        }
+      }
+    ]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'build it', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ agent: 'codex' })
+  })
+
   it("answers a remote worker's question only from its Run's coordinator, as a local one is", async () => {
     const receipt = await startOnB()
     const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
