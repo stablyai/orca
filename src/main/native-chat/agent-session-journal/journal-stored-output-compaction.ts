@@ -66,15 +66,17 @@ export function compactJournalStoredOutputPage(
     .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
     .get(JOURNAL_STORED_OUTPUT_CURSOR)
   let cursor = saved ? Number(saved.value) : 0
-  // Lengths and NULL tests come from record headers, so skipped rows never load their text.
-  const scanned = db
+  // Lengths and NULL tests come from record headers, so skipped rows never load their text. Headers
+  // are read lazily: a page cut short by its budget never fetches the rows the next page starts at.
+  const headers = db
     .prepare(`SELECT rowid, kind, wire_version, output_blob IS NULL AS inline,
       octet_length(payload_json) AS bytes FROM journal_items WHERE rowid>? ORDER BY rowid LIMIT ?`)
-    .all(cursor, SCAN_ROWS)
+    .iterate(cursor, SCAN_ROWS)
+  let scanned = 0
   let rows = 0
   let bytes = 0
-  let more = scanned.length === SCAN_ROWS
-  for (const header of scanned) {
+  let more = false
+  for (const header of headers) {
     const size = Number(header.bytes)
     if (
       rows >= PAGE_ROWS ||
@@ -83,6 +85,7 @@ export function compactJournalStoredOutputPage(
       more = true
       break
     }
+    scanned++
     cursor = Number(header.rowid)
     if (
       (header.kind !== 'tool-call' && header.kind !== 'diff') ||
@@ -103,6 +106,7 @@ export function compactJournalStoredOutputPage(
       console.warn('[agent-session-journal] kept a saved tool output inline', error)
     }
   }
+  more ||= scanned === SCAN_ROWS
   db.prepare(`INSERT INTO agent_session_store_meta(key,value) VALUES(?,?)
     ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
     JOURNAL_STORED_OUTPUT_CURSOR,
