@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -54,6 +58,7 @@ describe('commands about a worker a paired server owns', () => {
   let whileSending: () => Promise<void>
   let pulls: unknown[][]
   let sequence = 0
+  const tempDirectories: string[] = []
   const DEV_B: OrchestrationWorkerServer = {
     environmentId: 'env_b',
     name: 'devB',
@@ -140,6 +145,9 @@ describe('commands about a worker a paired server owns', () => {
     vi.useRealTimers()
     runtime.stopOrchestrationFederationRelay()
     db.close()
+    for (const directory of tempDirectories.splice(0)) {
+      rmSync(directory, { recursive: true, force: true })
+    }
     vi.restoreAllMocks()
   })
 
@@ -181,6 +189,166 @@ describe('commands about a worker a paired server owns', () => {
       dispatchId: String(receipt.dispatchId)
     }
   }
+
+  it.each([
+    {
+      choice: 'blank',
+      supported: true,
+      answer: { result: { agent: null, source: 'project', projectId: 'project-b' } },
+      error: 'agent_unconfigured'
+    },
+    {
+      choice: 'unavailable',
+      supported: true,
+      answer: { error: 'agent_unconfigured', data: { effectsApplied: false } },
+      error: 'agent_unconfigured'
+    },
+    {
+      choice: 'unsupported',
+      supported: false,
+      answer: { result: null },
+      error: 'capability_unsupported'
+    }
+  ])(
+    'refuses a $choice remote project default before binding a Run or reserving a Task',
+    async ({ supported, answer, error }) => {
+      if (supported) {
+        capabilities.push(PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY)
+      }
+      answers['agent.resolveDefault'] = [answer]
+      const response = await call(
+        'orchestration.workerStart',
+        {
+          from: 'term_coord',
+          on: 'devB',
+          spec: 'build it',
+          worktree: 'new-top-level',
+          repo: 'id:repo-b',
+          agent: 'default'
+        },
+        { requestId: REQUEST }
+      )
+      expect(response.ok ? undefined : response.error.code).toBe(error)
+      expect(db.listRuns().runs.filter((run) => !run.legacy)).toEqual([])
+      expect(db.listTasks()).toEqual([])
+      expect(sent.find((request) => request.method === 'orchestration.workerStart')).toBeUndefined()
+    }
+  )
+
+  it('replays the same request with its persisted agent after the project default changes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-default-replay-'))
+    tempDirectories.push(directory)
+    const databasePath = join(directory, 'orchestration.sqlite')
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    db.db.exec('ALTER TABLE remote_placements DROP COLUMN agent_selection')
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    runtime.setOrchestrationDb(db)
+    capabilities.push(PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY)
+    const selection = { agent: 'codex', source: 'project', projectId: 'project-b' }
+    const params = {
+      from: 'term_coord',
+      on: 'devB',
+      spec: 'build it',
+      worktree: 'new-top-level',
+      repo: 'id:repo-b',
+      agent: 'default'
+    }
+    answers['agent.resolveDefault'] = [{ result: selection }]
+    answers['orchestration.workerStart'] = [started()]
+    const first = await call('orchestration.workerStart', params, { requestId: REQUEST })
+    expect(first.ok).toBe(true)
+    runtime.stopOrchestrationFederationRelay()
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    runtime.setOrchestrationDb(db)
+    answers['agent.resolveDefault'] = [
+      { result: { agent: 'codex', source: 'explicit', projectId: 'project-b' } }
+    ]
+    answers['orchestration.workerStart'] = [started()]
+    const replayed = await call('orchestration.workerStart', params, { requestId: REQUEST })
+    expect(replayed.ok ? replayed.result : undefined).toMatchObject({ agentSelection: selection })
+    expect(
+      sent.findLast((request) => request.method === 'agent.resolveDefault')?.params
+    ).toMatchObject({ validateAgent: 'codex' })
+    expect(
+      sent.findLast((request) => request.method === 'orchestration.workerStart')?.params
+    ).toMatchObject({ agent: 'codex', resolvedAgentSelection: selection })
+  })
+
+  it('freezes the remote default and its project source through a retry', async () => {
+    capabilities.push(PROJECT_DEFAULT_AGENT_RUNTIME_CAPABILITY)
+    const selection = {
+      agent: 'codex',
+      source: 'project',
+      projectId: 'project-b',
+      projectName: 'B'
+    }
+    answers['agent.resolveDefault'] = [{ result: selection }]
+    answers['orchestration.workerStart'] = [started()]
+    const first = await call(
+      'orchestration.workerStart',
+      {
+        from: 'term_coord',
+        on: 'devB',
+        spec: 'build it',
+        worktree: 'new-top-level',
+        repo: 'id:repo-b',
+        agent: 'default'
+      },
+      { requestId: REQUEST }
+    )
+    expect(first.ok ? first.result : undefined).toMatchObject({ agentSelection: selection })
+    expect(
+      sent.find((request) => request.method === 'orchestration.workerStart')?.params
+    ).toMatchObject({
+      agent: 'codex',
+      resolvedAgentSelection: selection
+    })
+    if (!first.ok) {
+      throw new Error(first.error.message)
+    }
+    const receipt = record(first.result)
+    importState(String(receipt.runId), String(receipt.taskId), 1, {
+      status: 'failed',
+      workerState: 'failed',
+      taskStatus: 'blocked'
+    })
+    answers['orchestration.workerShow'] = [
+      { result: { worker: { startOptions: { agent: 'codex', agentSelection: selection } } } }
+    ]
+    answers['agent.resolveDefault'] = [
+      { result: { agent: 'codex', source: 'explicit', projectId: 'project-b' } }
+    ]
+    answers['orchestration.workerStart'] = [started('ctx_b2')]
+    const retried = await call(
+      'orchestration.workerStart',
+      {
+        from: 'term_coord',
+        on: 'devB',
+        task: receipt.taskId,
+        retryOf: 'ctx_b1',
+        worktree: 'new-top-level',
+        repo: 'id:repo-b',
+        agent: 'default'
+      },
+      { requestId: 'retry-project-default' }
+    )
+    expect(retried.ok ? retried.result : undefined).toMatchObject({ agentSelection: selection })
+    expect(
+      sent.findLast((request) => request.method === 'agent.resolveDefault')?.params
+    ).toMatchObject({
+      repo: 'id:repo-b',
+      validateAgent: 'codex'
+    })
+    expect(
+      sent.findLast((request) => request.method === 'orchestration.workerStart')?.params
+    ).toMatchObject({
+      agent: 'codex',
+      resolvedAgentSelection: selection
+    })
+  })
 
   it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [

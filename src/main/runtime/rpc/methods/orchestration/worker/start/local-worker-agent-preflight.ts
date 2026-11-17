@@ -27,9 +27,13 @@ export async function prepareLocalWorkerAgentParams(args: {
         }
   }
   const retried = retriedWorkerDefaultAgent(args.db, params)
-  const defaultAgent = retried
-    ? { params: { ...params, agent: retried.agent }, selection: retried.selection }
-    : await resolveWorkerDefaultAgentParams(runtime, params, resolveTarget)
+  const defaultAgent = await resolveWorkerDefaultAgentParams(
+    runtime,
+    retried
+      ? { ...params, agent: retried.agent, resolvedAgentSelection: retried.selection }
+      : params,
+    resolveTarget
+  )
   const launchParams = await resolveWorkerConfiguredAgentParams(
     runtime,
     defaultAgent.params,

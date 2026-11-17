@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE } from '../../shared/project/host-setup/project-host-setup-target'
 
 export function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {

@@ -260,9 +260,30 @@ describe('orchestration migration behavior', () => {
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
+  it('rejects forwarded default provenance from an unpaired caller before creating work', async () => {
+    const { db, runtime } = createRuntime()
+    const start = ORCHESTRATION_METHODS.find(
+      (method) => method.name === 'orchestration.workerStart'
+    )!
+    await expect(
+      start.handler(
+        start.params!.parse({
+          from: 'term_coord',
+          spec: 'work',
+          worktree: 'new-top-level',
+          agent: 'codex',
+          resolvedAgentSelection: { agent: 'codex', source: 'project', projectId: 'project-b' }
+        }),
+        { runtime }
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument', data: { effectsApplied: false } })
+    expect(db.listRuns().runs.filter((run) => !run.legacy)).toEqual([])
+    expect(db.listTasks()).toEqual([])
+  })
+
   it('refuses a remote blank default before creating a Run or Task', async () => {
     const { db, runtime } = createRuntime()
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_builder',
       name: 'builder',
       peerFingerprint: 'builder_peer'

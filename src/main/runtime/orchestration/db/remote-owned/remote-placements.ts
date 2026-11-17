@@ -1,3 +1,4 @@
+import type { ProjectDefaultAgentSelection } from '../../../../../shared/rpc-contract/project-default-agent-params'
 import type { TaskRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { OrchestrationError } from '../../orchestration-error'
@@ -49,6 +50,7 @@ export function reserveRemotePlacement(
     link: RemoteRunLinkRow
     taskId: string
     requestKey: string
+    agentSelection?: ProjectDefaultAgentSelection
     create?: TaskCreation
     retryOf?: string
   }
@@ -91,13 +93,13 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?)
+           dispatch_id, agent_selection
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
-           dispatch_id = excluded.dispatch_id`
+           dispatch_id = excluded.dispatch_id, agent_selection = excluded.agent_selection`
       )
       .run(
         task.id,
@@ -106,7 +108,8 @@ export function reserveRemotePlacement(
         link.conversation_id,
         params.requestKey,
         task.status,
-        params.retryOf ?? null
+        params.retryOf ?? null,
+        params.agentSelection ? JSON.stringify(params.agentSelection) : null
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',

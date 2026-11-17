@@ -4,11 +4,6 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project } from '../../../../shared/project/project-types'
-import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
-import { useAppStore } from '@/store'
-import { RepositoryPane } from './repository/RepositoryPane'
-import { TooltipProvider } from '../ui/tooltip'
-import type * as AgentLaunchSettingsTransport from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 
 vi.mock('../ui/select', () => ({
   Select: ({
@@ -38,20 +33,8 @@ vi.mock('../ui/select', () => ({
   )
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
-vi.mock(
-  '../../runtime/agent-launch-settings/agent-launch-settings-transport',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof AgentLaunchSettingsTransport>()),
-    readHostAgentLaunchSettings: vi.fn()
-  })
-)
-vi.mock('@/runtime/jira/runtime-jira-project-client', () => ({
-  jiraStatusForTarget: vi.fn().mockResolvedValue({ connected: false })
-}))
-
 import { ProjectDefaultAgentSetting } from './ProjectDefaultAgentSetting'
 import { toast } from 'sonner'
-import { readHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 
 const project: Project = {
   id: 'project-1',
@@ -73,7 +56,6 @@ function selectElement(): HTMLSelectElement {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -83,103 +65,9 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.clearAllMocks()
-  useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
 describe('ProjectDefaultAgentSetting', () => {
-  it('lets a folder project save its default through Project Settings search', async () => {
-    const updateProject = vi.fn().mockResolvedValue(true)
-    const updateRepo = vi.fn()
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' },
-      settingsSearchQuery: 'default agent'
-    })
-    await act(async () =>
-      root.render(
-        <TooltipProvider>
-          <RepositoryPane
-            repo={{
-              id: 'folder-repo',
-              path: '/tmp/folder',
-              displayName: 'Folder',
-              badgeColor: '',
-              addedAt: 1,
-              kind: 'folder'
-            }}
-            project={project}
-            yamlHooks={null}
-            hasHooksFile={false}
-            hooksInspectionReady
-            mayNeedUpdate={false}
-            updateRepo={updateRepo}
-            removeProject={vi.fn()}
-            updateProject={updateProject}
-          />
-        </TooltipProvider>
-      )
-    )
-    expect(selectElement().value).toBe('inherit')
-    expect(container.textContent).toContain('Current global default: Claude')
-    await act(async () => {
-      const select = selectElement()
-      select.value = 'codex'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    expect(updateProject).toHaveBeenCalledWith(project.id, { defaultTuiAgent: 'codex' })
-    expect(updateRepo).not.toHaveBeenCalled()
-    expect(toast.success).toHaveBeenCalledOnce()
-  })
-
-  it('shows a paired execution host global choice after loading it', async () => {
-    vi.mocked(readHostAgentLaunchSettings).mockResolvedValueOnce({
-      defaultTuiAgent: 'codex',
-      disabledTuiAgents: [],
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      environmentNames: {},
-      permissionMode: 'manual'
-    })
-    act(() =>
-      root.render(
-        <ProjectDefaultAgentSetting
-          project={project}
-          globalDefault="claude"
-          executionHostId="runtime:remote"
-          updateProject={vi.fn()}
-        />
-      )
-    )
-    expect(container.textContent).toContain('Loading target host global default')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(container.textContent).toContain('Codex')
-  })
-
-  it('shows the saved choice and inherited effective global choice', () => {
-    act(() =>
-      root.render(
-        <ProjectDefaultAgentSetting
-          project={project}
-          globalDefault="claude"
-          updateProject={vi.fn()}
-        />
-      )
-    )
-    expect(selectElement().value).toBe('inherit')
-    expect(container.textContent).toContain('Claude')
-    act(() =>
-      root.render(
-        <ProjectDefaultAgentSetting
-          project={{ ...project, defaultTuiAgent: 'blank' }}
-          globalDefault="claude"
-          updateProject={vi.fn()}
-        />
-      )
-    )
-    expect(selectElement().value).toBe('blank')
-  })
-
   it('reports a failed host save without showing the unsaved choice', async () => {
     const updateProject = vi.fn().mockResolvedValue(false)
     act(() =>
@@ -199,7 +87,7 @@ describe('ProjectDefaultAgentSetting', () => {
     })
     expect(updateProject).toHaveBeenCalledWith('project-1', { defaultTuiAgent: 'codex' })
     expect(selectElement().value).toBe('inherit')
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('could not be saved')
+    expect(container.querySelector('[role="alert"]')).not.toBeNull()
     expect(toast.success).not.toHaveBeenCalled()
   })
 

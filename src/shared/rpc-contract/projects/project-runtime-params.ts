@@ -2,10 +2,6 @@ import { z } from 'zod'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
-const ProjectDefaultTuiAgent = z.custom<TuiAgent | 'blank' | null>(
-  (value) => value === null || value === 'blank' || isTuiAgent(value),
-  { message: 'Unknown project default agent' }
-)
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -13,6 +9,10 @@ import {
   parseExecutionHostId
 } from '../../execution-host/execution-host'
 
+const ProjectDefaultTuiAgent = z.custom<TuiAgent | 'blank' | null>(
+  (value) => value === null || value === 'blank' || isTuiAgent(value),
+  { message: 'Unknown project default agent' }
+)
 export const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
   owner: requiredString('Missing project owner'),

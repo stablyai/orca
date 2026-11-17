@@ -1,10 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState, type ComponentProps } from 'react'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
-import type {
-  Project,
-  ProjectHostSetup,
-  ProjectUpdateArgs
-} from '../../../../../shared/project/project-types'
+import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
@@ -75,10 +71,7 @@ type RepositoryPaneProps = {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
-  updateProject?: (
-    projectId: string,
-    updates: ProjectUpdateArgs['updates']
-  ) => void | Promise<unknown>
+  updateProject?: ComponentProps<typeof RepositoryWindowsRuntimeSection>['updateProject']
   /** Lets the repository's text pickers save model lists its host reports. */
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }

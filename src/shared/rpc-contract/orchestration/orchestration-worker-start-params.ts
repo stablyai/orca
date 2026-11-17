@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ResolvedProjectDefaultAgentSelection } from '../project-default-agent-params'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const OptionalWorkerLaunchPreference = z
@@ -27,6 +28,7 @@ export const WorkerStartParams = z
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
     terminal: OptionalString,
     agent: OptionalString,
+    resolvedAgentSelection: ResolvedProjectDefaultAgentSelection.optional(),
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
@@ -36,6 +38,13 @@ export const WorkerStartParams = z
     adoptTaskId: OptionalString
   })
   .superRefine((params, ctx) => {
+    if (params.resolvedAgentSelection && params.resolvedAgentSelection.agent !== params.agent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['resolvedAgentSelection'],
+        message: 'Resolved selection must match the concrete agent'
+      })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
