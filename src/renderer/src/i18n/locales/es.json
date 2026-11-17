@@ -7663,6 +7663,9 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
+          },
+          "worktreeCardStyle": {
+            "title": "Estilo de tarjeta"
           }
         },
         "FloatingWorkspacePane": {
@@ -21596,6 +21599,21 @@
     "failed": "No se pudo abrir el archivo."
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Prueba las nuevas tarjetas",
+      "dismiss": "Ahora no",
+      "body": "Estado del agente, puntos de no leído y resúmenes de elementos secundarios en cada tarjeta.",
+      "switchBack": "Puedes volver cuando quieras en <path>Opciones de espacio de trabajo › Estilo de tarjeta</path>",
+      "switchLabel": "Estilo de tarjeta",
+      "classic": "Clásico",
+      "new": "Nuevo",
+      "keep": "Mantener nuevo",
+      "useClassic": "Usar clásico",
+      "laterToast": "Prueba las nuevas tarjetas cuando quieras en Opciones de espacio de trabajo › Estilo de tarjeta",
+      "saveFailedToast": "No se pudo guardar el estilo de tarjeta. Inténtalo de nuevo.",
+      "keptTitle": "Las nuevas tarjetas están activas",
+      "keptBody": "Cámbialo aquí, en Estilo de tarjeta."
+    },
     "revealFiltered": {
       "title": "¿Mostrar el espacio de trabajo oculto?",
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",

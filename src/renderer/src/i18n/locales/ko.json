@@ -7375,6 +7375,9 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
+          },
+          "worktreeCardStyle": {
+            "title": "카드 스타일"
           }
         },
         "FloatingWorkspacePane": {
@@ -20670,6 +20673,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "새 카드 사용해 보기",
+      "dismiss": "나중에",
+      "body": "모든 카드에 에이전트 상태, 읽지 않음 점, 하위 요약이 표시됩니다.",
+      "switchBack": "<path>워크스페이스 옵션 › 카드 스타일</path>에서 언제든지 되돌릴 수 있습니다",
+      "switchLabel": "카드 스타일",
+      "classic": "클래식",
+      "new": "새 카드",
+      "keep": "새 카드 유지",
+      "useClassic": "클래식 사용",
+      "laterToast": "워크스페이스 옵션 › 카드 스타일에서 언제든지 새 카드를 사용해 볼 수 있습니다",
+      "saveFailedToast": "카드 스타일을 저장하지 못했습니다. 다시 시도하세요.",
+      "keptTitle": "새 카드가 켜졌습니다",
+      "keptBody": "여기 카드 스타일에서 변경하세요."
+    },
     "revealFiltered": {
       "title": "숨겨진 워크스페이스를 공개하시겠습니까?",
       "description": "활성 워크스페이스는 사이드바에 숨겨져 있습니다. 이를 공개하면 이를 숨기는 필터만 조정됩니다.",

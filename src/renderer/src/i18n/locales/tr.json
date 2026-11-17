@@ -76,6 +76,21 @@
     "failed": "Dosya açılamadı."
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Yeni kartları deneyin",
+      "dismiss": "Şimdi değil",
+      "body": "Her kartta ajan durumu, okunmamış noktaları ve alt öğe özetleri.",
+      "switchBack": "İstediğiniz zaman geri dönün: <path>Çalışma alanı seçenekleri › Kart stili</path>",
+      "switchLabel": "Kart stili",
+      "classic": "Klasik",
+      "new": "Yeni",
+      "keep": "Yeniyi koru",
+      "useClassic": "Klasiği kullan",
+      "laterToast": "Yeni kartları istediğiniz zaman deneyin: Çalışma alanı seçenekleri › Kart stili",
+      "saveFailedToast": "Kart stili kaydedilemedi. Tekrar deneyin.",
+      "keptTitle": "Yeni kartlar açık",
+      "keptBody": "Buradan, Kart stili altında değiştirin."
+    },
     "revealFiltered": {
       "title": "Gizli çalışma alanı gösterilsin mi?",
       "description": "Etkin çalışma alanı kenar çubuğunda gizli. Bu işlem yalnızca onu gizleyen filtreleri ayarlar.",
@@ -8164,6 +8179,9 @@
             "modeAriaLabel": "Ajan Panosu açılış modu",
             "modeInWindow": "Pencere içi",
             "modePopout": "Ayrı pencere"
+          },
+          "worktreeCardStyle": {
+            "title": "Kart stili"
           }
         },
         "FloatingWorkspacePane": {
