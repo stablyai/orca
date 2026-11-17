@@ -46,8 +46,9 @@ export type OpenCodeSqliteCaptureRequest = {
 
 export type OpenCodeNativeChatReadRequest = {
   id: number
-  /** `hermes-history`: a Hermes conversation as chat messages, for a chat that takes it over. */
-  kind: 'native-page' | 'native-signal' | 'hermes-history'
+  /** `hermes-history`: a Hermes conversation as chat messages, for a chat that takes it over;
+   *  `hermes-exists`: whether the store holds the session. */
+  kind: 'native-page' | 'native-signal' | 'hermes-history' | 'hermes-exists'
   dbPath: string
   sessionId: string
   limit?: number
@@ -68,6 +69,7 @@ export type OpenCodeNativeChatReadValue =
   | OpenCodeTranscriptPage
   | OpenCodeTranscriptSignal
   | NativeChatMessage[]
+  | { exists: boolean }
   | null
 
 export type OpenCodeSqliteWorkerRequest = (

@@ -4,10 +4,8 @@ import type {
 } from '../../../../shared/native-chat/native-chat-types'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
-import {
-  readHermesConversation,
-  readHermesSchema
-} from '../../../ai-vault/scanners/hermes/hermes-state-db-conversations'
+import { readHermesConversation } from '../../../ai-vault/scanners/hermes/hermes-state-db-conversations'
+import { readHermesSchema } from '../../../ai-vault/scanners/hermes/hermes-state-db-schema'
 import {
   decodedContent,
   displayedMessages,
@@ -16,14 +14,13 @@ import {
   type MessageRow
 } from '../../../ai-vault/scanners/hermes/hermes-state-db-messages'
 import { sliceAtCodeUnitLimit } from '../../../../shared/text/surrogate-safe-text-slice'
-import { OPENCODE_CAPTURE_RECORD_LIMIT } from '../../../ai-vault/scanners/opencode/sqlite/opencode-transcript-capture-limits'
 import { readOpenCodeDatabase } from '../../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 // Electron-free: runs in the SQLite reader worker.
 
 // Import keeps a 16 KiB head of each block; reading more only crosses the worker boundary to be cut.
 const BLOCK_TEXT_LIMIT = 64 * 1024
-// Under the WSL guest's response frame, so a native and a WSL read fail at the same size.
-const TRANSCRIPT_TEXT_LIMIT = 24 * 1024 * 1024
+// Under the WSL guest's response frame; the import keeps its own newest 16 MiB of what this returns.
+const TRANSCRIPT_BYTES = 24 * 1024 * 1024
 
 const bounded = (text: string) => sliceAtCodeUnitLimit(text, BLOCK_TEXT_LIMIT)
 
@@ -122,7 +119,8 @@ function hermesChatMessages(row: MessageRow): NativeChatMessage[] {
   return messages
 }
 
-/** A Hermes conversation as chat history, as Hermes displays it; null when the store doesn't hold it. */
+/** A Hermes conversation's newest history that fits the transcript budget, as Hermes displays it,
+ *  oldest first; null when the store doesn't hold it. */
 export function readHermesChatTranscript(args: {
   dbPath: string
   sessionId: string
@@ -135,22 +133,37 @@ export function readHermesChatTranscript(args: {
       if (!schema || !conversation) {
         return null
       }
-      const displayed = displayedMessages(readMessageIdentities(db, schema, conversation))
-      if (displayed.length > OPENCODE_CAPTURE_RECORD_LIMIT) {
-        throw new Error('Hermes transcript exceeds import limits')
-      }
-      const messages: NativeChatMessage[] = []
+      const newestFirst = displayedMessages(
+        readMessageIdentities(db, schema, conversation)
+      ).toReversed()
+      const rows: NativeChatMessage[][] = []
       let size = 0
-      for (const row of readMessageBodies(db, schema, displayed, { full: true, tools: true })) {
-        for (const message of hermesChatMessages(row)) {
-          size += JSON.stringify(message.blocks).length
-          if (size > TRANSCRIPT_TEXT_LIMIT || messages.length >= OPENCODE_CAPTURE_RECORD_LIMIT) {
-            throw new Error('Hermes transcript exceeds import limits')
-          }
-          messages.push(message)
+      for (const row of readMessageBodies(db, schema, newestFirst, {
+        full: true,
+        tools: true,
+        textChars: BLOCK_TEXT_LIMIT
+      })) {
+        const messages = hermesChatMessages(row)
+        size += messages.reduce(
+          (total, message) => total + Buffer.byteLength(JSON.stringify(message)),
+          0
+        )
+        if (size > TRANSCRIPT_BYTES && rows.length > 0) {
+          break
         }
+        rows.push(messages)
       }
-      return messages
+      return rows.toReversed().flat()
     }
+  })
+}
+
+/** Whether the store holds this Hermes session, without reading its messages. */
+export function hasHermesSession(args: { dbPath: string; sessionId: string }): boolean {
+  return readOpenCodeDatabase({
+    dbPath: args.dbPath,
+    read: (db) =>
+      !!readHermesSchema(db, args.dbPath) &&
+      db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(args.sessionId) !== undefined
   })
 }

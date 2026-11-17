@@ -14,7 +14,7 @@ afterEach(() => {
   dir = null
 })
 
-it('reads a Hermes conversation as chat items a chat can take over, tool calls on their own', () => {
+function createStore(): { path: string; db: Database } {
   dir = mkdtempSync(join(tmpdir(), 'orca-hermes-chat-'))
   const path = join(dir, 'state.db')
   const db = new Database(path)
@@ -26,6 +26,11 @@ it('reads a Hermes conversation as chat items a chat can take over, tool calls o
       content TEXT, tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL NOT NULL);
   `)
   db.prepare("INSERT INTO sessions (id, source, started_at) VALUES ('s', 'cli', 1773300000)").run()
+  return { path, db }
+}
+
+it('reads a Hermes conversation as chat items a chat can take over, tool calls on their own', () => {
+  const { path, db } = createStore()
   const add = db.prepare(
     'INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
   )
@@ -74,4 +79,24 @@ it('reads a Hermes conversation as chat items a chat can take over, tool calls o
     }
   ])
   expect(readHermesChatTranscript({ dbPath: path, sessionId: 'missing' })).toBeNull()
+})
+
+it('keeps the newest messages of a conversation too long to take over whole', () => {
+  const { path, db } = createStore()
+  const add = db.prepare(
+    "INSERT INTO messages (session_id, role, content, timestamp) VALUES ('s', 'user', ?, ?)"
+  )
+  db.exec('BEGIN')
+  for (let index = 1; index <= 400; index++) {
+    add.run(`${index} ${'x'.repeat(100_000)}`, 1773300000 + index)
+  }
+  db.exec('COMMIT')
+  db.close()
+
+  const messages = readHermesChatTranscript({ dbPath: path, sessionId: 's' })!
+  expect([messages.length, messages[0].id, messages.at(-1)?.id]).toEqual([383, 's:18', 's:400'])
+  expect(messages[0].blocks[0]).toMatchObject({
+    type: 'text',
+    text: expect.stringMatching(/^18 x+$/)
+  })
 })

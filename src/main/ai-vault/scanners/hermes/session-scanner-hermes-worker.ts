@@ -37,3 +37,15 @@ export async function readHermesChatTranscriptViaWorker(
   }
   return value
 }
+
+/** Whether a Hermes store holds the session, without reading its messages. */
+export async function hasHermesSessionViaWorker(args: {
+  dbPath: string
+  sessionId: string
+}): Promise<boolean> {
+  const value = await readNativeChatForHost({ ...args, kind: 'hermes-exists' })
+  if (value === null || !('exists' in value)) {
+    throw new Error('Invalid Hermes session check')
+  }
+  return value.exists
+}

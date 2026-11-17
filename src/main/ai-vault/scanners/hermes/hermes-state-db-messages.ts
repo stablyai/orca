@@ -112,43 +112,51 @@ export function displayedMessages(identities: readonly MessageIdentity[]): Messa
   return groups.flatMap((group) => (group.shown && !group.newestRemoved ? [group.shown] : []))
 }
 
-function bodyColumns(schema: HermesSchema, full: boolean, tools: boolean): string {
+function bodyColumns(
+  schema: HermesSchema,
+  options: { full: boolean; tools: boolean; textChars?: number }
+): string {
+  const { full, tools, textChars } = options
   const has = (column: string) => schema.messages.has(column)
   const reasoning = ['reasoning_content', 'reasoning'].filter(has).map((column) => `m.${column}`)
+  const reasoningColumn =
+    reasoning.length > 1 ? `COALESCE(${reasoning.join(', ')})` : (reasoning[0] ?? 'NULL')
   return [
     'm.id',
     'm.session_id',
     'm.role',
     'm.timestamp',
-    // Multimodal content is JSON whose text a cut would lose; only plain text is cut for previews.
-    full
-      ? 'm.content'
-      : `CASE WHEN ${MULTIMODAL} THEN m.content ELSE CAST(substr(CAST(m.content AS BLOB), 1, ${PREVIEW_CONTENT_BYTES}) AS TEXT) END AS content`,
+    // Multimodal content is JSON whose text a cut would lose; only plain text is cut.
+    !full
+      ? `CASE WHEN ${MULTIMODAL} THEN m.content ELSE CAST(substr(CAST(m.content AS BLOB), 1, ${PREVIEW_CONTENT_BYTES}) AS TEXT) END AS content`
+      : textChars
+        ? `CASE WHEN ${MULTIMODAL} THEN m.content ELSE substr(m.content, 1, ${textChars}) END AS content`
+        : 'm.content',
     full
       ? '0 AS content_truncated'
       : `NOT (${MULTIMODAL}) AND length(CAST(m.content AS BLOB)) > ${PREVIEW_CONTENT_BYTES} AS content_truncated`,
     tools && has('tool_calls') ? 'm.tool_calls' : 'NULL AS tool_calls',
     tools && has('tool_call_id') ? 'm.tool_call_id' : 'NULL AS tool_call_id',
-    `${reasoning.length > 1 ? `COALESCE(${reasoning.join(', ')})` : (reasoning[0] ?? 'NULL')} AS reasoning`
+    `${textChars && reasoning.length > 0 ? `substr(${reasoningColumn}, 1, ${textChars})` : reasoningColumn} AS reasoning`
   ].join(', ')
 }
 
 const BODY_BATCH = 200
 
 /** Bodies of the chosen rows, in their order, a batch at a time so a capture never holds them all.
- *  `full: false` reads only each message's opening bytes. */
+ *  `full: false` reads only each message's opening bytes; `textChars` cuts plain text and reasoning. */
 export function* readMessageBodies(
   db: SyncDatabase,
   schema: HermesSchema,
   rows: readonly MessageIdentity[],
-  options: { full: boolean; tools: boolean }
+  options: { full: boolean; tools: boolean; textChars?: number }
 ): Generator<MessageRow> {
   for (let start = 0; start < rows.length; start += BODY_BATCH) {
     const batch = rows.slice(start, start + BODY_BATCH)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bodyColumns projects every MessageRow column.
     const found = db
       .prepare(
-        `SELECT ${bodyColumns(schema, options.full, options.tools)} FROM messages m
+        `SELECT ${bodyColumns(schema, options)} FROM messages m
          WHERE m.id IN (${batch.map(() => '?').join(',')})`
       )
       .all(...batch.map((row) => row.id)) as MessageRow[]

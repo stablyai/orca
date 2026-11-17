@@ -27,6 +27,7 @@ function isOpenCodeRequest(request: ReaderRequest): request is OpenCodeSqliteWor
     request.kind === 'native-page' ||
     request.kind === 'native-signal' ||
     request.kind === 'hermes-history' ||
+    request.kind === 'hermes-exists' ||
     request.kind === 'fork-coverage'
   )
 }

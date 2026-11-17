@@ -94,7 +94,7 @@ export async function prepareLegacyTranscriptImport(input: {
   const limits = options.limits ?? LEGACY_IMPORT_BLOCK_LIMITS
   // OMP retained Pi's format, so its decoder also reads Pi sessions.
   if (input.agent === 'hermes') {
-    return prepareHermesImport(input.sessionId, options, limits)
+    return prepareHermesImport(input.sessionId, options, limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
   }
   const transcriptAgent =
     input.agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(input.agent)

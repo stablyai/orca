@@ -75,13 +75,10 @@ export const HERMES_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
     if (!(await isFile(dbPath))) {
       return null
     }
-    const { parseHermesSqliteSessionViaWorker } =
+    const { hasHermesSessionViaWorker } =
       await import('../ai-vault/scanners/hermes/session-scanner-hermes-worker')
-    const session = await parseHermesSqliteSessionViaWorker({
-      dbPath,
-      sessionId: providerSessionId,
-      platform: process.platform
-    })
-    return session ? dbPath : null
+    return (await hasHermesSessionViaWorker({ dbPath, sessionId: providerSessionId }))
+      ? dbPath
+      : null
   }
 }
