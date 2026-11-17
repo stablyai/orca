@@ -349,3 +349,49 @@ it('sends a queued card back to wait when the old account turns out busy as it i
   expect(chat.dispatchedTo('queued next')).toEqual([])
   expect(chat.child()?.fence).toBe(chat.accountA)
 })
+
+it('delivers a kept queued card once on the new account after mail drains and the old work settles', async () => {
+  const chat = await chatOnAccountA()
+  const first = rig!.send('first turn')
+  await first.result
+  await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
+  const queued = rig!.send('queued next', 'queue-if-active')
+  await queued.result
+  chat.switchTo('/homes/b')
+  chat.onNextAccountRead(() => chat.background([devServer()]))
+  await rig!.settleAccepted(first.id, 'first turn')
+  await eventually(async () =>
+    expect((await rig!.handoff(queued.id))?.rejection).toMatchObject({ neverReachedAgent: true })
+  )
+
+  const mail = rig!.send('mail meanwhile', undefined, { internal: true, from: MAIL })
+  await mail.result
+  await eventually(() => expect(chat.mailDispatchedTo()).toEqual([chat.accountA]))
+  await rig!.settleAccepted(await rig!.handoffId(mail.id), 'mail meanwhile')
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
+  expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
+  expect(chat.child()!.fence).not.toBe(chat.accountA)
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
+
+it('delivers a kept queued card once on the new account when the old work settles right after', async () => {
+  const chat = await chatOnAccountA()
+  const first = rig!.send('first turn')
+  await first.result
+  await eventually(() => expect(chat.dispatchedTo('first turn')).toEqual([chat.accountA]))
+  const queued = rig!.send('queued next', 'queue-if-active')
+  await queued.result
+  chat.switchTo('/homes/b')
+  chat.onNextAccountRead(() => chat.background([devServer()]))
+  await rig!.settleAccepted(first.id, 'first turn')
+  await eventually(async () =>
+    expect((await rig!.handoff(queued.id))?.rejection).toMatchObject({ neverReachedAgent: true })
+  )
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+
+  await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
+  expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
+  expect(chat.child()!.fence).not.toBe(chat.accountA)
+})
