@@ -20947,9 +20947,6 @@
           "xhigh": "XHigh"
         },
         "imageUnavailable": "Preview unavailable",
-        "optionsApplyNext": "The agent is working. Changes apply to your next message.",
-        "optionsQueued": "Queued: {{choices}}. Applied when this reply finishes.",
-        "optionsQueueHint": "The agent is working. Your choice is queued and applied when this reply finishes.",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
