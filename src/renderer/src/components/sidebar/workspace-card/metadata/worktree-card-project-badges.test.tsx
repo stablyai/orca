@@ -19,13 +19,11 @@ describe('project badges without the project name', () => {
     ['header chip', (showName: boolean) => <WorktreeCardRepoChip repo={repo} showName={showName} />]
   ])('lets keyboard users reach the %s tooltip only when the name is hidden', (_name, badge) => {
     const hidden = render(<TooltipProvider>{badge(false)}</TooltipProvider>)
-    const trigger = hidden.container.querySelector('[aria-label]')
-    expect(trigger?.getAttribute('tabindex')).toBe('0')
-    expect(trigger?.getAttribute('role')).toBe('img')
-    expect(trigger?.getAttribute('aria-label')).toContain('orca')
+    const trigger = hidden.getByRole('img', { name: /orca/i })
+    expect(trigger.getAttribute('tabindex')).toBe('0')
     hidden.unmount()
 
     const shown = render(<TooltipProvider>{badge(true)}</TooltipProvider>)
-    expect(shown.container.querySelector('[aria-label]')?.hasAttribute('tabindex')).toBe(false)
+    expect(shown.getByLabelText(/orca/i).hasAttribute('tabindex')).toBe(false)
   })
 })
