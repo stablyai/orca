@@ -6,7 +6,8 @@ import {
   HostDataAuthSchema,
   HostHelloAckSchema,
   HostHelloSchema,
-  parseRelayHostCapabilities
+  parseRelayHostCapabilities,
+  RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES
 } from './control-messages.js'
 import {
   DeviceCredentialInstallSchema,
@@ -352,5 +353,40 @@ describe('pending connection details capability', () => {
     expect(parseRelayHostCapabilities(undefined).size).toBe(0)
     expect(parseRelayHostCapabilities('').size).toBe(0)
     expect(parseRelayHostCapabilities('x'.repeat(65)).size).toBe(0)
+  })
+})
+
+describe('origin alternates capability', () => {
+  const answer = { v: 1, cellUrl: 'https://edge.relay.example.test', assignmentEpoch: 3, lease: 'signed-lease' }
+
+  it('accepts one or two canonical https alternates and no field at all', () => {
+    expect(AssignmentResponseSchema.safeParse(answer).success).toBe(true)
+    for (const alternateCellUrls of [
+      ['https://cn.relay.example.test'],
+      ['https://cn.relay.example.test', 'https://edge2.relay.example.test']
+    ]) {
+      expect(AssignmentResponseSchema.safeParse({ ...answer, alternateCellUrls }).success).toBe(true)
+    }
+  })
+
+  it('rejects an empty, oversized or non-origin list', () => {
+    for (const alternateCellUrls of [
+      [],
+      ['https://a.example.test', 'https://b.example.test', 'https://c.example.test'],
+      ['http://cn.relay.example.test'],
+      ['https://cn.relay.example.test/path'],
+      'https://cn.relay.example.test'
+    ]) {
+      expect(AssignmentResponseSchema.safeParse({ ...answer, alternateCellUrls }).success).toBe(false)
+    }
+  })
+
+  it('is read from the same capabilities header the control upgrade uses', () => {
+    expect(
+      parseRelayHostCapabilities(`pending-conn-details, ${RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES}`).has(
+        RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES
+      )
+    ).toBe(true)
+    expect(RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES).toBe('origin-alternates-v1')
   })
 })

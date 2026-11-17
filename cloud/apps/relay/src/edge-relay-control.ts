@@ -68,9 +68,21 @@ export type EdgeControlFlags = {
   // the ask. A bad value drops only this key (reported in ignoredKeys) and keeps the last applied
   // one.
   cohortRegion?: EdgeCohortRegion
+  // Which edge hosts get AssignmentResponse.alternateCellUrls, the other origin that reaches the
+  // same edge object (front door ↔ the edge's own URL), so a desktop can fail over between them
+  // without a director ask. Only an ask carrying the origin-alternates-v1 host capability gets the
+  // field at all (shipped desktops parse the answer strictly). 'off' (also when absent): nobody.
+  // 'listed': a host frontDoor lists by id. 'country': any host frontDoor maps (by id or by
+  // country), and any host answered through an allowed front door. Derived from the flags and
+  // ORCA_RELAY_EDGE_FRONT_DOOR_URLS on every ask, with no epoch or row write; without that env
+  // nobody gets it. A bad value drops only this key (reported in ignoredKeys) and keeps the last
+  // applied one. An older director ignores the key (ignoredKeys) and never sends the field.
+  alternates?: EdgeAlternates
 }
 
 export type EdgeCohortRegion = 'ask' | 'host'
+
+export type EdgeAlternates = 'off' | 'listed' | 'country'
 
 export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
 
@@ -92,9 +104,11 @@ const EdgeControlFlagsSchema = z.object({
     .optional(),
   regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional(),
   frontDoor: z.unknown().optional(),
-  cohortRegion: z.unknown().optional()
+  cohortRegion: z.unknown().optional(),
+  alternates: z.unknown().optional()
 })
 const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
+const EdgeAlternatesSchema = z.enum(['off', 'listed', 'country'])
 const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
@@ -129,7 +143,7 @@ const EdgeControlObjectSchema = z.object({
 // voids the whole object, so the last applied flags stay.
 export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => parseEdgeControlOver(body, undefined)
 
-// As parseEdgeControl, with the flags applied now: a bad frontDoor keeps the last good one (as a bad
+// As parseEdgeControl, with the flags applied now: a bad frontDoor (cohortRegion, alternates) keeps the last good one (as a bad
 // file keeps the last applied flags), reported in ignoredKeys; the rest of the object applies.
 export function parseEdgeControlOver(
   body: unknown,
@@ -152,7 +166,8 @@ export function parseEdgeControlOver(
     regionExcludeCountries,
     regionExcludeUnknownCountry,
     frontDoor: rawFrontDoor,
-    cohortRegion: rawCohortRegion
+    cohortRegion: rawCohortRegion,
+    alternates: rawAlternates
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
   if (frontDoor === null) { ignoredKeys.push('frontDoor') }
@@ -160,6 +175,9 @@ export function parseEdgeControlOver(
   const cohortRegion = rawCohortRegion === undefined ? undefined : EdgeCohortRegionSchema.safeParse(rawCohortRegion)
   if (cohortRegion?.success === false) { ignoredKeys.push('cohortRegion') }
   const keptCohortRegion = cohortRegion === undefined ? undefined : cohortRegion.success ? cohortRegion.data : previous?.cohortRegion
+  const alternates = rawAlternates === undefined ? undefined : EdgeAlternatesSchema.safeParse(rawAlternates)
+  if (alternates?.success === false) { ignoredKeys.push('alternates') }
+  const keptAlternates = alternates === undefined ? undefined : alternates.success ? alternates.data : previous?.alternates
   ignoredKeys.sort()
   return {
     flags: {
@@ -170,7 +188,8 @@ export function parseEdgeControlOver(
       ...(regionExcludeCountries === undefined ? {} : { regionExcludeCountries }),
       ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
       ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor }),
-      ...(keptCohortRegion === undefined ? {} : { cohortRegion: keptCohortRegion })
+      ...(keptCohortRegion === undefined ? {} : { cohortRegion: keptCohortRegion }),
+      ...(keptAlternates === undefined ? {} : { alternates: keptAlternates })
     },
     ignoredKeys
   }

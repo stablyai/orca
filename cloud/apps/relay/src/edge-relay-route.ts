@@ -1,6 +1,6 @@
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
-import { EDGE_CONTROL_DEFAULTS, edgeFrontDoorFor } from './edge-relay-control.js'
-import type { EdgeRelayConfig, EdgeRoute } from './edge-relay.js'
+import { EDGE_CONTROL_DEFAULTS, edgeFrontDoorFor, edgeFrontDoorListsHost } from './edge-relay-control.js'
+import { EDGE_CELL_ID, type EdgeRelayConfig, type EdgeRoute } from './edge-relay.js'
 
 // The front-door route of a host's own ask, or undefined without ORCA_RELAY_EDGE_FRONT_DOOR_URLS
 // (moveToEdge then runs exactly as before front doors existed). Switchable only on a real
@@ -24,4 +24,29 @@ export function edgeRoute(
     ...(door === undefined ? {} : { frontDoor: door.url, byCountry: door.byCountry }),
     switchable: ask.reconnect === true && ask.regionCorrection === undefined
   }
+}
+
+// AssignmentResponse.alternateCellUrls for an answer (director/edge.json alternates), or undefined
+// for none. Only an edge answer has one, and only with ORCA_RELAY_EDGE_FRONT_DOOR_URLS: answered
+// through an allowed front door, the edge's own URL; answered with the edge's own URL, the front
+// door the flags map this ask to (as edgeRoute would). GCE cells never: their proof and placement
+// are per cell. `region` and `country`: the same the ask's edgeRoute uses.
+export function edgeAlternateCellUrls(
+  config: EdgeRelayConfig,
+  relayHostId: string,
+  requestedRegion: RelayRegion | undefined,
+  country: string | null,
+  answered: { cellId: string; cellUrl: string }
+): string[] | undefined {
+  if (answered.cellId !== EDGE_CELL_ID || config.frontDoorUrls === undefined) { return undefined }
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  const mode = flags.alternates ?? 'off'
+  if (mode === 'off') { return undefined }
+  if (mode === 'listed' && !edgeFrontDoorListsHost(flags, config.frontDoorUrls, relayHostId)) { return undefined }
+  const alternate = config.frontDoorUrls.has(answered.cellUrl)
+    ? config.cellUrl
+    : answered.cellUrl === config.cellUrl
+      ? edgeFrontDoorFor(flags, config.frontDoorUrls, relayHostId, requestedRegion ?? RELAY_DEFAULT_REGION, country)?.url
+      : undefined
+  return alternate === undefined || alternate === answered.cellUrl ? undefined : [alternate]
 }

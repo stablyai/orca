@@ -34,7 +34,11 @@ export const AssignmentResponseSchema = z
     cellUrl: CanonicalHttpsOriginSchema,
     assignmentEpoch: GenerationSchema,
     lease: SignedAssignmentLeaseSchema,
-    regionCorrection: RegionCorrectionResponseSchema.optional()
+    regionCorrection: RegionCorrectionResponseSchema.optional(),
+    // Other origins that reach the same edge host session as cellUrl (the edge's own URL and a
+    // front door), in order of preference; never equal to cellUrl. Sent only when the request carried
+    // RELAY_HOST_CAPABILITY_ORIGIN_ALTERNATES in RELAY_HOST_CAPABILITIES_HEADER.
+    alternateCellUrls: z.array(CanonicalHttpsOriginSchema).min(1).max(2).optional()
   })
   .strict()
 
