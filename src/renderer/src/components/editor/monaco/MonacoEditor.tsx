@@ -5,7 +5,7 @@ import type { MarkdownDocument } from '../../../../../shared/file-listing/file-d
 import { useAppStore } from '@/store/index'
 import '@/lib/editor/monaco/monaco-setup'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { useContextualCopySetup } from '../contextual-copy/useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { isLinuxUserAgent } from '../../../app-shell/platform/user-agent-platform'
@@ -35,7 +35,7 @@ import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { useEditorModelRekeyCarry } from '../model-lifetime/identity/editor-model-rekey-carry'
 import { useNewModelLineEnding } from '../model-lifetime/buffer-text/editor-new-model-line-ending'
 

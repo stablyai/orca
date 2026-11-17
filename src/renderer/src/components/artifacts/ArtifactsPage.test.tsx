@@ -36,7 +36,7 @@ vi.mock('sonner', () => ({
   toast: { success: mocks.toastSuccess, error: mocks.toastError }
 }))
 
-vi.mock('@/components/confirmation-dialog-context', () => ({
+vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => mocks.confirm
 }))
 

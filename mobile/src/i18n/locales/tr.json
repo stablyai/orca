@@ -395,6 +395,7 @@
       "otherDevice": "başka bir cihaz"
     },
     "sessionOptionCopy": {
+      "none": "Yok",
       "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
       "chooseInAgentPicker": "Ajan seçicisinden seç…",
       "effort": "Çaba",
@@ -669,6 +670,10 @@
       "mark": "Çatal ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Çatal: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Alıntıla",
+      "hint": "Seçili metni mesaja alıntı olarak ekler"
     }
   },
   "common": {
@@ -2426,7 +2431,6 @@
     },
     "sheets": {
       "browser": "Tarayıcı",
-      "browserUpdateRequired": "Mobil tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "chat": "Sohbet",
       "copyAllAndLeave": "Tümünü Kopyala ve Ayrıl",
       "copyDraftsFailed": "Taslaklar kopyalanamadı",
@@ -2522,7 +2526,6 @@
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
       "browserCreateFailed": "Tarayıcı oluşturulamadı",
       "browserUnavailable": "Tarayıcı sayfası henüz kullanılamıyor.",
-      "browserUpdateRequired": "Mobilde tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "invalidUrl": "Geçerli bir URL girin",
       "noteCreateFailed": "Markdown notu oluşturulamadı",
       "untitledNoteCreateFailed": "Başlıksız Markdown notu oluşturulamadı"
@@ -2675,6 +2678,7 @@
       "conversationCleared": "Bu konuşma temizlendi.",
       "goalsUnsupported": "Bu ajan hedefleri desteklemiyor.",
       "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+      "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
       "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
       "historyUnusable": "Bu sohbet yüklenemiyor.",
       "hostReconciling": "Orca yeniden başlatma sonrasında bu sohbeti hâlâ kontrol ediyor.",

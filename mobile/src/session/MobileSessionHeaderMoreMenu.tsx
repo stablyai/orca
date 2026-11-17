@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  ALargeSmall,
   Columns2,
   Folder,
   GitBranch,
@@ -38,6 +39,9 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
     handleOpenNewTab,
@@ -111,8 +115,13 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -122,7 +131,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
+          }
+        ]
+      : [])
+  ]
   const tabs: ActionSheetAction[] = [
     ...(worktreeFork ? [worktreeFork] : []),
     ...(subagentFork ? [subagentFork] : []),

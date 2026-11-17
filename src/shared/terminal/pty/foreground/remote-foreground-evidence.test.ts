@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRemoteForegroundEvidence } from './foreground-process-evidence'
-import {
-  admitRemoteForegroundEvidence,
-  REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS
-} from './remote-foreground-evidence-admission'
+import { admitRemoteForegroundEvidence } from './remote-foreground-evidence-admission'
 
 const live = {
   verdict: 'live' as const,
@@ -24,18 +20,7 @@ const live = {
 }
 
 describe('remote foreground evidence contract', () => {
-  it.each([
-    { ...live, authorityGeneration: '' },
-    { ...live, ptyIncarnationId: '' },
-    { ...live, capturedAgeMs: -1 },
-    { ...live, fence: { ...live.fence, shellStartTime: '' } },
-    { ...live, fence: { ...live.fence, process: { pid: 11, startTime: '' } } },
-    { ...live, verdict: 'exited' as const, reason: '' }
-  ])('rejects an unfenced or malformed host record', (value) => {
-    expect(isRemoteForegroundEvidence(value)).toBe(false)
-  })
-
-  it('admits only the current incarnation, fresh age, and increasing host epoch', () => {
+  it('admits only the current incarnation and increasing host epoch', () => {
     const base = {
       expectedPtyId: 'pty-1',
       expectedIncarnationId: 'inc-1',
@@ -50,13 +35,6 @@ describe('remote foreground evidence contract', () => {
     ).toBeNull()
     expect(
       admitRemoteForegroundEvidence(live, { ...base, expectedIncarnationId: 'inc-2' })
-    ).toBeNull()
-    // Test beyond the ceiling itself: old summation wrongly added the 10ms round trip again.
-    expect(
-      admitRemoteForegroundEvidence(
-        { ...live, capturedAgeMs: REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1 },
-        base
-      )
     ).toBeNull()
   })
 

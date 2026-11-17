@@ -27,4 +27,3 @@ jobs:
       shards: ${{ needs.unit_plan.outputs.shards }}
       module_cache: cold
       artifact_prefix: cache-producer-unit
-      run_relay_integration: false

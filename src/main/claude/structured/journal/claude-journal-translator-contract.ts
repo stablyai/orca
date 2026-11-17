@@ -14,6 +14,7 @@ import type {
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
+import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
@@ -50,8 +51,10 @@ export type ClaudeJournalTranslator = {
   beginCommand: (start: ClaudeCommandStart) => void
   forgetCommand: (turnId: string) => void
   commandInterruptRequested: (turnId: string) => void
-  /** Root work since cycle init makes the open turn eligible for folded sends. */
-  readonly openTurnInLiveProviderCycle: boolean
+  readonly turnCycle: Pick<
+    ClaudeOpenTurn,
+    'openedInLiveProviderCycle' | 'ownsLiveProviderCycle' | 'confirmProviderCycle'
+  >
   readonly openTurnHasInputWork: boolean
   flush: () => void
   childTaskParent?: (taskId: string, run?: string) => string | undefined

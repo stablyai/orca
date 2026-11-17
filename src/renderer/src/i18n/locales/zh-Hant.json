@@ -19068,6 +19068,7 @@
         "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
         "historyUnusable": "無法載入此聊天。",
         "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+        "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
         "savedByNewerOrca": "這些聊天由更新版本的 Orca 儲存。",
         "updateOrcaToKeepUsing": "請更新 Orca 以繼續使用這些聊天。",
         "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 儲存。",
@@ -19257,6 +19258,7 @@
         "availableAfterSessionStarts": "工作階段開始後可用。",
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
+          "none": "無",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -20319,7 +20321,11 @@
         "turnDiffsTitle": "回合差異",
         "turnDiffsCopy": "在回覆下方顯示每個回合變更的檔案及行數。",
         "turnDiffsSearchChangedFiles": "已變更檔案",
-        "turnDiffsSearchEdits": "編輯"
+        "turnDiffsSearchEdits": "編輯",
+        "promptSuggestionsTitle": "建議的提示詞",
+        "promptSuggestionsCopy": "Claude 回覆後，它對你下一則訊息的猜測會顯示在空白的訊息框中。按 Tab 即可使用。每次猜測都是一次額外請求，會計入你的 Claude 用量。",
+        "promptSuggestionsSearchNext": "下一個提示詞",
+        "promptSuggestionsSearchGhost": "幽靈文字"
       },
       "voice": {
         "dictationLanguage": {

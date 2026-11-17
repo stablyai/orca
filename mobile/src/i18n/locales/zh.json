@@ -188,7 +188,6 @@
     },
     "stream": {
       "updateApp": "请更新 Orca 应用，以便在这里串流浏览器标签页",
-      "updateDesktop": "请更新桌面端 Orca，以便在手机上串流浏览器标签页",
       "checking": "正在检查桌面是否支持浏览器串流",
       "pageUnavailable": "浏览器页面暂不可用",
       "timedOut": "浏览器串流超时"
@@ -431,6 +430,7 @@
       "otherDevice": "其他设备"
     },
     "sessionOptionCopy": {
+      "none": "无",
       "availableAfterSessionStarts": "会话开始后可用",
       "chooseInAgentPicker": "在智能体选择器中选择…",
       "effort": "推理强度",
@@ -770,6 +770,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "将所选文本作为引用添加到消息中"
     }
   },
   "common": {
@@ -2881,7 +2885,6 @@
     },
     "sheets": {
       "browser": "浏览器",
-      "browserUpdateRequired": "使用移动端浏览器串流需更新桌面应用",
       "chat": "聊天",
       "copyAllAndLeave": "全部复制并离开",
       "copyDraftsFailed": "无法复制草稿",
@@ -2978,7 +2981,6 @@
       "browserCommandFailed": "浏览器命令执行失败",
       "browserCreateFailed": "创建浏览器失败",
       "browserUnavailable": "浏览器页面暂不可用",
-      "browserUpdateRequired": "需更新桌面端才能使用移动端浏览器串流",
       "invalidUrl": "请输入有效的 URL",
       "noteCreateFailed": "创建 Markdown 笔记失败",
       "untitledNoteCreateFailed": "无法创建无标题 Markdown 笔记"
@@ -3132,6 +3134,7 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
       "hostReconciling": "Orca 重启后仍在检查此聊天",
