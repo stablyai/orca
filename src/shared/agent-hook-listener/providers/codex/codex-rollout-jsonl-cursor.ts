@@ -48,6 +48,8 @@ export type JsonRecord = Record<string, unknown>
 
 /** Rollout reads done off the main thread before a hook is normalized; the synchronous readers use them instead of blocking. */
 export type PrefetchedRolloutReads = {
+  /** Set once the hook stopped waiting; a closed prefetch starts no further reads. */
+  closed?: true
   cursors: { filePath: string; offset: number; carry: string; read: JsonlCursorBytes | undefined }[]
   firstRecords: Map<string, JsonlFirstRecord>
   sizes: Map<string, number | null>
@@ -78,7 +80,7 @@ export async function prefetchJsonlCursor(
   cursor: JsonlCursor
 ): Promise<void> {
   const { filePath, offset, carry } = cursor
-  if (filePath) {
+  if (filePath && !reads.closed) {
     reads.cursors.push({ filePath, offset, carry, read: await readJsonlCursorBytes(cursor) })
   }
 }
@@ -89,9 +91,12 @@ export async function prefetchRolloutHead(
   filePath: string,
   wantsHead: (size: number | null) => boolean
 ): Promise<void> {
+  if (reads.closed) {
+    return
+  }
   const size = await rolloutFileSizeAsync(filePath)
   reads.sizes.set(filePath, size)
-  if (wantsHead(size)) {
+  if (wantsHead(size) && !reads.closed) {
     reads.firstRecords.set(filePath, await readJsonlFirstRecordAsync(filePath))
   }
 }

@@ -107,19 +107,26 @@ export async function prefetchCodexHookRolloutReads(
   return reads
 }
 
-// Why: a hung open must not hold the hook (and every later hook of its pane) forever; reads still pending are deferred to the poll.
-const HOOK_PREFETCH_MAX_MS = 5_000
+// Why: longer than the multi-second opens on-access scans cause, so a hung open, not a slow one, is what gets cut off.
+const HOOK_PREFETCH_MAX_MS = 20_000
 
-function settledWithin(promise: Promise<unknown>, ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms)
+/** Prefetches within a time bound; reads still pending afterwards are deferred to the poll and start nothing further. */
+export async function prefetchCodexHookRolloutReadsWithin(
+  state: HookListenerState,
+  body: unknown
+): Promise<PrefetchedRolloutReads> {
+  const reads = createPrefetchedRolloutReads()
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, HOOK_PREFETCH_MAX_MS)
     timer.unref?.()
     const done = (): void => {
       clearTimeout(timer)
       resolve()
     }
-    promise.then(done, done)
+    prefetchCodexHookRolloutReads(state, body, reads).then(done, done)
   })
+  reads.closed = true
+  return reads
 }
 
 /** Prefetches Codex hooks per pane in arrival order, so a slow read cannot let a later hook's status overtake an earlier one. */
@@ -145,8 +152,6 @@ export class CodexHookRolloutPrefetcher {
     this.tails.set(key, turn)
     // Every turn's prefetch is time-bounded and its release follows synchronously, so the wait for `previous` is bounded too.
     await previous
-    const reads = createPrefetchedRolloutReads()
-    await settledWithin(prefetchCodexHookRolloutReads(state, body, reads), HOOK_PREFETCH_MAX_MS)
-    return { reads, release }
+    return { reads: await prefetchCodexHookRolloutReadsWithin(state, body), release }
   }
 }

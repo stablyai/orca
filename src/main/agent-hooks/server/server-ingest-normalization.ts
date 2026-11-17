@@ -26,7 +26,7 @@ import {
   withPrefetchedRolloutReads,
   type PrefetchedRolloutReads
 } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
-import { prefetchCodexHookRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
+import { prefetchCodexHookRolloutReadsWithin } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
@@ -204,7 +204,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (record.source === 'codex') {
       // Replayed Codex hooks read live rollouts too; keep those opens off the main thread (#43539).
       return Promise.resolve(pending)
-        .then(() => prefetchCodexHookRolloutReads(this.state, body))
+        .then(() => prefetchCodexHookRolloutReadsWithin(this.state, body))
         .then(apply)
     }
     return pending ? pending.then(() => apply()) : apply()

@@ -454,7 +454,7 @@ export function prefetchCodexSubagentTranscript(
   return visitCodexTranscriptCursors(
     state,
     (cursor) => prefetchJsonlCursor(reads, cursor),
-    () => true
+    () => !reads.closed
   )
 }
 
