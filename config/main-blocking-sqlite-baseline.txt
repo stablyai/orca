@@ -22,6 +22,7 @@
 16 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
 4 src/main/ai-vault/scanners/hermes/hermes-state-db-messages.ts
 6 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
+2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
 4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts

@@ -157,6 +157,25 @@ it('lists the conversations Hermes itself lists, newest first', () => {
   expect(listedIds(path, Infinity)).toEqual(listedIds(path))
 })
 
+it('finds an older conversation behind more recent sessions Hermes does not list', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'visible', startedAt: 1_800_000_000, cwd: '/repo' })
+  exchange(db, 'visible', 'plan the release', 1_800_000_010)
+  for (let index = 0; index < 60; index++) {
+    const id = `subagent-${index}`
+    addSession(db, {
+      id,
+      parent: 'visible',
+      startedAt: 1_800_001_000 + index,
+      modelConfig: { _delegate_from: 'visible' }
+    })
+    exchange(db, id, 'delegated task', 1_800_001_000 + index)
+  }
+  db.close()
+
+  expect(listedIds(path, 1)).toEqual([`${path}#visible`])
+})
+
 it('reads a compressed conversation as one row through the continuation Hermes resumes', () => {
   const { db, path } = createStateDb()
   addSession(db, {

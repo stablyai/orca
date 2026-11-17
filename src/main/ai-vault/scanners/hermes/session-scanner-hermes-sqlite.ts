@@ -68,6 +68,65 @@ function conversationCwd(conversation: HermesConversation): string | null {
 // Headroom over the limit for empty conversations and `last_activity_at` lagging a heartbeat.
 const RECENCY_SLACK = (limit: number) => Math.ceil(limit * 1.5) + 32
 
+type ListedRow = {
+  conversation: HermesConversation
+  directory: string | null
+  activity: ReturnType<typeof hermesConversationActivity>
+}
+
+/** Live conversations among the newest `window` (all of them without one), newest first, and
+ *  whether rows past the window were left unread. */
+function readListedRows(
+  db: SyncDatabase,
+  schema: HermesSchema,
+  dbPath: string,
+  window: number | undefined,
+  scopePaths: readonly string[] | undefined
+): { rows: ListedRow[]; truncated: { all: () => boolean; scope: boolean } } {
+  const scoped = Boolean(scopePaths?.length)
+  // A limited, unscoped list reads only the most recent session rows; a scope can reach any age.
+  const conversations = listHermesConversations(
+    db,
+    schema,
+    window !== undefined && !scoped ? window : undefined
+  ).map((conversation) => ({ conversation, directory: conversationCwd(conversation) }))
+  const byRecency = (list: typeof conversations) =>
+    list.toSorted(
+      (left, right) =>
+        hermesConversationRecency(right.conversation) - hermesConversationRecency(left.conversation)
+    )
+  const inScope = scoped ? scopedSessionRows(conversations, scopePaths!, Infinity, dbPath) : []
+  const chosen =
+    window === undefined
+      ? new Set(conversations)
+      : new Set([
+          ...byRecency(conversations).slice(0, window),
+          ...byRecency(inScope).slice(0, window)
+        ])
+  const segmentIds = [...chosen].flatMap(({ conversation }) =>
+    conversation.segments.map((segment) => segment.id)
+  )
+  // An indexed search per chosen session; only an unlimited sweep reads the whole index.
+  const activity = readHermesSegmentActivity(
+    db,
+    schema,
+    window === undefined ? undefined : segmentIds
+  )
+  const rows = [...chosen]
+    .map((row) => ({ ...row, activity: hermesConversationActivity(row.conversation, activity) }))
+    .filter((row) => row.activity.live > 0)
+    .sort((left, right) => right.activity.updatedMs - left.activity.updatedMs)
+  if (window === undefined) {
+    return { rows, truncated: { all: () => false, scope: false } }
+  }
+  // Counted only when the window came up short.
+  const all = () =>
+    scoped
+      ? conversations.length > window
+      : window < Number(db.prepare('SELECT COUNT(*) AS n FROM sessions').get()?.n ?? 0)
+  return { rows, truncated: { all, scope: inScope.length > window } }
+}
+
 /** Newest `limit` conversations, plus with `scopePaths` the newest `limit` in scope, newest first;
  *  never reads message bodies. A finite limit reads activity for only the most recent candidates. */
 export function listHermesSqliteSessions(args: {
@@ -78,6 +137,7 @@ export function listHermesSqliteSessions(args: {
 }): SessionFileCandidate[] {
   const candidates: SessionFileCandidate[] = []
   const limited = Number.isFinite(args.limit)
+  const scoped = Boolean(args.scopePaths?.length)
   for (const dbPath of args.dbPaths) {
     try {
       const rows = readOpenCodeDatabase({
@@ -87,44 +147,22 @@ export function listHermesSqliteSessions(args: {
           if (!schema) {
             return []
           }
-          const scoped = Boolean(args.scopePaths?.length)
-          const window = RECENCY_SLACK(args.limit)
           // Stores older than last_activity_at have no recency of their own; read them whole.
-          const windowed = limited && schema.sessions.has('last_activity_at')
-          // A limited, unscoped list reads only the most recent session rows; a scope can reach any age.
-          const conversations = listHermesConversations(
-            db,
-            schema,
-            windowed && !scoped ? window : undefined
-          ).map((conversation) => ({ conversation, directory: conversationCwd(conversation) }))
-          const newest = (list: typeof conversations) =>
-            list
-              .toSorted(
-                (left, right) =>
-                  hermesConversationRecency(right.conversation) -
-                  hermesConversationRecency(left.conversation)
-              )
-              .slice(0, window)
-          const chosen = windowed
-            ? new Set([
-                ...newest(conversations),
-                ...(scoped
-                  ? newest(scopedSessionRows(conversations, args.scopePaths!, Infinity, dbPath))
-                  : [])
-              ])
-            : new Set(conversations)
-          const segmentIds = [...chosen].flatMap(({ conversation }) =>
-            conversation.segments.map((segment) => segment.id)
-          )
-          // An indexed search per chosen session; only an unlimited sweep reads the whole index.
-          const activity = readHermesSegmentActivity(db, schema, windowed ? segmentIds : undefined)
-          return [...chosen]
-            .map((row) => ({
-              ...row,
-              activity: hermesConversationActivity(row.conversation, activity)
-            }))
-            .filter((row) => row.activity.live > 0)
-            .sort((left, right) => right.activity.updatedMs - left.activity.updatedMs)
+          if (!limited || !schema.sessions.has('last_activity_at')) {
+            return readListedRows(db, schema, dbPath, undefined, args.scopePaths).rows
+          }
+          // Hidden, archived, sub-agent and empty sessions can fill a window; widen it until enough remain.
+          for (let window = RECENCY_SLACK(args.limit); ; window *= 4) {
+            const { rows, truncated } = readListedRows(db, schema, dbPath, window, args.scopePaths)
+            const short =
+              (rows.length < args.limit && truncated.all()) ||
+              (scoped &&
+                truncated.scope &&
+                scopedSessionRows(rows, args.scopePaths!, args.limit, dbPath).length < args.limit)
+            if (!short) {
+              return rows
+            }
+          }
         }
       })
       const admitted = new Set([
