@@ -539,7 +539,6 @@
       "src/main/antigravity/posix-hook-invocation.test.ts": 5267,
       "src/main/antigravity/windows-hook-json-post.test.ts": 6873,
       "src/main/antigravity/windows-hook-payload-delivery.test.ts": 105,
-      "src/main/window/desktop-integration/app-icon.test.ts": 77,
       "src/main/startup/quit/app-relaunch.test.ts": 93,
       "src/main/updater/linux-package/appimage-runtime-identity.test.ts": 104,
       "src/main/artifacts/artifact-cloud-recovery.test.ts": 495,
