@@ -237,7 +237,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           // Daemon adoption can turn fresh spawn into reattach, which skips onPtySpawn to preserve recency.
           session.bindActivePanePty(resolvedPtyId, {
             updateTabPtyId: 'if-missing',
-            sampleVisibleForegroundAgent: true
+            sampleVisibleForegroundAgent: true,
+            // A cold restore starts its resume launch in a new process; typed-ahead keys belong to it.
+            newProcess: spawnedPtyId.isReattach !== true
           })
         }
         if (resolvedPtyId) {

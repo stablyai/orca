@@ -52,12 +52,20 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return false
     }
     if (session.transport.getPtyId() !== null) {
-      // Why always live: a trust or permission prompt on screen must take the user's keys.
-      liveInputSinceBind ||= wasUserInput
       if (phase === 'capturing') {
         // Capture only before first bind; later unbinds leave input holding/delivery to the host.
         phase = draft === '' ? 'closed' : 'delivering'
       }
+      if (wasUserInput && phase === 'delivering' && !agentAwaitsAnswer()) {
+        // Typing that spans the bind continues the draft: send it ahead of this key, in typing order.
+        const text = draft
+        draft = ''
+        phase = 'closed'
+        session.transport.sendInput(text, 'driving')
+        return false
+      }
+      // Why always live: a trust or permission prompt on screen must take the user's keys.
+      liveInputSinceBind ||= wasUserInput
       return false
     }
     if (phase !== 'capturing') {
@@ -70,6 +78,11 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     }
     // Pre-bind focus reports have no terminal to reach.
     return true
+  }
+
+  const agentAwaitsAnswer = (): boolean => {
+    const status = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)?.state
+    return status === 'blocked' || status === 'waiting'
   }
 
   const dropDraft = (draftAgent: TuiAgent): void => {
@@ -93,9 +106,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       phase = 'closed'
       return
     }
-    const status = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)?.state
     // Why drop: the user is already driving the screen, or a prompt is waiting on an answer.
-    if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
+    if (liveInputSinceBind || agentAwaitsAnswer()) {
       dropDraft(draftAgent)
       return
     }
@@ -123,18 +135,6 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return
     }
     liveInputSinceBind = false
-    if (
-      freshSpawn &&
-      session.spawnStartupInputReachesCommand === true &&
-      !(session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted)
-    ) {
-      // The host's shell runs the launch itself, so keys written now queue for the agent ahead of later typing.
-      const text = draft
-      draft = ''
-      phase = 'closed'
-      session.transport.sendInput(text, 'driving')
-      return
-    }
     phase = 'delivering'
     if (!freshSpawn) {
       // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
@@ -145,7 +145,13 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       ptyId,
       resolveDraftPasteReadyTimeoutMs(draftAgent),
       TUI_AGENT_CONFIG[draftAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-    ).then((ready) => (ready ? pasteDraft(ptyId, draftAgent) : dropDraft(draftAgent)))
+    ).then((ready) => {
+      // Live typing may already have sent the draft.
+      if (phase !== 'delivering') {
+        return
+      }
+      return ready ? pasteDraft(ptyId, draftAgent) : dropDraft(draftAgent)
+    })
   }
 
   session.discardAgentPreReadyDraft = (): void => {

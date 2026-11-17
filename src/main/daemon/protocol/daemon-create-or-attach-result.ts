@@ -22,8 +22,6 @@ export type DaemonCreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY; older daemons omit this field. */
   inputClosed?: true
-  /** The shell runs the launch itself, so input written now queues for the agent; older hosts omit it. */
-  startupInputReachesCommand?: true
 }
 
 export function getDaemonSessionResultMetadata(session: {

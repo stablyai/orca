@@ -99,7 +99,6 @@ export const ptySessionControlApi = {
     launchToken?: string
     resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     shellReadyArmed?: boolean
-    startupInputReachesCommand?: true
   }> => ipcRenderer.invoke('pty:spawn', opts),
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })

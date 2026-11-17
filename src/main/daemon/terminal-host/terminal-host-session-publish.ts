@@ -259,7 +259,6 @@ export async function spawnAndPublishSession(
     incarnationId: session.incarnationId,
     ...getDaemonSessionResultMetadata(session),
     ...(isSessionInputClosed(session) ? { inputClosed: true as const } : {}),
-    ...(startupCommandByWrapper ? { startupInputReachesCommand: true as const } : {}),
     ...(cwdReadableByDaemon !== null ? { cwdReadableByDaemon } : {}),
     attachToken: token
   }
