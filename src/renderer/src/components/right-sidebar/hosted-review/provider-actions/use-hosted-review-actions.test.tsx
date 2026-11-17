@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
-import { presentGitHubPRMergeState } from '../../../github-pr-merge-state'
+import { presentGitHubPRMergeState } from '../../../github/github-pr-merge-state'
 
 const confirmationMocks = vi.hoisted(() => ({
   confirm: vi.fn()
