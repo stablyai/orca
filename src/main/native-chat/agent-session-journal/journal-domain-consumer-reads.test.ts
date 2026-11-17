@@ -9,7 +9,6 @@ import { readJournalSqlPoint } from './journal-sql-point-read'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
-import { JOURNAL_PROVIDER_TURN_INDEX } from './database/journal-provider-turn-index'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -540,7 +539,6 @@ it('reuses a saved outline after reopen and refuses a cache result from an older
 
 it('counts a Codex thread as exchanged once it has a turn row or an accepted send', async () => {
   const f = domainLifecycleFixture(cleanup)
-  f.db.exec(JOURNAL_PROVIDER_TURN_INDEX)
   const reads = readsOf(f)
   expect(await reads.hasProviderTurn('thread-replied')).toBe(false)
   await f.run({

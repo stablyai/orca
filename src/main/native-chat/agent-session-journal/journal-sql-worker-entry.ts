@@ -1,6 +1,5 @@
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
-import { JOURNAL_PROVIDER_TURN_INDEX } from './database/journal-provider-turn-index'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
@@ -53,7 +52,6 @@ async function open(): Promise<void> {
     readOnly = opened.readOnly
     if (!readOnly) {
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
-      db.exec(JOURNAL_PROVIDER_TURN_INDEX)
     }
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)

@@ -11,7 +11,6 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
-import { JOURNAL_PROVIDER_TURN_ROWS } from './database/journal-provider-turn-index'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -35,6 +34,8 @@ export type JournalDomainEntityRead = Extract<
       | 'turn-removed'
   }
 >
+
+const NEWEST_TURN_SCAN_LIMIT = 64
 
 /** Named identities and fixed-size head facts come from the ready current epoch. */
 export function readJournalDomainEntity(
@@ -73,23 +74,28 @@ export function readJournalDomainEntity(
             operation.namespace
           ) !== undefined
       // A provider turn row whose opener is Orca's own send names no thread; fences only grow, so
-      // the newest one shows whether a turn ran since `sinceFence`. Orca's command turns don't count.
+      // the newest one shows whether a turn ran since `sinceFence`. Orca's `/compact` command turns
+      // don't count; past a bounded run of them, nothing is proven unexchanged.
       const { sinceFence } = operation
-      const newestTurn =
+      const newestTurns =
         named || sinceFence === undefined
-          ? undefined
+          ? []
           : db
-              .prepare(`SELECT owner_fence FROM journal_items INDEXED BY journal_items_newest_provider_turn
-          WHERE session_id=? AND epoch=? AND ${JOURNAL_PROVIDER_TURN_ROWS}
-          ORDER BY ordinal DESC LIMIT 1`)
-              .get(...prefix)
+              .prepare(`SELECT owner_fence,turn_id FROM journal_items INDEXED BY journal_items_kind
+          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn'
+          ORDER BY ordinal DESC LIMIT ?`)
+              .all(...prefix, NEWEST_TURN_SCAN_LIMIT)
+      const newestProviderTurn = newestTurns.find(
+        (row) => !String(row.turn_id).startsWith('compact:')
+      )
       return {
         kind: operation.kind,
         present:
           named ||
           (sinceFence !== undefined &&
-            newestTurn !== undefined &&
-            Number(newestTurn.owner_fence) >= sinceFence)
+            (newestProviderTurn
+              ? Number(newestProviderTurn.owner_fence) >= sinceFence
+              : newestTurns.length === NEWEST_TURN_SCAN_LIMIT))
       }
     }
     case 'saved-item-ids':
