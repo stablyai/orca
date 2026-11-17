@@ -1,11 +1,11 @@
 import {
   applyAppend,
   replaceList
-} from '../../../../../../src/shared/native-chat/native-chat-merge'
+} from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-merge'
 import { translate } from '../../../../i18n/mobile-i18n'
-import type { NativeChatMerger } from '../../../../../../src/shared/native-chat/native-chat-merge'
+import type { NativeChatMerger } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-merge'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTranscriptFrame } from '../../../../../../src/shared/native-chat/native-chat-transcript-frames'
+import type { NativeChatTranscriptFrame } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-transcript-frames'
 
 type SnapshotFrame = Extract<NativeChatTranscriptFrame, { type: 'snapshot' }>
 

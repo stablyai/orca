@@ -13,7 +13,7 @@ import {
   MobileMarkdownLinksContext,
   useNativeChatFileLinkExistsFrom
 } from './links/mobile-markdown-links-context'
-import type { NativeChatVisualDirective } from '../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 
 type Props = {
   content?: string

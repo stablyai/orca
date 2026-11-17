@@ -12,12 +12,12 @@ import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-jo
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 
 /** A recorded send made again: under the same id when it was never admitted, or under a new one
  *  after a proven rejection and a later turn or /clear. */

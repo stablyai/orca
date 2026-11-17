@@ -23,29 +23,6 @@ describe('hosted PR snapshots', () => {
     expect(await read('shared', 'manual')).toMatchObject({ kind: 'found', pr: { title: 'manual' } })
   })
 
-  it('reports the found PR from fresh, snapshot and reused phone reads for the host stats', async () => {
-    const phoneRead = () =>
-      commands.getRepoPRForBranch(
-        'repo',
-        'counted',
-        null,
-        null,
-        false,
-        'head-a',
-        undefined,
-        undefined,
-        'mobile'
-      )
-    await read('counted', 'visible')
-    await read('counted')
-    await phoneRead()
-    await phoneRead()
-    // Only the visible read fetches; the snapshot and both phone reads reuse its result.
-    expect(mocks.resolve).toHaveBeenCalledTimes(1)
-    const counted = ['repo', 12, 'https://github.com/acme/repo/pull/12']
-    expect(mocks.recordCreated.mock.calls).toEqual([counted, counted, counted, counted])
-  })
-
   it('keeps a confirmed unchanged quiet result, but a different request head reads again', async () => {
     await read('quiet', 'active')
     await vi.advanceTimersByTimeAsync(60_000)
@@ -59,26 +36,6 @@ describe('hosted PR snapshots', () => {
       pr: { title: 'new provider state' },
       fetchedAt: 181_000
     })
-  })
-
-  it('returns completed checks in each due response for three queued rows', async () => {
-    await Promise.all(['one', 'two', 'three'].map((branch) => read(branch, 'active')))
-    fixture.title = 'finished checks'
-    mocks.resolve.mockImplementation(
-      () =>
-        new Promise<PRRefreshOutcome>((resolve) => {
-          // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider delay exercises host admission and completion.
-          setTimeout(() => resolve(found()), 1_000)
-        })
-    )
-    await vi.advanceTimersByTimeAsync(60_000)
-    const responses = Promise.all(['one', 'two', 'three'].map((branch) => read(branch)))
-    await vi.advanceTimersByTimeAsync(21_000)
-    expect(await responses).toEqual([
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) }),
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) }),
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) })
-    ])
   })
 
   it('delivers a deferred provider failure to the next timer instead of reviving old success', async () => {

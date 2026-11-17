@@ -22,6 +22,7 @@ import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
+import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
@@ -32,6 +33,7 @@ export type JournalSqlMaintenance =
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
+  | { kind: 'chat-discard'; sessionId: string }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -50,6 +52,7 @@ export type JournalSqlMaintenanceResult =
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
+  | ReturnType<typeof discardForgottenJournalChatPage>
   | boolean
   | string
   | null
@@ -80,6 +83,8 @@ export function applyJournalSqlMaintenance(
       return journalDomainImportState(db, operation.sessionId)
     case 'import-discard':
       return discardJournalDomainImportPage(db, operation.sessionId)
+    case 'chat-discard':
+      return discardForgottenJournalChatPage(db, operation.sessionId)
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

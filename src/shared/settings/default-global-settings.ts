@@ -7,7 +7,7 @@ import { TASK_PROVIDERS } from '../work-items/task-providers'
 import { getDefaultSourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from '../app-lifecycle/identity/app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from '../editor/launch/open-in-applications'
-import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/native-chat-idle-stop'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
 import { DEFAULT_BROWSER_MEMORY_SAVER_HOURS } from '../browser/guest-lifecycle/browser-memory-saver'
 import { DEFAULT_DISABLED_TUI_AGENTS } from '../agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from '../i18n/ui-language'
@@ -64,8 +64,10 @@ export function buildDefaultSettings(args: {
     editorAutoSave: false,
     editorFormatOnSave: false,
     editorInsertFinalNewline: false,
+    editorEndOfLine: 'auto',
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
+    editorInlineBlame: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,

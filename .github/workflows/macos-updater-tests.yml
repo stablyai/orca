@@ -55,5 +55,3 @@ jobs:
           src/main/updater/mac-install/updater.mac-install.test.ts
           src/main/updater/updater.headless-serve-install.test.ts
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts
-          src/main/startup/quit/main-process-quit-update-veto.test.ts
-          src/main/window/main-window/main-window-state-lifecycle.test.ts

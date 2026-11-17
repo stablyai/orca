@@ -1,11 +1,11 @@
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as MobileSessionProjection } from './prune-mobile-session-tab-group-layout'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/chat/structured-session-tab-close'
 import type { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh as MobileSessionRefresh } from './perform-mobile-session-pty-records-refresh'
 import type { RuntimeWorkspaceCatalog as WorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup } from '../../terminal/launch/mobile-terminal-startup'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
-import { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../../session-tabs/mobile-session-hydration'
+import { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../../session-tabs/restoration/mobile-session-hydration'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,

@@ -13,7 +13,7 @@ import type { StructuredPointerDeliveryDependencies } from './structured-mailbox
 import { structuredMailMessage } from '../structured-mail/structured-mail-source'
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
 import { StructuredMailSettledState } from '../structured-mail/structured-mail-settled-state'
 import * as mailCustody from '../structured-mail/structured-mail-custody'

@@ -2,7 +2,10 @@
 import * as React from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionMcpResult, AgentSessionMcpServer } from '../agent-session-mcp'
+import type {
+  AgentSessionMcpResult,
+  AgentSessionMcpServer
+} from '../options/protocol/agent-session-mcp'
 import { createAgentSessionMcpPanelHook } from './use-agent-session-mcp-panel'
 
 const useAgentSessionMcpPanel = createAgentSessionMcpPanelHook(React)

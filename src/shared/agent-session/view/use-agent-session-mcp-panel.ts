@@ -4,7 +4,7 @@ import type {
   AgentSessionMcpResult,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../agent-session-mcp'
+} from '../options/protocol/agent-session-mcp'
 
 export type AgentSessionMcpRequest = (
   operation: AgentSessionMcpOperation

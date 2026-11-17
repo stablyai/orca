@@ -32,7 +32,7 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 export class RemoteInstallLockBusyError extends Error {
   constructor(lockDir: string, timeoutMs: number) {
     super(
-      `Could not acquire the install lock at ${lockDir} after ${timeoutMs / 1000}s; ` +
+      `Could not acquire the install lock at ${lockDir} after ${Math.round(timeoutMs / 1000)}s; ` +
         'another install is still in progress.'
     )
     this.name = 'RemoteInstallLockBusyError'
@@ -50,19 +50,33 @@ async function unlessUnconfirmed<T>(work: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+/** Null when the host did not answer with an age. */
+async function readInstallLockAgeMs(
+  conn: RemoteInstallTransport,
+  lockDir: string,
+  host: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<number | null> {
+  // Measure remotely to avoid client clock skew making live locks look stale.
+  const out = await unlessUnconfirmed(
+    execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir), { signal }),
+    ''
+  )
+  const ageSec = Number.parseInt(out.trim(), 10)
+  return Number.isFinite(ageSec) && ageSec >= 0 ? ageSec * 1000 : null
+}
+
 export async function isRelayInstallLockStale(
   conn: RemoteInstallTransport,
   lockDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
-  // Measure remotely to avoid client clock skew making live locks look stale.
-  const out = await unlessUnconfirmed(
-    execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir)),
-    ''
-  )
-  const ageSec = Number.parseInt(out.trim(), 10)
-  return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
+  const ageMs = await readInstallLockAgeMs(conn, lockDir, host)
+  return ageMs !== null && ageMs > INSTALL_LOCK_STALE_MS
 }
+
+/** A held lock's wait; `takeoverInMs` is null when no takeover is due before this attempt gives up. */
+export type InstallLockWait = { takeoverInMs: number | null; givesUpInMs: number }
 
 /** Exclusive host-native creation preserves lock markers older Windows clients recognize. */
 export async function acquireInstallLock(
@@ -81,6 +95,10 @@ export async function acquireInstallLock(
     owner?: InstallLockOwnerFile
     /** Proven-exited owner token permits early takeover. */
     exitedOwner?: InstallLockExitedOwnerProof
+    /** Keep waiting until the held lock turns stale rather than timing out just before takeover. */
+    waitThroughStaleTakeover?: boolean
+    /** Reported at each stale recheck while another holder keeps the lock. */
+    onWait?: (wait: InstallLockWait) => void
   }
 ): Promise<void> {
   const lockDir = joinRemotePath(host, remoteRelayDir, options?.lockName ?? RELAY_INSTALL_LOCK_NAME)
@@ -104,6 +122,7 @@ export async function acquireInstallLock(
   }
 
   const start = Date.now()
+  let deadline = start + waitTimeoutMs
   // Busy means a holder answered; a lock command that only ever failed reports its own error.
   let sawHolder = false
   let lastCommandError: unknown
@@ -171,17 +190,38 @@ export async function acquireInstallLock(
         if (await keptAfterGcRecheck()) {
           return
         }
+      } else if (options?.onWait || options?.waitThroughStaleTakeover) {
+        const ageMs = await readInstallLockAgeMs(conn, lockDir, host, options.signal)
+        const takeoverInMs = ageMs === null ? null : Math.max(0, INSTALL_LOCK_STALE_MS - ageMs)
+        if (options.waitThroughStaleTakeover && takeoverInMs !== null) {
+          // Lock age, not this attempt, sets the takeover time; a relaunch waits only the rest.
+          // Capped so a holder that keeps refreshing the lock cannot extend the wait forever.
+          deadline = Math.max(
+            deadline,
+            Math.min(
+              Date.now() + takeoverInMs + INSTALL_LOCK_STALE_RECHECK_MS,
+              start + INSTALL_LOCK_STALE_MS + 2 * INSTALL_LOCK_STALE_RECHECK_MS
+            )
+          )
+        }
+        const now = Date.now()
+        // Promise a takeover only if this attempt is still waiting when it comes due.
+        options.onWait?.({
+          takeoverInMs:
+            takeoverInMs !== null && now + takeoverInMs < deadline ? takeoverInMs : null,
+          givesUpInMs: Math.max(0, deadline - now)
+        })
       }
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastWaitLogAt = Date.now()
       console.info(`[ssh] Waiting for install lock at ${lockDir}`)
     }
-    if (Date.now() - start >= waitTimeoutMs) {
+    if (Date.now() >= deadline) {
       if (!sawHolder && lastCommandError !== undefined) {
         throw lastCommandError
       }
-      throw new RemoteInstallLockBusyError(lockDir, waitTimeoutMs)
+      throw new RemoteInstallLockBusyError(lockDir, deadline - start)
     }
     await waitForInstallLockPoll(options?.signal)
   }
