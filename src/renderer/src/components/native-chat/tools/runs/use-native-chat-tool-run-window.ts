@@ -6,7 +6,7 @@ import {
   type Virtualizer
 } from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 

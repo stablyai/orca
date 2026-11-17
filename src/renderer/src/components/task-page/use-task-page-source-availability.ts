@@ -6,7 +6,7 @@ import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-sou
 import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
-import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   type TaskSourceContext,
   normalizeTaskSourceContext,

@@ -74,10 +74,10 @@ To reuse a proven existing agent whose previous work is settled, replace the
 start command with:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --run <owning_run_id> --worktree <exact_existing_workspace> --terminal <agent_terminal_handle>
+ORCA orchestration worker-start --task <task_id> --run <owning_run_id> --terminal <agent_terminal_handle>
 ```
 
-Use that terminal's workspace; omit `--agent`, `--model`, `--effort`, and
+It starts in that terminal's workspace; omit `--agent`, `--model`, `--effort`, and
 new-worktree creation. Follow [Placement and remote execution](placement-and-remote.md)
 for execution-host selection and Dispatch-addressed follow-ups. After starting
 independent work, end your turn; Orca wakes you. Follow a receipt's `next` action.

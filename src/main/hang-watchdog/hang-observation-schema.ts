@@ -30,6 +30,17 @@ export type HangPowerReceipt = {
   receivedAt: number
 }
 export type CompletedHangContext = { name: string; startedAt: number; completedAt: number }
+/** What a worker last posted to its parent; a stuck receive names its sender here. */
+export type HangWorkerSend = {
+  role: string
+  kind: string
+  items: number
+  bytes: number
+  depth: number
+  agoMs: number
+  heapUsedMB: number
+}
+export const MAX_HANG_WORKER_SENDS = 4
 export type HangObservation = {
   id: string
   kind: 'heartbeat-stall' | 'watchdog-gap'
@@ -46,6 +57,7 @@ export type HangObservation = {
   mainJs?: MainJsCapture
   native?: NativeHangCapture
   watchdogGap?: { observedAt: number; durationMs: number; snapshot: HangSnapshot | null }
+  workerSends?: HangWorkerSend[]
 }
 export type HangObservationCollection = {
   version: 1

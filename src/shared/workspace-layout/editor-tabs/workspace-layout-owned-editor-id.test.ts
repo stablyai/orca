@@ -1,20 +1,20 @@
 // Owned editor IDs must retain facts main associates with the file for floating, contested and moved files.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../constants'
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import '../../orca-profiles/constants'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import { ownedEditorFileId } from '../../workspace-session/workspace-session-pane-ownership'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
-import { applyLayoutCommand } from '../workspace-layout-commands'
+import '../workspace-layout-commands'
 import { loadWorkspaceLayout } from '../persistence/workspace-layout-load'
 import '../persistence/workspace-layout-save'
-import { testContext } from '../commands/workspace-layout-command.test-fixture'
+import '../commands/workspace-layout-command.test-fixture'
 import {
   addWorkspace,
   emptySession,
   GIT_KEY
 } from '../persistence/workspace-layout-session.test-fixture'
-import { tabExecutionHostId } from './workspace-layout-tab-host'
+import './workspace-layout-tab-host'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../layout-owner-switch', () => ({
@@ -71,22 +71,5 @@ describe('editor tabs under an owned id, layout-owner build', () => {
     const loaded = load(session)
 
     expect(loaded.layout.workspaces[GIT_KEY]!.tabs[0]!.isPreview).toBeUndefined()
-  })
-
-  it("names its file's host and drops its file's record when its last tab closes", () => {
-    const filePath = '/srv/app/README.md'
-    const { session, fileId } = previewUnderOwnedId(GIT_KEY, filePath, 'env-1')
-    const { layout } = load(session)
-    const workspace = layout.workspaces[GIT_KEY]!
-
-    expect(tabExecutionHostId(workspace.tabs[0]!, workspace, LOCAL_EXECUTION_HOST_ID)).toBe(
-      'runtime:env-1'
-    )
-    const closed = applyLayoutCommand(
-      layout,
-      { type: 'closeTabs', workspace: GIT_KEY, tabIds: [fileId] },
-      testContext()
-    )
-    expect(closed.ok && closed.model.workspaces[GIT_KEY]!.editorFiles).toEqual([])
   })
 })

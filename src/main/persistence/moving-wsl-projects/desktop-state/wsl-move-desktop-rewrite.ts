@@ -1,5 +1,5 @@
 // Persist each store before its ledger entry; restart retries only unrecorded rewrites.
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutover

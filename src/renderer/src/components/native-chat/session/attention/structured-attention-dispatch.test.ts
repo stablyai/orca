@@ -1,9 +1,9 @@
 // Use real unread/acknowledgment reducers so broken wiring cannot pass on mocked sink call counts.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
+import { setPresenceGated } from '@/attention/agent-auto-ack-presence'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -211,5 +211,17 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       tabDot: 'agent-completion',
       surfaceDot: 'agent-completion'
     })
+  })
+
+  it('keeps unread state but sends no notification for a worktree the user muted', () => {
+    store.setState({ notificationsMutedByWorktree: { [WORKSPACE]: true } })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toEqual({
+      workspaceBold: true,
+      paneDot: 'agent-completion',
+      tabDot: 'agent-completion',
+      surfaceDot: 'agent-completion'
+    })
+    expect(dispatched).toEqual([])
   })
 })

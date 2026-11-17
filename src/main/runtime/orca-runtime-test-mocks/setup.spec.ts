@@ -6,7 +6,7 @@ import { beforeEach, vi, type Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
+import type * as FilesystemPathContainmentModule from '../../filesystem/local-file-io/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/worktree/hosted-review/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
@@ -48,7 +48,7 @@ const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() =>
 const findExistingWorktreeSymlinkPathsMock: TestMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock: TestMock = vi.hoisted(() => vi.fn(async () => ''))
 
-vi.mock('../../ipc/worktree-symlinks', () => ({
+vi.mock('../../ipc/worktrees/linked-paths/worktree-symlinks', () => ({
   createWorktreeCopiedPaths: vi.fn(),
   createWorktreeLinkedPaths: vi.fn(),
   createWorktreeSharedPaths: vi.fn(),
@@ -329,7 +329,7 @@ vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveSetupRunPolicy: vi.fn().mockReturnValue('auto')
 }))
 
-vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
+vi.mock('../../ipc/worktrees/paths/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -353,9 +353,9 @@ vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidati
 }))
 
 // Relay-rebuilt ENOENT errors may retain only the message.
-vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
+vi.mock('../../filesystem/local-file-io/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem/access/filesystem-path-containment'
+    '../../filesystem/local-file-io/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })

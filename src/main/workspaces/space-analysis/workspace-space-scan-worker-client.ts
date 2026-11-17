@@ -23,7 +23,7 @@ function createWorker(): Worker {
   if (!existsSync(path)) {
     throw new Error(`Workspace space scan worker entry not found: ${path}`)
   }
-  return spawnWorkerThread(path)
+  return spawnWorkerThread(path, { name: 'orca-workspace-space-scan' })
 }
 
 let queue: WorkerThreadRequestQueue<

@@ -24,7 +24,7 @@ import {
   type NativeChatCopyImage
 } from '../../media/images/native-chat-image-copy'
 import { isMacPlatform } from '../routing/native-chat-shortcut'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'

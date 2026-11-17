@@ -1,7 +1,7 @@
 import { app, BaseWindow, BrowserWindow, protocol, session, webContents } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'

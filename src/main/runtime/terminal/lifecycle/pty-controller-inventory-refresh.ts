@@ -1,13 +1,13 @@
 import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
 
 import type * as PtyControllerContract from './runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   type ExecutionHostId,
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   type ResolvedWorktree,

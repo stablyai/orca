@@ -8,7 +8,7 @@ import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse,
   type AgentSessionQuestionAnswer
-} from '../../../../shared/agent-session/agent-session-question-answer'
+} from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem,

@@ -4,7 +4,7 @@ import type {
   AgentSessionMcpResult,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../agent-session-mcp'
+} from '../options/protocol/agent-session-mcp'
 
 export type AgentSessionMcpRequest = (
   operation: AgentSessionMcpOperation
@@ -26,7 +26,8 @@ const MAX_POLL_MS = 15_000
 // Agents close their sign-in callback after five minutes.
 const SIGN_IN_WINDOW_MS = 5 * 60_000
 
-/** State for the `/mcp` panel; `openUrl` opens a sign-in page in the device's browser. */
+/** State for the `/mcp` panel; `openUrl` opens a sign-in page in the device's browser, and a new
+ *  `refreshKey` (the agent starting or stopping, `/mcp` run again) re-reads the servers. */
 export function createAgentSessionMcpPanelHook({
   useCallback,
   useEffect,
@@ -35,7 +36,8 @@ export function createAgentSessionMcpPanelHook({
 }: Pick<typeof React, 'useCallback' | 'useEffect' | 'useRef' | 'useState'>) {
   return function useAgentSessionMcpPanel(
     request: AgentSessionMcpRequest,
-    openUrl: (url: string) => void
+    openUrl: (url: string) => void,
+    refreshKey?: unknown
   ) {
     const [state, setState] = useState<AgentSessionMcpPanelState>({
       result: null,
@@ -46,6 +48,8 @@ export function createAgentSessionMcpPanelHook({
     })
     const busy = useRef(false)
     const reading = useRef(false)
+    // A read asked for mid-read may follow a change the one in flight missed.
+    const readAgain = useRef(false)
     // Bumped as each action starts and ends, so a read that overlapped one can't show older state.
     const actions = useRef(0)
     const mounted = useRef(true)
@@ -97,19 +101,23 @@ export function createAgentSessionMcpPanelHook({
 
     const read = useCallback(async () => {
       if (reading.current) {
+        readAgain.current = true
         return
       }
       reading.current = true
-      const operation = { action: 'status' } as const
-      const started = actions.current
-      const reply = await request(operation).catch((): AgentSessionMcpResult => ({
-        status: 'failed',
-        message: null
-      }))
+      do {
+        readAgain.current = false
+        const operation = { action: 'status' } as const
+        const started = actions.current
+        const reply = await request(operation).catch((): AgentSessionMcpResult => ({
+          status: 'failed',
+          message: null
+        }))
+        if (actions.current === started) {
+          apply(reply, operation)
+        }
+      } while (readAgain.current && mounted.current)
       reading.current = false
-      if (actions.current === started) {
-        apply(reply, operation)
-      }
     }, [apply, request])
 
     const run = useCallback(
@@ -146,7 +154,7 @@ export function createAgentSessionMcpPanelHook({
 
     useEffect(() => {
       void read()
-    }, [read])
+    }, [read, refreshKey])
 
     // Nothing reports when an agent finishes a callback sign-in or a server settles from
     // connecting; re-read with backoff, and stop at the agents' own five-minute window.

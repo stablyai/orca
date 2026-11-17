@@ -8,7 +8,7 @@ import type {
   AiVaultGroup,
   AiVaultScope
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import { AI_VAULT_SCOPE_STEP_EVENT, stepAiVaultScope } from '../scope/ai-vault-scope-state'

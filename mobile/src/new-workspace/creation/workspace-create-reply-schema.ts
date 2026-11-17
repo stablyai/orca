@@ -10,6 +10,9 @@ export const worktreeCreateReceiptSchema = z.looseObject({
   warning: createText('warning')
 })
 
+// Only `mismatch` changes what the phone says; any other status started or had nothing to run.
+export const approvedSetupRunSchema = z.looseObject({ status: z.string() })
+
 // Guarded launch receipt fields remain optional; the mode-blind caller reports missing ids as failed creation.
 export const agentLaunchCreateReceiptSchema = z.looseObject({
   worktreeId: createText('worktreeId'),

@@ -18,7 +18,7 @@ import {
   holdWslStoppedWorktreeRescan,
   releaseWslStoppedWorktreeRescan
 } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
-import { mergeWorktree } from '../../worktree-metadata-merge'
+import { mergeWorktree } from '../metadata/worktree-metadata-merge'
 import { buildDisconnectedDetectedWorktrees } from './folder-workspace-catalog'
 import {
   createSshWorktreeMetaIndexForRepo,

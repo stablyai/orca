@@ -1,6 +1,6 @@
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import { matchesRecentTabSwitcherChord } from '../../../shared/keybindings/window-shortcut-policy'
-import { agentsScopeShortcutOwnsChord } from '../app-shell/agents-shortcut-handlers'
+import { agentsScopeShortcutOwnsChord } from '@/hooks/app-commands/agents-shortcut-handlers'
 
 /** Whether a surface other than the workspace tab handlers owns this chord, so those handlers leave it alone. */
 export function chordOwnedOutsideWorkspaceTabs(

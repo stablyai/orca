@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { useAppStore } from '@/store/index'
 import {
@@ -9,7 +10,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AiVaultSessionResumeTargetState } from '../session-actions/ai-vault-session-resume'
 
@@ -214,4 +215,15 @@ export function useAiVaultSessionHostRefreshEvents(
       document.removeEventListener('visibilitychange', onRefocus)
     }
   }, [refresh])
+
+  // Workspace cleanup can delete transcripts of deleted workspaces while this list is open.
+  useEffect(
+    () =>
+      onWorkspaceCleanupRunFinished(({ run }) => {
+        if ((run.chatHistory?.deleted ?? 0) > 0) {
+          void refresh({ background: true, force: false })
+        }
+      }),
+    [refresh]
+  )
 }

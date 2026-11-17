@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../src/shared/execution-host'
+} from '../../../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { cachedHostRepos } from '../../../host-screen/catalog/host-list-queries'
 import { listHostRepos } from '../../../worktree/repositories/server-repos'

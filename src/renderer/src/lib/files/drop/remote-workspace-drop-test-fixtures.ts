@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 

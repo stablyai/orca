@@ -2,7 +2,7 @@ import type { Repo } from '../../../../../src/shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../src/shared/execution-host'
+} from '../../../../../src/shared/execution-host/execution-host'
 import {
   getProjectIdentityKey,
   getProjectProviderIdentity

@@ -13,7 +13,7 @@ import {
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import {
   isHostIdentityContinued,

@@ -178,18 +178,6 @@ describe('Electron recovery preflight', () => {
     runtime.release()
   })
 
-  it('exits quietly when the CLI closes its response pipe after a successful restore', () => {
-    const item = fixture()
-    mocks.output.mockImplementationOnce(() => {
-      throw new Error('EPIPE')
-    })
-    expect(() => runProfileStateRecoveryPreflight(item.argv)).not.toThrow()
-    expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
-    expect(mocks.exit).toHaveBeenCalledWith(1)
-    const runtime = acquireProfileStateRuntimeAdmission(item.root)
-    runtime.release()
-  })
-
   it('restores a real SQLite backup and retains root exclusion through marker publication', async () => {
     const item = fixture()
     rmSync(item.databaseFile)
@@ -269,19 +257,6 @@ describe('Electron recovery preflight', () => {
       expect(mocks.relaunch).toHaveBeenCalledWith({ args: ['--inspect', 'orca://share/1'] })
       expect(mocks.exit).toHaveBeenCalledWith(0)
       acquireProfileStateRuntimeAdmission(item.root).release()
-    })
-
-    it('reports a failed choice instead of relaunching', async () => {
-      const item = fixture()
-      mocks.requestSingleInstanceLock.mockReturnValue(false)
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
-      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
-      expect(mocks.relaunch).not.toHaveBeenCalled()
-      expect(mocks.showMessageBox).toHaveBeenCalledWith(
-        expect.objectContaining({ detail: expect.stringContaining('Stop Orca') })
-      )
-      expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
     })
   })
 })

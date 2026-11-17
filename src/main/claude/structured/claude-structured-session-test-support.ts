@@ -9,17 +9,15 @@ import type {
 } from '../claude-stream-json-connection'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type {
-  ClaudeStructuredSessionAdapterDeps,
-  ClaudeStructuredSessionEvent
-} from './claude-structured-session-state'
+import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   type claudeInitialization,
   claudeInitializationScope,
   claudeStartupSettled
-} from './claude-structured-startup-settled-test-support'
+} from './startup/claude-structured-startup-settled-test-support'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 

@@ -3,7 +3,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Progress } from '@/components/ui/progress'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -59,9 +59,8 @@ function stripSentence(progress: AiVaultScanProgress, t: Translate = translate):
       )
     case 'finished':
       return t(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.scanned',
-        'Scanned {{value0}}',
-        { value0 }
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.historyRefreshed',
+        'History refreshed'
       )
   }
 }
@@ -87,7 +86,9 @@ function StripText({ progress, active }: StripActivity): React.JSX.Element {
   return (
     <span className="min-w-0 truncate">
       {before}
-      <span className="font-medium text-foreground">{emphasis}</span>
+      {progress.stage !== 'finished' && (
+        <span className="font-medium text-foreground">{emphasis}</span>
+      )}
       {after}
     </span>
   )

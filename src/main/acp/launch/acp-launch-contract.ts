@@ -1,5 +1,5 @@
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
@@ -105,6 +105,8 @@ export type AcpHostBackend = {
     /** The account type Orca's own Chat signs in with, saved on this host. */
     settings: AcpHostBackendSettings
   }): Promise<AgentSessionAccountHome | null>
+  /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
+  selectionRevision?(): number
 }
 
 export type AcpHostBackendSettings = Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
