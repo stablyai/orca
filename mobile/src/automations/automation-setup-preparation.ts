@@ -103,8 +103,8 @@ export async function prepareAutomationSetup(args: {
   const pinsEmptySetup = !setupTrust && details.value.setupConfig !== undefined
   if (decision !== 'run' || (!setupTrust && !pinsEmptySetup)) {
     return readRepoHooksSetupCommand(details.value)
-      ? { ...draft, setupDecision: decision ?? 'inherit' }
-      : { ...draft, setupDecision: 'inherit' }
+      ? { ...draft, setupDecision: decision ?? 'inherit', setupTrustHash: undefined }
+      : { ...draft, setupDecision: 'inherit', setupTrustHash: undefined }
   }
   // Trust can only be saved on a paired desktop; a runtime host never trusts the repo.
   let trust: PersistedTrustedOrcaHooks = {}
@@ -126,13 +126,13 @@ export async function prepareAutomationSetup(args: {
     // branch adds later is skipped for review instead of running unseen.
     if (isOrcaHookRepoTrusted(trust, repos, setup.repoId)) {
       return readRepoHooksSetupCommand(details.value)
-        ? { ...draft, setupDecision: 'run' }
-        : { ...draft, setupDecision: 'inherit' }
+        ? { ...draft, setupDecision: 'run', setupTrustHash: undefined }
+        : { ...draft, setupDecision: 'inherit', setupTrustHash: undefined }
     }
     return { ...draft, setupDecision: 'run', setupTrustHash: EMPTY_ORCA_HOOK_CONTENT_HASH }
   }
   if (isOrcaHookTrusted(trust, repos, setup.repoId, 'setup', setupTrust.contentHash)) {
-    return { ...draft, setupDecision: 'run' }
+    return { ...draft, setupDecision: 'run', setupTrustHash: undefined }
   }
   const approved = await args.confirm(
     {
@@ -152,5 +152,5 @@ export async function prepareAutomationSetup(args: {
   // A runtime host can't save repo trust, so later runs may only run the content approved here.
   return approved === 'run' && runtimeHost
     ? { ...draft, setupDecision: 'run', setupTrustHash: setupTrust.contentHash }
-    : { ...draft, setupDecision: approved }
+    : { ...draft, setupDecision: approved, setupTrustHash: undefined }
 }
