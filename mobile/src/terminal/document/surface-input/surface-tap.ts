@@ -20,6 +20,21 @@ export function notifyTerminalSurfaceTap(
   originY: number,
   focusKeyboard: boolean
 ) {
+  const cell = viewportToCell(scope, originX, originY)
+  const term = scope.term
+  if (cell && term) {
+    // An agent's `! command` row is one target; a link or path inside it must not win the tap.
+    const buffer = term.buffer.active
+    const command = findTerminalSuggestedCommand(
+      buffer,
+      cell.row + 1,
+      buffer.baseY + buffer.cursorY
+    )
+    if (command) {
+      notify(scope, { type: 'run-suggested-command', text: command.text })
+      return
+    }
+  }
   const tappedOscLink = oscLinkAtViewportPoint(scope, originX, originY)
   if (tappedOscLink && tappedOscLink.kind === 'file') {
     notify(scope, { type: 'terminal-file-tap', candidates: [tappedOscLink.fileTap] })
@@ -29,18 +44,10 @@ export function notifyTerminalSurfaceTap(
     notify(scope, { type: 'open-url', url: tappedOscLink.url })
     return
   }
-  const cell = viewportToCell(scope, originX, originY)
-  const term = scope.term
   if (cell && term) {
     // Desktop's link detectors take 1-based cells and rebuild rows that wrap.
     const position = { x: cell.col + 1, y: cell.row + 1 }
     const buffer = term.buffer.active
-    // An agent's `! command` row is one target; a URL or path inside it must not win the tap.
-    const command = findTerminalSuggestedCommand(buffer, position.y, buffer.baseY + buffer.cursorY)
-    if (command) {
-      notify(scope, { type: 'run-suggested-command', text: command.text })
-      return
-    }
     const url = findTerminalHttpLinkAtBufferPosition(buffer, position, term.cols)
     if (url) {
       notify(scope, { type: 'open-url', url })

@@ -32,7 +32,9 @@ function SuggestedCommandSheet(props: {
   return (
     <ActionSheetModal
       visible={visible}
-      title={text}
+      title={t('session.suggestedCommandSheet.title', 'Run this command?')}
+      // The title clips to one line; the message wraps, so every argument is read before Run.
+      message={text}
       actions={[
         {
           id: 'runCommand',

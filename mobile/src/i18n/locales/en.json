@@ -3018,6 +3018,7 @@
       "hint": "Shows all tabs"
     },
     "suggestedCommandSheet": {
+      "title": "Run this command?",
       "run": "Run in this terminal",
       "copy": "Copy command"
     }
