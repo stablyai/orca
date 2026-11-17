@@ -10,6 +10,7 @@ import {
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
 import {
   isAgentHookSource,
   type AgentHookSource
@@ -117,10 +118,23 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
+  /** Never scans a transcript on the event loop: a skipped Stop-text read comes back as a path. */
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
     isReplay = false
+  ): NormalizedLocalHook {
+    const { value, skipped } = withStopTranscriptReadsSkipped(() =>
+      this.normalizeLocalHookPayloadNow(source, body, isReplay)
+    )
+    const stopTranscriptPath = skipped.at(-1)
+    return stopTranscriptPath ? { ...value, stopTranscriptPath } : value
+  }
+
+  private normalizeLocalHookPayloadNow(
+    source: AgentHookSource,
+    body: unknown,
+    isReplay: boolean
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
@@ -227,7 +241,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    if (enriched && normalized.stopTranscriptPath) {
+      this.readStopTextFromTranscript(enriched, normalized.stopTranscriptPath)
+    }
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

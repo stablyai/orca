@@ -129,6 +129,12 @@ export abstract class AgentHookServerStateContract {
     discoveryReady?: boolean
   ): void
 
+  protected abstract readStopTextFromTranscript(
+    original: EnrichedAgentHookEventPayload,
+    transcriptPath: string,
+    attempt?: number
+  ): void
+
   protected abstract applyAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,

@@ -183,7 +183,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
             this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+            if (normalized.stopTranscriptPath) {
+              this.readStopTextFromTranscript(enriched, normalized.stopTranscriptPath)
+            } else {
+              this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+            }
             this.scheduleTranscriptPoll(source, aliasedBody, enriched)
           }
         }
