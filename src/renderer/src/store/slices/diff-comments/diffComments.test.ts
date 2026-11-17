@@ -2,6 +2,7 @@ import type { AppState } from '../../types'
 import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import { mergeDiffCommentMutation } from '../../../../../shared/file-review/diff-comment-mutation'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/execution-host/host-authority'
 import {
@@ -246,6 +247,34 @@ describe('worktree diff comment rollback convergence', () => {
     ])
     expect(updateMeta).toHaveBeenCalledTimes(2)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
+  })
+})
+
+describe('desktop note writes beside another device', () => {
+  it('keeps a note another device saved after this desktop last loaded the list', async () => {
+    vi.clearAllMocks()
+    const store = createTestStore()
+    const mine = makeComment({ id: 'mine', body: 'desktop note' })
+    seed(store, [mine])
+    let hostNotes: DiffComment[] = [mine, makeComment({ id: 'phone', body: 'phone note' })]
+    updateMeta.mockImplementation(
+      async ({
+        updates
+      }: {
+        updates: { diffComments: DiffComment[]; diffCommentsBase?: DiffComment[] }
+      }) => {
+        hostNotes = updates.diffCommentsBase
+          ? mergeDiffCommentMutation(updates.diffCommentsBase, hostNotes, updates.diffComments)
+          : updates.diffComments
+        return {}
+      }
+    )
+
+    expect(
+      await store.getState().updateDiffComment(capturedOwner(store, WT), 'mine', 'edited')
+    ).toBe(true)
+
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['edited', 'phone note'])
   })
 })
 
