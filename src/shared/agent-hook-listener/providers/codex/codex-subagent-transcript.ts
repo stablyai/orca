@@ -1,6 +1,7 @@
 import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 
 import {
+  closeJsonlCursor,
   readJsonlCursor,
   readTranscriptDirectory,
   record,
@@ -231,6 +232,14 @@ export function reconcileCodexSubagentTranscript(
       finishCodexSubagent(roster, id)
     }
     changed = true
+    // Release the predecessor session's held descriptors before the cursors are replaced.
+    closeJsonlCursor(state.parent)
+    for (const tracked of state.subagents.values()) {
+      closeJsonlCursor(tracked)
+    }
+    for (const reviewerCursor of state.reviewerCursorsByPath.values()) {
+      closeJsonlCursor(reviewerCursor)
+    }
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.rootTurn = { interrupted: false }
     state.turnEnds.clear()
@@ -273,7 +282,7 @@ export function reconcileCodexSubagentTranscript(
     }
     if (activity.kind === 'interrupted') {
       finishCodexSubagent(roster, activity.id)
-      state.subagents.delete(activity.id)
+      closeTrackedCursor(state, activity.id)
       continue
     }
     const tracked = state.subagents.get(activity.id) ?? {
@@ -325,7 +334,30 @@ export function reconcileCodexSubagentTranscript(
     }
     changed = true
     finishCodexSubagent(roster, id)
-    state.subagents.delete(id)
+    closeTrackedCursor(state, id)
   }
   return changed
+}
+
+/** Drop a finished child's cursor and its held descriptor together. */
+function closeTrackedCursor(
+  state: CodexSubagentTranscriptState,
+  id: string
+): void {
+  const tracked = state.subagents.get(id)
+  state.subagents.delete(id)
+  if (tracked) {
+    closeJsonlCursor(tracked)
+  }
+}
+
+/** Release every descriptor a transcript state holds; call before discarding the state. */
+export function closeCodexTranscriptCursors(state: CodexSubagentTranscriptState): void {
+  closeJsonlCursor(state.parent)
+  for (const tracked of state.subagents.values()) {
+    closeJsonlCursor(tracked)
+  }
+  for (const reviewerCursor of state.reviewerCursorsByPath.values()) {
+    closeJsonlCursor(reviewerCursor)
+  }
 }

@@ -31,6 +31,8 @@ import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readString } from '../../tool-input-preview'
 import { applyCodexSessionStart } from './codex-session-start'
+import { closeJsonlCursor } from './codex-rollout-jsonl-cursor'
+import { closeCodexTranscriptCursors } from './codex-subagent-transcript'
 import {
   codexHookEventState,
   codexMainAgentStatusForPayload,
@@ -136,7 +138,12 @@ export function normalizeCodexSubagentLifecycleEvent(
     }
   } else {
     finishCodexSubagent(roster, agentId)
-    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.delete(agentId)
+    const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+    const tracked = transcriptState?.subagents.get(agentId)
+    transcriptState?.subagents.delete(agentId)
+    if (tracked) {
+      closeJsonlCursor(tracked)
+    }
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
@@ -199,7 +206,11 @@ export function normalizeCodexEvent(
   if (eventName === 'SessionStart' && !agentId) {
     // New processes must not retain children whose Stop hooks were lost.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
+    const priorTranscript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+    if (priorTranscript) {
+      closeCodexTranscriptCursors(priorTranscript)
+    }
   }
   if (agentId && transcriptPath && eventName === 'PermissionRequest') {
     const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)

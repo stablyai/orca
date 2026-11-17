@@ -19,6 +19,38 @@ export type JsonlCursor = {
   carry: string
 }
 
+// Re-opening a hot transcript on every poll re-triggers open-time scanning on Windows and stalls
+// the main thread for seconds (#43539); one held descriptor per cursor reads new bytes instead.
+const cursorFileDescriptors = new WeakMap<JsonlCursor, number>()
+
+/** Release a cursor's held descriptor; safe for never-read cursors and already-closed ones. */
+export function closeJsonlCursor(cursor: JsonlCursor): void {
+  const fd = cursorFileDescriptors.get(cursor)
+  if (fd !== undefined) {
+    cursorFileDescriptors.delete(cursor)
+    closeSync(fd)
+  }
+}
+
+/** Read through one held descriptor per cursor, reopening only after the handle went stale. */
+function readCursorBytes(cursor: JsonlCursor, buffer: Buffer, start: number): number {
+  let fd = cursorFileDescriptors.get(cursor)
+  try {
+    if (fd === undefined) {
+      fd = openSync(cursor.filePath as string, 'r')
+      cursorFileDescriptors.set(cursor, fd)
+    }
+    return readSync(fd, buffer, 0, buffer.length, start)
+  } catch (error) {
+    // A held handle can go stale (recreated or removed file); drop it so the next poll reopens.
+    if (fd !== undefined) {
+      cursorFileDescriptors.delete(cursor)
+      closeSync(fd)
+    }
+    throw error
+  }
+}
+
 export type JsonRecord = Record<string, unknown>
 
 export function record(value: unknown): JsonRecord | undefined {
@@ -78,6 +110,8 @@ export function readJsonlCursor(
     return undefined
   }
   if (stats.size < cursor.offset) {
+    // A smaller file is a recreated one; its held descriptor (if any) names the old inode.
+    closeJsonlCursor(cursor)
     cursor.offset = 0
     cursor.carry = ''
   }
@@ -87,17 +121,11 @@ export function readJsonlCursor(
   const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
   const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
   const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
-  let fd: number | undefined
+  let bytesRead: number
   try {
-    fd = openSync(cursor.filePath, 'r')
-    bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
+    bytesRead = readCursorBytes(cursor, buffer, start)
   } catch {
     return undefined
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
   }
   const skippedPrefix = start !== cursor.offset
   const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`

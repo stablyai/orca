@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import { closeJsonlCursor, readJsonlCursor, type JsonlCursor } from './codex-rollout-jsonl-cursor'
 
 const directories: string[] = []
 
@@ -44,4 +45,41 @@ for (const path of ${JSON.stringify([fifo, link, directory])}) {
       expect(result.code, result.stderr).toBe(0)
     }
   )
+})
+
+describe('readJsonlCursor held descriptor', () => {
+  const rollout = (): { directory: string; path: string; cursor: JsonlCursor } => {
+    const directory = mkdtempSync(join(tmpdir(), 'codex-rollout-cursor-'))
+    directories.push(directory)
+    const path = join(directory, 'rollout.jsonl')
+    writeFileSync(path, '{"a":1}\n')
+    return { directory, path, cursor: { filePath: path, offset: 0, carry: '' } }
+  }
+
+  it('reads appended lines across successive polls on one cursor', () => {
+    const { path, cursor } = rollout()
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 1 }])
+    expect(readJsonlCursor(cursor)).toEqual([])
+    appendFileSync(path, '{"a":2}\n')
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 2 }])
+    appendFileSync(path, '{"a":3}\n')
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 3 }])
+  })
+
+  it('resets and keeps reading when the file is recreated smaller', () => {
+    const { path, cursor } = rollout()
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 1 }])
+    // Shorter than the consumed offset, so the cursor must treat it as a recreated file.
+    writeFileSync(path, '{}\n')
+    expect(readJsonlCursor(cursor)).toEqual([{}])
+  })
+
+  it('reopens after closeJsonlCursor releases the descriptor', () => {
+    const { path, cursor } = rollout()
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 1 }])
+    closeJsonlCursor(cursor)
+    closeJsonlCursor(cursor)
+    appendFileSync(path, '{"a":2}\n')
+    expect(readJsonlCursor(cursor)).toEqual([{ a: 2 }])
+  })
 })

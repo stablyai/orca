@@ -8,6 +8,7 @@ import {
 } from '../../../agent-status/identity/agent-status-terminal-owner'
 import type { AgentLeadStatusResolution } from '../../../agent-status/lifecycle/agent-lead-status-fold'
 import { codexRosterToSnapshots, type CodexSubagentRoster } from './codex-subagent-roster'
+import { closeCodexTranscriptCursors } from './codex-subagent-transcript'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import {
@@ -36,7 +37,11 @@ export function previousCodexTurnContext<T extends AgentHookEventPayload>(
 function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  if (transcriptState) {
+    closeCodexTranscriptCursors(transcriptState)
+  }
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 

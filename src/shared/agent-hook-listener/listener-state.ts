@@ -13,6 +13,8 @@ import type { ClaudeLaunchedBackgroundTasks } from './providers/claude/backgroun
 import type { ClaudeSubagentRoster } from './providers/claude/lifecycle/claude-subagent-roster'
 import type { ClaudeToolRequest } from './claude-tool-request-identity'
 import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
+import { closeCodexTranscriptCursors } from './providers/codex/codex-subagent-transcript'
+import { closeJsonlCursor } from './providers/codex/codex-rollout-jsonl-cursor'
 import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
 import type { MusePaneState } from './providers/muse/muse-pane-state'
@@ -229,7 +231,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  closeCodexTranscriptStateCursors(state, paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
@@ -237,7 +239,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.grokBackgroundTasksByPaneKey.delete(paneKey)
-  state.musePaneStateByPaneKey.delete(paneKey)
+  closeMusePaneLogCursor(state, paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
@@ -348,4 +350,22 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.hermesTurnByPaneKey.clear()
   state.dshChildSessionIdsByPaneKey.clear()
   state.hookRootAttempts.clear()
+}
+
+/** Drop a pane's codex transcript state and release its held rollout descriptors. */
+function closeCodexTranscriptStateCursors(state: HookListenerState, paneKey: string): void {
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  if (transcriptState) {
+    closeCodexTranscriptCursors(transcriptState)
+  }
+}
+
+/** Drop a pane's Muse state and release its session-log descriptor. */
+function closeMusePaneLogCursor(state: HookListenerState, paneKey: string): void {
+  const muse = state.musePaneStateByPaneKey.get(paneKey)
+  state.musePaneStateByPaneKey.delete(paneKey)
+  if (muse?.log) {
+    closeJsonlCursor(muse.log.cursor)
+  }
 }
