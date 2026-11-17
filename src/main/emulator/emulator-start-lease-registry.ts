@@ -92,7 +92,12 @@ export class EmulatorStartLeaseRegistry {
         }
       })
     )
-      .then(() => undefined)
+      .then((results) => {
+        const failure = results.find((result) => result.status === 'rejected')
+        if (failure?.status === 'rejected') {
+          throw failure.reason
+        }
+      })
       .finally(() => this.cleanupByBackend.delete(backend))
     this.cleanupByBackend.set(backend, cleanup)
     await cleanup

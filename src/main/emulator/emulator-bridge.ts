@@ -239,22 +239,31 @@ export class EmulatorBridge {
   }
 
   async kill(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
-    await backend.stopHelperForDevice(udid, {
-      helperPid: this.sessionRegistry.getSession(udid)?.pid,
-      includeOrphaned: true
-    })
-    this.sessionRegistry.clearSessionAndWorktrees(udid)
-    return udid
+    return this.stopTarget(device, worktreeId, false)
   }
 
   async shutdown(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
+    return this.stopTarget(device, worktreeId, true)
+  }
+
+  private async stopTarget(
+    device: string | undefined,
+    worktreeId: string | undefined,
+    shutdown: boolean
+  ): Promise<string> {
+    const target = await this.resolveTarget({ device, worktreeId })
+    const backend = target.backend
+    const udid = await backend.resolveDeviceId(target.device)
+    if (!device && worktreeId) {
+      return (await this.stopActiveForWorktree(worktreeId, { shutdownDevice: shutdown })) ?? udid
+    }
     await backend.stopHelperForDevice(udid, {
       helperPid: this.sessionRegistry.getSession(udid)?.pid,
       includeOrphaned: true
     })
-    await backend.shutdownDevice(udid)
+    if (shutdown) {
+      await backend.shutdownDevice(udid)
+    }
     this.sessionRegistry.clearSessionAndWorktrees(udid)
     return udid
   }
@@ -276,8 +285,8 @@ export class EmulatorBridge {
       promises.push(
         backend
           .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
+          .then(() => backend.shutdownDevice(session.deviceUdid))
           .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
       )
     }
     await Promise.allSettled(promises)
@@ -302,18 +311,6 @@ export class EmulatorBridge {
       'emulator_no_active',
       'No active emulator for this worktree — use orca emulator attach or open the pane'
     )
-  }
-
-  private async resolveStopTarget(
-    device?: string,
-    worktreeId?: string
-  ): Promise<{ backend: EmulatorBackend; udid: string }> {
-    if (device) {
-      const backend = await this.backendForDevice(device)
-      return { backend, udid: await backend.resolveDeviceId(device) }
-    }
-    const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
-    return { backend, udid: await backend.resolveDeviceId(resolved) }
   }
 
   private backendForKind(kind: EmulatorBackendKind): EmulatorBackend | null {

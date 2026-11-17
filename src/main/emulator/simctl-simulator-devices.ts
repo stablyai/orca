@@ -3,7 +3,6 @@ import type { ExecFileException } from 'node:child_process'
 import { platform } from 'node:os'
 import { EmulatorError } from './emulator-errors'
 import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
-import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
 
 export type SimulatorDevice = {
   name: string
@@ -93,42 +92,28 @@ export async function listSimulatorDevices(): Promise<SimulatorDevice[]> {
   })
 }
 
-export async function resolveSimulatorUdid(
-  deviceOrName: string,
-  serveSimExecutable: ServeSimExecutable
-): Promise<string> {
+export async function resolveSimulatorUdid(deviceOrName: string): Promise<string> {
   if (UDID_RE.test(deviceOrName)) {
     return deviceOrName
   }
-  try {
-    const devices = await listSimulatorDevices()
-    const needle = deviceOrName.toLowerCase()
-    // An exact name wins so `iPhone 17` cannot resolve to an earlier `iPhone 17e`.
-    const match =
-      devices.find((device) => device.name.toLowerCase() === needle) ??
-      devices.find(
-        (device) => device.name.toLowerCase().includes(needle) || device.udid === deviceOrName
-      )
-    if (match) {
-      return match.udid
-    }
-  } catch {
-    // serve-sim --list resolves names in some paths; use it as a last fallback.
+  const devices = await listSimulatorDevices().catch(() => {
+    throw new EmulatorError(
+      'emulator_simctl_unavailable',
+      'Cannot resolve a simulator name without a device inventory; specify its UDID.'
+    )
+  })
+  const needle = deviceOrName.toLowerCase()
+  const exact = devices.filter((device) => device.name.toLowerCase() === needle)
+  const matches = exact.length
+    ? exact
+    : devices.filter((device) => device.name.toLowerCase().includes(needle))
+  if (matches.length > 1) {
+    throw new EmulatorError(
+      'emulator_device_not_found',
+      `Multiple simulators match "${deviceOrName}"; select a UDID.`
+    )
   }
-
-  try {
-    const raw = await execServeSimCommand(serveSimExecutable, ['--list', '-q'], {
-      json: true,
-      timeoutMs: 10_000
-    })
-    if (raw && typeof raw === 'object') {
-      const device = (raw as { device?: unknown }).device
-      if (typeof device === 'string' && device.toLowerCase().includes(deviceOrName.toLowerCase())) {
-        return device
-      }
-    }
-  } catch {}
-  return deviceOrName
+  return matches[0]?.udid ?? deviceOrName
 }
 
 export async function ensureSimulatorBooted(udid: string): Promise<void> {

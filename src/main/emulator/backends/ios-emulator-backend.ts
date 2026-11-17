@@ -13,20 +13,15 @@ import {
   execServeSimCommand,
   parseServeSimCommandArgs,
   resolveServeSimExecutable,
-  serveSimKillArgs,
   stripEmulatorTargetArgs,
   type ServeSimExecutable
 } from '../serve-sim-execution'
 import { waitForServeSimEndpointReady } from '../serve-sim-endpoint-readiness'
-import {
-  killServeSimHelperProcessesForDevice,
-  listServeSimHelperProcessesForDevice
-} from '../serve-sim-helper-processes'
+import { listServeSimHelperProcessesForDevice } from '../serve-sim-helper-processes'
+import { ServeSimOwnedSessions } from '../serve-sim-owned-session'
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
-import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
-import { hideNativeSimulatorApp } from '../simulator-app-visibility'
 import { assertSimulatorInputNotShadowedByDeviceHub } from '../simulator-device-hub-input'
 import type {
   BackendAvailability,
@@ -46,6 +41,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     logcat: false
   }
 
+  private readonly sessions = new ServeSimOwnedSessions()
   private cachedServeSimExecutable: ServeSimExecutable | undefined
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
@@ -64,7 +60,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async resolveDeviceId(deviceOrName: string): Promise<string> {
-    return resolveSimulatorUdid(deviceOrName, this.serveSimExecutable)
+    return resolveSimulatorUdid(deviceOrName)
   }
 
   async ownsDevice(id: string): Promise<boolean> {
@@ -129,7 +125,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
-    await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid])
+    await this.execForDevice(udid, ['tap', x.toString(), y.toString(), '-d', udid])
   }
 
   async gesture(
@@ -144,33 +140,42 @@ export class IosEmulatorBackend implements EmulatorBackend {
       throw new EmulatorError('emulator_no_active', 'No active emulator stream for gesture input')
     }
     await assertSimulatorInputNotShadowedByDeviceHub(deviceId)
+    if (!this.sessions.ownsEndpoint(deviceId, wsUrl)) {
+      throw new EmulatorError(
+        'emulator_no_active',
+        'Simulator gesture session is no longer active.'
+      )
+    }
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
   async type(deviceId: string, text: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
-    await this.execServeSim(['type', text, '-d', udid])
+    await this.execForDevice(udid, ['type', text, '-d', udid])
   }
 
   async button(deviceId: string, name: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['button', name, '-d', udid])
+    await this.execForDevice(udid, ['button', name, '-d', udid])
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
-    await this.execServeSim(['rotate', orientation, '-d', udid])
+    await this.execForDevice(udid, ['rotate', orientation, '-d', udid])
   }
 
   async exec(deviceId: string, command: string): Promise<unknown> {
     const udid = await this.resolveDeviceId(deviceId)
     const rawArgs = stripEmulatorTargetArgs(parseServeSimCommandArgs(command.trim()))
-    return this.execServeSim([...rawArgs, '-d', udid], { json: true })
+    if (!rawArgs[0] || rawArgs[0].startsWith('-')) {
+      throw new EmulatorError('emulator_error', 'Expected a device-scoped serve-sim command.')
+    }
+    return this.execForDevice(udid, [...rawArgs, '-d', udid], { json: true })
   }
 
-  async accessibilityTree(_deviceId: string, axUrl?: string): Promise<unknown> {
-    if (!axUrl) {
+  async accessibilityTree(deviceId: string, axUrl?: string): Promise<unknown> {
+    if (!axUrl || !this.sessions.ownsEndpoint(deviceId, axUrl)) {
       throw new EmulatorError(
         'emulator_no_active',
         'No active iOS emulator AX endpoint — attach the simulator first.'
@@ -181,81 +186,31 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
     const udid = await this.resolveDeviceId(deviceId)
-    await ensureSimulatorBooted(udid)
-    const startDetachedHelper = async (): Promise<EmulatorSessionInfo> => {
-      const raw = await this.execServeSim(['--detach', '-q', udid], { json: true })
-      return parseServeSimDetachedSession(raw, udid)
-    }
-
-    const waitForReadyOrKill = async (info: EmulatorSessionInfo): Promise<boolean> => {
-      if (
-        (await this.waitForEndpointReady(info.streamUrl)) &&
-        (await this.hasHelperForSession(info))
-      ) {
-        return true
-      }
-      await this.stopHelperForDevice(info.deviceUdid, {
-        helperPid: info.helperPid,
-        includeOrphaned: true
-      })
-      return false
-    }
-
-    const throwPersistentMissingFramebuffer = (error: EmulatorError): never => {
-      throw new EmulatorError(
-        'emulator_helper_failed',
-        `Simulator ${udid} keeps booting without a working display (no framebuffer descriptor), even after a reboot. Erase it with \`xcrun simctl erase ${udid}\` or recreate it in Xcode > Window > Devices and Simulators.\n\n${error.message}`
-      )
-    }
-
-    // CoreSimulator can report Booted without framebuffer ports; retry once after shutdown/boot.
-    let didRecycleWedgedBoot = false
-    const startHelperRecyclingWedgedBoot = async (): Promise<EmulatorSessionInfo> => {
-      try {
-        return await startDetachedHelper()
-      } catch (error) {
-        if (!isMissingFramebufferError(error)) {
-          throw error
-        }
-        if (didRecycleWedgedBoot) {
-          return throwPersistentMissingFramebuffer(error)
-        }
-        didRecycleWedgedBoot = true
-        await shutdownSimulatorDevice(udid)
-        await ensureSimulatorBooted(udid)
-        try {
-          return await startDetachedHelper()
-        } catch (retryError) {
-          if (!isMissingFramebufferError(retryError)) {
-            throw retryError
-          }
-          return throwPersistentMissingFramebuffer(retryError)
-        }
-      }
-    }
-
-    let info = await startHelperRecyclingWedgedBoot()
-    if (!(await waitForReadyOrKill(info))) {
-      info = await startHelperRecyclingWedgedBoot()
-      if (!(await waitForReadyOrKill(info))) {
+    const info = await this.sessions.start(udid, this.serveSimExecutable, async () => {
+      const existing = await listServeSimHelperProcessesForDevice(udid, { includeOrphaned: true })
+      if (existing.length > 0) {
         throw new EmulatorError(
           'emulator_helper_failed',
-          emulatorFailureText('serveSimEndpointUnreachable')
+          `Simulator ${udid} already has an external serve-sim helper.`
         )
       }
+      await ensureSimulatorBooted(udid)
+    })
+    if (!(await this.waitForEndpointReady(info.streamUrl))) {
+      await this.sessions.stop(udid, info.helperPid)
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        emulatorFailureText('serveSimEndpointUnreachable')
+      )
     }
-    // Keep the native Simulator window hidden while Orca embeds its stream.
-    await hideNativeSimulatorApp().catch(() => {})
-    return { ...info, streamCodec: 'mjpeg', backend: 'ios' }
+    return info
   }
 
   async stopHelperForDevice(
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
-    await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
-    // Stale helpers can outlive the state file that serve-sim --kill relies on.
-    await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})
+    await this.sessions.stop(deviceId, options.helperPid)
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {
@@ -263,23 +218,22 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async isSessionReusable(info: EmulatorSessionInfo): Promise<boolean> {
-    if (!(await this.waitForEndpointReady(info.streamUrl))) {
+    try {
+      return this.sessions.owns(info) && (await this.waitForEndpointReady(info.streamUrl))
+    } catch {
       return false
     }
-    return this.hasHelperForSession(info)
   }
 
-  private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {
-    try {
-      const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
-        helperPid: info.helperPid,
-        includeOrphaned: info.helperPid === undefined
-      })
-      return helpers.length > 0
-    } catch {
-      // Endpoint readiness already proves the helper is serving; never recycle it on a failed ps read.
-      return true
-    }
+  private async execForDevice(
+    udid: string,
+    args: string[],
+    options?: { json?: boolean; timeoutMs?: number }
+  ): Promise<unknown> {
+    return execServeSimCommand(this.serveSimExecutable, args, {
+      ...options,
+      stateRoot: this.sessions.stateRoot(udid)
+    })
   }
 
   private async execServeSim(
@@ -288,16 +242,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
   ): Promise<unknown> {
     return execServeSimCommand(this.serveSimExecutable, args, options)
   }
-}
-
-const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
-
-function isMissingFramebufferError(error: unknown): error is EmulatorError {
-  return (
-    error instanceof EmulatorError &&
-    error.code === 'emulator_error' &&
-    MISSING_FRAMEBUFFER_RE.test(error.message)
-  )
 }
 
 function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {

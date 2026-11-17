@@ -48,7 +48,7 @@ function ensureMacOpenShim(): string | null {
   }
 }
 
-function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
+export function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = executable.usesElectronAsNode
     ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
     : { ...process.env }
@@ -180,7 +180,7 @@ function serveSimFailureMessage(output: string): string {
 export async function execServeSimCommand(
   executable: ServeSimExecutable,
   args: string[],
-  options?: { json?: boolean; timeoutMs?: number }
+  options?: { json?: boolean; timeoutMs?: number; stateRoot?: string }
 ): Promise<unknown> {
   const timeout = options?.timeoutMs ?? EXEC_TIMEOUT_MS
   const finalArgs = [...args]
@@ -193,7 +193,10 @@ export async function execServeSimCommand(
     result = await runProcess({
       program: executable.command,
       args: [...executable.baseArgs, ...finalArgs],
-      env: getServeSimEnv(executable),
+      env: {
+        ...getServeSimEnv(executable),
+        ...(options?.stateRoot ? { TMPDIR: options.stateRoot } : {})
+      },
       maxOutputBytes: 10 * 1024 * 1024,
       timeoutMs: timeout
     })

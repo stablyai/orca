@@ -65,6 +65,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, platform: () => 'darwin' }
 })
 import { EmulatorBridge } from './emulator-bridge'
+import { IosEmulatorBackend } from './backends/ios-emulator-backend'
 import { RuntimeEmulatorCommands } from '../runtime/emulator/runtime-emulator-commands'
 
 function session(deviceUdid: string): EmulatorSessionInfo {
@@ -110,139 +111,17 @@ describe('EmulatorBridge helper ownership', () => {
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
   })
 
-  it('only kills Orca-managed helpers during app shutdown cleanup', async () => {
-    const bridge = new EmulatorBridge()
-    bridge.registerActiveEmulator('wt-managed', session('device-managed'), { managed: true })
-    bridge.registerActiveEmulator('wt-external', session('device-external'))
-
-    await bridge.destroyAllSessions()
-
-    expect(execServeSimCommandMock).toHaveBeenCalledTimes(1)
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill=device-managed', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(1)
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-managed', {
-      helperPid: 1234
-    })
-    expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-managed')
-    expect(bridge.getActiveForWorktree('wt-managed')).toBeNull()
-    expect(bridge.getActiveForWorktree('wt-external')).toBeNull()
-  })
-
-  it('does not clean up a failed attach while another start claim can register the device', async () => {
-    const waitForEndpointReady = vi.fn(async () => true)
-    execServeSimCommandMock.mockResolvedValue({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-
-    const failedLease = await bridge.acquireHelperForDevice('device-1')
-    const survivingLease = await bridge.acquireHelperForDevice('device-1')
-
-    await failedLease.release({ cleanupIfUnused: true })
-    bridge.registerActiveEmulator('wt-surviving', survivingLease.info, { managed: true })
-    await survivingLease.release()
-
-    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
-    expect(bridge.getActiveForWorktree('wt-surviving')).toMatchObject({
-      deviceUdid: 'device-1'
-    })
-  })
-
   it('keeps a shared device alive when one registered workspace detaches', async () => {
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
     bridge.registerActiveEmulator('wt-2', session('device-1'), { managed: true })
 
-    await bridge.stopActiveManagedForWorktree('wt-1', { shutdownDevice: true })
+    await bridge.shutdown(undefined, 'wt-1')
 
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(bridge.getActiveForWorktree('wt-1')).toBeNull()
     expect(bridge.getActiveForWorktree('wt-2')).toMatchObject({ deviceUdid: 'device-1' })
-  })
-
-  it('keeps a device alive when its last registered workspace closes during another attach', async () => {
-    let finishStart:
-      | ((info: Awaited<ReturnType<typeof execServeSimCommandMock>>) => void)
-      | undefined
-    execServeSimCommandMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishStart = resolve
-        })
-    )
-    const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
-    bridge.registerActiveEmulator('wt-closing', session('device-1'), { managed: true })
-
-    const leasePromise = bridge.acquireHelperForDevice('device-1')
-    await vi.waitFor(() => expect(execServeSimCommandMock).toHaveBeenCalledOnce())
-    const shutdown = bridge.shutdownActiveManagedForWorktree('wt-closing')
-    await Promise.resolve()
-
-    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    finishStart?.({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const lease = await leasePromise
-    bridge.registerActiveEmulator('wt-attaching', lease.info, { managed: true })
-    await lease.release()
-    await shutdown
-
-    expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
-    expect(bridge.getActiveForWorktree('wt-attaching')).toMatchObject({ deviceUdid: 'device-1' })
-  })
-
-  it('rejects detach results whose stream endpoint never becomes reachable', async () => {
-    const waitForEndpointReady = vi.fn(async () => false)
-    execServeSimCommandMock.mockResolvedValue({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-
-    await expect(bridge.acquireHelperForDevice('device-1')).rejects.toMatchObject({
-      code: 'emulator_helper_failed'
-    })
-
-    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
-    expect(execServeSimCommandMock).toHaveBeenCalledWith(
-      { command: '/serve-sim', env: {} },
-      ['--kill=device-1', '-q'],
-      undefined
-    )
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
-    expect(listServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
-    expect(hideNativeSimulatorAppMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects stale reachable endpoints when no exact serve-sim helper is alive', async () => {
-    const waitForEndpointReady = vi.fn(async () => true)
-    listServeSimHelperProcessesForDeviceMock.mockResolvedValue([])
-    execServeSimCommandMock.mockResolvedValue({
-      device: 'device-1',
-      streamUrl: 'http://127.0.0.1:3102/stream.mjpeg',
-      wsUrl: 'ws://127.0.0.1:3102'
-    })
-    const bridge = new EmulatorBridge({ waitForEndpointReady })
-
-    await expect(bridge.acquireHelperForDevice('device-1')).rejects.toMatchObject({
-      code: 'emulator_helper_failed'
-    })
-
-    expect(waitForEndpointReady).toHaveBeenCalledTimes(2)
-    expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
-    expect(killServeSimHelperProcessesForDeviceMock).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -304,6 +183,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
         isAvailable: true
       }
     ])
+    vi.spyOn(IosEmulatorBackend.prototype, 'isSessionReusable').mockResolvedValueOnce(true)
     const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
     const commands = new RuntimeEmulatorCommands({

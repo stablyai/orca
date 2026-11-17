@@ -94,4 +94,14 @@ describe('EmulatorStartLeaseRegistry', () => {
     expect(stopHelperForDevice).toHaveBeenCalledOnce()
     expect(shutdownDevice).toHaveBeenCalledOnce()
   })
+
+  it('reports a helper stop failure and does not shut down its device', async () => {
+    const { backend, stopHelperForDevice, shutdownDevice } = makeBackend()
+    stopHelperForDevice.mockRejectedValueOnce(new Error('ownership lost'))
+    const registry = new EmulatorStartLeaseRegistry()
+    const lease = await registry.acquire(backend, 'Pixel_Tablet', () => false)
+
+    await expect(lease.release({ cleanupIfUnused: true })).rejects.toThrow('ownership lost')
+    expect(shutdownDevice).not.toHaveBeenCalled()
+  })
 })
