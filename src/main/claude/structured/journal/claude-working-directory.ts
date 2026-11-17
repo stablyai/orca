@@ -8,9 +8,23 @@ import {
 
 type WorktreeCall = { name: 'EnterWorktree' | 'ExitWorktree'; input: unknown }
 
-// An absolute host path into Claude Code's worktree folder, POSIX or Windows.
-const WORKTREE_PATH_IN_TEXT =
-  /(?:[A-Za-z]:)?[\\/][^\s'"`<>|]*?[\\/]\.claude[\\/]worktrees[\\/][A-Za-z0-9._\-\\/]+/
+// Claude Code's worktree folder; the path before it may hold spaces (`/Users/Jane Doe/...`).
+const WORKTREE_MARKER = /[\\/]\.claude[\\/]worktrees[\\/][A-Za-z0-9._\-\\/]+/
+// An absolute path start (POSIX, drive or UNC) at a line start or after whitespace, a quote or `(`.
+const PATH_START = /(?<=^|[\s'"`(])(?:[A-Za-z]:)?[\\/]/gm
+
+/** The absolute worktree path named in tool output: the marker plus its nearest path start. */
+function worktreePathInText(output: string): string | null {
+  const marker = WORKTREE_MARKER.exec(output)
+  if (!marker) {
+    return null
+  }
+  const start = [...output.slice(0, marker.index).matchAll(PATH_START)].at(-1)?.index
+  if (start === undefined) {
+    return null
+  }
+  return output.slice(start, marker.index + marker[0].length).replace(/[.,;:)]+$/, '')
+}
 
 function isAbsoluteHostPath(path: string): boolean {
   return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
@@ -31,8 +45,7 @@ function enteredWorktree(input: unknown, output: string, structured: unknown): s
   if (fromResult) {
     return fromResult
   }
-  const inText = WORKTREE_PATH_IN_TEXT.exec(output)?.[0].replace(/[.,;:)]+$/, '')
-  return inText ?? absolutePath(claudeRecord(input)?.path)
+  return worktreePathInText(output) ?? absolutePath(claudeRecord(input)?.path)
 }
 
 /**

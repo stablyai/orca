@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatWorkingLocationLabel } from './NativeChatWorkingLocationLabel'
+import type { NativeChatWorkingLocation } from './native-chat-working-location'
 
 const HEADER_STYLE: React.CSSProperties & Record<'--orca-pane-title-bg', string> = {
   position: 'relative',
@@ -22,26 +23,36 @@ function Header({ children }: { children: React.ReactNode }): React.JSX.Element 
   )
 }
 
+const WORKTREE: NativeChatWorkingLocation = {
+  kind: 'worktree',
+  worktreeId: 'fixture-worktree',
+  repoId: 'fixture-repo',
+  hostId: undefined,
+  path: '/repo/.claude/worktrees/fix-login',
+  displayName: 'fix-login',
+  branch: 'worktree-fix-login',
+  hidden: true
+}
+
 export const worktree = defineFixture({
   width: 560,
   render: () => (
     <Header>
-      <NativeChatWorkingLocationLabel
-        location={{
-          kind: 'worktree',
-          worktreeId: 'fixture-worktree',
-          repoId: 'fixture-repo',
-          hostId: undefined,
-          path: '/repo/.claude/worktrees/fix-login',
-          displayName: 'fix-login',
-          branch: 'worktree-fix-login',
-          hidden: true
-        }}
-        opening={false}
-        onOpen={() => {}}
-      />
+      <NativeChatWorkingLocationLabel location={WORKTREE} opening={false} onOpen={() => {}} />
     </Header>
   )
+})
+
+// Keyboard focus opens the tooltip that carries the branch and path.
+export const worktreeTooltip = defineFixture({
+  width: 560,
+  render: worktree.render,
+  interact: async (frame) => {
+    // Tooltips open on focus only after keyboard input, as when tabbing to the label.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
+    frame.querySelector<HTMLElement>('[data-native-chat-working-location] [tabindex="0"]')?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
 })
 
 export const folder = defineFixture({

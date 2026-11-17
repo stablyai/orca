@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
-import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { importNewExternalWorktreeInboxPaths } from '@/components/sidebar/worktree-list/listing/new-external-worktrees-inbox-actions'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useStructuredAgentSessionWorkingDirectory } from '../../session/status/structured-agent-session-status-hooks'
 import {
@@ -23,22 +25,20 @@ type WorktreeLocation = Extract<NativeChatWorkingLocation, { kind: 'worktree' }>
 /** Import a hidden discovered worktree the way the visibility dialog does; false when that fails. */
 async function revealHiddenWorktree(location: WorktreeLocation): Promise<boolean> {
   const state = useAppStore.getState()
-  const repo = selectRepoByIdForActiveWorkspace(state, location.repoId)
+  // The worktree's own host picks the repo; the active workspace may be on another host.
+  const hostId = location.hostId ?? LOCAL_EXECUTION_HOST_ID
+  const repo = state.repos.find((row) => repoMatchesHostIdentity(row, location.repoId, hostId))
   if (!repo) {
     return false
   }
-  const hostOptions = location.hostId ? { hostId: location.hostId } : undefined
   let failed = false
   await importNewExternalWorktreeInboxPaths({
     projectId: repo.id,
     repo,
     worktreePaths: [location.path],
-    updateRepo: (projectId, updates) => state.updateRepo(projectId, updates, hostOptions),
+    updateRepo: (projectId, updates) => state.updateRepo(projectId, updates, { hostId }),
     fetchWorktrees: (projectId, options) =>
-      state.fetchWorktrees(projectId, {
-        ...options,
-        ...(location.hostId ? { executionHostId: location.hostId } : {})
-      }),
+      state.fetchWorktrees(projectId, { ...options, executionHostId: hostId }),
     setInboxState: (_projectId, inbox) => {
       failed ||= Boolean(inbox?.error)
     }
@@ -67,7 +67,10 @@ export function NativeChatWorkingLocationChip({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const workingDirectory = useStructuredAgentSessionWorkingDirectory(sessionId, target)
-  const chatWorktree = useWorktreeById(worktreeId)
+  const chatHostId = executionHostIdForStructuredTarget(target)
+  const chatWorktree = useAppStore((state) =>
+    selectKnownWorktreeById(state, worktreeId, chatHostId)
+  )
   const worktrees = useAppStore(selectWorktreesByRepo)
   const detectedWorktrees = useAppStore(selectDetectedWorktreesByRepo)
   const [opening, setOpening] = useState(false)
@@ -75,11 +78,12 @@ export function NativeChatWorkingLocationChip({
     () =>
       resolveNativeChatWorkingLocation({
         workingDirectory,
+        chatHostId,
         chatWorktree: chatWorktree ?? undefined,
         worktrees,
         detectedWorktrees
       }),
-    [chatWorktree, detectedWorktrees, workingDirectory, worktrees]
+    [chatHostId, chatWorktree, detectedWorktrees, workingDirectory, worktrees]
   )
   if (!location) {
     return null

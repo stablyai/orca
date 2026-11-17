@@ -28,7 +28,12 @@ export function NativeChatWorkingLocationLabel({
       <FolderGit2 className="size-3 shrink-0" />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="min-w-0 truncate">{label}</span>
+          <span
+            tabIndex={0}
+            className="min-w-0 truncate rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {label}
+          </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
           {branch ? <div>{branch}</div> : null}

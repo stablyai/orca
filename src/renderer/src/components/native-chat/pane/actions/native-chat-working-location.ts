@@ -1,6 +1,7 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import { worktreeBelongsToHost } from '@/store/repos/repo-host-identity'
 
 export type NativeChatWorkingLocation =
   | {
@@ -17,10 +18,6 @@ export type NativeChatWorkingLocation =
   | { kind: 'folder'; path: string; displayName: string }
 
 type WorktreeRow = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'path' | 'displayName' | 'branch'>
-
-function sameHost(a: ExecutionHostId | undefined, b: ExecutionHostId | undefined): boolean {
-  return a === undefined || b === undefined || a === b
-}
 
 function shortBranch(branch: string | null | undefined): string | null {
   return branch ? branch.replace(/^refs\/heads\//, '') : null
@@ -46,6 +43,8 @@ function located(row: WorktreeRow, hidden: boolean): NativeChatWorkingLocation {
 /** Where a chat's agent works, when that is not the chat's own workspace; null otherwise. */
 export function resolveNativeChatWorkingLocation(args: {
   workingDirectory: string | undefined
+  /** The host the chat's session runs on; only that host's worktrees can match. */
+  chatHostId: ExecutionHostId
   chatWorktree: Pick<Worktree, 'path' | 'hostId'> | undefined
   worktrees: Readonly<Record<string, readonly WorktreeRow[]>>
   /** Discovered listings; their `visible: false` rows are the sidebar's hidden worktrees. */
@@ -53,17 +52,17 @@ export function resolveNativeChatWorkingLocation(args: {
     Record<string, { worktrees: readonly (WorktreeRow & { visible: boolean })[] } | undefined>
   >
 }): NativeChatWorkingLocation | null {
-  const { workingDirectory, chatWorktree } = args
-  if (!workingDirectory) {
+  const { workingDirectory, chatHostId, chatWorktree } = args
+  // Without the chat's own row on its host, a match could name another host's worktree.
+  if (!workingDirectory || !chatWorktree || !worktreeBelongsToHost(chatWorktree, chatHostId)) {
     return null
   }
   const target = normalizeRuntimePathForComparison(workingDirectory)
-  if (chatWorktree && normalizeRuntimePathForComparison(chatWorktree.path) === target) {
+  if (normalizeRuntimePathForComparison(chatWorktree.path) === target) {
     return null
   }
-  const hostId = chatWorktree?.hostId
   const matches = (row: WorktreeRow): boolean =>
-    sameHost(row.hostId, hostId) && normalizeRuntimePathForComparison(row.path) === target
+    worktreeBelongsToHost(row, chatHostId) && normalizeRuntimePathForComparison(row.path) === target
   for (const rows of Object.values(args.worktrees)) {
     const row = rows.find(matches)
     if (row) {

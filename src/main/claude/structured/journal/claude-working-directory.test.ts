@@ -66,6 +66,19 @@ describe('ClaudeWorkingDirectory', () => {
     expect(tracker.current).toBeUndefined()
   })
 
+  it('reads worktree paths whose parent folders contain spaces', () => {
+    const tracker = new ClaudeWorkingDirectory()
+    const posix = '/Users/Jane Doe/repo/.claude/worktrees/fix-login'
+    feed(tracker, call('posix', 'EnterWorktree', { name: 'fix-login' }))
+    feed(tracker, result('posix', `Switched from /tmp/x to ${posix} on branch fix-login.`))
+    expect(tracker.current).toBe(posix)
+
+    const windows = 'C:\\Users\\Jane Doe\\repo\\.claude\\worktrees\\fix-login'
+    feed(tracker, call('windows', 'EnterWorktree', { name: 'fix-login' }))
+    feed(tracker, result('windows', `Created worktree at "${windows}".`))
+    expect(tracker.current).toBe(windows)
+  })
+
   it('uses an existing worktree path given as input when the result names none', () => {
     const tracker = new ClaudeWorkingDirectory()
     feed(tracker, call('enter', 'EnterWorktree', { path: 'C:\\repo\\wt-review' }))

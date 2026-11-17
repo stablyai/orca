@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveNativeChatWorkingLocation } from './native-chat-working-location'
 
 const chatWorktree = { path: '/repo', hostId: undefined }
+const remoteRow = { ...row('/repo/remote-only', 'remote-only'), hostId: 'ssh:box' as const }
 
 function row(path: string, branch: string) {
   return {
@@ -14,7 +15,10 @@ function row(path: string, branch: string) {
   }
 }
 
-const worktrees = { repo: [row('/repo', 'refs/heads/main'), row('/repo/feature', 'feature')] }
+const worktrees = {
+  repo: [row('/repo', 'refs/heads/main'), row('/repo/feature', 'feature')],
+  remote: [remoteRow]
+}
 const detectedWorktrees = {
   repo: {
     worktrees: [
@@ -27,6 +31,7 @@ const detectedWorktrees = {
 function resolve(workingDirectory: string | undefined, hostId?: 'ssh:box') {
   return resolveNativeChatWorkingLocation({
     workingDirectory,
+    chatHostId: hostId ?? 'local',
     chatWorktree: { ...chatWorktree, hostId },
     worktrees,
     detectedWorktrees
@@ -64,6 +69,12 @@ describe('resolveNativeChatWorkingLocation', () => {
       kind: 'folder',
       path: '/repo/feature',
       displayName: 'feature'
+    })
+    // A local chat whose row predates host ids must not adopt another host's worktree.
+    expect(resolve('/repo/remote-only')).toEqual({
+      kind: 'folder',
+      path: '/repo/remote-only',
+      displayName: 'remote-only'
     })
   })
 })
