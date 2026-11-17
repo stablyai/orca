@@ -46,6 +46,19 @@ export type WorkspaceCopyCreateOptions = {
   minFreeBytes?: number
 }
 
+/** Full paths a tree copy leaves out. */
+export type TreeExclusions = { folders: readonly string[]; files: readonly string[] }
+
+export type TreeCopyResult =
+  | {
+      ok: true
+      files: number | null
+      bytes: number | null
+      /** True when every file is known to be a clone; null when only free space can tell. */
+      cloned: boolean | null
+    }
+  | { ok: false; message: string }
+
 export type WorkspaceCopySpace = {
   /** Bytes the copy reported copying; null when robocopy's summary could not be read. */
   copiedBytes: number | null

@@ -5,7 +5,8 @@ import { runProcess } from '@orca/process-host'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { transientLockRemovalOptions } from '../../file-write/windows-transient-lock-removal'
 import { runP4, type P4CommandResult, type P4RunOptions } from '../p4-command'
-import { cloneTree, type TreeCopyResult, type TreeExclusions } from './workspace-copy-clone-tree'
+import { macCloneTree } from './workspace-copy-mac-clone'
+import type { TreeCopyResult, TreeExclusions } from './workspace-copy-types'
 import {
   parseRobocopySummary,
   robocopyArguments,
@@ -105,7 +106,7 @@ export function createWorkspaceCopyHost(
         ...options
       }),
     platform,
-    copyTree: platform === 'windows' ? robocopyTree : (from, to, ex) => cloneTree(from, to, ex),
+    copyTree: platform === 'windows' ? robocopyTree : macCloneTree,
     prepareCopiesDir: platform === 'macos' ? keepCopiesOutOfIndexAndBackups : undefined,
     windowsBuild: () => (process.platform === 'win32' ? parseWindowsBuild(release()) : null),
     freeBytes: async (path) => {

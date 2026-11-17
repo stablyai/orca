@@ -1,7 +1,7 @@
 import { cpSync, readdirSync, statSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import type { TreeCopyResult } from '../workspace-copy-clone-tree'
+import type { TreeCopyResult } from '../workspace-copy-types'
 import type { HostProcess, WorkspaceCopyHost } from '../workspace-copy-host'
 import type { FakePerforceServer } from './fake-perforce-server'
 

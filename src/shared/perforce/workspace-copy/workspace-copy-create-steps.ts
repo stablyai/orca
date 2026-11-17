@@ -1,6 +1,5 @@
 import { rm } from 'node:fs/promises'
 import { WorkspaceCopyError } from './workspace-copy-errors'
-import type { TreeCopyResult } from './workspace-copy-clone-tree'
 import type { WorkspaceCopyHost } from './workspace-copy-host'
 import type { WorkspaceCopyNames } from './workspace-copy-names'
 import { findClient } from './workspace-copy-p4'
@@ -10,7 +9,7 @@ import {
   pathExists,
   type CopySource
 } from './workspace-copy-source'
-import type { WorkspaceCopySpace } from './workspace-copy-types'
+import type { TreeCopyResult, WorkspaceCopySpace } from './workspace-copy-types'
 
 export async function assertNameFree(
   host: WorkspaceCopyHost,

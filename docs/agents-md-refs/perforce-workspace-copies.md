@@ -83,19 +83,22 @@ Settings › Perforce › Workspace Copies: minimum free space (default 10 GB), 
 `createWorkspaceCopy` (`src/shared/perforce/workspace-copy/`):
 
 1. **Check.** Windows build, the P4CONFIG binding, a stream client, `<root>.wt` not a junction or
-   link, free space, and a **clone probe**. On Windows: copy a 64 MB file next to the workspace with
-   robocopy and check that free space did not drop by its size. Asking Windows whether a volume is a
-   Dev Drive (`fsutil devdrv query`) needs an elevated shell; the probe measures the property copies
-   rely on. The host remembers a volume's answer (a negative one for five minutes), since each probe
-   writes about 256 MB. On macOS: a forced clone of a 1 MB file (`COPYFILE_FICLONE_FORCE`) either
-   succeeds or fails, plus `<root>.wt` on the workspace's volume and a case-insensitivity probe
+   link, free space, and a **clone probe**: copy a 64 MB file next to the workspace with the host's
+   `copyTree` and check that free space did not drop by its size. Asking Windows whether a volume is a
+   Dev Drive (`fsutil devdrv query`) needs an elevated shell, and macOS's `cp -c` silently copies bytes
+   where it cannot clone, so the probe measures the property copies rely on. The host remembers a
+   volume's answer (a negative one for five minutes), since each probe writes about 256 MB. On macOS
+   also `<root>.wt` on the workspace's volume and a case-insensitivity probe
    (`workspace-copy-volume.ts`).
 2. **Copy.** The host's `copyTree`. Windows: `robocopy /E /COPY:DAT /DCOPY:DAT /MT:32` into
-   `<root>.wt\<name>`. macOS: `cloneTree` (`workspace-copy-clone-tree.ts`) clones file by file, 16 at a
-   time, recreates symbolic links and fails rather than fall back to a full copy; `<root>.wt` gets
-   `.metadata_never_index` and a Time Machine exclusion (`tmutil addexclusion`). Both keep file and
-   folder timestamps so Unity does not reimport. Each Unity project's `Temp`, `Logs`, `obj` and editor
-   lock files stay behind.
+   `<root>.wt\<name>`. macOS: `macCloneTree` (`workspace-copy-mac-clone.ts`) runs `/bin/cp -cpR` over
+   whole subtrees, six at a time, and lists only the folders that hold an excluded path. Node's
+   `copyFile` cannot clone on macOS (libuv's `COPYFILE_FICLONE_FORCE` is Linux-only and returns
+   `ENOSYS`); `cp -c` uses `clonefile`, which copies a file's data and times in one call, so a file
+   saved during the copy never ends up with one version's content and another's time. `-R` keeps
+   symbolic links as links. `<root>.wt` gets `.metadata_never_index` and a Time Machine exclusion
+   (`tmutil addexclusion`). Both keep file and folder timestamps so Unity does not reimport. Each
+   Unity project's `Temp`, `Logs`, `obj` and editor lock files stay behind.
 3. **Stream and client.** The copy's own sparsedev stream `<parent>_wt_<name>` (`stream -o -t sparsedev
    -P <parent>` → `stream -i`), branched at the parent's latest change; an earlier copy's stream of the
    same name that kept submitted work is continued instead. Then `<client>_wt_<name>` from the source's
