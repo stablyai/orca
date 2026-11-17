@@ -22894,6 +22894,18 @@
         "disconnectedHostLine": "{{host}} не подключён. Файлы остаются на хосте.",
         "filesStayLine": "Файлы остаются на {{host}}.",
         "removing": "Удаление…"
+      },
+      "agentRowMenu": {
+        "copyId": "Копировать ID",
+        "open": "Открыть",
+        "rename": "Переименовать…",
+        "workspace": "Рабочее пространство",
+        "workspaces_one": "{{count}} рабочее пространство",
+        "workspaces_few": "{{count}} рабочих пространства",
+        "workspaces_many": "{{count}} рабочих пространств",
+        "workspaces_other": "{{count}} рабочего пространства",
+        "ariaLabel": "Агент: {{name}}",
+        "agentGone": "Этот агент больше не открыт."
       }
     },
     "terminal": {

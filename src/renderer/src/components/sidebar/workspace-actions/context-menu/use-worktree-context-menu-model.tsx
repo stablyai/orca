@@ -23,6 +23,7 @@ import {
   EMPTY_WORKTREE_LINEAGE_BY_ID,
   getSharedWorkspaceStatus,
   isContextWorktreeDeletable,
+  restoreWorktreeMenuSidebarFocus,
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
@@ -45,7 +46,7 @@ export type WorktreeContextMenuProps = {
   children: React.ReactNode
   contentClassName?: string
   selectedWorktrees?: readonly Worktree[]
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  onContextMenuSelect?: (event: React.UIEvent<HTMLElement>) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   onOpenChange?: (open: boolean) => void
   onLifecycleComplete?: () => void
@@ -339,27 +340,17 @@ export function useWorktreeContextMenuModel({
     })
 
   const handleCloseAutoFocus = useCallback(
-    (event: Event) => {
+    (event: Event, restoreFocus = () => restoreWorktreeMenuSidebarFocus(scopeRef.current)) => {
       // Suppress Radix focus restoration to a hidden trigger that can scroll the virtual list after Sleep/Delete.
       event.preventDefault()
       if (pendingParentPickerRef.current) {
         window.setTimeout(openPendingParentPicker, 0)
         return
       }
-      const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
-      if (!(sidebar instanceof HTMLElement)) {
-        return
-      }
-      const active = sidebar.ownerDocument.activeElement
-      // Why: an outside click, or a dialog opened by an item, already owns focus (#46550).
-      if (active && active !== sidebar.ownerDocument.body && !sidebar.contains(active)) {
-        return
-      }
-      sidebar.focus({ preventScroll: true })
+      restoreFocus()
     },
     [openPendingParentPicker]
   )
-
   return {
     ...commands,
     showsUnread,

@@ -23498,6 +23498,15 @@
         "disconnectedHostLine": "{{host}} 未连接。文件会保留在主机上。",
         "filesStayLine": "文件会保留在 {{host}} 上。",
         "removing": "正在移除…"
+      },
+      "agentRowMenu": {
+        "copyId": "复制 ID",
+        "open": "打开",
+        "rename": "重命名…",
+        "workspace": "工作区",
+        "workspaces_other": "{{count}} 个工作区",
+        "ariaLabel": "代理：{{name}}",
+        "agentGone": "此代理已不再打开。"
       }
     },
     "bots": {

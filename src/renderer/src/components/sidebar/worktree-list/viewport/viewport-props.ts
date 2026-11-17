@@ -80,7 +80,7 @@ export type VirtualizedWorktreeViewportProps = {
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onImmediateWorktreeActivate: (worktreeId: string, rowKey: string | undefined) => void
   onContextMenuSelect: (
-    event: React.MouseEvent<HTMLElement>,
+    event: React.UIEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
   repoMap: Map<string, Repo>

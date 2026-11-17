@@ -29,6 +29,7 @@ import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-ord
 import type { ProgramStatusPresentation } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useAgentRowMenuTrigger } from '../../workspace-actions/agent-row-menu/use-agent-row-menu-trigger'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -174,6 +175,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
+  const menuTrigger = useAgentRowMenuTrigger({
+    agent,
+    label: primary,
+    sendTargetStatus,
+    onActivate
+  })
 
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -331,6 +338,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
       title={sendTargetDisabledReason}
+      {...menuTrigger}
     >
       {rowBody}
     </div>

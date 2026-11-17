@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   RENAME_TERMINAL_TAB_EVENT,
+  registerTerminalTabRenameListener,
   type RenameTerminalTabDetail
 } from './terminal-tab-rename-request'
 import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
@@ -76,6 +77,9 @@ export function useSortableTabRename({
   }, [handleRenameOpen])
 
   useEffect(() => {
+    if (!renamable) {
+      return
+    }
     const onRenameRequest = (event: Event): void => {
       const detail = (event as CustomEvent<RenameTerminalTabDetail | undefined>).detail
       if (detail?.tabId !== tabId) {
@@ -84,8 +88,12 @@ export function useSortableTabRename({
       handleRenameOpenRef.current()
     }
     window.addEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
-    return () => window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
-  }, [tabId])
+    const unregister = registerTerminalTabRenameListener(tabId)
+    return () => {
+      unregister()
+      window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
+    }
+  }, [renamable, tabId])
 
   return {
     isEditing,

@@ -3,6 +3,7 @@ import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status
 import { findIndexedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
+import { AgentRowMenuContext } from '../../workspace-actions/agent-row-menu/agent-row-menu-context'
 import { WorktreeCardDetailSection } from './WorktreeCardDetailSection'
 import StatusIndicator from '../surface/StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
@@ -75,7 +76,9 @@ export function WorktreeCardLineActivity({
           [WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR]: workspaceMenuEnabled ? menuScope : undefined
         }}
       >
-        <WorktreeCardAgents worktreeId={worktreeId} executionHostId={activityHostId} />
+        <AgentRowMenuContext value={null}>
+          <WorktreeCardAgents worktreeId={worktreeId} executionHostId={activityHostId} />
+        </AgentRowMenuContext>
       </div>
     </WorktreeCardDetailSection>
   )

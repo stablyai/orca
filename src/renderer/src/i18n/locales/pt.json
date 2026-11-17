@@ -23798,6 +23798,17 @@
         "disconnectedHostLine": "{{host}} não está conectado. Os arquivos continuam no host.",
         "filesStayLine": "Os arquivos continuam em {{host}}.",
         "removing": "Removendo…"
+      },
+      "agentRowMenu": {
+        "copyId": "Copiar ID",
+        "open": "Abrir",
+        "rename": "Renomear…",
+        "workspace": "Espaço de Trabalho",
+        "workspaces_one": "{{count}} Espaço de Trabalho",
+        "workspaces_many": "{{count}} Espaços de Trabalho",
+        "workspaces_other": "{{count}} Espaços de Trabalho",
+        "ariaLabel": "Agente: {{name}}",
+        "agentGone": "Este agente não está mais aberto."
       }
     },
     "terminal": {

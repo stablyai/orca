@@ -24207,6 +24207,16 @@
         "disconnectedHostLine": "{{host}} bağlı değil. Dosyalar ana makinede kalır.",
         "filesStayLine": "Dosyalar {{host}} üzerinde kalır.",
         "removing": "Kaldırılıyor…"
+      },
+      "agentRowMenu": {
+        "copyId": "Kimliği kopyala",
+        "open": "Aç",
+        "rename": "Yeniden adlandır…",
+        "workspace": "Çalışma Alanı",
+        "workspaces_one": "{{count}} Çalışma Alanı",
+        "workspaces_other": "{{count}} Çalışma Alanı",
+        "ariaLabel": "Ajan: {{name}}",
+        "agentGone": "Bu ajan artık açık değil."
       }
     },
     "terminal": {

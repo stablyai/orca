@@ -6,10 +6,14 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function CopyTabIdMenuItem({
   unifiedTabId,
-  menuKind = 'dropdown'
+  menuKind = 'dropdown',
+  beforeRun,
+  label
 }: {
   unifiedTabId: string
   menuKind?: 'dropdown' | 'context'
+  beforeRun?: () => boolean
+  label?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
@@ -23,9 +27,15 @@ export function CopyTabIdMenuItem({
   }
 
   return (
-    <Item onSelect={() => void copyTabId()}>
+    <Item
+      onSelect={() => {
+        if (!beforeRun || beforeRun()) {
+          void copyTabId()
+        }
+      }}
+    >
       <Copy className="size-3.5" />
-      {t('components.tab.bar.CopyTabIdMenuItem.copy', 'Copy Tab ID')}
+      {label ?? t('components.tab.bar.CopyTabIdMenuItem.copy', 'Copy Tab ID')}
     </Item>
   )
 }

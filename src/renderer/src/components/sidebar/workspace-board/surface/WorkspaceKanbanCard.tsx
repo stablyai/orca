@@ -20,7 +20,7 @@ type WorkspaceKanbanCardProps = {
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect: (
-    event: React.MouseEvent<HTMLElement>,
+    event: React.UIEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void

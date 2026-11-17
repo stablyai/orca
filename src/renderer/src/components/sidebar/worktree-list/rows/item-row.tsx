@@ -35,7 +35,7 @@ export type WorktreeItemRowContext = {
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onWorktreeCardClick?: () => void
   onContextMenuSelect: (
-    event: React.MouseEvent<HTMLElement>,
+    event: React.UIEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void

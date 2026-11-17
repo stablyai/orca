@@ -22170,6 +22170,16 @@
         "disconnectedHostLine": "{{host}} ist nicht verbunden. Die Dateien bleiben auf dem Host.",
         "filesStayLine": "Die Dateien bleiben auf {{host}}.",
         "removing": "Wird entfernt…"
+      },
+      "agentRowMenu": {
+        "copyId": "ID kopieren",
+        "open": "Öffnen",
+        "rename": "Umbenennen…",
+        "workspace": "Arbeitsbereich",
+        "workspaces_one": "{{count}} Arbeitsbereich",
+        "workspaces_other": "{{count}} Arbeitsbereiche",
+        "ariaLabel": "Agent: {{name}}",
+        "agentGone": "Dieser Agent ist nicht mehr geöffnet."
       }
     },
     "terminal": {

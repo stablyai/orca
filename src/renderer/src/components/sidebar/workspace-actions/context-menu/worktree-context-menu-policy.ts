@@ -122,6 +122,19 @@ export function shouldIgnoreNestedWorktreeContextMenuScope(
   return closestScope != null && closestScope !== currentTarget
 }
 
+export function restoreWorktreeMenuSidebarFocus(scope: Element | null): void {
+  const sidebar = scope?.closest('[data-worktree-sidebar]')
+  if (!(sidebar instanceof HTMLElement)) {
+    return
+  }
+  const active = sidebar.ownerDocument.activeElement
+  // An outside click or an item that opened a dialog may already own focus.
+  if (active && active !== sidebar.ownerDocument.body && !sidebar.contains(active)) {
+    return
+  }
+  sidebar.focus({ preventScroll: true })
+}
+
 export function shouldSuppressContextMenuFollowUpClick(
   contextMenuOpenedAt: number,
   now: number

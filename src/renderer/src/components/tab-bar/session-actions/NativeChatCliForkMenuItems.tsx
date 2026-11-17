@@ -15,13 +15,15 @@ export function NativeChatCliForkMenuItems({
   nativeChat,
   leadingSeparator,
   menuKind = 'context',
-  onComplete
+  onComplete,
+  beforeRun
 }: {
   tab: { id: string; worktreeId: string }
   nativeChat: NativeChatTabSession
   leadingSeparator: boolean
   menuKind?: 'context' | 'dropdown'
   onComplete?: () => void
+  beforeRun?: () => boolean
 }): React.JSX.Element | null {
   const [subject] = useState(() =>
     resolveTabSessionHistorySubject(useAppStore.getState(), { tab, nativeChat })
@@ -45,6 +47,9 @@ export function NativeChatCliForkMenuItems({
         cliPending={pending}
         onResumeInNewCli={(event) => {
           event.preventDefault()
+          if (beforeRun && !beforeRun()) {
+            return
+          }
           void runNativeChatCliFork({ subject: chat, tab, agent, onComplete })
         }}
       />

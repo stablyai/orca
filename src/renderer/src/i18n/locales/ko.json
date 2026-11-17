@@ -23352,6 +23352,15 @@
         "disconnectedHostLine": "{{host}}이(가) 연결되어 있지 않습니다. 파일은 호스트에 남습니다.",
         "filesStayLine": "파일은 {{host}}에 남습니다.",
         "removing": "제거 중…"
+      },
+      "agentRowMenu": {
+        "copyId": "ID 복사",
+        "open": "열기",
+        "rename": "이름 바꾸기…",
+        "workspace": "워크스페이스",
+        "workspaces_other": "워크스페이스 {{count}}개",
+        "ariaLabel": "에이전트: {{name}}",
+        "agentGone": "이 에이전트는 더 이상 열려 있지 않습니다."
       }
     },
     "terminal": {

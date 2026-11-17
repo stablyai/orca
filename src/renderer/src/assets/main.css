@@ -2080,12 +2080,6 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
-/* Active and selected cards already use box-shadow. */
-[data-worktree-card-surface][data-worktree-card-menu-open] {
-  outline: 1px solid color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent);
-  outline-offset: -1px;
-}
-
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
 [data-worktree-sleeping-dim] {
   color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));
@@ -4549,4 +4543,20 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   .browser-agent-cursor-layer[data-agent-active]::before {
     animation: none;
   }
+}
+
+/* Why: a context menu outlines what it acts on; !important beats every row/card state wash
+   while open, and box-shadow keeps the outline from shifting layout. */
+.agent-disclosure-row[data-agent-row-menu-open] {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent) !important;
+  background: color-mix(in srgb, var(--worktree-sidebar-ring) 12%, transparent) !important;
+}
+
+[data-worktree-card-menu-open] > [data-worktree-card-surface] {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent) !important;
+}
+
+.agent-disclosure-row[data-agent-row-menu]:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
