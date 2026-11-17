@@ -16,6 +16,8 @@ describe('GitLab Duo process recognition', () => {
     'glab duo cli --goal "fix the tests"',
     '/opt/homebrew/bin/glab duo cli --model claude_sonnet_5_5 --goal run',
     'glab duo cli --startup-cards false',
+    'glab duo cli --skill review',
+    '"/Users/me/Library/Application Support/glab-cli/bin/duo" --skill review',
     '"/Users/me/Library/Application Support/glab-cli/bin/duo" --dangerously-skip-permissions'
   ])('claims the interactive TUI for %s', (line) => {
     expect(recognizeAgentProcessFromCommandLine(line)?.agent).toBe('gitlab-duo')
@@ -33,6 +35,7 @@ describe('GitLab Duo process recognition', () => {
   it.each([
     'glab duo cli run --goal "fix the tests"',
     'glab duo cli --model claude_sonnet_5_5 run --goal x',
+    'glab duo cli --skill review run --goal x',
     'glab duo cli update',
     'glab duo cli --help',
     'duo export --output session.json'

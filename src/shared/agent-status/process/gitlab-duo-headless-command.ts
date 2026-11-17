@@ -21,7 +21,8 @@ const DUO_VALUE_FLAGS = new Set([
   '-g',
   '--goal',
   '--connection-type',
-  '--model'
+  '--model',
+  '--skill'
 ])
 const DUO_OPTIONAL_VALUE_FLAGS = new Set(['--session-tracking-enabled', '--startup-cards'])
 const DUO_NON_TUI_FLAGS = new Set(['-h', '--help', '-v', '--version', '--install', '--update'])

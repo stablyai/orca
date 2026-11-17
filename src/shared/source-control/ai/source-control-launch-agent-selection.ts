@@ -7,7 +7,7 @@ import type {
 } from './recipes/source-control-ai-actions'
 import {
   filterEnabledTuiAgents,
-  TUI_AGENT_AUTO_PICK_ORDER
+  TUI_AGENT_FALLBACK_PICK_ORDER
 } from '../../agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { Repo } from '../../repository/repo-types'
@@ -38,7 +38,7 @@ export function pickSourceControlLaunchAgent(args: {
   if (args.defaultAgent && args.defaultAgent !== 'blank' && usable(args.defaultAgent)) {
     return args.defaultAgent
   }
-  return TUI_AGENT_AUTO_PICK_ORDER.find((agent) => enabledAgents.includes(agent)) ?? null
+  return TUI_AGENT_FALLBACK_PICK_ORDER.find((agent) => enabledAgents.includes(agent)) ?? null
 }
 
 export type SourceControlLaunchAgentScope = {
