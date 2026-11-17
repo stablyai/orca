@@ -48,7 +48,10 @@ import {
 import { MacServeStartupAbortError } from './serve/startup/serve-signal-exit-diagnostic'
 import { superviseServeService } from './serve/supervision/serve-supervised-service'
 import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
-import { supervisedAppImageUpdate } from './serve/updates/serve-appimage-update'
+import {
+  resolveAppImageBuildWatch,
+  supervisedAppImageUpdate
+} from './serve/updates/serve-appimage-update'
 import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
   noteServeSupervisorStart,
@@ -206,7 +209,9 @@ async function serveWithSelectedRuntime(
       userDataPath,
       stripElectronRunAsNode(process.env),
       findBundledWebClientRoot(resolveAppRoot()),
-      findAppSpeechRecognizerDir(resolveAppRoot())
+      findAppSpeechRecognizerDir(resolveAppRoot()),
+      // The file, not the FUSE mount: it outlives this process and keeps its path across updates.
+      resolveAppImageBuildWatch(executable)?.appImagePath
     )
   }
   if (selection.reason) {

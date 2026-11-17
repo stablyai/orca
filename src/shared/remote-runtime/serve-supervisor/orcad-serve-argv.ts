@@ -17,6 +17,9 @@ export type ServeOrcaAppArgs = {
   supervise?: boolean
 }
 
+/** The AppImage file serve runs from: orcad's slot has no Electron, so its browser helper launches this. */
+export const ORCA_SERVE_APPIMAGE_ENV = 'ORCA_SERVE_APPIMAGE'
+
 /** Serialize optional serve flags for either the CLI or Electron's internal argv form. */
 export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-'): string[] {
   return [

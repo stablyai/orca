@@ -8,7 +8,12 @@ import {
   commitServeSupervisorParkOnQuit,
   releaseServeSupervisorPark
 } from '../../updater/lifecycle/serve-supervisor-install-park'
-import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import {
+  installedElectronCandidates,
+  resolveInstalledElectronExecutable,
+  resolveOrcadBrowserProvider,
+  type OrcadBrowserProvider
+} from './orcad-browser-provider'
 
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
@@ -71,5 +76,21 @@ describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', (
         expect.objectContaining({ program: executable })
       )
     )
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('installed Electron lookup on Linux', () => {
+  it('uses the AppImage serve runs from when no installer path exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orcad-appimage-'))
+    try {
+      const appImage = join(root, 'orca-linux.AppImage')
+      await writeFile(appImage, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]), { mode: 0o755 })
+      const candidates = installedElectronCandidates('linux', join(root, 'home'), {
+        ORCA_SERVE_APPIMAGE: appImage
+      })
+      await expect(resolveInstalledElectronExecutable(candidates)).resolves.toBe(appImage)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })
