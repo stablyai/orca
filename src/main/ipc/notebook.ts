@@ -7,7 +7,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveUserNamedRegularFile
 } from './filesystem/access/local-file-access-resolution'
-import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { createSenderScopedRequestCancellations } from './renderer-requests/sender-scoped-request-cancellation'
 import { startNotebookKernel, type NotebookKernel } from '../notebook/notebook-kernel'
 import {
   createNotebookVenv,

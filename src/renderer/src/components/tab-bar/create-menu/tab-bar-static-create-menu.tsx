@@ -2,6 +2,7 @@ import React from 'react'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { MobileEmulatorTabIntroCallout } from '../../emulator-pane/tab-intro/MobileEmulatorTabIntroCallout'
+import { NewTabMenuTipSlot } from '../menu-fit/NewTabMenuTipSlot'
 import { ShellIcon } from '../../terminal/shells/ShellIcon'
 import { useAppStore } from '@/store/index'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
@@ -203,11 +204,15 @@ export function TabBarStaticCreateMenu({
       items={items}
       customizable={!terminalOnly}
       layoutSetting={NEW_TAB_MENU_LAYOUT_SETTING[newTabMenuSurface]}
-      renderBelow={(shownIds) =>
-        showMobileEmulatorIntroCallout && isMacOs && shownIds.has(CREATE_ROW_MOBILE_EMULATOR_ID) ? (
-          <MobileEmulatorTabIntroCallout />
-        ) : null
-      }
+      renderBelow={(shownIds, anchor) => (
+        <NewTabMenuTipSlot
+          eligible={
+            showMobileEmulatorIntroCallout && isMacOs && shownIds.has(CREATE_ROW_MOBILE_EMULATOR_ID)
+          }
+        >
+          <MobileEmulatorTabIntroCallout anchor={anchor} />
+        </NewTabMenuTipSlot>
+      )}
     />
   )
 }

@@ -6,7 +6,7 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-co
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { foldGitRefNameCase } from '../../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { computeValidatedBranchName } from '../../../ipc/worktree-branch-name'
+import { computeValidatedBranchName } from '../../../ipc/worktrees/creation/worktree-branch-name'
 import { getHostedReviewForBranch } from '../../../source-control/hosted-review'
 import {
   getSelectedReviewBranch,

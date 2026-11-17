@@ -1,6 +1,6 @@
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/saved-conversation-title-publication'
+import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
@@ -30,7 +30,7 @@ import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressin
 import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
-} from '../../session-tabs/structured-conversation-tab-title'
+} from '../../session-tabs/chat/structured-conversation-tab-title'
 import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 

@@ -34,7 +34,7 @@ import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../lifecycle/claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork

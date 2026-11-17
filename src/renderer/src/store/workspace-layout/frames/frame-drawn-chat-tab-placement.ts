@@ -7,7 +7,7 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { useAppStore } from '@/store/index'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 import type { StructuredLaunchSurfaceAddress } from '../../../lib/agent-session/launch/structured-agent-session-launch-record'
 

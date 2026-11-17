@@ -85,6 +85,19 @@ it('discovers saved SQL chats after restart and consults the old store only befo
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
 })
 
+it('still opens the store when cleanup deleted the last chat before its rows were gone', () => {
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
+  try {
+    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(
+      'journal.forgotten-chat:deleted-chat',
+      '1'
+    )
+  } finally {
+    db.close()
+  }
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
+})
+
 it.each(['standalone', 'construction'] as const)(
   'retains failed %s database closure for retry',
   async (path) => {
