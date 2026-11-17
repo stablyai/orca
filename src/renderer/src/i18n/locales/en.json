@@ -21863,6 +21863,12 @@
         "openAgain": "Open again",
         "finished": "Sign-in finished",
         "finishedWith": "Sign-in finished · {{message}}"
+      },
+      "workingLocation": {
+        "in": "Working in {{name}}",
+        "inBranch": "Working in {{name}} ({{branch}})",
+        "open": "Open worktree",
+        "revealFailed": "Could not show that worktree."
       }
     },
     "tab": {

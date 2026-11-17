@@ -67,6 +67,7 @@ export function structuredAgentSessionStatusSummary({
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+  const workingDirectory = session.child?.workingDirectory?.()
   return {
     sessionId,
     ...(usageLimitContinue ? { usageLimitContinue } : {}),
@@ -102,6 +103,7 @@ export function structuredAgentSessionStatusSummary({
     ...childWork,
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...(workingDirectory ? { workingDirectory } : {}),
     ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),

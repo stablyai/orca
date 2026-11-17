@@ -31,14 +31,15 @@ import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
-import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
+import {
+  createClaudeMessageObservers,
+  journalClaudeMessage,
+  journalClaudeStream
+} from './claude-message-journaling'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult } from './claude-result-journaling'
 import { endClaudeStreams } from './claude-open-stream-endings'
 import type { ClaudeResultJournalContext } from './claude-result-journaling'
-import { ClaudeAssistantFailures } from './claude-assistant-failures'
-import { ClaudeUsageLimits } from './claude-usage-limits'
-import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
 import {
@@ -135,9 +136,7 @@ export function createClaudeJournalTranslator(
     providerFallback,
     corrections,
     turn,
-    assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
-    usageLimits: new ClaudeUsageLimits(),
-    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
+    ...createClaudeMessageObservers(deps)
   }
 
   const resultContext: ClaudeResultJournalContext = {
@@ -284,6 +283,7 @@ export function createClaudeJournalTranslator(
     get contextActivity() {
       return context.activityRevision
     },
+    workingDirectory: messageContext.workingDirectory,
     get finalOutputAdmitted() {
       return coverage.admitted
     },

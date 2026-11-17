@@ -115,6 +115,8 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly catalogSource?: AgentModelCatalogSource
   /** Read adapter-held sends at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
+  /** Read the adapter's live working directory at each status publication. */
+  readonly workingDirectory?: () => string | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
 }

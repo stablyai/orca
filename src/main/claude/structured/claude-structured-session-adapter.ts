@@ -202,6 +202,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.sessions.get(sessionId)?.translator?.currentTurnId
+  workingDirectory = (sessionId: string): string | undefined =>
+    this.sessions.get(sessionId)?.translator?.workingDirectory.current
   heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
     const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
     const held = session && claudeHeldSends(session)
