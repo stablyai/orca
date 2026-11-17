@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import '@/store/slices/editor/tabs/editor-open-target-group'
 import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '@/lib/links/placement/link-open-intent'
-import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal-flash'
+import { flashRevealedEditorView } from '@/components/tab-group/editor-reveal/editor-reveal-flash'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   EditorOpenLinkIntent,

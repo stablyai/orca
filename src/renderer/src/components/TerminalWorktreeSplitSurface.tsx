@@ -1,6 +1,6 @@
 import React from 'react'
 import type { TabGroupLayoutNode } from '../../../shared/workspace-layout/tab-groups/tab-types'
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from './activity/terminal-portal/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
   useWorktreeBrowserPageIds

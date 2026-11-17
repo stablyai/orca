@@ -28,11 +28,13 @@ import {
 import type { OrcaInstallIdentity } from './orca-install-identity'
 import { forgetClaudeAgentViewMarkers } from '../claude/agent-view/agent-view-uninstall'
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
+import { describeOrcaUninstallPath } from './orca-uninstall-path-display'
 
 /** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
 export type OrcaUninstallHost = {
   platform: NodeJS.Platform
   homeDir: string
+  userDataPath: string
   uid: number
   identity: OrcaInstallIdentity
   /** Persists `agentStatusHooksEnabled: false`, so startup reconciliation cannot reinstall. */
@@ -56,13 +58,6 @@ function isOrcaOwnedCli(status: CliInstallStatus | null): status is CliInstallSt
   return status !== null && (status.state === 'installed' || status.state === 'stale')
 }
 
-function pathExists(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false
-  )
-}
-
 async function serviceEntry(host: OrcaUninstallHost): Promise<OrcaUninstallSimpleEntry | null> {
   const units = await listInstalledServeServiceUnits(host.platform, host.homeDir)
   return units.length === 0
@@ -76,7 +71,7 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     .filter((status) => status.managedHooksPresent)
     .map((status) => ({
       agent: status.agent,
-      paths: status.configPath ? [collapseHomePath(status.configPath, host.homeDir)] : [],
+      paths: status.configPath ? [describeOrcaUninstallPath(status.configPath, host)] : [],
       state: 'present',
       detail: null
     }))
@@ -84,12 +79,13 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     await findPluginHookFiles({ homeDir: host.homeDir })
   ).map((entry) => ({
     ...entry,
-    paths: entry.paths.map((path) => collapseHomePath(path, host.homeDir)),
+    paths: entry.paths.map((path) => describeOrcaUninstallPath(path, host)),
     state: 'present',
     detail: null
   }))
   const cli = await host.getCliStatus().catch(() => null)
   const scripts = join(host.homeDir, '.orca', 'agent-hooks')
+  const scriptsMissing = await access(scripts).catch(() => true)
   return {
     installKind: host.identity.installKind,
     agents: [...registryAgents, ...pluginAgents],
@@ -104,7 +100,7 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
         }
       : null,
     backgroundService: await serviceEntry(host),
-    hookScripts: (await pathExists(scripts))
+    hookScripts: !scriptsMissing
       ? { location: collapseHomePath(scripts, host.homeDir), state: 'present', detail: null }
       : null,
     hosts: await host.listHosts(),

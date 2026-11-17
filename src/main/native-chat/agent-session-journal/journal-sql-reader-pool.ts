@@ -110,7 +110,13 @@ export class JournalSqlReaderPool {
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
     }
-    return { result: response.result, ...(response.work ? { work: response.work } : {}) }
+    return {
+      result: response.result,
+      ...(response.work ? { work: response.work } : {}),
+      ...(response.acceptedUnopened === undefined
+        ? {}
+        : { acceptedUnopened: response.acceptedUnopened })
+    }
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {

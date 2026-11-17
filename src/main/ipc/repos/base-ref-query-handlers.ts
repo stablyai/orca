@@ -21,7 +21,7 @@ import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
 import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
 import { getProjectRuntimeReadGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
+import { broadcastWhenWslDistroRunning } from '../preflight/preflight-wsl-refusal-retry'
 
 export function registerBaseRefQueryHandlers(store: Store): void {
   ipcMain.handle(

@@ -3,15 +3,15 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../native-chat-types'
-import { isWordlessProviderFrameBlock } from '../native-chat-provider-frame-summary'
+import { isWordlessProviderFrameBlock } from './notices/native-chat-provider-frame-summary'
 import { pairToolBlocks, type NativeChatToolPair } from '../tools/native-chat-tool-pairs'
 import { formatToolInputPreview } from '../tools/native-chat-tool-summary'
 import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 import { MAX_CONTEXT_CHARS } from '../../agent-session/requests/agent-session-context-budget'
 import { agentJournalToolCallLifecycle } from '../../agent-session/journal/agent-journal-tool-call-lifecycle'
-import { withoutNativeChatVisualDirectiveLines } from '../native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../visuals/native-chat-visual-directive'
 import { workerTranscriptBlockFallbacks } from './worker-transcript-text'
-import { isInlineDataUrl } from '../native-chat-inline-data-url'
+import { isInlineDataUrl } from '../attachments/native-chat-inline-data-url'
 
 const MAX_TOOL_CHARS = 8_000
 const MAX_MESSAGE_CHARS = 8_000

@@ -16,6 +16,11 @@ vi.mock('../../../observability/instrumentation', () => ({
   withGitSpan: (_attributes: unknown, run: () => unknown) => run()
 }))
 vi.mock('../../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
+// The distro's mount root counts as already read, so spawns here are the Git commands under test.
+vi.mock('../../../wsl/filesystem/wsl-automount-root', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  settleWslAutomountRoot: () => null
+}))
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../git-exec-file'
 import { gitStreamStdout } from '../git-stream-stdout'
 

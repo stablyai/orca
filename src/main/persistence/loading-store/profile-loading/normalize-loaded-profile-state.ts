@@ -1,3 +1,4 @@
+import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
@@ -49,6 +50,25 @@ export function normalizeLoadedProfileState(
   )
   const worktreeLineageById = { ...parsed.worktreeLineageById }
   dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
+
+  const legacyPaneKeyAliasEntries = normalizeLegacyPaneKeyAliasEntries(
+    parsed.legacyPaneKeyAliasEntries
+  ).map((entry) => {
+    const decoded = decodeSavedLocalPtyReference(entry)
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
+  const migrationUnsupportedPtyEntries = normalizeMigrationUnsupportedPtyEntries(
+    parsed.migrationUnsupportedPtyEntries
+  ).map((entry) => {
+    const decoded = entry.source === 'local' ? decodeSavedLocalPtyReference(entry) : entry
+    if (decoded !== entry) {
+      markNeedsSave()
+    }
+    return decoded
+  })
 
   return {
     ...defaults,
@@ -113,10 +133,8 @@ export function normalizeLoadedProfileState(
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
     sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
-    migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
-      parsed.migrationUnsupportedPtyEntries
-    ),
-    legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
+    migrationUnsupportedPtyEntries,
+    legacyPaneKeyAliasEntries,
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(

@@ -36,21 +36,34 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
 export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10 * 1024 * 1024
 
-// Only this licensed desktop-identical asset has its own allowance; other fonts (KaTeX's) and code count.
-export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
-const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
-const TERMINAL_FONT_BYTES = 1_177_916
+// Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
+// The page fetches each only when the terminal draws with it, so none weighs on first open.
+export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1300 * 1024
+const APPROVED_TERMINAL_FONTS = [
+  // Symbols Nerd Font Mono, identical to desktop's.
+  ['8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467', 1_177_916],
+  // The terminal font setting's JetBrains Mono, Fira Code and Geist Mono, latin and latin-ext.
+  ['18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e', 40_404],
+  ['79bfdab9ba467e26eea4122e6f2567e188dd8a09a8c730d501fc487c4ab99c6e', 15_196],
+  ['771bf4b79a97fc005d12866168bd39d868a9dd3d5903008fe8b796723c8a56f4', 36_276],
+  ['801677342d1191c5e964719bbcb5834f5da3c39a00e1e1501f450b1379fcc116', 13_272],
+  ['684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc', 23_128],
+  ['1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b', 14_696]
+]
 
 export function mobileWebAppBundleBudgetBytes(manifest) {
-  const terminalFont = manifest.assets.find(
-    (asset) =>
-      asset.path === `assets/${TERMINAL_FONT_SHA256}.woff2` &&
-      asset.sha256 === TERMINAL_FONT_SHA256 &&
-      asset.contentType === 'font/woff2' &&
-      asset.byteLength === TERMINAL_FONT_BYTES &&
-      asset.byteLength <= MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES
-  )
-  return manifest.totalBytes - (terminalFont?.byteLength ?? 0)
+  const fontBytes = manifest.assets
+    .filter((asset) =>
+      APPROVED_TERMINAL_FONTS.some(
+        ([sha256, byteLength]) =>
+          asset.path === `assets/${sha256}.woff2` &&
+          asset.sha256 === sha256 &&
+          asset.contentType === 'font/woff2' &&
+          asset.byteLength === byteLength
+      )
+    )
+    .reduce((total, asset) => total + asset.byteLength, 0)
+  return manifest.totalBytes - (fontBytes <= MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES ? fontBytes : 0)
 }
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
@@ -207,7 +220,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
   if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
     fail(
-      `bundle excluding the approved font and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
+      `bundle excluding the approved fonts and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
     )
   }
@@ -248,7 +261,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved font, ` +
+        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )

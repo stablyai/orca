@@ -6,7 +6,7 @@ import { ForkMarkedName } from '../../fork/ForkMarkedName'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   type NativeChatNoticeLook
-} from '../../../../../../shared/native-chat/native-chat-notice'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 
 /** The rule after a fork's inherited history: a pill that opens the source while it can be opened,
  *  plain words otherwise (source unknown to its host, or the pane cannot open chats now). */

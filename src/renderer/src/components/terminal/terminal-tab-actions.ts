@@ -6,8 +6,8 @@ import { useAppStore } from '@/store'
 import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
+import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking/tracking-lifecycle'
+import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/identity/tracking-mappings'
 import { resolveTerminalCloseRoute } from '@/lib/workspace/ownership/terminal-close-route'
 import {
   guardPinnedTabClose,
@@ -126,6 +126,7 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
   if (shouldConfirmRunningTerminalClose(options)) {
     guardRunningTerminalClose({
       terminalTabId,
+      worktreeId: owningWorktreeId,
       ...(options?.consentedPtyId ? { consentedPtyId: options.consentedPtyId } : {}),
       // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
