@@ -22858,10 +22858,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
-    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
-    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
-    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
-    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
     "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "검색, 예: Opus 5.5…",
     "configure": "{{agent}} 설정",
