@@ -11,7 +11,7 @@ import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/workspace/catalog/
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
-import { projectHostCountLabel } from '@/components/project-host-count-label'
+import { projectHostCountLabel } from '@/components/host-picker/project-host-count-label'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getAutomationProjectGroupForRepo,

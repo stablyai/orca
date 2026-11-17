@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type Database from '../../../sqlite/sync-database'
 import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
@@ -11,6 +11,7 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { journalDatabasePath } from './journal-host-database'
+import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
 import { persistJournalOutcomeRows } from '../outcomes/journal-outcome-table'
@@ -554,3 +555,48 @@ it('keeps a reply and queued text an older Orca saved as outcome records, not a 
       .map((row) => String(row.session_id))
   ).toEqual(copies.filter((copy) => !items(later.db, copy).includes('older-reply')))
 })
+
+// Perf contract: an unchanged original only needs baselines, so it skips adoption at any fleet size.
+it.each([10, 100])(
+  'fills in %i missing baselines without reading tabs, claims or chat state when the original is unchanged',
+  async (chats) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: original } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => original.close())
+    for (let index = 0; index < chats; index += 1) {
+      olderOrcaChat(original, `chat-${index}`, rows)
+      original
+        .prepare(
+          'INSERT INTO agent_session_attachment_claims(upload_id,session_id,claimed_at) VALUES(?,?,?)'
+        )
+        .run(`upload-${index}`, `chat-${index}`, 0)
+    }
+    const first = await upgrade(root)
+    cleanup.push(first.close)
+    // Baselines missing, receipt with its WAL identity: only such a receipt proves the original unchanged.
+    first.db.exec(`DELETE FROM agent_session_store_meta
+      WHERE key LIKE 'journal.legacy-revision%' OR key = 'journal.legacy-revisions-kept.v1'`)
+
+    const prepared = vi.spyOn(first.db, 'prepare')
+    reconcileJournalLegacySource(root, first.db)
+    expect(
+      prepared.mock.calls
+        .map(([sql]) => String(sql))
+        .filter((sql) => /agent_session_tabs|attachment_claims|journal_chat_state/.test(sql))
+    ).toEqual([])
+    prepared.mockRestore()
+    expect(
+      first.db
+        .prepare(
+          "SELECT COUNT(*) AS baselines FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-revision:%'"
+        )
+        .get()
+    ).toEqual({ baselines: chats })
+    expect(
+      first.db
+        .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+        .get('journal.legacy-revisions-kept.v1')
+    ).toEqual({ value: '1' })
+  }
+)

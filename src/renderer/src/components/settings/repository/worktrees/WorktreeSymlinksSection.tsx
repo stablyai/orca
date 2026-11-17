@@ -5,7 +5,7 @@ import { Button } from '../../../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
 import { cn } from '@/lib/class-names'
-import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,

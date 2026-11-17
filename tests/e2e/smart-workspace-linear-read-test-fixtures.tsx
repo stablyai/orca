@@ -3,7 +3,7 @@ import { createTestStore } from '@/store/slices/linear/linear-slice-test-harness
 import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
 import React from 'react'
 import type * as ReactModule from 'react'
-import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-client-ipc-bridge'
+import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-events/runtime-client-ipc-bridge'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
 import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSourceStatus'
@@ -228,9 +228,12 @@ vi.mock(
     useJiraUrlSource: () => ({ intent: false })
   })
 )
-vi.mock('../../src/renderer/src/components/use-jira-project-inventory', () => ({
-  useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
-}))
+vi.mock(
+  '../../src/renderer/src/components/task-page/jira/project-selection/use-jira-project-inventory',
+  () => ({
+    useJiraProjectInventory: () => ({ projects: [], connected: true, error: null, loading: false })
+  })
+)
 
 export const repo: Repo = { ...referenceRepo, executionHostId: 'runtime:env-1' }
 // Stable identity: search effects depend on the repos array.

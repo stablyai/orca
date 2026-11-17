@@ -54,21 +54,35 @@ export function keepJournalLegacyPersonEdits(
     return
   }
   const source = openJournalLegacySource(sourcePath)
-  let edits: [string, string][]
+  let keep: (() => void) | null
   try {
-    edits = readPersonEdits(source)
+    keep = journalLegacyPersonEditsBaseline(source, db)
   } finally {
     source.close()
   }
   if (!sameJournalLegacySource(savedReceipt, captureJournalLegacySourceReceipt(sourcePath))) {
     return
   }
-  runJournalTransaction(db, () => {
+  if (keep) {
+    runJournalTransaction(db, keep)
+  }
+}
+
+/** The write that keeps the original's person edits, read now, as their baseline; null once kept. */
+export function journalLegacyPersonEditsBaseline(
+  source: Database.Database,
+  db: Database.Database
+): (() => void) | null {
+  if (readJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT) !== undefined) {
+    return null
+  }
+  const edits = readPersonEdits(source)
+  return () => {
     for (const [id, value] of edits) {
       writeJournalStoreMeta(db, personEditsKey(id), value)
     }
     writeJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT, '1')
-  })
+  }
 }
 
 function readPersonEdits(records: Database.Database): [string, string][] {

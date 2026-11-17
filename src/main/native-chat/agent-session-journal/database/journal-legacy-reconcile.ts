@@ -29,6 +29,7 @@ import {
   applyOlderOrcaRecordEdits,
   takeOlderOrcaRecordEdits,
   JOURNAL_LEGACY_PERSON_EDITS_KEPT,
+  journalLegacyPersonEditsBaseline,
   keepJournalLegacyPersonEdits,
   olderOrcaRecordKeepingEditsHere,
   passOlderOrcaRecordEditsToCopy
@@ -62,16 +63,22 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   }
   const receipt = JSON.stringify(captured)
   const pass: Pass = {
-    changed: !unchanged,
     kept,
     lastRead: journalLegacySourceLastRead(saved),
     baselines: [],
     recordEdits: []
   }
   const source = openJournalLegacySource(sourcePath)
-  let complete = false
+  let complete = true
+  let personEdits: (() => void) | null = null
   try {
-    complete = absorbChats(source, db, pass)
+    if (unchanged) {
+      // The original wrote nothing since the copy, so each chat is as shown here.
+      pass.baselines = missingBaselines(source, db)
+      personEdits = journalLegacyPersonEditsBaseline(source, db)
+    } else {
+      complete = absorbChats(source, db, pass)
+    }
   } finally {
     source.close()
     // Applied as soon as read, as each chat's own write was: a later pass compares with them.
@@ -93,14 +100,17 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     if (complete) {
       writeJournalStoreMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
       writeJournalStoreMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
-      writeJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT, '1')
+      if (personEdits) {
+        personEdits()
+      } else {
+        writeJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT, '1')
+      }
     }
   })
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
-  changed: boolean
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
   /** When the original was last read, in ms; null when no receipt says. */
@@ -121,6 +131,28 @@ type Adoption = {
   tabsRecorded: boolean
 }
 
+/**
+ * A baseline is the original's revision when it was read. A write changes the original's identity
+ * for good, so while it still matches the saved receipt, no write followed any baseline here.
+ */
+function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
+  return originalChatIds(source, 'any')
+    .filter((id) => readJournalStoreMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
+    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+}
+
+/** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
+function originalChatIds(source: Database.Database, order: 'saved' | 'any'): string[] {
+  return source
+    .prepare(
+      order === 'saved'
+        ? 'SELECT session_id FROM agent_session_records ORDER BY rowid'
+        : 'SELECT session_id FROM agent_session_records'
+    )
+    .all()
+    .map((row) => String(row.session_id))
+}
+
 /** True when every chat was absorbed; a failed chat is logged and retried next launch. */
 function absorbChats(source: Database.Database, db: Database.Database, pass: Pass): boolean {
   let adoption = readAdoption(source, db)
@@ -130,11 +162,9 @@ function absorbChats(source: Database.Database, db: Database.Database, pass: Pas
     }
   })
   let complete = true
-  for (const { session_id: id } of source
-    .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
-    .all()) {
+  for (const id of originalChatIds(source, 'saved')) {
     try {
-      absorbChat(source, db, String(id), adoption, pass)
+      absorbChat(source, db, id, adoption, pass)
     } catch (error) {
       complete = false
       // The failed chat's transaction rolled back; reread what this file now holds.
@@ -194,14 +224,14 @@ function absorbChat(
     db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id) !== undefined
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
-  // A file copied before revisions were kept has none to compare. An original as copied wrote
-  // nothing since; otherwise a chat held here but not converted converts from the current
-  // original, so nothing is hidden. The copy cataloged every chat with history, so one it didn't
-  // is new, unless it has none: then it may have been deleted here.
+  // A file copied before revisions were kept has none to compare. A chat held here but not
+  // converted converts from the current original, so nothing is hidden. The copy cataloged every
+  // chat with history, so one it didn't is new, unless it has none: then it may have been deleted
+  // here.
   if (
     shown === undefined &&
-    (!pass.changed ||
-      (!converted && (chat !== undefined ? here : !pass.kept && revision === 'null')))
+    !converted &&
+    (chat !== undefined ? here : !pass.kept && revision === 'null')
   ) {
     baseline()
     return

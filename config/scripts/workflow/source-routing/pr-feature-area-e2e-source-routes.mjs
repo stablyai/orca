@@ -16,16 +16,9 @@ function featureRoute(id, specs, prefixes) {
 // Feature areas whose specs the nightly suite alone used to select (gap audit, Oct 2026).
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute('feature.sparse-checkout', ['sparse-explorer-proof'], [`${COMPONENTS}sparse/`]),
-  featureRoute('feature.onboarding', ['onboarding'], [`${COMPONENTS}onboarding/`]),
   featureRoute(
     'feature.diff-notes',
-    [
-      'diff-note-delete',
-      'diff-note-draft',
-      'diff-note-edit',
-      'diff-note-layout',
-      'diff-note-line-range'
-    ],
+    ['diff-note-delete', 'diff-note-draft', 'diff-note-edit', 'diff-note-line-range'],
     [`${COMPONENTS}diff-comments/`]
   ),
   featureRoute(
@@ -63,22 +56,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/shared/linear/'
     ]
   ),
-  featureRoute(
-    'feature.jira',
-    ['jira-panel-layout'],
-    [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
-  ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
-  featureRoute(
-    'feature.github-projects',
-    ['github-project-board'],
-    [
-      `${COMPONENTS}github-project/`,
-      'src/renderer/src/store/github/projects/',
-      'src/main/github/project-view/',
-      'src/main/ipc/source-control/github-project-view-handlers.ts'
-    ]
-  ),
   featureRoute(
     'feature.agent-descendant-kill',
     ['agent-descendant-process-kill'],

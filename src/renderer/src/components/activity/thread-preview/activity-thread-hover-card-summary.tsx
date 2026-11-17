@@ -18,8 +18,8 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
-import CommentMarkdown from '../../sidebar/CommentMarkdown'
-import { getTranslatedExecutionHostLabel } from '../../sidebar/execution-host-label'
+import CommentMarkdown from '../../comment-markdown/CommentMarkdown'
+import { getTranslatedExecutionHostLabel } from '../../../runtime/hosts/display/execution-host-label'
 import {
   DetailHeader,
   MetadataActionIcon

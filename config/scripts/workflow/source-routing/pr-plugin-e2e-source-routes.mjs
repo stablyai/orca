@@ -111,19 +111,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
-  // The component catalog: Orca draws each component, so the gallery exercises every one.
-  pluginRoute(
-    'plugins.components-catalog',
-    ['plugin-components-gallery'],
-    [
-      `${UI}declarative\\/`,
-      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
-      'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
-      'examples\\/plugins\\/components-gallery\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
   // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
   pluginRoute(
     'plugins.buildless-tsx',
@@ -186,7 +173,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
       // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
       'src\\/cli\\/(?:plugins\\/view\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
-      'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
+      'src\\/renderer\\/src\\/(?:components\\/plugins\\/view\\/plugin-view-ipc-bridge|hooks\\/theme\\/use-document-dark-theme)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panels\\/health\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report)|right-sidebar-panel-content)'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
