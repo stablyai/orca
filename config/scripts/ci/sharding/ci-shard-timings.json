@@ -1958,7 +1958,6 @@
       "src/main/pty/process-retirement/pty-descendant-exit-verification.test.ts": 155,
       "src/main/pty/process-retirement/pty-descendant-termination-libproc.test.ts": 135,
       "src/main/pty/process-retirement/pty-descendant-termination.test.ts": 200,
-      "src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts": 41,
       "src/main/pty/shell-startup/codex-no-daemon-launch-command.test.ts": 108,
       "src/main/pty/shell-startup/codex-preflight-profile-path-rewrite.test.ts": 180,
       "src/main/pty/shell-startup/codex-shell-launch-preflight.test.ts": 7407,
