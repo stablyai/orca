@@ -29030,7 +29030,8 @@
     },
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
-      "sideDetail": "Side chat: a separate topic with this bot."
+      "sideDetail": "Side chat: a separate topic with this bot.",
+      "homeBanner": "Open {{name}}'s page"
     },
     "settingsView": {
       "pathCopied": "Path copied",

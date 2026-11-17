@@ -16,8 +16,11 @@ import {
 import { installBotHomeTabPlacement } from './bot-home-tab-placement'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+const bots = vi.hoisted(() => ({ hostId: 'local' }))
 vi.mock('@/lib/bot-catalog', () => ({
-  readBots: () => [{ id: 'bot-1', folderWorkspaceId: 'bot-home', chatSessionId: 'home' }],
+  readBots: () => [
+    { id: 'bot-1', hostId: bots.hostId, folderWorkspaceId: 'bot-home', chatSessionId: 'home' }
+  ],
   readBotsEnabled: () => true,
   subscribeToBotChanges: () => () => {}
 }))
@@ -60,11 +63,18 @@ function strips(): string[][] {
   return ids.map((id) => groups.get(id)?.tabOrder ?? [])
 }
 
+function pinnedIds(): string[] {
+  return (store.getState().unifiedTabsByWorktree[WT] ?? [])
+    .filter((tab) => tab.isPinned)
+    .map((tab) => tab.id)
+}
+
 function groupOf(tabId: string): string {
   return store.getState().unifiedTabsByWorktree[WT]!.find((tab) => tab.id === tabId)!.groupId
 }
 
 beforeEach(() => {
+  bots.hostId = 'local'
   resetWebSessionTabsSyncTestState()
   store = createTestStore()
   uninstall = installBotHomeTabPlacement(store)
@@ -235,5 +245,83 @@ describe('bot Home tab placement', () => {
       applyWebSessionTabsSnapshot(state, { ...snapshot, snapshotVersion: 2 }, ENV, NOW + 1)
     )
     expect(strips()).toEqual([[home, page]])
+  })
+
+  it('unpins a side chat pinned before only Home could be, once the session restores, wherever it comes from', () => {
+    open('home')
+    store.getState().createUnifiedTab(WT, 'agent-session', {
+      id: 'tab-side-1',
+      entityId: 'side-1',
+      agentSessionAgent: 'claude',
+      label: 'side-1',
+      isPinned: true
+    })
+    store.getState().createUnifiedTab(WT, 'browser', {
+      id: 'tab-page',
+      entityId: 'page',
+      label: 'Docs',
+      isPinned: true
+    })
+    // Restore is not done, so the window cannot know this pin is its own yet.
+    expect(pinnedIds()).toEqual(['tab-side-1', 'tab-page'])
+
+    store.setState({ workspaceSessionReady: true })
+    expect(pinnedIds()).toEqual(['tab-page'])
+    expect(strips()).toEqual([['tab-home', 'tab-page', 'tab-side-1']])
+
+    store.getState().createUnifiedTab(WT, 'agent-session', {
+      id: 'tab-side-2',
+      entityId: 'side-2',
+      agentSessionAgent: 'claude',
+      label: 'side-2',
+      isPinned: true
+    })
+    expect(pinnedIds()).toEqual(['tab-page'])
+    expect(strips()[0]?.[0]).toBe('tab-home')
+  })
+
+  it("leaves a paired host's pinned side chat to that host", () => {
+    bots.hostId = `runtime:${ENV}`
+    store.setState({ workspaceSessionReady: true })
+    const snapshot = makeSnapshot(
+      [
+        {
+          type: 'agent-session',
+          id: 'agent-session:home',
+          sessionId: 'home',
+          agent: 'claude',
+          title: 'Home',
+          isActive: true
+        },
+        {
+          type: 'agent-session',
+          id: 'agent-session:side-1',
+          sessionId: 'side-1',
+          agent: 'claude',
+          title: 'Side',
+          isActive: false,
+          isPinned: true
+        }
+      ],
+      {
+        worktree: WT,
+        activeGroupId: 'host-group',
+        activeTabId: 'agent-session:home',
+        activeTabType: 'agent-session',
+        tabGroups: [
+          {
+            id: 'host-group',
+            activeTabId: 'agent-session:home',
+            tabOrder: ['agent-session:home', 'agent-session:side-1']
+          }
+        ],
+        tabGroupLayout: { type: 'leaf', groupId: 'host-group' }
+      }
+    )
+    store.setState((state) => applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW))
+    const side = (store.getState().unifiedTabsByWorktree[WT] ?? []).find(
+      (tab) => tab.entityId === 'side-1'
+    )
+    expect(side?.isPinned).toBe(true)
   })
 })

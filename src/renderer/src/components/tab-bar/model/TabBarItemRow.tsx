@@ -25,6 +25,7 @@ import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conve
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { useBotForWorkspace } from '../../bots/bot-workspace'
+import { isBotHomeTab, isBotSideChatTab } from '../../../../../shared/bots/bot-home-tab'
 import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
@@ -87,7 +88,7 @@ function TabBarItemRow({
     item.type === 'agent-session' ? item.data : undefined
   )
   const bot = useBotForWorkspace(worktreeId)
-  const isBotChat = item.type === 'agent-session' && bot?.chatSessionId === item.data.entityId
+  const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const roomMembers = useBotGroupTabMembers(item.type === 'room' ? item.data.entityId : null)
   // A room is unread while one of its own members' replies is; a sibling thread's stays on that tab.
   const roomUnread = useAppStore(
@@ -195,6 +196,8 @@ function TabBarItemRow({
         fork={fork}
         closable={!isBotChat}
         sizing={isBotChat ? 'content' : 'terminal'}
+        canPin={!isBotSideChatTab(item.data, bot)}
+        isBotHome={isBotChat}
         canContinueInTerminal={bot === null}
         identityIcon={
           bot ? <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" /> : undefined

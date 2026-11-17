@@ -42,6 +42,7 @@ import {
   NativeChatNamingFailedDialog
 } from '../session-actions/NativeChatNamingFailure'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
+import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
 
 export default function SortableTab({
   tab,
@@ -75,6 +76,8 @@ export default function SortableTab({
   namingFailure,
   closable = true,
   sizing = 'terminal',
+  canPin = true,
+  isBotHome = false,
   canContinueInTerminal = true,
   identityIcon,
   identityDetail,
@@ -193,6 +196,7 @@ export default function SortableTab({
       // Expose rendered selection so E2E catches visual regressions missed by store-only assertions.
       data-active={isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
+      data-bot-home={isBotHome ? '' : undefined}
       // The drag handle's describedby owns the description, so the names join the tab's name.
       aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
@@ -229,6 +233,7 @@ export default function SortableTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isBotHome && <BotHomeTabAccent />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
@@ -271,7 +276,11 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{titleNode}</span>
+        <span
+          className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
+        >
+          {titleNode}
+        </span>
       )}
       {tab.color && !isEditing && (
         <span
@@ -373,6 +382,7 @@ export default function SortableTab({
         hasTabsToLeft={hasTabsToLeft}
         isPinned={isPinned}
         closable={closable}
+        canPin={canPin}
         canContinueInTerminal={canContinueInTerminal}
         onActivate={onActivate}
         onClose={onClose}
