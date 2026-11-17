@@ -39,7 +39,9 @@ running as when the worker shares your execution host. Otherwise, such as a
 different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
 that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 
-- Start every independent worker, then **end your turn**. "Report back" and
+- Start independent workers at the same time: each `worker-start` waits until
+  its agent is ready, so run them as parallel commands, not one after another.
+  Then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
   report then.
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
