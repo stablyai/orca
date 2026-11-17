@@ -1,7 +1,10 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { PluginSyntaxMetadata } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import { parsePluginSyntaxPayload } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
-import { pluginSyntaxRevisionKey, recordPluginSyntaxFailure } from '@/store/plugin-syntax-failures'
+import {
+  pluginSyntaxRevisionKey,
+  recordPluginSyntaxFailure
+} from '@/store/plugins/syntax/plugin-syntax-failures'
 import { createPluginSyntaxEngine, type PluginSyntaxEngine } from './plugin-syntax-engine'
 import { PluginSyntaxSlotPool, type PluginSyntaxLease } from './plugin-syntax-slot-pool'
 

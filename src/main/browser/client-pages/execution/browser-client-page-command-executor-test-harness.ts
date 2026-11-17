@@ -1,5 +1,5 @@
 import type { BrowserRoutePreparePageInput } from '../../routing/sessions/browser-route-session-state'
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { vi } from 'vitest'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import type {
@@ -85,7 +85,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
     legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     maxPages: options.maxPages,
-    retainNetworkRoute: vi.fn(async () => {
+    retainNetworkRoute: vi.fn(async (_key: string, _signal: AbortSignal) => {
       order.push('retain-route')
       return route
     }),

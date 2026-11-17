@@ -1,27 +1,30 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { findKeybindingConflicts } from '../../shared/keybindings/formatting'
+import { getKeybindingDefinition, isKeybindingActionId } from '../../shared/keybindings/definitions'
 import {
-  findKeybindingConflicts,
-  getKeybindingDefinition,
-  isKeybindingActionId,
   keybindingFileDiagnostic,
   keybindingValidationFailure,
   KEYBINDING_REASON_COPY,
+  type KeybindingReasonCode
+} from '../../shared/keybindings/keybinding-diagnostic-copy'
+import {
   normalizeKeybindingArrayForAction,
-  normalizeKeybindingListForAction,
-  type KeybindingActionId,
-  type KeybindingFileDiagnostic,
-  type KeybindingOverrides,
-  type KeybindingPlatform,
-  type KeybindingReasonCode,
-  type KeybindingValidationResult
-} from '../../shared/keybindings'
+  normalizeKeybindingListForAction
+} from '../../shared/keybindings/normalization'
+import type {
+  KeybindingActionId,
+  KeybindingFileDiagnostic,
+  KeybindingOverrides,
+  KeybindingPlatform,
+  KeybindingValidationResult
+} from '../../shared/keybindings/types'
 
 export type JsonObject = Record<string, unknown>
 
 export const FILE_VERSION = 1
 const PLATFORM_KEYS: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
-const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms'])
+const ROOT_KEYS = new Set(['$schema', 'version', 'keybindings', 'platforms', 'migrations'])
 
 export function isJsonObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)

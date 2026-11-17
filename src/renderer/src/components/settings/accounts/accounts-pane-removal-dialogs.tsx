@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   removeClaudeProviderAccount,
   removeCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -13,18 +14,31 @@ import {
   DialogTitle
 } from '../../ui/dialog'
 import type { AccountsPaneSectionModel, RemoveAccountTarget } from './accounts-pane-types'
+import { getManagedAccountInlineLabel } from '../../../../../shared/agent-accounts/managed-account-display-names'
+
+function removalAccountLabel(
+  accounts: readonly { id: string; email: string; displayName?: string }[],
+  target: RemoveAccountTarget | null
+): string {
+  const account = target ? accounts.find((entry) => entry.id === target.id) : undefined
+  return account ? getManagedAccountInlineLabel(account) : ''
+}
 
 export function renderAccountsRemovalDialogs(
   model: AccountsPaneSectionModel,
   removeCodexTarget: RemoveAccountTarget | null,
-  removeClaudeTarget: RemoveAccountTarget | null
+  removeClaudeTarget: RemoveAccountTarget | null,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     runClaudeAccountAction,
     runCodexAccountAction,
     setRemoveClaudeTarget,
     setRemoveCodexTarget,
-    accountOwner
+    accountOwner,
+    accountRuntimeSentenceLabel,
+    claudeAccounts,
+    codexAccounts
   } = model
   return (
     <>
@@ -35,21 +49,22 @@ export function renderAccountsRemovalDialogs(
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.settings.AccountsPane.0d47394635',
-                'Remove Codex Account?'
-              )}
+              {t('auto.components.settings.AccountsPane.0d47394635', 'Remove Codex Account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
-                'auto.components.settings.AccountsPane.380a7736cc',
-                'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
+              <span className="block font-medium text-foreground">
+                {removalAccountLabel(codexAccounts.accounts, removeCodexTarget)}
+              </span>
+              {t(
+                'settings.accounts.codexRemoveHome',
+                "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+                { host: accountRuntimeSentenceLabel }
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveCodexTarget(null)}>
-              {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -66,7 +81,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {translate('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -78,21 +93,22 @@ export function renderAccountsRemovalDialogs(
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.settings.AccountsPane.63843e37e2',
-                'Remove Claude Account?'
-              )}
+              {t('auto.components.settings.AccountsPane.63843e37e2', 'Remove Claude Account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
-                'settings.accounts.claudeRemoveFolder',
-                "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+              <span className="block font-medium text-foreground">
+                {removalAccountLabel(claudeAccounts.accounts, removeClaudeTarget)}
+              </span>
+              {t(
+                'settings.accounts.claudeRemoveProfile',
+                "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default.",
+                { host: accountRuntimeSentenceLabel }
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveClaudeTarget(null)}>
-              {translate('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
+              {t('auto.components.settings.AccountsPane.dbb9626ed1', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -109,7 +125,7 @@ export function renderAccountsRemovalDialogs(
                 )
               }}
             >
-              {translate('auto.components.settings.AccountsPane.c2d2751587', 'Remove Account')}
+              {t('auto.components.settings.AccountsPane.699680a328', 'Remove account')}
             </Button>
           </DialogFooter>
         </DialogContent>

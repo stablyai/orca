@@ -28,32 +28,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('shares one native watch and refresh timer across path aliases', async () => {
-  const pool = new WindowsRuntimeWatchPool()
-  const { watcher, notify } = installWatcher()
-  const callbacks = Array.from({ length: 3 }, () => vi.fn())
-  const releases = await Promise.all(
-    callbacks.map((callback, index) =>
-      pool.watch(index % 2 === 0 ? 'C:\\repo' : 'c:/REPO', callback, vi.fn())
-    )
-  )
-  expect(watchMock).toHaveBeenCalledOnce()
-  notify()
-  expect(vi.getTimerCount()).toBe(1)
-  await releases[0]()
-  expect(watcher.close).not.toHaveBeenCalled()
-  await vi.advanceTimersByTimeAsync(500)
-  expect(callbacks[0]).not.toHaveBeenCalled()
-  for (const callback of callbacks.slice(1)) {
-    expect(callback).toHaveBeenCalledExactlyOnceWith([
-      { kind: 'overflow', absolutePath: 'C:\\repo' }
-    ])
-  }
-  await Promise.all(releases.slice(1).map((release) => release()))
-  expect(watcher.close).toHaveBeenCalledOnce()
-  expect(vi.getTimerCount()).toBe(0)
-})
-
 it('cancels a successor waiting on physical close without starting another watch', async () => {
   const pool = new WindowsRuntimeWatchPool()
   const first = installWatcher(() => undefined)

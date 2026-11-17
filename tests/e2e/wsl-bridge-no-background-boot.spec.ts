@@ -19,7 +19,7 @@ import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePanePtyId } from './helpers/terminal'
 import { visitSettingsPanes } from './helpers/settings-pane-visits'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 import {
   readDiagnosticLog,
   recordMainProcessWslDiagnostics
@@ -147,7 +147,8 @@ async function expectNothingStartsTheStoppedDistro(
   await activate(page, workspace.worktreeId)
   await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/ })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/ })
     .first()
     .click()
   await expect(page.locator('.xterm:visible').first()).toBeVisible({ timeout: 60_000 })

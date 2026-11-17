@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { PluginIconThemeMetadata } from '../../../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
 import type { PluginLanguagePackRegistration } from '../../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
@@ -6,9 +6,9 @@ import type { PluginThemeRegistration } from '../../../../../shared/plugins/arti
 import { isUsablePluginLanguagePack } from '../../../../../shared/plugins/languages/plugin-language-pack-coverage'
 import { useAppStore } from '@/store'
 import { isPluginAppThemeSelected } from './plugin-theme-apply'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
+import { usePluginLanguagePacks } from '@/store/plugins/localization/plugin-language-packs'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 
 type ThemeMode = 'light' | 'dark'
 

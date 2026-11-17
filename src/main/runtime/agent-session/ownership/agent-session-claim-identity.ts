@@ -12,8 +12,8 @@ import { dirname, isAbsolute, join, normalize } from 'node:path'
 import {
   AGENT_SESSION_CLAIM_DIGEST_VERSION,
   type AgentSessionExecutionClaim
-} from '../../../../shared/agent-session/agent-session-host-authority'
-import { getAgentResumeArgv } from '../../../../shared/agent-resume-argv'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { getAgentResumeArgv } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,

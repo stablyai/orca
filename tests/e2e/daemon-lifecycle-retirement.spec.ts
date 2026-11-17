@@ -6,14 +6,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from 'esbuild'
 import { expect, test } from '@playwright/test'
-import { DaemonClient } from '../../src/main/daemon/client'
-import { DaemonPtyAdapter } from '../../src/main/daemon/daemon-pty-adapter'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
+import { DaemonPtyAdapter } from '../../src/main/daemon/providers/adapter/daemon-pty-adapter'
 import {
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath
-} from '../../src/main/daemon/daemon-spawner'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+} from '../../src/main/daemon/launch/daemon-spawner'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 
 // Connect to prove liveness: retired daemons deliberately leave endpoint entries on disk.
 function connectsTo(socketPath: string): Promise<boolean> {

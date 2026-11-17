@@ -5,7 +5,7 @@ import {
   BULK_TAB_CLOSE_COPY as COPY,
   closeTabsAfterConfirmation,
   type BulkTabCloseScope
-} from '../../../shared/bulk-tab-close-confirmation'
+} from '../../../shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 
 export function useBulkTabCloseConfirmation() {
   const confirm = useConfirmationDialog()
@@ -28,7 +28,6 @@ export function useBulkTabCloseConfirmation() {
             title: titles[scope],
             description: translate('components.tab.bar.bulkClose.description', COPY.description),
             confirmLabel: translate('components.tab.bar.bulkClose.confirm', COPY.confirm),
-            cancelVariant: 'ghost',
             confirmVariant: 'destructive'
           })
         },

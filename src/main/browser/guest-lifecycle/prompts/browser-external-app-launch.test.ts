@@ -1,155 +1,146 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  getApplicationNameForProtocol: vi.fn((_url: string) => 'Okta Verify'),
-  openExternal: vi.fn((_url: string) => Promise.resolve())
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
+
+const { openExternalMock, agentInjecting } = vi.hoisted(() => ({
+  openExternalMock: vi.fn(async () => {}),
+  agentInjecting: { current: false }
 }))
 
 vi.mock('electron', () => ({
-  app: { getApplicationNameForProtocol: mocks.getApplicationNameForProtocol },
-  shell: { openExternal: mocks.openExternal }
+  app: { getApplicationNameForProtocol: () => 'Visual Studio Code', getPath: () => '/tmp' },
+  shell: { openExternal: openExternalMock }
 }))
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
-import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
+vi.mock('../../cdp/input/agent-input-injection', () => ({
+  isAgentInjectingInput: () => agentInjecting.current
+}))
+
+import { trackBrowserGuestInputGesture } from '../input/browser-guest-input-gesture'
 import {
-  BROWSER_PAGE_PROMPT_TIMEOUT_MS,
-  respondToBrowserPagePrompt,
-  type BrowserPagePromptTarget
-} from './browser-page-prompts'
+  registerBrowserSessionSitePermissions,
+  sessionBrowserSitePermissions
+} from '../../site-settings/permissions/browser-site-permission-memory'
+import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
+import { BROWSER_PAGE_PROMPT_TIMEOUT_MS, respondToBrowserPagePrompt } from './browser-page-prompts'
 
-const OKTA_URL = 'com-okta-authenticator:/deviceChallenge?challengeRequest=abc'
+type MockContents = Electron.WebContents & EventEmitter
 
-function mockRenderer(id: number): Electron.WebContents {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed, send and subscribe to the window's lifecycle events.
-  return {
-    id,
-    isDestroyed: () => false,
-    send: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn()
-  } as unknown as Electron.WebContents
-}
+const LINK = 'vscode://file/src/app.ts:12'
+const guests: MockContents[] = []
 
-const requesters: (Electron.WebContents & EventEmitter)[] = []
-
-function mockRequester(): Electron.WebContents & EventEmitter {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed and the input, navigation and destroyed events.
-  const contents = new EventEmitter() as Electron.WebContents & EventEmitter
-  Object.assign(contents, { id: 1000 + requesters.length, isDestroyed: () => false })
-  requesters.push(contents)
-  return contents
-}
-
-function ask(rawUrl = OKTA_URL, requestingUrl: string | null = 'https://acme.okta.com/signin') {
-  return requestBrowserExternalAppLaunch({
-    requester: mockRequester(),
-    target: resolveTarget(),
-    rawUrl,
-    requestingUrl: () => requestingUrl
+function mockTab(pageUrl: string) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: prompts only read id, isDestroyed and send.
+  const renderer = new EventEmitter() as MockContents
+  Object.assign(renderer, { id: 1, isDestroyed: () => false, send: vi.fn() })
+  const session = {}
+  registerBrowserSessionSitePermissions(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the memory is only keyed by session identity.
+    session as Electron.Session,
+    sessionBrowserSitePermissions(`partition-${guests.length}`)
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launches read id, session, getURL, isDestroyed and input and lifecycle events.
+  const guest = new EventEmitter() as MockContents
+  Object.assign(guest, {
+    id: 100 + guests.length,
+    session,
+    getURL: () => pageUrl,
+    isDestroyed: () => false
   })
+  guests.push(guest)
+  trackBrowserGuestInputGesture(guest)
+  const prompts = (): BrowserPagePromptRequest[] =>
+    vi
+      .mocked(renderer.send)
+      .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
+      .map(([, request]) => request)
+  return {
+    // An unnamed requester, like a link in a sandboxed srcdoc frame.
+    openLink: ({ pageInitiated = true } = {}) =>
+      requestBrowserExternalAppLaunch({
+        requester: guest,
+        target: { browserPageId: 'page-1', renderer },
+        rawUrl: LINK,
+        requestingUrl: () => null,
+        pageInitiated
+      }),
+    click: ({ byAgent = false } = {}) => {
+      agentInjecting.current = byAgent
+      guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
+      agentInjecting.current = false
+    },
+    prompts,
+    answerLatest: (answer: unknown) =>
+      respondToBrowserPagePrompt(renderer, { requestId: prompts().at(-1)!.requestId, answer })
+  }
 }
 
-function sentRequests(renderer: Electron.WebContents): BrowserPagePromptRequest[] {
-  return vi
-    .mocked(renderer.send)
-    .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
-    .map(([, request]) => request)
-}
-
-let resolveTarget: () => BrowserPagePromptTarget | null = () => null
-
-describe('browser external app launch', () => {
-  let renderer: Electron.WebContents
-
+describe('requestBrowserExternalAppLaunch', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    mocks.openExternal.mockClear()
-    renderer = mockRenderer(10)
-    // Give each request its own page to avoid prompt sharing.
-    let page = 0
-    resolveTarget = () => ({ browserPageId: `page-${++page}`, renderer })
+    openExternalMock.mockClear()
   })
 
   afterEach(() => {
     vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
-    for (const requester of requesters.splice(0)) {
-      requester.emit('destroyed')
+    for (const guest of guests.splice(0)) {
+      guest.emit('destroyed')
     }
     vi.useRealTimers()
   })
 
-  it('names the app and the asking site, and opens the app only after a yes', async () => {
-    expect(ask()).toBe(true)
-    const [request] = sentRequests(renderer)
-    expect(request).toEqual({
-      requestId: expect.any(String),
-      kind: 'external-app',
-      details: {
-        appName: process.platform === 'linux' ? null : 'Okta Verify',
-        scheme: 'com-okta-authenticator',
-        origin: 'https://acme.okta.com'
-      }
+  it('opens the app unasked after Always, only once per click by the desktop user', async () => {
+    const tab = mockTab('https://review.example.com/guide')
+
+    tab.click()
+    tab.openLink()
+    // The app name is platform-dependent (Linux names none), so it is left out.
+    expect(tab.prompts().at(-1)?.details).toMatchObject({
+      scheme: 'vscode',
+      origin: null,
+      rememberSite: 'https://review.example.com'
     })
-    expect(mocks.openExternal).not.toHaveBeenCalled()
+    await tab.answerLatest('always')
+    expect(openExternalMock).toHaveBeenCalledTimes(1)
 
-    await expect(
-      respondToBrowserPagePrompt(renderer, { requestId: request.requestId, answer: true })
-    ).resolves.toBe('answered')
-    expect(mocks.openExternal).toHaveBeenCalledWith(OKTA_URL)
+    // The click that raised the prompt was spent there.
+    tab.openLink()
+    expect(openExternalMock).toHaveBeenCalledTimes(1)
+    expect(tab.prompts()).toHaveLength(1)
 
-    ask('zoommtg://zoom.us/join?confno=1')
-    await respondToBrowserPagePrompt(renderer, {
-      requestId: sentRequests(renderer)[1].requestId,
-      answer: null
-    })
-    expect(mocks.openExternal).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(200)
+    tab.click()
+    tab.openLink()
+    expect(openExternalMock).toHaveBeenCalledTimes(2)
+    expect(tab.prompts()).toHaveLength(1)
+
+    // The click's release cannot open a second app.
+    tab.click()
+    tab.openLink()
+    expect(openExternalMock).toHaveBeenCalledTimes(2)
+    expect(tab.prompts()).toHaveLength(1)
+
+    // An agent's click still asks, even right after the user's own launch.
+    tab.click({ byAgent: true })
+    tab.openLink()
+    expect(openExternalMock).toHaveBeenCalledTimes(2)
+    expect(tab.prompts()).toHaveLength(2)
   })
 
-  it.each([
-    'https://example.com/',
-    'http://localhost:3000/',
-    'file:///etc/passwd',
-    'javascript:alert(1)',
-    'data:text/html,x',
-    'blob:https://example.com/id',
-    'about:blank',
-    'orca-preview://doc/index.html',
-    'chrome-extension://nngceckbapebfimnlniiiahkandclblb/popup/index.html',
-    'orca-extension-api://api/call',
-    'shell:startup',
-    'vbscript:msgbox(1)',
-    'hcp://system/sysinfo',
-    'ms-help://topic',
-    'afp://share.example/volume',
-    'not a url'
-  ])('refuses %s without asking', (rawUrl) => {
-    expect(ask(rawUrl)).toBe(false)
-    expect(renderer.send).not.toHaveBeenCalled()
+  it('offers no Always for a plain http site', () => {
+    const tab = mockTab('http://review.example.com/guide')
+
+    tab.openLink()
+
+    expect(tab.prompts().at(-1)?.details).toMatchObject({ rememberSite: null })
   })
 
-  it('refuses a page with no window on this computer', () => {
-    resolveTarget = () => null
-    expect(ask()).toBe(false)
-  })
+  it('does not credit the tab when the browser itself loaded a link that redirects to an app', () => {
+    const tab = mockTab('https://review.example.com/guide')
 
-  it('keeps blocking the link while its page already has a prompt open', () => {
-    resolveTarget = () => ({ browserPageId: 'page-1', renderer })
-    ask()
-    expect(ask()).toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
-  })
+    tab.openLink({ pageInitiated: false })
 
-  it('reports a launch the OS could not start, so the window can say so', async () => {
-    mocks.openExternal.mockRejectedValueOnce(new Error('no application for scheme'))
-    ask('zoommtg://zoom.us/join?confno=1')
-
-    await expect(
-      respondToBrowserPagePrompt(renderer, {
-        requestId: sentRequests(renderer)[0].requestId,
-        answer: true
-      })
-    ).resolves.toBe('failed')
+    expect(tab.prompts().at(-1)?.details).toMatchObject({ origin: null, rememberSite: null })
   })
 })

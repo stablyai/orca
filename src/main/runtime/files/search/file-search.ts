@@ -2,15 +2,15 @@ import {
   QUICK_OPEN_SEARCH_VERSION,
   QuickOpenPathRanker,
   isQuickOpenQueryTooLarge
-} from '../../../../shared/quick-open-path-search'
-import type { RuntimeFileListResult } from '../../../../shared/runtime-types'
-import type { SearchOptions, SearchResult } from '../../../../shared/code-search-types'
+} from '../../../../shared/quick-open/quick-open-path-search'
+import type { RuntimeFileListResult } from '../../../../shared/file-listing/runtime-file-list'
+import type { SearchOptions, SearchResult } from '../../../../shared/file-search/code-search-types'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
-import { listQuickOpenFiles } from '../../../ipc/filesystem/filesystem-list-files'
-import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem/filesystem-search-file-paths'
+} from '../../../../shared/concurrency/abort-signal-reason'
+import { listQuickOpenFiles } from '../../../ipc/filesystem/search/filesystem-list-files'
+import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem/search/filesystem-search-file-paths'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from '../mobile-file-kind'
 import {
   requireRuntimeFileProvider,

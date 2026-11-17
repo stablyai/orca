@@ -5,7 +5,7 @@ import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress,
   WorkspaceSpaceWorktreeMeasurement
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 import { analyzeWorkspaceSpace } from '../../workspaces/space-analysis/workspace-space-analysis'
 import { WorkspaceSpaceScanCancelledError } from '../../workspaces/space-analysis/workspace-space-scan-control'
 import {

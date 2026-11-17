@@ -1,11 +1,11 @@
-import { isRestoreSpawnIntent } from '../../../../shared/host-spawn-admission'
+import { isRestoreSpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import {
   assemblePtySpawnEnvDeletions,
   assemblePtySpawnLaunchOptions,
   seedPtySpawnSize
-} from '../spawn-options-assembly'
+} from '../spawn/spawn-options-assembly'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 /** Carries deletions to provider-owned environments, including persistent older daemons. */

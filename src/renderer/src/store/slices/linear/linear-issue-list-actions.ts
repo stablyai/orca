@@ -10,8 +10,8 @@ import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-re
 import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
-} from '../../../../../shared/integration-credential-errors'
-import { linearListIssues, linearSearchIssues } from '@/runtime/runtime-linear-client'
+} from '../../../../../shared/secure-storage/integration-credential-errors'
+import { linearListIssues, linearSearchIssues } from '@/runtime/linear/runtime-linear-client'
 import {
   evictStaleEntries,
   getSelectedWorkspaceId,

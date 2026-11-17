@@ -1,6 +1,14 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewForBranchOutcome, HostedReviewInfo } from '../../shared/hosted-review'
-import { cachedHostedReviewOutcome } from '../../shared/hosted-review'
+import type {
+  CacheEntry,
+  HostedReviewBranchCacheIdentity,
+  HostedReviewBranchCacheOptions
+} from './hosted-review-branch-cache-types'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import type {
+  HostedReviewForBranchOutcome,
+  HostedReviewInfo
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -38,6 +46,7 @@ import {
   noteFailure
 } from './hosted-review-lookup-backoff'
 import { observeProviderRead } from './hosted-review-provider-read'
+import { scaleReviewRefreshInterval } from '../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -51,39 +60,9 @@ import {
 const FOUND_REVIEW_TTL_MS = 60_000
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
-type CacheEntry = {
-  review: HostedReviewInfo | null
-  fetchedAt: number
-  headOid: string | null
-  /** When the lookup that produced this answer began, for straggler ordering. */
-  startedAt: number
-}
-
 const entries = new Map<string, CacheEntry>()
 // NUL cannot occur in paths/branches, preventing invalidation prefixes from crossing identity components.
 const KEY_SEPARATOR = '\0'
-
-export type HostedReviewBranchCacheIdentity = {
-  repoPath: string
-  executionHostId: ExecutionHostId
-  branch: string
-  linkedGitHubPR?: number | null
-  fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-  localGitExecOptions?: unknown
-}
-
-export type HostedReviewBranchCacheOptions = {
-  /** The worktree's checked-out HEAD oid, for merged-at-head visibility. */
-  headOid: string | null
-  /** Set by surfaces that only ever render the selected worktree. */
-  active?: boolean
-  force?: boolean
-  userRefresh?: boolean
-}
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
   return [
@@ -106,10 +85,14 @@ function isHeadSensitive(entry: CacheEntry): boolean {
 }
 
 function refreshIntervalMs(entry: CacheEntry, active: boolean): number {
-  if (entry.review !== null) {
-    return FOUND_REVIEW_TTL_MS
-  }
-  return active ? ACTIVE_REFRESH_INTERVAL_MS : NO_REVIEW_REFRESH_INTERVAL_MS
+  const base =
+    entry.review !== null
+      ? FOUND_REVIEW_TTL_MS
+      : active
+        ? ACTIVE_REFRESH_INTERVAL_MS
+        : NO_REVIEW_REFRESH_INTERVAL_MS
+  // A slower host cadence keeps answers longer; forced, user and newly selected reads still ask.
+  return scaleReviewRefreshInterval(base) ?? Number.POSITIVE_INFINITY
 }
 
 function isFresh(entry: CacheEntry, headOid: string | null, active: boolean): boolean {

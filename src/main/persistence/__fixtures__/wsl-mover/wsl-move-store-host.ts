@@ -12,9 +12,9 @@ import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../../shared/orcad-mi
 import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
-} from '../../../../shared/orcad-runtime-capabilities'
+} from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import type { Store } from '../../loading-store/store'
-import type { WslMoveHost } from '../../moving-wsl-projects/wsl-move-driver-ports'
+import type { WslMoveHost } from '../../moving-wsl-projects/execution/wsl-move-driver-ports'
 
 export class WslMoveKilled extends Error {}
 
@@ -106,7 +106,10 @@ export function createWslMoveStoreHost(options: WslMoveStoreHostOptions): WslMov
           })
         ),
       stageChunk: (request) =>
-        mutate('snapshot-chunk', () => store().stageOrcadMigrationSnapshotChunk(request))
+        mutate('snapshot-chunk', () => store().stageOrcadMigrationSnapshotChunk(request)),
+      readCapabilities: async () => WSL_MOVE_STORE_HOST_CAPABILITIES,
+      stageBlobChunk: (request) =>
+        mutate(`blob:${request.blob.blobKind}`, () => store().stageOrcadMigrationBlobChunk(request))
     },
     commitWithBlobs: (manifest, expectedBlobs) =>
       mutate('commit', () =>

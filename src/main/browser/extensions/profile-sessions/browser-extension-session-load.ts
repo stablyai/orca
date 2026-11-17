@@ -1,4 +1,4 @@
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
 import {

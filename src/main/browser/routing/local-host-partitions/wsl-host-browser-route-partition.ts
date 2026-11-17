@@ -2,11 +2,11 @@
  * The route partition a WSL host's in-app browser pages will use, resolved from the environment
  * record alone so a caller can seed it while no page or orcad connection is live.
  */
-import { classifyRuntimeEnvironmentHost } from '../../../../shared/runtime-environment-host-kind'
+import { classifyRuntimeEnvironmentHost } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { browserAuthorityExecutionHostStorageIdentity } from '../identity/browser-execution-host-storage-identity'
 import {
   deriveBrowserRoutePartitionStorageScope,

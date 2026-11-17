@@ -1,4 +1,4 @@
-import { normalizeBitbucketRemoteHost } from '../../shared/git-remote-host-alias'
+import { normalizeBitbucketRemoteHost } from '../../shared/git/remotes/git-remote-host-alias'
 import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
 
 export type BitbucketRepoRef = {

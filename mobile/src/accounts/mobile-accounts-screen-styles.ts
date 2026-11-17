@@ -11,14 +11,12 @@ export const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm
   },
+  offlineBanner: {
+    paddingBottom: spacing.sm
+  },
   // On a screen, not a sheet: one step above the page, as the other screen groups are.
   group: {
     backgroundColor: colors.bgPanel
-  },
-  usageRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs
   },
   errorText: {
     fontSize: typography.metaSize,

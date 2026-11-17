@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileCandidate } from '../../session-scanner-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 
@@ -8,7 +8,9 @@ export async function refreshCodexTitleFromIndex(
   readIndexedTitle: (sessionId: string) => Promise<string | null>
 ): Promise<AiVaultSession> {
   const title = await readIndexedTitle(session.sessionId)
-  return title && title !== session.title ? { ...session, title } : session
+  return title && (title !== session.title || session.titleKind !== 'named')
+    ? { ...session, title, titleKind: 'named' }
+    : session
 }
 
 export function refreshCachedCodexTitle(

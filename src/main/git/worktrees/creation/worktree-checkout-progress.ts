@@ -1,5 +1,5 @@
 import type { WorktreeCheckoutProgress } from '../../../../shared/worktree/create-types'
-import { createGitProgressRecordReader } from '../../../../shared/git-progress-records'
+import { createGitProgressRecordReader } from '../../../../shared/git/commands/git-progress-records'
 
 /** Receives checkout progress; `null` means git finished writing the files. */
 export type WorktreeCheckoutProgressListener = (progress: WorktreeCheckoutProgress | null) => void

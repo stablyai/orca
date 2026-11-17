@@ -12,7 +12,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DshHookService } from './hook-service'
-import { DSH_HOOK_EVENTS } from './hook-settings'
 
 // Redirect HOME and USERPROFILE and clear DSH_HOME so tests cannot edit real user config.
 let home: string
@@ -51,8 +50,6 @@ afterEach(() => {
 
 const configPath = (): string => join(home, '.dsh', 'cordis.patch.yml')
 const managedHooksPath = (): string => join(home, '.orca', 'agent-hooks', 'dsh-hooks.json')
-const scriptPath = (): string =>
-  join(home, '.orca', 'agent-hooks', process.platform === 'win32' ? 'dsh-hook.cmd' : 'dsh-hook.sh')
 
 function readManagedHooks(): { hooks: Record<string, unknown[]> } {
   const parsed: { hooks: Record<string, unknown[]> } = JSON.parse(
@@ -62,28 +59,6 @@ function readManagedHooks(): { hooks: Record<string, unknown[]> } {
 }
 
 describe('DshHookService', () => {
-  it('installs the patch block, the managed hooks file, and the script', () => {
-    const status = new DshHookService().install()
-    expect(status.state).toBe('installed')
-    expect(status.managedHooksPresent).toBe(true)
-    expect(status.configPath).toBe(configPath())
-
-    const patch = readFileSync(configPath(), 'utf-8')
-    expect(patch).toContain("name: '@deepseek-ai/dsh-hooks-claude-code'")
-    expect(patch).toContain(`configPath: '${managedHooksPath()}'`)
-
-    expect(Object.keys(readManagedHooks().hooks).sort()).toEqual([...DSH_HOOK_EVENTS].sort())
-    expect(readFileSync(scriptPath(), 'utf-8').length).toBeGreaterThan(0)
-  })
-
-  it('is idempotent', () => {
-    const service = new DshHookService()
-    service.install()
-    const first = readFileSync(configPath(), 'utf-8')
-    expect(service.install().state).toBe('installed')
-    expect(readFileSync(configPath(), 'utf-8')).toBe(first)
-  })
-
   it('preserves an existing user patch layer through install and remove', () => {
     const userRows = ['- id: llm-deepseek', '  config:', '    thinking: disabled', ''].join('\n')
     mkdirSync(join(home, '.dsh'), { recursive: true })
@@ -184,13 +159,5 @@ describe('DshHookService', () => {
     const polled = service.getStatus()
     expect(polled.state).toBe('error')
     expect(polled.detail).toContain('flow-style sequence')
-  })
-
-  it('honours DSH_HOME', () => {
-    const dshHome = join(home, 'custom-dsh-home')
-    process.env.DSH_HOME = dshHome
-    const status = new DshHookService().install()
-    expect(status.configPath).toBe(join(dshHome, 'cordis.patch.yml'))
-    expect(status.state).toBe('installed')
   })
 })

@@ -1,12 +1,14 @@
-import type { AiVaultListResult, AiVaultSubagentListResult } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSubagentListResult,
+  AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
-import type {
-  ReadAiVaultFirstUserPromptArgs,
-  ReadAiVaultFirstUserPromptResult
-} from '../session-first-user-prompt-read'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type { ReadAiVaultFirstUserPromptArgs } from '../prompts/session-first-user-prompt-read'
+
 import {
   clearAiVaultServiceRestartCircuit,
   invalidateAiVaultServiceCache,
@@ -20,8 +22,8 @@ import type {
   AiVaultServiceScanOptions,
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
-import { isWslUncPath } from '../../../shared/wsl-paths'
-import type { LocalAiVaultScanProgressHandle } from '../ai-vault-local-scan-progress'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import type { LocalAiVaultScanProgressHandle } from '../scan-lifecycle/ai-vault-local-scan-progress'
 
 // Let forced refreshes retry after a local service circuit opens.
 export function clearAiVaultBackgroundRestartCircuit(): void {
@@ -53,7 +55,7 @@ export async function readAiVaultFirstUserPromptInBackground(
   request: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
   if (process.platform === 'win32' && isWslUncPath(request.filePath)) {
-    const { localAiVaultScanRoots } = await import('../cached-session-list')
+    const { localAiVaultScanRoots } = await import('../discovery/ai-vault-scan-roots')
     const roots = await localAiVaultScanRoots()
     request = { ...request, wslOpenCodeReaders: roots.wslOpenCodeReaders ?? [] }
   }

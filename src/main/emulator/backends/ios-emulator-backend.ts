@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,
@@ -305,8 +305,11 @@ function toEmulatorDevice(device: SimulatorDevice): EmulatorDevice {
     backend: 'ios',
     id: device.udid,
     name: device.name,
-    state: device.state === 'Booted' ? 'booted' : 'shutdown',
+    state:
+      device.state === 'Booted' ? 'booted' : device.state === 'Booting' ? 'booting' : 'shutdown',
     detail: device.runtime,
+    lastUsedAt: device.lastUsedAt,
+    availabilityError: device.availabilityError,
     isAvailable: device.isAvailable !== false
   }
 }

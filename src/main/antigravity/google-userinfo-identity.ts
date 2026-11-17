@@ -1,4 +1,4 @@
-import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../shared/network/fetch-response-body'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { getMainHttpClient } from '../network/http-client'
 import {

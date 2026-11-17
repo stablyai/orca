@@ -1,5 +1,5 @@
 import React from 'react'
-import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
+import type { AgentChildRowModel } from '../../../shared/agent-status/presentation/agent-child-row-model'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { StateIndicatorTooltipSide } from '@/components/StateIndicatorTooltip'
 import { agentChildRowText } from './agent-child-row-text'

@@ -1,11 +1,13 @@
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
 } from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { nextBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
-import type { BrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
+import {
+  nextBrowserHostReconnectDelay,
+  type BrowserHostReconnectDelay
+} from './browser-host-lease-reconnect-delay'
 
 type BrowserHostInitialAdmissionRetryOptions = {
   attach(timeoutMs: number): Promise<BrowserClientHostLeaseAuthority>

@@ -4,16 +4,16 @@
  * journal the conversion and restart. The next startup rewrites everything before the window
  * opens (wsl-drive-unc-conversion-startup.ts); the woken panes reattach to their renamed sessions.
  */
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
 import type {
   WslDriveUncConversionBlocker,
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
-} from '../../../shared/wsl-drive-unc-conversion-types'
+} from '../../../shared/wsl-move/wsl-drive-unc-conversion-types'
 import type { WslMoveRefusal } from '../../../shared/wsl-move/wsl-move-driver-types'
-import type { WslMoveTerminalScope } from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
+import type { WslMoveTerminalScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
 import {
   listWslDriveUncConversionsForProfile,
   writeWslDriveUncConversion
@@ -29,9 +29,9 @@ import {
   withNestedWslDriveUncProjects,
   wslDriveUncDuplicatesSplitBy
 } from './wsl-drive-unc-project-scope'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
-import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
+import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 
 export type WslDriveUncConversionRunDeps = Pick<
   WslDriveProjectDeps,

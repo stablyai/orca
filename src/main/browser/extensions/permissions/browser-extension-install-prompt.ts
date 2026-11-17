@@ -4,7 +4,7 @@ import {
   BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL,
   type BrowserExtensionInstallPromptRequest,
   type BrowserExtensionInstallPromptResponse
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 
 /** Main → renderer round trip for Orca's install/uninstall confirmation (mirrors the passkey picker). */
 

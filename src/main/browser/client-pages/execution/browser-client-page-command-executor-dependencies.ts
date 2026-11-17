@@ -1,11 +1,9 @@
-import type { BrowserClientAutomationMethod } from '../../../../shared/browser-client-automation-protocol'
+import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientPageGuestBinding } from '../lifecycle/browser-client-page-guest-binding'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
-import type {
-  BrowserClientPageNetworkRoute,
-  BrowserClientPageRenderer
-} from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import type { BrowserRouteSessionRegistry } from '../../routing/sessions/browser-route-session-registry'
 import type {
   BrowserClientPageLifecycleRegistry,
@@ -50,6 +48,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
       browserProfileId: string
       method: BrowserClientAutomationMethod
       params: Record<string, unknown>
+      agent: boolean
       registration: BrowserClientRetainedPage['registration']
     },
     signal: AbortSignal

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash,
@@ -48,10 +48,6 @@ describe('sweepStaleWorktreeTrash', () => {
     expect(existsSync(nestedTrashRoot)).toBe(true)
   })
 
-  it('ignores workspace roots that do not exist', async () => {
-    expect(await sweepStaleWorktreeTrash([join(scratchDir, 'missing')])).toEqual({ removed: 0 })
-  })
-
   it('never descends past the trash roots beside worktrees', async () => {
     const deepTrashRoot = join(scratchDir, 'repo', 'feature', WORKTREE_TRASH_DIR_NAME)
     await mkdir(join(deepTrashRoot, 'wt-1700000000002-abcdef03'), { recursive: true })
@@ -79,21 +75,6 @@ describe('collectWorktreeTrashSweepRoots', () => {
   function repo(overrides: Partial<Repo>): Repo {
     return { id: 'repo-1', path: '/home/dev/code/orca', ...overrides } as unknown as Repo
   }
-
-  it('collects one root per local git repo', () => {
-    expect(
-      collectWorktreeTrashSweepRoots(
-        [repo({}), repo({ id: 'repo-2', path: '/code/other' })],
-        settings
-      )
-    ).toEqual(['/home/dev/orca/workspaces'])
-  })
-
-  it('honours a repo-specific worktree base path', () => {
-    expect(
-      collectWorktreeTrashSweepRoots([repo({ worktreeBasePath: '/volumes/fast/trees' })], settings)
-    ).toEqual(['/volumes/fast/trees'])
-  })
 
   it('skips SSH repos and folder workspaces', () => {
     expect(

@@ -3,7 +3,7 @@ import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 import type { Store } from '../../persistence/loading-store/store'
 
 const {

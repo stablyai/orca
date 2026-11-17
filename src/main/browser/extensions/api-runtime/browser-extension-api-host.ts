@@ -2,12 +2,12 @@ import { ipcMain } from 'electron'
 import {
   BROWSER_EXTENSION_INVOKE_CHANNEL,
   type BrowserExtensionInvokeResult
-} from '../../../../shared/browser-extension-channels'
+} from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
-import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser-extension-worker-api'
+} from '../../../../shared/browser/extensions/browser-extension-url'
+import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import type { BrowserExtensionCaller } from './browser-extension-namespace-registry'
 import { detachWorkerEventStream } from './browser-extension-worker-event-stream'
 import {
@@ -186,7 +186,10 @@ export function attachBrowserExtensionApiHostToSession(
 
 export function forgetBrowserExtensionContexts(sess: Electron.Session): void {
   forgetHostSession(sess)
-  sess.protocol.unhandle(BROWSER_EXTENSION_API_SCHEME)
+  // Why: profile delete forgets this host twice, and Electron throws if the scheme is already gone.
+  if (sess.protocol.isProtocolHandled(BROWSER_EXTENSION_API_SCHEME)) {
+    sess.protocol.unhandle(BROWSER_EXTENSION_API_SCHEME)
+  }
 }
 
 export function getBrowserExtensionProfileIdForSession(sess: Electron.Session): string | null {

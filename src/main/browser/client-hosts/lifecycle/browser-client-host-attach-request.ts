@@ -1,4 +1,4 @@
-import { BrowserClientHostAttachParams } from '../../../../shared/browser-client-host-protocol'
+import { BrowserClientHostAttachParams } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { prepareBrowserClientPageInventoryForAttach } from '../../client-pages/lifecycle/browser-client-page-inventory'
 import type { PairedRuntimeBrowserHostLeaseOptions } from '../leases/paired-runtime-browser-host-lease-options'
 

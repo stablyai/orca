@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/release/versioning/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
   resolveSharedReleaseCacheRoot
@@ -12,6 +12,7 @@ import {
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,
@@ -102,6 +103,10 @@ function resolveCommit(ref: string): string {
         'The ref must exist locally; a shallow CI clone needs `fetch-depth: 0`.'
     )
   }
+}
+
+export async function prepareReleaseCheckoutSnapshot(ref: string): Promise<void> {
+  await prepareReleaseSnapshotSource(REPO_ROOT, resolveCommit(ref))
 }
 
 function checkoutModulePath(root: string, rootRelativePath: string): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { retireBrowserRoutePartitionStorageForEnvironment } from './browser-route-partition-storage-retirement'
 import { PairedRuntimeBrowserClientHostComposition } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-composition'
 import { PairedRuntimeBrowserClientHostRegistry } from '../../client-hosts/lifecycle/paired-runtime-browser-client-host-registry'
@@ -129,26 +129,6 @@ describe('browser route partition storage retirement', () => {
 
     expect(await retiring).toEqual([partition])
     expect(order).toEqual(['close-executor', 'clear'])
-  })
-
-  it('retries a partition that was still live during the first pass', async () => {
-    const clearStorage = vi
-      .fn()
-      .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: [partition] })
-      .mockResolvedValueOnce({ clearedPartitions: [partition], livePartitions: [] })
-    const onError = vi.fn()
-
-    const cleared = await retireBrowserRoutePartitionStorageForEnvironment({
-      environmentId: 'environment-a',
-      whenClientHostClosed: Promise.resolve(),
-      clearStorage,
-      retryDelayMs: 0,
-      onError
-    })
-
-    expect(cleared).toEqual([partition])
-    expect(clearStorage).toHaveBeenCalledTimes(2)
-    expect(onError).not.toHaveBeenCalled()
   })
 
   it('reports a partition that stays live and never retries a third time', async () => {

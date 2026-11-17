@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { claudeAgentViewChord } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_SHORTCUTS,
   ClaudeAgentViewObservation,
   type ClaudeAgentViewSnapshot,
   type ClaudeAgentViewResult
-} from '../../../shared/claude-agent-view'
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 const Identity = z.object({
   paneKey: z

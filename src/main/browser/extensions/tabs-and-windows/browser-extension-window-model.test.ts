@@ -26,7 +26,7 @@ vi.mock('electron', async () => {
   }
   return { BrowserWindow: FakeBrowserWindow }
 })
-vi.mock('../../../window/foreground-activation-policy', () => ({
+vi.mock('../../../window/activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
   showWindowWithoutStealingFocus: () => {}
 }))
@@ -50,19 +50,13 @@ const profileB = { name: 'b' } as unknown as Electron.Session
 const focus = (window: Electron.BrowserWindow): boolean => window.emit('focus')
 
 describe("a profile's extension windows", () => {
-  it('track the main window while extensions are off, so turning them on finds it', () => {
-    const main = new BrowserWindow()
-    model.trackBrowserExtensionMainWindow(main)
-    expect(model.getBrowserExtensionMainWindow()).toBe(main)
-  })
-
   it("never include another profile's popout, in lookups or events", () => {
     const main = new BrowserWindow()
     model.trackBrowserExtensionMainWindow(main)
     const popout = model.createBrowserExtensionPopout(profileB, {
       url: 'https://b.test/',
       type: 'popup',
-      focused: false
+      presentation: 'unfocused'
     })
     const ids = (sess: Electron.Session) =>
       model.listBrowserExtensionWindows(sess).map((entry) => entry.window.id)
@@ -86,7 +80,11 @@ describe("a profile's extension windows", () => {
   it("keep each profile's last-focused popout when another profile's popout takes focus", () => {
     const main = new BrowserWindow()
     model.trackBrowserExtensionMainWindow(main)
-    const options = { url: 'https://x.test/', type: 'popup' as const, focused: false }
+    const options = {
+      url: 'https://x.test/',
+      type: 'popup' as const,
+      presentation: 'unfocused' as const
+    }
     const popoutA = model.createBrowserExtensionPopout(profileA, options)
     const popoutB = model.createBrowserExtensionPopout(profileB, options)
     focus(popoutA)

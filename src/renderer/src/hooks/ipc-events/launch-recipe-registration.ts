@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store'
-import type { PaneLaunchRecipe } from '../../../../shared/terminal-attachment-launch-result'
+import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { tryMakePaneKey } from './agent-status-routing'
 
 /** Record a pane's launch recipe so a later resume replays its flags. */

@@ -6,7 +6,7 @@ import {
   TERMINAL_ORDERED_INPUT_HOST_MAX_BYTES,
   TERMINAL_ORDERED_INPUT_HOST_MAX_WAITERS,
   type TerminalInputSessionBinding
-} from '../../../../../shared/terminal-ordered-input'
+} from '../../../../../shared/terminal/input/terminal-ordered-input'
 
 // Bound per-PTY/client-session entries; evicted idle sessions have no pending acknowledgements.
 export const TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_SESSIONS = 4096

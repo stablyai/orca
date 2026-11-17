@@ -9,7 +9,13 @@ const MAX_RETAINED_BYTES = 8 * 1024 * 1024
 export function createBrowserNetworkTunnelResourceBudget(
   options: BrowserNetworkTunnelSessionOptions
 ): BrowserNetworkTunnelResourceBudget {
-  return new BrowserNetworkTunnelResourceBudget(options.now, options.claimAggregateRetainedBytes)
+  return new BrowserNetworkTunnelResourceBudget(
+    options.now,
+    options.claimAggregateRetainedBytes,
+    // Upload windows grow only while charged to the connection pool, so growth retains at most one
+    // connection window beyond the legacy headroom (woken idle streams aside; see the credit class).
+    MAX_RETAINED_BYTES + (options.flowControl?.connectionWindow?.toSessionBytes ?? 0)
+  )
 }
 
 export class BrowserNetworkTunnelResourceBudget {
@@ -21,7 +27,8 @@ export class BrowserNetworkTunnelResourceBudget {
 
   constructor(
     private readonly now: () => number = () => performance.now(),
-    private readonly claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
+    private readonly claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null,
+    private readonly maxRetainedBytes = MAX_RETAINED_BYTES
   ) {}
 
   admitOpenAttempt(): boolean {
@@ -43,7 +50,7 @@ export class BrowserNetworkTunnelResourceBudget {
   }
 
   reserveRetainedBytes(bytes: number): boolean {
-    if (bytes < 0 || bytes > MAX_RETAINED_BYTES - this.retainedBytes) {
+    if (bytes < 0 || bytes > this.maxRetainedBytes - this.retainedBytes) {
       return false
     }
     if (bytes === 0) {

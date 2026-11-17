@@ -1,4 +1,4 @@
-import type { BrowserClientProfileMetadata } from '../../../../shared/browser-client-profile-switch-protocol'
+import type { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
 
 export type BrowserRouteElectronSession = {

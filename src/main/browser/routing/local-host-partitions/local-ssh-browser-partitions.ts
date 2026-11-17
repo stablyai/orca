@@ -19,7 +19,7 @@ import {
   type BrowserRouteProxyEndpoint
 } from '../sessions/browser-route-session-policy'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   closeLocalSshBrowserRouteForTarget,
   probeLocalSshBrowserRouteForwarding,
@@ -76,6 +76,12 @@ export function localSshBrowserPartitionForSession(webSession: Session): string 
 export function localSshBrowserTargetIdForSession(webSession: Session): string | null {
   const partition = partitionBySession.get(webSession)
   return partition ? (preparedByPartition.get(partition)?.targetId ?? null) : null
+}
+
+export function localSshBrowserProfileIdForSession(webSession: Session): string | null {
+  const partition = partitionBySession.get(webSession)
+  const profileId = partition ? preparedByPartition.get(partition)?.browserProfileId : null
+  return profileId && browserSessionRegistry.getProfile(profileId) ? profileId : null
 }
 
 // Verify the proxy before exposing the partition to the renderer.

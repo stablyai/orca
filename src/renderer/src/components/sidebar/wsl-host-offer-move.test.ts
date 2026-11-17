@@ -1,60 +1,61 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => {
-  const repos: { id: string; path: string }[] = []
-  const folders: { id: string; folderPath: string }[] = []
-  return { repos, folders }
-})
-const openDialog = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
+const openWslMoveDialogFor = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
-vi.mock('@/store/workspace-record-selectors', () => ({
-  selectFolderWorkspaces: (current: typeof state) => current.folders
-}))
-vi.mock('../wsl-move/wsl-move-entry', () => ({ openWslMoveDialogFor: openDialog }))
+vi.mock('../wsl-move/wsl-move-entry', () => ({ openWslMoveDialogFor }))
 
-import { moveWslHostOfferProject, wslHostOfferProjectRef } from './wsl-host-offer-move'
+import { useAppStore } from '@/store'
+import { moveWslHostOfferProject } from './wsl-host-offer-move'
 
-const PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+const initialState = useAppStore.getState()
 
-describe("the offer's move of the project it added (B3)", () => {
-  beforeEach(() => {
-    state.repos = []
-    state.folders = []
-    openDialog.mockReset()
-    toastError.mockReset()
-  })
+const offer = {
+  path: 'W:\\home\\u\\repo',
+  sharePath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\repo',
+  distro: 'Ubuntu',
+  source: 'local_folder_picker' as const
+}
 
-  it('finds the added repo by its path, however its slashes are written', () => {
-    state.repos = [{ id: 'other', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\other' }]
-    state.repos.push({ id: 'r1', path: '//wsl.localhost/Ubuntu/home/me/repo' })
-    expect(wslHostOfferProjectRef(PATH)).toEqual({ kind: 'repo', id: 'r1' })
-  })
+afterEach(() => {
+  toastError.mockReset()
+  openWslMoveDialogFor.mockReset()
+  useAppStore.setState(initialState, true)
+})
 
-  it('finds the innermost stored repo that contains an added subfolder', () => {
-    state.repos = [
-      { id: 'outer', path: '\\\\wsl.localhost\\Ubuntu\\home\\me' },
-      { id: 'r1', path: PATH },
-      { id: 'sibling', path: `${PATH}-two` }
-    ]
-    moveWslHostOfferProject({
-      path: `${PATH}\\packages\\app`,
-      distro: 'Ubuntu',
-      source: 'local_folder_picker'
+describe('moveWslHostOfferProject', () => {
+  it('opens the move for the repo the add answered with', () => {
+    moveWslHostOfferProject(offer, {
+      status: 'completed',
+      repo: { id: 'repo-unc', path: offer.sharePath }
     })
-    expect(openDialog).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'r1' })
+    expect(openWslMoveDialogFor).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'repo-unc' })
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('does not take a sibling whose path only shares a prefix', () => {
-    state.repos = [{ id: 'sibling', path: `${PATH}-two` }]
-    expect(wslHostOfferProjectRef(PATH)).toBeNull()
+  it('explains instead of opening a move when the add found the folder saved as W:', () => {
+    // Registration matches by real path, so the share spelling resolves to the saved W: row.
+    moveWslHostOfferProject(offer, {
+      status: 'completed',
+      repo: { id: 'repo-w', path: 'W:\\home\\u\\repo' }
+    })
+    expect(openWslMoveDialogFor).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('W:\\home\\u\\repo'))
   })
 
-  it('says so instead of doing nothing when no stored project matches', () => {
-    moveWslHostOfferProject({ path: PATH, distro: 'Ubuntu', source: 'local_folder_picker' })
-    expect(openDialog).not.toHaveBeenCalled()
-    expect(toastError).toHaveBeenCalledTimes(1)
+  it('falls back to the share spelling when the add names no repo', () => {
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-unc',
+          path: offer.sharePath,
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 1
+        }
+      ]
+    })
+    moveWslHostOfferProject(offer, { status: 'skipped' })
+    expect(openWslMoveDialogFor).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'repo-unc' })
   })
 })

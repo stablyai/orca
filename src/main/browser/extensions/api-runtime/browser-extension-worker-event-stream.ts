@@ -1,4 +1,4 @@
-import type { BrowserExtensionEventPayload } from '../../../../shared/browser-extension-channels'
+import type { BrowserExtensionEventPayload } from '../../../../shared/browser/extensions/browser-extension-channels'
 import type { WorkerContext } from './browser-extension-contexts'
 
 /** The worker's open events response; `send` throws once the worker has gone. */

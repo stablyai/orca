@@ -2,7 +2,9 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from '../../../../shared/program-status/facet'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { EnrichedAgentHookEventPayload } from '../server-types'
+import { isOpenCodeHookRow } from './hook-precedence'
 
 // Bound retained facets across long sessions; evict the least recently changed first.
 const MAX_PROGRAM_STATUS_FACETS = 1024
@@ -116,8 +118,14 @@ export class ProgramStatusFacetStore {
   }
 
   /** Stitch without mutating the stored row. */
-  stitch<T extends { paneKey: string; programStatus?: ProgramStatusFacet }>(row: T): T {
-    const facet = this.byPaneKey.get(row.paneKey)?.facet
+  stitch<
+    T extends Pick<
+      EnrichedAgentHookEventPayload,
+      'paneKey' | 'programStatus' | 'observation' | 'payload'
+    >
+  >(row: T): T {
+    // Another session's block or title must not decorate this pane.
+    const facet = isOpenCodeHookRow(row) ? undefined : this.byPaneKey.get(row.paneKey)?.facet
     if (facet === row.programStatus) {
       return row
     }

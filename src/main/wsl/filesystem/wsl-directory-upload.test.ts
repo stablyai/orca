@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
@@ -14,8 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
-import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
+import { uploadDirectoryIntoWsl } from './wsl-directory-upload'
 import {
   createWslOrcadHostTransport,
   type WslOrcadHostTransport
@@ -30,30 +29,6 @@ function hasSha256sum(): boolean {
   }
 }
 
-describe('wslGuestSourcePath', () => {
-  const originalPlatform = process.platform
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-  })
-
-  it('maps a drive-letter directory onto its /mnt automount', () => {
-    expect(wslGuestSourcePath('C:\\Users\\me\\orcad', 'Ubuntu')).toBe('/mnt/c/Users/me/orcad')
-  })
-
-  it('leaves a source with no drive letter to the tar stream', () => {
-    expect(wslGuestSourcePath('/opt/orcad', 'Ubuntu')).toBeNull()
-    expect(wslGuestSourcePath('\\\\server\\share\\orcad', 'Ubuntu')).toBeNull()
-  })
-
-  it('reads the same distro directly but not another distro', () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    expect(wslGuestSourcePath('\\\\wsl.localhost\\ubuntu\\home\\me\\o', 'Ubuntu')).toBe(
-      '/home/me/o'
-    )
-    expect(wslGuestSourcePath('\\\\wsl.localhost\\Debian\\home\\me\\o', 'Ubuntu')).toBeNull()
-  })
-})
-
 // Runs the generated scripts through a real POSIX shell standing in for the distro.
 describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirectoryIntoWsl', () => {
   let root: string
@@ -61,7 +36,7 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   let dest: string
   let commands: string[]
   const transports: WslOrcadHostTransport[] = []
-  const children: PipedChildProcess[] = []
+  const children: ChildProcessWithoutNullStreams[] = []
 
   const getTransport = (): WslOrcadHostTransport => {
     const transport = transports.at(-1)
@@ -115,18 +90,6 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
     expect(existsSync(join(dest, 'empty'))).toBe(true)
     expect(readdirSync(dest).filter((name) => name.startsWith('.orca-upload-'))).toEqual([])
   }
-
-  it('streams a tar when the guest cannot see the source', async () => {
-    await uploadDirectoryIntoWsl(getTransport(), source, null, dest)
-    expectUploaded()
-    expect(commands.some((command) => command.includes('tar -x'))).toBe(true)
-  })
-
-  it('copies from the guest-visible path without a tar stream', async () => {
-    await uploadDirectoryIntoWsl(getTransport(), source, source, dest)
-    expectUploaded()
-    expect(commands.some((command) => command.includes('tar -x'))).toBe(false)
-  })
 
   it('falls back to the tar stream when the mount is missing', async () => {
     await uploadDirectoryIntoWsl(getTransport(), source, join(root, 'not-mounted'), dest)

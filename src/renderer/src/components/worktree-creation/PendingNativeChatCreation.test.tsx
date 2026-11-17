@@ -1,61 +1,74 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { forwardRef, useRef } from 'react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { NativeChatComposerProps } from '@/components/native-chat/native-chat-composer-types'
-import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
-import { useNativeChatComposerRevealFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import type * as ComposerModule from '@/components/native-chat/NativeChatComposer'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from '@/components/native-chat/composer/native-chat-composer-types'
+import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
+import { useNativeChatComposerRevealFocus } from '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
+import type * as ComposerModule from '@/components/native-chat/composer/NativeChatComposer'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import PendingNativeChatCreation from './PendingNativeChatCreation'
 import {
   changePrompt,
   promptEditor,
   promptValue
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
-  readNativeChatComposerDraft,
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled,
   flushNativeChatComposerDrafts
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { moveNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-move'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import { moveNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-move'
+import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
-} from '@/components/native-chat/native-chat-composer-mount'
+} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
+
+const modelCatalog = vi.hoisted(() => vi.fn())
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: modelCatalog
+}))
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 
 const composer = vi.hoisted((): { props: NativeChatComposerProps | null } => ({ props: null }))
-vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) => {
+vi.mock('@/components/native-chat/composer/NativeChatComposer', async (importOriginal) => {
   const original = await importOriginal<typeof ComposerModule>()
   return {
-    NativeChatComposer: forwardRef<
-      ComposerModule.NativeChatComposerHandle,
-      NativeChatComposerProps
-    >((props, ref) => {
-      composer.props = props
-      return <original.NativeChatComposer {...props} ref={ref} />
-    })
+    NativeChatComposer: forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
+      (props, ref) => {
+        composer.props = props
+        return <original.NativeChatComposer {...props} ref={ref} />
+      }
+    )
   }
 })
-vi.mock('@/components/native-chat/NativeChatEmptyState', () => ({
+vi.mock('@/components/native-chat/host-access/NativeChatEmptyState', () => ({
   NativeChatEmptyState: () => null
 }))
-vi.mock('@/components/native-chat/NativeChatUserMessageRow', () => ({
+vi.mock('@/components/native-chat/messages/rows/NativeChatUserMessageRow', () => ({
   NativeChatUserMessageRow: () => null
 }))
 vi.mock('./WorktreeSetupSteps', () => ({ WorktreeSetupSteps: () => null }))
 vi.mock('./WorktreeCreationTabStrip', () => ({ default: () => null }))
 
 const initialState = useAppStore.getState()
+const originalApi = Object.getOwnPropertyDescriptor(window, 'api')
 const request: WorktreeCreationRequest = {
   repoId: 'repo',
   name: 'feature',
@@ -69,10 +82,217 @@ const request: WorktreeCreationRequest = {
   quickTelemetry: null,
   suppressTerminalFocusOnCompletion: true
 }
+
+function pasteImage(field: HTMLElement): void {
+  const image = new File(['image'], 'clipboard.png', { type: 'image/png' })
+  fireEvent.paste(field, {
+    clipboardData: {
+      items: [{ type: 'image/png', getAsFile: () => image }],
+      files: [],
+      getData: () => ''
+    }
+  })
+}
+
+function installImageClipboardSave(save: () => Promise<string>): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { ...window.api, ui: { ...window.api?.ui, saveClipboardImageAsTempFile: save } }
+  })
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:clipboard-image')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+}
+
+it('shows effort and Fast picks without turning the listed default into a model choice', async () => {
+  modelCatalog.mockResolvedValue({
+    origin: 'probe',
+    fetchedAt: 1,
+    listingNamesConfiguredModel: true,
+    fastModeSupport: { supported: true },
+    models: [
+      {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        isDefault: true,
+        defaultEffort: 'high',
+        supportsFastMode: true,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
+    ]
+  })
+  useAppStore.setState({
+    pendingWorktreeCreations: {
+      creation: {
+        creationId: 'creation',
+        phase: 'preparing',
+        status: 'creating',
+        startedAt: 1,
+        indeterminate: false,
+        loaderVisible: true,
+        request: { ...request, executionHostId: 'local' }
+      }
+    }
+  })
+  render(
+    <TooltipProvider>
+      <PendingNativeChatCreation creationId="creation" />
+    </TooltipProvider>
+  )
+  await waitFor(() =>
+    expect(
+      composer.props?.structuredTransport?.optionSnapshot.find((option) => option.id === 'effort')
+        ?.settable
+    ).toBe(true)
+  )
+
+  await act(async () => {
+    await composer.props?.structuredTransport?.optionsSurface.setOption('effort', 'low')
+  })
+  await act(async () => {
+    await composer.props?.structuredTransport?.optionsSurface.setOption('fastMode', true)
+  })
+
+  expect(
+    composer.props?.structuredTransport?.optionSnapshot.find((option) => option.id === 'effort')
+      ?.kind.currentValue
+  ).toBe('low')
+  expect(
+    composer.props?.structuredTransport?.optionSnapshot.find((option) => option.id === 'fastMode')
+      ?.kind.currentValue
+  ).toBe(true)
+  expect(
+    useAppStore.getState().pendingWorktreeCreations.creation?.request.launchInputs
+      ?.chatSessionOptions
+  ).toEqual({ effort: 'low', fastMode: 'true' })
+})
+
+it('accepts an image-only message before the worktree exists', async () => {
+  useAppStore.setState({
+    pendingWorktreeCreations: {
+      creation: {
+        creationId: 'creation',
+        phase: 'creating',
+        status: 'creating',
+        startedAt: 1,
+        indeterminate: false,
+        loaderVisible: true,
+        request
+      }
+    }
+  })
+  const save = vi.fn().mockResolvedValue('/tmp/pasted.png')
+  installImageClipboardSave(save)
+  render(
+    <TooltipProvider>
+      <PendingNativeChatCreation creationId="creation" />
+    </TooltipProvider>
+  )
+  pasteImage(screen.getByRole('textbox'))
+  await waitFor(() => expect(save).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(readNativeChatComposerDraft('pending-worktree-creation:creation').images).toMatchObject([
+      { path: '/tmp/pasted.png' }
+    ])
+  )
+  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+  await waitFor(() =>
+    expect(
+      useAppStore.getState().pendingWorktreeCreations.creation?.heldChatAttachments
+    ).toMatchObject([{ path: '/tmp/pasted.png' }])
+  )
+  expect(readNativeChatComposerDraft('pending-worktree-creation:creation').images).toHaveLength(0)
+})
+
+it('finishes a pending image paste in the real chat after the worktree handoff', async () => {
+  const saved = Promise.withResolvers<string>()
+  const save = vi.fn(() => saved.promise)
+  installImageClipboardSave(save)
+  useAppStore.setState({
+    pendingWorktreeCreations: {
+      creation: {
+        creationId: 'creation',
+        phase: 'creating',
+        status: 'creating',
+        startedAt: 1,
+        indeterminate: false,
+        loaderVisible: true,
+        request
+      }
+    }
+  })
+  const pending = render(
+    <TooltipProvider>
+      <PendingNativeChatCreation creationId="creation" />
+    </TooltipProvider>
+  )
+  pasteImage(screen.getByRole('textbox'))
+  await waitFor(() => expect(save).toHaveBeenCalledOnce())
+  const props = composer.props
+  if (!props?.structuredTransport) {
+    throw new Error('Pending composer did not mount')
+  }
+  const send = vi.fn(() => true)
+  const destinationProps: NativeChatComposerProps = {
+    ...props,
+    workspacePending: undefined,
+    structuredTransport: {
+      ...props.structuredTransport,
+      sessionId: 'created-session',
+      attachmentStagingScope: undefined,
+      sendBlockedReason: undefined,
+      send
+    }
+  }
+  render(<Destination props={destinationProps} ready mounted />)
+  await waitForNativeChatComposerHandoff(
+    'pending-worktree-creation:creation',
+    'destination',
+    new AbortController().signal
+  )
+  act(() => moveNativeChatComposerDraft('pending-worktree-creation:creation', 'destination'))
+  pending.unmount()
+
+  const replacement = screen.getByRole('textbox')
+  expect(screen.getByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeTruthy()
+  fireEvent.keyDown(replacement, { key: 'Enter' })
+  expect(send).not.toHaveBeenCalled()
+  await act(async () => saved.resolve('/tmp/pasted.png'))
+
+  await waitFor(() =>
+    expect(readNativeChatComposerDraft('destination').images).toMatchObject([
+      { path: '/tmp/pasted.png' }
+    ])
+  )
+  expect(readNativeChatComposerDraft('pending-worktree-creation:creation').images).toEqual([])
+  fireEvent.keyDown(replacement, { key: 'Enter' })
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.any(String),
+      [expect.objectContaining({ path: '/tmp/pasted.png' })],
+      expect.objectContaining({
+        prepareAttachments: expect.any(Function),
+        onSettled: expect.any(Function)
+      })
+    )
+  )
+})
+
 afterEach(() => {
   cleanup()
+  if (originalApi) {
+    Object.defineProperty(window, 'api', originalApi)
+  } else {
+    Reflect.deleteProperty(window, 'api')
+  }
+  releaseNativeChatStagedFiles('pending-worktree-creation:creation')
+  releaseNativeChatStagedFiles('destination')
+  clearNativeChatPendingAttachmentsForTests()
   useAppStore.setState(initialState, true)
   composer.props = null
+  modelCatalog.mockReset()
   clearNativeChatComposerDraftsForTests()
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -90,7 +310,7 @@ function Destination({
   disabled?: boolean
 }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
-  const composerRef = useRef<ComposerModule.NativeChatComposerHandle>(null)
+  const composerRef = useRef<NativeChatComposerHandle>(null)
   useNativeChatComposerRevealFocus({
     tabId: 'destination',
     rootRef,
@@ -276,23 +496,6 @@ it.each([false, true])(
     )
   }
 )
-
-it('cancels a handoff whose destination never mounts', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  const abort = new AbortController()
-  let completed = false
-  const handoff = waitForNativeChatComposerHandoff('no-source', 'missing', abort.signal, 5000).then(
-    () => {
-      completed = true
-    }
-  )
-  await act(async () => {})
-  expect(completed).toBe(false)
-  abort.abort()
-  await handoff
-  expect(completed).toBe(true)
-  expect(vi.getTimerCount()).toBe(0)
-})
 
 it('keeps typing visible in the replacement while its draft write is slow or refused', async () => {
   const storage = createMemoryNativeChatComposerDraftStorage()

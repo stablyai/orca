@@ -1,14 +1,14 @@
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 import {
   readSidecarSnapshot,
   sidecarSnapshotFile,
   withSidecarSnapshotQueue,
   writeSidecarSnapshot
 } from '../../filesystem/sidecar-snapshot-file'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   activeWorkspaceSnapshotPruneKeys,
   registerWorkspaceSnapshotPrunesForFile,

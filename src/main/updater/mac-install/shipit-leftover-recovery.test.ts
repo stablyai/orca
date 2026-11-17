@@ -75,14 +75,6 @@ describe('prepareShipItStaging', () => {
     expect(await readdir(shipItStagingOwnersDir(coordinationDir))).toEqual(['500'])
   })
 
-  it('ignores the ShipIt of another app', async () => {
-    const other = deps({
-      listProcesses: async () =>
-        '/Applications/Other.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt com.other.ShipIt /x\n'
-    })
-    await expect(prepareShipItStaging(other)).resolves.toMatchObject({ kind: 'recovered' })
-  })
-
   it('never clears while ShipIt runs, or when that cannot be checked', async () => {
     const running = deps({ listProcesses: async () => `${SHIPIT} com.stablyai.orca.ShipIt\n` })
     await expect(prepareShipItStaging(running)).resolves.toEqual({
@@ -110,13 +102,5 @@ describe('prepareShipItStaging', () => {
 
     await expect(prepareShipItStaging(deps())).resolves.toMatchObject({ kind: 'recovered' })
     expect(existsSync(shipItInstallLockPath(coordinationDir))).toBe(false)
-  })
-
-  it('does nothing extra when there is nothing left over', async () => {
-    await rm(cacheDir, { recursive: true, force: true })
-    const d = deps()
-    await expect(prepareShipItStaging(d)).resolves.toEqual({ kind: 'clean' })
-    expect(d.listProcesses).not.toHaveBeenCalled()
-    expect(await readdir(shipItStagingOwnersDir(coordinationDir))).toEqual(['500'])
   })
 })

@@ -1,20 +1,20 @@
-import type { AgentPermissionChoice } from '../../../../../../shared/tui-agent-permission-choice'
+import type { AgentPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../../../../shared/tui-agent-launch-defaults'
+} from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   AUTO_TUI_AGENT_ARGS,
   hasConfigurableTuiAgentPermissions,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
   type AgentPermissionMode
-} from '../../../../../../shared/tui-agent-permissions'
+} from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { buildAgentPermissionBaseline, majorityPermissionMode } from './agent-permission-baseline'
 import type { AgentRowPermission } from './AgentRowPermissions'
 

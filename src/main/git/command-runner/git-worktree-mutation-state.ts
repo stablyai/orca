@@ -3,12 +3,12 @@ import { resolve } from 'node:path'
 import {
   classifyGitCommand,
   findGitSubcommandIndex
-} from '../../../shared/git-command-classification'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
-import { resolveGitFetchHeadCommand } from '../../../shared/git-fetch-head-lock'
+} from '../../../shared/git/commands/git-command-classification'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
+import { resolveGitFetchHeadCommand } from '../../../shared/git/fetch/git-fetch-head-lock'
 import { resolveGitDir } from '../source-control/resolve-git-dir'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from './git-runtime-options'
 
 // These can write refs or objects without changing HEAD, the index, or the working tree.
 const WORKTREE_NEUTRAL_SUBCOMMANDS = new Set(['fetch', 'push', 'ls-remote', 'merge-tree'])

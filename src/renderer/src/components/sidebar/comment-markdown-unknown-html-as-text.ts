@@ -42,6 +42,11 @@ function classifyHtml(
   return hasUnknown ? (hasOther ? 'mixed' : 'unknown-only') : 'none'
 }
 
+/** Whether the transform replaces this whole HTML node with text, so no raw HTML reaches rendering. */
+export function htmlRendersAsText(html: string, allowedTagNames: ReadonlySet<string>): boolean {
+  return classifyHtml(html, allowedTagNames) === 'unknown-only'
+}
+
 function replaceUnknownHtml(parent: MarkdownNode, allowedTagNames: ReadonlySet<string>): void {
   const children = parent.children
   if (!children) {

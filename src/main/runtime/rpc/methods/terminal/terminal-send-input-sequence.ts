@@ -1,17 +1,17 @@
 import { createHash } from 'node:crypto'
 import type { z } from 'zod'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal/input/terminal-input'
 import {
   TerminalOpenInputSession,
   type TerminalSend
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   terminalOrderedInputControls,
   terminalOrderedInputByteLength,
   TERMINAL_ORDERED_INPUT_MAX_BYTES,
   type TerminalInputSessionBinding
-} from '../../../../../shared/terminal-ordered-input'
+} from '../../../../../shared/terminal/input/terminal-ordered-input'
 import { defineMethod, type RpcContext } from '../../core'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
 

@@ -1,16 +1,16 @@
-import { transitionLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-transition'
+import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import {
   hasHostRowsForSortOrders,
   patchWorktreeSortOrderBatch
@@ -22,7 +22,7 @@ import {
   captureWorkspaceSelection,
   isWorkspaceSelected,
   restoreWorkspaceSelection
-} from '@/lib/active-workspace-host'
+} from '@/lib/workspace/ownership/active-workspace-host'
 import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh
@@ -34,7 +34,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 

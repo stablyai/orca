@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import * as repoWorktreeAdminFingerprint from '../repo-worktree-admin-fingerprint'
+import * as repoWorktreeAdminFingerprint from '../workspaces/catalog/repo-worktree-admin-fingerprint'
 import * as wslUncAccessGate from '../../wsl/filesystem/wsl-unc-access-gate'
-import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
-import { makeWorktreeInfo, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { makeWorktreeInfo, makeWorktreeMeta, store } from './orca-runtime-test-fixtures.spec'
 
 const WSL_REPO_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 

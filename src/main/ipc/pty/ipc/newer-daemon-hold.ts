@@ -1,11 +1,11 @@
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../../shared/newer-daemon-hold'
+} from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import {
   readNewerDaemonHeldScreen,
   reopenNewerDaemonTerminals
-} from '../../../daemon/daemon-newer-protocol-hold'
+} from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import { getPtyIpc } from '../pty-host-bindings'
 
 export function installPtyNewerDaemonHoldIpcHandlers(): void {

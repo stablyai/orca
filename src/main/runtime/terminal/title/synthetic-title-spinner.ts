@@ -1,4 +1,4 @@
-import type { AgentStatusClearIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusClearIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Losing an SSH connection does not prove its PTY stopped; only pane-scoped clears stop spinners.
 export function getSyntheticTitleSpinnerPaneKeyToStop(

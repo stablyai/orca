@@ -1,17 +1,17 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
-import { getDefaultSettings } from '../../../../../shared/constants'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useAppStore } from '../../../store'
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionModel } from '../page/use-settings-interaction-controller'
-import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control-ai'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../../../../shared/agent-launch-settings'
+} from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 
 const originalState = useAppStore.getState()
 const originalApi = window.api
@@ -91,12 +91,12 @@ export function settingsModel(): SettingsPersistenceModel {
     hasUnsavedBranchPromptChanges: false,
     hasUnsavedChatPromptChanges: false,
     hasUnsavedCommitPromptChanges: false,
-    highlightedSettingsTargetId: null,
+    highlightedSettingsTarget: null,
     setFontSuggestions: vi.fn(),
     setHasUnsavedBranchPromptChanges: vi.fn(),
     setHasUnsavedChatPromptChanges: vi.fn(),
     setHasUnsavedCommitPromptChanges: vi.fn(),
-    setHighlightedSettingsTargetId: vi.fn(),
+    setHighlightedSettingsTarget: vi.fn(),
     setSettingsSearchQuery: vi.fn(),
     setSourceControlAiPromptDiscardSignal: vi.fn()
   } satisfies SettingsPersistenceModel

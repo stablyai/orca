@@ -1,14 +1,19 @@
-import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
+import {
+  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+  scanTerminalReplyQuerySequences,
+  type TerminalReplyQuerySequence
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import type { PublishedTerminalOutput } from '../../../terminal/output/terminal-published-output-ring'
 import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
   type TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+} from '../../terminal/terminal-output-frame-chunks'
 import {
   measureTerminalStreamByteLength,
   terminalStreamByteLength
-} from '../../terminal-stream-byte-length'
-import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+} from '../../terminal/terminal-stream-byte-length'
+import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
 
 export function appendPendingMultiplexOutput(
@@ -85,16 +90,58 @@ export function stripSnapshotBoundaryQuerySuffixes(
   return output + data.slice(offset)
 }
 
+/** Joins a resume gap into one chunk ending at its last seq, without the reply queries the desktop already answered.
+ * Color-scheme subscribe/withdraw are mode state, not queries, so they stay. */
+export function buildResumeGapChunk(output: PublishedTerminalOutput[]): TerminalOutputChunk | null {
+  const last = output.at(-1)
+  if (!last) {
+    return null
+  }
+  const joined = output.map((chunk) => chunk.data).join('')
+  const { queries } = scanTerminalReplyQuerySequences(
+    joined,
+    0,
+    EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+  )
+  let data = ''
+  let offset = 0
+  for (const query of queries) {
+    if (query.data === '\x1b[?2031h' || query.data === '\x1b[?2031l') {
+      continue
+    }
+    data += joined.slice(offset, query.startSeq)
+    offset = query.endSeq
+  }
+  data += joined.slice(offset)
+  const rawLength = output.reduce((total, chunk) => total + chunk.rawLength, 0)
+  const cwd = output.findLast((chunk) => chunk.cwd !== undefined)?.cwd
+  return {
+    data,
+    bytes: terminalStreamByteLength(data),
+    meta: {
+      seq: last.seq,
+      rawLength,
+      ...(data.length !== rawLength || output.some((chunk) => chunk.transformed)
+        ? { transformed: true }
+        : {}),
+      // The batcher sends this as a Metadata frame, as it did for each live chunk.
+      ...(cwd !== undefined ? { cwd } : {})
+    }
+  }
+}
+
 export function appendAckPendingOutput(
   stream: TerminalMultiplexStream,
-  chunk: TerminalOutputFrameChunk
+  chunk: TerminalOutputFrameChunk,
+  maxBytes: number
 ): TerminalOutputFrameChunk[] {
   stream.ackPendingOutput.push(chunk)
   stream.ackPendingOutputBytes += chunk.bytes.byteLength
   const trimmed = trimHeadToBudget(
     stream.ackPendingOutput,
     stream.ackPendingOutputBytes,
-    (pending) => pending.bytes.byteLength
+    (pending) => pending.bytes.byteLength,
+    maxBytes
   )
   stream.ackPendingOutputBytes = trimmed.bytes
   stream.ackPendingOutputOverflowed ||= trimmed.overflowed
@@ -105,16 +152,22 @@ export function trimPendingOutputToBudget(
   pendingOutput: TerminalOutputChunk[],
   pendingOutputBytes: number
 ): { bytes: number; overflowed: boolean } {
-  return trimHeadToBudget(pendingOutput, pendingOutputBytes, (chunk) => chunk.bytes)
+  return trimHeadToBudget(
+    pendingOutput,
+    pendingOutputBytes,
+    (chunk) => chunk.bytes,
+    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
+  )
 }
 
 function trimHeadToBudget<T>(
   items: T[],
   bytes: number,
-  sizeOf: (item: T) => number
+  sizeOf: (item: T) => number,
+  maxBytes: number
 ): { bytes: number; overflowed: boolean; omitted: T[] } {
   let omittedCount = 0
-  while (bytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES && omittedCount < items.length) {
+  while (bytes > maxBytes && omittedCount < items.length) {
     bytes -= sizeOf(items[omittedCount]!)
     omittedCount += 1
   }

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  OrcaRuntimeService,
-  setPlatform,
-  worktreePathComparison
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
-import { makeWorktreeMeta, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { makeWorktreeMeta, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {
@@ -90,7 +89,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
 
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -123,9 +122,9 @@ describe('OrcaRuntimeService', () => {
   it('shows worktree.ps active when the current pane is the Claude agents screen', async () => {
     const runtime = new OrcaRuntimeService(store)
 
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
+    await syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
     runtime.onPtyData('pty-1', '\x1b]0;claude working\x07', 100)
-    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude agents' })
+    await syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude agents' })
 
     const summary = await runtime.getWorktreePs()
 

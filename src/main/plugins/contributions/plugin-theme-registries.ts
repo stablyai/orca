@@ -8,13 +8,11 @@ import {
   parsePluginTerminalThemeArtifact,
   type PluginTerminalThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import {
-  PLUGIN_THEME_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
+import { PLUGIN_THEME_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { resolvePluginThemeBackground } from './plugin-theme-background-image'
 
 async function readTheme<T>(
@@ -52,9 +50,13 @@ async function readTheme<T>(
   }
 }
 
-export function createPluginThemeRegistry(contentVerifier: PluginContentVerifier) {
+export function createPluginThemeRegistry(
+  contentVerifier: PluginContentVerifier,
+  overlay?: (entries: readonly PluginThemeRegistration[]) => readonly PluginThemeRegistration[]
+) {
   return new PluginArtifactPackRegistry<PluginThemeContribution, PluginThemeRegistration>({
     contentVerifier,
+    overlay,
     contributions: (plugin) => plugin.manifest.contributes.themes,
     load: async (plugin, contribution) => {
       const { background, ...theme } = await readTheme(
@@ -73,9 +75,15 @@ export function createPluginThemeRegistry(contentVerifier: PluginContentVerifier
   })
 }
 
-export function createPluginTerminalThemeRegistry(contentVerifier: PluginContentVerifier) {
+export function createPluginTerminalThemeRegistry(
+  contentVerifier: PluginContentVerifier,
+  overlay?: (
+    entries: readonly PluginTerminalThemeRegistration[]
+  ) => readonly PluginTerminalThemeRegistration[]
+) {
   return new PluginArtifactPackRegistry<PluginThemeContribution, PluginTerminalThemeRegistration>({
     contentVerifier,
+    overlay,
     contributions: (plugin) => plugin.manifest.contributes.terminalThemes,
     load: (plugin, contribution) =>
       readTheme(plugin, contribution, 'terminal theme', parsePluginTerminalThemeArtifact)

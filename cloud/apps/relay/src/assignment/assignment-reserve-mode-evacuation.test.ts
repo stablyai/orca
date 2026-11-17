@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from '../config.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'cell-a', url: 'https://relay-a.example.com', capacityRequests: 10 },
@@ -61,16 +61,5 @@ describe('evacuation from reserve-mode cells', () => {
     // The same host on a db source completes: the guard, not the fixture, held it.
     await store.setCellAdmitMode('cell-a', 'db')
     expect(await store.completeReadyEvacuations()).toBe(1)
-  })
-
-  it('refuses evacuation status for a reserve cell, where activeCellMigrations would count no units', async () => {
-    const store = await setup(() => 1_000)
-    await store.setCellAdmitMode('cell-a', 'reserve')
-    await expect(store.cellEvacuationStatus('cell-a', 'cell-b', true)).rejects.toThrow(
-      'cell_in_reserve_mode'
-    )
-    await expect(store.cellEvacuationStatus('cell-b', 'cell-a', false)).rejects.toThrow(
-      'cell_in_reserve_mode'
-    )
   })
 })

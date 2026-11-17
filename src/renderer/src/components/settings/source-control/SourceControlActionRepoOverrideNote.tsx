@@ -5,8 +5,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import type {
   SourceControlActionRecipeOverrideField,
   SourceControlActionRecipeOverrideSummary
-} from '../../../../../shared/source-control-launch-agent-selection'
+} from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type SourceControlActionRepoOverrideNoteProps = {
   summary: SourceControlActionRecipeOverrideSummary
@@ -44,12 +45,12 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
   return _exhaustive
 }
 
-function getRecipeOverrideFieldSummary(fields: SourceControlActionRecipeOverrideField[]): string {
+function getRecipeOverrideFieldSummary(
+  fields: SourceControlActionRecipeOverrideField[],
+  t: Translate = translate
+): string {
   if (fields.length === 0) {
-    return translate(
-      'auto.components.settings.SourceControlActionRepoOverrideNote.recipe',
-      'Recipe'
-    )
+    return t('auto.components.settings.SourceControlActionRepoOverrideNote.recipe', 'Recipe')
   }
   return fields.map(getRecipeOverrideFieldLabel).join(', ')
 }
@@ -58,6 +59,7 @@ export function SourceControlActionRepoOverrideNote({
   summary,
   onReviewRepo
 }: SourceControlActionRepoOverrideNoteProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (summary.count === 0) {
     return null
   }
@@ -69,11 +71,11 @@ export function SourceControlActionRepoOverrideNote({
   const hiddenOverrideCount = Math.max(0, summary.overrides.length - visibleOverrides.length)
   const noteText =
     summary.count === 1
-      ? translate(
+      ? t(
           'auto.components.settings.SourceControlActionRepoOverrideNote.singular',
           "Global saves won't change 1 repository with its own recipe."
         )
-      : translate(
+      : t(
           'auto.components.settings.SourceControlActionRepoOverrideNote.plural',
           "Global saves won't change {{count}} repositories with their own recipes.",
           { count: summary.count }
@@ -90,7 +92,7 @@ export function SourceControlActionRepoOverrideNote({
         <TooltipContent side="top" align="start" className="max-w-[18rem]">
           <div className="space-y-1.5">
             <p className="text-[11px] font-medium">
-              {translate(
+              {t(
                 'auto.components.settings.SourceControlActionRepoOverrideNote.tooltipTitle',
                 'Repository overrides'
               )}
@@ -100,14 +102,14 @@ export function SourceControlActionRepoOverrideNote({
                 <li key={override.repoId} className="space-y-0.5">
                   <div>{override.repoName}</div>
                   <div className="text-[11px] text-muted-foreground">
-                    {getRecipeOverrideFieldSummary(override.fields)}
+                    {getRecipeOverrideFieldSummary(override.fields, t)}
                   </div>
                 </li>
               ))}
             </ul>
             {hiddenOverrideCount > 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.SourceControlActionRepoOverrideNote.more',
                   '+{{count}} more',
                   { count: hiddenOverrideCount }
@@ -125,11 +127,8 @@ export function SourceControlActionRepoOverrideNote({
         onClick={() => onReviewRepo(firstOverride.repoId)}
       >
         {summary.count === 1
-          ? translate(
-              'auto.components.settings.SourceControlActionRepoOverrideNote.review',
-              'Review'
-            )
-          : translate(
+          ? t('auto.components.settings.SourceControlActionRepoOverrideNote.review', 'Review')
+          : t(
               'auto.components.settings.SourceControlActionRepoOverrideNote.reviewFirst',
               'Review first'
             )}

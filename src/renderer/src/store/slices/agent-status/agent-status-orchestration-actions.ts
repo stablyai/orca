@@ -2,18 +2,18 @@ import {
   canonicalOrchestrationForRow,
   recordOrchestrationProducer,
   orchestrationProducer
-} from '@/runtime/visible-agent-orchestration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../../shared/agent-status-types'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import {
   getAgentRowGeneratedTitleText,
   orchestrationLabelsMatchLiveDispatch
-} from '../../../../../shared/agent-row-primary-text'
+} from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import {
   mergeCurrentOrchestrationContext,
   orchestrationContextsEqual
@@ -53,28 +53,23 @@ export function createAgentStatusOrchestrationActions(
         }
         let nextLive = s.agentStatusByPaneKey
         let liveChanged = false
-        let nextRetained = s.retainedAgentsByPaneKey
-        let retainedChanged = false
 
-        for (const paneKey of new Set([...Object.keys(nextLive), ...Object.keys(nextRetained)])) {
+        for (const paneKey of Array.from(nextLive.keys())) {
           const runtimeOrchestration = canonicalOrchestrationForRow(canonicalState, paneKey)
           if (!runtimeOrchestration) {
             continue
           }
-          const liveEntry = nextLive[paneKey]
+          const liveEntry = nextLive.get(paneKey)
           if (liveEntry) {
             const merged = mergeCurrentOrchestrationContext(
               liveEntry.orchestration,
               runtimeOrchestration
             )
             if (merged !== liveEntry.orchestration) {
-              if (!liveChanged) {
-                nextLive = { ...nextLive }
-                liveChanged = true
-              }
+              liveChanged = true
               const nextEntry = { ...liveEntry, orchestration: merged }
               changedPaneKeys.add(paneKey)
-              nextLive[paneKey] = nextEntry
+              nextLive = nextLive.replace([[paneKey, nextEntry]])
               // Why: only replace titles when labels match the live dispatch taskId; sticky completed context must not rename a later turn.
               if (
                 (merged.displayName?.trim() || merged.taskTitle?.trim()) &&
@@ -87,34 +82,15 @@ export function createAgentStatusOrchestrationActions(
               }
             }
           }
-
-          const retainedEntry = nextRetained[paneKey]
-          if (retainedEntry) {
-            const merged = mergeCurrentOrchestrationContext(
-              retainedEntry.entry.orchestration,
-              runtimeOrchestration
-            )
-            if (merged !== retainedEntry.entry.orchestration) {
-              if (!retainedChanged) {
-                nextRetained = { ...nextRetained }
-                retainedChanged = true
-              }
-              nextRetained[paneKey] = {
-                ...retainedEntry,
-                entry: { ...retainedEntry.entry, orchestration: merged }
-              }
-            }
-          }
         }
 
-        if (!runtimeMapChanged && !liveChanged && !retainedChanged) {
+        if (!runtimeMapChanged && !liveChanged) {
           return s
         }
 
         return {
           ...(runtimeMapChanged ? { runtimeAgentOrchestrationByPaneKey: reconciled } : {}),
           ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
-          ...(retainedChanged ? { retainedAgentsByPaneKey: nextRetained } : {}),
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })

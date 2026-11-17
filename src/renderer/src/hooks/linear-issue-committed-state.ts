@@ -3,7 +3,7 @@ import type { LinearReadScope } from '@/store/slices/linear/linear-slice-scope'
 import type {
   LinearIssueLease,
   LinearIssueView
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 
 type Receipt<T> = {
   target: string

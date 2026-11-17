@@ -1,12 +1,12 @@
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   requestedExecutionHostScope
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
 
 export type RuntimeAiVaultSessionTitleResolver = (

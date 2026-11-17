@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { posix, resolve } from 'node:path'
 
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Store } from '../../persistence/loading-store/store'
 import type { StatsCollector } from '../../stats/collector'
 import {
@@ -15,7 +15,7 @@ import {
   type HostedReviewCreationEligibilityArgs,
   type HostedReviewForBranchArgs,
   hostedReviewForBranchReply
-} from '../../../shared/hosted-review'
+} from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
@@ -24,7 +24,10 @@ import {
   getLocalProjectWorktreeGitOptions
 } from '../../workspaces/execution-host/project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId
+} from '../../../shared/execution-host/execution-host'
 import { getStoredRepoExecutionHostId } from '../../workspaces/execution-host/repo-execution-host'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 

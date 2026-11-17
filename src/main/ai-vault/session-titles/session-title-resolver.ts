@@ -4,7 +4,7 @@ import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitleRequest,
   type AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { resolveAiVaultSessionTitlesInBackground } from '../scan-service/session-scanner-background'
 
 const TRANSCRIPT_PATH_MAX_LENGTH = 32_768

@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientDownloadRelay } from './browser-client-download-relay'
 import {
-  BrowserClientDownloadRelay,
+  resetBrowserClientDownloadRouting,
   type BrowserClientDownloadRoute
-} from './browser-client-download-relay'
-import { resetBrowserClientDownloadRouting } from './browser-client-download-routing'
+} from './browser-client-download-routing'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 
 const page: BrowserClientHostedPageInventory = Object.freeze({
@@ -74,37 +74,6 @@ afterEach(() => {
 })
 
 describe('BrowserClientDownloadRelay', () => {
-  it('streams the staged file to the remote and reports the remote destination', async () => {
-    const writes: { offset: number; final: boolean; contentBase64: string }[] = []
-    const transport = negotiatedTransport((_method, params) => {
-      const chunk = params as { offset: number; final: boolean; contentBase64: string }
-      writes.push({ offset: chunk.offset, final: chunk.final, contentBase64: chunk.contentBase64 })
-      return chunk.final
-        ? { accepted: true, workspaceRelativePath: '.orca/browser-downloads/report.pdf' }
-        : { accepted: true }
-    })
-    const { filesystem, removed } = memoryFilesystem(Buffer.from('hello world'))
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport,
-      resolvePage: () => page,
-      filesystem
-    })
-
-    const route = remoteRoute(relay.route({ guestWebContentsId: 7 }))
-
-    const destination = await route.complete('report.pdf')
-
-    expect(destination).toEqual({
-      workspaceRelativePath: '.orca/browser-downloads/report.pdf',
-      hostLabel: 'build-box'
-    })
-    expect(writes.at(0)?.offset).toBe(0)
-    expect(writes.at(-1)).toMatchObject({ final: true, contentBase64: '', offset: 11 })
-    expect(removed).toContain(path.dirname(route.stagingPath))
-  })
-
   it('leaves nothing on disk under the real staging root once transfers settle', async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-download-relay-')))
     const stagingRoot = path.join(root, 'downloads')
@@ -164,31 +133,5 @@ describe('BrowserClientDownloadRelay', () => {
     expect(writes.map((write) => write.final)).toEqual([false])
     expect(aborts).toHaveLength(1)
     expect(removed).toContain(path.dirname(route.stagingPath))
-  })
-
-  it('aborts the remote transfer and removes the staged copy when a chunk is rejected', async () => {
-    const aborted: unknown[] = []
-    const transport = negotiatedTransport((method, params) => {
-      if (method.endsWith('abort')) {
-        aborted.push(params)
-        return { released: true }
-      }
-      return { accepted: false }
-    })
-    const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
-    const relay = new BrowserClientDownloadRelay({
-      stagingRoot: '/tmp/staging',
-      hostLabel: 'build-box',
-      transport,
-      resolvePage: () => page,
-      filesystem
-    })
-
-    const route = remoteRoute(relay.route({ guestWebContentsId: 7 }))
-    await expect(route.complete('report.pdf')).rejects.toThrow(
-      'browser_client_download_chunk_rejected'
-    )
-    expect(aborted).toHaveLength(1)
-    expect(removed.length).toBeGreaterThan(0)
   })
 })

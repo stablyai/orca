@@ -2,7 +2,7 @@ import {
   isShebangLine,
   parseSetupScriptShebang,
   stripLeadingShebangLine
-} from '../../shared/setup-script-shebang'
+} from '../../shared/workspace-setup/setup-script-shebang'
 
 // Reject POSIX scripts before cmd can leave setup half-applied.
 const WINDOWS_RUNNER_SHEBANG_REFUSAL = [

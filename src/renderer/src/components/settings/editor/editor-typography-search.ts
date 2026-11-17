@@ -1,7 +1,9 @@
+import { GENERAL_SETTING_ANCHORS, generalSetting } from '../general/general-setting-anchors'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { supportsCodeFontSmoothing } from '@/lib/code-font-smoothing'
+
+import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import type { SettingsSearchEntry } from '../search/settings-search'
 
 function editorTypographyKeywords(): string[] {
@@ -19,7 +21,7 @@ function editorTypographyKeywords(): string[] {
 /** Shared by the rows and the General search index so a match always reveals its row. */
 export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
   fontSize: {
-    title: translate('auto.components.settings.editorTypography.fontSize', 'Editor Font Size'),
+    title: translate('auto.components.settings.editorTypography.253fc29ebb', 'Editor font size'),
     description: translate(
       'auto.components.settings.editorTypography.fontSizeDesc',
       'Base size for file editors and diff views. Leave empty to follow the terminal font size.'
@@ -30,7 +32,7 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
     ]
   },
   fontWeight: {
-    title: translate('auto.components.settings.editorTypography.fontWeight', 'Editor Font Weight'),
+    title: translate('auto.components.settings.editorTypography.09d72edc6f', 'Editor font weight'),
     description: translate(
       'auto.components.settings.editorTypography.fontWeightDesc',
       'Weight for file editors and diff views. Leave empty for regular weight (400).'
@@ -42,7 +44,7 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
     ]
   },
   lineHeight: {
-    title: translate('auto.components.settings.editorTypography.lineHeight', 'Editor Line Height'),
+    title: translate('auto.components.settings.editorTypography.8e8a87f9ed', 'Editor line height'),
     description: translate(
       'auto.components.settings.editorTypography.lineHeightDesc',
       'Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.'
@@ -58,8 +60,8 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
   },
   ligatures: {
     title: translate(
-      'auto.components.settings.editorTypography.ligatures',
-      'Editor Font Ligatures'
+      'auto.components.settings.editorTypography.83db4f82b0',
+      'Editor font ligatures'
     ),
     description: translate(
       'auto.components.settings.editorTypography.ligaturesDesc',
@@ -79,7 +81,7 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
     ]
   },
   fontSmoothing: {
-    title: translate('auto.components.settings.editorTypography.fontSmoothing', 'Font Smoothing'),
+    title: translate('auto.components.settings.editorTypography.d4b7264499', 'Font smoothing'),
     description: translate(
       'auto.components.settings.editorTypography.fontSmoothingDesc',
       'How terminals and code editors smooth text. Native draws heavier glyphs, closer to other macOS terminals.'
@@ -103,7 +105,18 @@ export const getEditorTypographySearchEntries = createLocalizedCatalog(() => ({
 /** Font smoothing only exists on macOS, so search must not reveal a row that never renders. */
 export function getVisibleEditorTypographySearchEntries(): SettingsSearchEntry[] {
   const { fontSmoothing, ...entries } = getEditorTypographySearchEntries()
-  return supportsCodeFontSmoothing()
-    ? [...Object.values(entries), fontSmoothing]
-    : Object.values(entries)
+  return isMacUserAgent() ? [...Object.values(entries), fontSmoothing] : Object.values(entries)
 }
+
+export const getVisibleEditorTypographySearchDescriptors = createLocalizedCatalog(() => {
+  const entries = getEditorTypographySearchEntries()
+  return [
+    generalSetting(GENERAL_SETTING_ANCHORS.fontSize, entries.fontSize),
+    generalSetting(GENERAL_SETTING_ANCHORS.fontWeight, entries.fontWeight),
+    generalSetting(GENERAL_SETTING_ANCHORS.lineHeight, entries.lineHeight),
+    generalSetting(GENERAL_SETTING_ANCHORS.ligatures, entries.ligatures),
+    ...(isMacUserAgent()
+      ? [generalSetting(GENERAL_SETTING_ANCHORS.fontSmoothing, entries.fontSmoothing)]
+      : [])
+  ]
+})

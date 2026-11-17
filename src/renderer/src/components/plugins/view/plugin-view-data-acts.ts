@@ -16,7 +16,7 @@ import type {
   PluginDeclarativeActTarget,
   PluginDeclarativeDrawnProps
 } from '../declarative/plugin-declarative-act-targets'
-import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
+import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panels/health/plugin-panel-act-driver'
 
 export type PluginPanelActDeps = {
   driver: Pick<PluginPanelActDriver, 'tree' | 'send'>

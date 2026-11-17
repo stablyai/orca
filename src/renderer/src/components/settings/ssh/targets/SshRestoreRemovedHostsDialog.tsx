@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -27,6 +27,7 @@ export function SshRestoreRemovedHostsDialog({
   onOpenChange: (open: boolean) => void
   onConfirm: () => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [removed, setRemoved] = useState<RemovedAliases>({ status: 'loading' })
 
   useEffect(() => {
@@ -68,13 +69,10 @@ export function SshRestoreRemovedHostsDialog({
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.settings.SshRestoreRemovedHosts.title',
-              'Restore removed hosts?'
-            )}
+            {t('auto.components.settings.SshRestoreRemovedHosts.title', 'Restore removed hosts?')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.SshRestoreRemovedHosts.description',
               'Hosts from ~/.ssh/config that you removed in Orca come back in Settings and in every host picker.'
             )}
@@ -87,7 +85,7 @@ export function SshRestoreRemovedHostsDialog({
             ) : aliases.length > 0 ? (
               <span className="break-all">{aliases.join(', ')}</span>
             ) : (
-              translate(
+              t(
                 'auto.components.settings.SshRestoreRemovedHosts.none',
                 'No removed hosts from ~/.ssh/config.'
               )
@@ -103,7 +101,7 @@ export function SshRestoreRemovedHostsDialog({
             }}
             disabled={busy}
           >
-            {translate('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
+            {t('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
           </Button>
           <Button
             onClick={() => void onConfirm()}
@@ -115,7 +113,7 @@ export function SshRestoreRemovedHostsDialog({
             className="gap-1.5"
           >
             {busy ? <Loader2 className="size-3 animate-spin" /> : null}
-            {translate('auto.components.settings.SshRestoreRemovedHosts.confirm', 'Restore')}
+            {t('auto.components.settings.SshRestoreRemovedHosts.confirm', 'Restore')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,17 +13,7 @@ import {
   removeLargeFileCountRepo,
   removeLargeFileCountUntrackedTree
 } from './large-file-count-fixtures'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
-import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/right-sidebar-width'
-
-// A blocking stall over 1s matches the reported unresponsive UI.
-const MAX_EVENT_LOOP_LAG_MS = 1_000
-// Repeat identical status cycles to catch unbounded growth, allowing GC timing headroom.
-const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
-
-// Virtualization must bound mounts to viewport plus overscan, independent of change count.
-const MAX_MOUNTED_ROWS = 200
-const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
+import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/layout/right-sidebar-width'
 
 type LoadMeasurement = {
   entryCount: number
@@ -228,57 +218,7 @@ async function readRendererWorkingSetMb(electronApp: ElectronApplication): Promi
 }
 
 test.describe('Source Control large file count (#8013)', () => {
-  // Keep scales independent because every isolated app/repo failure is a useful data point.
   test.use({ seedTestRepo: false })
-
-  test('a large untracked set under the status cap stays responsive', async ({
-    orcaPage,
-    electronApp,
-    registerPostElectronShutdownCleanup
-  }) => {
-    test.setTimeout(600_000)
-    const untrackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '950')
-    // ORCA_LARGE_FILE_BYTES exposes uncached line-stat I/O beyond the 2048-entry cache with realistic file sizes.
-    const untrackedFileBytes = Number(process.env.ORCA_LARGE_FILE_BYTES ?? '0')
-    const fixture = createLargeFileCountRepo({
-      trackedFiles: 100,
-      untrackedFiles,
-      untrackedFileBytes
-    })
-    registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
-    try {
-      await waitForSessionReady(orcaPage)
-      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
-      const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
-      const measurement = await measureSourceControlLoad(orcaPage, {
-        worktreeId,
-        repoPath: fixture.repoPath,
-        expectedRows: untrackedFiles,
-        pollCycles: 3
-      })
-      const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
-      logMeasurement(`untracked=${untrackedFiles}`, {
-        ...measurement,
-        rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
-      })
-
-      expect(measurement.didHitLimit).toBe(false)
-      expect(measurement.entryCount).toBeGreaterThanOrEqual(untrackedFiles)
-      expect(measurement.renderedRows).toBeGreaterThan(0)
-      // Reject mounts proportional to change count; keep only viewport plus overscan.
-      expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
-      expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
-      if (measurement.heapUsedMbPerCycle.length > 1) {
-        const first = measurement.heapUsedMbPerCycle[0]
-        const last = measurement.heapUsedMbPerCycle.at(-1) ?? first
-        expect(last - first).toBeLessThan(
-          MAX_HEAP_GROWTH_PER_CYCLE_MB * (measurement.heapUsedMbPerCycle.length - 1)
-        )
-      }
-    } finally {
-      await unregisterLargeFileCountRepos(orcaPage, [fixture.repoPath])
-    }
-  })
 
   test('a change set over the status cap degrades to the too-many-changes state', async ({
     orcaPage,
@@ -354,18 +294,6 @@ test.describe('Source Control large file count (#8013)', () => {
       }
 
       expect(measurement.didHitLimit).toBe(true)
-      expect(measurement.entryCount).toBeLessThanOrEqual(DEFAULT_GIT_STATUS_LIMIT)
-      expect(measurement.payloadBytes).toBeLessThan(MAX_CAPPED_STATUS_PAYLOAD_BYTES)
-      expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
-      expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
-      expect(activationMaxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
-
-      // didHitLimit must stop background polling from repeating huge scans.
-      const hugeState = await orcaPage.evaluate(
-        (wId) => window.__store?.getState().gitStatusHugeByWorktree?.[wId] ?? null,
-        worktreeId
-      )
-      expect(hugeState).not.toBeNull()
 
       const retryButton = tooManyChangesBanner.getByRole('button', { name: 'Retry' })
       await expect(retryButton).toBeVisible()

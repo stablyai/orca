@@ -1,10 +1,11 @@
+import type {
+  BrowserClientHostCommandEvent,
+  BrowserClientHostLeaseAuthority
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
-  BrowserClientHostCommandResult,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
-  type BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../../../shared/browser-client-page-metadata-protocol'
+  BrowserClientAutomationResult as BrowserClientHostCommandResult,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResultType
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { assertBrowserClientHostAttachOptions } from '../lifecycle/browser-client-host-attach-request'
 import {
   BrowserHostReconnectDelay,
@@ -77,12 +78,12 @@ export class PairedRuntimeBrowserHostLease {
   }
 
   /** Unversioned, unlike the file channel: an older runtime answers with a reportable error. */
-  sendPageMetadataRequest(params: unknown, timeoutMs: number) {
+  sendHostRequest(method: string, params: unknown, timeoutMs: number) {
     // close drops the connection synchronously.
     return requireBrowserHostLeaseSendRequest(
       this.connection?.sendRequest,
       'Remote runtime browser host lease is unavailable.'
-    )(BROWSER_CLIENT_PAGE_METADATA_METHOD, params, timeoutMs)
+    )(method, params, timeoutMs)
   }
 
   sendFileChannelRequest(method: string, params: unknown, timeoutMs: number) {

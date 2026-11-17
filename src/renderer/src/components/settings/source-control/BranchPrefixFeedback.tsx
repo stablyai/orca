@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react'
-import { getBranchPrefixIssue, normalizeBranchPrefix } from '../../../../../shared/branch-prefix'
-import { translate } from '@/i18n/i18n'
+import {
+  getBranchPrefixIssue,
+  normalizeBranchPrefix
+} from '../../../../../shared/git/branches/branch-prefix'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BranchPrefixFeedbackProps = {
   rawPrefix: string
 }
 
 export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): ReactNode {
+  const t = useTranslate()
   const issue = getBranchPrefixIssue(rawPrefix)
   const normalized = normalizeBranchPrefix(rawPrefix)
 
@@ -14,7 +18,7 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
   if (issue) {
     message = (
       <span className="text-destructive">
-        {translate(
+        {t(
           'auto.components.settings.BranchPrefixFeedback.6c40c0908f',
           'Prefix cannot contain spaces or special characters like ~ ^ : ? * [ \\'
         )}
@@ -23,7 +27,7 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
   } else if (normalized) {
     message = (
       <span className="text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.BranchPrefixFeedback.64d70b156a',
           'Branches will be named {{example}}',
           { example: `${normalized}/feature` }
@@ -33,10 +37,7 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
   } else if (rawPrefix.trim()) {
     message = (
       <span className="text-muted-foreground">
-        {translate(
-          'auto.components.settings.BranchPrefixFeedback.808f9a726e',
-          'No prefix will be applied'
-        )}
+        {t('auto.components.settings.BranchPrefixFeedback.808f9a726e', 'No prefix will be applied')}
       </span>
     )
   }

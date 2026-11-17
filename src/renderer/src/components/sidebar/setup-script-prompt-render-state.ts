@@ -1,9 +1,12 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SetupScriptPromptInspection } from '@/lib/setup-script-prompt'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  ignoresSharedSetupScripts,
+  type SetupScriptPromptInspection
+} from '@/runtime/repo-hooks/setup-script-prompt'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export type SetupScriptPromptState = SetupScriptPromptInspection & {
   repoHostIdentity: string
@@ -62,4 +65,8 @@ export function getRenderedSetupScriptPromptState(input: {
   return !promptState && lastVisiblePrompt?.state.repoHostIdentity === activeRepoHostIdentity
     ? lastVisiblePrompt.state
     : null
+}
+
+export function isSharedSetupIgnored(state: SetupScriptPromptState, repo: Repo): boolean {
+  return state.status === 'ok' && state.candidate === null && ignoresSharedSetupScripts(repo)
 }

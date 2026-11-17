@@ -4,8 +4,9 @@ import {
   type DecodedSessionMessage,
   type DecodedToolCall
 } from './session-decoded-message'
-import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
-import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault-types'
+import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
+import { ownRetainedString } from '../../../shared/text/own-retained-string'
+import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { TranscriptMessage, TranscriptMessageRole } from './session-transcript-consumers'
 
 // Bound pathological messages; consumers may impose tighter limits.
@@ -141,6 +142,10 @@ export function transcriptMessageFromText(
 }
 
 export function boundedText(value: string): string | null {
-  const bounded = sliceAtCodeUnitLimit(value, TRANSCRIPT_MESSAGE_TEXT_LIMIT)
-  return bounded.trim() ? bounded : null
+  const sliced = sliceAtCodeUnitLimit(value, TRANSCRIPT_MESSAGE_TEXT_LIMIT)
+  if (!sliced.trim()) {
+    return null
+  }
+  // A truncated slice would pin the whole oversized source while the capture is retained.
+  return sliced.length === value.length ? sliced : ownRetainedString(sliced)
 }
