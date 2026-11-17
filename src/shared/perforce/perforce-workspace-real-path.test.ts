@@ -69,9 +69,10 @@ describe('deleteChangelistWithFiles', () => {
     p4.calls = []
   })
 
-  it('stops before the revert when an added file sits behind a link that leaves the workspace', async () => {
+  it('keeps the shelf and stops before the revert when an added file sits behind a link that leaves the workspace', async () => {
     p4.added = [join(workspace, 'link', 'notes.txt')]
     await expect(deleteChangelistWithFiles(workspace, 7)).rejects.toThrow('escapes the workspace')
+    expect(p4.calls.some((args) => args[0] === 'shelve')).toBe(false)
     expect(p4.calls.some((args) => args[0] === 'revert')).toBe(false)
     expect(await exists(join(outside, 'notes.txt'))).toBe(true)
   })
