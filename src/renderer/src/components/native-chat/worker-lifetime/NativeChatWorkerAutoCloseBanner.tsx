@@ -29,6 +29,8 @@ export function NativeChatWorkerAutoCloseBanner({
     isVisible
   )
   const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t)
-  // In flow, so the messages start below it instead of under it.
-  return banner ? <PaneTopBanner {...banner} className="shrink-0" /> : null
+  // In flow, so messages start below it. Not `font-sans`: chat maps that to its font, which can be monospace.
+  return banner ? (
+    <PaneTopBanner {...banner} className="shrink-0 font-(family-name:--font-sans)" />
+  ) : null
 }

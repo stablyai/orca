@@ -20617,6 +20617,7 @@
         "keepOpen": "保持開啟",
         "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
         "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
+        "bannerFinishedStatus": "協作工作者已完成 · 2 分鐘後關閉",
         "temporaryBadge": "暫時"
       }
     },

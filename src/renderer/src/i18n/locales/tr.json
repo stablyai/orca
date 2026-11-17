@@ -21080,6 +21080,7 @@
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
         "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · 2 dakika içinde kapanır",
         "temporaryBadge": "Geçici"
       }
     },

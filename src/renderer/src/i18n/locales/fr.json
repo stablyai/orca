@@ -21072,6 +21072,7 @@
         "keepOpen": "Garder ouvert",
         "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
         "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
+        "bannerFinishedStatus": "Worker d’orchestration terminé · Fermeture dans 2 minutes",
         "temporaryBadge": "Temporaire"
       }
     },
