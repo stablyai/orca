@@ -30,18 +30,19 @@ export function claudeHeldTurnEnd(
     !isAgentStatusHeldOpenByChildWork({
       state: resolvedStatus.stateName,
       mainAgent: { state: 'done' }
-    }) ||
+    })
+  ) {
+    return {}
+  }
+  const unclassified = outcome !== 'failure' && isClaudeTurnStartUnclassified(state, paneKey)
+  if (
+    !heldTurnCountsAsFinished(resolvedStatus, outcome, !unclassified && end.selfStarted) ||
     // Owed notifications wake the lead within ~100ms; announcing first would duplicate completion.
     !claudePaneHasRunningChildWork(state, paneKey)
   ) {
     return {}
   }
-  if (outcome !== 'failure' && isClaudeTurnStartUnclassified(state, paneKey)) {
-    return heldTurnCountsAsFinished(resolvedStatus, outcome, false)
-      ? { unclassifiedTurnCompletedAt: Date.now() }
-      : {}
-  }
-  return heldTurnCountsAsFinished(resolvedStatus, outcome, end.selfStarted)
-    ? { turnCompletedAt: Date.now() }
-    : {}
+  return unclassified
+    ? { unclassifiedTurnCompletedAt: Date.now() }
+    : { turnCompletedAt: Date.now() }
 }

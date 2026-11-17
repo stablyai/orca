@@ -17,8 +17,10 @@ export type ClaudePromptTurns = {
   sessionId: string | undefined
   /** Sessions this pane left; only their prompt events, which Claude does not wait for, can still arrive. */
   retiredSessionIds: string[]
-  /** Admitted live turn ids, oldest first. Append-only, so no late or replayed event makes an old turn newest. */
+  /** Admitted live turn ids, oldest first. Append-only, so no late or replayed event moves a seen turn. */
   turnIds: string[]
+  /** A live event arrived; until then only spool replays, in recorded order, fill the turn ids. */
+  live: boolean
   /** The newest turn's UserPromptSubmit arrived, so whether a person or a task wakeup started it is known. */
   promptArrived: boolean
 }
@@ -68,16 +70,18 @@ function orderClaudeTurn(
         ...(known.sessionId !== undefined ? [known.sessionId] : [])
       ].slice(-RETIRED_SESSIONS_PER_PANE),
       turnIds: [],
+      live: false,
       promptArrived: false
     }
-  } else if (!known && !isReplay) {
-    turns = { sessionId, retiredSessionIds: [], turnIds: [], promptArrived: false }
+  } else if (!known) {
+    turns = { sessionId, retiredSessionIds: [], turnIds: [], live: false, promptArrived: false }
   }
   if (!turns) {
     return passThrough
   }
+  state.claudePromptTurnsByPaneKey.set(paneKey, turns)
   if (!isReplay) {
-    state.claudePromptTurnsByPaneKey.set(paneKey, turns)
+    turns.live = true
   }
   const promptId = normalizeClaudePromptId(hookPayload.prompt_id)
   const current = turns.turnIds.at(-1)
@@ -85,7 +89,7 @@ function orderClaudeTurn(
     return passThrough
   }
   if (turns.turnIds.includes(promptId)) {
-    if (isPrompt && promptId === current && !isReplay) {
+    if (isPrompt && promptId === current) {
       turns.promptArrived = true
     }
     return {
@@ -94,13 +98,18 @@ function orderClaudeTurn(
       turnKey: current
     }
   }
-  if (isReplay) {
-    return passThrough
+  if (isReplay && turns.live) {
+    // A replay after live events is older than them; it is recognized but never becomes the current turn.
+    if (turns.turnIds.length < TURN_IDS_PER_SESSION) {
+      turns.turnIds = [promptId, ...turns.turnIds]
+    }
+    return { eventName, opensTurn: false }
   }
   turns.turnIds = [...turns.turnIds, promptId].slice(-TURN_IDS_PER_SESSION)
   turns.promptArrived = isPrompt
-  // The pane's first observed event (Orca started mid-turn) cannot tell a new turn from a running one.
-  return { eventName, opensTurn: known !== undefined, turnKey: promptId }
+  // Spool replay before live events restates recorded turns in order; the pane's first observed event (Orca started
+  // mid-turn) cannot tell a new turn from a running one. Neither opens a turn.
+  return { eventName, opensTurn: known !== undefined && !isReplay, turnKey: promptId }
 }
 
 type ClaudeHookOrder = ClaudeTurnOrder & {

@@ -175,6 +175,14 @@ describe('Claude prompt event arriving after its turn', () => {
     ).toMatchObject({ prompt: 'second' })
   })
 
+  it('keeps a replayed finished turn done when its prompt event replays after it', () => {
+    event({ hook_event_name: 'Stop', prompt_id: FIRST }, true)
+
+    expect(
+      event({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'hi' }, true)?.payload
+    ).toMatchObject({ state: 'done', prompt: 'hi' })
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching() {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })

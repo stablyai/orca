@@ -77,7 +77,7 @@ export function normalizeClaudeEvent(
   const outcome = !isTurnBoundary
     ? undefined
     : (eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-        previousLead?.outcome === 'cancellation'
+        (!opensTurn && previousLead?.outcome === 'cancellation')
       ? ('cancellation' as const)
       : eventName === 'StopFailure'
         ? ('failure' as const)
