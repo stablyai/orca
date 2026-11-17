@@ -53,7 +53,7 @@ function fakeEditor(id: string): editor.IStandaloneCodeEditor {
   } as unknown as editor.IStandaloneCodeEditor
 }
 
-it('runs git blame once for the active file among many mounted editors', async () => {
+it('runs git blame only for the front editor among many mounted ones', async () => {
   blame.mockResolvedValue({ kind: 'unavailable' })
   const fileIds = Array.from({ length: 10 }, (_, index) => `file-${index}.ts`)
   const useStore = create<FakeState>(() => ({
@@ -65,8 +65,7 @@ it('runs git blame once for the active file among many mounted editors', async (
     statusBarItems: ['git-blame']
   }))
   store.current = useStore
-  // file-0.ts is also open in a second split.
-  for (const [index, fileId] of [...fileIds, 'file-0.ts'].entries()) {
+  for (const [index, fileId] of fileIds.entries()) {
     renderHook(() =>
       useMonacoGitBlame({
         mountedEditor: fakeEditor(`editor-${index}`),

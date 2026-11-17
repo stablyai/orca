@@ -20,26 +20,6 @@ type LoadedBlame = { blame: ReadyBlame; headLines: string[]; target: GitBlameTar
 // monaco.editor.CursorChangeReason.Explicit: arrow keys, clicks, go-to; typing is NotSet.
 const CURSOR_CHANGE_EXPLICIT = 3
 
-// Same-file splits and a focus right after activation ask for the same blame at once: share one call.
-const inFlightBlame = new Map<string, Promise<GitBlameResult>>()
-
-function loadBlameOnce(
-  target: GitBlameTarget,
-  knownHeadOid: string | undefined,
-  headSignal: unknown
-): Promise<GitBlameResult> {
-  // The HEAD signal keeps a load started after HEAD moved from adopting the pre-move reply.
-  const key = JSON.stringify([target.git, target.relativePath, knownHeadOid ?? null, headSignal])
-  let pending = inFlightBlame.get(key)
-  if (!pending) {
-    pending = getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).finally(() => {
-      inFlightBlame.delete(key)
-    })
-    inFlightBlame.set(key, pending)
-  }
-  return pending
-}
-
 function commitIndexForHeadLine(ranges: number[], headLine: number): number {
   const line = headLine + 1
   let low = 0
@@ -196,9 +176,12 @@ export function useMonacoGitBlame(params: {
       const generation = loads.generation
       // Only the focused or front editor runs git: hidden worktrees and other splits stay mounted.
       if (!ed.hasTextFocus() && !(isFrontFile(useAppStore.getState()) && isActivePane())) {
-        if (reason === 'headMoved') {
+        if (reason === 'headMoved' && loadedRef.current) {
+          // Hide the old baseline now; a visible split or the status bar would otherwise keep it.
+          loading = true
           loadedRef.current = null
           mapping = null
+          update()
         }
         loadOwed = true
         return
@@ -229,8 +212,7 @@ export function useMonacoGitBlame(params: {
         known.target.relativePath === target.relativePath
       // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
       const knownHeadOid = sameFile ? known.blame.headOid : undefined
-      const headSignal = headKey ? state.gitStatusHeadByWorktree[headKey] : null
-      void loadBlameOnce(target, knownHeadOid, headSignal ?? null).then((result) => {
+      void getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).then((result) => {
         if (disposed || generation !== loads.generation) {
           return
         }
