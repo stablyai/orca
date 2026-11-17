@@ -4679,7 +4679,6 @@
       "tests/e2e/terminal-pane-title-strip-placement.spec.ts": 62400,
       "tests/e2e/terminal-parked-cli-split.spec.ts": 28900,
       "tests/e2e/terminal-parked-close-retirement.spec.ts": 16300,
-      "tests/e2e/terminal-parked-memory.spec.ts": 80100,
       "tests/e2e/terminal-paste-ownership.spec.ts": 66100,
       "tests/e2e/terminal-pinned-viewport-streaming-switch.spec.ts": 19400,
       "tests/e2e/terminal-pinned-viewport-worktree-switch.spec.ts": 16700,
