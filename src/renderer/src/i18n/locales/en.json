@@ -21808,6 +21808,11 @@
         "openAgain": "Open again",
         "finished": "Sign-in finished",
         "finishedWith": "Sign-in finished · {{message}}"
+      },
+      "workingLocation": {
+        "in": "Working in {{name}}",
+        "open": "Open worktree",
+        "revealFailed": "Could not show that worktree."
       }
     },
     "tab": {

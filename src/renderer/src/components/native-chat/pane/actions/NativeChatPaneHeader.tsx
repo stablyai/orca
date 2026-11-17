@@ -13,6 +13,8 @@ import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { NativeChatWorkingLocationChip } from './NativeChatWorkingLocationChip'
 
 const HEADER_STYLE: React.CSSProperties & Record<'--orca-pane-title-bg', string> = {
   '--orca-pane-title-bg': 'var(--chat-canvas)'
@@ -27,7 +29,8 @@ export function NativeChatPaneHeader({
   nativeChat,
   focused,
   colorScheme,
-  handOff
+  handOff,
+  target
 }: {
   tabId: string
   worktreeId: string
@@ -36,6 +39,7 @@ export function NativeChatPaneHeader({
   focused: boolean
   colorScheme: React.CSSProperties['colorScheme']
   handOff?: NativeChatHeaderHandOff
+  target?: RuntimeClientTarget
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
@@ -55,6 +59,13 @@ export function NativeChatPaneHeader({
       data-pane-title-surface={light ? 'light' : 'dark'}
       style={HEADER_STYLE}
     >
+      {target ? (
+        <NativeChatWorkingLocationChip
+          sessionId={nativeChat.sessionId}
+          worktreeId={worktreeId}
+          target={target}
+        />
+      ) : null}
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
         {handOff && focused ? (
           <Tooltip>
@@ -138,6 +149,7 @@ export function nativeChatPaneHeader(
     | 'isVisible'
     | 'isFocusedGroup'
     | 'contextMenuActions'
+    | 'target'
   >,
   worktreeId: string | null,
   colorScheme: React.CSSProperties['colorScheme'],
@@ -151,6 +163,7 @@ export function nativeChatPaneHeader(
       nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
       focused={view.isFocusedGroup}
       colorScheme={colorScheme}
+      target={view.target}
       handOff={
         handOff?.available
           ? { open: handOff.open, disabled: handOff.preparing || handOff.dialog !== null }

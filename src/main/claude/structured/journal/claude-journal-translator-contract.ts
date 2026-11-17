@@ -1,4 +1,5 @@
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
+import type { ClaudeWorkingDirectory } from './claude-working-directory'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
@@ -63,6 +64,8 @@ export type ClaudeJournalTranslator = {
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity; history catch-up refuses to finish past it. */
   readonly contextActivity: number
+  /** Where EnterWorktree moved the root session; `current` undefined is its launch directory. */
+  readonly workingDirectory: Pick<ClaudeWorkingDirectory, 'current'>
   markContextActivity: () => void
   subscribeContextActivity: (listener: () => void) => () => void
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */

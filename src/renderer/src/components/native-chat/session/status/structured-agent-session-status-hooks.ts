@@ -60,6 +60,19 @@ export function useStructuredAgentSessionPermissionStatus(
   return { permissionReport, launchPermissionMode, runningPermissionMode, observation }
 }
 
+/** Host path the live agent moved its work to; undefined while it works in its launch directory. */
+export function useStructuredAgentSessionWorkingDirectory(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string | undefined {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.workingDirectory,
+    () => undefined
+  )
+}
+
 export function useStructuredAgentSessionOptionStamp(
   sessionId: string,
   target: RuntimeClientTarget

@@ -43,6 +43,7 @@ export function structuredStatusSummariesEqual(
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
+    a.workingDirectory === b.workingDirectory &&
     a.hostProgram === b.hostProgram &&
     a.conversationName === b.conversationName &&
     a.conversationNameSource === b.conversationNameSource &&

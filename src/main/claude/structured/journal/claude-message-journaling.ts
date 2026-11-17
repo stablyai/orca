@@ -36,9 +36,11 @@ import {
   type ClaudeTurnSource
 } from '../turns/claude-turn-opening'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
-import type { ClaudeAssistantFailures } from './claude-assistant-failures'
-import type { ClaudeUsageLimits } from './claude-usage-limits'
-import type { ClaudeThreadGoal } from './claude-thread-goal'
+import { ClaudeAssistantFailures } from './claude-assistant-failures'
+import { ClaudeUsageLimits } from './claude-usage-limits'
+import { ClaudeThreadGoal } from './claude-thread-goal'
+import { ClaudeWorkingDirectory } from './claude-working-directory'
+import type { ClaudeJournalTranslatorDeps } from './claude-journal-translator-contract'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -56,6 +58,24 @@ export type ClaudeMessageJournalContext = {
   assistantFailures: ClaudeAssistantFailures
   usageLimits: ClaudeUsageLimits
   threadGoal: ClaudeThreadGoal
+  workingDirectory: ClaudeWorkingDirectory
+}
+
+type ClaudeMessageObservers = Pick<
+  ClaudeMessageJournalContext,
+  'assistantFailures' | 'usageLimits' | 'threadGoal' | 'workingDirectory'
+>
+
+/** Per-session readers of state the agent reports inside its message frames. */
+export function createClaudeMessageObservers(
+  deps: Pick<ClaudeJournalTranslatorDeps, 'account' | 'model' | 'sink'>
+): ClaudeMessageObservers {
+  return {
+    assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
+    usageLimits: new ClaudeUsageLimits(),
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal),
+    workingDirectory: new ClaudeWorkingDirectory()
+  }
 }
 
 export function journalClaudeStream(
@@ -100,6 +120,7 @@ export function journalClaudeMessage(
   const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
   ctx.threadGoal.observe(message)
+  ctx.workingDirectory.observe(envelope, message)
   const source: ClaudeTurnSource = {
     sessionId: envelope.sessionId,
     uuid: envelope.uuid,

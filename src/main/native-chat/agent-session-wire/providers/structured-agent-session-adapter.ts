@@ -40,6 +40,7 @@ import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
+import type { StructuredAgentSessionLiveChildReads } from './structured-agent-session-live-child-reads'
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
@@ -265,12 +266,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     executionOptions?: AgentSessionExecutionOptions
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Derive unanswered retained work from the live child; false without one. */
-  holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
-  /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
-  liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */
   requiresModelTransitionRestart?(input: {
     sessionId: string
@@ -284,8 +281,6 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     fence: number
     generation: string
   }): (() => boolean) | undefined
-  /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
-  heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean
   /** This exact acquisition's ending before the host committed it ready, as the adapter reads it. */
@@ -370,4 +365,4 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   ): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(sessionId: string, acquisition?: AcquisitionReceipt): void
-}
+} & StructuredAgentSessionLiveChildReads

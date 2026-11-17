@@ -262,6 +262,9 @@ export type AgentSessionStatusSummary = {
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
+  /** Host path the live agent moved its work to mid-session (e.g. Claude's EnterWorktree). Absent
+   *  while it works in its launch directory, and from older hosts; older clients ignore it. */
+  workingDirectory?: string
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number

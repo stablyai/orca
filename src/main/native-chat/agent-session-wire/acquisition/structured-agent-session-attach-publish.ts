@@ -93,6 +93,7 @@ export async function publishAttachedChild(
           phase: 'starting' as const,
           catalogSource: attempt.catalogSource,
           heldSends: () => context.deps.adapter.heldSends?.(sessionId),
+          workingDirectory: () => context.deps.adapter.workingDirectory?.(sessionId),
           exitObservation: eventSink.exitObservation,
           ...(startedFor === undefined ? {} : { startedFor }),
           ...(permissionMode === undefined ? {} : { permissionMode }),
