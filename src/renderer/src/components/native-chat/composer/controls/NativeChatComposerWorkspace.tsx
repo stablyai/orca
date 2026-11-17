@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Folder, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
+import { Folder, FolderGit2, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -46,6 +46,7 @@ export function NativeChatComposerWorkspace({
   const {
     worktreeId: rowWorktreeId,
     repoId,
+    projectName,
     hostId,
     machine,
     checkout,
@@ -82,6 +83,7 @@ export function NativeChatComposerWorkspace({
   }
   // Why: for a plain folder the folder icon is literally the kind, so "· Folder" only repeats it.
   // Worktrees and main checkouts reuse that icon, so they keep a suffix to tell them apart.
+  const showProjectName = Boolean(projectName && projectName !== checkout)
   const kindLabel =
     kind === 'folder'
       ? null
@@ -139,6 +141,16 @@ export function NativeChatComposerWorkspace({
           )}
         </span>
       )}
+      {showProjectName && (
+        <span
+          className="hidden min-w-14 max-w-32 shrink items-center gap-1 @sm:flex"
+          title={projectName}
+          data-chat-footer-project=""
+        >
+          <FolderGit2 className="size-3 shrink-0" aria-hidden />
+          <span className={FOOTER_TEXT}>{projectName}</span>
+        </span>
+      )}
       {checkout && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -148,7 +160,7 @@ export function NativeChatComposerWorkspace({
               size="xs"
               className={
                 identity
-                  ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @sm:flex'
+                  ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @lg:flex'
                   : 'h-5.5 min-w-0 max-w-56 shrink justify-start'
               }
               aria-label={t(
@@ -160,8 +172,9 @@ export function NativeChatComposerWorkspace({
             >
               <Folder className="size-3" aria-hidden />
               <span className={FOOTER_TEXT}>{checkout}</span>
-              {kindLabel && (
+              {kindLabel && !showProjectName && (
                 <span
+                  data-chat-footer-kind=""
                   className={`${FOOTER_TEXT} max-w-[max(0px,calc(100%_-_var(--spacing)*5))] shrink-0 font-normal text-chat-foreground-faint`}
                 >
                   · {kindLabel}
@@ -170,7 +183,7 @@ export function NativeChatComposerWorkspace({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {path}
+            {showProjectName ? [path, kindLabel].filter(Boolean).join(' · ') : path}
           </TooltipContent>
         </Tooltip>
       )}
