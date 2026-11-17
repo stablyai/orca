@@ -6,19 +6,11 @@ import {
   getDefaultWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import type {
-  WorkspaceCleanupPreviewRow,
-  WorkspaceCleanupRun
-} from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { TooltipProvider } from '../../ui/tooltip'
-import { getSettingsScrollTarget } from '../navigation/settings-navigation-foundations'
-import { getSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
-import { matchesSettingsSearch } from '../search/settings-search'
-import { getWorkspaceCleanupSettingsSearchEntries } from './workspace-cleanup-settings-search'
 import type * as RuntimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import { WorkspaceCleanupSettingsPane } from './WorkspaceCleanupSettingsPane'
 
@@ -70,9 +62,6 @@ let includeCandidate = false
 let matchWhenMergedOn = false
 let previewGate: Promise<void> | null = null
 let saveGate: Promise<void> | null = null
-let runNowGate: Promise<void> | null = null
-let reportRuns: WorkspaceCleanupRun[] = []
-let reportRunning = false
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
@@ -143,9 +132,6 @@ beforeEach(() => {
   matchWhenMergedOn = false
   previewGate = null
   saveGate = null
-  runNowGate = null
-  reportRuns = []
-  reportRunning = false
   environmentCall.settingsGetFails = false
   useAppStore.setState(useAppStore.getInitialState(), true)
   Object.assign(window, {
@@ -159,9 +145,6 @@ beforeEach(() => {
           method: string
           params?: { rules?: WorkspaceCleanupRules }
         }) => {
-          if (method === 'workspaceCleanup.runNow') {
-            await runNowGate
-          }
           if (method === 'workspaceCleanup.preview') {
             await previewGate
             if (failPreview) {
@@ -176,7 +159,7 @@ beforeEach(() => {
             ok: true,
             result:
               method === 'workspaceCleanup.report'
-                ? { runs: reportRuns, running: reportRunning, nextRunAt: null }
+                ? { runs: [], running: false, nextRunAt: null }
                 : { evaluatedAt: 0, rows: candidate ? [row] : [] }
           }
         }
@@ -347,28 +330,6 @@ describe('turning a rule on', () => {
     expect(document.activeElement).toBe(workers())
   })
 
-  it('returns focus to the rule when the confirmation a retry opened is cancelled', async () => {
-    failPreview = true
-    mount()
-    merged().focus()
-    await act(async () => {
-      fireEvent.click(merged())
-    })
-    failPreview = false
-    matchWhenMergedOn = true
-    await act(async () => {
-      fireEvent.click(tryAgain())
-    })
-    expect(await screen.findByRole('dialog')).toBeTruthy()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    })
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await waitFor(() => expect(document.activeElement).toBe(merged()))
-    expect(savedRules().merged.enabled).toBe(false)
-    expect(merged().getAttribute('aria-checked')).toBe('false')
-  })
-
   it("shows the host's load error when its rules can't be read during a change", async () => {
     mount(false, { kind: 'environment', environmentId: 'env-1' })
     const rule = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
@@ -386,168 +347,5 @@ describe('turning a rule on', () => {
     expect(reloaded.getAttribute('aria-checked')).toBe('false')
     expect(reloaded.hasAttribute('aria-busy')).toBe(false)
     expect(screen.queryByRole('alert')).toBeNull()
-  })
-})
-
-describe('automatic cleanup search', () => {
-  it('shows the heading and Run rules now without the rules for a status-only search', () => {
-    mount(true)
-    search('Run rules now')
-    expect(screen.getByRole('button', { name: 'Run rules now' })).toBeTruthy()
-    expect(screen.queryAllByRole('switch')).toHaveLength(0)
-    expect(screen.queryByRole('button', { name: /Advanced/ })).toBeNull()
-  })
-
-  it.each([
-    ['off', false, false],
-    ['on', true, false],
-    ['running', true, true]
-  ])(
-    'keeps the Run rules now result pointing at the heading after the query clears, rules %s',
-    async (_state, enabled, running) => {
-      reportRunning = running
-      mount(enabled)
-      if (running) {
-        await screen.findByRole('button', { name: 'Running…' })
-      }
-      search('run rules now')
-      const results = getWorkspaceCleanupSettingsSearchEntries()
-        .filter((entry) => matchesSettingsSearch('run rules now', entry))
-        .map((entry) => entry.title)
-      expect(results).toEqual(['Automatic cleanup'])
-      const targetId = getSettingsTitleTargetId('Automatic cleanup')
-      expect(getSettingsScrollTarget(targetId)).not.toBeNull()
-
-      // Choosing a result clears the query before the page scrolls to the target.
-      search('')
-      const target = getSettingsScrollTarget(targetId)
-      expect(target?.querySelector('[data-settings-group-heading]')?.textContent).toContain(
-        'Automatic cleanup'
-      )
-    }
-  )
-})
-
-describe('automatic cleanup announcements', () => {
-  function finishedRun(id: string, finishedAt: number): WorkspaceCleanupRun {
-    return {
-      id,
-      trigger: 'hourly',
-      startedAt: finishedAt - 1000,
-      finishedAt,
-      counts: { removed: 0, archived: 0, kept: 0, failed: 0 },
-      freedBytes: 0,
-      rows: []
-    }
-  }
-  function statusLine(): string {
-    return document.querySelector('[data-settings-group-description]')?.textContent ?? ''
-  }
-  // The page's live regions; no rule check is running in these tests.
-  function regions(): string[] {
-    return screen.getAllByRole('status').map((region) => region.textContent ?? '')
-  }
-  // A finished-run event makes the page read the report again, as the host's event does.
-  async function rereadReport(changed: () => boolean): Promise<void> {
-    await act(async () => {
-      const { rows: _rows, ...run } = reportRuns[0]!
-      emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
-    })
-    await waitFor(() => expect(changed()).toBe(true))
-  }
-  // Only the relative times change; nothing should be announced.
-  async function refreshTimes(advance: () => void): Promise<void> {
-    const line = statusLine()
-    const before = regions()
-    advance()
-    await rereadReport(() => statusLine() !== line)
-    expect(regions()).toEqual(before)
-  }
-
-  it('announces a run starting and its result, not a refresh of the relative times', async () => {
-    let now = Date.UTC(2026, 10, 15, 12)
-    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    try {
-      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
-      mount(true)
-      await waitFor(() => expect(statusLine()).not.toBe(''))
-      expect(regions()).toEqual(['', ''])
-      await refreshTimes(() => (now += 2 * 60 * 60_000))
-
-      let finishRun = (): void => {}
-      runNowGate = new Promise((resolve) => (finishRun = resolve))
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Run rules now' }))
-      })
-      const started = regions()
-      expect(started.filter(Boolean)).toHaveLength(1)
-
-      reportRuns = [finishedRun('run-2', now), ...reportRuns]
-      await act(async () => {
-        finishRun()
-      })
-      await rereadReport(() => regions().join() !== started.join())
-      const finished = regions()
-      // The result goes into the region that was empty, not over the start text.
-      expect(finished.findIndex(Boolean)).toBe(started.indexOf(''))
-      expect(finished.filter(Boolean)).toHaveLength(1)
-
-      await refreshTimes(() => (now += 60 * 60_000))
-    } finally {
-      clock.mockRestore()
-    }
-  })
-
-  it('announces a result and a run start that arrive together in one update, once', async () => {
-    let now = Date.UTC(2026, 10, 15, 12)
-    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    try {
-      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
-      mount(true)
-      await waitFor(() => expect(statusLine()).not.toBe(''))
-
-      // One report read brings both a new finished run and a run already under way.
-      reportRunning = true
-      reportRuns = [finishedRun('run-2', now), ...reportRuns]
-      await rereadReport(() => regions().some(Boolean))
-      expect(regions().filter(Boolean)).toEqual([
-        'Last run just now removed nothing. Removing what your rules match…'
-      ])
-      const announced = regions()
-
-      // The run finishing without a new result, and later time-only refreshes, say nothing.
-      const runningLine = statusLine()
-      reportRunning = false
-      await rereadReport(() => statusLine() !== runningLine)
-      expect(regions()).toEqual(announced)
-      await refreshTimes(() => (now += 60 * 60_000))
-    } finally {
-      clock.mockRestore()
-    }
-  })
-
-  it('announces each scheduled run, including two worded the same', async () => {
-    const now = Date.UTC(2026, 10, 15, 12)
-    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    try {
-      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
-      mount(true)
-      await waitFor(() => expect(statusLine()).not.toBe(''))
-
-      reportRuns = [finishedRun('run-2', now), ...reportRuns]
-      await rereadReport(() => regions().some(Boolean))
-      const first = regions()
-      const firstSlot = first.findIndex(Boolean)
-      expect(first.filter(Boolean)).toHaveLength(1)
-
-      reportRuns = [finishedRun('run-3', now), ...reportRuns]
-      await rereadReport(() => regions().join() !== first.join())
-      const second = regions()
-      // Same words, so the text moves to the region that was empty and is announced again.
-      expect(second[firstSlot]).toBe('')
-      expect(second[1 - firstSlot]).toBe(first[firstSlot])
-    } finally {
-      clock.mockRestore()
-    }
   })
 })

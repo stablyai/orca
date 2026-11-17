@@ -13,7 +13,7 @@ vi.mock('./workspaces/creation/runtime-local-worktree-create', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
-import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from './construction/test-context/runtime-store-partial-fixture'
 import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 
 const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', kind: 'git' }
