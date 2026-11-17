@@ -27,6 +27,7 @@ import {
   useLeasedSenderSelector,
   useStableSenderTarget
 } from './native-chat-agent-message-sender-source'
+import { usePluginMessageSender } from './native-chat-plugin-message-sender'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')
@@ -144,7 +145,7 @@ function labelSourceSelector(
   }
 }
 
-/** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
+/** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded; a plugin is named from the installed plugin. */
 export function useAgentMessageSenderLabel(
   sender: AgentMessageSender,
   chatWorktreeId: string | null,
@@ -166,12 +167,13 @@ export function useAgentMessageSenderLabel(
   )
   const { host, tab, sessionId } = useLeasedSenderSelector(NO_ROWS, select)
   const conversationName = useStructuredConversationName(host, sessionId)
+  const plugin = usePluginMessageSender(address)
   return agentMessageSenderLabel({
     localChat: Boolean(sessionId),
     customLabel: tab?.customLabel,
     conversationName,
     snapshotName: sender.name,
     tabLabel: tab?.label,
-    fallback: unnamedSenderLabel(t)
+    fallback: plugin?.name ?? unnamedSenderLabel(t)
   })
 }

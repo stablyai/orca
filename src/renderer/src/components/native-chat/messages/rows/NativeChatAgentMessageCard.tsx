@@ -17,6 +17,8 @@ import {
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
+import { usePluginMessageSender } from '../agent-senders/native-chat-plugin-message-sender'
+import { PluginContributionIcon } from '@/components/plugins/PluginContributionIcon'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
 import { NativeChatExpandable } from '../disclosure/NativeChatExpandable'
@@ -195,9 +197,14 @@ function AgentMessageAvatar({
   target?: RuntimeClientTarget
 }): React.JSX.Element {
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
+  const plugin = usePluginMessageSender(sender?.party.address)
   return (
     <div className="relative flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-      <AgentTypeIcon agentType={view.agentType} size={16} />
+      <PluginContributionIcon
+        url={plugin?.iconUrl}
+        className="size-4 rounded-sm"
+        fallback={<AgentTypeIcon agentType={view.agentType} size={16} />}
+      />
       {view.dot ? (
         // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
         <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
