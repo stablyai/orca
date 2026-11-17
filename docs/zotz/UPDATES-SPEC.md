@@ -88,19 +88,19 @@ En cada push a `main` que cambie código (los cambios solo de `docs/**` y `*.md`
   - `src/main/updater/releases/updater-release-readiness.ts:4,110`.
   - `src/main/updater/releases/updater-prerelease-feed.ts:15,20,72,78` (Atom, regex de etiquetas y `/releases/latest`; el repo se escapa en las regex).
   - `config/dev-app-update.yml` (owner, repo y carpeta de caché `zotz-updater`).
-- Los canales hourly/daily/adhoc/RC se **ocultan** en Ajustes → Updates (`ReleaseChannelSection.tsx`). Solo existe "Estable".
+- No hay selector de canales: el que Orca escondía detrás de Alt+clic en Ajustes → Acerca de se quitó. Solo existe el canal estable de Zotz.
 - Un check en CI (`grep`) falla si vuelve a aparecer `stablyai/orca` en `src/main/updater/` o `src/shared/release-channel.ts` después de un sync con Orca.
 
 ### 5.2 Lo que se apaga
 
-- **Changelog** de `orca.dev/whats-new/changelog.json` y **nudges** de `orca.dev/whats-new/nudge.json`: apagados por la política de red (features `orca-changelog`, `orca-nudges`, no permitidas). La tarjeta de update ya soporta `changelog: null`. "¿Qué hay de nuevo?" abre las notas del release de Zotz.
+- **Changelog** de `orca.dev/whats-new/changelog.json` y **nudges** de `orca.dev/whats-new/nudge.json`: apagados por la política de red (feature `orca-whats-new`, no permitida). La tarjeta de update ya soporta `changelog: null`, y "Notas de la versión" abre el release de Zotz.
 - Enlaces de ayuda del menú (`SidebarSettingsHelpMenu.tsx`): "Changelog" y "GitHub" apuntan a los releases y al repo de Zotz.
 
 ### 5.3 Encendido y red
 
 - Encendido **por default**. Un switch en Ajustes → Updates, "Buscar y descargar versiones nuevas de Zotz" (setting `zotzUpdatesEnabled`, default `true`), lo apaga.
 - `ZOTZ_ENABLE_UPDATER` desaparece. Para las pruebas de upstream, el loader de tests sigue forzando el actualizador encendido.
-- Política de red (`zotz-network-policy.ts`): nueva feature permitida `zotz-updates`. Solo cubre `github.com/HugoRodriguezDEV/zotz/releases*`, `objects.githubusercontent.com` (descarga de los archivos) y `api.github.com/repos/HugoRodriguezDEV/zotz/releases` (selector de builds). Con el switch apagado, nada de esto se consulta.
+- Política de red (`zotz-network-policy.ts`): la nueva feature `orca-whats-new` (no permitida) apaga el changelog y los nudges de `orca.dev`. Las consultas a GitHub del actualizador dependen del switch: con el switch apagado, nada se consulta.
 
 ### 5.4 Cuándo revisa, descarga e instala
 
@@ -145,20 +145,21 @@ La regla del modo servidor vive en un archivo nuevo, `src/main/updater/zotz-serv
 
 ## 9. Archivos que se tocan
 
-| Archivo                                                                                                           | Cambio                                                             |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `.github/workflows/zotz-desktop-builds.yml`                                                                       | versión, zip de macOS, manifiestos y blockmaps, release versionado |
-| `config/scripts/zotz/zotz-release-version.mjs` (nuevo)                                                            | calcula la versión (§3)                                            |
-| `config/electron-builder.config.cjs`                                                                              | `mac.target` + `zip`; acepta la versión de CI                      |
-| `config/dev-app-update.yml`                                                                                       | repo y caché                                                       |
-| `src/shared/zotz/zotz-app-identity.ts`                                                                            | `ZOTZ_RELEASE_REPO`                                                |
-| `src/shared/release-channel.ts`, `updater-setup.ts`, `updater-release-readiness.ts`, `updater-prerelease-feed.ts` | repo desde la constante                                            |
-| `src/shared/zotz/zotz-network-policy.ts`                                                                          | `zotz-updates`, `orca-changelog`, `orca-nudges`                    |
-| `src/main/updater/zotz-updater-policy.ts`, `updater-service.ts`                                                   | encendido por setting en vez de env var                            |
-| `src/main/updater/zotz-server-idle-install.ts` (nuevo)                                                            | instalar en servidor sin agentes                                   |
-| `src/main/updater/lifecycle/updater-setup.ts`, `updater-state.ts`                                                 | `autoDownload` y 6 h (pocas líneas)                                |
-| Ajustes → Updates (renderer)                                                                                      | switch, ocultar canales, versión con base de Orca                  |
-| `docs/zotz/UPDATE.md`, `docs/zotz/PLAN.md`                                                                        | reescritura y bitácora                                             |
+| Archivo                                                                                                                              | Cambio                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `.github/workflows/zotz-desktop-builds.yml`                                                                                          | job `version`, zip de macOS, manifiestos y blockmaps, release versionado, check de referencias |
+| `config/scripts/release/zotz-release-version.mjs` (nuevo)                                                                            | calcula la versión (§3)                                                                        |
+| `config/scripts/release/zotz-stage-release-assets.mjs` (nuevo)                                                                       | sube lo que nombran los manifiestos + copias `zotz-*`                                          |
+| `config/scripts/release/zotz-check-release-repo-refs.mjs` (nuevo)                                                                    | falla si vuelve `stablyai/orca` al actualizador                                                |
+| `config/dev-app-update.yml`                                                                                                          | repo y caché                                                                                   |
+| `src/shared/zotz/zotz-app-identity.ts`                                                                                               | `ZOTZ_RELEASE_REPO`, `ZOTZ_RELEASES_URL`                                                       |
+| `src/shared/release-channel.ts`, `updater-setup.ts`, `updater-release-readiness.ts`, `updater-prerelease-feed.ts`                    | repo desde la constante                                                                        |
+| `src/shared/zotz/zotz-network-policy.ts`, `updater-changelog.ts`, `nudge-campaign.ts`                                                | `orca-whats-new` apagado                                                                       |
+| `src/main/updater/zotz-updater-policy.ts`, `updater-service.ts`, `main-window-updater.ts`                                            | encendido por setting (`zotzUpdatesEnabled`)                                                   |
+| `src/main/updater/zotz-update-automation.ts` (nuevo), `updater-status.ts`, `main-process-observers.ts`                               | descarga en segundo plano e instalación en servidor sin agentes                                |
+| `src/main/updater/lifecycle/updater-state.ts`                                                                                        | 6 h                                                                                            |
+| `src/renderer/src/components/zotz/ZotzUpdatesSetting.tsx` (nuevo), `GeneralUpdateSettingsSection.tsx`, `SidebarSettingsHelpMenu.tsx` | switch, versión con base de Orca, sin selector de canales, enlaces a Zotz                      |
+| `docs/zotz/UPDATE.md`, `SYNC.md`, `PLAN.md`                                                                                          | reescritura, zona de sync y bitácora                                                           |
 
 ## 10. Riesgos
 

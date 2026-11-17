@@ -34,6 +34,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # An Orca sync must not point the updater back at stablyai/orca.
+      - name: Check the updater reads Zotz releases
+        run: node config/scripts/release/zotz-check-release-repo-refs.mjs
+
       - name: Compute the release version
         id: compute
         run: node config/scripts/release/zotz-release-version.mjs

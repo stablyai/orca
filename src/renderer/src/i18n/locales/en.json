@@ -1357,7 +1357,7 @@
       },
       "about": {
         "title": "About",
-        "version": "Orca {{version}}"
+        "version": "Zotz {{version}}"
       }
     },
     "openInApp": {
@@ -8870,7 +8870,7 @@
           "a6b37929dc": "Version",
           "8311da27ba": "is available. Click \"Download Update\" to download it.",
           "02dc082e70": "Could not start the update download.",
-          "ceb579abaf": "Check for app updates and install a newer Orca version.",
+          "ceb579abaf": "Check for app updates and install a newer Zotz version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
           "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
@@ -13766,7 +13766,7 @@
           "version": "v{{version}}",
           "updateAvailable": "v{{version}} available",
           "throughSsh": "Through {{host}} → port {{port}}",
-          "updatesOff": "Zotz updates are turned off.",
+          "manualUpdate": "Update Orca on the server host",
           "defaultChip": "Default",
           "sshTunnelChip": "SSH tunnel",
           "sshDialogTitle": "Connect {{name}} through SSH",
@@ -25801,8 +25801,11 @@
   },
   "zotz": {
     "updater": {
-      "manualUpdate": "Zotz updates with git pull + build.",
-      "updatesOffDetail": "Turn them on in Settings → Updates and restart Zotz."
+      "updatesOffDetail": "Turn them on in Settings → Updates and restart Zotz.",
+      "versionWithBase": "Zotz {{version}} (Orca {{base}}, build {{build}})",
+      "toggleLabel": "Check for and download new Zotz versions",
+      "toggleDescription": "From the Zotz releases on GitHub, every 6 hours. Never restarts on its own; on a server it installs when no agent is working. Applies after restarting Zotz.",
+      "updatesOff": "Zotz updates are turned off."
     },
     "machineMode": {
       "autostartRemoveFailed": "Could not remove the sign-in task: {{detail}}",

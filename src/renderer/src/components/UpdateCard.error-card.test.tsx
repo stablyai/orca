@@ -167,7 +167,9 @@ describe('UpdateCard Linux package-install recovery', () => {
     expect(screen.queryByText('Manual Install Required')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry Download' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Download Manually' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/HugoRodriguezDEV/zotz/releases/tag/v1.4.200')
+    expect(openUrl).toHaveBeenCalledWith(
+      'https://github.com/HugoRodriguezDEV/zotz/releases/tag/v1.4.200'
+    )
   })
 
   it('relaunches once when Enable & Restart is double-clicked', async () => {
