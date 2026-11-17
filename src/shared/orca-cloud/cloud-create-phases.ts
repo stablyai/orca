@@ -1,4 +1,4 @@
-// N-01: stable names for the phases of an Orca Cloud workspace create, logged to the main app log as
+// Stable names for the phases of an Orca Cloud workspace create, logged to the main app log as
 // `[orca-cloud] create <creationId> <phase> +<ms>` (ms since the create's provision started). Keep the
 // names stable: log readers grep for them. The provision's own `[orca-cloud] <stage>` progress lines,
 // which the create's progress text reads, are separate and unchanged.

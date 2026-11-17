@@ -1,11 +1,11 @@
 // A create cancelled while its request was in flight may still have made a sandbox on the control
-// plane, and a sandbox bills (GH-CREATE-CANCEL). The control plane keys creates by Idempotency-Key
+// plane, and a sandbox bills. The control plane keys creates by Idempotency-Key
 // and body: sending the same create again hands back the sandbox the first one made (or makes one, if
 // the first never arrived), and that sandbox is deleted. Shared by the owned create (the recipe) and
 // the GitHub-only create, which both go through createSandboxWithProgress.
-// EP-5: while the first create still runs, the replay answers 409; the sandbox it is making is found
+// While the first create still runs, the replay answers 409; the sandbox it is making is found
 // by its workspace id and deleted directly. Deleting it mid-create could leave that create to retry
-// with a new row (pooled adopt, region fallback; n48), so the replays go on until the create itself
+// with a new row (pooled adopt, region fallback), so the replays go on until the create itself
 // has answered (its sandbox, `create_cancelled`, or a refusal), and a final sweep of the workspace
 // deletes anything of it still up. Only that confirmed sweep counts as cleaned up.
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'

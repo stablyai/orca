@@ -224,7 +224,7 @@ export function FailureSummary({
   activeBuildNumber: number | null
   /** Scrolls to Orca's own error note in the log (the title's click); null when the log has none. */
   onShowError: (() => void) | null
-  /** Try again / Fix with agent, on the latest failed build for admins (DS-40). */
+  /** Try again / Fix with agent, on the latest failed build for admins. */
   actions?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()

@@ -1,4 +1,4 @@
-// EP-7: a published or revoked skill link changes the owner's shared links. Every mounted
+// A published or revoked skill link changes the owner's shared links. Every mounted
 // "Shared links" list re-reads on this signal, so the count and list are right without reopening
 // the page.
 const listeners = new Set<() => void>()

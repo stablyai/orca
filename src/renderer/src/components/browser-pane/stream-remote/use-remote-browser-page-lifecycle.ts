@@ -195,7 +195,7 @@ export function useRemoteBrowserPageLifecycle({
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
       lifecycle.abandonRemotePage()
-      // Slept with its VM (NEW-01, LC2-P1): wait, or reopen at its URL, instead of closing.
+      // Slept with its VM: wait, or reopen at its URL, instead of closing.
       const action = sleptRemotePageMissingAction({
         id: browserTab.id,
         worktreeId: browserTab.worktreeId

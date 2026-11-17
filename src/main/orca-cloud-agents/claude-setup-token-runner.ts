@@ -18,14 +18,14 @@ export type SubmitSetupCode = (code: string) => boolean
 /** Rejects with `{ code: 'ENOENT' }` when there is no `claude` to run. */
 export type SpawnSetupToken = () => Promise<SetupTokenProcess>
 
-export type ClaudeSetupTokenFailure =
+type ClaudeSetupTokenFailure =
   | 'no_cli'
   | 'denied'
   | 'timed_out'
   | 'capture_failed'
   | 'cancelled'
 
-export type ClaudeSetupTokenOutcome =
+type ClaudeSetupTokenOutcome =
   | { ok: true; token: string }
   | { ok: false; error: ClaudeSetupTokenFailure }
 
@@ -51,7 +51,7 @@ const DENIED =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 const AUTHORIZE_HOSTS = new Set(['claude.ai', 'claude.com', 'console.anthropic.com'])
 const LINK = /https:\/\/[^\s"'<>]+(?=\s)/g
-// The CLI's answer to a pasted code it could not take; it then waits for Enter to start over. RS-1: the
+// The CLI's answer to a pasted code it could not take; it then waits for Enter to start over. The
 // wording is Claude Code's own (2.1.323): an exchange the server refused ("That code wasn't accepted…"),
 // a paste without both halves ("Invalid code. Please make sure the full code was copied."), and a code
 // from another sign-in ("That code is not from this sign-in…").
@@ -63,11 +63,11 @@ const ENTER_AFTER_CODE_MS = 150
 const RETRY_AFTER_REJECT_MS = 500
 
 function plainText(raw: string): string {
-  // RS-1: a pseudo-terminal ends lines with CRLF; one line break, not two (a blank line means a gap).
+  // A pseudo-terminal ends lines with CRLF; one line break, not two (a blank line means a gap).
   return raw.replace(/\r\n/g, '\n').replace(INLINE_ESCAPE, '').replace(TERMINAL_ESCAPE, '\n')
 }
 
-// RS-1: Claude Code prints the token as one Ink <Text>, which wraps at the terminal's width (2.1.323:
+// Claude Code prints the token as one Ink <Text>, which wraps at the terminal's width (2.1.323:
 // `Your OAuth token (valid for …):`, the token, then a blank line and `Store this token securely…`).
 // Orca's pty is 1000 columns, so it shouldn't wrap; if it ever does, the continuation is the very next
 // line and holds only token characters, while the line after the whole token is blank. Join those, so a

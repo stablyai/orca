@@ -20981,10 +20981,7 @@
         "paymentFailed": "Payment failed",
         "updatePayment": "Update payment method",
         "team": {
-          "menuItem": "Team",
-          "roleOwner": "Owner",
-          "roleAdmin": "Admin",
-          "roleMember": "Member"
+          "menuItem": "Team"
         },
         "comparePlans": "Compare plans",
         "health": {
@@ -27611,10 +27608,6 @@
       "waking": "Waking…"
     },
     "archived": {
-      "prOpen": "Open",
-      "prDraft": "Draft",
-      "prMerged": "Merged",
-      "prClosed": "Closed",
       "since": "Archived {{when}}",
       "title": "Archived workspace",
       "unarchiving": "Unarchiving…",

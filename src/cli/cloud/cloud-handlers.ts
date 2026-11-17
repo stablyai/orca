@@ -87,7 +87,7 @@ export function createCloudHandlers(
           { field: 'token' }
         )
       }
-      let existingUrl: string | null = null
+      let existingUrl: string | null
       try {
         existingUrl = resolveCloudCredentials(
           { ...deps.env, ORCA_CLOUD_TOKEN: undefined },
@@ -105,9 +105,7 @@ export function createCloudHandlers(
         throw new RuntimeClientError(
           'invalid_argument',
           'Pass --api-url <control-plane-url> (first login only).',
-          {
-            field: 'api-url'
-          }
+          { field: 'api-url' }
         )
       }
       const apiUrl = normalizeCloudApiUrl(rawUrl, '--api-url')
@@ -171,9 +169,7 @@ export function createCloudHandlers(
         throw new RuntimeClientError(
           'invalid_argument',
           '--agent needs --prompt (the first message).',
-          {
-            field: 'prompt'
-          }
+          { field: 'prompt' }
         )
       }
       const repoFlag = getOptionalStringFlag(flags, 'repo')
@@ -213,9 +209,7 @@ export function createCloudHandlers(
       const { message } = await api.request<{ message: CloudMessage }>(
         'POST',
         workspacePath(id, '/messages'),
-        {
-          body
-        }
+        { body }
       )
       if (flags.get('wait') !== true) {
         printCloudResult({ message }, json, formatCloudMessage)

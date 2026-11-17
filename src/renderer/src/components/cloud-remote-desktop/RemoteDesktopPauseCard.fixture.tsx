@@ -1,9 +1,7 @@
 // The reconnect card inside a desktop tab lives in the VM's page glue (orca-desktop-page.js), not
-// in React. These fixtures render that file's own stylesheet so the shots track the shipped CSS.
-import pageSource from '../../../../../cloud/apps/sandbox-control/image/vm/orca-desktop-page.js?raw'
+// in React. These fixtures render a copy of that file's stylesheet (remote-desktop-page-css.ts).
 import { defineFixture } from '../../component-fixtures/component-fixture'
-
-const PAGE_CSS = /style\.textContent = `([\s\S]*?)`;/.exec(pageSource)?.[1] ?? ''
+import { REMOTE_DESKTOP_PAGE_CSS as PAGE_CSS } from './remote-desktop-page-css'
 
 /**
  * In the tab, prefers-color-scheme is Orca's theme (Orca sets Electron's theme source from its

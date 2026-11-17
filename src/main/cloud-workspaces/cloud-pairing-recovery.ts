@@ -1,11 +1,11 @@
-// EP-8: a cloud workspace's server refuses this computer's saved pairing (an owner change revoked
+// A cloud workspace's server refuses this computer's saved pairing (an owner change revoked
 // its device, or a teammate's grant was revoked). Retrying the old token forever ("Reconnecting…",
 // "rejected the pairing token") never recovers, so ask Orca Cloud for a fresh grant for this
 // computer and swap it in on the same server. The server's own access check decides: the current
 // owner or a member who can still see the workspace gets one; anyone else is refused and told so.
 // A refusal is final for that pairing; a transient failure (the network, a 5xx) may try again a
 // couple of times, spaced out, so a blip self-heals without a revoked device hammering the control
-// plane (GRANT-ID-TRACKING). Every grant a recovery leaves this computer holding is remembered, so
+// plane. Every grant a recovery leaves this computer holding is remembered, so
 // the next recovery revokes it instead of letting stray device grants pile up.
 
 /** Only a real refusal of this computer's pairing re-grants; never timeouts or other errors. */
@@ -17,7 +17,7 @@ export function isPairingRejection(code: string | undefined, message: string): b
   )
 }
 
-export type CloudPairingTarget = {
+type CloudPairingTarget = {
   sandboxId: string
   /** owned: this computer's own workspace (its VM's environment); paired: a teammate's (a binding). */
   kind: 'owned' | 'paired'
@@ -56,13 +56,13 @@ export type CloudPairingRecoveryDeps = {
 }
 
 /** Attempts per saved pairing: the first, then two retries after transient failures. */
-export const MAX_RECOVERY_ATTEMPTS = 3
+const MAX_RECOVERY_ATTEMPTS = 3
 /** Wait before each retry (after the 1st and 2nd failed attempts). */
 export const RECOVERY_RETRY_DELAYS_MS = [30_000, 120_000] as const
 
 export type CloudPairingRepair = 'saved' | 'wrong_server' | 'failed'
 
-export type CloudPairingRecoveryOutcome =
+type CloudPairingRecoveryOutcome =
   | 'not_cloud'
   | 'already_tried'
   | 'repaired'
@@ -194,5 +194,3 @@ export function createCloudPairingRecovery(deps: CloudPairingRecoveryDeps) {
     recover
   }
 }
-
-export type CloudPairingRecovery = ReturnType<typeof createCloudPairingRecovery>

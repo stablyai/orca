@@ -1,4 +1,4 @@
-// The cloud workspace card (sidebar hover/pinned popover), calm by default (Neil, 5db0b968935f):
+// The cloud workspace card (sidebar hover/pinned popover), calm by default:
 // name and state, one usage line, at most one attention row, "On this computer ›", and one footer
 // action beside ⋯. Details and the sync settings are one step away, never on the first view.
 import React, { useEffect, useId, useState } from 'react'
@@ -312,7 +312,7 @@ export function CloudWorkspaceStatusPanel({
         </p>
       ) : null}
 
-      {/* ARCHIVED-DEAD-ACTIONS: .context sync runs for this desktop's own cloud workspaces only,
+      {/* .context sync runs for this desktop's own cloud workspaces only,
           so a paired card doesn't offer it. */}
       {state === 'archived' || paired ? null : (
         <OnComputerRow view={sync} onOpen={() => setLayer('onComputer')} />

@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/orca-billing'
 
 /** Account and service problems a plain-language card can name, each with one way forward. */
-export type VmBuildAccountFailureKind =
+type VmBuildAccountFailureKind =
   | 'plan'
   | 'hoursUsed'
   | 'spendCap'
@@ -153,7 +153,7 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
   )
 }
 
-/** JA-21: the billing refusals the creating sheet shows as a blocker card, by kind. */
+/** The billing refusals the creating sheet shows as a blocker card, by kind. */
 export function billingBlockKind(
   failure: VmBuildFailure | null
 ): 'plan' | 'hoursUsed' | 'spendCap' | 'payment' | null {

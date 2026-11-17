@@ -28,7 +28,7 @@ import {
   type RuntimeDownloadToastState
 } from './runtime-download-toast'
 
-export type RuntimeDownloadIntent = RuntimeDownloadToastIntent
+type RuntimeDownloadIntent = RuntimeDownloadToastIntent
 
 // Long enough to reach "Reveal in Finder" after a long download, short enough not to pile up.
 // Errors stay until dismissed: their one next action must not time out.

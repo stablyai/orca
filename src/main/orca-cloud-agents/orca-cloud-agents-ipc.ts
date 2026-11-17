@@ -1,4 +1,4 @@
-// Renderer bridge for the one-time Orca Cloud agent setup (spec §5 S0). Replies are states and codes:
+// Renderer bridge for the one-time Orca Cloud agent setup. Replies are states and codes:
 // the Claude setup-token is captured and sent from main, and a pasted token goes renderer -> main once.
 import { BrowserWindow, app, ipcMain, shell } from 'electron'
 import { z } from 'zod'
@@ -19,7 +19,7 @@ import {
   type OrcaCloudAgentsService
 } from './orca-cloud-agents-service'
 
-export const ORCA_CLOUD_AGENTS_SETUP_CHANGED = 'orcaCloudAgents:setupChanged'
+const ORCA_CLOUD_AGENTS_SETUP_CHANGED = 'orcaCloudAgents:setupChanged'
 
 const Agent = z.enum(ORCA_CLOUD_ACCOUNT_AGENTS)
 const AgentRequest = z.object({ agent: Agent })
@@ -173,7 +173,7 @@ export function registerOrcaCloudAgentsHandlers(userDataPath: string): void {
     const workspaceId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
     return workspaceId ? service.workspaceSources(workspaceId) : notFound
   })
-  // FAIL-CLOSED (#568): the renderer's catalog flag can lag a fresh pairing; main's own records
+  // Fails closed: the renderer's catalog flag can lag a fresh pairing; main's own records
   // (runtime store + pairing bindings) answer whether an agent launch here is on Orca Cloud.
   ipcMain.handle('orcaCloudAgents:isCloudEnvironment', (_event, raw: unknown) => {
     const request = WorkspaceRequest.safeParse(raw)

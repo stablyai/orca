@@ -95,7 +95,7 @@ export const trialPlan = defineFixture({
     )
 })
 
-/** CAP-GATE-DESKTOP: the team has a plan, but Orca Cloud isn't turned on for it yet. */
+/** The team has a plan, but Orca Cloud isn't turned on for it yet. */
 export const capabilityOff = defineFixture({
   width: 1000,
   render: () =>
@@ -113,7 +113,7 @@ export const capabilityOff = defineFixture({
     )
 })
 
-/** DS-b: only GitHub left. NS-04 (e): the agent's glyph, muted, before its name in the header line. */
+/** Only GitHub left. The agent's glyph, muted, before its name in the header line. */
 export const githubLeft = defineFixture({
   width: 1000,
   render: () =>
@@ -166,7 +166,7 @@ export const teamSwitchPlanUnknown = defineFixture({
     )
 })
 
-/** N-10: sign-in opened in the browser; the waiting line and its actions sit flush-left too. */
+/** Sign-in opened in the browser; the waiting line and its actions sit flush-left too. */
 export const signedOutWaitingBrowser = defineFixture({
   width: 1000,
   render: () =>

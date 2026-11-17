@@ -1,4 +1,4 @@
-// REPO-CAN-INSTALL (#645): the control plane's `canInstall` decides the push notice's button when it
+// The control plane's `canInstall` decides the push notice's button when it
 // knows; the person's gh read is asked only when it can't tell (null) or the Worker is older (absent).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

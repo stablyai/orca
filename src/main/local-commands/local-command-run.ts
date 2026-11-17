@@ -13,7 +13,7 @@ export type RequestBase = {
   agent: string | null
 }
 
-export type ApprovedLocalCommandDeps = {
+type ApprovedLocalCommandDeps = {
   settle: (
     environmentId: string,
     params: LocalCommandSettleParams

@@ -8,7 +8,7 @@ import {
 
 beforeEach(() => resetGitHubCreateKeysForTest())
 
-describe('GitHub-only create Idempotency-Key (GH-CREATE-SHEET)', () => {
+describe('GitHub-only create Idempotency-Key', () => {
   it('a Retry after a lost answer resends the same key, so it gets the same sandbox back', () => {
     const first = githubCreateIdempotencyKey('c1')
     noteGitHubCreateOutcome('c1', true)

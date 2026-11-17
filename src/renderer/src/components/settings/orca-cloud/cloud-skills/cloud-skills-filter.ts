@@ -14,7 +14,7 @@ export type CloudSkillsFilter = 'all' | 'enabled' | 'disabled'
 
 /** Enabled: the switch is on. Disabled: the user switched it off. Rows with no switch (looks like a
  * key, in the repo, too large…) are neither: they show under All only. */
-export function cloudSkillsEntryFilter(
+function cloudSkillsEntryFilter(
   entry: CloudSkillsEntry,
   excluded: ReadonlySet<string>
 ): Exclude<CloudSkillsFilter, 'all'> | null {

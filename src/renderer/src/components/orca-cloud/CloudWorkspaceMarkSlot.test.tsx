@@ -41,7 +41,7 @@ const slot = () =>
     />
   )
 
-describe('cloud mark slot (NP-5)', () => {
+describe('cloud mark slot', () => {
   it('a new workspace on an Orca Cloud server shows the cloud glyph before its id is listed', () => {
     mocks.isCloud = false
     mocks.cloudHost = true
@@ -58,7 +58,7 @@ describe('cloud mark slot (NP-5)', () => {
     expect(container.querySelector('[data-live-cloud-mark]')).not.toBeNull()
   })
 
-  it('PAIRED-CHROME: a paired row (created elsewhere) gets the live cloud mark', () => {
+  it('a paired row (created elsewhere) gets the live cloud mark', () => {
     mocks.isCloud = false
     mocks.paired = true
     mocks.cloudHost = true

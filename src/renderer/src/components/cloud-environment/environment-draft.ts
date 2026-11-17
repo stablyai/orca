@@ -5,7 +5,7 @@ import type {
   EnvironmentView
 } from './cloud-environment-types'
 
-export const DEFAULT_ENVIRONMENT_NAME = 'Default'
+const DEFAULT_ENVIRONMENT_NAME = 'Default'
 
 export function draftFromEnvironment(environment: EnvironmentView): EnvironmentDraft {
   return {
@@ -163,7 +163,7 @@ export function upsertBuild(
     : next
 }
 
-export const ENV_VAR_NAME_PATTERN = /^[A-Z_][A-Z0-9_]{0,127}$/
+const ENV_VAR_NAME_PATTERN = /^[A-Z_][A-Z0-9_]{0,127}$/
 export const MAX_ENV_VAR_NAMES = 100
 export const MAX_INSTALL_SCRIPT_CHARS = 20000
 

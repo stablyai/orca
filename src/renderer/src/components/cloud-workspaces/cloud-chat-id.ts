@@ -5,7 +5,7 @@
 import { base64ToBytes } from '../../../../shared/cloud-workspaces/sealed-grant'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
-export type CloudChatRef = { kind: 'session' | 'terminal'; id: string }
+type CloudChatRef = { kind: 'session' | 'terminal'; id: string }
 
 /** The slice of a terminal tab's layout that names which PTY each pane shows. */
 export type CloudChatTerminalLayout = {

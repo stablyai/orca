@@ -19,12 +19,12 @@ import {
 const DEFAULT_WARNING_TONE_PERCENT = 90
 
 /** The included-hours bar turns to the warning tone at billing's last alert level below 100%. */
-export function includedHoursWarningPercent(entitlement: OrcaBillingEntitlement): number {
+function includedHoursWarningPercent(entitlement: OrcaBillingEntitlement): number {
   const below = (usageAlertLevels(entitlement) ?? []).filter((level) => level < 100)
   return below.length > 0 ? Math.max(...below) : DEFAULT_WARNING_TONE_PERCENT
 }
 
-/** Hours left as a plural count (41.5, 78, 1): the one rounding every surface uses (JA-07). */
+/** Hours left as a plural count (41.5, 78, 1): the one rounding every surface uses. */
 export function sandboxHoursCount(seconds: number): number {
   return sandboxHoursLeft(seconds)
 }
@@ -44,7 +44,7 @@ export function sandboxHoursLeftLine(entitlement: OrcaBillingEntitlement, t: Tra
 }
 
 /** Hours past the included amount this month (billed as overage or not), or 0. */
-export function hoursOverIncludedSeconds(entitlement: OrcaBillingEntitlement): number {
+function hoursOverIncludedSeconds(entitlement: OrcaBillingEntitlement): number {
   if (entitlement.includedSeconds <= 0) {
     return entitlement.overageSeconds
   }
@@ -115,7 +115,7 @@ export function trialHoursLeftHint(entitlement: OrcaBillingEntitlement, t: Trans
 }
 
 /**
- * The account menu's trial row (spec T1): every member sees it while the team is on its trial;
+ * The account menu's trial row: every member sees it while the team is on its trial;
  * owners and admins also get Choose plan. Gone once a plan starts (the entitlement has no trial).
  */
 export function accountMenuTrialRow(

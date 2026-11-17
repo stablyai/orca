@@ -11,7 +11,7 @@ import type { SidebarHostOption } from './sidebar-host-options'
 
 /**
  * Orca Cloud is one logical host. Each sandbox is its own runtime environment underneath, so
- * without this every sandbox drew its own "Orca Cloud" header and Hosts entry (RA-2). The first
+ * without this every sandbox drew its own "Orca Cloud" header and Hosts entry. The first
  * sandbox's row stands for all of them (aliasHostIds); the rest merge into it, so filters and
  * host sections treat every cloud workspace as the same host. The shown row carries an aggregate
  * state, never one sandbox's.
@@ -57,7 +57,7 @@ export function collapseOrcaCloudHosts(
 }
 
 /** "Asleep", "2 running", or "1 running · 1 asleep": the cloud host as a whole. */
-export function orcaCloudAggregateDetail(running: number, asleep: number, t: Translate): string {
+function orcaCloudAggregateDetail(running: number, asleep: number, t: Translate): string {
   if (running === 0 && asleep > 0) {
     return t('orcaCloudWorkspace.state.asleep', 'Asleep')
   }

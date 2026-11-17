@@ -124,16 +124,16 @@ export function runReadyPaneAccountRestarts<
   /**
    * Destroys the pane's transport without reconnecting. A paired pane's transport otherwise reacts to
    * its own host terminal stopping by reattaching, which wakes the leaf with its original launch
-   * before the resume lands (RA-11 resume race).
+   * before the resume lands (the resume race).
    */
   releasePaneForRestart?: (paneId: number) => void
   /** Stops the one host terminal behind a paired pane before its restart reconnects. */
   stopRemotePane?: (ptyId: string, worktreeId: string) => Promise<void>
   /** Relaunches the paired pane's agent on its own conversation, in the same pane. */
   resumeRemotePane?: typeof resumeRemotePaneAgent
-  /** RA-11 resume race: wait until the resumed terminal is live in the pane's own leaf. */
+  /** Resume race: wait until the resumed terminal is live in the pane's own leaf. */
   waitForResumedTerminal?: typeof waitForResumedTerminalReady
-  /** RA-11e: start fresh in the same pane when a resume found no conversation. */
+  /** Start fresh in the same pane when a resume found no conversation. */
   freshIfResumeFoundNothing?: typeof freshIfResumeFoundNothing
   /** The fresh-launch command for this tab's pane (no session to resume). */
   buildFreshCommand?: (
@@ -174,7 +174,7 @@ export function runReadyPaneAccountRestarts<
     try {
       startup = agent ? args.buildAccountRestartStartup(agent, pane.leafId) : null
     } catch (err) {
-      // RA-11: a Restart clicked on the strip reports this; any other caller keeps its old behavior.
+      // A Restart clicked on the strip reports this; any other caller keeps its old behavior.
       if (!forced) {
         throw err
       }
@@ -188,7 +188,7 @@ export function runReadyPaneAccountRestarts<
     }
     const launchedStartup = startup
     const providerSession = launchedStartup.resumeProviderSession ?? null
-    // RA-11c: on a paired pane a reconnect alone reattaches to the running agent (the host hands back
+    // On a paired pane a reconnect alone reattaches to the running agent (the host hands back
     // its live terminal), so every restart there takes the stop → resume → reconnect path, and an
     // account-switch restart is tracked like a strip Restart: proof of a new PTY, else a failure.
     const worktreeId = isRemoteRuntimePtyId(ptyId) ? worktreeIdForTab(args.tabId) : null
@@ -217,9 +217,9 @@ export function runReadyPaneAccountRestarts<
       launch()
       continue
     }
-    // RA-11d: the pane's recorded launch, or (a host-launched agent the desktop never recorded) the
+    // The pane's recorded launch, or (a host-launched agent the desktop never recorded) the
     // agent's default CLI args, the same source the create launch read.
-    // RA-11d: the resume plan always carries a launch config, with empty args when nothing was
+    // The resume plan always carries a launch config, with empty args when nothing was
     // recorded (a host-launched agent); only real recorded args win over the defaults.
     const recorded = launchedStartup.launchConfig
     const defaults = recorded?.agentArgs?.trim() ? undefined : defaultLaunchConfig(agent)
@@ -237,7 +237,7 @@ export function runReadyPaneAccountRestarts<
       .then(() =>
         providerSession
           ? args.resumeRemotePane({
-              // RA-11d: the pane's own launch (model, effort, every flag), not the host defaults.
+              // The pane's own launch (model, effort, every flag), not the host defaults.
               ...(launchConfig ? { launchConfig } : {}),
               ptyId,
               worktreeId,
@@ -249,7 +249,7 @@ export function runReadyPaneAccountRestarts<
           : undefined
       )
       .then(async (resumed) => {
-        // RA-11 resume race: reconnect only once the resumed terminal is live in this very leaf;
+        // Resume race: reconnect only once the resumed terminal is live in this very leaf;
         // an earlier reconnect would wake the leaf with its original launch and drop the resume.
         if (resumed) {
           await args.waitForResumedTerminal({
@@ -274,7 +274,7 @@ export function runReadyPaneAccountRestarts<
               handle: resumed.handle,
               onMismatch: (bound) => {
                 console.warn(
-                  '[orca-cloud] RA-11 restart bound',
+                  '[orca-cloud] account restart bound',
                   bound,
                   'not the resumed',
                   resumed.handle
@@ -287,7 +287,7 @@ export function runReadyPaneAccountRestarts<
             })
           }
           if (providerSession) {
-            // RA-11e: a session with no conversation can't resume; start fresh in the same pane, once.
+            // A session with no conversation can't resume; start fresh in the same pane, once.
             void Promise.resolve()
               .then(() =>
                 args.freshIfResumeFoundNothing({
@@ -296,7 +296,7 @@ export function runReadyPaneAccountRestarts<
                       pane.leafId
                     ] ?? null,
                   replacedPtyId: ptyId,
-                  // RA-11d: a fresh fallback keeps the pane's own model, effort and flags too.
+                  // A fresh fallback keeps the pane's own model, effort and flags too.
                   freshCommand: freshCommandFor(
                     () => args.buildFreshCommand(agent, pane.leafId, launchConfig?.agentArgs),
                     agent

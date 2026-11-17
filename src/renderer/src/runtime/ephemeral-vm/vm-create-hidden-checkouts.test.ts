@@ -157,7 +157,7 @@ describe('Orca Cloud sandboxes', () => {
   })
 })
 
-describe("a paired cloud host's base clone (EP-6)", () => {
+describe("a paired cloud host's base clone", () => {
   const paired = 'runtime:paired-teammate'
   const base = {
     repoId: 'r',
@@ -167,7 +167,7 @@ describe("a paired cloud host's base clone (EP-6)", () => {
   }
   const workspace = {
     repoId: 'r',
-    path: '/home/vercel/ws/Hello-World/endpass-n44',
+    path: '/home/vercel/ws/Hello-World/feature-branch',
     isMainWorktree: false,
     hostId: paired
   }

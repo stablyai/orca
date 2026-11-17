@@ -5,7 +5,7 @@ import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
 const t: Translate = (_key, fallback, options) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(options?.[name] ?? ''))
 
-describe('cloudAgentSetupStripModel (PC-3b)', () => {
+describe('cloudAgentSetupStripModel', () => {
   it('the setup-token fallback matches the paste-code step: placeholder, Finish setup, inline command', () => {
     const model = cloudAgentSetupStripModel({
       agent: 'claude',
@@ -78,7 +78,7 @@ describe('cloudAgentSetupStripModel (PC-3b)', () => {
     expect(failed).toMatchObject({ status: 'error', primary: { action: { kind: 'setUpOnce' } } })
   })
 
-  it('after a cancelled setup it asks again, then offers Start once a setup from anywhere covers the agent (RR-a)', () => {
+  it('after a cancelled setup it asks again, then offers Start once a setup from anywhere covers the agent', () => {
     // Cancel left the setup idle and the launch held.
     const again = cloudAgentSetupStripModel({
       agent: 'claude',

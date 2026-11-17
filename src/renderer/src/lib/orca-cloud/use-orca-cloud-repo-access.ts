@@ -1,8 +1,8 @@
-// Can Orca Cloud clone this project's repository? Checked when Orca Cloud is picked (cloud-start D1),
-// never after a build fails. "Not on GitHub" (D3) is known from the project's git remote with no
-// network call; everything else comes from the control plane's GET /v1/github/repo-access (N2),
+// Can Orca Cloud clone this project's repository? Checked when Orca Cloud is picked,
+// never after a build fails. "Not on GitHub" is known from the project's git remote with no
+// network call; everything else comes from the control plane's GET /v1/github/repo-access,
 // cached 5 minutes. While a repository is waiting (an install in the browser, or an org owner's
-// approval, D2), `poll` re-checks on the spec's cadence: every 2 s for 3 minutes, then every 10 s.
+// approval), `poll` re-checks every 2 s for 3 minutes, then every 10 s.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
@@ -20,13 +20,13 @@ type OrcaCloudRepoAccessState =
 
 export type OrcaCloudRepoAccess = {
   state: OrcaCloudRepoAccessState
-  /** GitHub's install page, preselecting this repository when its ids are known (N3). */
+  /** GitHub's install page, preselecting this repository when its ids are known. */
   installUrl?: string
   /** The control plane's raw answer: `public` and `granted` both read as `ok`. */
   access?: HostedGithubRepoAccessResponse['access']
   /** owner/repo for GitHub remotes, else the project's name. */
   repoName: string
-  /** GitHub owner (org or user) login; D2 names it. */
+  /** GitHub owner (org or user) login; the waiting-for-owner row names it. */
   owner?: string
   /** https://github.com/<owner>/<repo>, or null when the project isn't on GitHub. */
   repoUrl: string | null
@@ -134,7 +134,7 @@ export function useOrcaCloudRepoAccess(
     setupSessionId?: string
     /** Skip the check (Orca Cloud isn't picked). */
     enabled?: boolean
-    /** Fired once when a repository that was waiting becomes reachable (D2's "access granted"). */
+    /** Fired once when a repository that was waiting becomes reachable ("access granted"). */
     onGranted?: () => void
   } = {}
 ): OrcaCloudRepoAccess & { refresh: () => void; openInstall: () => Promise<boolean> } {

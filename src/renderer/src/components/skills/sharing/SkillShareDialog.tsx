@@ -217,7 +217,7 @@ export function SkillShareDialog({
         return
       }
       setShareUrl(result.value.share.url)
-      // EP-7: Shared links (and its count) list the new link without reopening the page.
+      // Shared links (and its count) list the new link without reopening the page.
       noteSkillSharesChanged()
     } catch (cause) {
       console.warn('[skills] publish failed:', cause)

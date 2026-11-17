@@ -18,7 +18,7 @@ const base = {
 }
 
 describe('deriveVmBuildSteps', () => {
-  it('a clone GitHub refused marks the clone failed, not the sandbox start (CLONE-ACCESS-ERROR)', () => {
+  it('a clone GitHub refused marks the clone failed, not the sandbox start', () => {
     const steps = deriveVmBuildSteps(
       {
         ...base,
@@ -200,7 +200,7 @@ describe('holdRunningSteps', () => {
   })
 })
 
-describe('provisionStageLabel (N-01)', () => {
+describe('provisionStageLabel', () => {
   const t: Translate = (_key, fallback) => fallback
 
   it('stays quiet for a normal start, then names what the sandbox step waits on', () => {
@@ -232,7 +232,7 @@ describe('provisionStageLabel (N-01)', () => {
   })
 })
 
-describe('Checking your plan… (JA-21)', () => {
+describe('Checking your plan…', () => {
   const t: Translate = (_key, fallback) => fallback
 
   it('says so at once until the server takes the create, then goes quiet as before', () => {
@@ -356,7 +356,7 @@ describe('Orca Cloud clone step', () => {
     ).toEqual({ kind: 'cloneFailed', reason: 'clone_timeout' })
   })
 
-  it('names the repository step once, from the boot plan, before it runs (PC-4)', () => {
+  it('names the repository step once, from the boot plan, before it runs', () => {
     const pendingStep = (...rows: [string, number][]) =>
       deriveVmBuildSteps({ ...base, ...lines(...rows) }, 2000, { cloud: true })[1]
     // Not known yet: no mode (the row shows a placeholder, never a guessed label).
@@ -427,7 +427,7 @@ describe('Orca Cloud clone step', () => {
   })
 })
 
-describe('GitHub-only Orca Cloud create (GH-CREATE-SHEET)', () => {
+describe('GitHub-only Orca Cloud create', () => {
   it('has no environment checks step: start, clone, then open', () => {
     const log = '[orca-cloud] provisioning\n[orca-cloud] cloning\n[orca-cloud] connecting'
     const steps = deriveVmBuildSteps(

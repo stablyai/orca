@@ -194,7 +194,7 @@ export function CloudWorkspaceScreen({
         <View style={styles.centered}>
           {missing === 'signin' ? (
             // A share link opened on a phone that isn't connected yet: the list query never runs.
-            // Same layout as the asleep host (DS-27 polish): glyph, title, one sentence, one button.
+            // Same layout as the asleep host: glyph, title, one sentence, one button.
             <MobileStateView
               iconElement={<CloudStateGlyph />}
               title={t('cloud.workspace.signIn', 'Sign in to Orca Cloud on this phone')}

@@ -16,10 +16,10 @@ export function formatAsleepSince(at: number, now = Date.now()): string {
 }
 
 /**
- * A terminal pane of an Orca Cloud workspace that is asleep (RA-12): nothing dropped and nothing to
+ * A terminal pane of an Orca Cloud workspace that is asleep: nothing dropped and nothing to
  * retry, so a calm line and Wake instead of a reconnect toast. The pane keeps its scrollback
  * underneath, greyed out behind an "Asleep since" divider so old output (a dev server's "Serving
- * on port 8000") doesn't read as live (JA-15).
+ * on port 8000") doesn't read as live.
  */
 export function CloudAsleepTerminalNotice({
   workspaceId,

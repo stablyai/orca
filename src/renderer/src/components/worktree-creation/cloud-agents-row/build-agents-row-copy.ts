@@ -1,3 +1,4 @@
+// Agent names as one phrase in the user's language.
 import type { Translate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
 import type { OrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'

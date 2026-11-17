@@ -40,7 +40,7 @@ function SubsectionTitle({
   )
 }
 
-export type CloudEnvironmentPanelProps = {
+type CloudEnvironmentPanelProps = {
   environment: EnvironmentView
   /** The environment the form draft started from (defaults to `environment`). */
   formEnvironment?: EnvironmentView | null
@@ -82,9 +82,9 @@ export type CloudEnvironmentPanelProps = {
   onActivate: (build: EnvironmentBuildView) => void
   onSelectBuild: (build: EnvironmentBuildView) => void
   onConfigureWithAgent: () => void
-  /** DS-40: set when the latest build failed in a way an agent can fix (install script, repo contents). */
+  /** Set when the latest build failed in a way an agent can fix (install script, repo contents). */
   onFixWithAgent: (() => void) | null
-  /** DS-40: set when the latest build's clone couldn't reach a repo; opens GitHub to give access. */
+  /** Set when the latest build's clone couldn't reach a repo; opens GitHub to give access. */
   onGiveAccess: (() => void) | null
   /** Render the log viewer at a fixed clock (fixtures). */
   frozenNow?: number

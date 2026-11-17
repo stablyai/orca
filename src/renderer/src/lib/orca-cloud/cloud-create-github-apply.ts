@@ -1,6 +1,6 @@
-// CREATE-GH-STEP: a GitHub access grant that lands while the create's sandbox is already up. The
-// sandbox booted without the Orca GitHub App's repository token, so its git has neither the token
-// route nor the auth header; the control plane's live refresh (LIVE-GIT-ACCESS) hands it both before
+// A GitHub access grant (the create wizard's GitHub access step) that lands while the create's
+// sandbox is already up. The sandbox booted without the Orca GitHub App's repository token, so its git has neither the token
+// route nor the auth header; the control plane's live refresh hands it both before
 // the workspace opens, so no restart is needed. Best effort: when it can't, the workspace still
 // opens and the push notice (Check again, then Restart) remains.
 import type { OrcaCloudWorkspaceApi } from '../../../../shared/hosted-sandbox/cloud-workspace-api'

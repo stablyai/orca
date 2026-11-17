@@ -1,4 +1,4 @@
-// CLOUD-PRIMARY-DELETE: Delete for a cloud row that IS the cloud workspace (the sandbox's own
+// Delete for a cloud row that IS the cloud workspace (the sandbox's own
 // checkout, shown as "primary"), including paired ones this desktop did not create. A local removal
 // cannot delete it (Git keeps a primary checkout; a paired sandbox isn't this desktop's to destroy),
 // so this is the cloud delete dialog from the sidebar, acting through the control plane:
@@ -59,7 +59,7 @@ async function withSandbox(target: Target, run: (sandboxId: string) => Promise<v
 /** Destroys the sandbox (only "destroyed" counts) and refreshes what lists it. */
 export async function destroyCloudPrimary(target: Target): Promise<void> {
   const name = target.displayName ?? ''
-  // INT-T1 for cloud rows (owned or PAIRED): Delete cancels an archive still in its Undo window and
+  // For cloud rows (owned or PAIRED), Delete cancels an archive still in its Undo window and
   // quiets one already under way, the same as the sidebar's ordinary delete.
   noteCloudWorkspaceDeleting(target.id)
   try {

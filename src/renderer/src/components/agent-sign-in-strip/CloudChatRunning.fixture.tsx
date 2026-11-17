@@ -1,4 +1,4 @@
-// CHAT-BANNERS B2: a structured chat on Orca Cloud whose agent was running when its Orca-account
+// A structured chat on Orca Cloud whose agent was running when its Orca-account
 // sign-in expired: the strip at the top of the chat (expired → Renew; renewed → confirm and dismiss,
 // no Restart), and the agent's 401 card, which on Orca Cloud points at Renew instead of the CLI login.
 import React from 'react'
@@ -95,7 +95,7 @@ const fixture = (phase: 'expired' | 'renewed' | null, card: boolean, width = 760
     render: () => <Chat phase={phase} card={card} width={width} />
   })
 
-/** RA-11 on a running structured chat: expired, with the agent's 401 card pointing at Renew. */
+/** On a running structured chat: expired, with the agent's 401 card pointing at Renew. */
 export const runningExpired = fixture('expired', true)
 export const runningExpiredNarrow = fixture('expired', true, 420)
 /** Renewed: confirms; the chat's next message uses it (no Restart), × dismisses. */

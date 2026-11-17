@@ -62,7 +62,7 @@ export function createHostedSandboxRecipeDriver(
 }
 
 /** https clone URL the control plane can mint a GitHub App token for; null for non-GitHub remotes. */
-export async function hostedSandboxRepoUrl(repoPath: string): Promise<string | null> {
+async function hostedSandboxRepoUrl(repoPath: string): Promise<string | null> {
   const remote = await getRemoteUrl(repoPath)
   const normalized = remote ? normalizeGitRemoteUrl(remote) : null
   return normalized?.startsWith('github.com/') ? `https://${normalized}.git` : null

@@ -1,11 +1,11 @@
 // The setup page hands the screen to the start screen. It used to close first and then let the
 // hidden composer auto-start, so for a few frames the workspace underneath (a terminal) showed
-// before "Starting your cloud workspace" did (Neil, build ff845fe). Now the page stays up until the
+// before "Starting your cloud workspace" did. Now the page stays up until the
 // create's start screen has actually painted, or the composer goes away without a create.
 
 type HandoffState = { activePendingCreationId: string | null; activeModal: string }
 
-export type HandoffDeps<Timer> = {
+type HandoffDeps<Timer> = {
   getState: () => HandoffState
   subscribe: (listener: (state: HandoffState) => void) => () => void
   /** True once the start screen is in the DOM (its lazy chunk may land a few frames later). */

@@ -1,4 +1,4 @@
-// A16 annotation 7: WSL rows name the account selected for that distro in Accounts. Read from this
+// WSL rows name the account selected for that distro in Accounts. Read from this
 // computer's settings (the selection the desktop pushes to the distro), never from the distro, so a
 // stopped distro is never started to answer.
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'

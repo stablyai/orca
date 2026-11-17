@@ -71,7 +71,7 @@ export type OrcaCloudRepoSetupImports = {
   installScript?: string
   /** Human labels of where the suggestions came from, e.g. "Conductor (.conductor/settings.toml)". */
   sources: string[]
-  /** PARITY-DNF: the install script came from Amazon Linux (dnf); what was translated and what to check. */
+  /** The install script came from Amazon Linux (dnf); what was translated and what to check. */
   ubuntuNote?: UbuntuNote
 }
 

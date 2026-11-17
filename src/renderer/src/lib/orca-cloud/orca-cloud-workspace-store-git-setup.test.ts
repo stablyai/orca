@@ -77,7 +77,7 @@ const restartReady = (workspaceId: string): void => {
   noteCloudWakeProgress({ ...base, phase: 'ready', at: 12 })
 }
 
-describe('GIT-SETUP state in the workspace store', () => {
+describe('state in the workspace store', () => {
   it('carries the failed git setup from the status read', async () => {
     stub(async () => ({ ok: true, value: status('ready', true) }))
     await refreshCloudWorkspaceStatus('a')

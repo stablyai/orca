@@ -32,7 +32,7 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-export async function refreshCloudMcpSyncStatus(environmentId: string): Promise<void> {
+async function refreshCloudMcpSyncStatus(environmentId: string): Promise<void> {
   const asked = versions.get(environmentId) ?? 0
   const status = await window.api.runtimeEnvironments
     .getMcpSyncStatus?.(environmentId)

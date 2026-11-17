@@ -1,4 +1,4 @@
-// The S0 row frame (spec §5): agent heading, status glyph, two text lines and one action slot.
+// The Cloud agent sign-ins row frame (spec §5): agent heading, status glyph, two text lines and one action slot.
 import type React from 'react'
 import { CircleAlert, CircleCheck, Info, Loader2, TriangleAlert } from 'lucide-react'
 import { getIntlLocale } from '@/i18n/i18n'

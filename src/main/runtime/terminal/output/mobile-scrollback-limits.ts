@@ -6,7 +6,7 @@ export const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024
 // replayed from the move, and the 1000-row cut would drop the rest for good. Same byte budget.
 export const MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS = 5000
 
-// N-02: a desktop subscriber (a cloud pane reattaching after an app restart, a resubscribe) keeps
+// A desktop subscriber (a cloud pane reattaching after an app restart, a resubscribe) keeps
 // the history a local terminal keeps; the 1000-row cut is for phones. Same 2 MB a requested
 // desktop snapshot already gets; snapshots go out in chunks, so frame caps don't bound it.
 export const DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS = DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT

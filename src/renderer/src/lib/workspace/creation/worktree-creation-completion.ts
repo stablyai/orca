@@ -24,7 +24,7 @@ export async function completeWorktreeCreation(args: {
   focusOnCompletion: boolean
 }): Promise<void> {
   const { request } = args
-  // Orca Cloud: the start screen stays over the new workspace until its PTY attaches (JA-12).
+  // Orca Cloud: the start screen stays over the new workspace until its PTY attaches.
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   if (
     pending &&
@@ -37,7 +37,7 @@ export async function completeWorktreeCreation(args: {
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
   useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
   if (request.ephemeralVmRecipe?.provider === 'orca-cloud') {
-    // N-01: the create's last phase in main's app log.
+    // The create's last phase in main's app log.
     window.api.ephemeralVm?.notePhase?.({ provisionId: args.creationId, phase: 'workspace-open' })
   }
   // Why: an agent the host planned but did not start has no tab to seed and is not the window's to start.

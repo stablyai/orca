@@ -4,7 +4,7 @@ import { withholdsCloudAgentBackendStartup } from '@/lib/orca-cloud/cloud-create
 export function resolveBackendDraftStartup(
   request: WorktreeCreationRequest
 ): WorktreeCreationRequest['startup'] {
-  // Orca Cloud agent not set up: the pane plans the launch behind its hold, never the host (PC-3b).
+  // Orca Cloud agent not set up: the pane plans the launch behind its hold, never the host.
   if (withholdsCloudAgentBackendStartup(request)) {
     return undefined
   }

@@ -7,7 +7,7 @@ import {
 
 const T0 = 1_800_000_000_000
 
-// N-02: a hidden pane rebuilt on every reveal cannot pull a deep image each time.
+// A hidden pane rebuilt on every reveal cannot pull a deep image each time.
 describe('deep requested snapshots share the per-terminal ceiling', () => {
   beforeEach(() => {
     resetFullDepthSnapshotLimitForTests()

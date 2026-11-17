@@ -12,7 +12,7 @@ import {
 type CleanupStep = Promise<boolean>
 
 /** Which runtime records belong to the canceled create. */
-export type OrcaCloudCancelScope = {
+type OrcaCloudCancelScope = {
   runtimeId?: string
   createStartedAt: number
   canceledAt: number
@@ -34,7 +34,7 @@ const CLEANUP_TIMEOUT_MS = 3 * 60_000
 // cancel each ends once its own cleanup has.
 const inFlight = new Map<string, Set<CleanupStep>>()
 const cleanups = new Map<string, Cleanup>()
-// EP-5: a step that couldn't confirm its sandbox deleted leaves its own Try again here.
+// A step that couldn't confirm its sandbox deleted leaves its own Try again here.
 const retries = new Map<string, () => Promise<boolean>>()
 
 export function isOrcaCloudCreateRequest(request: WorktreeCreationRequest): boolean {
@@ -43,7 +43,7 @@ export function isOrcaCloudCreateRequest(request: WorktreeCreationRequest): bool
 
 /**
  * A create run a cancel must wait for: it may still bring the sandbox up or tear it down.
- * `leftNothingRunning` reads its result (EP-5): false when it couldn't confirm its sandbox deleted,
+ * `leftNothingRunning` reads its result: false when it couldn't confirm its sandbox deleted,
  * so the cancel never says "Sandbox deleted" for it. A rejected step counts as not confirmed.
  */
 export function trackOrcaCloudCreateStep<T>(
@@ -71,7 +71,7 @@ export function trackOrcaCloudCreateStep<T>(
   return step
 }
 
-/** EP-5: how Try again deletes what a step of this create couldn't confirm deleted. */
+/** How Try again deletes what a step of this create couldn't confirm deleted. */
 export function setOrcaCloudCancelRetry(creationId: string, retry: () => Promise<boolean>): void {
   retries.set(creationId, retry)
 }

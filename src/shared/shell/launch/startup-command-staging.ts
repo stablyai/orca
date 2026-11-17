@@ -88,7 +88,7 @@ function stagedScriptLine(shellName: string | null, quotedPath: string): string 
 const QUIET_SHELLS = new Set(['bash', 'zsh'])
 
 /**
- * CR-cmd-quiet (design-squad): on an Orca Cloud host the staged line is Orca's, not the user's, so it
+ * On an Orca Cloud host the staged line is Orca's, not the user's, so it
  * leaves no trace. Runs first in the sourced script, before the agent draws:
  * - erases the rows the shell echoed for the prompt and the typed line, so the pane's first visible
  *   row is the agent's own output; nothing below them is touched;

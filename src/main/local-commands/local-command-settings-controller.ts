@@ -5,7 +5,7 @@ import type {
 import type { LocalCloudWorkspaceRef, LocalCommandBridge } from './local-command-bridge'
 import type { LocalCommandSettingsStore } from './local-command-settings-store'
 
-export type LocalCommandSettingsControllerDeps = {
+type LocalCommandSettingsControllerDeps = {
   bridge: LocalCommandBridge
   settings: LocalCommandSettingsStore
   supported: boolean

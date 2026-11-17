@@ -19,10 +19,9 @@ import {
   isEnvironmentProviderError,
   type EnvironmentProviderErrorCode
 } from '../environment-providers/environment-provider-driver'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
-import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudSandboxIdOfRuntime } from './orca-cloud-sandbox-id'
 import type { HostedWorkspaceService } from './hosted-workspace-service'
 
 export type CloudRuntime = { runtime: EphemeralVmRuntimeRecord; sandboxId: string }
@@ -40,11 +39,8 @@ export function findCloudRuntime(userDataPath: string, workspaceId: string): Clo
     if (runtime.recipe?.provider !== 'orca-cloud' || runtime.workspaceId !== workspaceId) {
       continue
     }
-    const handle = runtime.recipeResult
-      ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-      : null
-    const sandboxId = handle?.driverState.sandboxId
-    if (typeof sandboxId === 'string' && sandboxId) {
+    const sandboxId = cloudSandboxIdOfRuntime(runtime)
+    if (sandboxId) {
       return { runtime, sandboxId }
     }
   }
@@ -168,7 +164,7 @@ export function createOomTracker(announce: (event: CloudOomEvent) => void) {
   }
 }
 
-/** The window's status read: the panel's status plus the sandbox's failed git setup (GIT-SETUP). */
+/** The window's status read: the panel's status plus the sandbox's failed git setup. */
 export function withGitSetup(
   status: HostedWorkspaceStatus,
   sandbox: Pick<HostedSandboxView, 'gitSetup'>
@@ -194,7 +190,7 @@ export function getHostedWorkspaceService(): HostedWorkspaceService | null {
 }
 
 /** Polls a cheap terminal listing until the woken server answers it (or the deadline passes). */
-export async function waitForTerminalsReachable(
+async function waitForTerminalsReachable(
   userDataPath: string,
   environmentId: string,
   deadline: number,

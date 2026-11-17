@@ -1,4 +1,4 @@
-// V3-01b: a held structured chat on Orca Cloud waits before its session is created, and that hold
+// A held structured chat on Orca Cloud waits before its session is created, and that hold
 // lives only in memory. A quit loses it: after a restart the chat's launch retries without knowing it
 // was held, and the chat shows the generic sign-in notice. One record per held chat, per Orca
 // profile on this device, puts the hold back. Never prompts, env or secrets.

@@ -16,7 +16,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-activity/window-vi
 /** Builds advance server-side; while one runs, re-read the history this often (the log streams). */
 const IN_PROGRESS_POLL_MS = 8_000
 
-export type CloudEnvironmentLoad =
+type CloudEnvironmentLoad =
   | { phase: 'loading' }
   | { phase: 'error'; error: EnvironmentApiError }
   | { phase: 'none'; canAdmin: boolean }

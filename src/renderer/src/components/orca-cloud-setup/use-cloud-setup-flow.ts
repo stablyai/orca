@@ -1,7 +1,7 @@
-// The setup page's state and actions (composer-redo). It reuses the composer's setup plumbing: the
+// The setup page's state and actions. It reuses the composer's setup plumbing: the
 // rows from billing, the GitHub repository check and the agent accounts (useCloudStartSteps), the
-// one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
-// tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
+// one-trip setup session with its deep-link return, the team switch, and the
+// tracker's error parsing. Only the UI moved: from a card in the dialog to this page.
 import { mintFirstClickLink } from '@/components/orca-sign-in-link'
 import { usePlanCatalog } from '@/components/billing/use-plan-catalog'
 import { cloudContactUrl } from './cloud-contact-url'
@@ -194,7 +194,7 @@ export function useCloudSetupFlow(
   const signingIn = busy && startedSignIn && signInPending
 
   // One browser trip for everything still open from here (sign-in, team, trial or Checkout, GitHub).
-  // COPY-LINK-FIRST-CLICK: `openBrowser: false` makes the same trip without the browser and hands
+  // `openBrowser: false` makes the same trip without the browser and hands
   // its link to `onUrl` (signed in: the session's; signed out: the sign-in publishes its own).
   const runBrowserTrip = useCallback(
     (copy?: { onUrl: (url: string | null) => void }) => {
@@ -292,7 +292,7 @@ export function useCloudSetupFlow(
   }, [markInBrowser, openInstall])
 
   const checkAgain = useCallback(() => {
-    // CAP-GATE: Orca Cloud may have been turned on for the team since (or the team started paying,
+    // Orca Cloud may have been turned on for the team since (or the team started paying,
     // which auth counts as access); the page moves on by itself once the fresh capabilities land.
     void recheckCloudCapability({
       refreshAuth: () => useAppStore.getState().refreshCurrentOrcaProfileAuth(),
@@ -310,7 +310,7 @@ export function useCloudSetupFlow(
     capabilityRechecked.current = true
     checkAgain()
   }, [model.action, checkAgain])
-  // "Contact us" (CAP-GATE): billing catalog's contact target, never a hard-coded address.
+  // "Contact us": billing catalog's contact target, never a hard-coded address.
   const catalog = usePlanCatalog(model.action === 'capability-off')
   const contactUrl = cloudContactUrl(catalog.result)
 

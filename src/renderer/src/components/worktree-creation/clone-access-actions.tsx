@@ -1,4 +1,4 @@
-// CLONE-ACCESS-ERROR: the card's copy and actions for a clone GitHub refused, by what GitHub says
+// The card's copy and actions for a clone GitHub refused, by what GitHub says
 // about Orca's access now (use-clone-access-handoff).
 import { Check, Copy, FolderSearch, Github, Loader2 } from 'lucide-react'
 import type { Translate } from '@/i18n/use-translate'
@@ -13,7 +13,7 @@ export type CloneAccessHandlers = {
   copied?: boolean
 }
 
-export type CloneAccessAction = {
+type CloneAccessAction = {
   key: string
   label: string
   icon?: React.ReactNode
@@ -106,7 +106,7 @@ export function cloneAccessActions(
     case 'missing':
       return [
         {
-          // The App's install page, not a sign-in: no Copy link (AUTH-ONLY-COPY-LINK).
+          // The App's install page, not a sign-in: no Copy link.
           key: 'giveAccess',
           label: t('worktreeCreation.cloneAccess.giveAccess', 'Give Orca access'),
           icon: <Github />,

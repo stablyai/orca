@@ -99,7 +99,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       if (!stopped) {
         throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
       }
-      // RA-ORPH: a process that left the PTY's session (setsid, a launcher) outlives the session kill but
+      // A process that left the PTY's session (setsid, a launcher) outlives the session kill but
       // still carries this PTY's id; reap it, and never call the stop verified while one survives.
       const survivors = await killPtyStragglers(ptyId)
       if (survivors.length > 0) {

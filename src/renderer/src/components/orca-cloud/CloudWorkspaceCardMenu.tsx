@@ -13,7 +13,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 
-export type CloudCardMenuItems = {
+type CloudCardMenuItems = {
   details: { open: boolean; toggle: () => void }
   restart?: () => void
   moveToComputer?: () => void

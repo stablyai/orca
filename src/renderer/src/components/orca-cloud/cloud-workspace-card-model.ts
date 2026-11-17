@@ -1,4 +1,4 @@
-// The calm cloud workspace card (Neil, 5db0b968935f): what each line says, decided without React so
+// The calm cloud workspace card: what each line says, decided without React so
 // the copy and the attention order are tested once. The card renders whatever this returns.
 import { getIntlLocale } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -63,9 +63,9 @@ export function cloudCardUsageLine(
 export type CloudCardAttention =
   | { kind: 'agentNotSetUp'; agent: string; tabId: string }
   | { kind: 'agentExpired'; agent: string; tabId: string }
-  /** V3-01: a launch put back after a restart that waits for the person's Start (neutral). */
+  /** A launch put back after a restart that waits for the person's Start (neutral). */
   | { kind: 'agentNotStarted'; agent: string; tabId: string }
-  /** GIT-SETUP: the teammates' git identities couldn't be installed; commits and pushes are off. */
+  /** The teammates' git identities couldn't be installed; commits and pushes are off. */
   | { kind: 'gitSetupOff' }
   | { kind: 'secretsMissing'; count: number }
 
@@ -73,9 +73,9 @@ const URGENCY: Record<CloudCardAttention['kind'], number> = {
   // An agent that can't start blocks the work the workspace was made for.
   agentNotSetUp: 0,
   agentExpired: 1,
-  // Below an agent that can't start, above commits and pushes being off (design-squad).
+  // Below an agent that can't start, above commits and pushes being off.
   agentNotStarted: 1.5,
-  // Below an agent that can't start, above missing secrets (design-squad).
+  // Below an agent that can't start, above missing secrets.
   gitSetupOff: 2,
   secretsMissing: 3
 }
@@ -93,7 +93,7 @@ export function mostUrgentAttention(
   return best
 }
 
-/** The row's colours: a launch waiting for Start (V3-01) is neutral info, everything else a warning. */
+/** The row's colours: a launch waiting for Start is neutral info, everything else a warning. */
 export function cloudCardAttentionTone(item: CloudCardAttention): { text: string; dot: string } {
   return item.kind === 'agentNotStarted'
     ? { text: 'text-foreground', dot: 'size-1.5 shrink-0 rounded-full bg-muted-foreground' }
@@ -136,7 +136,7 @@ export function cloudCardOnComputerStatus(view: CloudSyncView | null, t: Transla
   return t('orcaCloudWorkspace.card.contextSynced', '.context synced')
 }
 
-export type CloudCardPrimary = 'sleep' | 'wake' | 'restart' | 'unarchive' | null
+type CloudCardPrimary = 'sleep' | 'wake' | 'restart' | 'unarchive' | null
 
 /** The footer's one visible action for the state; everything else lives under ⋯. */
 export function cloudCardPrimary(state: CloudDotState, restarting: boolean): CloudCardPrimary {

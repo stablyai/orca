@@ -33,7 +33,7 @@ export function noteCloudSshInclude(includeInstalled: boolean): void {
   }
 }
 
-export type CloudSshMenuState =
+type CloudSshMenuState =
   | { kind: 'none' }
   | { kind: 'loading' }
   | { kind: 'ready'; status: CloudSshStatus }

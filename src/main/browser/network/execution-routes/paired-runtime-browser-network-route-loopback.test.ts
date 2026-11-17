@@ -1,4 +1,4 @@
-// CLOUD-BROWSER-DIRECT: an Orca Cloud route sends only the workspace's loopback through the sandbox.
+// An Orca Cloud route sends only the workspace's loopback through the sandbox.
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { PassThrough } from 'node:stream'

@@ -13,7 +13,7 @@ import type { SshAgentSignInFlow } from '../../../../shared/ssh-agent-sign-in-ty
 import { SshCodeSignIn, type SshCodeSignInActions } from './ssh-classic/SshCodeSignIn'
 import { apiKeyOverridesDetail } from '../settings/agent-accounts/overview/overview-copy'
 
-export type HostAgentsPanelSectionProps = {
+type HostAgentsPanelSectionProps = {
   title: string
   help: string
   host: string

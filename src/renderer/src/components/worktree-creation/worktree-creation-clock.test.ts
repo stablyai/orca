@@ -31,7 +31,7 @@ describe('formatElapsedTime', () => {
     expect(formatElapsedTime(3_605_000, 'en')).toBe('1h 0m 5s')
     // German goes through the runtime's own Intl.DurationFormat, not the English fallback. The exact
     // words are CLDR data and differ by engine (V8/Electron: "2 Min., 5 Sek.", Bun/JSC: "2min 5s"),
-    // so the test compares with the runtime instead of pinning one engine's string (REG-4).
+    // so the test compares with the runtime instead of pinning one engine's string.
     const german = formatElapsedTime(125_000, 'de')
     expect(german).toBe(runtimeNarrowDuration('de', { minutes: 2, seconds: 5 }))
     expect(german).not.toBe('2m 5s')

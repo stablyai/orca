@@ -173,7 +173,7 @@ export const packageManager = defineFixture({
   )
 })
 
-/** PARITY-DNF: a Conductor setup from Amazon Linux; translated lines, and lines left to check. */
+/** A Conductor setup from Amazon Linux; translated lines, and lines left to check. */
 export const conductorDnfReview = defineFixture({
   width: 720,
   render: () => (
@@ -201,7 +201,7 @@ export const conductorDnfReview = defineFixture({
   interact: openReview
 })
 
-/** PARITY-DNF: every dnf install line translated. */
+/** Every dnf install line translated. */
 export const conductorDnfTranslatedReview = defineFixture({
   width: 720,
   render: () => (

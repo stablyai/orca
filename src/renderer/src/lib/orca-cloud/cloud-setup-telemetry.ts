@@ -1,4 +1,4 @@
-// N10: setup telemetry derived from the rows the tracker already renders, so every source (the
+// Setup telemetry derived from the rows the tracker already renders, so every source (the
 // setup session or rows derived from billing) reports the same way. Enum-only: no email, team,
 // repository or session id leaves this file (see telemetry-cloud-setup-event-schemas).
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -139,7 +139,7 @@ function cloudSetupSessionStartedAt(sessionId: string): number | null {
 }
 
 /**
- * Time to first sandbox: call once when setup's auto-start submits the workspace (O4).
+ * Time to first sandbox: call once when setup's auto-start submits the workspace.
  * `sessionStartedAt` defaults to when the tracker first saw the session.
  */
 export function recordCloudSetupFirstSandbox({

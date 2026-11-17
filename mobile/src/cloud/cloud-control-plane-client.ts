@@ -41,7 +41,6 @@ export type CloudWorkspace = {
   machineSize: string
   createdAt: number
   lastActivityAt: number | null
-  /** Compute spend so far, when the registry reports it. */
   /** Awake time so far, from the team registry; the plan meters hours, not per-workspace dollars. */
   sandboxMs: number | null
   createdByUserId: string | null
@@ -75,7 +74,7 @@ const SandboxViewSchema = z.object({
   createdAt: z.number()
 })
 
-export function cloudWorkspaceTitleFallback(repoUrl: string | null, workspaceId: string): string {
+function cloudWorkspaceTitleFallback(repoUrl: string | null, workspaceId: string): string {
   const name = repoUrl
     ?.replace(/\.git$/, '')
     .split('/')
@@ -123,14 +122,19 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     readSnapshotAt: null
   }
 }
-// Lists archived rows as `archived` rather than folding them into `suspended` (W2 lifecycle).
+// Lists archived rows as `archived` rather than folding them into `suspended`.
 const FEATURES = { 'x-orca-sandbox-features': 'archive' }
 
 /**
  * `complete`: this is the team registry, so a workspace this phone can open that is missing from it
  * is gone. The owner-only fallback omits teammates' workspaces and never proves that.
  */
-export type CloudWorkspaceList = { workspaces: CloudWorkspace[]; complete: boolean }
+type CloudWorkspaceList = { workspaces: CloudWorkspace[]; complete: boolean }
+
+const sandboxPath = (sandboxId: string, sub: string): string =>
+  `/v1/sandboxes/${encodeURIComponent(sandboxId)}${sub}`
+const teamWorkspacePath = (sandboxId: string): string =>
+  `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`
 
 // A destroyed workspace is gone, whatever list still carries it.
 const isLive = (row: { status: string }): boolean => row.status !== 'destroyed'
@@ -164,8 +168,6 @@ export async function listCloudWorkspaces(
   return { workspaces: body.sandboxes.filter(isLive).map(fromSandbox), complete: false }
 }
 
-export type CloudWakeState = HostedWakeResponse['state']
-
 /**
  * One long-poll wake (the server holds it up to 30 s); idempotent and single-flight server side.
  * The team route lets any member who can open the workspace wake it (a teammate's too); the
@@ -175,8 +177,7 @@ export async function wakeCloudWorkspace(
   plane: CloudControlPlane,
   sandboxId: string,
   signal?: AbortSignal
-): Promise<{ state: CloudWakeState; endpoint: string | null }> {
-  const id = encodeURIComponent(sandboxId)
+): Promise<{ state: HostedWakeResponse['state']; endpoint: string | null }> {
   const wake = (path: string) =>
     request(plane, 'POST', `${path}/wake?wait=30s`, HostedWakeResponseSchema, {
       body: {},
@@ -185,12 +186,12 @@ export async function wakeCloudWorkspace(
     })
   let body: HostedWakeResponse
   try {
-    body = await wake(`/v1/team/workspaces/${id}`)
+    body = await wake(teamWorkspacePath(sandboxId))
   } catch (error) {
     if (!(error instanceof CloudRequestError) || error.status !== 404) {
       throw error
     }
-    body = await wake(`/v1/sandboxes/${id}`)
+    body = await wake(sandboxPath(sandboxId, ''))
   }
   return { state: body.state, endpoint: body.endpoint }
 }
@@ -202,7 +203,7 @@ export async function sleepCloudWorkspace(
   await request(
     plane,
     'POST',
-    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/suspend`,
+    sandboxPath(sandboxId, '/suspend'),
     z.unknown(),
     { timeoutMs: 60_000 }
   )
@@ -216,7 +217,7 @@ export async function restartCloudWorkspace(
   await request(
     plane,
     'POST',
-    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/restart`,
+    sandboxPath(sandboxId, '/restart'),
     z.unknown(),
     { body: {}, timeoutMs: 120_000 }
   )
@@ -229,23 +230,21 @@ export async function archiveCloudWorkspace(
   await request(
     plane,
     'POST',
-    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/archive`,
+    sandboxPath(sandboxId, '/archive'),
     z.unknown(),
     { body: {}, timeoutMs: 90_000 }
   )
 }
 
-export type CloudWorkspaceLiveStatus = HostedWorkspaceStatus
-
 /** Live state, uptime and spend. */
 export async function readCloudWorkspaceStatus(
   plane: CloudControlPlane,
   sandboxId: string
-): Promise<CloudWorkspaceLiveStatus> {
+): Promise<HostedWorkspaceStatus> {
   const reply = await request(
     plane,
     'GET',
-    `/v1/sandboxes/${encodeURIComponent(sandboxId)}/status`,
+    sandboxPath(sandboxId, '/status'),
     HostedWorkspaceStatusResponseSchema
   )
   return reply.status
@@ -289,11 +288,9 @@ export async function renameCloudWorkspace(
   await request(
     plane,
     'PATCH',
-    `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`,
+    teamWorkspacePath(sandboxId),
     z.unknown(),
-    {
-      body: { title }
-    }
+    { body: { title } }
   ).catch(() => undefined)
 }
 
@@ -309,7 +306,7 @@ export async function isCloudWorkspaceGoneFromRegistry(
     await request(
       plane,
       'GET',
-      `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`,
+      teamWorkspacePath(sandboxId),
       z.unknown(),
       { timeoutMs: 10_000 }
     )
@@ -336,7 +333,7 @@ export async function readCloudWorkspaceOwner(
   const { workspace } = await request(
     plane,
     'GET',
-    `/v1/team/workspaces/${encodeURIComponent(sandboxId)}`,
+    teamWorkspacePath(sandboxId),
     CloudWorkspaceResponseSchema,
     { timeoutMs: 3_000, signal }
   )

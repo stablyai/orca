@@ -1,4 +1,4 @@
-// AGENT-PICKER-WIDTH: the composer's Agent menu is as wide as its field in every state. Neil's case:
+// The composer's Agent menu is as wide as its field in every state. The case that broke:
 // Project "~" (a folder, not a git repository) with Run on = Orca Cloud, which used to fall back to
 // the compact 256 px menu under the full-width field.
 import React from 'react'
@@ -71,7 +71,7 @@ export const homeFolderOrcaCloud = defineFixture({
   interact: open
 })
 
-/** Before (n39): the same menu at its compact width, for comparison. */
+/** Before: the same menu at its compact width, for comparison. */
 export const homeFolderOrcaCloudBefore = defineFixture({
   width: 500,
   render: () => (

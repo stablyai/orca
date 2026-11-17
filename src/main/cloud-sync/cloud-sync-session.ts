@@ -36,12 +36,12 @@ import {
   type WatchSubscription
 } from './cloud-sync-watch'
 
-export type { WatchSubscribe, WatchSubscription }
+export type { WatchSubscribe }
 
 const WATCH_RETRY_MIN_MS = 5_000
 const WATCH_RETRY_MAX_MS = 5 * 60_000
 
-export type CloudSyncSessionDeps = {
+type CloudSyncSessionDeps = {
   workspaceId: string
   folder: string
   projectRoot: string | null

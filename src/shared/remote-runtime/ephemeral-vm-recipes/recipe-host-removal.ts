@@ -31,11 +31,11 @@ export class RecipeWorkspaceRemovalError extends Error {
 }
 
 /**
- * REG-12: an Orca Cloud workspace's delete either destroys its sandbox or fails visibly. It never
+ * An Orca Cloud workspace's delete either destroys its sandbox or fails visibly. It never
  * reports success while the sandbox is kept (another workspace on it, or no proof it is empty).
  */
 export const CLOUD_DELETE_NOT_SENT = 'cloud_delete_not_sent'
-// Main sends these as the error message; the toast shows the translated copy for each (design-squad).
+// Main sends these as the error message; the toast shows the translated copy for each.
 export const CLOUD_DELETE_NOT_SENT_UNCHECKED =
   "Orca couldn't check the sandbox, so nothing was deleted."
 export const CLOUD_DELETE_NOT_SENT_IN_USE =

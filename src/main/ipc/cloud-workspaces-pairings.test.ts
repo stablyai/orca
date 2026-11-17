@@ -43,7 +43,7 @@ function owned(id: string, sandboxId: string): EphemeralVmRuntimeRecord {
   }
 }
 
-describe('Delete from Home (LC-2)', () => {
+describe('Delete from Home', () => {
   it("retires this desktop's own record of the deleted sandbox at once, and only that one", async () => {
     upsertEphemeralVmRuntime(userData.path, owned('lumpfish', 'sbx_aaaaaaaaaaaaaaaaaaaaaaaa'))
     upsertEphemeralVmRuntime(userData.path, owned('gudgeon', 'sbx_bbbbbbbbbbbbbbbbbbbbbbbb'))

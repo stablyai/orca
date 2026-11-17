@@ -9,12 +9,12 @@ import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portabili
 // ~/.claude.json also holds chat history per project; refuse anything absurd rather than buffer it.
 const MAX_CONFIG_BYTES = 32 * 1024 * 1024
 
-export type LocalMcpConfigPaths = {
+type LocalMcpConfigPaths = {
   claudeConfig: string
   codexConfig: string
 }
 
-export function defaultLocalMcpConfigPaths(
+function defaultLocalMcpConfigPaths(
   env: NodeJS.ProcessEnv = process.env
 ): LocalMcpConfigPaths {
   const claudeDir = env.CLAUDE_CONFIG_DIR?.trim()

@@ -1,4 +1,4 @@
-// EP-6-FLAKE: a slow open says so after a few seconds; a timeout says it is still starting (Try
+// A slow open says so after a few seconds; a timeout says it is still starting (Try
 // again); a workspace the server no longer has fails at once (Couldn't find it).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

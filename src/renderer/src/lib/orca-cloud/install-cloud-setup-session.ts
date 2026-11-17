@@ -45,7 +45,7 @@ export function sessionNeedsFor(
 ): CloudSetupNeed[] {
   const steps = setupNeedsFrom(needs)
   if (!repoUrl) {
-    // Without a GitHub remote there's nothing to install; D3 covers that case in the composer.
+    // Without a GitHub remote there's nothing to install; the composer covers that case.
     return steps.filter((need) => need !== 'github')
   }
   return needs.includes('account') && !steps.includes('github') ? [...steps, 'github'] : steps

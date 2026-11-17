@@ -1,5 +1,5 @@
-// PC-3b: the Orca Cloud pane strip for an agent that isn't set up yet. The launch holds; "Set up
-// once" runs the same one-time setup as Settings › Orca Cloud › Cloud agent sign-ins (S0) right in the pane,
+// The Orca Cloud pane strip for an agent that isn't set up yet. The launch holds; "Set up
+// once" runs the same one-time setup as Settings › Orca Cloud › Cloud agent sign-ins right in the pane,
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
 import {
@@ -31,7 +31,7 @@ function base(agent: string, t: Translate): CloudStripModel {
 }
 
 /** "Sign in inside this workspace instead": the in-VM login, as a quiet second choice to Set up once. */
-export function signInInsideWorkspaceAlternative(
+function signInInsideWorkspaceAlternative(
   t: Translate
 ): NonNullable<CloudStripModel['alternative']> {
   return {
@@ -119,14 +119,14 @@ export function cloudAgentSetupStripModel(args: {
       return {
         ...need,
         status: setup.code === 'rejected' ? 'warning' : 'busy',
-        // A refusal leads at every width; nothing is loading then, so the warning icon (design-squad).
+        // A refusal leads at every width; nothing is loading then, so the warning icon.
         ...(setup.code === 'rejected'
           ? { title: t('agentSignInStrip.setupCodeRejectedTitle', 'Code didn’t work') }
           : {}),
         // A refused code stays the detail until the next paste or "Open again".
         detail:
           setup.code === 'rejected'
-            ? // The title already says "Code didn’t work": the detail doesn't repeat it (design-squad).
+            ? // The title already says "Code didn’t work": the detail doesn't repeat it.
               t(
                 'agentSignInStrip.setupCodeRejectedDetail',
                 'Paste the newest code from the sign-in page, or open it again.'
@@ -139,7 +139,7 @@ export function cloudAgentSetupStripModel(args: {
               : t('agentSignInStrip.finishInBrowser', 'Finish in your browser'),
         // Claude's page shows a code to bring back: [Paste code] [Finish setup] [Open again].
         // After a refusal the CLI takes a moment to show a fresh link: the field and "Open again" stay
-        // in place, disabled, so nothing actionable disappears (design-squad).
+        // in place, disabled, so nothing actionable disappears.
         paste:
           setup.acceptsCode || setup.code === 'rejected'
             ? setupCodePaste(args.agent, setup.code, t, { waiting: !setup.acceptsCode })
@@ -191,7 +191,7 @@ export function cloudAgentSetupStripModel(args: {
       }
     case 'paste': {
       // The fallback when setup-token can't run here (no CLI, unreadable output) or the person chose
-      // it: same layout and voice as the paste-code step (design-squad). `…` marks inline code.
+      // it: same layout and voice as the paste-code step. `…` marks inline code.
       const rejected = setup.token === 'rejected'
       const title = rejected
         ? t('agentSignInStrip.pasteTokenRejectedTitle', 'Token didn’t work')
@@ -245,7 +245,7 @@ export function cloudAgentSetupStripModel(args: {
 }
 
 /**
- * V3-01: a launch put back after a restart that only needs the person's Start: the account covers
+ * A launch put back after a restart that only needs the person's Start: the account covers
  * the agent, Orca couldn't read it, or an expired sign-in was just renewed. Neutral, never "isn't
  * set up"; Start launches it (a start that then finds no account holds as "isn't set up" again).
  */

@@ -32,7 +32,7 @@ export type CloudReadViewState =
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
 
-export type CloudReadSnapshotViewProps = {
+type CloudReadSnapshotViewProps = {
   title: string
   state: CloudReadViewState
   now: number
@@ -46,7 +46,7 @@ export type CloudReadSnapshotViewProps = {
   /** Linux names the keyring to set up; defaults to this renderer's platform. */
   linux?: boolean
   /**
-   * SLEEP-IN-PROGRESS (paired): Sleep was pressed here and its sealed copy is still being saved, or
+   * Paired: Sleep was pressed here and its sealed copy is still being saved, or
    * never arrived. Either replaces the copy and every empty state; saving has no Wake yet.
    */
   copySave?: 'saving' | 'failed' | null

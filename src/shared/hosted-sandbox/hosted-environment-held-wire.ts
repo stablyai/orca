@@ -1,4 +1,4 @@
-// ENV-BUILD-CHURN (feature `environment-held`): the repo's environment wasn't used because its build is
+// Feature `environment-held`: the repo's environment wasn't used because its build is
 // below the security floor; the workspace started from the current image without its setup.
 import { z } from 'zod'
 

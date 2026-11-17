@@ -16,7 +16,7 @@ import {
   type HostedLeaseWarning
 } from './hosted-session-lease-policy'
 
-export type HostedSessionLeasePorts = {
+type HostedSessionLeasePorts = {
   driver: HostedEnvironmentProviderDriver
   /** A shorter idle window for this environment right now (e.g. woken on intent, not opened). */
   idleStopMs?: () => number | null

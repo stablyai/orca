@@ -6,7 +6,7 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { hasLocalSidebarRow } from './cloud-local-row'
 import { firstWorktreeOnHost } from './open-cloud-workspace'
 
-export async function cloudWorkspaceIdsInSidebar(): Promise<Set<string>> {
+async function cloudWorkspaceIdsInSidebar(): Promise<Set<string>> {
   const api = window.api.cloudWorkspaces
   const [local, bindings] = await Promise.all([
     api.localWorkspaces().catch(() => []),

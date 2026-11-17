@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useGitHubIdentity } from '@/components/settings/accounts/orca/use-github-identity'
 import type { GitHubIdentityState } from '@/components/settings/accounts/orca/github-identity-model'
 
-// CREATE-GH-IDENTITY: under the wizard's GitHub access step, once access is settled: the person
+// Under the wizard's GitHub access step, once access is settled: the person
 // hasn't connected their own GitHub, so commits and PRs from the workspace carry Orca's name.
 // Never holds the create. "Not now" is remembered on this device (it's about the person, not the
 // repository); Settings › Orca account still has Connect.

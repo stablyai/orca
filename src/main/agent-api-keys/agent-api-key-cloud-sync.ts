@@ -1,4 +1,4 @@
-// D12: while signed in to Orca, a saved Agent API key is also written to the user's personal Cloud
+// While signed in to Orca, a saved Agent API key is also written to the user's personal Cloud
 // secret of the same variable. Cloud secrets are write-only, so this is one way (desktop → account),
 // and a key removed here leaves the account copy alone unless this computer wrote it and the user
 // confirms. The ledger records which variables this computer wrote, per account; it holds no values.
@@ -49,7 +49,7 @@ const TRANSIENT: ReadonlySet<CloudSecretsErrorCode> = new Set([
 
 const PERSONAL = { scope: 'personal' } as const
 
-export type AgentApiKeyCloudSyncOptions = {
+type AgentApiKeyCloudSyncOptions = {
   ledgerPath: string
   /** Signed out (or no Orca Cloud): keys stay on this computer. */
   link: () => Promise<AgentApiKeyCloudLink>

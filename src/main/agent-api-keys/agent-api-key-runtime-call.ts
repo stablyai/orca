@@ -6,7 +6,7 @@ import { resolveAgentApiKeyLaunchEnv } from './agent-api-key-launch-env'
 
 type CapabilityVerdict = 'supported' | 'unsupported' | 'unknown'
 
-export type AgentApiKeyRuntimeCall = {
+type AgentApiKeyRuntimeCall = {
   environmentId: string
   method: string
   params: unknown

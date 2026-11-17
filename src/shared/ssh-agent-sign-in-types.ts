@@ -1,5 +1,5 @@
 // Classic SSH hosts (no Orca server): sign-in status and code sign-in run over the existing SSH
-// remote exec (agent-accounts spec v4 §4 annotations 4–5, Q8). Verdicts and links only: a token,
+// remote exec. Verdicts and links only: a token,
 // a pasted code or CLI output never crosses to the renderer except the code the person typed.
 import type {
   HostAgentSignInAgent,
@@ -8,7 +8,7 @@ import type {
 } from './host-agent-sign-in-status'
 
 /**
- * A classic-SSH verdict. `hasLogin` (contract §2, T4) is set only when an API key signs the agent
+ * A classic-SSH verdict. `hasLogin` is set only when an API key signs the agent
  * in: true when a CLI login also exists underneath, so "API key overrides sign-in" is knowable. It
  * comes from a presence check on the host; no credential value is ever read or returned.
  */

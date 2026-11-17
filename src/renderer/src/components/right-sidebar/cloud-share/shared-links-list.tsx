@@ -40,7 +40,7 @@ function endedAt(share: ShareLink, now: number): number | null {
 }
 
 /** Active links, plus links that ended in the last few minutes. */
-export function visibleShareLinks(shares: ShareLink[], now: number): ShareLink[] {
+function visibleShareLinks(shares: ShareLink[], now: number): ShareLink[] {
   return shares.filter((share) => {
     const ended = endedAt(share, now)
     return ended === null || now - ended < ENDED_VISIBLE_MS

@@ -1,4 +1,4 @@
-// PARITY-DNF: Conductor's cloud runs Amazon Linux (dnf/yum); Orca's sandboxes run Ubuntu (apt).
+// Conductor's cloud runs Amazon Linux (dnf/yum); Orca's sandboxes run Ubuntu (apt).
 // An imported setup's own `dnf install` / `yum install` lines become apt-get when every package has
 // a clear Ubuntu name; anything else stays as written and is listed for the person to check. A
 // script file the setup runs is only read (never changed or run) to say which of its lines use dnf.

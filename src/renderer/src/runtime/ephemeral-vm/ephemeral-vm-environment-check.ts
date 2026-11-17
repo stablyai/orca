@@ -170,7 +170,7 @@ function scheduleBlockedSandboxSleep(
 
 /**
  * Shows what the create's check found in the opened workspace. A failed reach of origin waits for a
- * confirming check first (ENV-ORIGIN-TOAST): a fresh sandbox can miss its GitHub credential briefly.
+ * confirming check first: a fresh sandbox can miss its GitHub credential briefly.
  */
 function publishCloudNotices(
   record: CloudSetupNoticesRecord,

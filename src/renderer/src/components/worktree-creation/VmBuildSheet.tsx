@@ -156,7 +156,7 @@ export function VmBuildSheet({
   const failure = classifyVmBuildFailure({ entry, error, cloud })
   const gated = isAccountGate(failure)
   const billing = useOrcaBillingStatus(isBillingFailure(failure))
-  // JA-21: on Orca Cloud a billing refusal is a blocker card in place of the steps, under the
+  // On Orca Cloud a billing refusal is a blocker card in place of the steps, under the
   // sheet's own title; nothing was created and the draft is kept.
   const billingBlock = cloud ? billingBlockKind(failure) : null
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
@@ -169,7 +169,7 @@ export function VmBuildSheet({
       : step
   )
   const steps = useMinimumRunningSteps(derived, failure === null, now)
-  // JA-11: this computer's own "Start sandbox" durations drive the next sheet's hint.
+  // This computer's own "Start sandbox" durations drive the next sheet's hint.
   const provisionMs = cloud
     ? derived.find((step) => step.id === 'provision' && step.state === 'done')?.elapsedMs
     : null
@@ -216,7 +216,7 @@ export function VmBuildSheet({
   return (
     <div data-vm-build-sheet className="flex min-h-full justify-center pt-12">
       <div className="flex w-full max-w-2xl flex-col gap-4">
-        {/* JA-24: on Orca Cloud a failure card carries the one title; no page title above it. */}
+        {/* On Orca Cloud a failure card carries the one title; no page title above it. */}
         {cloud && failure && !billingBlock ? null : (
           <div className="flex min-h-7 items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -295,7 +295,7 @@ export function VmBuildSheet({
                       timing={timings[step.id] ?? null}
                       t={t}
                     />
-                    {/* CREATE-GH-STEP: checked alongside Start sandbox, held before Open. */}
+                    {/* The GitHub access step: checked alongside Start sandbox, held before Open. */}
                     {cloud && step.id === 'provision' ? (
                       <VmBuildGitHubAccessRow creationId={creationId} />
                     ) : null}

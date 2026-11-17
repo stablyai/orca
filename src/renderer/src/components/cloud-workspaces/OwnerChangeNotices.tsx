@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: shows this member's owner-change notices as persistent cloud toasts while they
+// Shows this member's owner-change notices as persistent cloud toasts while they
 // are signed in to a team. A previous owner is told who took or gave away their workspace and to
 // consider rotating personal secrets (amber, until dismissed); a new owner is told once that the
 // workspace runs like a shared one (info).
@@ -13,6 +13,7 @@ import { useOrgRoster } from '../billing/team/use-org-roster'
 import { useCloudWorkspaceIdentities } from './cloud-workspace-identity'
 import { newOwnerNotice, previousOwnerNotice, previousOwnerNoticeAction } from './owner-change-copy'
 import {
+  localStorageOrNull,
   dismissPreviousOwnerNotice,
   markNewOwnerNoticeSeen,
   newOwnerWorkspaces,
@@ -22,14 +23,6 @@ import {
 } from './owner-change-notices-store'
 
 export const OWNER_NOTICE_POLL_MS = 60_000
-
-function localStorageOrNull(): Storage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
 
 function openCloudSecrets(): void {
   const store = useAppStore.getState()

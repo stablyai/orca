@@ -218,7 +218,7 @@ export type DetectedSetupPreviewContent = {
   skippedFields: readonly string[]
   /** Imported run actions, as the text the Run button will execute. */
   runActions: string | null
-  /** PARITY-DNF: Amazon Linux install lines translated to apt-get, and what to check. */
+  /** Amazon Linux install lines translated to apt-get, and what to check. */
   ubuntuNote: UbuntuNote | null
 }
 

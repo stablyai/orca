@@ -127,7 +127,7 @@ export function createHostedSandboxDriver(
 /**
  * One create with the build sheet's progress: the boot plan names the repository step, then the
  * create, then git's clone or update until it is done. Shared by the owned create (the recipe) and
- * the GitHub-only create (GH-CREATE-SHEET), so both sheets read the same phases.
+ * the GitHub-only create, so both sheets read the same phases.
  */
 export { CANCEL_CLEANUP_UNCONFIRMED }
 
@@ -138,7 +138,7 @@ export function hostedCreateBody(
   return {
     workspaceId: spec.workspaceId,
     machineSize: toMachineSize(spec.machineSize),
-    // Named rows: Home shows the workspace's name, never an untitled sandbox (PC-8).
+    // Named rows: Home shows the workspace's name, never an untitled sandbox.
     ...(spec.workspaceName?.trim() ? { title: spec.workspaceName.trim().slice(0, 120) } : {}),
     ...(spec.region ? { region: spec.region } : {}),
     ...(spec.repo ? { repo: spec.repo } : {})
@@ -169,10 +169,10 @@ export async function createSandboxWithProgress(
   try {
     ready = await client.create(body, ctx?.signal, spec.idempotencyKey)
   } catch (error) {
-    // GH-CREATE-CANCEL: cancelled in flight, the control plane may still have made it: find it by
+    // Cancelled in flight, the control plane may still have made it: find it by
     // its key and delete it before reporting the cancel.
     if (ctx?.signal?.aborted && spec.idempotencyKey) {
-      // EP-5: the cancel may report "deleted" only when the control plane confirmed it.
+      // The cancel may report "deleted" only when the control plane confirmed it.
       if (!(await reclaimCancelledCreate(client, body, spec.idempotencyKey))) {
         throw new EnvironmentProviderError('aborted', 'Cancelled.', CANCEL_CLEANUP_UNCONFIRMED)
       }
@@ -184,7 +184,7 @@ export async function createSandboxWithProgress(
     await waitForClone(client, ready.sandbox.id, ctx, { mode: ready.clone.mode ?? 'clone' })
   }
   if (ready.environmentHeld) {
-    // ENV-BUILD-CHURN: the workspace starts without its environment's setup (a security rebuild runs);
+    // The workspace starts without its environment's setup (a security rebuild runs);
     // the window says so in the workspace (ephemeral-vm-environment-check publishes the notice).
     ctx?.onProgress?.({ phase: 'environment-held', message: ready.environmentHeld.environmentId })
   }

@@ -136,7 +136,7 @@ describe('Orca Cloud cancel cleanup', () => {
     expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledTimes(2)
   })
 
-  it('EP-5: a create step whose result says its sandbox was not confirmed deleted fails the cancel', async () => {
+  it('a create step whose result says its sandbox was not confirmed deleted fails the cancel', async () => {
     const run = deferred<{ ok: boolean; reason?: string }>()
     void trackOrcaCloudCreateStep(
       'c-ep5',
@@ -153,7 +153,7 @@ describe('Orca Cloud cancel cleanup', () => {
     )
   })
 
-  it('EP-5: a plain cancelled create (nothing left running) still reads as deleted', async () => {
+  it('a plain cancelled create (nothing left running) still reads as deleted', async () => {
     const run = deferred<{ ok: boolean; reason?: string }>()
     void trackOrcaCloudCreateStep(
       'c-ep5b',
@@ -166,7 +166,7 @@ describe('Orca Cloud cancel cleanup', () => {
     expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-ep5b')
   })
 
-  it("EP-5: Try again runs the create's own retry (no runtime records) and reads deleted only if it confirms", async () => {
+  it("Try again runs the create's own retry (no runtime records) and reads deleted only if it confirms", async () => {
     const retry = vi
       .fn<() => Promise<boolean>>()
       .mockResolvedValueOnce(false)

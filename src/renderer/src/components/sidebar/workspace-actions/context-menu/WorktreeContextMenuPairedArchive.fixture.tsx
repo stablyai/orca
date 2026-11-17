@@ -1,4 +1,4 @@
-// PAIRED-ARCHIVE: a paired cloud workspace's own row (created on another desktop) gets the same
+// A paired cloud workspace's own row (created on another desktop) gets the same
 // cloud rows in its sidebar menu as an owned one: Restart and Archive (Unarchive once archived).
 // No "Mirror to this computer": mirroring syncs this desktop's own workspaces only.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'

@@ -1,4 +1,4 @@
-// ARCHIVE-HOOK: the window asks the control plane to run the repo's orca.yaml `scripts.archive` in
+// The window asks the control plane to run the repo's orca.yaml `scripts.archive` in
 // the VM before an archive or a delete, and what it knows about the hook while the VM sleeps.
 // Every outcome is logged here; the window shows it and decides whether to go on.
 import { ipcMain } from 'electron'
@@ -6,7 +6,7 @@ import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
   type CloudWorkspaceTarget
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
-import { cloudSandboxIdForEnvironment } from './cloud-delete-preflight'
+import { cloudSandboxIdForEnvironment } from './hosted-remote-desktop'
 import { findCloudSandbox } from './cloud-workspace-target'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { NOT_CLOUD, failure } from './hosted-workspace-runtime'

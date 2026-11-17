@@ -1,13 +1,13 @@
-// Seam for the one-trip setup session (spec N1, owned by team-billing-ux / np4-setup). Until the
+// Seam for the one-trip setup session. Until the
 // session exists, the composer derives setup rows from billing access and availability and "Set up
-// and start" runs today's sign-in / plans actions. When the session lands, np4-setup registers:
+// and start" runs today's sign-in / plans actions. When the session lands, the setup session registers:
 // - a starter: "Set up and start" calls it and keeps the returned session id (also on the draft);
 // - a source: a synchronous read of the latest polled snapshot for a session id;
 // and calls notifyCloudSetupSessionChanged() after each poll so the panel re-renders.
 import { useCallback, useSyncExternalStore } from 'react'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 
-/** "All set" holds this long before the composer submits itself (O4; 0 with reduced motion). */
+/** "All set" holds this long before the composer submits itself (0 with reduced motion). */
 export const CLOUD_SETUP_ALL_SET_HOLD_MS = 600
 
 export type CloudSetupSessionSnapshot = {
@@ -41,7 +41,7 @@ type CloudSetupStartRequest = {
   repoId: string
   /** The rows still open when the user clicked (account, team, plan, github). */
   needs: CloudSetupStep['id'][]
-  /** COPY-LINK-FIRST-CLICK: false starts the same trip without opening the browser. */
+  /** False starts the same trip without opening the browser. */
   openBrowser?: boolean
 }
 /**

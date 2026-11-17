@@ -1,4 +1,4 @@
-// V3-01: a held Orca Cloud launch waits in a plain-shell placeholder tab on the host, and the hold
+// A held Orca Cloud launch waits in a plain-shell placeholder tab on the host, and the hold
 // itself lives only in memory (cloud-agent-launch-hold). A quit loses it: the placeholder comes back
 // as a plain shell with no strip and no way to start the agent. This keeps one record per held
 // placeholder so a restart can put the hold back. Per Orca profile, on this device; never the

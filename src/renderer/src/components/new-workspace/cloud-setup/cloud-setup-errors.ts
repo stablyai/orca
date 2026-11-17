@@ -1,4 +1,4 @@
-// X1: why a one-trip setup stopped, as the setup session reports it (`error.kind`), and the one
+// Why a one-trip setup stopped, as the setup session reports it (`error.kind`), and the one
 // action each offers. Copy lives in CloudSetupErrorNotice; this file stays pure for tests.
 import { z } from 'zod'
 import { CLOUD_SETUP_ERROR_KIND_VALUES } from '../../../../../shared/telemetry-cloud-setup-event-schemas'

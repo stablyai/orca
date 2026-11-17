@@ -7,7 +7,7 @@ import { useWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
 type CloudRecoveryContext = {
   /** A wake is in flight: the waking pill already says what's happening, so no reconnect banner. */
   waking: boolean
-  /** Asleep or going to sleep: nothing to reconnect to, so a calm note instead of "Reconnecting" (RA-12). */
+  /** Asleep or going to sleep: nothing to reconnect to, so a calm note instead of "Reconnecting". */
   asleep: boolean
   /** Asleep because it was archived: its notes say "archived" and offer Unarchive, not Wake. */
   archived: boolean
@@ -21,7 +21,7 @@ type CloudRecoveryContext = {
 export function useCloudRecoveryContext(
   worktreeId: string | null | undefined
 ): CloudRecoveryContext | null {
-  // ASLEEP-SR-RECONNECTING: a paired cloud workspace is cloud here too. Owned-only left its asleep
+  // A paired cloud workspace is cloud here too. Owned-only left its asleep
   // and waking states unknown to the recovery notices, so the outage notice ("Reconnecting to …",
   // a polite live region) stayed up under the asleep view and a screen reader announced it.
   const owned = useIsCloudWorkspace(worktreeId)

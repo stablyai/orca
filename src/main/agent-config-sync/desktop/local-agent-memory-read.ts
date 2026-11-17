@@ -14,7 +14,7 @@ import { readItemFile } from './agent-config-item-file'
 const IMPORT = /(?:^|\s)@((?:~|\.{1,2})?\/?[^\s@`'")\]]+)/g
 
 /** Imports that point outside the agent's config folder: the sandbox won't have those files. */
-export function countLocalMemoryRefs(text: string, root: string): number {
+function countLocalMemoryRefs(text: string, root: string): number {
   let count = 0
   for (const match of text.matchAll(IMPORT)) {
     const target = match[1]

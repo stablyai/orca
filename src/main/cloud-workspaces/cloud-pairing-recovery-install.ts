@@ -1,8 +1,8 @@
-// EP-8: wires the pairing recovery (cloud-pairing-recovery.ts) to this process: which environments
+// Wires the pairing recovery (cloud-pairing-recovery.ts) to this process: which environments
 // are cloud workspaces, the grant call, the same-server repair and the window notice.
 import { app, BrowserWindow } from 'electron'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/cloud-delete-preflight'
+import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/hosted-remote-desktop'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from '../ipc/runtime-environments/pairing/runtime-environment-pairing-verification'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { setRuntimeEnvironmentRejectionObserver } from '../ipc/runtime-environments/runtime-environment-rejection-observer'
@@ -14,7 +14,7 @@ import type { CloudWorkspacesService } from './cloud-workspaces-service'
 import { createCloudPairingRecovery } from './cloud-pairing-recovery'
 import { createCloudRecoveryGrantsStore } from './cloud-recovery-grants-store'
 
-export const CLOUD_ACCESS_LOST_CHANNEL = 'cloudWorkspaces:accessLost'
+const CLOUD_ACCESS_LOST_CHANNEL = 'cloudWorkspaces:accessLost'
 
 export function installCloudPairingRecovery(
   getService: () => Promise<CloudWorkspacesService | null>

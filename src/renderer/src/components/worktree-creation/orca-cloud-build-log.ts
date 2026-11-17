@@ -197,8 +197,8 @@ function awaitingPlanCheck(log: string): boolean {
   return true
 }
 
-/** Past this, a still-running "Start sandbox" names what it is waiting on (N-01: no silent 30 s). */
-export const PROVISION_STAGE_AFTER_MS = 5_000
+/** Past this, a still-running "Start sandbox" names what it is waiting on (no silent 30 s). */
+const PROVISION_STAGE_AFTER_MS = 5_000
 
 /**
  * What a "Start sandbox" step that has run past PROVISION_STAGE_AFTER_MS is waiting on, in plain words:
@@ -210,7 +210,7 @@ export function provisionStageLabel(
   elapsedMs: number | null,
   t: Translate
 ): string | null {
-  // JA-21 (design-squad): until the server takes the create, the step says it is checking the
+  // Until the server takes the create, the step says it is checking the
   // plan, at once rather than after the quiet period; a refusal turns into the blocker card.
   if (entry.phase !== 'preparing' && awaitingPlanCheck(entry.provisioningLog ?? '')) {
     return phaseLabel('checking-entitlement', t)

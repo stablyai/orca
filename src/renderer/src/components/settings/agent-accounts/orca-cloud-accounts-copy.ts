@@ -1,4 +1,4 @@
-// Copy for S0 (agent-accounts spec §5, §10) and the composer's Agent row (cloud-start G).
+// Copy for Cloud agent sign-ins (agent-accounts spec §5, §10) and the composer's Agent row.
 // Catalog names only ("Claude", "Codex"); the vendor account for Codex is a ChatGPT account.
 import type { Translate } from '@/i18n/use-translate'
 import type {
@@ -68,7 +68,7 @@ export function keySourceLabel(kind: AgentKeyKind, t: Translate): string {
   }
 }
 
-/** RS-3 (design-squad): a fixable access setting reads as a warning (amber), not an error (red). */
+/** A fixable access setting reads as a warning (amber), not an error (red). */
 export function setupFailureTone(error: OrcaCloudAgentSetupFailure): 'warning' | 'error' {
   return error === 'device_auth_disabled' ? 'warning' : 'error'
 }
@@ -121,8 +121,8 @@ export function setupFailureCopy(
         detail: nothingChanged
       }
     case 'device_auth_disabled':
-      // RS-3: the broker started but ChatGPT refused to issue a device code for this account.
-      // (design-squad) a pointer that is right rather than a guessed setting name.
+      // The broker started but ChatGPT refused to issue a device code for this account.
+      // A pointer that is right rather than a guessed setting name.
       return {
         title: t(
           'orcaCloudAccounts.error.deviceAuthDisabled',
@@ -181,7 +181,7 @@ export function setupFailureCopy(
 }
 
 /**
- * Under a Codex device code (strip and Settings): the RS-3 fix said before it's needed. OpenAI's
+ * Under a Codex device code (strip and Settings): the device-code fix said before it's needed. OpenAI's
  * page refuses the code when the ChatGPT account has device code sign-in off.
  */
 export function deviceCodeOffHint(t: Translate): string {

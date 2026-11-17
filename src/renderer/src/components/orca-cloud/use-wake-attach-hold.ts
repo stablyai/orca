@@ -32,7 +32,7 @@ const IDLE: Track = {
   reconnectNow: false
 }
 
-export type WakeAttachHold = {
+type WakeAttachHold = {
   /** What the overlay shows in place of the store's wake, if anything. */
   wake: CloudWakeProgressEvent | undefined
   /** True when `wake` is the "Couldn't reconnect the terminal" failure. */

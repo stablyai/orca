@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: everything a person sees when a cloud workspace changes owner.
+// Everything a person sees when a cloud workspace changes owner.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { defineFixture } from '../../component-fixtures/component-fixture'

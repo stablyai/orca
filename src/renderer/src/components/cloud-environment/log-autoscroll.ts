@@ -1,7 +1,7 @@
 /** Within this many px of the bottom counts as "at the bottom" (sub-pixel rounding, momentum). */
-export const STICKY_THRESHOLD_PX = 24
+const STICKY_THRESHOLD_PX = 24
 
-export type AutoscrollState = {
+type AutoscrollState = {
   following: boolean
   /** Lines appended while the user was reading history; drives the "Jump to latest" pill. */
   unseen: number
@@ -10,7 +10,7 @@ export type AutoscrollState = {
   awayFromBottom: boolean
 }
 
-export type AutoscrollAction =
+type AutoscrollAction =
   | {
       type: 'scroll'
       scrollTop: number

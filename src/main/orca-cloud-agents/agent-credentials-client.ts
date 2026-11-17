@@ -1,4 +1,4 @@
-// Orca account agent credentials on the sandbox control plane (contract D11 + §2). Write-only for the
+// Orca account agent credentials on the sandbox control plane. Write-only for the
 // Claude token: the PUT carries it, no response or error does, and nothing here logs a body.
 import { z } from 'zod'
 import {

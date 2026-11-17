@@ -1,4 +1,4 @@
-// EP-8: lets the cloud pairing recovery hear that a server refused this computer's pairing, without
+// Lets the cloud pairing recovery hear that a server refused this computer's pairing, without
 // the transport depending on cloud workspaces. Observing only: the failure still reaches its caller.
 
 type Observer = (

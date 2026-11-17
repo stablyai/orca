@@ -48,7 +48,7 @@ describe('composer data for a create billing refused', () => {
   })
 })
 
-describe('Back to draft from a GitHub-only create (GH-CREATE-SHEET)', () => {
+describe('Back to draft from a GitHub-only create', () => {
   const github = {
     ...request,
     repoId: '',
@@ -73,7 +73,7 @@ describe('Back to draft from a GitHub-only create (GH-CREATE-SHEET)', () => {
     })
   })
 
-  it('"Choose another repository" (CLONE-ACCESS-ERROR) opens the picker instead of the refused repository', () => {
+  it('"Choose another repository" opens the picker instead of the refused repository', () => {
     const data = composerDataFromRefusedCreate(
       { request: github },
       { local: false, pickRepo: true }

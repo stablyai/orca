@@ -44,7 +44,7 @@ class ActiveForward {
   }
 }
 
-export type RuntimePortForwardManagerOptions = {
+type RuntimePortForwardManagerOptions = {
   connector: PortForwardTunnelConnector
   onChange?: (forwards: RuntimePortForward[]) => void
   now?: () => number

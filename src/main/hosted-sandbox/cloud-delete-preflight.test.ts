@@ -24,10 +24,10 @@ const failing = (error: unknown) => ({
 
 describe('preflightCloudWorkspaceDelete', () => {
   it('passes non-cloud workspaces straight through', async () => {
-    expect(await preflightCloudWorkspaceDelete(undefined, null)).toEqual({ ok: true })
+    expect(await preflightCloudWorkspaceDelete(null, null)).toEqual({ ok: true })
   })
 
-  it('keeps the row when the signed-in identity cannot see the sandbox (W9 D-2)', async () => {
+  it('keeps the row when the signed-in identity cannot see the sandbox', async () => {
     const result = await preflightCloudWorkspaceDelete(
       'sbx_1',
       failing(new EnvironmentProviderError('not_found', 'gone'))
@@ -63,7 +63,7 @@ describe('preflightCloudWorkspaceDelete', () => {
     })
   })
 
-  it("EP-8: a running sandbox whose server refuses or doesn't answer this computer is unreachable", async () => {
+  it("a running sandbox whose server refuses or doesn't answer this computer is unreachable", async () => {
     expect(
       await preflightCloudWorkspaceDelete('sbx_1', answering('running'), async () => 'rejected')
     ).toEqual({ ok: true, unreachable: 'rejected' })
@@ -82,7 +82,7 @@ describe('preflightCloudWorkspaceDelete', () => {
     })
   })
 
-  it('EP-8: never probes an asleep or destroyed sandbox', async () => {
+  it('never probes an asleep or destroyed sandbox', async () => {
     let probed = 0
     const probe = async (): Promise<'ok'> => {
       probed += 1

@@ -12,7 +12,7 @@ export type SecretRequestPaneSlot = {
   primary: boolean
 }
 
-export type RoutedSecretRequest = {
+type RoutedSecretRequest = {
   entry: SecretRequestEntry
   /** Shown on the pane running the asking terminal, so "Restart {{agent}}" restarts the right one. */
   onAskingPane: boolean

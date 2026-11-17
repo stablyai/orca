@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path'
 import type { ReadSnapshotPin } from '../../shared/cloud-workspaces/read-snapshot-signature'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 
-export const READ_PIN_FILE_NAME = 'cloud-read-pins.json'
+const READ_PIN_FILE_NAME = 'cloud-read-pins.json'
 /** Bounded: oldest-touched pins go first (a dropped pin falls back to trust on first use). */
 const MAX_PINS = 500
 
@@ -45,7 +45,7 @@ function parsePins(text: string): PinFile['pins'] {
   return out
 }
 
-export function getCloudReadPinPath(profileId: string, userDataPath: string): string {
+function getCloudReadPinPath(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), READ_PIN_FILE_NAME)
 }
 
@@ -132,7 +132,7 @@ export function createReadPinStore(deps: {
   }
 }
 
-export type ReadPinStore = ReturnType<typeof createReadPinStore>
+type ReadPinStore = ReturnType<typeof createReadPinStore>
 
 let defaultStore: { userDataPath: string; store: ReadPinStore } | null = null
 

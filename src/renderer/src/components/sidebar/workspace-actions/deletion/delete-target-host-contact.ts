@@ -5,7 +5,7 @@
 import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
-export type DeleteTargetHostRead = 'git-status' | 'at-risk-scan'
+type DeleteTargetHostRead = 'git-status' | 'at-risk-scan'
 
 export function mayContactDeleteTargetHost(
   target: Pick<Worktree, 'id'>,

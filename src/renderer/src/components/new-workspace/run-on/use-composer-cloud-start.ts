@@ -75,7 +75,7 @@ export function useComposerCloudStart({
   useEffect(() => {
     recordCreatedRef.current = cloudStart.recordCreated
   }, [cloudStart.recordCreated, recordCreatedRef])
-  // RR-c1 (Neil): Create stays enabled; one that needs a GitHub repository stops and says so.
+  // Create stays enabled; one that needs a GitHub repository stops and says so.
   const needsRepo = cloudStart.view?.needsGitHubRepo ?? null
   const guard = useNeedsRepoSubmitGuard(needsRepo, cloudStart.onPrimary ?? runCreate)
   const view = useMemo(

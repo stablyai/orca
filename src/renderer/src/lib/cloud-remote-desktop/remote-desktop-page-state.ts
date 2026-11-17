@@ -31,26 +31,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-export function getRemoteDesktopPageState(browserPageId: string): RemoteDesktopPageState | null {
-  install()
-  return states.get(browserPageId) ?? null
-}
-
 /** Null until main reports on the page (it does once the page loads). */
 export function useRemoteDesktopPageState(browserPageId: string): RemoteDesktopPageState | null {
   return useSyncExternalStore(subscribe, () => states.get(browserPageId) ?? null)
-}
-
-export function setRemoteDesktopPageStateForTest(
-  state: RemoteDesktopPageState | null,
-  id = ''
-): void {
-  if (state) {
-    states.set(state.browserPageId, state)
-  } else {
-    states.delete(id)
-  }
-  for (const listener of listeners) {
-    listener()
-  }
 }

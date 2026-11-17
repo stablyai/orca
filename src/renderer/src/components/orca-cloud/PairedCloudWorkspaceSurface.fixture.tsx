@@ -1,4 +1,4 @@
-// SLEEP-IN-PROGRESS (2/2): the layer over a PAIRED cloud workspace's panes (waking, asleep with its
+// The layer over a PAIRED cloud workspace's panes (waking, asleep with its
 // sealed copy, saving that copy after Sleep, and a wake the plan refused).
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'

@@ -39,7 +39,7 @@ export function archiveDialogKeptLine(t: Translate, ttlDays?: number | null): st
 }
 
 /** Whole days until `keptUntil`, rounded up so "deletes in 1 day" never shows for a past date. */
-export function daysUntilDeletion(keptUntil: number, now: number): number {
+function daysUntilDeletion(keptUntil: number, now: number): number {
   return Math.max(0, Math.ceil((keptUntil - now) / DAY_MS))
 }
 

@@ -1,5 +1,5 @@
-// The woke-up strip on an agent pane (JA-15 / RA-WAKE). The host relaunches the pane's agent after a
-// wake by itself (WAKE-1, #450), usually within ~7 s, so a strip over it would sit on a live agent.
+// The woke-up strip on an agent pane. The host relaunches the pane's agent after a
+// wake by itself, usually within ~7 s, so a strip over it would sit on a live agent.
 // Restart is only the fallback for a relaunch that never came (an older host, or a failed resume
 // back at a bare shell).
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'

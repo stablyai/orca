@@ -3,7 +3,7 @@
 // pane in front re-attaches to its terminal a moment later; the waking pill waits for that, so it
 // never disappears over a pane that can't take a keystroke yet.
 
-export type WakePaneEntry = {
+type WakePaneEntry = {
   /** Taking input: attached to a terminal, connected, nothing it was given still unsent. */
   isReady: () => boolean
   /** Reconnect this pane's terminal (Try again on "Couldn't reconnect the terminal"). */

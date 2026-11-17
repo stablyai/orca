@@ -9,7 +9,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { RuntimeClientError } from '../runtime/connection/types'
 
-export type CloudCredentialSource = 'env' | 'file'
+type CloudCredentialSource = 'env' | 'file'
 
 export type CloudCredentials = {
   apiUrl: string
@@ -128,9 +128,9 @@ function readCredentialsFile(
   const str = (value: unknown): string | null =>
     typeof value === 'string' && value.trim() ? value.trim() : null
   return {
-    apiUrl: str(parsed?.apiUrl),
-    token: str(parsed?.token),
-    workspaceId: str(parsed?.workspaceId)
+    apiUrl: str(parsed.apiUrl),
+    token: str(parsed.token),
+    workspaceId: str(parsed.workspaceId)
   }
 }
 
@@ -170,7 +170,8 @@ export function resolveCloudCredentials(
       { path, nextSteps: [LOGIN_HINT, IN_VM_HINT] }
     )
   }
-  const apiUrl = env.ORCA_CLOUD_API_URL?.trim() || file.apiUrl
+  const envUrl = env.ORCA_CLOUD_API_URL?.trim()
+  const apiUrl = envUrl || file.apiUrl
   if (!apiUrl) {
     throw new RuntimeClientError('cloud_credentials_invalid', `${path} has no apiUrl.`, {
       path,
@@ -178,10 +179,7 @@ export function resolveCloudCredentials(
     })
   }
   return {
-    apiUrl: normalizeCloudApiUrl(
-      apiUrl,
-      env.ORCA_CLOUD_API_URL?.trim() ? 'ORCA_CLOUD_API_URL' : `apiUrl in ${path}`
-    ),
+    apiUrl: normalizeCloudApiUrl(apiUrl, envUrl ? 'ORCA_CLOUD_API_URL' : `apiUrl in ${path}`),
     token: file.token,
     workspaceId: file.workspaceId,
     source: 'file',

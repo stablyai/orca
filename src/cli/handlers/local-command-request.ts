@@ -13,6 +13,7 @@ import {
 } from '../../shared/local-commands/local-command-contract'
 
 const POLL_MS = 1000
+const NO_ANSWER = 'Nobody answered the request in time. Ask the person before trying again.'
 
 export type LocalCommandCliDeps = {
   call: <T>(method: string, params: unknown) => Promise<T>
@@ -99,14 +100,11 @@ export function formatLocalCommandOutcome(outcome: LocalCommandStatusResult): {
             ? 'The person denied this command. Do not retry it; ask them what to do instead.'
             : outcome.declineReason === 'not_allowed'
               ? "This person's computer does not allow local commands from this workspace."
-              : 'Nobody answered the request in time. Ask the person before trying again.',
+              : NO_ANSWER,
         isError: true
       }
     case 'expired':
-      return {
-        text: 'Nobody answered the request in time. Ask the person before trying again.',
-        isError: true
-      }
+      return { text: NO_ANSWER, isError: true }
     case 'failed':
       return {
         text: `The command could not start: ${outcome.message ?? 'unknown error'}`,

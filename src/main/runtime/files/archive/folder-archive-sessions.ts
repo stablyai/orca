@@ -10,7 +10,7 @@ import { planFolderArchive, sanitizeArchiveSegment } from './folder-archive-walk
 import { FolderArchiveZipStream } from './folder-archive-zip-stream'
 
 // A lost cancel (closed laptop, dropped socket) must not pin host memory or file handles.
-export const FOLDER_ARCHIVE_IDLE_TIMEOUT_MS = 2 * 60_000
+const FOLDER_ARCHIVE_IDLE_TIMEOUT_MS = 2 * 60_000
 /** Per client (paired device or connection), so one client can't hold every slot. */
 const MAX_ARCHIVES_PER_OWNER = 2
 /** Host-wide backstop across all clients. */

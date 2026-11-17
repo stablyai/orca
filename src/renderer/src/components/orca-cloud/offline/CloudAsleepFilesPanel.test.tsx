@@ -45,7 +45,7 @@ const snapshot = (git: CloudOfflineSnapshot['git']): CloudOfflineSnapshot => ({
   chats: []
 })
 
-describe('asleep Files tab (RA-10)', () => {
+describe('asleep Files tab', () => {
   it('shows recent times relatively and old ones as a date', () => {
     expect(formatWhen(NOW - 47_000, NOW, 'en-US', t)).toBe('47s ago')
     expect(formatWhen(NOW - 5362 * DAY, NOW, 'en-US', t)).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/)
@@ -121,7 +121,7 @@ describe('asleep Files tab (RA-10)', () => {
     ).toBe('none')
   })
 
-  it('while going to sleep: says the copy is being saved, and offers no Wake (RA-13b)', () => {
+  it('while going to sleep: says the copy is being saved, and offers no Wake', () => {
     serve(snapshot(null))
     markWorktreeGoingToSleep('ws')
     const { container, queryByRole } = render(<CloudAsleepFilesPanel workspaceId="ws" />)
@@ -130,7 +130,7 @@ describe('asleep Files tab (RA-10)', () => {
     expect(queryByRole('button')).toBeNull()
   })
 
-  it('SLEEP-IN-PROGRESS: still saving after the sleep returned, no "Files aren’t available" yet', () => {
+  it('still saving after the sleep returned, no "Files aren’t available" yet', () => {
     serve(snapshot(null))
     markSleepCopySaving('ws', NOW)
     const { container } = render(<CloudAsleepFilesPanel workspaceId="ws" />)

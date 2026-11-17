@@ -1,4 +1,4 @@
-// Archive calls on the Orca sandbox control plane: archive, its metadata, and (ARCHIVE-HOOK) the
+// Archive calls on the Orca sandbox control plane: archive, its metadata, and the
 // repo's orca.yaml archive hook run in the VM before an archive or delete.
 import {
   HostedArchiveResponseSchema,

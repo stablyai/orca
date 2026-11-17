@@ -40,7 +40,7 @@ export type EnterprisePlanModel = {
 
 export type TrialPlanModel = { label: string; tagline: string | null; features: string[] }
 
-export type PlansModel = {
+type PlansModel = {
   team: TeamPlanModel
   enterprise: EnterprisePlanModel | null
   trial: TrialPlanModel | null
@@ -55,7 +55,7 @@ function featureLines(features: readonly { text: string }[]): string[] {
   })
 }
 
-export function plansModelFromCatalog(
+function plansModelFromCatalog(
   catalog: OrcaPlanCatalog,
   source: 'live' | 'cache'
 ): PlansModel | null {
@@ -102,7 +102,7 @@ export function plansModelFromCatalog(
 }
 
 /** An older billing service (no GET /v1/plans): its entitlement offers. No feature bullets. */
-export function plansModelFromOffers(offers: OrcaBillingOffers): PlansModel {
+function plansModelFromOffers(offers: OrcaBillingOffers): PlansModel {
   const team = offers.team
   const intervals: OrcaBillingInterval[] = []
   if (team.monthlyPriceCentsPerSeat !== null || team.monthlyPriceLabel) {
@@ -137,7 +137,7 @@ export function plansModelFromOffers(offers: OrcaBillingOffers): PlansModel {
   }
 }
 
-export type PlansModelState =
+type PlansModelState =
   | { state: 'loading' }
   | { state: 'ready'; model: PlansModel }
   /** Nothing from billing to show: the dialog still offers the console, never a guessed price. */

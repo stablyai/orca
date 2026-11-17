@@ -74,7 +74,7 @@ import {
 } from '../agent-config-sync/desktop/cloud-agent-config-sync-ipc'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
-export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
+const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
 
 let installed: { registry: HostedSessionRegistry } | null = null
 let controlPlaneClient: HostedSandboxControlPlaneClient | null = null
@@ -130,7 +130,7 @@ export function installHostedSandbox(
     onListed: (account, listed) => gonePrune.observeList(account, listed),
     relistMs: 10 * 60_000
   })
-  // A cloud list refresh or a not-found status read asks for the prune now (LC-2).
+  // A cloud list refresh or a not-found status read asks for the prune now.
   setCloudGonePruneRunner(() => accountBackfill.run({ force: true }))
   installLocalCommands(userDataPath)
   installDevTokenClaimsProbe(() => config.getAccessToken(), app.isPackaged)
@@ -279,7 +279,7 @@ export function installHostedSandbox(
 }
 
 /** "Restart now" from the window's session-cap toast. */
-export function restartHostedWorkspace(workspaceId: string): Promise<HostedSessionRestartResult> {
+function restartHostedWorkspace(workspaceId: string): Promise<HostedSessionRestartResult> {
   return installed
     ? installed.registry.restartWorkspace(workspaceId)
     : Promise.resolve({ status: 'not-running' })

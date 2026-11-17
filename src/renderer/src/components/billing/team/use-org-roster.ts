@@ -33,11 +33,6 @@ function readRoster(orgId: string): Promise<OrcaProfileOrgMembersListResult> {
     }))
 }
 
-/** The sequence number the next read will be above; reads started later see later changes. */
-export function currentRosterReadSeq(): number {
-  return readCounter
-}
-
 function put(orgId: string, entry: Entry): void {
   entries.delete(orgId)
   entries.set(orgId, entry)
@@ -54,7 +49,7 @@ function put(orgId: string, entry: Entry): void {
  * Reads the roster. A call during a running read doesn't reuse its (possibly stale) answer: it
  * marks the entry dirty so one more read runs right after, which sees every change made so far.
  */
-export function loadOrgRoster(orgId: string): Promise<void> {
+function loadOrgRoster(orgId: string): Promise<void> {
   const existing = entries.get(orgId)
   if (existing?.inFlight) {
     existing.dirty = true

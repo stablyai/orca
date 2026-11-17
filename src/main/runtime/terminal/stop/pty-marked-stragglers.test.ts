@@ -40,7 +40,7 @@ const A = 'wt::/vercel/sandbox/project@@aaaa'
 const B = 'wt::/vercel/sandbox/project@@bbbb'
 const mark = (id: string) => `${ORCA_PTY_SESSION_ENV}=${id}`
 
-describe('RA-ORPH: reaping what outlived a PTY stop', () => {
+describe('reaping what outlived a PTY stop', () => {
   it("kills a setsid'd agent (and its children) that still carries the stopped PTY's id", async () => {
     const box = sandbox([
       // Pane A's create-launched Claude left the PTY session (own sid/pgid 1654) and has a node child.

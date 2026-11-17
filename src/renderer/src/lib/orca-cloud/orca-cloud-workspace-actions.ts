@@ -14,7 +14,7 @@ import {
 } from './orca-cloud-workspace-store'
 
 /**
- * ARCHIVE-MENU-DISABLED: Unarchive's wake is settled by whoever wakes it next, but a workspace the
+ * Unarchive's wake is settled by whoever wakes it next, but a workspace the
  * control plane already brought up starts no wake on open. A fresh read that says running settles
  * a still-pending unarchive wake, so the row is not left "waking" (Archive disabled, then stalled).
  */
@@ -85,7 +85,7 @@ export function archiveCloudWorkspace(
   deps: {
     /** The ordinary Sleep; a result whose workspaces did not all sleep stops the archive. */
     sleep: (workspaceId: string) => Promise<readonly { completed: boolean }[] | void>
-    /** ARCHIVE-HOOK: the repo's archive hook, while the VM still runs; false keeps the workspace. */
+    /** The repo's archive hook, while the VM still runs; false keeps the workspace. */
     beforeSleep?: () => Promise<boolean>
     pullRequests?: HostedArchivePullRequest[]
   }

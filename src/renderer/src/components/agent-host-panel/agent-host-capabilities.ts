@@ -1,4 +1,4 @@
-// A16 (agent-accounts spec v4 §4): what the per-host panel shows, hides and disables for each host
+// Agent-accounts spec v4 §4: what the per-host panel shows, hides and disables for each host
 // kind. The layout never changes by kind; kinds only hide rows, disable actions with a stated reason,
 // or add Cloud rows. Every string here is the spec's exact copy.
 import type { Translate } from '@/i18n/use-translate'

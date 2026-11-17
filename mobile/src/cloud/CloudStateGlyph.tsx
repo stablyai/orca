@@ -7,7 +7,7 @@ import type { CloudWorkspaceStatus } from './cloud-control-plane-client'
 import { CloudStatusDot } from './CloudStatusDot'
 
 /** A centred cloud state's mark (MobileStateView iconElement): the Cloud glyph, with the workspace's
- *  state dot when there is one, so the phone's asleep and sign-in screens match the desktop's (DS-38). */
+ *  state dot when there is one, so the phone's asleep and sign-in screens match the desktop's. */
 export function CloudStateGlyph({ status }: { status?: CloudWorkspaceStatus }) {
   useMobileColorScheme()
   return (

@@ -9,7 +9,7 @@ import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { PlanBillingConsoleLink } from './OrcaCloudConsoleLinks'
 
 /** The two parts of Account & billing under their headers; with no billing, just the account. */
-export function AccountBillingLayout({
+function AccountBillingLayout({
   account,
   billing
 }: {
@@ -46,7 +46,7 @@ export function AccountBillingLayout({
 }
 
 /**
- * Neil: Account + Billing is one page in Orca Cloud builds. The account (who's signed in, Sign
+ * Account + Billing is one page in Orca Cloud builds. The account (who's signed in, Sign
  * out) leads; Plan & billing follows for signed-in, billing-enabled accounts, as the plan's status
  * and a link to the web console, where billing is managed. Signed out, the account part already
  * offers sign-in, so billing adds nothing rather than a second sign-in notice.

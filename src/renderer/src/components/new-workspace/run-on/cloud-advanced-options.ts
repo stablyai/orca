@@ -8,7 +8,7 @@
 //   switching Run on to Orca Cloud is not sent.
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 
-export function isOrcaCloudRunOn(recipeId: string | null | undefined): boolean {
+function isOrcaCloudRunOn(recipeId: string | null | undefined): boolean {
   return recipeId === ORCA_CLOUD_RECIPE_ID
 }
 

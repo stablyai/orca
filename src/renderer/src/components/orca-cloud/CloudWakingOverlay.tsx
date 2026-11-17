@@ -20,7 +20,7 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
 export const WAKE_SLOW_S = 10
-export const WAKE_STUCK_S = 60
+const WAKE_STUCK_S = 60
 
 /**
  * A wake that failed on the server for no known reason (an HTTP 5xx or internal_error from Orca
@@ -119,9 +119,9 @@ export function CloudWakingOverlay({
   const stuck = !failed && seconds >= WAKE_STUCK_S
   const retryRef = useRef<HTMLButtonElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  // PAIRED-WAKE-TYPE-THROUGH: while typing goes through to the terminal, the pill never takes focus.
+  // While typing goes through to the terminal, the pill never takes focus.
   // Taking it as the overlay mounted (~0.3 s in) moved the keys typed after the first one onto the
-  // overlay, where they were lost (n53: "e" held, 22 lost).
+  // overlay, where they were lost ("e" held, 22 lost).
   const typingThrough = typeThrough && !failed
   useEffect(() => {
     if (!autoFocus || typingThrough) {

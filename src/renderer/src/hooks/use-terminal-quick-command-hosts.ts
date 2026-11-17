@@ -194,7 +194,7 @@ export function useTerminalQuickCommandHosts(
       ? runtimeEnvironments.find((environment) => environment.id === remoteEnvironmentId)
       : undefined
     // An Orca Cloud workspace runs its commands on its sandbox only: this computer's commands
-    // can't run there, so offering them was a choice that always fails (JA-31).
+    // can't run there, so offering them was a choice that always fails.
     if (remoteHostId && remoteEnvironment && isOrcaCloudRuntimeEnvironment(remoteEnvironment)) {
       const ready =
         remoteState?.supported === true &&

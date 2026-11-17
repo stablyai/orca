@@ -23,7 +23,7 @@ import { createGunzip } from 'node:zlib'
 
 const BLOCK = 512
 
-export type TarExtractResult = {
+type TarExtractResult = {
   files: number
   dirs: number
   bytes: number

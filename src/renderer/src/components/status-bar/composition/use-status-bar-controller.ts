@@ -206,7 +206,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later. Never on
-  // Orca Cloud: sandboxes don't publish agent usage, and "No usage on Orca Cloud" reads as hours (JA-07).
+  // Orca Cloud: sandboxes don't publish agent usage, and "No usage on Orca Cloud" reads as hours.
   const onOrcaCloud = remoteOwner !== null && isOrcaCloudEnvironmentId(remoteOwner.environmentId)
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed && !onOrcaCloud
   const anyFetching =

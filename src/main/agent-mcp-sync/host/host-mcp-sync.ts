@@ -35,7 +35,7 @@ export type HostMcpSyncDeps = {
   resolves?: (hostname: string) => Promise<boolean>
 }
 
-export function syncerLedgerPath(sharedLedger: string, syncer: string): string {
+function syncerLedgerPath(sharedLedger: string, syncer: string): string {
   return sharedLedger.replace(/\.json$/, `-${syncer}.json`)
 }
 
@@ -71,7 +71,7 @@ async function writePrivate(path: string, expected: string | null, text: string)
 
 /** Same lookup and login-shell environment Orca uses to find agent CLIs, so the answer matches
  * what an agent launched here would see. */
-export async function defaultCommandExists(command: string): Promise<boolean> {
+async function defaultCommandExists(command: string): Promise<boolean> {
   const shellEnv = await hostShellEnvironment().catch(() => process.env)
   return (
     (await isCommandOnLocalPath(command, { env: shellEnv })) ||

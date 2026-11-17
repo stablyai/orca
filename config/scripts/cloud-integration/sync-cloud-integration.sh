@@ -9,7 +9,7 @@
 #     Once a PR lands, main brings it; drop it from STACKED. A source force-pushed (rebased) still merges: resolve to
 #     its new structure and never re-add what it removed (see the vercel-driver rebase merge).
 # Never based on stablyai/orca-private (Bots). git rerere replays conflict resolutions made before in this clone.
-# Conflict policy: billing files (cloud/apps/billing, cloud/docs/accounts-billing-design.md, src/main/billing,
+# Conflict policy: billing files (src/main/billing,
 # src/renderer/src/components/billing, src/shared/orca-billing.ts, billing keys in en.json) keep accounts-billing;
 # vercel-driver carries an older billing snapshot. Elsewhere keep both sides.
 #

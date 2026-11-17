@@ -131,7 +131,7 @@ export function PendingWorktreeRow({
         </span>
       </button>
       {isError ? (
-        // REFUSED-CREATE-ROW-STICKY: a failed create keeps its prompt; Retry runs it again from here.
+        // A failed create keeps its prompt; Retry runs it again from here.
         <button
           type="button"
           title={t('auto.components.sidebar.PendingWorktreeRow.retry', 'Retry')}

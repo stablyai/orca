@@ -16,7 +16,7 @@ const CONTROL_PROOF_TIMEOUT_MS = 8_000
 /** How long the health refresh waits for the control socket so it rides that socket, not a new one. */
 const STATUS_RIDES_CONTROL_MS = 3_000
 
-export function controlReadyAt(environmentId: string): number | null {
+function controlReadyAt(environmentId: string): number | null {
   const diagnostics = getRemoteRuntimeSharedControlDiagnostics(environmentId)
   return diagnostics?.state === 'ready' ? diagnostics.lastConnectedAt : null
 }

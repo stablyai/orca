@@ -25,7 +25,7 @@ const notice = (overrides: Partial<OwnerChangeNotice> = {}): OwnerChangeNotice =
   ...overrides
 })
 
-describe('owner change copy (OWNER-TRANSFER)', () => {
+describe('owner change copy', () => {
   it('lists what the change does, in the owner’s words or naming the owner for an admin', () => {
     const own = ownerChangeConsequences(null, t)
     expect(own).toHaveLength(4)

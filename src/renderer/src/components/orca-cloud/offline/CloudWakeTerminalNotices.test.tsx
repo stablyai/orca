@@ -58,7 +58,7 @@ describe('CloudAsleepTerminalNotice', () => {
     expect(divider?.className).toContain('absolute')
   })
 
-  // END-PASS n64 P3: an archived workspace's bar said "asleep" and offered Wake.
+  // An archived workspace's bar once said "asleep" and offered Wake.
   it('says archived and offers Unarchive, not Wake, for an archived workspace', () => {
     const { container } = render(
       <CloudAsleepTerminalNotice
@@ -85,7 +85,7 @@ describe('CloudAsleepTerminalNotice', () => {
 })
 
 describe('CloudWokeProcessesNotice', () => {
-  // WAKE-RERUN (cut 68321452c97c): a shell pane running `sleep 900` woke with no bar.
+  // A shell pane running `sleep 900` once woke with no bar.
   it('a shell pane that was running a silent `sleep 900` wakes to Rerun sleep 900', () => {
     resetWakeProcessHintsForTests()
     const lines = ['ubuntu@ik-wake:~/Hello-World/ik-wake$ sleep 900', '', '']
@@ -148,7 +148,7 @@ describe('CloudWokeProcessesNotice', () => {
     expect(onRerun).toHaveBeenCalledTimes(1)
   })
 
-  // JA-15: an agent pane offers its Restart, never its input box as a command.
+  // An agent pane offers its Restart, never its input box as a command.
   it('offers Restart Claude on an agent pane, with no command shown', () => {
     const onRestart = vi.fn()
     render(

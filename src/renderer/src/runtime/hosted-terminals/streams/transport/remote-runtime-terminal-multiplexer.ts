@@ -27,7 +27,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     reportsPaneVisibility?: boolean
     /** Set by callers that retune cadence via setOutputCadence; absent leaves the capability unadvertised. */
     outputCadence?: TerminalOutputCadence
-    /** N-02: this view holds no local copy of the pane, so the first snapshot carries full history. */
+    /** This view holds no local copy of the pane, so the first snapshot carries full history. */
     historyDepth?: 'full'
     /** Names this pane mount, so the host's full-depth limit counts repeats per mount. */
     historyMountId?: string

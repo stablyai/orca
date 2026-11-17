@@ -1,4 +1,4 @@
-// One action set per cloud workspace, the same on every surface (JA-14): the "Open cloud
+// One action set per cloud workspace, the same on every surface: the "Open cloud
 // workspace…" list's ⋯ menu and the sidebar's context menu both render these groups, in this order:
 // Open, Owner, Lifecycle, Danger. Each surface leaves out only what it already shows elsewhere (the
 // sidebar row *is* the open workspace; the list has no local-only items) and never invents its own.
@@ -15,7 +15,7 @@ export type CloudWorkspaceAction =
   | 'unarchive'
   | 'delete'
 
-export type CloudWorkspaceActionGroup = {
+type CloudWorkspaceActionGroup = {
   id: 'open' | 'owner' | 'lifecycle' | 'danger'
   actions: CloudWorkspaceAction[]
 }

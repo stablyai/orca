@@ -61,7 +61,7 @@ describe('sleepWorkspaces', () => {
   // #36923: a Sleep asked for while the VM wakes keeps its place in the queue and stops what the
   // woken server runs once the wake is done.
 
-  // RA-13b: the window swaps "Keep awake" for "Wake to continue" the moment a reopen can no longer
+  // The window swaps "Keep awake" for "Wake to continue" the moment a reopen can no longer
   // keep the VM up, never on a timer guess.
   it('tells the window when the VM suspend is committed, and only then', async () => {
     const { log, deps: d } = deps()

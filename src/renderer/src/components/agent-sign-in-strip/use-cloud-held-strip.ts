@@ -1,6 +1,6 @@
-// The held-launch strip for one pane key: account recovery (S4-c), "Set up once" (PC-3b), or
+// The held-launch strip for one pane key: account recovery, "Set up once", or
 // #40228's per-workspace gate on an Orca Cloud host. Shared by a terminal pane's strip and a structured
-// chat's (CHAT-BANNERS), so both read the same hold and act the same way.
+// chat's, so both read the same hold and act the same way.
 import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -43,7 +43,7 @@ function openSettings(pane: 'cloud-secrets', sectionId?: string): void {
 
 /**
  * The strip a held launch (or a cloud gate) shows for this pane key; tabHoldKey also reads a hold on
- * the whole tab (RA-1). key: whichever key holds, for releases and abandons.
+ * the whole tab. key: whichever key holds, for releases and abandons.
  */
 export function useCloudHeldStrip(
   paneKey: string,
@@ -71,12 +71,12 @@ export function useCloudHeldStrip(
       ? 'notOffered'
       : 'paused'
   const gateActions = agentSignInCardActions(paneKey)
-  // PC-3b: a launch held because the agent isn't set up runs the one-time setup in the pane.
+  // A launch held because the agent isn't set up runs the one-time setup in the pane.
   const awaiting = hold?.reason === 'awaitingStart' ? (hold.awaiting ?? 'unread') : null
-  // V3-01: a restored hold waiting for Start shares the setup hold's actions (Start, cancel).
+  // A restored hold waiting for Start shares the setup hold's actions (Start, cancel).
   const setupHold = hold?.reason === 'notSetUp' || awaiting !== null
   const setup = accounts.setups[agent]
-  // HELD-STALE-COVERED: the setup just finished here: "is set up · Start" (the account, read fresh).
+  // The setup just finished here: "is set up · Start" (the account, read fresh).
   const shownBeforeRenew =
     awaiting === 'setUp'
       ? cloudAgentSetupStripModel({ agent, setup: accounts.setups[agent], ready: true, t })
@@ -102,7 +102,7 @@ export function useCloudHeldStrip(
               hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
               t
             })
-  // CHAT-RENEW-INPLACE: a launch held on an expired sign-in renews right here (steps 1-4).
+  // A launch held on an expired sign-in renews right here (steps 1-4).
   const renewing = hold?.reason === 'accountExpired'
   const model = renewing
     ? cloudRenewInPlaceModel({ agent, expired: shownBeforeRenew, setup, t })
@@ -126,7 +126,7 @@ export function useCloudHeldStrip(
     : null
   const gateOrRecovery: CloudStripActions = {
     primary: (action) => {
-      // RA-11's restart belongs to the running-pane strip; a held launch never offers it.
+      // Restart belongs to the running-pane strip; a held launch never offers it.
       if (
         action.kind === 'restart' ||
         action.kind === 'setUpOnce' ||

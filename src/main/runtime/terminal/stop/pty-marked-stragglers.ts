@@ -1,6 +1,6 @@
 // Every process a PTY starts inherits ORCA_PTY_SESSION_ID=<that PTY's id> (spawn-environment.ts), and keeps it
 // through setsid, launcher wrappers and grandchildren. Killing the PTY's session can miss a process that left
-// the session (RA-ORPH: a create-launched Claude survived its pane's Restart). After an exact stop, anything
+// the session (a create-launched Claude survived its pane's Restart). After an exact stop, anything
 // still carrying this PTY's id is killed by process group, and the stop only counts as verified when nothing
 // with the id is left. Only exact matches of this PTY's id are touched, so a sibling pane's agent (its own
 // id) is never signalled. Linux only (cloud sandboxes); elsewhere this is a no-op.
@@ -9,7 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export const ORCA_PTY_SESSION_ENV = 'ORCA_PTY_SESSION_ID'
 
-export type MarkedProcess = { pid: number; pgid: number }
+type MarkedProcess = { pid: number; pgid: number }
 
 export type StragglerDeps = {
   platform?: NodeJS.Platform

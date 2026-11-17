@@ -161,7 +161,6 @@ export function createCloudWorkspacesService(deps: {
   }
 
   return {
-    available: true as const,
     list: async (query: CloudWorkspaceListQuery): Promise<CloudWorkspaceListResult> => {
       let routineRuns: CloudWorkspaceRoutineRuns | undefined
       const result = await wrap(async () => {
@@ -214,9 +213,9 @@ export function createCloudWorkspacesService(deps: {
       wrap(() => client.changeOwner(id, ownerUserId)),
     ownerNotices: () => wrap(() => client.ownerNotices()),
     dismissOwnerNotice: (id: string) => wrap(() => client.dismissOwnerNotice(id)),
-    localWorkspaces: () => localWorkspaces(),
+    localWorkspaces,
     sleep: (id: string) => wrap(() => client.sleep(id)),
-    /** PAIRED-WAKE: wake a workspace this desktop paired with (no local VM record to resume). */
+    /** Wake a workspace this desktop paired with (no local VM record to resume). */
     wake: (id: string) => wrap(async () => void (await client.wake(id))),
     destroy: (id: string) => wrap(() => client.destroy(id)),
 

@@ -5,8 +5,6 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import { cloudApiError, type CloudRequestIntent } from './cloud-api-errors'
 import { jsonFields, type CloudCredentials } from './cloud-credentials'
 
-export { cloudApiError, type CloudApiErrorBody } from './cloud-api-errors'
-
 export type CloudFetch = (input: string, init: RequestInit) => Promise<Response>
 
 const DEFAULT_TIMEOUT_MS = 60_000

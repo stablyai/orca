@@ -1,5 +1,5 @@
 // The setup panel's rows for the composer: billing access (account, trial or plan), the GitHub
-// repository check (D1–D3) and the agent row, or the setup session's own rows once one is open.
+// repository check and the agent row, or the setup session's own rows once one is open.
 import { useEffect, useMemo, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -23,7 +23,7 @@ import { noteComposerAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-ag
 import { toGitHubSetupStep } from './cloud-start-github-step'
 
 /** Composer-only wording on derived rows: the Agent row (G) from the Orca account's agent setup. */
-export function decorateCloudSetupSteps(
+function decorateCloudSetupSteps(
   steps: readonly CloudSetupStep[],
   agentRow: OrcaCloudAgentSetupRowModel
 ): CloudSetupStep[] {
@@ -57,7 +57,7 @@ export function useCloudStartSteps({
   agent: string | null
   cloudSelected: boolean
   setupSessionId: string | null
-  /** A cloud-only repository listed from the team's installations: its GitHub row is done (D4). */
+  /** A cloud-only repository listed from the team's installations: its GitHub row is done. */
   githubOverride?: CloudSetupStep | null
   /** A repository that was waiting on GitHub (install or an owner's approval) became reachable. */
   onGranted?: (repoName: string) => void

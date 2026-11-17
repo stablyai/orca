@@ -24,7 +24,7 @@ const t: Translate = (_key, fallback, params) => {
   return fallback.replace('{{seconds}}', seconds)
 }
 
-it('hints from this computer’s own end-to-end starts per kind, rolling, once there are enough (JA-11)', () => {
+it('hints from this computer’s own end-to-end starts per kind, rolling, once there are enough', () => {
   for (const [index, ms] of [6100, 5200, 7000, 6400].entries()) {
     recordCloudStartSample(`c${index}`, 'clone', ms)
   }
@@ -66,7 +66,7 @@ const rowText = (step: VmBuildStep, timing: { p50Ms: number; p95Ms: number } | n
     </ol>
   ).container.textContent
 
-it('warns only past the measured p95, or past 30 s with no measurement (JA-11)', () => {
+it('warns only past the measured p95, or past 30 s with no measurement', () => {
   expect(rowText(running(7000), null)).not.toContain('Taking longer')
   cleanup()
   expect(rowText(running(31_000), null)).toContain('Taking longer than usual')

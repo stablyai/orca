@@ -9,7 +9,7 @@ import {
 import { CloudWokeProcessesNotice } from './CloudWokeProcessesNotice'
 
 /**
- * The woke-up strip on an agent pane (RA-WAKE): nothing while the host relaunches the agent, gone
+ * The woke-up strip on an agent pane: nothing while the host relaunches the agent, gone
  * for good once it has; "Restart <agent>" only if, after the grace, the pane sits at a bare shell.
  */
 export function CloudWokeAgentNotice({
@@ -32,7 +32,9 @@ export function CloudWokeAgentNotice({
   onRestart: () => void
   onDismiss: () => void
 }): React.JSX.Element | null {
-  const evidenceAt = useAppStore((state) => agentEvidenceAt(state.agentStatusByPaneKey.get(paneKey)))
+  const evidenceAt = useAppStore((state) =>
+    agentEvidenceAt(state.agentStatusByPaneKey.get(paneKey))
+  )
   // Mounted once the workspace is live again; the grace and the watch count from here.
   const [sinceLiveMs, setSinceLiveMs] = useState(0)
   useEffect(() => {

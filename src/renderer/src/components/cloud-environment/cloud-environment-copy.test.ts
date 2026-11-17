@@ -153,7 +153,7 @@ describe('build failure copy', () => {
     expect(buildErrorCopy(null, t)).toBeNull()
   })
 
-  it('says a secret left on disk is why the environment was not saved (SEC-2)', () => {
+  it('says a secret left on disk is why the environment was not saved', () => {
     expect(buildErrorCopy('secret_in_image', t)).toBe(
       'The install script left a secret on disk, so the environment wasn’t saved. Remove it before the script ends, then save again.'
     )

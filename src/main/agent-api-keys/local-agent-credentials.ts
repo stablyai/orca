@@ -35,7 +35,7 @@ export type LocalAgentKey = {
 }
 
 /** A sign-in that stays on this computer; the user signs in on the workspace instead. */
-export type LocalAgentSignIn = {
+type LocalAgentSignIn = {
   agent: 'opencode' | 'gemini'
   /** Provider (OpenCode) or method (Gemini) the sign-in is for. */
   provider: string

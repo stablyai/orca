@@ -8,7 +8,7 @@ import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { isActivePlan } from './plan-billing-format'
 
-export type BillingSummary = {
+type BillingSummary = {
   /** null until the first read answers (or when billing is off for this build/account). */
   subscribed: boolean | null
   canManageBilling: boolean
@@ -213,7 +213,7 @@ export function getBillingState(): BillingStoreState {
   return state
 }
 
-export function subscribeBillingState(listener: () => void): () => void {
+function subscribeBillingState(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }

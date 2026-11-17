@@ -22,7 +22,7 @@ type Attachment = {
   closed: boolean
 }
 
-export type LocalCommandAttachmentsDeps = {
+type LocalCommandAttachmentsDeps = {
   subscribe: (
     environmentId: string,
     onEvent: (event: unknown) => void,

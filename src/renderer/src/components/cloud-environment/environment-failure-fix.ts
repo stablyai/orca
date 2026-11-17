@@ -1,4 +1,4 @@
-// DS-40: what a failed environment build's summary offers besides Try again. Install-script
+// What a failed environment build's summary offers besides Try again. Install-script
 // failures and clone failures caused by repo contents go to an agent in a cloud workspace on the last
 // good build; a clone that couldn't reach the repo goes to GitHub (an agent can't grant access).
 import { toast } from 'sonner'
@@ -12,7 +12,7 @@ import type { EnvironmentBuildView, EnvironmentView } from './cloud-environment-
 /** The prompt carries this much of the visible log (it is redacted and capped again downstream). */
 const LOG_TAIL_LINES = 80
 
-export type EnvironmentFailureFix = {
+type EnvironmentFailureFix = {
   onFixWithAgent: (() => void) | null
   onGiveAccess: (() => void) | null
 }

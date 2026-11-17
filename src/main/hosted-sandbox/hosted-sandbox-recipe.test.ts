@@ -93,7 +93,7 @@ describe('Orca Cloud built-in recipe steps', () => {
     'overage_cap_reached',
     'payment_past_due'
   ] as const)(
-    'JA-21: a %s refusal creates no sandbox, so a blocked create uses no hours',
+    'a %s refusal creates no sandbox, so a blocked create uses no hours',
     async (reason) => {
       const { plane, step } = setup()
       plane.denyNextStart(reason)

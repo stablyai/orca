@@ -2,7 +2,9 @@ import type {
   AgentConfigSyncStatus,
   CloudAgentConfigSyncPreferences
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
+import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 
 export const MAX_EXCLUDED = 1024
 
@@ -15,7 +17,7 @@ export const DEFAULT_PREFERENCES: CloudAgentConfigSyncPreferences = {
   optedIn: []
 }
 
-export class RuntimeCallError extends Error {
+class RuntimeCallError extends Error {
   constructor(
     message: string,
     readonly code: string | undefined
@@ -24,6 +26,36 @@ export class RuntimeCallError extends Error {
   }
 }
 
+/** One call to the workspace host; a host error throws with its code, for `errorCode`. */
+export async function callCloudHost(
+  userDataPath: string,
+  environmentId: string,
+  method: string,
+  params: unknown,
+  timeoutMs: number
+): Promise<unknown> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    method,
+    params,
+    timeoutMs
+  )
+  if (response.ok) {
+    return response.result
+  }
+  throw new RuntimeCallError(response.error.message, response.error.code)
+}
+
+/** The workspace's runtime record, only when it is an Orca Cloud workspace. */
+export function findCloudRuntime(userDataPath: string, environmentId: string) {
+  return listEphemeralVmRuntimes(userDataPath).find(
+    (runtime) =>
+      runtime.runtimeEnvironmentId === environmentId && runtime.recipe?.provider === 'orca-cloud'
+  )
+}
+
+/** Shared by the skills and MCP syncs: both statuses report the same three failures. */
 export function errorCode(error: unknown): AgentConfigSyncStatus['error'] {
   const code =
     typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''

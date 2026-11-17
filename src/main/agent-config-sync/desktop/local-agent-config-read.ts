@@ -34,7 +34,7 @@ export type LocalAgentConfigItem = {
   skipReason?: Extract<AgentConfigSkipReason, 'in-repo' | 'too-large' | 'secret' | 'invalid'>
 }
 
-export type LocalAgentConfigReadDeps = {
+type LocalAgentConfigReadDeps = {
   homes: AgentConfigHomes
   /** The workspace's checkout on this computer, for project items. */
   repoPath: string | null

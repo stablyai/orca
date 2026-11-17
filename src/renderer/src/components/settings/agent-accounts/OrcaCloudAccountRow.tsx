@@ -1,4 +1,4 @@
-// One S0 row per agent: picks the state's row and keeps the row's own Remove / save-error state.
+// One Cloud agent sign-ins row per agent: picks the state's row and keeps the row's own Remove / save-error state.
 import type React from 'react'
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -71,7 +71,7 @@ export function AccountRow({
           }
         >
           <div className="-ml-2.5 mt-1 flex flex-wrap items-center gap-x-1">
-            {/* The paste path stays reachable without the browser (RA-5), as a real action (JA-23). */}
+            {/* The paste path stays reachable without the browser, as a real action. */}
             {agent === 'claude' ? (
               <Button type="button" variant="ghost" size="sm" onClick={actions.usePaste}>
                 {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}

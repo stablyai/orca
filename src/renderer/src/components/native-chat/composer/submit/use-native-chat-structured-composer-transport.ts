@@ -103,7 +103,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   reveal: { revealLatest: () => void; captureRevealLatest: () => () => void }
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
-  /** END-PASS CHAT-RENEW: the empty field's placeholder while Send is held (typing stays open). */
+  /** The empty field's placeholder while Send is held (typing stays open). */
   heldHint?: string
 }): NativeChatStructuredComposerTransport {
   const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =

@@ -10,14 +10,14 @@ import { agentConfigPutBatches, type DesiredAgentConfigItem } from './agent-conf
 const PLAN_TIMEOUT_MS = 30_000
 const PUT_TIMEOUT_MS = 60_000
 
-export type AgentConfigHostCall = (
+type AgentConfigHostCall = (
   environmentId: string,
   method: string,
   params: unknown,
   timeoutMs: number
 ) => Promise<unknown>
 
-export type AgentConfigExchange = {
+type AgentConfigExchange = {
   plan: AgentConfigSyncPlanResult
   put: AgentConfigSyncPutResult['items']
   sent: number

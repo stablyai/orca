@@ -18,9 +18,9 @@ import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import { useAppStore } from '@/store'
 
-export type CloudToastPriority = 'action' | 'warning' | 'info'
+type CloudToastPriority = 'action' | 'warning' | 'info'
 
-export type CloudToastAction = {
+type CloudToastAction = {
   label: string
   onClick: () => void
   /** The next required step: a single primary button. Everything else is outline. */
@@ -29,7 +29,7 @@ export type CloudToastAction = {
   pending?: boolean
 }
 
-export type CloudToastLine = {
+type CloudToastLine = {
   /** Stable per line inside one toast (a toast may hold several lines). */
   key: string
   text: string
@@ -46,11 +46,11 @@ export type CloudToastView = {
   label?: string
 }
 
-/** A toast about one workspace shows only while that workspace is on screen (N-03). */
-export type CloudToastScope = { workspaceId: string }
+/** A toast about one workspace shows only while that workspace is on screen. */
+type CloudToastScope = { workspaceId: string }
 
 /** What decides visibility: the app's view and its active workspace. */
-export type CloudToastContext = { activeView: string; activeWorktreeId: string | null }
+type CloudToastContext = { activeView: string; activeWorktreeId: string | null }
 
 type Entry = {
   view: CloudToastView
@@ -88,7 +88,7 @@ function emit(): void {
   }
 }
 
-/** Never over Settings or any other page; a scoped toast only in its own workspace (N-03). */
+/** Never over Settings or any other page; a scoped toast only in its own workspace. */
 function isVisible(entry: Entry): boolean {
   if (context.activeView !== 'terminal') {
     return false
@@ -274,14 +274,10 @@ export function hideCloudToast(logicalId: string): void {
 }
 
 /** The user closed it with ×: down, and its owner is told (by logical id). */
-export function dismissCloudToastByUser(logicalId: string): void {
+function dismissCloudToastByUser(logicalId: string): void {
   const onDismiss = entries.get(logicalId)?.onDismiss
   hideCloudToast(logicalId)
   onDismiss?.()
-}
-
-export function isCloudToastShown(logicalId: string): boolean {
-  return entries.has(logicalId)
 }
 
 /** Test seam: the internal sonner id a logical toast currently uses. */
@@ -354,7 +350,7 @@ export function CloudToastCard({
       aria-hidden={quiet || undefined}
       aria-label={!single ? view.label : undefined}
       role={single ? undefined : 'group'}
-      // GA-P3t: the severity look, so a notice never blends into a white pane under it.
+      // The severity look, so a notice never blends into a white pane under it.
       className={cn(
         'w-[var(--width,356px)] max-w-full rounded-lg border font-sans text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)]',
         BANNER_TONE[warning ? 'warning' : 'info'].surface,

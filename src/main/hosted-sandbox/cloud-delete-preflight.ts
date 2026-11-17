@@ -1,14 +1,16 @@
 // Before Delete removes an Orca Cloud workspace's row, prove the signed-in identity can reach its
 // sandbox. A row removed first and a destroy that then fails leaves a billed VM nobody can see.
-import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import {
+  ephemeralVmFailure,
+  type EphemeralVmFailure
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
-import { cloudSandboxesByEnvironment } from './hosted-remote-desktop'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 
 /**
  * `asleep`: no running server to remove its checkout; destroying the sandbox takes the disk.
  * `gone`: Orca Cloud already destroyed it (or it never started); only the row is left.
- * `unreachable` (EP-8): running, but this computer can't reach its server (its pairing was revoked,
+ * `unreachable`: running, but this computer can't reach its server (its pairing was revoked,
  * e.g. by an owner change, or it doesn't answer). Like asleep: Delete goes through Orca Cloud.
  */
 export type CloudDeletePreflight =
@@ -16,20 +18,13 @@ export type CloudDeletePreflight =
   | ({ ok: false } & EphemeralVmFailure)
 
 /** Can this computer reach the workspace's server right now? A short probe, never a wake. */
-export type CloudServerProbe = () => Promise<'ok' | 'rejected' | 'no_answer'>
+type CloudServerProbe = () => Promise<'ok' | 'rejected' | 'no_answer'>
 
 const ASLEEP_STATUSES = new Set(['suspending', 'suspended', 'archived'])
 const GONE_STATUSES = new Set(['destroying', 'destroyed', 'failed'])
 
-export function cloudSandboxIdForEnvironment(
-  userDataPath: string,
-  runtimeEnvironmentId: string
-): string | undefined {
-  return cloudSandboxesByEnvironment(userDataPath).get(runtimeEnvironmentId)
-}
-
 export async function preflightCloudWorkspaceDelete(
-  sandboxId: string | undefined,
+  sandboxId: string | null,
   client: Pick<HostedSandboxControlPlaneClient, 'get'> | null,
   probe?: CloudServerProbe
 ): Promise<CloudDeletePreflight> {

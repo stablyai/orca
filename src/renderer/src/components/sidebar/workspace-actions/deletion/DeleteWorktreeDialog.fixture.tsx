@@ -70,7 +70,7 @@ export const alwaysDeleteMenu = dialogFixture(dirtyEntries, () => {
     ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
 })
 
-/** An Orca Cloud workspace: sandbox + disk copy, Archive instead, no Force step (DS-07). */
+/** An Orca Cloud workspace: sandbox + disk copy, Archive instead, no Force step. */
 export const cloudWorkspace = defineFixture({
   width: 640,
   store: {

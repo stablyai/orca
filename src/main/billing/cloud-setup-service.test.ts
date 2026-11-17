@@ -121,7 +121,7 @@ describe('cloud setup service', () => {
       cloudSetupStartArgsFromUnknown({ needs: ['team'], repo: 'https://gitlab.com/a/b' })
     ).toThrow()
     expect(() => cloudSetupStartArgsFromUnknown({ needs: ['bogus'] })).toThrow()
-    // COPY-LINK-FIRST-CLICK: Copy link starts setup without the browser.
+    // Copy link starts setup without the browser.
     expect(cloudSetupStartArgsFromUnknown({ needs: ['plan'], openBrowser: false })).toEqual({
       needs: ['plan'],
       openBrowser: false

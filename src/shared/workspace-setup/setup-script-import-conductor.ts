@@ -35,7 +35,7 @@ export async function inspectConductorConfig(
 }
 
 /**
- * PARITY-DNF: Conductor's cloud runs Amazon Linux, Orca's sandboxes Ubuntu. The setup's own dnf/yum
+ * Conductor's cloud runs Amazon Linux, Orca's sandboxes Ubuntu. The setup's own dnf/yum
  * install lines become apt-get where every package maps clearly; a script file it runs is only read
  * (never changed or run) to list the lines that still use dnf.
  */

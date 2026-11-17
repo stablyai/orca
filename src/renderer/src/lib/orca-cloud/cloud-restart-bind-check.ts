@@ -1,4 +1,4 @@
-// RA-11 resume race: after a cloud Restart reconnects, the pane must sit on the terminal the resume
+// Resume race: after a cloud Restart reconnects, the pane must sit on the terminal the resume
 // ensured. Anything else is the leaf's original launch (a new conversation), which the strip reports.
 import { useAppStore } from '@/store'
 import {

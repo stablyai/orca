@@ -29,7 +29,7 @@ function makeHeadlessRestorable(terminal: HeadlessTerminal): Terminal {
 }
 
 describe('scroll state', () => {
-  // WAKE-SCROLLBACK-SCROLL: a remount's first fit captures "at bottom" while the pane can't render
+  // A remount's first fit captures "at bottom" while the pane can't render
   // yet and waits; the person's place, set after it, must not be undone when that restore resumes.
   async function heldBottomRestore() {
     const frames: FrameRequestCallback[] = []

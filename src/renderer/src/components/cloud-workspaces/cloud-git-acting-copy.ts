@@ -1,4 +1,4 @@
-// GH-ACTING-LINE: who a cloud workspace's pushes and PRs go out as right now, in words. The control
+// Who a cloud workspace's pushes and PRs go out as right now, in words. The control
 // plane decides (its owner, else Orca's bot) and says so in the workspace's `githubActing`; this only
 // puts it into words. Nothing when it's absent (an older control plane, a row the caller can't open),
 // or for `off` / `not_github`.
@@ -7,7 +7,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 
 export type CloudGitActing = Pick<CloudWorkspace, 'githubActing' | 'you'>
 
-export type GitActingLine = {
+type GitActingLine = {
   text: string
   /** It falls back to Orca's bot and the viewer hasn't connected GitHub: offer Connect GitHub. */
   connect: boolean

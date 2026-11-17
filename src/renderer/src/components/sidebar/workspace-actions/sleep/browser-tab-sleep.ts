@@ -1,4 +1,4 @@
-// Sleep never changes a workspace's tab layout (NEW-01). Its browser tabs stay where they are, in
+// Sleep never changes a workspace's tab layout. Its browser tabs stay where they are, in
 // the same order with the same active tab; only their pages are dropped to free memory, and the
 // workspace's tabs are marked asleep so they no longer count as activity (an asleep workspace still
 // reads as asleep and hides with "Hide sleeping"). Opening the workspace again wakes them: each
@@ -56,7 +56,7 @@ const reopenAfterSleep = new Set<string>()
 /**
  * A slept page still owed a new host page. It stays owed until a host page answers for it again
  * (a new one opened, or the old one still there), however many times "missing" is reported on
- * the way: a wake that races the suspend reports it while the VM is still going down (LC2-P1).
+ * the way: a wake that races the suspend reports it while the VM is still going down.
  */
 export function isAwaitingReopenAfterSleep(browserPageId: string): boolean {
   return reopenAfterSleep.has(browserPageId)
@@ -89,7 +89,7 @@ type SandboxState = {
 }
 
 /** This window's view of a sleep in flight for one workspace (workspace-sleep-follower). */
-export type SleepInFlight = {
+type SleepInFlight = {
   /** Sleep started and has not ended (also while the user presses Wake to continue). */
   sleepIntent: boolean
   goingToSleep: boolean
@@ -128,7 +128,7 @@ export function isBrowserSandboxUp(
   )
 }
 
-/** What a pane does when its host page is reported missing (NEW-01, LC2-P1). */
+/** What a pane does when its host page is reported missing. */
 export function missingRemotePageAction(args: {
   awaitingReopen: boolean
   asleep: boolean

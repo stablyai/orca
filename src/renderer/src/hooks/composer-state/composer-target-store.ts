@@ -130,7 +130,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const eligibleRepos = useMemo(() => getNewWorkspaceDialogEligibleRepos(repos), [repos])
 
-  // STALE-RUN-TARGET: another team's cloud workspace isn't a place to run (same rule as the sidebar).
+  // Another team's cloud workspace isn't a place to run (same rule as the sidebar).
   const hiddenCloudHostIds = useAppStore(selectOrcaCloudHiddenHostIds)
 
   const hostOptions = useMemo(

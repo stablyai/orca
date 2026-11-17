@@ -18,8 +18,6 @@ import { DEFAULT_ARCHIVE_TTL_DAYS } from './archive-snapshot-copy'
 import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
 import { BulletList, CloudMovePartialResult, useFocusOnStage } from './cloud-move-parts'
 
-export { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
-
 export type CloudMoveConflicts = {
   /** The cloud branch is already checked out here: the move gets this new name instead. */
   branchCheckedOutLocally: { branch: string; newName: string } | null

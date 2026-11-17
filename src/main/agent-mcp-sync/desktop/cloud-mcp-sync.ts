@@ -8,9 +8,7 @@ import {
 } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
 import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 import { applyMcpSyncResult, planMcpSync } from '../../../shared/agent-mcp-sync/mcp-sync-plan'
-import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import type { CloudMcpSyncPreferences } from '../../../shared/agent-mcp-sync/mcp-sync-preferences'
 import { mcpEgressHostsOf } from '../../../shared/agent-mcp-sync/mcp-egress-hosts'
 import { environmentHandleFromRecipeResult } from '../../environment-providers/environment-provider-recipe-adapter'
@@ -18,17 +16,21 @@ import { HOSTED_SANDBOX_DRIVER_ID } from '../../hosted-sandbox/hosted-sandbox-dr
 import { readLocalMcpConfig, type LocalMcpConfig } from './local-mcp-config-read'
 import type { CloudMcpEgress } from './cloud-mcp-egress'
 import { readOrCreateSyncerId } from '../../agent-config-sync/desktop/syncer-id'
+import {
+  callCloudHost,
+  errorCode,
+  findCloudRuntime
+} from '../../agent-config-sync/desktop/cloud-agent-config-sync-support'
 
 const SYNC_TIMEOUT_MS = 30_000
 const MAX_EXCLUDED = 512
 
-export type { CloudMcpSyncPreferences }
 
 // Off until the user syncs once by hand: MCP entries often carry tokens (env, headers), so nothing
 // leaves this computer for a cloud sandbox without that first explicit Sync.
 const DEFAULT_PREFERENCES: CloudMcpSyncPreferences = { autoSync: false, excluded: [] }
 
-export type CloudMcpSyncDeps = {
+type CloudMcpSyncDeps = {
   userDataPath: string
   broadcast: (status: McpSyncStatus) => void
   readLocal?: (repoPath: string | null) => Promise<LocalMcpConfig>
@@ -48,24 +50,6 @@ export type CloudMcpSync = {
   setServerIncluded(key: string, included: boolean): CloudMcpSyncPreferences
 }
 
-class RuntimeCallError extends Error {
-  constructor(
-    message: string,
-    readonly code: string | undefined
-  ) {
-    super(message)
-  }
-}
-
-function errorCode(error: unknown): McpSyncStatus['error'] {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
-  if (code === 'method_not_found') {
-    return 'host-outdated'
-  }
-  return /unavailable|timeout|unreachable/.test(code) ? 'host-unreachable' : 'failed'
-}
-
 /** Mirrors this computer's MCP servers into each Orca Cloud workspace's agent configs. */
 export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
   const preferencesPath = join(deps.userDataPath, 'cloud-mcp-sync.json')
@@ -75,19 +59,14 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
   const readLocal = deps.readLocal ?? ((repoPath) => readLocalMcpConfig(repoPath))
   const call =
     deps.call ??
-    (async (environmentId: string, params: unknown) => {
-      const response = await callRuntimeEnvironment(
+    ((environmentId: string, params: unknown) =>
+      callCloudHost(
         deps.userDataPath,
         environmentId,
         AGENT_MCP_SYNC_METHOD,
         params,
         SYNC_TIMEOUT_MS
-      )
-      if (response.ok) {
-        return response.result
-      }
-      throw new RuntimeCallError(response.error.message, response.error.code)
-    })
+      ))
 
   let preferences: CloudMcpSyncPreferences | null = null
   function getPreferences(): CloudMcpSyncPreferences {
@@ -111,10 +90,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
   }
 
   function cloudRuntime(environmentId: string) {
-    return listEphemeralVmRuntimes(deps.userDataPath).find(
-      (runtime) =>
-        runtime.runtimeEnvironmentId === environmentId && runtime.recipe?.provider === 'orca-cloud'
-    )
+    return findCloudRuntime(deps.userDataPath, environmentId)
   }
 
   function sandboxIdOf(environmentId: string): string | null {

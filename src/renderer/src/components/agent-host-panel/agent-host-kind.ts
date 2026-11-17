@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AgentHostAvailability, AgentHostKind } from './agent-host-capabilities'
 
-export type AgentHostEnvironmentFacts = {
+type AgentHostEnvironmentFacts = {
   name?: string | null
   source?: RuntimeEnvironmentSource
   orcadDeployment?: OrcadDeploymentLink | null
@@ -47,7 +47,7 @@ export function agentHostAvailability(
   kind: AgentHostKind,
   facts: {
     health: ExecutionHostHealth
-    /** WSL: the distro is stopped (never started to probe, Q12). */
+    /** WSL: the distro is stopped (never started to probe). */
     wslStopped?: boolean
     /** Orca Cloud: from the control plane's view of the workspace, never the sandbox. */
     cloud?: { asleep: boolean; archived: boolean } | null

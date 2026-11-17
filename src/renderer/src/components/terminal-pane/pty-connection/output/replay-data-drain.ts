@@ -122,7 +122,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       let preSleep: WakeScrollbackRestore | null = null
       let paneCopyKept = false
       if (clearBeforeReplay) {
-        // WAKE-SCROLLBACK: a resubscribe keeps only the host's 1000 rows; keep the fuller copy first
+        // A resubscribe keeps only the host's 1000 rows; keep the fuller copy first
         // in case a sleep nobody clicked here follows (a teammate, idle auto-sleep).
         const keptBeforeReplay = noteBeforeCloudReplay(
           session.pane.leafId,
@@ -197,7 +197,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!isCurrentPayload()) {
         continue
       }
-      // N-02: a shallower replay of the same terminal never shrinks the pane's history.
+      // A shallower replay of the same terminal never shrinks the pane's history.
       if (!preSleep && paneCopyKept) {
         await keepDeeperHistoryAfterReplay(
           session.pane.leafId,

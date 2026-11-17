@@ -1,5 +1,6 @@
-// Wires S3 to the renderer's host list and the per-host sign-in probes. Rows open the A16 panel.
-// No Orca Cloud row (JA-04): the page's own Orca Cloud part right below is the one place for it.
+// Wires "Sign-ins by host" to the renderer's host list and the per-host sign-in probes. Rows open
+// the host's agent accounts panel.
+// No Orca Cloud row: the page's own Orca Cloud part right below is the one place for it.
 import React, { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'

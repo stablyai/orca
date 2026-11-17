@@ -1,9 +1,9 @@
-// "Start in Orca Cloud" for a repository with no clone here (cloud-start D4): the sandbox clones it
+// "Start in Orca Cloud" for a repository with no clone here: the sandbox clones it
 // from GitHub, this computer pairs to it like any cloud workspace, and the chosen agent starts there
-// with no prompt (the composer's name field only names the workspace, CLOUD-ONLY-NAME-AS-PROMPT).
+// with no prompt (the composer's name field only names the workspace).
 // Nothing is written to this computer's disk.
 //
-// GH-CREATE-SHEET: it shows the same build sheet as an Orca Cloud create from a local clone: Start
+// It shows the same build sheet as an Orca Cloud create from a local clone: Start
 // sandbox, Clone repository (git's progress), Open workspace, with the same failure cards, billing
 // blocker, Retry and Back to draft. The sheet is a pending creation like any other; this module
 // runs it instead of the worktree create.
@@ -53,7 +53,7 @@ export function githubCreateRequest(request: StartFromGitHubRequest): WorktreeCr
   const repoName = request.fullName.split('/').pop() ?? request.fullName
   return {
     repoId: '',
-    // The composer's name field is the workspace's name (NAME-DROPPED); the repository's otherwise.
+    // The composer's name field is the workspace's name; the repository's otherwise.
     name: name.slice(0, 120) || repoName,
     displayName: name.slice(0, 120) || repoName,
     displayNameKind: name ? 'user' : 'generated',
@@ -62,7 +62,7 @@ export function githubCreateRequest(request: StartFromGitHubRequest): WorktreeCr
     pendingFirstAgentMessageRename: false,
     note: '',
     startupPlan: null,
-    // CLOUD-ONLY-NAME-AS-PROMPT: the name is not a prompt; this create has none.
+    // The name is not a prompt; this create has none.
     quickPrompt: '',
     quickTelemetry: null,
     telemetrySource: 'unknown',
@@ -169,7 +169,7 @@ async function startSandbox(creationId: string): Promise<string | null> {
         idempotencyKey: githubCreateIdempotencyKey(creationId)
       })
       .catch(() => null),
-    // EP-5: a cancel whose sandbox the control plane didn't confirm deleted is not "Sandbox deleted".
+    // A cancel whose sandbox the control plane didn't confirm deleted is not "Sandbox deleted".
     (result) => result?.ok !== false || result.reason !== CANCEL_CLEANUP_UNCONFIRMED
   ).finally(() => unsubscribe?.())
   if (created && !created.ok && created.reason === CANCEL_CLEANUP_UNCONFIRMED) {
@@ -205,7 +205,7 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
     return false
   }
   if (!startedSandboxes.has(creationId)) {
-    // CREATE-GH-STEP: asked alongside Start sandbox, so it adds nothing when access is fine.
+    // The GitHub access step: asked alongside Start sandbox, so it adds nothing when access is fine.
     beginCloudCreateGitHubAccess(creationId, source.repoUrl)
   }
   const sandboxId = startedSandboxes.get(creationId) ?? (await startSandbox(creationId))
@@ -215,7 +215,7 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   // Held before Open workspace while the GitHub step asks for access.
   const github = await gateCloudCreateOnGitHubAccess(creationId)
   if (!current(creationId) || !github.proceed) {
-    // GH-CREATE-CANCEL: cancelled after the sandbox started but before it opened.
+    // Cancelled after the sandbox started but before it opened.
     await discardSandbox(creationId, sandboxId)
     return false
   }
@@ -229,7 +229,7 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
     ? await openCloudWorkspace(workspace.value, {
         // Its pending row shows the open's progress and failure (no open toasts).
         feedback: false,
-        // GH-CREATE-NO-ROW: that server's rows wait behind the pending row until the hand-off.
+        // That server's rows wait behind the pending row until the hand-off.
         onHost: (hostId) =>
           useAppStore
             .getState()
@@ -237,7 +237,7 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
       })
     : null
   if (!current(creationId)) {
-    // GH-CREATE-CANCEL: cancelled while it opened. Opening can't be stopped half way, so the
+    // Cancelled while it opened. Opening can't be stopped half way, so the
     // sandbox is deleted, which also drops this computer's pairing and its row.
     await discardSandbox(creationId, sandboxId)
     return false
@@ -257,9 +257,9 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   forgetGitHubCreateKey(creationId)
   // Opened: the workspace replaces the sheet. Nothing to clean up, the sandbox is the workspace.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  // PAIRED-HELD-STRIPS (#568): the chosen agent starts even with no prompt, once the workspace
+  // The chosen agent starts even with no prompt, once the workspace
   // lists its first worktree and is confirmed Orca Cloud (so its launch holds when it can't run).
-  // CLOUD-ONLY-NAME-AS-PROMPT: no prompt; Blank terminal (no agent) starts nothing.
+  // No prompt; Blank terminal (no agent) starts nothing.
   void launchFirstCloudAgent({
     fullName: source.fullName,
     agent: request.agent,
@@ -278,7 +278,7 @@ async function discardSandbox(creationId: string, sandboxId: string): Promise<vo
       .destroy(sandboxId)
       .then((result) => result.ok)
       .catch(() => false)
-  // EP-5: the cancel's toast waits for this delete and says "deleted" only if it went through.
+  // The cancel's toast waits for this delete and says "deleted" only if it went through.
   const ok = await trackOrcaCloudCreateStep(creationId, destroy(), (deleted) => deleted)
   if (!ok) {
     console.warn('[orca-cloud] cancelled GitHub create: could not delete sandbox', sandboxId)

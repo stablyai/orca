@@ -4,7 +4,7 @@ import { CloudWorkspaceSchema } from './cloud-workspaces-wire'
 const acting = CloudWorkspaceSchema.shape.githubActing
 const you = CloudWorkspaceSchema.shape.you
 
-describe('GIT-ACTOR wire fields', () => {
+describe('wire fields', () => {
   it('parses member and bot, and tolerates older or newer control planes', () => {
     // `until` (the retired shared-workspace window) still parses and is dropped.
     expect(acting.parse({ actingAs: 'member', userId: 'u1', login: 'ada', until: 5 })).toEqual({

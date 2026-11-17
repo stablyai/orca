@@ -43,7 +43,7 @@ describe('the setup-script check waits for an Orca Cloud workspace that is aslee
     expect(result.current).toBe(false)
   })
 
-  it('still waits for an asleep one (RA-12), and ignores other workspaces going to sleep', () => {
+  it('still waits for an asleep one, and ignores other workspaces going to sleep', () => {
     const { result, rerender } = renderHook(() => useSetupScriptAsleepCloud('ws'))
     act(() => markWorktreeGoingToSleep('other'))
     expect(result.current).toBe(false)

@@ -1,9 +1,9 @@
-// DS-40 (b): why an environment build's clone step failed, from the log lines the user can see.
+// Why an environment build's clone step failed, from the log lines the user can see.
 // Repo contents (submodules, LFS, paths that can't be checked out) are an agent's to fix; access
 // and auth are not (an agent can't grant access), so those go to GitHub. Anything unrecognized gets
 // neither, so we never point an agent at a problem it can't fix.
 
-export type CloneFailure =
+type CloneFailure =
   | { kind: 'content'; repoUrl: string | null }
   | { kind: 'access'; repoUrl: string | null }
   | { kind: 'unknown'; repoUrl: string | null }

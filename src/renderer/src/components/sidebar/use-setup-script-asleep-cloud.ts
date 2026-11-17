@@ -6,8 +6,8 @@ import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 /**
- * An Orca Cloud workspace whose setup script can't be inspected right now: asleep or waking
- * (RA-12, JA-15), going to sleep, or kept on screen read-only after Sleep (RA-13b). The
+ * An Orca Cloud workspace whose setup script can't be inspected right now: asleep or waking,
+ * going to sleep, or kept on screen read-only after Sleep. The
  * setup-script card waits instead of showing "Couldn't verify this repo's setup script" with Retry.
  */
 export function useSetupScriptAsleepCloud(worktreeId: string | null | undefined): boolean {
@@ -20,8 +20,8 @@ export function useSetupScriptAsleepCloud(worktreeId: string | null | undefined)
 
 /**
  * The project copy lives on an Orca Cloud sandbox (`runtime:<cloud environment>`). Orca Cloud never
- * shows this nudge (PC-7), and the check can't reach an archived or asleep sandbox: after archiving,
- * the project stays selected with no workspace, which showed "Couldn't verify" with Retry (N-28).
+ * shows this nudge, and the check can't reach an archived or asleep sandbox: after archiving,
+ * the project stays selected with no workspace, which showed "Couldn't verify" with Retry.
  */
 export function useIsCloudRepoHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null

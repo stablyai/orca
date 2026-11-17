@@ -1,4 +1,4 @@
-// PICKER-OPEN-INTERMITTENT: the workspace's row lands a moment after the reads that follow pairing;
+// The workspace's row lands a moment after the reads that follow pairing;
 // opening waits for it (bounded) instead of leaving the person where they were.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,7 +36,7 @@ describe('waitForHostWorktree', () => {
     expect(store.listeners.size).toBe(0)
   })
 
-  it('resolves when the row lands a moment later (the n48/n55 picker open)', async () => {
+  it('resolves when the row lands a moment later (an open from the picker)', async () => {
     let row: string | null = null
     const waiting = waitForHostWorktree(() => row)
     store.emit()

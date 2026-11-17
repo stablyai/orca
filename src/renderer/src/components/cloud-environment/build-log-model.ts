@@ -10,7 +10,7 @@ export const BUILD_STEPS: readonly EnvironmentBuildStep[] = [
 ]
 const SCRIPT_STEP_LIST: readonly EnvironmentBuildStep[] = ['clone', 'install', 'record']
 
-export type LogLineKind = 'plain' | 'warning' | 'error' | 'orca-error'
+type LogLineKind = 'plain' | 'warning' | 'error' | 'orca-error'
 
 export type LogLine = {
   id: number

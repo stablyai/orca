@@ -69,7 +69,7 @@ function useLoad<T>(
   return [loaded, update, reload]
 }
 
-export function cloudSecretTargetKey(target: CloudSecretTarget): string {
+function cloudSecretTargetKey(target: CloudSecretTarget): string {
   return target.scope === 'repo' ? `repo:${target.repo ?? ''}` : target.scope
 }
 

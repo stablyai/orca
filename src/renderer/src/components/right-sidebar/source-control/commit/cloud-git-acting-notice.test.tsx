@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// GH-ACTING-LINE: the source control panel says who pushes and PRs go out as, and offers Connect
+// The source control panel says who pushes and PRs go out as, and offers Connect
 // GitHub only when it falls back to Orca's bot for a viewer who hasn't connected.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

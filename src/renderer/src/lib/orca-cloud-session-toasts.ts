@@ -14,7 +14,7 @@ import type {
 
 const RESULT_DURATION_MS = 20_000
 
-export type OrcaCloudRestartToastActions = {
+type OrcaCloudRestartToastActions = {
   restartNow: (workspaceId: string) => Promise<HostedSessionRestartResult>
   open: (workspaceId: string) => void
 }

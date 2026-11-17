@@ -55,7 +55,7 @@ export function orcaCloudEnvironmentIdForWorktree(
  * Why a cloud agent row at rest is not "Done" or "Idle": its agent isn't signed in.
  * Null for local, SSH and paired hosts, and for working or waiting rows.
  */
-export function useCloudAgentRowSignIn(
+function useCloudAgentRowSignIn(
   agent: Pick<DashboardAgentRow, 'agentType' | 'entry' | 'tab' | 'childRow'>,
   dotState: AgentDotState
 ): CloudAgentRowSignIn | null {
@@ -96,7 +96,7 @@ export function useCloudAgentRowSignIn(
   })
 }
 
-export type CloudAgentRowStatus = {
+type CloudAgentRowStatus = {
   dotState: AgentDotState
   label: string
   /** The catalog name ("Claude", "Codex"), never a terminal title such as "Claude Code". */

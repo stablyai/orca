@@ -2,7 +2,7 @@
 // (Windows may not have one) and nothing touches the user's ~/.ssh keys.
 import { generateKeyPairSync, randomBytes } from 'node:crypto'
 
-export type CloudSshKeyPair = {
+type CloudSshKeyPair = {
   /** `-----BEGIN OPENSSH PRIVATE KEY-----` (openssh-key-v1, unencrypted), for IdentityFile. */
   privateKey: string
   /** `ssh-ed25519 <base64> <comment>`, one line. */

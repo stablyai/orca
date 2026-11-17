@@ -26,14 +26,14 @@ import {
   writeWorktreeCheckpoint
 } from './worktree-checkpoint-snapshot'
 
-export type WorktreeRestorePreview = {
+type WorktreeRestorePreview = {
   /** Files that differ between the working tree now and the checkpoint. */
   changes: TreeChange[]
   /** HEAD moved since the checkpoint (for example the agent committed); those commits stay. */
   headMoved: boolean
 }
 
-export type WorktreeRestoreResult = WorktreeRestorePreview & {
+type WorktreeRestoreResult = WorktreeRestorePreview & {
   /** The checkpoint of the working tree as it was just before this restore. */
   undo: WorktreeCheckpoint
   indexRestored: boolean

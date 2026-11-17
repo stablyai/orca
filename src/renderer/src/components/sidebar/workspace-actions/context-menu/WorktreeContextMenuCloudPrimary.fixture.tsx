@@ -1,4 +1,4 @@
-// CLOUD-PRIMARY-DELETE: a cloud workspace on its repo's default branch (the sandbox's own checkout,
+// A cloud workspace on its repo's default branch (the sandbox's own checkout,
 // here paired from another desktop) gets an enabled "Delete workspace…", with no primary-worktree
 // note and no "Remove Project". A local primary checkout keeps upstream's rule, unchanged.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'

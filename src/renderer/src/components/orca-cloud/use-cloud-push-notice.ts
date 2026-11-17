@@ -15,7 +15,7 @@ const FAST_POLL_WINDOW_MS = 3 * 60_000
 const SLOW_POLL_MS = 10_000
 const GIVE_UP_MS = 30 * 60_000
 
-export type CloudPushNoticeState = {
+type CloudPushNoticeState = {
   access: CloudPushAccess
   installing: boolean
   install: () => void
@@ -24,7 +24,7 @@ export type CloudPushNoticeState = {
   recheck: () => void
   rechecking: boolean
   /**
-   * LIVE-GIT-ACCESS: the App reaches the repository, the live refresh ran and the sandbox still can't
+   * The App reaches the repository, the live refresh ran and the sandbox still can't
    * push or reach origin. The line says Restart instead of offering Check again forever.
    */
   needsRestart: boolean
@@ -165,7 +165,7 @@ export function useCloudPushNotice(
       }
       recheckBusy.current = true
       setRechecking(true)
-      // LIVE-GIT-ACCESS: the running workspace takes the App's access first, then the check runs again.
+      // The running workspace takes the App's access first, then the check runs again.
       // A push that works now drops the line; a refusal after that says Restart, not Check again again.
       void recheckCloudPushAccess(environmentId, { workspaceId })
         .then((result) => {

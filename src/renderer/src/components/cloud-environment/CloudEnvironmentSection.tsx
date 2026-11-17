@@ -260,7 +260,7 @@ function CloudEnvironmentController({
       .then(() => setAgentLaunching(false))
   }
 
-  // DS-40: a failed latest build gets Fix with agent (install script, or repo contents that broke
+  // A failed latest build gets Fix with agent (install script, or repo contents that broke
   // the clone) or Give access (the clone couldn't reach the repo); see environment-failure-fix.ts.
   const failureFix = environmentFailureFix({
     build: builds[0],

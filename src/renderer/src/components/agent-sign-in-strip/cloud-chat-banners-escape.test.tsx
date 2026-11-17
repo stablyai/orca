@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// END-PASS CHAT-RENEW: Escape in a chat (focus in its composer) stops a sign-in or renewal that is
+// Escape in a chat (focus in its composer) stops a sign-in or renewal that is
 // mid-flow and goes back to step 1, like the strip's ×; otherwise Escape is left to the composer.
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

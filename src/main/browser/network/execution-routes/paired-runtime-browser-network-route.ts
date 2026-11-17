@@ -29,7 +29,7 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   onError?: (error: Error) => void
   /** The route stayed dark after bounded recovery; its pages cannot reach the network. */
   onUnavailable?: (error: Error) => void
-  loopbackOnly?: LoopbackOnlyRoute // CLOUD-BROWSER-DIRECT (workspace-loopback-host.ts)
+  loopbackOnly?: LoopbackOnlyRoute // see workspace-loopback-host.ts
 }
 
 type BrowserNetworkRouteAddress = { host: string; port: number }

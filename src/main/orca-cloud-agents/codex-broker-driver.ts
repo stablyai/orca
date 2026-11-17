@@ -1,4 +1,4 @@
-// Drives the Codex broker login (contract D11): start a broker, show its device code, poll until the
+// Drives the Codex broker login: start a broker, show its device code, poll until the
 // control plane holds the ChatGPT login, then hand back. The login itself never touches this computer.
 import type {
   CodexBrokerStart,
@@ -28,7 +28,7 @@ export function isCodexSignInUrl(value: string): boolean {
   )
 }
 
-export type CodexBrokerDriverDeps = {
+type CodexBrokerDriverDeps = {
   client: Pick<
     AgentCredentialsClient,
     'startCodexBroker' | 'codexBrokerStatus' | 'cancelCodexBroker'
@@ -47,7 +47,7 @@ const MAX_POLL_FAILURES = 5
 function isBrokerFailure(
   error: string
 ): error is 'not_a_chatgpt_login' | 'store_failed' | 'device_auth_disabled' {
-  // RS-3: device-code sign-in turned off on the ChatGPT account gets its own words, not "couldn't save".
+  // Device-code sign-in turned off on the ChatGPT account gets its own words, not "couldn't save".
   return (
     error === 'not_a_chatgpt_login' || error === 'store_failed' || error === 'device_auth_disabled'
   )

@@ -29,7 +29,7 @@ import {
   type CloudSecretsAskData
 } from './cloud-secrets-ask-model'
 
-export type CloudSecretsAskPhase = 'editing' | 'saving' | 'failed' | 'saved' | 'skipped'
+type CloudSecretsAskPhase = 'editing' | 'saving' | 'failed' | 'saved' | 'skipped'
 
 export type CloudSecretsAskFormState = {
   /** Typed values, by name. Cleared (and the inputs unmounted) once saved. */
@@ -84,7 +84,7 @@ function coverageLine(data: CloudSecretsAskData, t: Translate): string {
 }
 
 /** "2 secrets missing" heading plus its coverage line (shared by the sheet and the dialog). */
-export function CloudSecretsAskHeading({
+function CloudSecretsAskHeading({
   data,
   headingId,
   action
@@ -112,7 +112,7 @@ export function CloudSecretsAskHeading({
 }
 
 /**
- * S2: the environment's declared names this person doesn't get a value for, asked inline. Never
+ * The environment's declared names this person doesn't get a value for, asked inline. Never
  * blocks Open; values go to Orca Cloud in one batch and the inputs unmount after the save.
  */
 export function CloudSecretsAskForm({

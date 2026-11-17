@@ -1,4 +1,4 @@
-// CLONE-ACCESS-ERROR: a cloud create whose clone GitHub refused. The card asks GitHub whether Orca
+// A cloud create whose clone GitHub refused. The card asks GitHub whether Orca
 // can reach the repository, sends the person to the Orca GitHub App's install page for its owner
 // (repository preselected), and once access shows up starts the create again on its own. Someone
 // who can't install (GitHub turns their install into a request for an owner) is told who to ask.
@@ -14,8 +14,8 @@ import { useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
  */
 export type CloneAccessPhase = 'checking' | 'missing' | 'waiting' | 'requested' | 'reachable'
 
-/** Re-check delays while focused after Give Orca access (as REPO-ACCESS-REFRESH backs off). */
-export const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
+/** Re-check delays while focused after Give Orca access (backing off like the composer's GitHub access re-read). */
+const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
 /** Stop waiting after this long: the button comes back. */
 export const CLONE_ACCESS_WAIT_MS = 3 * 60_000
 

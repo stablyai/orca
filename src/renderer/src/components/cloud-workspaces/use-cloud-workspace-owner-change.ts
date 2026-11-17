@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: makes someone else the owner of a cloud workspace. The control plane puts the
+// Makes someone else the owner of a cloud workspace. The control plane puts the
 // workspace to sleep first, so the confirmation stays open while it runs and shows a refusal in
 // place; on success the person is told whether the previous owner will hear about it.
 import { useCallback, useState } from 'react'
@@ -10,6 +10,7 @@ import { memberName, type MemberDirectory } from './cloud-workspace-format'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 import { ownerChangeRefusal, previousOwnerToast } from './owner-change-copy'
 import {
+  localStorageOrNull,
   markNewOwnerNoticeSeen,
   markOwnerChangeMadeHere,
   refreshPreviousOwnerNoticesNow
@@ -18,16 +19,8 @@ import {
 /** Long enough to read two sentences about someone else's secrets. */
 const TOLD_TOAST_MS = 12_000
 
-export type OwnerChangeState = { busy: boolean; error: string | null }
+type OwnerChangeState = { busy: boolean; error: string | null }
 const IDLE: OwnerChangeState = { busy: false, error: null }
-
-function localStorageOrNull(): Storage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
 
 export function useCloudWorkspaceOwnerChange({
   directory,
@@ -91,7 +84,7 @@ export function useCloudWorkspaceOwnerChange({
       )
       if (previousOwner?.userId === selfId) {
         // You gave away your own: your notice (with the advice to rotate) is waiting, and this
-        // is the one device that shows it (TRANSFER-TOAST-OTHER-DEVICE).
+        // is the one device that shows it.
         markOwnerChangeMadeHere(localStorageOrNull(), next.id)
         refreshPreviousOwnerNoticesNow()
       }

@@ -19,7 +19,7 @@ export function useIsOrcaCloudHost(hostId: string | null | undefined): boolean {
 }
 
 /** Host kind for an execution host id, before Orca Cloud and recipe VMs are known. */
-export function hostGlyphKindForHostId(hostId: string | null | undefined): HostGlyphKind {
+function hostGlyphKindForHostId(hostId: string | null | undefined): HostGlyphKind {
   const parsed = parseExecutionHostId(hostId ?? undefined)
   return parsed?.kind === 'ssh' ? 'ssh' : parsed?.kind === 'runtime' ? 'orca-server' : 'local'
 }

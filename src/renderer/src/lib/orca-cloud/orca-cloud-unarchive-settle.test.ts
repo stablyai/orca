@@ -1,4 +1,4 @@
-// ARCHIVE-MENU-DISABLED: a paired Unarchive whose server is already up when the window opens it starts
+// A paired Unarchive whose server is already up when the window opens it starts
 // no wake, so nothing settled main's "waking" (source unarchive): the row stayed waking (Archive
 // disabled) until the overlay called it stalled. The unarchive now settles it from a fresh read.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

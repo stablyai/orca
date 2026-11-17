@@ -62,7 +62,7 @@ function renderBlocker(
   return { onContinue, onBackToDraft }
 }
 
-describe('billing blocker on the creating sheet (JA-21)', () => {
+describe('billing blocker on the creating sheet', () => {
   it.each([
     ['hoursUsed', 'Out of sandbox hours', 'Turn on in browser'],
     ['spendCap', 'Spend cap reached', 'Raise in browser'],
@@ -130,7 +130,7 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     ['trial_unavailable', true, 'This account or team already used its trial.'],
     [null, true, 'Your team needs a plan to use Orca Cloud.']
   ] as const)(
-    'no plan (%s, admin=%s): only a plan that existed has "ended" (EP-11)',
+    'no plan (%s, admin=%s): only a plan that existed has "ended"',
     (reason, admin, body) => {
       renderBlocker('plan', { reason, canManageBilling: admin })
       expect(screen.getByText(body)).toBeTruthy()

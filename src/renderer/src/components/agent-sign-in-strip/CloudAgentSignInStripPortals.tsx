@@ -1,4 +1,4 @@
-// Orca Cloud panes get the strip instead of #40228's centred card: account recovery (S4-c) while the
+// Orca Cloud panes get the strip instead of #40228's centred card: account recovery while the
 // private launch hold waits, or #40228's per-workspace gate while the Orca-account path is paused or
 // never offered. It overlays the top 56 px of the pane while the agent hasn't started, so the
 // terminal's size never changes. SSH, WSL and paired hosts keep #40228's card.
@@ -26,7 +26,7 @@ import { CloudRunningStripPortal } from './CloudRunningStripPortal'
 const ABANDON_CHECK_MS = 1_000
 
 /**
- * NOACCT-MISLABEL: a held launch is given up only when its tab is really gone (closed). A pane that
+ * A held launch is given up only when its tab is really gone (closed). A pane that
  * unmounts because its workspace is off screen (parked, another workspace, Settings) keeps waiting:
  * its strip and the sidebar mark come back with it. Cancelling it there showed "The agent didn't
  * start" for a create whose agent simply isn't set up.
@@ -42,8 +42,6 @@ function isTabOpen(tabId: string): boolean {
   const tabsByWorktree = useAppStore.getState().tabsByWorktree
   return Object.values(tabsByWorktree).some((tabs) => tabs?.some((tab) => tab.id === tabId))
 }
-
-export { isOrcaCloudEnvironmentId }
 
 /** Pane keys whose #40228 gate is on an Orca Cloud host; those panes show the strip instead. */
 export function useCloudGatePaneKeys(controller: TerminalPaneController): ReadonlySet<string> {
@@ -66,12 +64,12 @@ function CloudStripPortal({
 }: {
   pane: ManagedPane
   tabId: string
-  /** A host-published launch holds its whole tab (RA-1); its first pane shows the strip. */
+  /** A host-published launch holds its whole tab; its first pane shows the strip. */
   first: boolean
 }): React.JSX.Element | null {
   const paneKey = makePaneKey(tabId, pane.leafId)
   const { key, active, strip } = useCloudHeldStrip(paneKey, first ? cloudTabHoldKey(tabId) : null)
-  // The first render's class; the strip then follows its own live width (RA-1).
+  // The first render's class; the strip then follows its own live width.
   const width = cloudStripWidth(pane.container.clientWidth)
   useEffect(() => {
     if (!active) {

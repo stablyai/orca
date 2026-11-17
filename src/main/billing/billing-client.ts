@@ -5,8 +5,6 @@ import type { OrcaBillingEntitlement, OrcaBillingTeamPlan } from '../../shared/o
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import { normalizeEntitlement } from './billing-entitlement-schema'
 
-export { normalizeEntitlement }
-
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_TOKEN_LENGTH = 8 * 1024
 
@@ -42,7 +40,7 @@ const explicitOrg = { unsupportedUntil: 0 }
 const EXPLICIT_ORG_RETRY_MS = 10 * 60_000
 
 /** The `org` claim of a billing token (null: personal). Decodes only; billing verifies it. */
-export function readBillingTokenOrg(token: string): string | null {
+function readBillingTokenOrg(token: string): string | null {
   let payload: unknown = null
   try {
     payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'))
@@ -56,7 +54,7 @@ export function readBillingTokenOrg(token: string): string | null {
   return typeof org === 'string' && org ? org : null
 }
 
-/** The minted token speaks for a different team than the one this device shows (EP-9). */
+/** The minted token speaks for a different team than the one this device shows. */
 export class BillingOrgMismatchError extends Error {
   constructor(readonly requested: string | null) {
     super('billing_org_mismatch')
@@ -67,8 +65,8 @@ export class BillingOrgMismatchError extends Error {
 /**
  * POST to Orca Cloud auth for a billing token for `orgId`, the team THIS device shows (null:
  * personal). Auth used to pick the team from the profile's active team, which a user's other
- * devices share, so one device switching teams made the other read and act on that team's plan
- * (EP-9). The token's org claim is checked; a token for any other team is refused, never used.
+ * devices share, so one device switching teams made the other read and act on that team's plan.
+ * The token's org claim is checked; a token for any other team is refused, never used.
  * A 401/403 is surfaced as OrcaCloudRequestError so the caller's session refresh retries once.
  */
 export async function mintBillingToken(
@@ -171,7 +169,7 @@ const TeamPlansBody = z.object({
     .max(20)
 })
 
-/** Plan state for other teams the caller is on (cloud start B2), read with the caller's own token. */
+/** Plan state for other teams the caller is on, read with the caller's own token. */
 export async function fetchTeamPlans(
   endpoints: BillingEndpoints,
   token: string,

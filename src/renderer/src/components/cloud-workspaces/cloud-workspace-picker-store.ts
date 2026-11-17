@@ -12,7 +12,7 @@ export type CloudWorkspacePickerFocus =
   /** Deleting the team: every team workspace, archived ones too, so they can be deleted first. */
   | { kind: 'team-cleanup' }
 
-export type CloudWorkspacePickerRequest = { id: number; focus: CloudWorkspacePickerFocus }
+type CloudWorkspacePickerRequest = { id: number; focus: CloudWorkspacePickerFocus }
 
 let request: CloudWorkspacePickerRequest | null = null
 let nextId = 0

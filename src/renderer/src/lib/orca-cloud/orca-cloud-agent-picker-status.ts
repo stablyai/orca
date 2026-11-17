@@ -1,4 +1,4 @@
-// JA-22: the status suffix each agent row shows inside the open agent picker when Run on is Orca
+// The status suffix each agent row shows inside the open agent picker when Run on is Orca
 // Cloud. Claude and Codex read the Orca account coverage (the shared selector); the API-key agents
 // read whether a Cloud secret they use exists. Names only: no secret value ever reaches here.
 import { useMemo } from 'react'
@@ -78,7 +78,7 @@ export function orcaCloudAgentPickerStatus(
   return (API_KEY_AGENT_NAMES[agent] ?? []).some((name) => names.has(name)) ? 'ready' : 'setUp'
 }
 
-/** The muted suffix; null for 'ready' (no status means ready, design-squad JA-22). */
+/** The muted suffix; null for 'ready' (no status means ready). */
 export function orcaCloudAgentPickerStatusLabel(
   status: OrcaCloudAgentPickerStatus,
   t: Translate

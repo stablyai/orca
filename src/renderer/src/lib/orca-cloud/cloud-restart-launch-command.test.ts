@@ -9,7 +9,7 @@ function withSettings(patch: Record<string, unknown>): void {
   useAppStore.setState({ settings: { ...base, ...patch } })
 }
 
-describe('defaultLaunchConfig (RA-11d, RST-FLAGS)', () => {
+describe('defaultLaunchConfig', () => {
   afterEach(() => {
     useAppStore.setState({ settings: getDefaultSettings('/home/dev') })
   })

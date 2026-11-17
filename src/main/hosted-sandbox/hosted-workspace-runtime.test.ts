@@ -113,7 +113,7 @@ describe('archive checkouts trim', () => {
   })
 })
 
-describe('GIT-SETUP on the status read', () => {
+describe('failed git setup on the status read', () => {
   it('passes the sandbox view’s failed git setup to the window, and nothing otherwise', () => {
     const read = status(1_000, 10, 0)
     expect(withGitSetup(read, { gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true })
@@ -123,7 +123,11 @@ describe('GIT-SETUP on the status read', () => {
   it('carries the sandbox region for the card details', () => {
     const read = status(1_000, 10, 0)
     expect(withSandboxFacts(read, { region: 'iad1' })).toEqual({ ...read, region: 'iad1' })
-    expect(withSandboxFacts(read, { region: 'pdx1', gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true, region: 'pdx1' })
+    expect(withSandboxFacts(read, { region: 'pdx1', gitSetup: 'failed' })).toEqual({
+      ...read,
+      gitSetupFailed: true,
+      region: 'pdx1'
+    })
   })
 
   it('the strict sandbox view accepts the field the server sends with feature git-setup', () => {
@@ -141,7 +145,7 @@ describe('GIT-SETUP on the status read', () => {
   })
 })
 
-describe('findCloudSandbox (PAIRED-STATUS)', () => {
+describe('findCloudSandbox', () => {
   it('answers for a paired server only while it is bound to a sandbox', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-paired-status-'))
     try {

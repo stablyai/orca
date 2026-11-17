@@ -22,7 +22,7 @@ const listed = [
   { fullName: 'acme/web', url: 'https://github.com/acme/web', private: true }
 ]
 
-describe('remote-server projects (RUNON-NO-NEW-SANDBOX)', () => {
+describe('remote-server projects', () => {
   it('is a project cloned only on a remote Orca server, never this computer, SSH or a folder', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the fields the check reads.
     const as = (value: unknown) => value as Parameters<typeof isRemoteServerProject>[0]

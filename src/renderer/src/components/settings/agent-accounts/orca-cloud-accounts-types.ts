@@ -1,4 +1,4 @@
-// Contracts between S0's container and its rows.
+// Contracts between Cloud agent sign-ins' container and its rows.
 import type { OrcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 import type { OrcaCloudAgentAccountsLoad } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import type {

@@ -4,7 +4,7 @@ import { installDevTokenClaimsProbe, tokenOrgClaims } from './dev-token-claims-p
 const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString('base64url')
 const jwt = (claims: unknown): string => `${encode({ alg: 'ES256' })}.${encode(claims)}.sig`
 
-describe('dev token claims probe (GH-LIST-MISSING)', () => {
+describe('dev token claims probe', () => {
   afterEach(() => {
     Reflect.deleteProperty(globalThis, '__orcaCloudTokenClaims')
   })

@@ -1,4 +1,4 @@
-// SLEEP-HOME-REGRESSION (terminal-only, n51): Sleep on a paired cloud workspace on screen closed its
+// Terminal-only: Sleep on a paired cloud workspace on screen closed its
 // last terminal tab as the host stopped it, and closing the last tab landed on Home. Held asleep on
 // screen, the workspace stays selected with no tab; the asleep view covers it.
 import { afterEach, describe, expect, it } from 'vitest'

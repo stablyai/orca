@@ -56,7 +56,7 @@ export async function loadPersistedTransfer(dir: string): Promise<Prepared | nul
   }
 }
 
-export type PatchOutcome = 'none' | 'applied' | 'already' | 'conflict'
+type PatchOutcome = 'none' | 'applied' | 'already' | 'conflict'
 
 async function gitOk(cwd: string, args: string[]): Promise<{ ok: boolean; stderr: string }> {
   try {

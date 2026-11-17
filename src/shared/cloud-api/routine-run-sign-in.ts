@@ -1,7 +1,7 @@
 // A routine run whose agent exited because Claude isn't set up for Orca Cloud. Claude Code reports
 // it headless as "Not logged in · Please run /login"; the run's summary carries that text and the
 // control plane records `agent_exit_<n>` (or `agent_failed:<note>`). Every surface (desktop, CLI)
-// says how to set Claude up instead of the CLI's own words (END-PASS n64 P3).
+// says how to set Claude up instead of the CLI's own words.
 
 const CLAUDE_NOT_SIGNED_IN = /not logged in|please run \/login|\brun \/login\b/i
 

@@ -112,7 +112,7 @@ export async function unarchiveFromHome(
   })
 }
 
-export function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
+function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
   void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
 }
 
@@ -136,7 +136,7 @@ export async function deleteFromHome(
 ): Promise<void> {
   const worktreeId = await defaultDeps().localWorktreeId(w.id)
   if (worktreeId) {
-    // The sidebar's own funnel (REG-8): it opens the dialog with the confirmed row's host and
+    // The sidebar's own funnel: it opens the dialog with the confirmed row's host and
     // instance, which the dialog re-checks on Delete. A bare { worktreeId } has none, so every
     // Delete from Home was refused as "Workspace list changed".
     runWorktreeDelete(worktreeId)

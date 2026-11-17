@@ -1,4 +1,4 @@
-// N9: the setup done page (auth.onorca.dev/cloud/setup/done) opens
+// The setup done page (auth.onorca.dev/cloud/setup/done) opens
 // orca://cloud/setup/return?session=<id>. The desktop never depends on it (polling already sees
 // every step); the link only focuses Orca and asks the open setup tracker to re-read right away.
 

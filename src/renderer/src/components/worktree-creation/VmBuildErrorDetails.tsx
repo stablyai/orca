@@ -7,10 +7,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 
 /** Raw error lines shown; earlier ones are left to Copy. */
-export const ERROR_DETAILS_VISIBLE_LINES = 20
+const ERROR_DETAILS_VISIBLE_LINES = 20
 
 /** Keeps the last lines, since recipes and their tools usually print the cause at the end. */
-export function truncateErrorDetails(text: string): { visible: string; hiddenLines: number } {
+function truncateErrorDetails(text: string): { visible: string; hiddenLines: number } {
   const lines = text.split('\n')
   const hiddenLines = Math.max(0, lines.length - ERROR_DETAILS_VISIBLE_LINES)
   return {

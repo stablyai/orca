@@ -17,7 +17,7 @@ export type OrcaCloudMcpWorkspace = {
 }
 
 /** Running Orca Cloud workspaces, newest first: MCP sync only reaches a sandbox that is awake. */
-export function runningOrcaCloudMcpWorkspaces(
+function runningOrcaCloudMcpWorkspaces(
   records: readonly EphemeralVmRuntimeRecord[]
 ): OrcaCloudMcpWorkspace[] {
   return records
@@ -100,7 +100,11 @@ export function OrcaCloudMcpServersView({
   )
 }
 
-export function OrcaCloudMcpServersPane(): React.JSX.Element {
+/** The running Orca Cloud workspaces, reloaded on every lifecycle change; null while loading. */
+export function useRunningOrcaCloudWorkspaces(): {
+  workspaces: OrcaCloudMcpWorkspace[] | null | 'failed'
+  retry: () => void
+} {
   const [workspaces, setWorkspaces] = useState<OrcaCloudMcpWorkspace[] | null | 'failed'>(null)
   const [attempt, setAttempt] = useState(0)
   // The store mirrors every lifecycle broadcast, so a change there means the list moved.
@@ -123,6 +127,11 @@ export function OrcaCloudMcpServersPane(): React.JSX.Element {
     setWorkspaces(null)
     setAttempt((value) => value + 1)
   }, [])
+  return { workspaces, retry }
+}
+
+export function OrcaCloudMcpServersPane(): React.JSX.Element {
+  const { workspaces, retry } = useRunningOrcaCloudWorkspaces()
   return (
     <OrcaCloudMcpServersView
       workspaces={workspaces}

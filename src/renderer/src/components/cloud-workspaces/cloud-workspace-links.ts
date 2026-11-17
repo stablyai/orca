@@ -15,7 +15,7 @@ import { installCloudAccessLostNotice } from './cloud-access-lost-toast'
 /** No input for this long and the desktop stops renewing a paired workspace's lease. */
 const IDLE_MS = 15 * 60_000
 
-export async function handleCloudWorkspaceLink(link: string): Promise<void> {
+async function handleCloudWorkspaceLink(link: string): Promise<void> {
   const parsed = parseCloudWorkspaceLink(link)
   if (!parsed || !(await cloudWorkspacesAvailable())) {
     return
@@ -74,7 +74,7 @@ export function installCloudWorkspaceLinks(): () => void {
     return () => {}
   }
   cleanups.push(installCloudWorkspaceSync())
-  // EP-8: a server that refuses this computer for good says so, with one fix.
+  // A server that refuses this computer for good says so, with one fix.
   cleanups.push(installCloudAccessLostNotice())
   cleanups.push(
     api.onOpenLink((link) => {

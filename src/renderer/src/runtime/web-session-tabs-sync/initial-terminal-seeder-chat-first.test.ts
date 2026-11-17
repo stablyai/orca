@@ -1,4 +1,4 @@
-// CLOUD-CHAT-FIRST-TAB (END-PASS n51): an Orca Cloud create whose first agent opens as a chat got a
+// An Orca Cloud create whose first agent opens as a chat got a
 // second plain "Terminal" tab, in front: the mirror's first empty frame saw no terminal tabs (a chat
 // is not one) and seeded a shell. A chat now counts as the workspace's first surface, and the create
 // holds the seeder off while its chat launches.

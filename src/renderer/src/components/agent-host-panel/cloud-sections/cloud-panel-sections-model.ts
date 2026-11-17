@@ -73,7 +73,7 @@ export type CloudKeyRow = {
   shadowed: ShadowedKey[]
 }
 
-export function canWriteScope(
+function canWriteScope(
   caller: Pick<CloudSecretsCaller, 'canWrite'>,
   scope: CloudSecretScope
 ): boolean {
@@ -105,7 +105,7 @@ export function cloudKeyRows(effective: CloudSecretsEffective): CloudKeyRow[] {
     )
 }
 
-export type CloudEnvRow =
+type CloudEnvRow =
   | {
       kind: 'set'
       name: string

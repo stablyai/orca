@@ -2,7 +2,7 @@
 // bytes this computer sends to the host. Feeds idle sleep for cloud VMs, so it must let an editor
 // window nobody touches sleep while typing keeps the VM awake.
 //
-// Measured on a real VM (W3 perf, OpenSSH 10 client, openvscode-server 1.109 over `ssh -L`, bytes
+// Measured on a real VM (OpenSSH 10 client, openvscode-server 1.109 over `ssh -L`, bytes
 // the forward carried toward the VM):
 // - idle `ssh -N` or an idle shell: one 52 B keepalive every 30 s, ~104 B/min.
 // - idle VS Code remote window: a 60 + 44 + 52 B burst every 5 s, 2.3-3.0 KB/min, at most 5
@@ -13,16 +13,16 @@
 // Keepalives stay small and evenly spaced; use is a burst of packets or larger ones.
 
 /** Sliding window the thresholds below apply to. */
-export const FORWARD_USE_WINDOW_MS = 10_000
+const FORWARD_USE_WINDOW_MS = 10_000
 /** Packets up to this size are keepalive-sized; alone they count only through their rate. */
-export const FORWARD_USE_SMALL_CHUNK_BYTES = 128
+const FORWARD_USE_SMALL_CHUNK_BYTES = 128
 /** Bytes in larger packets within one window that mean use (an idle VS Code window sends none). */
-export const FORWARD_USE_PAYLOAD_BYTES = 1024
+const FORWARD_USE_PAYLOAD_BYTES = 1024
 /** Packets of any size within one window that mean use (an idle VS Code window sends ~6). */
-export const FORWARD_USE_CHUNKS = 40
+const FORWARD_USE_CHUNKS = 40
 /** A short burst of packets that means use: typing, even one short line. */
-export const FORWARD_USE_BURST_MS = 2_000
-export const FORWARD_USE_BURST_CHUNKS = 10
+const FORWARD_USE_BURST_MS = 2_000
+const FORWARD_USE_BURST_CHUNKS = 10
 
 /** One connection's client-to-host traffic. Holds at most FORWARD_USE_CHUNKS entries. */
 export class ForwardUseMeter {

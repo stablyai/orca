@@ -49,7 +49,7 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /** Long-polls the wake route until the VM is ready; each call holds up to 30 s on the server. */
-export async function wakeCloudWorkspaceUntilReady(
+async function wakeCloudWorkspaceUntilReady(
   plane: CloudControlPlane,
   sandboxId: string,
   signal?: AbortSignal

@@ -1,4 +1,4 @@
-// Orca Cloud setup session (NP-4 N1): one browser tab that chains sign-in, team, plan or trial,
+// Orca Cloud setup session: one browser tab that chains sign-in, team, plan or trial,
 // Checkout (only when needed) and the GitHub App install. The billing service owns the session;
 // the desktop starts it and polls it while the composer's setup panel shows each step.
 
@@ -14,7 +14,7 @@ export type CloudSetupStartArgs = {
   /** Ask which team even when the profile already has an active one. */
   chooseTeam?: boolean
   /**
-   * COPY-LINK-FIRST-CLICK: false starts the same setup without opening the browser; a signed-in
+   * `false` starts the same setup without opening the browser; a signed-in
    * start then returns the session's link (`url`) to copy instead.
    */
   openBrowser?: boolean
@@ -42,7 +42,7 @@ type CloudSetupSessionStep = {
   detail?: string
 }
 
-/** Error kinds the setup tracker shows (spec X1); `detail` carries e.g. the other account's email. */
+/** Error kinds the setup tracker shows; `detail` carries e.g. the other account's email. */
 export const CLOUD_SETUP_ERROR_KINDS = [
   'timed_out',
   'checkout_canceled',

@@ -11,7 +11,7 @@ import { base64ToBytes, bytesToBase64 } from '../../shared/cloud-workspaces/seal
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import { generateGrantRecipientKey, x25519PublicKeyOf } from './sealed-grant-node'
 
-export const READER_KEY_FILE_NAME = 'cloud-reader-key.json.enc'
+const READER_KEY_FILE_NAME = 'cloud-reader-key.json.enc'
 
 export type ReaderKeyCodec = {
   encrypt: (plain: string) => Buffer
@@ -39,7 +39,7 @@ const KEYCHAIN_MESSAGE =
   'Reading sleeping workspaces needs the OS keychain to protect this device’s key.'
 
 /** The OS keychain, or null when it is missing or only obfuscates (Linux basic_text). */
-export function osReaderKeyCodec(): ReaderKeyCodec | null {
+function osReaderKeyCodec(): ReaderKeyCodec | null {
   try {
     if (!guardedSafeStorage.isEncryptionAvailable() || assessSecretProtection().level !== 'os') {
       return null
@@ -53,7 +53,7 @@ export function osReaderKeyCodec(): ReaderKeyCodec | null {
   }
 }
 
-export function getCloudReaderKeyPath(profileId: string, userDataPath: string): string {
+function getCloudReaderKeyPath(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), READER_KEY_FILE_NAME)
 }
 
@@ -173,7 +173,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export type CloudReaderKeyStore = ReturnType<typeof createCloudReaderKeyStore>
+type CloudReaderKeyStore = ReturnType<typeof createCloudReaderKeyStore>
 
 let defaultStore: { userDataPath: string; store: CloudReaderKeyStore } | null = null
 
@@ -199,7 +199,7 @@ export function setCloudReaderKeyRevoker(next: typeof revoker): void {
   revoker = next
 }
 
-export const READER_KEY_REVOKE_TIMEOUT_MS = 2_500
+const READER_KEY_REVOKE_TIMEOUT_MS = 2_500
 
 /** Best effort and bounded: resolves within `timeoutMs` whatever the network does. */
 export async function revokeCloudReaderKeyBestEffort(

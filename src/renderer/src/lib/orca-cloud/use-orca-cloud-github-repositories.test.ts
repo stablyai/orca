@@ -11,7 +11,7 @@ const repo = (fullName: string) => ({
   private: true
 })
 
-describe('GitHub-only projects (D4)', () => {
+describe('GitHub-only projects', () => {
   it('lists only repositories with no clone here, matching remotes case-insensitively', () => {
     expect(
       selectCloudOnlyRepositories(

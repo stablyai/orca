@@ -1,7 +1,7 @@
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 
-// One rounding rule for sandbox hours on every surface (JA-07: home, billing, composer and the
-// account menu showed four different numbers). Tenths of an hour; "left" rounds down and "used"
+// One rounding rule for sandbox hours on every surface (home, billing, composer and the
+// account menu once showed four different numbers). Tenths of an hour; "left" rounds down and "used"
 // rounds up, so the two always add up to the included amount and "left" never overstates.
 
 /** Absorbs float noise (177.4 h is 1773.9999… tenths) without moving a real boundary. */
@@ -50,7 +50,7 @@ export function includedUsagePercent(entitlement: OrcaBillingEntitlement): numbe
   return Math.min(100, Math.round((entitlement.usedSeconds / entitlement.includedSeconds) * 100))
 }
 
-export type PlanBillingTone = 'ok' | 'warning' | 'blocked'
+type PlanBillingTone = 'ok' | 'warning' | 'blocked'
 
 export function planBillingTone(entitlement: OrcaBillingEntitlement): PlanBillingTone {
   if (!entitlement.canStartSandbox) {

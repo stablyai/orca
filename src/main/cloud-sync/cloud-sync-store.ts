@@ -4,12 +4,12 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { CloudSyncChoice, IndexEntry } from './cloud-sync-plan'
+import type { CloudSyncChoice } from './cloud-sync-plan'
 
 export type { CloudSyncChoice }
 
 /** `.context` is small and holds what people come back for (plans, screenshots): on by default. */
-export const DEFAULT_SYNC_CHOICE: CloudSyncChoice = { context: true }
+const DEFAULT_SYNC_CHOICE: CloudSyncChoice = { context: true }
 
 const ChoicesSchema = z.object({
   version: z.literal(1),
@@ -113,4 +113,3 @@ function safeJson(raw: string): unknown {
 }
 
 export type CloudSyncStore = ReturnType<typeof createCloudSyncStore>
-export type { IndexEntry }

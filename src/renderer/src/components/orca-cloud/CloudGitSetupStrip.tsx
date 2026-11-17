@@ -1,4 +1,4 @@
-// GIT-SETUP: one strip above the workspace's panes (never one per split pane) while the sandbox
+// One strip above the workspace's panes (never one per split pane) while the sandbox
 // reports that its teammates' git identities couldn't be installed. Same shape as the cloud sign-in
 // strip; its action is the workspace Restart, whose boot installs them again.
 import React from 'react'
@@ -53,8 +53,8 @@ export function CloudGitSetupStrip({
   worktreeId: string | null
 }): React.JSX.Element | null {
   const id = worktreeId ?? ''
-  // PAIRED-GIT-SETUP: a paired row's status reads like an owned one's, and its Restart reaches the
-  // sandbox (PAIRED-WAKE), so its strip shows the same way.
+  // A paired row's status reads like an owned one's, and its Restart reaches the
+  // sandbox, so its strip shows the same way.
   const isCloud = useCloudWorkspace((s) => (worktreeId ? isCloudStatusRow(s, worktreeId) : false))
   const gitSetupFailed = useCloudWorkspace((s) => s.status[id]?.status?.gitSetupFailed === true)
   const dismissed = useCloudGitSetup((s) => s.dismissed[id] === true)

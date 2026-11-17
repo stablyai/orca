@@ -1,4 +1,4 @@
-// S0 · Settings › Orca Cloud › Cloud agent sign-ins (agent-accounts spec §5): the one place a Claude or
+// Settings › Orca Cloud › Cloud agent sign-ins (agent-accounts spec §5): the one place a Claude or
 // ChatGPT account is connected to Orca Cloud, once, on this computer. Rows show states only; the
 // setup-token is captured in main and a pasted one goes to main once and never comes back.
 import type React from 'react'
@@ -22,7 +22,7 @@ export type {
   OrcaCloudAccountsViewProps
 } from './orca-cloud-accounts-types'
 
-export const ORCA_CLOUD_ACCOUNTS_SECTION_ID = 'orca-cloud'
+const ORCA_CLOUD_ACCOUNTS_SECTION_ID = 'orca-cloud'
 
 function setupAnnouncement(
   rows: Record<OrcaCloudAccountAgent, OrcaCloudAccountRow>,

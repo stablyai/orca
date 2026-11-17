@@ -29,7 +29,7 @@ export async function listCheckpointRefs(repo: CheckpointRepo, prefix: string): 
   return (await listRefs(repo, prefix)).map((entry) => entry.ref)
 }
 
-export async function deleteCheckpointRefs(repo: CheckpointRepo, refs: string[]): Promise<void> {
+async function deleteCheckpointRefs(repo: CheckpointRepo, refs: string[]): Promise<void> {
   const owned = refs.filter((ref) => ref.startsWith(CHECKPOINT_REF_ROOT))
   if (owned.length === 0) {
     return

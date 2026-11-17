@@ -27,7 +27,7 @@ import { CurrentPlanStrip, TrialOfferStrip, TrialStrip } from './PlansCurrentPla
 import { resolvePlansModel } from './plans-model'
 import { annualSavingsPercent, shownInterval } from './plans-pricing'
 
-export type PlansDialogViewProps = {
+type PlansDialogViewProps = {
   /** null while billing's first answer is on its way. */
   billing: OrcaBillingStatusResult | null
   /** null while the plan catalog loads. */

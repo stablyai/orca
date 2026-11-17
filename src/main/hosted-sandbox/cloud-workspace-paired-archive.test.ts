@@ -35,7 +35,7 @@ afterEach(() => {
 
 const target = { workspaceId: 'row', environmentId: 'env-gh' }
 
-describe('Archive for a paired cloud workspace (PAIRED-ARCHIVE)', () => {
+describe('Archive for a paired cloud workspace', () => {
   it('archives its bound sandbox with the PRs, and no checkouts (main never caches them)', async () => {
     const archive = vi.fn(async () => undefined)
     const pullRequests = [{ number: 7, url: 'https://github.com/o/r/pull/7', title: 'x' }]
@@ -85,7 +85,7 @@ describe('Archive for a paired cloud workspace (PAIRED-ARCHIVE)', () => {
   })
 })
 
-describe('Unarchive for a paired cloud workspace (PAIRED-ARCHIVE)', () => {
+describe('Unarchive for a paired cloud workspace', () => {
   it('unarchives its bound sandbox, reconnects only its server, and reports waking', async () => {
     const unarchive = vi.fn(async () => undefined)
     const invalidate = vi.fn(async () => undefined)

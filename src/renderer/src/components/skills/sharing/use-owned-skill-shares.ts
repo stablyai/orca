@@ -59,7 +59,7 @@ export function useOwnedSkillShares(): OwnedSkillShares {
 
   useEffect(() => {
     void load()
-    // EP-7: a link published (or revoked) anywhere on this computer shows here at once.
+    // A link published (or revoked) anywhere on this computer shows here at once.
     const unsubscribe = onSkillSharesChanged(() => void load())
     return () => {
       unsubscribe()

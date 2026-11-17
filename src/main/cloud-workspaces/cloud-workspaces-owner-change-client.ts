@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: changing a workspace's owner and the previous owner's notices, on the same
+// Changing a workspace's owner and the previous owner's notices, on the same
 // authenticated call as the rest of the team registry client.
 import type { z } from 'zod'
 import {
@@ -21,7 +21,7 @@ type Call = <T>(
  * The control plane puts the workspace to sleep before it changes the owner, then asks Orca Cloud
  * auth up to three things (6 s each). The usual 20 s would give up on a change that then lands.
  */
-export const OWNER_CHANGE_TIMEOUT_MS = 90_000
+const OWNER_CHANGE_TIMEOUT_MS = 90_000
 
 export function cloudWorkspaceOwnerChangeMethods(call: Call) {
   return {

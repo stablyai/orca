@@ -94,10 +94,10 @@ export async function runSleepWorktrees(
   const ownedCloud = getCloudWorkspaceSnapshot().ids
   for (const id of worktreeIds) {
     if (ownedCloud.has(id) || isPairedCloudWorkspace(id)) {
-      // Saving its read-only copy until the asleep view reads one back (SLEEP-IN-PROGRESS); a
+      // Saving its read-only copy until the asleep view reads one back; a
       // PAIRED one's is the sealed snapshot its sandbox hands the control plane as it sleeps.
       markSleepCopySaving(id, pressedAt)
-      // Its terminals drop on purpose: no "Reattaching terminal" until it's asleep (n64 P3).
+      // Its terminals drop on purpose: no "Reattaching terminal" until it's asleep.
       noteDeliberateCloudStop(id, pressedAt)
     }
     notePredictiveWakeSlept(id)
@@ -107,7 +107,7 @@ export async function runSleepWorktrees(
   }
   const { errors, results, vmStillRunningIds, unsleptWorktreeIds } =
     await sleepWorktreesReportingFailures(worktreeIds, { markChatsAsleep: true })
-  // SLEEP-RECONNECT-BANNER: a paired workspace is still going to sleep until its sandbox has slept
+  // A paired workspace is still going to sleep until its sandbox has slept
   // through the control plane below and its status says so (it has no local record that flips).
   const pairedIds = new Set(worktreeIds.filter((id) => isPairedCloudWorkspace(id)))
   for (const id of worktreeIds) {
@@ -126,7 +126,7 @@ export async function runSleepWorktrees(
     clearSleepCopySave(id)
     clearDeliberateCloudStop(id)
   }
-  // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
+  // A paired cloud workspace's sandbox sleeps through the control plane.
   const unslept = new Set(unsleptWorktreeIds)
   const { stillRunning: pairedStillRunning, refused: pairedRefused } =
     await sleepPairedCloudSandboxes(worktreeIds.filter((id) => !unslept.has(id))).finally(() => {
@@ -210,13 +210,13 @@ export type WorktreeSleepOutcome = {
 }
 
 /** The sleep without the toast, for callers that report failures themselves. */
-/** PAIRED-ARCHIVE-STALL: how long a PAIRED workspace's host-side Sleep may take before it is left behind. */
+/** How long a PAIRED workspace's host-side Sleep may take before it is left behind. */
 export const PAIRED_HOST_SLEEP_TIMEOUT_MS = 30_000
 
 /**
  * A paired workspace's host-side Sleep (its terminals, over the paired connection) can hang when that
  * connection is slow or reconnecting; then neither the control-plane suspend (what stops billing) nor
- * an Archive waiting on this Sleep ever ran (n40b). With a paired target in the batch, the host step
+ * an Archive waiting on this Sleep ever ran. With a paired target in the batch, the host step
  * is bounded: past the timeout a paired target gets no outcome (its sandbox is still put to sleep by
  * the control plane next), and any other target reports the timeout as a failure.
  */

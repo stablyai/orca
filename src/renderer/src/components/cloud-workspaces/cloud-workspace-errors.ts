@@ -10,7 +10,7 @@ import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
  * Whose seat a start counts against. The per-seat running cap counts the workspace owner's seat,
  * not the seat of whoever wakes or opens it (control plane `requireStart(row.user_id)`).
  */
-export type CloudWorkspaceSeatOwner = { self: boolean; name: string | null }
+type CloudWorkspaceSeatOwner = { self: boolean; name: string | null }
 
 // Codes describeError() has specific copy for; anything else from a 5xx is an unknown server failure.
 const DESCRIBED_CODES: ReadonlySet<string> = new Set([
@@ -30,7 +30,7 @@ export function isUnknownServerFailure(error: string, status?: number): boolean 
 }
 
 /** The team's MFA policy refused the request: not a session problem, so never "sign in again". */
-export function mfaRequiredMessage(t: Translate = translate): string {
+function mfaRequiredMessage(t: Translate = translate): string {
   return t(
     'auto.components.teamMfa.requiredInline',
     'Your team requires two-factor authentication. Set it up in Settings, Account to use its cloud workspaces.'

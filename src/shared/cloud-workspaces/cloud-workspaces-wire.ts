@@ -62,10 +62,10 @@ export const CloudWorkspaceSchema = z.object({
   fromRoutine: z.boolean().optional().catch(undefined),
   // The routine that started it, for routine runs (shown as "Routine · <name>").
   routineName: z.string().max(200).nullable().optional().catch(undefined),
-  // OWNER-TRANSFER: set once its owner was ever changed (a workspace made from one inherits it).
+  // Set once its owner was ever changed (a workspace made from one inherits it).
   // From then on it runs in shared credential mode for good. Older control planes omit it.
   ownershipTransferredAt: z.number().nullable().optional().catch(undefined),
-  // GIT-ACTOR: who pushes and PRs go out as right now (the control plane's own rule: the owner, else the Orca
+  // Who pushes and PRs go out as right now (the control plane's own rule: the owner, else the Orca
   // bot). Approvals always go out as the bot. Present only on rows the caller may open; older control planes omit
   // it. Older control planes may still send the retired multi-member reasons (`no_sender_yet`,
   // `sender_not_connected`, `window_expired`, which read as the plain bot line) and `until` (dropped).

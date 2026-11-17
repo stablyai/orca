@@ -1,10 +1,10 @@
-// SEC-5: a cloud workspace shared with teammates gets no personal secrets (its owner's or anyone's).
+// A cloud workspace shared with teammates gets no personal secrets (its owner's or anyone's).
 // What a workspace-scoped secrets view should answer for: the shared mode drops personal values.
 import type { CloudSecretWorkspaceMode } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 
 /**
- * 'shared' when the workspace is shared, or when its sharing can't be read (fails closed, like D13):
- * promising a personal value that the workspace won't get is the mismatch SEC-5 removes.
+ * 'shared' when the workspace is shared, or when its sharing can't be read (fails closed, like the
+ * running-pane sign-in check): promising a personal value that the workspace won't get is a mismatch.
  * No runtime environment (a workspace still being created, or none known): 'private'.
  */
 export async function cloudWorkspaceSecretsMode(
