@@ -35,6 +35,8 @@ export class JournalSqlReaderPool {
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
   private readonly replyCredit = new JournalReaderReplyCredit()
+  /** Lifetime totals of readers already replaced, so the pool's totals never go backwards. */
+  private readonly replaced = { receivedBytes: 0, consumedBytes: 0, creditWaitsExpired: 0 }
 
   constructor(
     private readonly filename: string,
@@ -55,9 +57,7 @@ export class JournalSqlReaderPool {
       unconsumed: 0,
       waiting: 0,
       oldestWaitMs: 0,
-      receivedBytes: 0,
-      consumedBytes: 0,
-      creditWaitsExpired: 0,
+      ...this.replaced,
       outstandingBytes: this.replyCredit.outstandingBytes()
     }
     for (const slot of this.slots) {
@@ -203,6 +203,10 @@ export class JournalSqlReaderPool {
     for (let index = this.slots.length - 1; index >= 0; index--) {
       if (this.slots[index]!.failed) {
         const [failed] = this.slots.splice(index, 1)
+        const stats = failed!.admissionStats()
+        this.replaced.receivedBytes += stats.receivedBytes
+        this.replaced.consumedBytes += stats.consumedBytes
+        this.replaced.creditWaitsExpired += stats.creditWaitsExpired
         const closed = failed!.close().finally(() => this.retiring.delete(closed))
         this.retiring.add(closed)
       }
