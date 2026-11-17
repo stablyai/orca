@@ -20,7 +20,6 @@ import {
 import { getPaletteOwnershipWorktreeIds } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Translate } from '@/i18n/use-translate'
-import { excludeActiveStripOpenTabEntries } from './open-tab-strip-exclusion'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -200,57 +199,63 @@ export function buildOpenTabSearchBrowserPages(
   })
 }
 
-export type BuildOpenTabSearchEntriesOptions = {
-  clientHostedRowActive?: boolean
-  groupId?: string | null
-  t?: Translate
-}
-
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
   agentState: OpenTabSearchAgentState,
   chatNames: StructuredChatTabNames,
-  options: BuildOpenTabSearchEntriesOptions = {}
+  excludedTabId: string | null = null,
+  t?: Translate
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
+  const excludedTab = state.unifiedTabsByWorktree[state.worktree.id]?.find(
+    (tab) => tab.id === excludedTabId
+  )
 
-  return excludeActiveStripOpenTabEntries(
-    {
-      workspaceTabs: buildSearchableWorkspaceTabEntries({
+  const entries = {
+    workspaceTabs: buildSearchableWorkspaceTabEntries({
+      ...scope,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+      tabsByWorktree: state.tabsByWorktree,
+      openFiles: state.openFiles,
+      agentStatusByPaneKey: agentState.agentStatusByPaneKey,
+      sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
+      terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
+      activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+      groupsByWorktree: state.groupsByWorktree,
+      activeWorktreeId: state.activeWorktreeId,
+      activeTabType: state.activeTabType,
+      activeTabId: state.activeTabId,
+      activeTabIdByWorktree: state.activeTabIdByWorktree,
+      activeFileId: state.activeFileId,
+      activeFileIdByWorktree: state.activeFileIdByWorktree,
+      activeTabTypeByWorktree: state.activeTabTypeByWorktree,
+      generatedTitlesEnabled: state.generatedTitlesEnabled,
+      chatNames
+    }),
+    browserPages: buildOpenTabSearchBrowserPages(state, scope),
+    simulatorTabs: buildSearchableSimulatorTabs(
+      {
         ...scope,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-        tabsByWorktree: state.tabsByWorktree,
-        openFiles: state.openFiles,
-        agentStatusByPaneKey: agentState.agentStatusByPaneKey,
-        sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
-        terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
-        paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
         activeGroupIdByWorktree: state.activeGroupIdByWorktree,
         groupsByWorktree: state.groupsByWorktree,
         activeWorktreeId: state.activeWorktreeId,
-        activeTabType: state.activeTabType,
-        activeTabId: state.activeTabId,
-        activeTabIdByWorktree: state.activeTabIdByWorktree,
-        activeFileId: state.activeFileId,
-        activeFileIdByWorktree: state.activeFileIdByWorktree,
-        activeTabTypeByWorktree: state.activeTabTypeByWorktree,
-        generatedTitlesEnabled: state.generatedTitlesEnabled,
-        chatNames
-      }),
-      browserPages: buildOpenTabSearchBrowserPages(state, scope),
-      simulatorTabs: buildSearchableSimulatorTabs(
-        {
-          ...scope,
-          unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-          activeGroupIdByWorktree: state.activeGroupIdByWorktree,
-          groupsByWorktree: state.groupsByWorktree,
-          activeWorktreeId: state.activeWorktreeId,
-          activeTabType: state.activeTabType
-        },
-        options.t
-      )
-    },
-    state,
-    options
-  )
+        activeTabType: state.activeTabType
+      },
+      t
+    )
+  }
+  return {
+    workspaceTabs: entries.workspaceTabs.filter((entry) => entry.tab.id !== excludedTabId),
+    browserPages: entries.browserPages.filter(
+      (entry) =>
+        !(
+          excludedTab?.contentType === 'browser' &&
+          entry.workspace.id === excludedTab.entityId &&
+          entry.workspace.activePageId === entry.page.id
+        )
+    ),
+    simulatorTabs: entries.simulatorTabs.filter((entry) => entry.tab.id !== excludedTabId)
+  }
 }

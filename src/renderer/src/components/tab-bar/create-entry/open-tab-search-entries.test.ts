@@ -4,7 +4,9 @@ import {
   buildBrowserPage,
   buildWorkspaceFromPage
 } from '@/store/slices/browser/pages/browser-page-records'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import {
   buildOpenTabSearchEntries,
   selectOpenTabSearchAgentState,
@@ -19,7 +21,7 @@ function baseState(overrides: Partial<OpenTabSearchEntryState>): OpenTabSearchEn
     activeBrowserTabId: null,
     activeFileId: null,
     activeFileIdByWorktree: {},
-    activeGroupIdByWorktree: { [worktree.id]: 'group-left' },
+    activeGroupIdByWorktree: {},
     activeTabId: null,
     activeTabIdByWorktree: {},
     activeTabType: 'terminal',
@@ -42,207 +44,104 @@ function baseState(overrides: Partial<OpenTabSearchEntryState>): OpenTabSearchEn
 }
 
 describe('buildOpenTabSearchEntries', () => {
-  it('omits the active tab of the strip while keeping inactive and sibling-split tabs', () => {
+  it('omits the visible tab while keeping inactive and sibling-split tabs', () => {
     const state = baseState({
-      activeTabId: 'term-active',
       tabsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'term-active',
-            worktreeId: worktree.id,
-            ptyId: null,
-            title: 'Claude recovery',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0
-          },
-          {
-            id: 'term-inactive',
-            worktreeId: worktree.id,
-            ptyId: null,
-            title: 'Claude follow-up',
-            customTitle: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 1
-          },
-          {
-            id: 'term-sibling',
-            worktreeId: worktree.id,
-            ptyId: null,
-            title: 'Claude sibling',
-            customTitle: null,
-            color: null,
-            sortOrder: 2,
-            createdAt: 2
-          }
-        ]
-      },
-      groupsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'group-left',
-            worktreeId: worktree.id,
-            activeTabId: 'utab-active',
-            tabOrder: ['utab-active', 'utab-inactive']
-          },
-          {
-            id: 'group-right',
-            worktreeId: worktree.id,
-            activeTabId: 'utab-sibling',
-            tabOrder: ['utab-sibling']
-          }
-        ]
+        [worktree.id]: ['active', 'inactive', 'sibling'].map((id) =>
+          makeTab({ id: `term-${id}`, worktreeId: worktree.id, title: `Claude ${id}` })
+        )
       },
       unifiedTabsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'utab-active',
-            entityId: 'term-active',
-            groupId: 'group-left',
+        [worktree.id]: ['active', 'inactive', 'sibling'].map((id) =>
+          makeUnifiedTab({
+            id: `utab-${id}`,
+            entityId: `term-${id}`,
             worktreeId: worktree.id,
-            contentType: 'terminal',
-            label: 'Claude recovery',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0
-          },
-          {
-            id: 'utab-inactive',
-            entityId: 'term-inactive',
-            groupId: 'group-left',
-            worktreeId: worktree.id,
-            contentType: 'terminal',
-            label: 'Claude follow-up',
-            customLabel: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 1
-          },
-          {
-            id: 'utab-sibling',
-            entityId: 'term-sibling',
-            groupId: 'group-right',
-            worktreeId: worktree.id,
-            contentType: 'terminal',
-            label: 'Claude sibling',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 2
-          }
-        ]
+            groupId: id === 'sibling' ? 'right' : 'left'
+          })
+        )
       }
     })
 
-    const leftEntries = buildOpenTabSearchEntries(state, agentState, new Map(), {
-      groupId: 'group-left'
-    })
-    expect(leftEntries.workspaceTabs.map((entry) => entry.tab.id)).toEqual([
+    const entries = buildOpenTabSearchEntries(state, agentState, new Map(), 'utab-active')
+    expect(entries.workspaceTabs.map((entry) => entry.tab.id)).toEqual([
       'utab-inactive',
       'utab-sibling'
     ])
 
-    const clientHostedEntries = buildOpenTabSearchEntries(state, agentState, new Map(), {
-      groupId: 'group-left',
-      clientHostedRowActive: true
-    })
-    expect(clientHostedEntries.workspaceTabs.map((entry) => entry.tab.id)).toEqual([
+    // A paired-device browser row covers the real tab, so the strip excludes nothing.
+    const covered = buildOpenTabSearchEntries(state, agentState, new Map(), null)
+    expect(covered.workspaceTabs.map((entry) => entry.tab.id)).toEqual([
       'utab-active',
       'utab-inactive',
       'utab-sibling'
     ])
   })
 
-  it('omits only the active page of the strip active browser tab', () => {
-    const activePage = buildBrowserPage(
+  it('omits only the visible browser page, keeping background pages and other browser tabs', () => {
+    const active = buildBrowserPage(
       'bws-1',
       worktree.id,
       'https://claude.ai',
       'Claude',
       undefined,
-      'page-active'
+      'active'
     )
-    const backgroundPage = buildBrowserPage(
+    const background = buildBrowserPage(
       'bws-1',
       worktree.id,
       'https://cloudflare.com',
       'Cloudflare',
       undefined,
-      'page-background'
+      'background'
     )
-    const otherTabPage = buildBrowserPage(
+    const other = buildBrowserPage(
       'bws-2',
       worktree.id,
       'https://cli.github.com',
       'GitHub CLI',
       undefined,
-      'page-other-tab'
+      'other'
     )
     const state = baseState({
-      activeTabType: 'browser',
-      activeBrowserTabId: 'bws-1',
       browserTabsByWorktree: {
         [worktree.id]: [
-          buildWorkspaceFromPage('bws-1', worktree.id, activePage, [
-            activePage.id,
-            backgroundPage.id
-          ]),
-          buildWorkspaceFromPage('bws-2', worktree.id, otherTabPage, [otherTabPage.id])
+          buildWorkspaceFromPage('bws-1', worktree.id, active, [active.id, background.id]),
+          buildWorkspaceFromPage('bws-2', worktree.id, other, [other.id])
         ]
       },
-      browserPagesByWorkspace: {
-        'bws-1': [activePage, backgroundPage],
-        'bws-2': [otherTabPage]
-      },
-      groupsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'group-left',
+      browserPagesByWorkspace: { 'bws-1': [active, background], 'bws-2': [other] },
+      unifiedTabsByWorktree: {
+        [worktree.id]: ['bws-1', 'bws-2'].map((id) =>
+          makeUnifiedTab({
+            id: `utab-${id}`,
+            entityId: id,
             worktreeId: worktree.id,
-            activeTabId: 'utab-bws-1',
-            tabOrder: ['utab-bws-1', 'utab-bws-2']
-          }
-        ]
-      },
+            groupId: 'left',
+            contentType: 'browser'
+          })
+        )
+      }
+    })
+
+    const entries = buildOpenTabSearchEntries(state, agentState, new Map(), 'utab-bws-1')
+    expect(entries.browserPages.map((entry) => entry.page.id)).toEqual(['background', 'other'])
+  })
+
+  it('omits the visible simulator even without persisted groups', () => {
+    const state = baseState({
       unifiedTabsByWorktree: {
         [worktree.id]: [
-          {
-            id: 'utab-bws-1',
-            entityId: 'bws-1',
-            groupId: 'group-left',
+          makeUnifiedTab({
+            id: 'sim',
             worktreeId: worktree.id,
-            contentType: 'browser',
-            label: 'Claude',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0
-          },
-          {
-            id: 'utab-bws-2',
-            entityId: 'bws-2',
-            groupId: 'group-left',
-            worktreeId: worktree.id,
-            contentType: 'browser',
-            label: 'GitHub CLI',
-            customLabel: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: 1
-          }
+            groupId: worktree.id,
+            contentType: 'simulator'
+          })
         ]
       }
     })
 
-    const entries = buildOpenTabSearchEntries(state, agentState, new Map(), {
-      groupId: 'group-left'
-    })
-    expect(entries.browserPages.map((entry) => entry.page.id)).toEqual([
-      'page-background',
-      'page-other-tab'
-    ])
+    expect(buildOpenTabSearchEntries(state, agentState, new Map(), 'sim').simulatorTabs).toEqual([])
   })
 })

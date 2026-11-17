@@ -1,7 +1,9 @@
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from '../TabBar'
 
@@ -16,49 +18,11 @@ const repo: Repo = {
   addedAt: 0
 }
 
-const worktree: Worktree = {
-  id: WORKSPACE_ID,
-  repoId: repo.id,
-  path: '/workspace/orca',
-  head: 'abc1234',
-  branch: 'refs/heads/main',
-  isBare: false,
-  isMainWorktree: true,
-  displayName: 'orca',
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-}
-
-const activeClaudeTab: TerminalTab = {
-  id: 'term-active',
-  worktreeId: WORKSPACE_ID,
-  ptyId: null,
-  title: 'Claude recovery',
-  customTitle: null,
-  color: null,
-  sortOrder: 0,
-  createdAt: 0,
-  launchAgent: 'claude'
-}
-
-const inactiveClaudeTab: TerminalTab = {
-  id: 'term-inactive',
-  worktreeId: WORKSPACE_ID,
-  ptyId: null,
-  title: 'Claude follow-up',
-  customTitle: null,
-  color: null,
-  sortOrder: 1,
-  createdAt: 1,
-  launchAgent: 'claude'
-}
+const worktree = makeWorktree({ id: WORKSPACE_ID, repoId: repo.id, path: '/workspace/orca' })
+const tabs = ['Claude recovery', 'Claude follow-up'].map((title, index) =>
+  makeTab({ id: `term-${index}`, worktreeId: WORKSPACE_ID, title, launchAgent: 'claude' })
+)
+const activeClaudeTab = tabs[0]!
 
 const noop = (): void => {}
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 250))
@@ -88,7 +52,7 @@ function Strip({ tabs }: { tabs: TerminalTab[] }): React.JSX.Element {
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
           groupId={GROUP_ID}
-          groupActiveTabId="utab-active"
+          groupActiveTabId="utab-0"
           expandedPaneByTabId={{}}
           showAgentLaunchItems
           onActivate={noop}
@@ -108,100 +72,46 @@ function Strip({ tabs }: { tabs: TerminalTab[] }): React.JSX.Element {
   )
 }
 
-export const activeTabOmitted = defineFixture({
-  width: 560,
-  store: {
-    activeWorktreeId: WORKSPACE_ID,
-    activeTabId: activeClaudeTab.id,
-    activeTabType: 'terminal',
-    activeGroupIdByWorktree: { [WORKSPACE_ID]: GROUP_ID },
-    repos: [repo],
-    worktreesByRepo: { [repo.id]: [worktree] },
-    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    tabsByWorktree: { [WORKSPACE_ID]: [activeClaudeTab] },
-    groupsByWorktree: {
-      [WORKSPACE_ID]: [
-        {
-          id: GROUP_ID,
-          worktreeId: WORKSPACE_ID,
-          activeTabId: 'utab-active',
-          tabOrder: ['utab-active']
-        }
-      ]
+function searchFixture(count: number) {
+  const fixtureTabs = tabs.slice(0, count)
+  const unifiedTabs = fixtureTabs.map((tab, index) =>
+    makeUnifiedTab({
+      id: `utab-${index}`,
+      entityId: tab.id,
+      groupId: GROUP_ID,
+      worktreeId: WORKSPACE_ID,
+      label: tab.title,
+      sortOrder: index
+    })
+  )
+  return defineFixture({
+    width: 560,
+    store: {
+      activeWorktreeId: WORKSPACE_ID,
+      activeTabId: activeClaudeTab.id,
+      activeTabType: 'terminal',
+      activeGroupIdByWorktree: { [WORKSPACE_ID]: GROUP_ID },
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [worktree] },
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      ensureDetectedAgents: async () => ['claude', 'codex'],
+      tabsByWorktree: { [WORKSPACE_ID]: fixtureTabs },
+      groupsByWorktree: {
+        [WORKSPACE_ID]: [
+          makeTabGroup({
+            id: GROUP_ID,
+            worktreeId: WORKSPACE_ID,
+            activeTabId: 'utab-0',
+            tabOrder: unifiedTabs.map((tab) => tab.id)
+          })
+        ]
+      },
+      unifiedTabsByWorktree: { [WORKSPACE_ID]: unifiedTabs }
     },
-    unifiedTabsByWorktree: {
-      [WORKSPACE_ID]: [
-        {
-          id: 'utab-active',
-          entityId: activeClaudeTab.id,
-          groupId: GROUP_ID,
-          worktreeId: WORKSPACE_ID,
-          contentType: 'terminal',
-          label: activeClaudeTab.title,
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0
-        }
-      ]
-    }
-  },
-  render: () => <Strip tabs={[activeClaudeTab]} />,
-  interact: (frame) => openMenuAndSearch(frame, 'cl')
-})
+    render: () => <Strip tabs={fixtureTabs} />,
+    interact: (frame) => openMenuAndSearch(frame, 'cl')
+  })
+}
 
-export const inactiveTabOffered = defineFixture({
-  width: 560,
-  store: {
-    activeWorktreeId: WORKSPACE_ID,
-    activeTabId: activeClaudeTab.id,
-    activeTabType: 'terminal',
-    activeGroupIdByWorktree: { [WORKSPACE_ID]: GROUP_ID },
-    repos: [repo],
-    worktreesByRepo: { [repo.id]: [worktree] },
-    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    tabsByWorktree: { [WORKSPACE_ID]: [activeClaudeTab, inactiveClaudeTab] },
-    groupsByWorktree: {
-      [WORKSPACE_ID]: [
-        {
-          id: GROUP_ID,
-          worktreeId: WORKSPACE_ID,
-          activeTabId: 'utab-active',
-          tabOrder: ['utab-active', 'utab-inactive']
-        }
-      ]
-    },
-    unifiedTabsByWorktree: {
-      [WORKSPACE_ID]: [
-        {
-          id: 'utab-active',
-          entityId: activeClaudeTab.id,
-          groupId: GROUP_ID,
-          worktreeId: WORKSPACE_ID,
-          contentType: 'terminal',
-          label: activeClaudeTab.title,
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0
-        },
-        {
-          id: 'utab-inactive',
-          entityId: inactiveClaudeTab.id,
-          groupId: GROUP_ID,
-          worktreeId: WORKSPACE_ID,
-          contentType: 'terminal',
-          label: inactiveClaudeTab.title,
-          customLabel: null,
-          color: null,
-          sortOrder: 1,
-          createdAt: 1
-        }
-      ]
-    }
-  },
-  render: () => <Strip tabs={[activeClaudeTab, inactiveClaudeTab]} />,
-  interact: (frame) => openMenuAndSearch(frame, 'cl')
-})
+export const activeTabOmitted = searchFixture(1)
+export const inactiveTabOffered = searchFixture(2)
