@@ -177,9 +177,18 @@ describe('Claude prompt event arriving after its turn', () => {
 
   it('keeps a replayed finished turn done when its prompt event replays after it', () => {
     event({ hook_event_name: 'Stop', prompt_id: FIRST }, true)
+    event({ hook_event_name: 'Stop', session_id: 'session-b', prompt_id: SECOND }, true)
 
     expect(
-      event({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'hi' }, true)?.payload
+      event(
+        {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session-b',
+          prompt_id: SECOND,
+          prompt: 'hi'
+        },
+        true
+      )?.payload
     ).toMatchObject({ state: 'done', prompt: 'hi' })
   })
 

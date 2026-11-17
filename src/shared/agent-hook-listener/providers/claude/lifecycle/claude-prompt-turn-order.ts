@@ -60,7 +60,8 @@ function orderClaudeTurn(
     if (isPrompt && known.retiredSessionIds.includes(sessionId)) {
       return null
     }
-    if (isReplay) {
+    // Before live delivery, replays restate the recorded session changes in order.
+    if (isReplay && known.live) {
       return passThrough
     }
     turns = {
@@ -100,7 +101,7 @@ function orderClaudeTurn(
   }
   if (isReplay && turns.live) {
     // A replay after live events is older than them; it is recognized but never becomes the current turn.
-    if (turns.turnIds.length < TURN_IDS_PER_SESSION) {
+    if (turns.turnIds.length > 0 && turns.turnIds.length < TURN_IDS_PER_SESSION) {
       turns.turnIds = [promptId, ...turns.turnIds]
     }
     return { eventName, opensTurn: false }
