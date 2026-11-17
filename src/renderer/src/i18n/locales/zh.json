@@ -778,21 +778,37 @@
       "tryAgain": "重试",
       "keeps": "项目、工作树和 Orca 设置会保留",
       "keepsShared": "{{name}} 也已安装，因此与它共用的钩子也会保留",
+      "closesTerminals": "打开的终端将会关闭",
       "removing": "正在移除…",
       "button": "卸载",
       "uninstalling": "正在卸载…",
       "rows": {
+        "hooksIn": "{{targets}}中的钩子",
         "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> 命令行工具",
         "service": "<cmd>orca serve</cmd> 服务器",
-        "hookScripts": "钩子脚本"
+        "hookScripts": "钩子脚本",
+        "terminalDaemon": "终端后台进程"
       },
       "retry": "重试",
+      "hookTargets": {
+        "agents_other": "{{count}} 个智能体",
+        "sshHosts_other": "{{count}} 台 SSH 主机"
+      },
+      "path": {
+        "codexAccount": "由 Orca 管理的 Codex 账户",
+        "appData": "Orca 应用数据"
+      },
       "host": {
-        "connected": "已连接"
+        "ssh": "SSH",
+        "connected": "已连接",
+        "notConnected": "未连接",
+        "notConnectedRun": "未连接，请在该主机上运行 <cmd>{{command}}</cmd>"
       },
       "summary": {
+        "hooksIn": "{{targets}}中的钩子",
         "cliCommand": "<cmd>{{name}}</cmd> 命令行工具",
         "service": "<cmd>orca serve</cmd> 服务器",
+        "terminalDaemon": "终端后台进程",
         "hookScripts": "钩子脚本",
         "nothing": "应用之外没有需要移除的内容",
         "loading": "正在检查 Orca 安装了哪些内容…",
@@ -25687,6 +25703,7 @@
     "createRow": {
       "label": "新建标签页操作，按左右方向键选择，最后一项用于自定义这一行",
       "shownLabel": "显示在 + 菜单中",
+      "hiddenHint": "隐藏的项目仍可通过搜索和各自的快捷键打开",
       "reset": "重置顺序",
       "allShortcuts": "所有键盘快捷键…",
       "hiddenLabel": "已隐藏",
