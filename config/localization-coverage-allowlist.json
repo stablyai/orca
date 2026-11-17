@@ -119,13 +119,6 @@
     "count": 1
   },
   {
-    "filePath": "src/renderer/src/components/sidebar/workspace-card/metadata/worktree-card-meta-row.tsx",
-    "kind": "jsx-attribute:label",
-    "text": "sidebar",
-    "dynamic": false,
-    "count": 1
-  },
-  {
     "filePath": "src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx",
     "kind": "jsx-text",
     "text": "Language",
@@ -227,6 +220,20 @@
     "filePath": "src/renderer/src/components/sidebar/workspace-card/template/card-primitives.tsx",
     "kind": "object-property:title",
     "text": "text-[13px] leading-5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/cloud-environment/cloud-environment-fixture-data.ts",
+    "kind": "object-property:error",
+    "text": "install_failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/cloud-environment/cloud-environment-fixture-data.ts",
+    "kind": "object-property:error",
+    "text": "canceled",
     "dynamic": false,
     "count": 1
   },

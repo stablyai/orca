@@ -25,24 +25,13 @@ import {
 import { reactPluginOptions } from './config/build-plugins/react-compiler'
 import { BUNDLED_MAIN_DEPENDENCIES } from './config/build-plugins/bundled-main-dependencies'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
-
-// Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
-// Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
-const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
-const ORCA_BUILD_IDENTITY_LITERAL =
-  orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
-    ? JSON.stringify(orcaBuildIdentity)
-    : 'null'
-const orcaPostHogWriteKey = process.env.ORCA_POSTHOG_WRITE_KEY
-const ORCA_POSTHOG_WRITE_KEY_LITERAL =
-  typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
-    ? JSON.stringify(orcaPostHogWriteKey)
-    : 'null'
-const orcaDiagnosticsTokenUrl = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
-const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
-  typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0
-    ? JSON.stringify(orcaDiagnosticsTokenUrl)
-    : 'null'
+import { cloudBuildDefaultsDefine } from './config/build-plugins/cloud-build-defaults'
+import {
+  orcaBuildIdentity,
+  ORCA_BUILD_IDENTITY_LITERAL,
+  ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+  ORCA_POSTHOG_WRITE_KEY_LITERAL
+} from './config/build-plugins/official-build-env-literals'
 
 const darkBuildSwitches: {
   darkBuildDefines: () => Record<string, string>
@@ -239,6 +228,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ORCA_CLOUD_BUILD_DEFAULTS: cloudBuildDefaultsDefine(),
       ...DARK_BUILD_DEFINES
     },
     // @xterm/headless declares exports:null; point Vite directly at its published CJS main to permit inlining.

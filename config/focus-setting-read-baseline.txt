@@ -98,9 +98,9 @@
 1 src/renderer/src/components/setup-guide/SetupGuideSidebarEntry.tsx
 1 src/renderer/src/components/sidebar/setup-script-prompts/SetupScriptPromptCard.tsx
 1 src/renderer/src/components/activity/sidebar/SidebarAgentsList.tsx
-1 src/renderer/src/components/sidebar/chrome/SidebarSettingsHelpMenu.tsx
 1 src/renderer/src/components/sidebar/chrome/SidebarTaskNavButton.tsx
 1 src/renderer/src/components/skills/setup/linear-agent-skill-runtime.ts
+1 src/renderer/src/components/sidebar/account-menu/SidebarAccountMenu.tsx
 1 src/renderer/src/components/sidebar/project-admission/drop/sidebar-project-drop.ts
 2 src/renderer/src/components/sidebar/project-admission/drop/useSidebarProjectDrop.ts
 2 src/renderer/src/components/sidebar/project-admission/host-selection/use-add-repo-host-selection.ts
