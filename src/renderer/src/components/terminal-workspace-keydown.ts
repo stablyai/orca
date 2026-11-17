@@ -31,6 +31,7 @@ import {
   launchFloatingWorkspaceAgentShortcut
 } from './agent-tab-shortcut-launch'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
+import { handleTerminalWorkspaceTabMoveShortcut } from './terminal-workspace-tab-move-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function handleTerminalWorkspaceKeyDown(
@@ -289,17 +290,11 @@ export function handleTerminalWorkspaceKeyDown(
       floatingPanelOwned: floatingWorkspaceFocused
     })
   }
-  const moveTabDirection = matchShortcut('tab.moveRight')
-    ? 1
-    : matchShortcut('tab.moveLeft')
-      ? -1
-      : null
-  if (moveTabDirection !== null && claimTabSwitch()) {
-    notifyTerminalCapture(moveTabDirection === 1 ? 'tab.moveRight' : 'tab.moveLeft')
-    dispatchWorkspaceTabCommand({
-      type: 'move',
-      direction: moveTabDirection,
-      floatingPanelOwned: floatingWorkspaceFocused
-    })
-  }
+  handleTerminalWorkspaceTabMoveShortcut({
+    event,
+    floatingWorkspaceFocused,
+    matchShortcut,
+    notifyTerminalCapture,
+    claimTabSwitch
+  })
 }

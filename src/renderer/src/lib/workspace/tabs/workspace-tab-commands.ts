@@ -30,6 +30,9 @@ import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-wo
 import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import type { TabMoveToSplitDirection } from '../../../../../shared/keybindings/tab-move-to-split-definitions'
+import { moveTabToNewPaneColumn } from '../../../components/tab-bar/pane-actions/tab-move-to-pane-column'
+import { selectActiveTabForWorktree } from '@/store/slices/tabs/active-tab-selection'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -52,6 +55,7 @@ export type WorkspaceTabCommand =
     }
   | { type: 'previous-recent'; floatingPanelOwned?: boolean }
   | { type: 'move'; direction: -1 | 1; floatingPanelOwned?: boolean }
+  | { type: 'move-to-split'; direction: TabMoveToSplitDirection; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -133,6 +137,25 @@ function closeFocusedSplitLanding(state: TabState): boolean {
   }
   whenEmptied()
   return true
+}
+
+/** Move the focused group's active tab into a new split, as the tab menu's Move Tab to Split does. */
+function moveActiveTabToSplit(
+  worktreeId: string | null,
+  direction: TabMoveToSplitDirection
+): boolean {
+  const tab = worktreeId ? selectActiveTabForWorktree(useAppStore.getState(), worktreeId) : null
+  if (!worktreeId || !tab) {
+    return false
+  }
+  return (
+    moveTabToNewPaneColumn({
+      worktreeId,
+      unifiedTabId: tab.id,
+      groupId: tab.groupId,
+      direction
+    }) !== false
+  )
 }
 
 /** Move the focused group's active tab past its visible neighbor; moves stop at the group's edges. */
@@ -244,6 +267,17 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
   if (command.type === 'move') {
     const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
     return moveActiveTab(
+      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
+      command.direction
+    )
+  }
+  if (command.type === 'move-to-split') {
+    const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
+    // The workbench stays mounted behind Settings, Tasks and Activity; leave the chord to the visible view.
+    if (!floatingPanelOwned && state.activeView !== 'terminal') {
+      return false
+    }
+    return moveActiveTabToSplit(
       floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
       command.direction
     )

@@ -12,7 +12,11 @@ import { toModifierDoubleTapEvent } from '../../../../../shared/keybindings/modi
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { moveActiveTab } from '@/lib/workspace/tabs/workspace-tab-commands'
+import {
+  dispatchWorkspaceTabCommand,
+  moveActiveTab
+} from '@/lib/workspace/tabs/workspace-tab-commands'
+import { matchTabMoveToSplitAction } from '../../../../../shared/keybindings/tab-move-to-split-definitions'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
@@ -137,6 +141,18 @@ export function useFloatingTerminalGlobalShortcutListeners({
       if (moveTabDirection !== null) {
         consume()
         moveActiveTab(FLOATING_TERMINAL_WORKTREE_ID, moveTabDirection)
+        return
+      }
+      const split = matchTabMoveToSplitAction(matches)
+      if (
+        split &&
+        dispatchWorkspaceTabCommand({
+          type: 'move-to-split',
+          direction: split.direction,
+          floatingPanelOwned: true
+        })
+      ) {
+        consume()
       }
     }
     const handleFloatingPanelKeyUp = (event: KeyboardEvent): void => {

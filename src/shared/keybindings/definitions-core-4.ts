@@ -1,5 +1,6 @@
 import type { KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
+import { buildTabMoveToSplitKeybindingDefinitions } from './tab-move-to-split-definitions'
 
 const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
@@ -167,5 +168,6 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'move', 'right', 'reorder'],
     defaultBindings: platformBindings([])
-  }
+  },
+  ...buildTabMoveToSplitKeybindingDefinitions()
 ]
