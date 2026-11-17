@@ -33,7 +33,7 @@ export function ClaudeAccountRotationControls({
         type="number"
         min={50}
         max={99.9}
-        className="h-6 w-14"
+        className="h-6 w-16"
         title={t('accounts.claude.autoSwitch.threshold', 'Switch at % used')}
         placeholder={String(settings.claudeAutoSwitch.threshold)}
         value={rule.threshold ?? ''}
@@ -46,7 +46,7 @@ export function ClaudeAccountRotationControls({
         type="number"
         min={0}
         max={1000}
-        className="h-6 w-14"
+        className="h-6 w-16"
         title={t('accounts.claude.autoSwitch.priority', 'Priority (higher is used first)')}
         placeholder="0"
         value={rule.priority ?? ''}
