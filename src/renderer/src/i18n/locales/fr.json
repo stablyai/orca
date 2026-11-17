@@ -21489,7 +21489,8 @@
         "installLockWait_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
         "installLockWaitGivesUp_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minute.",
         "installLockWaitGivesUp_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
-        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes."
+        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
+        "installLockWaitHolderGone": "L’autre installation d’Orca dans cette distribution s’est arrêtée. Orca prend le relais dans quelques secondes."
       }
     },
     "agentSummary": {

@@ -164,7 +164,8 @@
         "peerCheckFailed": "Orca 無法向 WSL 主機詢問此電腦上的另一個 Orca 是否仍在使用該主機：{{detail}}",
         "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}",
         "installLockWait_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後接手。",
-        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。"
+        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。",
+        "installLockWaitHolderGone": "此發行版中的另一個 Orca 安裝已停止。Orca 將在幾秒內接手。"
       }
     },
     "agentSummary": {
