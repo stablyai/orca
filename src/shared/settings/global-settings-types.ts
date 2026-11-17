@@ -142,6 +142,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalPaddingX?: number
   terminalPaddingY?: number
   terminalMouseHideWhileTyping?: boolean
+  /** Underline agent-suggested `! command` lines so a click can run them; unset means on. */
+  terminalRunSuggestedCommands?: boolean
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]

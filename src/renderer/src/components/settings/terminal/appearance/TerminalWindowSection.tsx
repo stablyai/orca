@@ -165,6 +165,46 @@ export function TerminalWindowSection({
       </SearchableSetting>
 
       <SearchableSetting
+        title={t(
+          'auto.components.settings.TerminalWindowSection.3ab15cdd6d',
+          'Run suggested commands'
+        )}
+        description={t(
+          'auto.components.settings.TerminalWindowSection.8146bb5ce5',
+          'Underline `! command` lines an agent asks you to run; click to run them in the same terminal.'
+        )}
+        keywords={['command', 'run', 'agent', 'suggested']}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>
+            {t(
+              'auto.components.settings.TerminalWindowSection.3ab15cdd6d',
+              'Run suggested commands'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.settings.TerminalWindowSection.8146bb5ce5',
+              'Underline `! command` lines an agent asks you to run; click to run them in the same terminal.'
+            )}
+          </p>
+        </div>
+        <Switch
+          aria-label={t(
+            'auto.components.settings.TerminalWindowSection.3ab15cdd6d',
+            'Run suggested commands'
+          )}
+          checked={settings.terminalRunSuggestedCommands ?? true}
+          onCheckedChange={(checked) =>
+            updateSettings({
+              terminalRunSuggestedCommands: checked
+            })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
         title={t('auto.components.settings.TerminalWindowSection.c9d73aee44', 'Color overrides')}
         description={t(
           'auto.components.settings.TerminalWindowSection.e86e09b5c7',
