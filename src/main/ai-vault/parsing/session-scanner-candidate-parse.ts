@@ -18,7 +18,6 @@ import {
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ScannedSessionCollection } from './session-root-dedup'
-import { codexRolloutHardlinkIdentity } from '../scanners/codex/codex-session-root-dedup'
 import type { AntigravityWorkspaceResolver } from '../scanners/antigravity/session-scanner-antigravity-history'
 import {
   parseAgentSessionFileCached,
@@ -92,21 +91,12 @@ export async function parseSessionCandidates(args: {
         let selected = false
         let provisional: { candidate: SessionFileCandidate; session: AiVaultSession } | undefined
         let accepted: typeof provisional
-        // A hardlink twin holds the same bytes, so parsing it again cannot change the outcome.
-        const parsedInodes = choice.alternatives ? new Set<string>() : null
         for (const candidate of physicalSessionCandidates(choice)) {
           throwIfAiVaultScanCancelled(args.signal)
-          const inode = parsedInodes && codexRolloutHardlinkIdentity(candidate.file)
-          if (inode && parsedInodes?.has(inode)) {
-            continue
-          }
           if (args.selectCandidate && !(await args.selectCandidate(candidate))) {
             continue
           }
           selected = true
-          if (inode) {
-            parsedInodes?.add(inode)
-          }
           const result = await parseSessionCandidate(candidate, {
             platform: args.platform,
             executionHostId: args.executionHostId,

@@ -178,10 +178,12 @@ export async function groupCodexRolloutCopyAliases<T>(
     }
     const physical = dedupeCodexRolloutFileAliases(group, accessors)
     if (physical !== group) {
-      const kept = new Set(physical)
+      const twinByInode = new Map(physical.map((kept) => [hardlinkKey(kept, accessors), kept]))
       for (const candidate of group) {
-        if (!kept.has(candidate)) {
-          outrankedBy.set(candidate, hardlinkTwin(candidate, physical, accessors))
+        const key = hardlinkKey(candidate, accessors)
+        const twin = key === null ? undefined : twinByInode.get(key)
+        if (twin !== undefined && twin !== candidate) {
+          outrankedBy.set(candidate, twin)
         }
       }
       groups.set(key, physical)
@@ -252,31 +254,15 @@ export async function groupCodexRolloutCopyAliases<T>(
       return []
     }
     const copies = outranked.get(candidate)
-    return [copies ? [candidate, ...copies.sort(codexAliasOrder(accessors))] : [candidate]]
+    return [copies ? [candidate, ...copies] : [candidate]]
   })
 }
 
-function hardlinkTwin<T>(candidate: T, kept: readonly T[], accessors: CodexAliasAccessors<T>): T {
+function hardlinkKey<T>(candidate: T, accessors: CodexAliasAccessors<T>): string | null {
   const identity = accessors.getHardlinkIdentity(candidate)
-  const fileName = lastPathSegment(accessors.getFilePath(candidate))
-  return kept.find(
-    (other) =>
-      accessors.getHardlinkIdentity(other) === identity &&
-      lastPathSegment(accessors.getFilePath(other)) === fileName
-  ) as T
-}
-
-function codexAliasOrder<T>(accessors: CodexAliasAccessors<T>): (left: T, right: T) => number {
-  return (left, right) => {
-    const leftPath = accessors.getFilePath(left)
-    const rightPath = accessors.getFilePath(right)
-    return (
-      codexSessionRootRank(accessors.getCodexHome(left)) -
-        codexSessionRootRank(accessors.getCodexHome(right)) ||
-      Number(leftPath.endsWith('.zst')) - Number(rightPath.endsWith('.zst')) ||
-      (leftPath < rightPath ? -1 : leftPath > rightPath ? 1 : 0)
-    )
-  }
+  return identity === null
+    ? null
+    : `${lastPathSegment(accessors.getFilePath(candidate))}\0${identity}`
 }
 
 export function codexSessionAliasKey(session: AiVaultSession): string | null {

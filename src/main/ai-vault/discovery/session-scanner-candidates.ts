@@ -92,7 +92,6 @@ export async function sessionCandidatesFromDiscoveries(
       }
     }
   }
-  // Outranked copies stay as alternatives so search can retire their rows when the preferred copy flips.
   const candidates: SessionFileChoice[] = (
     await groupCodexRolloutCopyAliases(
       legacy,
@@ -100,8 +99,13 @@ export async function sessionCandidatesFromDiscoveries(
       (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
       options.signal
     )
-  ).map((group) => (group.length === 1 ? group[0] : { ...group[0], alternatives: group }))
-  for (const group of canonical.values()) {
+  ).map(([preferred, ...copies]) =>
+    copies.length === 0 ? preferred : { ...preferred, outrankedCopies: copies }
+  )
+  for (const named of canonical.values()) {
+    const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
+    const kept = group === named ? null : new Set(group)
+    const outrankedCopies = kept ? named.filter((candidate) => !kept.has(candidate)) : []
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||
@@ -109,7 +113,11 @@ export async function sessionCandidatesFromDiscoveries(
         Number(a.file.path.endsWith('.zst')) - Number(b.file.path.endsWith('.zst')) ||
         (a.file.path < b.file.path ? -1 : a.file.path > b.file.path ? 1 : 0)
     )
-    candidates.push(group.length === 1 ? group[0] : { ...group[0], alternatives: group })
+    candidates.push({
+      ...group[0],
+      ...(group.length > 1 ? { alternatives: group } : {}),
+      ...(outrankedCopies.length > 0 ? { outrankedCopies } : {})
+    })
   }
   candidates.sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
   return prioritizeAntigravityTranscriptCandidates(

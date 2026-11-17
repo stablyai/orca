@@ -291,3 +291,32 @@ it.each([
     expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: preferred }])
   }
 )
+
+it('keeps an indexed account copy with extra messages when a shorter preferred copy shares its mtime', async () => {
+  io.failed = ''
+  const shorter = await readFile(managed)
+  await rm(real)
+  await appendFile(
+    managed,
+    `${JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'appendedaliasneedle' }]
+      }
+    })}\n`
+  )
+  const sharedAt = new Date(2026, 0, 1)
+  await utimes(managed, sharedAt, sharedAt)
+  await sweep()
+  await writeFile(real, shorter)
+  await utimes(real, sharedAt, sharedAt)
+  await sweep()
+  await sweep()
+  expect(
+    index.db
+      .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'appendedaliasneedle'")
+      .all()
+  ).toEqual([{ user_text: 'appendedaliasneedle' }])
+})

@@ -41,6 +41,7 @@ export async function runSessionSearchIndexPass(
   let outOfTime = false
   let left = 0
   let heldRemovals = 0
+  let retirementOverdue = false
   for (const choice of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     if (!acceptsReads()) {
@@ -66,16 +67,17 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
-          if (position + 1 < aliases.length) {
-            for (const path of retirableAliasRows(
-              options.rows,
-              candidate,
-              aliases.slice(position + 1)
-            )) {
+          if (!retirementOverdue && (position + 1 < aliases.length || choice.outrankedCopies)) {
+            for (const path of retirableAliasRows(options.rows, candidate, [
+              ...aliases.slice(position + 1),
+              ...(choice.outrankedCopies ?? [])
+            ])) {
               store.removeFile(path)
               if (++heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
                 heldRemovals = 0
                 await store.flush?.()
+                // Later sweeps finish a large first cleanup; the preferred copy stays current.
+                retirementOverdue = options.overdue?.() === true
               }
             }
           }
@@ -138,13 +140,19 @@ export async function runSessionSearchIndexPass(
   return { stats, outOfTime, left }
 }
 
-/** Only an equal mtime (a move, or Codex's timestamp-keeping archive) proves a copy adds nothing. */
+/** Hardlinks, moves and Codex archives keep mtime; same-format copies must also match size. */
 function retirableAliasRows(
   rows: ReadonlyMap<string, SessionSearchFileRow>,
   preferred: SessionFileCandidate,
   outranked: readonly SessionFileCandidate[]
 ): string[] {
   return outranked
-    .filter((alias) => rows.has(alias.file.path) && alias.file.mtimeMs === preferred.file.mtimeMs)
+    .filter(
+      (alias) =>
+        rows.has(alias.file.path) &&
+        alias.file.mtimeMs === preferred.file.mtimeMs &&
+        (alias.file.path.endsWith('.zst') !== preferred.file.path.endsWith('.zst') ||
+          alias.file.sizeBytes === preferred.file.sizeBytes)
+    )
     .map((alias) => alias.file.path)
 }
