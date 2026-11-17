@@ -35,24 +35,11 @@ export function legacySessionHold(
   empty: boolean,
   hasQueue: boolean
 ): LegacySessionHold {
-  // The reconcile tracks chats by record; history whose record an older Orca already removed is
-  // only ever converted, as it was before this check.
   const recorded =
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)
   const revision = journalLegacyChatRevision(source, sessionId) ?? 'null'
   const shown = meta(store, journalLegacyChatRevisionKey(sessionId))
-  if (!recorded) {
-    // Converting never replaces a chat already converted here, so history an older Orca added after
-    // that conversion would only be in the original. No reconcile reads it, so it keeps the original.
-    if (shown !== undefined && shown !== revision && converted(store, sessionId)) {
-      throw new JournalLegacyRetentionError(
-        'an original chat without a record has history this store lacks',
-        'source-history'
-      )
-    }
-    return { convert: true }
-  }
   const here = store
     .prepare(
       `SELECT EXISTS(SELECT 1 FROM agent_session_records WHERE session_id=?1) AS recorded,
@@ -60,17 +47,31 @@ export function legacySessionHold(
         EXISTS(SELECT 1 FROM journal_chat_state WHERE session_id=?1) AS cataloged`
     )
     .get(sessionId)
+  const converted = here?.epoch !== null && here?.epoch !== undefined
+  // Converting never replaces a chat already converted here, so text an older Orca queued in it
+  // since is kept with the original's version.
+  const queueDiffers = converted && hasQueue && !queueHeld(source, store, sessionId)
+  if (!recorded) {
+    // The reconcile tracks chats by record, so history an older Orca added to a converted chat it
+    // no longer records is read by no pass: it keeps the original. Conversions before the
+    // reconcile left no revision to compare, and older Orcas write no turns to a chat they removed.
+    if (converted && shown !== undefined && shown !== revision) {
+      throw new JournalLegacyRetentionError(
+        'an original chat without a record has history this store lacks',
+        'source-history'
+      )
+    }
+    return {
+      convert: true,
+      original: queueDiffers ? originalVersion(source, sessionId) : undefined
+    }
+  }
   if (!here?.recorded && !here?.cataloged) {
-    // Deleted here after reading this revision (its revision key stays): the person's choice. Text an
-    // older Orca queued in it since moves no revision, so the original's waiting text is kept.
+    // Deleted here after reading this revision (its revision key stays): the person's choice. No
+    // content says whether an older Orca renamed it or queued text in it since, so the original's
+    // version is kept.
     if (shown === revision || empty) {
-      return {
-        convert: false,
-        original:
-          hasQueue && unsettledQueue(source, sessionId)
-            ? originalVersion(source, sessionId)
-            : undefined
-      }
+      return { convert: false, original: originalVersion(source, sessionId) }
     }
     throw new JournalLegacyRetentionError('an original chat is not in this store yet')
   }
@@ -82,11 +83,7 @@ export function legacySessionHold(
   return {
     convert: true,
     original:
-      personEditsDiffer(source, store, sessionId) ||
-      (here.epoch !== null &&
-        here.epoch !== undefined &&
-        hasQueue &&
-        !queueHeld(source, store, sessionId))
+      queueDiffers || personEditsDiffer(source, store, sessionId)
         ? originalVersion(source, sessionId)
         : undefined
   }
@@ -104,16 +101,13 @@ export function legacyRecordOnlyHold(
   const recorded = store
     .prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
     .get(sessionId)
-  if (!recorded) {
-    // Deleted here after reading it, or a draft an older Orca made that this store never showed.
-    const read = meta(store, journalLegacyChatRevisionKey(sessionId)) !== undefined
-    return { convert: false, original: read ? undefined : originalVersion(source, sessionId) }
-  }
+  // Deleted here, or a draft an older Orca made that this store never showed: kept as the original's.
   return {
     convert: false,
-    original: personEditsDiffer(source, store, sessionId)
-      ? originalVersion(source, sessionId)
-      : undefined
+    original:
+      !recorded || personEditsDiffer(source, store, sessionId)
+        ? originalVersion(source, sessionId)
+        : undefined
   }
 }
 
@@ -236,26 +230,6 @@ function personEditsDiffer(
   return original !== undefined && original !== null && read(store) !== original
 }
 
-function converted(store: Database.Database, sessionId: string): boolean {
-  const row = store
-    .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
-    .get(sessionId)
-  return row?.epoch !== null && row?.epoch !== undefined
-}
-
-/** The original still has text waiting to send in this chat. */
-function unsettledQueue(source: Database.Database, sessionId: string): boolean {
-  for (const row of source
-    .prepare('SELECT * FROM queued_messages WHERE session_id=?')
-    .iterate(sessionId)) {
-    const queued = readStoredQueuedMessageRow(row)
-    if (!queued || isUnsettledQueuedMessage(queued)) {
-      return true
-    }
-  }
-  return false
-}
-
 /** The original's record and the text it still has waiting to send, verbatim. */
 function originalVersion(source: Database.Database, sessionId: string): string {
   const record = source
@@ -305,7 +279,7 @@ export function readLegacyProofSessions(
   let bytes = 0
   for (const row of rows) {
     const session = readLegacyProofSession(db, store, tables, row)
-    const size = session.original?.length ?? 0
+    const size = session.original ? Buffer.byteLength(session.original) : 0
     if (size > LEGACY_ORIGINAL_MAX_BYTES) {
       throw new JournalLegacyRetentionError(
         'an original chat holds more waiting text than one reply can carry',
@@ -322,7 +296,7 @@ export function readLegacyProofSessions(
   return page
 }
 
-/** One reply carries at most 64 MiB; a page of originals stays well under it. */
+/** One reply carries at most 64 MiB of serialized bytes; a page of originals stays well under it. */
 const LEGACY_ORIGINALS_PAGE_BYTES = 16 * 1024 * 1024
 const LEGACY_ORIGINAL_MAX_BYTES = 48 * 1024 * 1024
 

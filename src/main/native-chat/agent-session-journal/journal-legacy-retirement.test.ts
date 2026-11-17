@@ -250,11 +250,29 @@ it('keeps the original version of what both sides changed, then retires, with no
   deletedQueued.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
   deletedQueued.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
   queue(deletedQueued.filename, 'unopened', 'queued after the chat was deleted here')
+  rename(deletedQueued.filename, 'unopened', 'Renamed after the chat was deleted here')
   await initializeJournalDomainDatabase(deletedQueued.root)
   await deletedQueued.launch().run()
   expect(companions(deletedQueued.filename)).toEqual([])
   expect(JSON.stringify(original(deletedQueued.db, 'unopened').queued)).toContain(
     'queued after the chat was deleted here'
+  )
+  expect(original(deletedQueued.db, 'unopened').record).toContain(
+    'Renamed after the chat was deleted here'
+  )
+
+  // Text an older Orca queued in a converted chat it no longer records is kept the same way.
+  const unrecordedQueued = await profile()
+  await unrecordedQueued.convert('unopened')
+  const legacy = new Database(unrecordedQueued.filename)
+  legacy.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  legacy.close()
+  queue(unrecordedQueued.filename, 'unopened', 'queued in an unrecorded chat')
+  await initializeJournalDomainDatabase(unrecordedQueued.root)
+  await unrecordedQueued.launch().run()
+  expect(companions(unrecordedQueued.filename)).toEqual([])
+  expect(JSON.stringify(original(unrecordedQueued.db, 'unopened').queued)).toContain(
+    'queued in an unrecorded chat'
   )
 
   // A later retirement of a restored original keeps its own version beside the first one.
