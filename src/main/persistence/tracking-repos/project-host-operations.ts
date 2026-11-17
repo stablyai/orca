@@ -54,7 +54,7 @@ export class ProjectHostPersistenceOperations {
 
   constructor(private readonly operations: ProjectHostMutationOperations) {}
 
-  /** A write changed the repo collection (membership, order or a row's host). */
+  /** A write changed the repo collection or any row's fields; every row edit must save `repos`. */
   invalidateRepoIndex(): void {
     this.repoIndex = null
     this.hydratedRows = new WeakMap()
