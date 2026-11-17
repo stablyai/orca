@@ -40,7 +40,6 @@ function fixture(detectorStep = detector) {
     'package.json',
     'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
     'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
-    'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
     'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
     'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs',

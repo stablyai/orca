@@ -82,6 +82,20 @@ export class AgentPickerCatalogRetries {
     return true
   }
 
+  /** What a failed read shows: still pending while a transient failure waits for its retry. */
+  failed(
+    error: unknown,
+    job: AgentPickerCatalogJob,
+    open: boolean,
+    retry: () => void
+  ): 'pending' | 'unsupported' | 'failed' {
+    const failure = agentPickerCatalogFailure(error)
+    if (failure !== 'retry') {
+      return failure
+    }
+    return open && this.schedule(job, retry) ? 'pending' : 'failed'
+  }
+
   cancel() {
     this.timers.forEach(clearTimeout)
     this.timers.clear()

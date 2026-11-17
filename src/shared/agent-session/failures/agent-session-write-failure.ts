@@ -91,6 +91,7 @@ type DurableRefusalFacts = {
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
   agent_session_ownership_unknown: { ownerVerdict?: AgentSessionOwnerVerdict }
+  agent_session_identity_required: { otherFolder?: true }
 }
 
 const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly string[]>> = {
@@ -104,7 +105,8 @@ const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly st
     'expiredAttachments'
   ],
   agent_session_operation_unknown: ['rewindReason'],
-  agent_session_ownership_unknown: ['ownerVerdict']
+  agent_session_ownership_unknown: ['ownerVerdict'],
+  agent_session_identity_required: ['otherFolder']
 } satisfies { [C in keyof DurableRefusalFacts]: readonly (keyof DurableRefusalFacts[C])[] }
 
 export type AgentSessionWriteRefusalDetails<C extends AgentSessionWireRefusalCode> = {

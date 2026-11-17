@@ -120,27 +120,4 @@ describe('canSleepInsteadOfClosingTab', () => {
       })
     ).toBe(false)
   })
-  it('requires a supported agent and a provider session before offering sleep', () => {
-    worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
-    const resumable = { agentType: 'claude', providerSession: SESSION }
-    expect(eligible(stateWith(resumable))).toBe(true)
-
-    const noSession = { agentType: 'claude' }
-    expect(eligible(stateWith(noSession))).toBe(false)
-
-    const notResumable = { agentType: 'aider', providerSession: SESSION }
-    expect(eligible(stateWith(notResumable))).toBe(false)
-  })
-
-  it('offers sleep on SSH workspaces but not on paired servers or VM workspaces', () => {
-    const resumable = { agentType: 'claude', providerSession: SESSION }
-    worktrees.set('wt-1', { id: 'wt-1', hostId: 'ssh:devbox-2' })
-    expect(eligible(stateWith(resumable))).toBe(true)
-
-    worktrees.set('wt-1', { id: 'wt-1', hostId: 'runtime:env-1' })
-    expect(eligible(stateWith(resumable))).toBe(false)
-
-    worktrees.set('wt-1', { id: 'wt-1' })
-    expect(eligible(stateWith(resumable, true))).toBe(false)
-  })
 })

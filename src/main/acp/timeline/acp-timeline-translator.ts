@@ -261,6 +261,7 @@ export class AcpTimelineTranslator {
           dialect: this.dialect,
           backgroundTasks: this.backgroundTasks,
           subagents: this.subagents,
+          failures: this.failures,
           messageKey
         })
       ]

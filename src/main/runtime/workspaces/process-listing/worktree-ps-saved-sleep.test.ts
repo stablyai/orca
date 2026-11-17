@@ -8,7 +8,7 @@ import {
   partialRuntimeStore,
   storeFolderWorkspace,
   storeProjectGroup
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

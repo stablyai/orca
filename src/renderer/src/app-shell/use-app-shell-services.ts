@@ -1,7 +1,7 @@
 import { useAppStore } from '../store'
 import { useClosedEditorTabCleanup } from '../components/editor/model-lifetime/retention/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
-import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
+import { useReadOnScreenAttention } from '../attention/useReadOnScreenAttention'
 import { useAppMenuPaste } from '../hooks/clipboard/menu/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '../hooks/app-commands/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from '../hooks/text-input/paste/useLargeTextControlPaste'
@@ -9,7 +9,7 @@ import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
 } from '../hooks/clipboard/primary-selection/usePrimarySelectionPaste'
-import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
+import { useRadixBodyPointerEventsRecovery } from './useRadixBodyPointerEventsRecovery'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
 import { useWindowsTerminalFontWeightNotice } from '../components/terminal-pane/appearance/windows-terminal-font-weight-notice'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync/use-local-structured-session-tabs-sync'

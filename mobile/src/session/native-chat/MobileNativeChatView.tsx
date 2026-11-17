@@ -42,10 +42,8 @@ import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './composer/attachments/mobile-native-chat-composer-paste'
-import {
-  MobileNativeChatDraftComposer,
-  type MobileNativeChatSendProps
-} from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatSendProps } from './composer/MobileNativeChatComposer'
+import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'

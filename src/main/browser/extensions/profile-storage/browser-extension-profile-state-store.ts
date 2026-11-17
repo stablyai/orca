@@ -33,7 +33,9 @@ const extensionStateSchema = z.object({
   /** Scripts this profile's worker registration was made from; a mismatch re-registers it. */
   workerSignature: z.string().optional(),
   /** Versions at the last load; absent means runtime.onInstalled has not fired in this profile. */
-  lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional()
+  lastLoaded: z.object({ extensionVersion: z.string(), chromiumVersion: z.string() }).optional(),
+  /** sidePanel.setPanelBehavior; Chrome keeps it across restarts, unlike the panel options. */
+  openSidePanelOnActionClick: z.boolean().optional()
 })
 
 export type StoredContextMenuItem = z.infer<typeof contextMenuItemSchema>

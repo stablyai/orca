@@ -5,6 +5,7 @@ import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   describeOrcadBindExposure,
   resolveOrcadBindHost
@@ -208,9 +209,13 @@ export async function activateBackendRuntime(
 
   const { installOrcadSessionSearchService } =
     await import('../orcad/host-runtime/orcad-session-search')
+  const { sessionSearchScopeCatalogFromStore } =
+    await import('../ai-vault-search/scope/session-search-store-scope-catalog')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
+    getSettings: () => profileStore.getSettings(),
+    // Workspace/Project scopes resolve through this host's own registrations, read per search.
+    getScopeCatalog: () => sessionSearchScopeCatalogFromStore(profileStore, LOCAL_EXECUTION_HOST_ID)
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
   featureReadiness.open('sessionSearch')

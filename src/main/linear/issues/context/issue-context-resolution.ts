@@ -1,7 +1,4 @@
-import type {
-  LinearSearchIssueSummary,
-  LinearSearchResult
-} from '../../../../shared/linear/agent-result-types'
+import type { LinearSearchResult } from '../../../../shared/linear/agent-result-types'
 import { clampLinearSearchLimit } from '../../../../shared/linear/agent-access'
 import type { LinearWorkspace } from '../../../../shared/linear/workspace-types'
 import { acquire, release } from '../../requests/linear-request-concurrency'
@@ -18,6 +15,7 @@ import type { RawIssueResponse } from './issue-context-graphql'
 import { LinearAgentAccessError, linearError, toLinearAccessError } from './linear-access-errors'
 import { getFanoutClientEntries, workspaceFailure } from './workspace-read-fanout'
 import type { WorkspaceReadFailure } from './workspace-read-fanout'
+import { sumSearchTotals, type WorkspaceSearchResult } from './linear-search-totals'
 import {
   ambiguousWorkspace,
   resolveWorkspaceSelector,
@@ -56,7 +54,7 @@ export async function searchLinearIssuesForAgents(args: {
     entryFailures
   )
   const merged = perWorkspace.results
-    .flat()
+    .flatMap((result) => result.issues)
     .sort((left, right) => Date.parse(right.updatedAt ?? '') - Date.parse(left.updatedAt ?? ''))
   const limited = merged.slice(0, limit)
   const limitReached = merged.length > limit
@@ -68,6 +66,7 @@ export async function searchLinearIssuesForAgents(args: {
       workspaceId,
       limit,
       returned: limited.length,
+      ...(perWorkspace.total !== undefined ? { total: perWorkspace.total } : {}),
       limitReached,
       partial: perWorkspace.failures.length > 0,
       workspaceErrors: perWorkspace.failures.map(({ workspace, code, message }) => ({
@@ -257,7 +256,7 @@ async function readSearchWorkspace(
   query: string,
   limit: number,
   workspaceId?: (string & {}) | 'all'
-): Promise<LinearSearchIssueSummary[]> {
+): Promise<WorkspaceSearchResult> {
   const response = await withLinearRead(
     entry,
     async () => {
@@ -265,17 +264,20 @@ async function readSearchWorkspace(
         SEARCH_QUERY,
         { term: query, first: limit }
       )
-      return raw.data?.searchIssues?.nodes ?? []
+      return raw.data?.searchIssues
     },
     workspaceId
   )
-  return response.map((issue) => ({
-    ...pickSearchIssue(mapIssue(issue)),
-    workspace: {
-      id: entry.workspace.id,
-      name: entry.workspace.organizationName
-    }
-  }))
+  return {
+    issues: (response?.nodes ?? []).map((issue) => ({
+      ...pickSearchIssue(mapIssue(issue)),
+      workspace: {
+        id: entry.workspace.id,
+        name: entry.workspace.organizationName
+      }
+    })),
+    totalCount: typeof response?.totalCount === 'number' ? response.totalCount : undefined
+  }
 }
 
 async function readSearchWorkspaces(
@@ -284,19 +286,21 @@ async function readSearchWorkspaces(
   limit: number,
   workspaceId?: (string & {}) | 'all',
   initialFailures: WorkspaceReadFailure[] = []
-): Promise<{ results: LinearSearchIssueSummary[][]; failures: WorkspaceReadFailure[] }> {
+): Promise<{
+  results: WorkspaceSearchResult[]
+  failures: WorkspaceReadFailure[]
+  total?: number
+}> {
   if (workspaceId && workspaceId !== 'all') {
-    return {
-      results: [await readSearchWorkspace(entries[0], query, limit, workspaceId)],
-      failures: []
-    }
+    const results = [await readSearchWorkspace(entries[0], query, limit, workspaceId)]
+    return { results, failures: [], total: sumSearchTotals(results, 1) }
   }
 
   const settled = await Promise.allSettled(
     entries.map(async (entry) => readSearchWorkspace(entry, query, limit, workspaceId))
   )
   const attemptedWorkspaceCount = entries.length + initialFailures.length
-  const results: LinearSearchIssueSummary[][] = []
+  const results: WorkspaceSearchResult[] = []
   const failures: WorkspaceReadFailure[] = [...initialFailures]
   for (let index = 0; index < settled.length; index += 1) {
     const result = settled[index]
@@ -313,5 +317,5 @@ async function readSearchWorkspaces(
   if (results.length === 0 && failures.length === attemptedWorkspaceCount && failures[0]) {
     throw failures[0].error
   }
-  return { results, failures }
+  return { results, failures, total: sumSearchTotals(results, attemptedWorkspaceCount) }
 }

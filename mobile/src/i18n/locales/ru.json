@@ -739,6 +739,10 @@
       "mark": "Форк ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Форк: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Цитировать",
+      "hint": "Добавляет выделенный текст в сообщение как цитату"
     }
   },
   "common": {
@@ -2566,7 +2570,6 @@
     },
     "sheets": {
       "browser": "Браузер",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "chat": "Чат",
       "copyAllAndLeave": "Скопировать всё и выйти",
       "copyDraftsFailed": "Не удалось скопировать черновики",
@@ -2662,7 +2665,6 @@
       "browserCommandFailed": "Не удалось выполнить команду браузера",
       "browserCreateFailed": "Не удалось создать вкладку браузера",
       "browserUnavailable": "Страница браузера пока недоступна.",
-      "browserUpdateRequired": "Для трансляции браузера на телефон обновите Orca на компьютере",
       "invalidUrl": "Введите корректный URL",
       "noteCreateFailed": "Не удалось создать заметку Markdown",
       "untitledNoteCreateFailed": "Не удалось создать заметку Markdown без названия"
@@ -2815,6 +2817,7 @@
       "conversationCleared": "Этот разговор очищен.",
       "goalsUnsupported": "Этот агент не поддерживает цели.",
       "historyUnavailable": "Сейчас Orca не удалось открыть историю чата.",
+      "savedInOtherFolder": "Этот разговор сохранён в другой папке.",
       "historyUnreadable": "Orca не удалось прочитать сохранённую историю чата.",
       "historyUnusable": "Не удалось загрузить этот чат.",
       "hostReconciling": "После перезапуска Orca ещё проверяет состояние этого чата.",

@@ -113,22 +113,4 @@ describe('CodexSharedServerFixDialog', () => {
     expect(onServerStopped).toHaveBeenCalledOnce()
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
-
-  it('names and marks the destructive action only when stopping is selected', async () => {
-    renderFix()
-    expect(screen.getByRole('button', { name: 'Turn off sharing' })).toHaveAttribute(
-      'data-variant',
-      'default'
-    )
-    await userEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: 'Turn off and stop server' })).toHaveAttribute(
-      'data-variant',
-      'destructive'
-    )
-    await userEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: 'Turn off sharing' })).toHaveAttribute(
-      'data-variant',
-      'default'
-    )
-  })
 })

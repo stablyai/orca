@@ -6,9 +6,9 @@ import type {
 } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const { AgentHookServer } = await import('../../../agent-hooks/server/agent-hook-server')
 const { agentHookRuntimeDeps } =
   await import('../../../agent-hooks/runtime/agent-hook-runtime-deps')
@@ -22,7 +22,7 @@ const {
   syncSinglePty,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 
