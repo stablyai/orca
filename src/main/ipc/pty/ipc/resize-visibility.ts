@@ -32,6 +32,7 @@ import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
 import type { PaintedRestoreAck } from '../../../../shared/terminal/replay/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
+import { pendingRepaintGrids } from '../delivery/pending-repaint-grids'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   const ipcMain = getPtyIpc()
@@ -63,6 +64,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       return
     }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
+    pendingRepaintGrids.delete(args.id)
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 

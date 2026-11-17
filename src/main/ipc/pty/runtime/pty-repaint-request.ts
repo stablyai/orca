@@ -6,9 +6,8 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 const REPAINT_RESTORE_MS = 250
 
-/** One row smaller, then back to the size recorded by then: a same-size resize sends no SIGWINCH.
- *  The recorded size is left alone and an attach meanwhile commits the real grid, so readers and a
- *  resize landing meanwhile keep it. */
+/** One row smaller and back: a same-size resize sends no SIGWINCH. The recorded size is left alone,
+ *  an attach meanwhile commits the real grid, and a real resize meanwhile cancels the way back. */
 export function requestRepaintFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
@@ -32,13 +31,13 @@ export function requestRepaintFromRuntimeController(
   }
   pendingRepaintGrids.set(ptyId, size)
   setTimeout(() => {
-    pendingRepaintGrids.delete(ptyId)
-    const latest = ptySizes.get(ptyId)
-    if (!latest) {
+    // A real resize meanwhile took the entry and owns the grid now.
+    if (pendingRepaintGrids.get(ptyId) !== size) {
       return
     }
+    pendingRepaintGrids.delete(ptyId)
     try {
-      getProviderForPty(ptyId).resize(ptyId, latest.cols, latest.rows)
+      getProviderForPty(ptyId).resize(ptyId, size.cols, size.rows)
     } catch {
       // The PTY exited during the nudge.
     }

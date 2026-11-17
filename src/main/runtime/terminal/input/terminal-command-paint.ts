@@ -73,6 +73,7 @@ export class TerminalCommandPaint {
     this.markerEndInChunk = -1
     this.scanner.scan(data)
     if (this.markerEndInChunk !== -1) {
+      this.repaintRequestable = false
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
       const commandOutput = data.slice(this.markerEndInChunk)
       this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
@@ -87,6 +88,7 @@ export class TerminalCommandPaint {
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
       this.awaitingPaint = false
+      this.repaintRequestable = false
     }
     this.observeComposers(data)
   }
@@ -112,7 +114,7 @@ export class TerminalCommandPaint {
 
   /** True once per reattach while nothing has painted: the one repaint request it allows. */
   takeReattachedRepaintRequest(): boolean {
-    const take = this.repaintRequestable && this.awaitingPaint
+    const take = this.repaintRequestable
     this.repaintRequestable = false
     return take
   }
