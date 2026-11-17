@@ -91,3 +91,12 @@ export function countTerminalGestureInputSequences(bytes: string): number | null
 export function isTerminalGestureInput(bytes: string): boolean {
   return countTerminalGestureInputSequences(bytes) != null
 }
+
+/** A scroll or click gesture the person just made, posted back from the terminal document. */
+export function isTerminalGestureInputMessage(msg: Record<string, unknown>): boolean {
+  return (
+    msg.type === 'terminal-input' &&
+    typeof msg.bytes === 'string' &&
+    isTerminalGestureInput(msg.bytes)
+  )
+}

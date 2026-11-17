@@ -11,6 +11,7 @@ export function useTerminalPaneLifecycleRefs() {
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
   const terminalHandleLinkDisposablesRef = useRef(new Map<number, IDisposable>())
+  const suggestedCommandLinkDisposablesRef = useRef(new Map<number, IDisposable>())
   const linkifierClickPrimingDisposablesRef = useRef(new Map<number, IDisposable>())
   const linkPointerGesturesRef = useRef(
     new Map<number, ReturnType<typeof installTerminalLinkPointerGesture>>()
@@ -37,6 +38,7 @@ export function useTerminalPaneLifecycleRefs() {
     previousVisibleForReconcileRef,
     linkProviderDisposablesRef,
     terminalHandleLinkDisposablesRef,
+    suggestedCommandLinkDisposablesRef,
     linkifierClickPrimingDisposablesRef,
     linkPointerGesturesRef,
     fileLinkClickFallbackDisposablesRef,

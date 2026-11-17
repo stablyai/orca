@@ -78,6 +78,11 @@ export function dispatchTerminalWebViewNotification(
     if (url.length > 0) {
       handlers.onOpenUrl?.(url)
     }
+  } else if (msg.type === 'run-suggested-command') {
+    const text = typeof msg.text === 'string' ? msg.text : ''
+    if (text.length > 0) {
+      handlers.onRunSuggestedCommand?.(text)
+    }
   } else if (msg.type === 'keyboard-avoidance-metrics') {
     handlers.onKeyboardAvoidanceMetrics?.(parseTerminalKeyboardAvoidanceMetrics(msg))
   } else if (msg.type === 'haptic') {

@@ -15,7 +15,7 @@ import { dispatchTerminalWebViewNotification } from './terminal-webview-notifica
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalDocumentWrites } from '../output-flow/terminal-output-ack'
-import { isTerminalGestureInput } from '../pointer-input/terminal-gesture-input'
+import { isTerminalGestureInputMessage } from '../pointer-input/terminal-gesture-input'
 import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
@@ -52,6 +52,7 @@ export function useTerminalWebViewController(
     onTerminalTap,
     onFileTap,
     onOpenUrl,
+    onRunSuggestedCommand,
     onTextScaleChange,
     onCellBoxChange
   } = props
@@ -142,12 +143,7 @@ export function useTerminalWebViewController(
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
       routeTerminalQueryReply(msg, onTerminalQueryReply)
-      if (
-        interactionActive &&
-        msg.type === 'terminal-input' &&
-        typeof msg.bytes === 'string' &&
-        isTerminalGestureInput(msg.bytes)
-      ) {
+      if (interactionActive && isTerminalGestureInputMessage(msg)) {
         writeCoalescer.markInteractive()
       }
 
@@ -182,6 +178,7 @@ export function useTerminalWebViewController(
           onTerminalTap: interactionActive ? onTerminalTap : undefined,
           onFileTap: interactionActive ? onFileTap : undefined,
           onOpenUrl: interactionActive ? onOpenUrl : undefined,
+          onRunSuggestedCommand: interactionActive ? onRunSuggestedCommand : undefined,
           onTextScaleChange
         })
       }
@@ -204,6 +201,7 @@ export function useTerminalWebViewController(
       onTerminalTap,
       onFileTap,
       onOpenUrl,
+      onRunSuggestedCommand,
       onTextScaleChange,
       onCellBoxChange,
       writeCoalescer

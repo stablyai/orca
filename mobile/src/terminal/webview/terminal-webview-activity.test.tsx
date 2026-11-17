@@ -19,7 +19,8 @@ it('rejects bridge-delayed gestures while keeping query replies and readiness av
   const onTerminalInput = vi.fn(),
     onTerminalTap = vi.fn(),
     onFileTap = vi.fn(),
-    onOpenUrl = vi.fn()
+    onOpenUrl = vi.fn(),
+    onRunSuggestedCommand = vi.fn()
   const onTerminalQueryReply = vi.fn(),
     onWebReady = vi.fn()
   let controller: ReturnType<typeof useTerminalWebViewController> | undefined
@@ -32,6 +33,7 @@ it('rejects bridge-delayed gestures while keeping query replies and readiness av
         onTerminalTap,
         onFileTap,
         onOpenUrl,
+        onRunSuggestedCommand,
         onTerminalQueryReply,
         onWebReady
       },
@@ -52,11 +54,36 @@ it('rejects bridge-delayed gestures while keeping query replies and readiness av
     candidates: [{ pathText: '/tmp/file', line: null, column: null }]
   })
   controller.receive({ type: 'open-url', url: 'https://example.com' })
+  controller.receive({ type: 'run-suggested-command', text: '! git status' })
   controller.receive({ type: 'terminal-data', bytes: '\x1b[0n' })
   act(() => controller?.receive({ type: 'web-ready' }))
-  for (const handler of [onTerminalInput, onTerminalTap, onFileTap, onOpenUrl]) {
+  for (const handler of [
+    onTerminalInput,
+    onTerminalTap,
+    onFileTap,
+    onOpenUrl,
+    onRunSuggestedCommand
+  ]) {
     expect(handler).not.toHaveBeenCalled()
   }
   expect(onTerminalQueryReply).toHaveBeenCalledWith('\x1b[0n')
   expect(onWebReady).toHaveBeenCalledOnce()
+})
+
+it('hands a tapped agent-suggested command to the session while interactive', () => {
+  const onRunSuggestedCommand = vi.fn()
+  let controller: ReturnType<typeof useTerminalWebViewController> | undefined
+  const transport = { post: vi.fn(), pingsOnForegroundRecovery: () => false }
+  function Probe() {
+    controller = useTerminalWebViewController({ onRunSuggestedCommand }, transport)
+    return null
+  }
+  act(() => {
+    root = create(<Probe />)
+  })
+  controller?.receive({ type: 'run-suggested-command', text: '! git status' })
+  controller?.receive({ type: 'run-suggested-command', text: '' })
+
+  expect(onRunSuggestedCommand).toHaveBeenCalledOnce()
+  expect(onRunSuggestedCommand).toHaveBeenCalledWith('! git status')
 })
