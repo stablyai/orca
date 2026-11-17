@@ -180,7 +180,7 @@ export type RuntimePtyController = {
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   /** Asks the foreground program to redraw itself, sending it no input. */
-  requestRepaint?(ptyId: string): boolean
+  requestRepaint?(ptyId: string): void
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null

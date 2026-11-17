@@ -1,46 +1,24 @@
-import { TERMINAL_VIEWPORT_MIN_ROWS } from '../../../../shared/terminal/viewport/terminal-viewport'
-import { ptySizes } from '../delivery/visibility-state'
-import { pendingRepaintGrids } from '../delivery/pending-repaint-grids'
 import { getProviderForPty } from '../provider/registry'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
-const REPAINT_RESTORE_MS = 250
-
-/** One row smaller and back: a same-size resize sends no SIGWINCH. The recorded size is left alone,
- *  an attach meanwhile commits the real grid, and a real resize meanwhile cancels the way back. */
+/** The host owning the PTY redraws its program; a host that cannot leaves queued input held. */
 export function requestRepaintFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
-): boolean {
-  const size = ptySizes.get(ptyId)
+): void {
   const { runtime } = deps
+  // Why: a phone or remote desktop owns this grid, and its layout repaints the program itself.
   if (
-    !size ||
-    pendingRepaintGrids.has(ptyId) ||
-    // Why: a phone or remote desktop owns this grid, and its layout repaints the program itself.
     runtime?.getDriver(ptyId).kind === 'mobile' ||
     runtime?.isRemoteDesktopResizeDriven?.(ptyId) === true
   ) {
-    return false
+    return
   }
-  const nudgeRows = size.rows > TERMINAL_VIEWPORT_MIN_ROWS ? size.rows - 1 : size.rows + 1
   try {
-    getProviderForPty(ptyId).resize(ptyId, size.cols, nudgeRows)
+    void getProviderForPty(ptyId)
+      .requestRepaint?.(ptyId)
+      ?.catch(() => {})
   } catch {
-    return false
+    // No provider owns this PTY any more.
   }
-  pendingRepaintGrids.set(ptyId, size)
-  setTimeout(() => {
-    // A real resize meanwhile took the entry and owns the grid now.
-    if (pendingRepaintGrids.get(ptyId) !== size) {
-      return
-    }
-    pendingRepaintGrids.delete(ptyId)
-    try {
-      getProviderForPty(ptyId).resize(ptyId, size.cols, size.rows)
-    } catch {
-      // The PTY exited during the nudge.
-    }
-  }, REPAINT_RESTORE_MS).unref?.()
-  return true
 }

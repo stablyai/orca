@@ -4,7 +4,6 @@ import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
 import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
-import { pendingRepaintGrids } from '../delivery/pending-repaint-grids'
 import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
 import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
 import { seedAttachedRuntimeTerminal } from './seed-attached-runtime-terminal'
@@ -295,7 +294,6 @@ export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows
   try {
     getProviderForPty(ptyId).resize(ptyId, cols, rows)
     ptySizes.set(ptyId, { cols, rows })
-    pendingRepaintGrids.delete(ptyId)
     return true
   } catch {
     return false

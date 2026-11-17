@@ -1,6 +1,5 @@
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptySizes } from './visibility-state'
-import { pendingRepaintGrids } from './pending-repaint-grids'
 
 export type PtyGrid = { cols: number; rows: number }
 
@@ -24,14 +23,12 @@ export function shouldSeedPreAttachPtySize(args: {
   return args.isFreshSessionId || (!args.hasCachedSize && !args.requestIsUnmeasured)
 }
 
-/** Attach does not resize the PTY; prefer proven provider/cached geometry over the pane request.
- *  Why a pending repaint first: the provider reports the grid that nudge holds one row off. */
+/** Attach does not resize the PTY; prefer proven provider/cached geometry over the pane request. */
 function resolveAttachedPtySize(args: {
-  result: Pick<PtySpawnResult, 'id' | 'attachedGrid' | 'snapshotCols' | 'snapshotRows'>
+  result: Pick<PtySpawnResult, 'attachedGrid' | 'snapshotCols' | 'snapshotRows'>
   cachedBeforeAttach: PtyGrid | undefined
 }): PtyGrid | undefined {
   return (
-    pendingRepaintGrids.get(args.result.id) ??
     positiveGrid(args.result.attachedGrid?.cols, args.result.attachedGrid?.rows) ??
     positiveGrid(args.result.snapshotCols, args.result.snapshotRows) ??
     positiveGrid(args.cachedBeforeAttach?.cols, args.cachedBeforeAttach?.rows)
@@ -39,10 +36,7 @@ function resolveAttachedPtySize(args: {
 }
 
 export function resolveCommittedPtySize(args: {
-  result: Pick<
-    PtySpawnResult,
-    'id' | 'isReattach' | 'attachedGrid' | 'snapshotCols' | 'snapshotRows'
-  >
+  result: Pick<PtySpawnResult, 'isReattach' | 'attachedGrid' | 'snapshotCols' | 'snapshotRows'>
   requested: PtyGrid
   cachedBeforeAttach: PtyGrid | undefined
 }): PtyGrid {
