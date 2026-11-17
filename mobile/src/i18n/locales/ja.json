@@ -2426,7 +2426,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "chat": "チャット",
       "copyAllAndLeave": "すべてコピーして戻る",
       "copyDraftsFailed": "下書きをコピーできませんでした。",
@@ -2522,7 +2521,6 @@
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
       "browserCreateFailed": "ブラウザの作成に失敗しました。",
       "browserUnavailable": "ブラウザのページはまだ利用できません。",
-      "browserUpdateRequired": "モバイルでのブラウザストリーミングにはデスクトップの更新が必要です。",
       "invalidUrl": "有効な URL を入力してください。",
       "noteCreateFailed": "Markdown ノートの作成に失敗しました。",
       "untitledNoteCreateFailed": "無題の Markdown ノートを作成できませんでした。"

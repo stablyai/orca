@@ -2430,7 +2430,6 @@
     },
     "sheets": {
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop-Update für mobiles Browser-Streaming erforderlich",
       "chat": "Chat",
       "copyAllAndLeave": "Alles kopieren und verlassen",
       "copyDraftsFailed": "Entwürfe konnten nicht kopiert werden",
@@ -2526,7 +2525,6 @@
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
       "browserCreateFailed": "Browser konnte nicht erstellt werden",
       "browserUnavailable": "Browserseite ist noch nicht verfügbar.",
-      "browserUpdateRequired": "Desktop-Update für Browser-Streaming auf Mobilgeräten erforderlich",
       "invalidUrl": "Gültige URL eingeben",
       "noteCreateFailed": "Markdown-Notiz konnte nicht erstellt werden",
       "untitledNoteCreateFailed": "Markdown-Notiz ohne Titel konnte nicht erstellt werden"

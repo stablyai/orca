@@ -2430,7 +2430,6 @@
     },
     "sheets": {
       "browser": "Tarayıcı",
-      "browserUpdateRequired": "Mobil tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "chat": "Sohbet",
       "copyAllAndLeave": "Tümünü Kopyala ve Ayrıl",
       "copyDraftsFailed": "Taslaklar kopyalanamadı",
@@ -2526,7 +2525,6 @@
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
       "browserCreateFailed": "Tarayıcı oluşturulamadı",
       "browserUnavailable": "Tarayıcı sayfası henüz kullanılamıyor.",
-      "browserUpdateRequired": "Mobilde tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "invalidUrl": "Geçerli bir URL girin",
       "noteCreateFailed": "Markdown notu oluşturulamadı",
       "untitledNoteCreateFailed": "Başlıksız Markdown notu oluşturulamadı"

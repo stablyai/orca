@@ -1967,7 +1967,7 @@
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",
-      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
@@ -2229,7 +2229,7 @@
       "newTab": "New Tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "markdownNote": "Markdown Note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
@@ -2624,7 +2624,7 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "invalidUrl": "Enter a valid URL",
       "browserCreateFailed": "Failed to create browser",
       "browserUnavailable": "Browser page is not available yet.",

@@ -2426,7 +2426,6 @@
     },
     "sheets": {
       "browser": "瀏覽器",
-      "browserUpdateRequired": "需更新桌面版，才能將瀏覽器畫面串流至手機",
       "chat": "聊天",
       "copyAllAndLeave": "全部複製並離開",
       "copyDraftsFailed": "無法複製草稿",
@@ -2522,7 +2521,6 @@
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
       "browserUnavailable": "瀏覽器頁面尚未就緒。",
-      "browserUpdateRequired": "需更新桌面版才能使用行動版瀏覽器串流",
       "invalidUrl": "請輸入有效的網址",
       "noteCreateFailed": "建立 Markdown 筆記失敗",
       "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記"
