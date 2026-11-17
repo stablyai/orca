@@ -13,7 +13,7 @@ import { reportedHome, type SavedResumeStoreQuery } from './store-query'
 const MAX_PROJECT_DIR_NAME = 200
 const MAX_PROJECT_DIRS = 5_000
 
-/** The common pattern's check: `<id>.jsonl` in any project folder of the launch's own store.
+/** Presence check: `<id>.jsonl` in any project folder of the launch's own store.
  *  A miss proves absence only when every project folder was checked and the launch folder's own
  *  project exists to have held it. The folder is the one the invocation reported it runs with. */
 export async function claudeStorePresence(
