@@ -19,6 +19,8 @@ const now = Date.now()
 const SEEDS: WorkspaceSeed[] = [
   { id: 'ti-parent', name: 'tidy-settings-layout', agents: [], lastActivityMinutesAgo: 9 },
   { id: 'ti-child', name: 'sample-child-workspace', agents: [], lastActivityMinutesAgo: 9 },
+  { id: 'ti-grandchild', name: 'every-icon-at-depth-two', agents: [], lastActivityMinutesAgo: 9 },
+  { id: 'ti-detached', name: 'detached-review', agents: [], lastActivityMinutesAgo: 9 },
   {
     id: 'ti-long',
     name: 'nightly-dependency-audit-for-every-sample-package',
@@ -43,26 +45,30 @@ const pr = (number: number) => ({
   url: `https://github.com/example/sample/pull/${number}`
 })
 
+const automationProvenance: Worktree['automationProvenance'] = {
+  kind: 'created-by-automation',
+  automationId: 'sample-automation',
+  automationNameSnapshot: 'Nightly audit',
+  automationRunId: 'sample-run',
+  automationRunTitleSnapshot: 'Nightly audit',
+  createdAt: now - 12 * MINUTE,
+  executionTargetType: 'local',
+  executionTargetId: 'local',
+  projectId: FIXTURE_REPO.id
+}
+
 function decorate(worktree: Worktree): Worktree {
   switch (worktree.id) {
     case 'ti-parent':
     case 'ti-child':
       return { ...worktree, linkedItems: [pr(101)] }
+    case 'ti-grandchild':
+      return { ...worktree, linkedItems: [pr(301), pr(302)], automationProvenance }
+    // Detached HEAD fills the details row, so its icon moves there instead of the title line.
+    case 'ti-detached':
+      return { ...worktree, branch: '', head: 'f00dcafe1234', linkedItems: [pr(401)] }
     case 'ti-long':
-      return {
-        ...worktree,
-        automationProvenance: {
-          kind: 'created-by-automation',
-          automationId: 'sample-automation',
-          automationNameSnapshot: 'Nightly audit',
-          automationRunId: 'sample-run',
-          automationRunTitleSnapshot: 'Nightly audit',
-          createdAt: now - 12 * MINUTE,
-          executionTargetType: 'local',
-          executionTargetId: 'local',
-          projectId: FIXTURE_REPO.id
-        }
-      }
+      return { ...worktree, automationProvenance }
     case 'ti-prs':
       return { ...worktree, linkedItems: [pr(201), pr(202)] }
     default:
@@ -128,12 +134,17 @@ export const nestedAndLongTitles = defineFixture({
   },
   render: () => (
     <div className="flex flex-col gap-0.5 bg-worktree-sidebar py-1.5 text-worktree-sidebar-foreground">
-      <Card id="ti-parent" descendantIds={['ti-child']}>
-        <Card id="ti-child" nested />
+      <Card id="ti-parent" descendantIds={['ti-child', 'ti-grandchild']}>
+        <Card id="ti-child" nested descendantIds={['ti-grandchild']}>
+          <Card id="ti-grandchild" nested />
+        </Card>
       </Card>
       <Card id="ti-long" />
       <Card id="ti-prs" descendantIds={CHILD_IDS} collapsed />
       <Card id="ti-plain" />
+      <Card id="ti-detached" />
     </div>
   )
 })
+
+export const narrowSidebar = defineFixture({ ...nestedAndLongTitles, width: 240 })
