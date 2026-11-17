@@ -26,7 +26,7 @@ export function useNativeChatRestartOffer(enabled: boolean, store = localNativeC
   useEffect(() => {
     if (enabled && settingsLoaded && store.target.kind === 'local') {
       if (launch == null) {
-        launch = loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+        launch = loadNativeChatLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
       }
     }
   }, [enabled, settingsLoaded, store])
@@ -53,7 +53,7 @@ export function useNativeChatRestartRun(store = localNativeChatRestartStore) {
 
 let launch: Promise<void> | undefined
 
-async function loadLaunchOffer(store: NativeChatRestartStore): Promise<void> {
+export async function loadNativeChatLaunchOffer(store: NativeChatRestartStore): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
   let read = await store.readNativeChatRestartOffer()
@@ -75,7 +75,12 @@ async function loadLaunchOffer(store: NativeChatRestartStore): Promise<void> {
     requestNativeChatResumeOnRestartDialog()
     return
   }
-  await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
+  const working = launchResumeSessionIds(offered)
+  await store.continueNativeChatRestartOffer(working, 'launch')
+  // Chats left waiting on the person need them, so show the list instead of only a status-bar count.
+  if (working.length < offered.length) {
+    requestNativeChatResumeOnRestartDialog()
+  }
 }
 
 export function _resetNativeChatRestartOffer(): void {
