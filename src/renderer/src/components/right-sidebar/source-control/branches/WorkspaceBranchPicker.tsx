@@ -90,9 +90,7 @@ export function WorkspaceBranchPicker({
   )
   const environmentName = useAppStore(selectEnvironmentName)
   // Workspace rows need every worktree, not a folder section's owner-only map.
-  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
-  // Read during render: a title write keeps the indexed map's identity and replaces only the rows.
-  const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
+  const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const agentWorking = useAppStore(
     (state) => selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking
   )
@@ -178,7 +176,6 @@ export function WorkspaceBranchPicker({
       hostLabel={hostLabel}
       workspaceLabel={workspaceLabel}
       workspaces={worktreeMap}
-      workspacesVersion={worktreesByRepo}
       onOpenWorkspace={openBranchWorkspace}
       onSwitched={onSwitched}
     />

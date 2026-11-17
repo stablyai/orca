@@ -5,11 +5,16 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
+import { renderHook } from '@testing-library/react'
 import {
   getIndexedAllWorktrees,
-  getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  useAllWorktrees,
+  useWorktreeMap
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { subscribeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { resolveStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type * as ChatTabName from '@/runtime/native-chat/naming/structured-chat-tab-name'
@@ -23,6 +28,20 @@ vi.mock('@/runtime/native-chat/naming/structured-chat-tab-name', async (importOr
 
 const TITLE = 'Triage assigned issues prs'
 const CHAT_TABS = 100
+
+/** Counts full walks of an index, which is how a copy reads it. */
+function countIterations(target: Map<string, Worktree> | Worktree[]): () => number {
+  let walks = 0
+  const iterate = target[Symbol.iterator].bind(target)
+  Object.defineProperty(target, Symbol.iterator, {
+    configurable: true,
+    value: () => {
+      walks++
+      return iterate()
+    }
+  })
+  return () => walks
+}
 
 function repo(id: string): Repo {
   return { id, path: '/work', displayName: id, badgeColor: '#000000', addedAt: 0 }
@@ -113,22 +132,41 @@ describe('applyLocalPinnedDisplayName', () => {
     const stopWrites = useAppStore.subscribe(() => {
       writes++
     })
+    const mapCopies = countIterations(warmMap)
+    const lineageCopies = countIterations(warmLineage)
+    const rowCopies = countIterations(warmRows)
     otherReads = 0
     resolvedNames.mockClear()
 
     applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: TITLE })
     const pinned = useAppStore.getState().worktreesByRepo
-    // Updated in place: 0 other catalog or lineage entries copied.
-    expect(getIndexedWorktreeMap(pinned)).toBe(warmMap)
-    expect(getIndexedAllWorktrees(pinned)).toBe(warmRows)
-    expect(getLineageAncestorIndex(pinned)).toBe(warmLineage)
     expect(resolvedNames).toHaveBeenCalledTimes(0)
-    expect(getIndexedWorktreeById(pinned, rows[0].id)).toMatchObject({
+    // New views for memo deps, over the untouched warm indexes.
+    const pinnedMap = getIndexedWorktreeMap(pinned)
+    const pinnedLineage = getLineageAncestorIndex(pinned)
+    expect(pinnedMap).not.toBe(warmMap)
+    expect(pinnedLineage).not.toBe(warmLineage)
+    expect(pinnedMap.get(rows[0].id)).toMatchObject({
       displayName: TITLE,
       displayNameMode: 'fixed'
     })
-    const lineageRows = [...getLineageAncestorIndex(pinned).values()]
-    expect(lineageRows.find(({ id }) => id === rows[0].id)?.displayName).toBe(TITLE)
+    expect(pinnedLineage.get(getWorktreeHostIdentity(rows[0]))?.displayName).toBe(TITLE)
+    expect(warmMap.get(rows[0].id)?.displayName).toBe('batfish-2')
+    expect(mapCopies()).toBe(0)
+    expect(lineageCopies()).toBe(0)
+    // No subscriber has read the row list yet, so it is not copied.
+    expect(rowCopies()).toBe(0)
+
+    // Two subscribers share one pointer copy of the row list.
+    const first = renderHook(() => useAllWorktrees())
+    const second = renderHook(() => useAllWorktrees())
+    expect(first.result.current).toBe(second.result.current)
+    expect(first.result.current).not.toBe(warmRows)
+    expect(first.result.current).toHaveLength(size)
+    expect(first.result.current[0].displayName).toBe(TITLE)
+    expect(rowCopies()).toBe(1)
+    expect(renderHook(() => useWorktreeMap()).result.current).toBe(pinnedMap)
+    expect(mapCopies()).toBe(0)
     expect(otherReads).toBe(0)
     expect(senderLocations).toBe(0)
     // The pin and any sort-settle write it triggers; the identical pin below must add none.
@@ -156,5 +194,22 @@ describe('applyLocalPinnedDisplayName', () => {
     stopNames()
     stopSenders()
     stopWrites()
+    first.unmount()
+    second.unmount()
+  })
+
+  it('indexing an older catalog leaves the newer one on its own title', () => {
+    const rows = Array.from({ length: 10 }, (_, index) => row(10, index, false, () => {}))
+    useAppStore.setState({ worktreesByRepo: { 'repo-10': rows }, detectedWorktreesByRepo: {} })
+    getIndexedWorktreeMap(useAppStore.getState().worktreesByRepo)
+    applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: TITLE })
+    const older = useAppStore.getState().worktreesByRepo
+    applyLocalPinnedDisplayName({ worktreeId: rows[0].id, displayName: 'Second title' })
+    const newer = useAppStore.getState().worktreesByRepo
+
+    expect(getIndexedWorktreeMap(newer).get(rows[0].id)?.displayName).toBe('Second title')
+    expect(getIndexedWorktreeMap(older).get(rows[0].id)?.displayName).toBe(TITLE)
+    expect(getIndexedWorktreeMap(newer).get(rows[0].id)?.displayName).toBe('Second title')
+    expect(getIndexedAllWorktrees(newer)[0].displayName).toBe('Second title')
   })
 })

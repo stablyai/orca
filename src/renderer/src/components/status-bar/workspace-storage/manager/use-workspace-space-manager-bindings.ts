@@ -22,9 +22,8 @@ export function useWorkspaceSpaceManagerBindings() {
   const deleteStateByWorktreeId = useAppStore((state) => state.deleteStateByWorktreeId)
   const repoMap = useAppStore((state) => getIndexedRepoMap(state.repos))
   const repos = useAppStore((state) => state.repos)
+  const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
-  // Read during render: a title write keeps the indexed map's identity, and consumers also depend on worktreesByRepo.
-  const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
   const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)

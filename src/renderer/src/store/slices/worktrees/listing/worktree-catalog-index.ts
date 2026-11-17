@@ -5,14 +5,31 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../types'
 import { replacedWorktreeRows, type ReplacedWorktreeRow } from './worktree-catalog-membership'
+import { ReadOnlyOverlayMap } from './read-only-overlay-map'
 
-type WorktreeSnapshot = {
+type WorktreeBase = {
   allWorktrees: Worktree[]
   worktreeMap: Map<string, Worktree>
   worktreesById: Map<string, Worktree[]>
   /** Slot of each row in allWorktrees, so a replaced row is found without a scan. */
   positions: Map<Worktree, number>
 }
+
+/** One catalog's view: an immutable base shared across title writes plus that catalog's replaced rows. */
+type WorktreeSnapshot = {
+  base: WorktreeBase
+  /** Replaced rows by slot in base.allWorktrees, and each replacement's slot. */
+  rows: ReadonlyMap<number, Worktree>
+  slots: ReadonlyMap<Worktree, number>
+  firstById: ReadonlyMap<string, Worktree>
+  byId: ReadonlyMap<string, Worktree[]>
+  worktreeMap: Map<string, Worktree>
+  /** Built on first read only, so a title write with no reader copies nothing. */
+  allWorktrees: Worktree[] | null
+}
+
+// Past this many replaced rows, a rebuild costs less than carrying the overlay.
+const MAX_OVERLAY_ROWS = 64
 
 // Why: Zustand reruns selectors on every write, so identity projections need
 // cross-render caching without pinning replaced store snapshots in memory.
@@ -30,42 +47,84 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   const previousSnapshot = previousRows && worktreeSnapshotCache.get(previousRows)
   const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const snapshot =
-    previousSnapshot && replaced
-      ? patchWorktreeSnapshot(previousSnapshot, replaced)
-      : buildWorktreeSnapshot(worktreesByRepo)
+    (previousSnapshot && replaced && overlayWorktreeSnapshot(previousSnapshot, replaced)) ||
+    viewOf(buildWorktreeSnapshot(worktreesByRepo))
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
   lastIndexedRows = new WeakRef(worktreesByRepo)
   return snapshot
 }
 
-/** Same membership, so only replaced rows move, in place; the retired map shares this snapshot and is never read for membership again. */
-function patchWorktreeSnapshot(
-  snapshot: WorktreeSnapshot,
-  replaced: readonly ReplacedWorktreeRow[]
+function viewOf(
+  base: WorktreeBase,
+  rows: ReadonlyMap<number, Worktree> = new Map(),
+  slots: ReadonlyMap<Worktree, number> = new Map(),
+  firstById: ReadonlyMap<string, Worktree> = new Map(),
+  byId: ReadonlyMap<string, Worktree[]> = new Map()
 ): WorktreeSnapshot {
+  return {
+    base,
+    rows,
+    slots,
+    firstById,
+    byId,
+    worktreeMap:
+      firstById.size === 0 ? base.worktreeMap : new ReadOnlyOverlayMap(base.worktreeMap, firstById),
+    allWorktrees: rows.size === 0 ? base.allWorktrees : null
+  }
+}
+
+/** A new view for a catalog that only replaced rows; the previous view and its base stay untouched. Null asks for a rebuild. */
+function overlayWorktreeSnapshot(
+  previous: WorktreeSnapshot,
+  replaced: readonly ReplacedWorktreeRow[]
+): WorktreeSnapshot | null {
+  if (replaced.length === 0) {
+    return previous
+  }
+  const { base } = previous
+  const rows = new Map(previous.rows)
+  const slots = new Map(previous.slots)
+  const firstById = new Map(previous.firstById)
+  const byId = new Map(previous.byId)
   for (const { before, after } of replaced) {
-    const position = snapshot.positions.get(before)
-    if (position !== undefined) {
-      snapshot.allWorktrees[position] = after
-      snapshot.positions.delete(before)
-      snapshot.positions.set(after, position)
+    const slot = base.positions.get(before) ?? previous.slots.get(before)
+    if (slot !== undefined) {
+      slots.delete(before)
+      if (base.allWorktrees[slot] === after) {
+        rows.delete(slot)
+      } else {
+        rows.set(slot, after)
+        slots.set(after, slot)
+      }
     }
-    if (snapshot.worktreeMap.get(before.id) === before) {
-      snapshot.worktreeMap.set(before.id, after)
+    if (previous.worktreeMap.get(before.id) === before) {
+      if (base.worktreeMap.get(before.id) === after) {
+        firstById.delete(before.id)
+      } else {
+        firstById.set(before.id, after)
+      }
     }
-    const rows = snapshot.worktreesById.get(before.id)
-    if (rows?.includes(before)) {
-      // New per-id array so selectors returning one workspace's rows see the change.
-      snapshot.worktreesById.set(
+    const idRows = previous.byId.get(before.id) ?? base.worktreesById.get(before.id)
+    if (idRows?.includes(before)) {
+      byId.set(
         before.id,
-        rows.map((row) => (row === before ? after : row))
+        idRows.map((row) => (row === before ? after : row))
       )
     }
   }
-  return snapshot
+  return rows.size > MAX_OVERLAY_ROWS ? null : viewOf(base, rows, slots, firstById, byId)
 }
 
-function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
+function rowsOf(snapshot: WorktreeSnapshot): Worktree[] {
+  // One pointer copy per catalog, shared by every reader of it; the base array is never written.
+  snapshot.allWorktrees ??= Array.from(
+    snapshot.base.allWorktrees,
+    (row, slot) => snapshot.rows.get(slot) ?? row
+  )
+  return snapshot.allWorktrees
+}
+
+function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeBase {
   // Deduplicate same-host create/fetch races, last wins. repoId::path collides across hosts; retain those rows or one workspace vanishes (STA-4343).
   const byHostAndId = new Map<string, Worktree>()
   for (const worktrees of Object.values(worktreesByRepo)) {
@@ -97,7 +156,7 @@ function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Wo
 }
 
 export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
-  return getWorktreeSnapshot(worktreesByRepo).allWorktrees
+  return rowsOf(getWorktreeSnapshot(worktreesByRepo))
 }
 
 /** Legacy bare-ID view cannot prove ownership amid collisions; destructive paths need explicit WorktreeRemovalTarget hosts and getIndexedWorktreesById. */
@@ -112,7 +171,8 @@ export function getIndexedWorktreesById(
   worktreesByRepo: AppState['worktreesByRepo'],
   worktreeId: string
 ): Worktree[] {
-  return getWorktreeSnapshot(worktreesByRepo).worktreesById.get(worktreeId) ?? []
+  const snapshot = getWorktreeSnapshot(worktreesByRepo)
+  return snapshot.byId.get(worktreeId) ?? snapshot.base.worktreesById.get(worktreeId) ?? []
 }
 
 export function getIndexedWorktreeById(

@@ -16,6 +16,9 @@ export function replacedWorktreeRows(
   next: AppState['worktreesByRepo'],
   previous: AppState['worktreesByRepo']
 ): ReplacedWorktreeRow[] | null {
+  if (next === previous) {
+    return []
+  }
   const repoIds = Object.keys(next)
   if (repoIds.length !== Object.keys(previous).length) {
     return null
@@ -70,6 +73,9 @@ export function sameDetectedWorktreeMembership(
   next: AppState['detectedWorktreesByRepo'],
   previous: AppState['detectedWorktreesByRepo']
 ): boolean {
+  if (next === previous) {
+    return true
+  }
   const repoIds = Object.keys(next)
   return (
     repoIds.length === Object.keys(previous).length &&

@@ -30,8 +30,6 @@ export type BranchPickerOptions = {
   /** Names the workspace in a result that arrives after the user moved on. */
   workspaceLabel: string
   workspaces: ReadonlyMap<string, BranchWorkspace>
-  /** Changes whenever a workspace row changes; the indexed map can keep its identity across a title write. */
-  workspacesVersion?: unknown
   onOpenWorkspace: (workspace: BranchWorkspace) => void
   onSwitched: (warning?: string) => void
   /** Every open change, including the picker closing itself after a switch. */
@@ -59,7 +57,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
   const generation = useRef(0)
-  const { context, repoId, hostId, workspaces, workspacesVersion } = options
+  const { context, repoId, hostId, workspaces } = options
   const { target, worktreeId, worktreePath } = context
   const route = useMemo(
     () => ({ target, worktreeId, worktreePath }),
@@ -131,8 +129,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
   )
   const workspaceIndex = useMemo(
     () => indexBranchWorkspaces(open, workspaces.values(), repoId, hostId),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- workspacesVersion marks rows replaced inside the same map.
-    [open, workspaces, workspacesVersion, repoId, hostId]
+    [open, workspaces, repoId, hostId]
   )
   const localRows = useMemo(
     () => (open ? indexLocalBranchRows(local, context.worktreePath, workspaceIndex) : []),
