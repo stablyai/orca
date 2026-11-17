@@ -22,7 +22,7 @@ const STATIC_TITLE_COPY = {
   'worktree.quickOpen': () => translate('keybindings.title.1d1d2ec47b', 'Go to file'),
   'app.settings': () => translate('keybindings.title.e316152321', 'Open settings'),
   'app.forceReload': () => translate('keybindings.title.8a1982d598', 'Force reload'),
-  'worktree.palette': () => translate('keybindings.title.worktreePalette', 'Switch worktree'),
+  'worktree.palette': () => translate('keybindings.title.worktreePalette', 'Search everything'),
   'worktree.navigateUp': () =>
     translate('keybindings.title.worktreeNavigateUp', 'Previous worktree'),
   'worktree.navigateDown': () =>

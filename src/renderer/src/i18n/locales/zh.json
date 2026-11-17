@@ -24386,7 +24386,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切换工作树",
+      "worktreePalette": "搜索全部",
       "worktreeNavigateUp": "上一个工作树",
       "worktreeNavigateDown": "下一个工作树",
       "workspaceCreate": "创建工作树",

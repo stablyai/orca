@@ -23062,7 +23062,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Cambiar de worktree",
+      "worktreePalette": "Buscar en todo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Worktree siguiente",
       "workspaceCreate": "Crear worktree",

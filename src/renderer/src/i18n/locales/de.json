@@ -22841,7 +22841,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree wechseln",
+      "worktreePalette": "Alles durchsuchen",
       "worktreeNavigateUp": "Zum vorherigen Worktree wechseln",
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",

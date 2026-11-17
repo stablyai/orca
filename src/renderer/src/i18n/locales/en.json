@@ -25825,7 +25825,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Switch worktree",
+      "worktreePalette": "Search everything",
       "worktreeNavigateUp": "Previous worktree",
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",

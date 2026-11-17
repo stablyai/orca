@@ -23899,7 +23899,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "ワークツリーを切り替え",
+      "worktreePalette": "すべてを検索",
       "worktreeNavigateUp": "前のワークツリー",
       "worktreeNavigateDown": "次のワークツリー",
       "workspaceCreate": "ワークツリーを作成",

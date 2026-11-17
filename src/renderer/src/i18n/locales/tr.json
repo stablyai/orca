@@ -22826,7 +22826,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",

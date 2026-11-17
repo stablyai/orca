@@ -23621,7 +23621,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Alternar worktree",
+      "worktreePalette": "Buscar tudo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
