@@ -113,10 +113,10 @@ Orca ya trae casi todo:
 
 Tareas:
 
-- [ ] Verificar en Windows que los tres CLIs se detectan (`where claude`, `where codex`, `where agy`) y arrancan en full-access desde terminal **y** desde chat.
-- [ ] Codex: confirmar que full-access implica `--sandbox danger-full-access` y sin aprobaciones, también en `src/shared/agent-launch/permissions/codex-permission-policy.ts`.
-- [ ] Workspace trust: confirmar que `agent-workspace-trust-decision.ts` / `workspace-pretrust-scope.ts` no frenan a ningún agente con un prompt de "¿confías en esta carpeta?". Si lo hacen, pre-confiar las carpetas de trabajo de la MSI.
-- [ ] Setting nuevo `zotzVisibleAgents` (default `['claude', 'codex', 'antigravity']`) para que la UI y el selector solo muestren esos tres. **No borres** los demás agentes del catálogo; solo ocúltalos.
+- [ ] Verificar en Windows que los tres CLIs se detectan (`where claude`, `where codex`, `where agy`) y arrancan en full-access desde terminal **y** desde chat. (Código revisado: un perfil nuevo lanza los tres en full-access en terminal y chat. En la MSI solo está `claude`; faltan instalar `codex` y `agy` y probarlos a mano.)
+- [x] Codex: confirmar que full-access implica `--sandbox danger-full-access` y sin aprobaciones, también en `src/shared/agent-launch/permissions/codex-permission-policy.ts`.
+- [x] Workspace trust: confirmar que `agent-workspace-trust-decision.ts` / `workspace-pretrust-scope.ts` no frenan a ningún agente con un prompt de "¿confías en esta carpeta?". Si lo hacen, pre-confiar las carpetas de trabajo de la MSI.
+- [x] ~~Setting nuevo `zotzVisibleAgents`~~ Reemplazado: se reusa `disabledTuiAgents` de upstream (ya oculta agentes del selector y del auto-launch sin borrarlos del catálogo); `src/shared/zotz/zotz-visible-agents.ts` deja visibles solo `claude`, `codex` y `antigravity`. **No borres** los demás agentes del catálogo; solo ocúltalos.
 
 **Listo cuando:** desde el móvil o la laptop, por Tailscale, lanzas una tarea a cada uno de los tres agentes y la completan sin pedir ninguna aprobación.
 
@@ -428,3 +428,16 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Rechazar el UAC se detecta recorriendo las excepciones internas (`Win32Exception` 1223 / `0x800704C7`), para mostrar "permiso rechazado" en vez del error crudo.
 - `orca serve service` en Windows registra la tarea con `S4U` (sin ventana) en vez de `InteractiveToken`: `orca.exe` es de consola y abría una ventana visible en cada inicio de sesión.
 - Pendientes anotados, no arreglados: (1) la repetición cada minuto podría relanzar Zotz durante una actualización NSIS (hoy el updater está apagado por Fase 3); (2) `xmlText`/`systemdArgument` duplican escapadores de `serve-service-unit.ts`.
+
+### 2026-11-17 — Fase 4 (`zotz/fase-4-agentes`)
+
+- Permisos: no hizo falta código. Un perfil nuevo trae `agentPermissionDefault: 'full-access'` y en cada lanzamiento se convierte en flags (`claude`/`agy` → `--dangerously-skip-permissions`, `codex` → `--dangerously-bypass-approvals-and-sandbox`) o en política de chat (Codex `never` + `danger-full-access`; Claude con skip-permissions; Antigravity por ACP en modo `yolo`). El `'own'` de `agent-launch-profile.ts:161` solo arma vistas del selector, no pisa el lanzamiento.
+- Workspace trust: tampoco hizo falta código. Orca pre-confía la carpeta para Claude (`~/.claude.json`), Codex (`config.toml`) y Antigravity (`~/.gemini/antigravity-cli/settings.json`) justo antes de cada lanzamiento, en cualquier modo de permisos y también en workspaces de carpeta (`agentWorkspaceTrustEnabled`, default `true`).
+- Agentes visibles: `applyZotzVisibleAgents` se engancha en los defaults y al cargar el perfil. Guarda en `zotzSeenTuiAgents` qué agentes del catálogo ya vio, así que los que agregue upstream en un sync nacen ocultos y lo que Hugo active o desactive a mano se respeta.
+
+**Sorpresas / pendientes**
+
+- Casos en que un agente sí puede preguntar: Claude cuando la carpeta es la raíz de un disco o el home (`isTooBroadToPreTrust`); Antigravity si arranca en una subcarpeta del workspace (solo confía rutas exactas); escribir `claude`/`codex`/`agy` a mano en una terminal (no pasa por el pre-trust); Codex en WSL; hosts SSH con relay viejo. Para el nodo: abrir cada proyecto como su propio workspace, nunca `C:\` ni la carpeta del usuario.
+- Un perfil guardado con `agentYoloDefaultsMigrated: true` pero sin `agentPermissionDefault` cae en `'own'` (sin flags). No pasa con perfiles nuevos de Zotz.
+- Antigravity, aun en `yolo`, a veces hace preguntas o pide revisiones administrativas (lo dice su propio spec en `antigravity-acp-launch-spec.ts`).
+- La MSI (Katana 15, 16 GB) solo tiene `claude` en el PATH. Falta instalar `codex` y `agy` para cerrar el "Listo cuando".

@@ -417,8 +417,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
   computerAwakeMode?: ComputerAwakeMode
-  /** Zotz: 'unset' shows the first-run wizard; 'server' keeps the node awake and network-exposed. */
-  zotzMachineMode?: 'unset' | 'personal' | 'server'
   /** macOS Option: auto uses keyboard layout (US → Meta, others compose); false composes; true sends Meta on both keys; left/right select one.
    * See docs/terminal-option-key-layout-aware-default.md. */
   terminalMacOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right'

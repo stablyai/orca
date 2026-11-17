@@ -22,6 +22,7 @@ import {
   stripRetiredGlobalSettings
 } from '../../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../../applying-settings/onboarding-normalization'
+import { applyZotzVisibleAgents } from '../../../../shared/zotz/zotz-visible-agents'
 import { normalizeMachineName } from '../../../../shared/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
@@ -181,7 +182,7 @@ export function normalizeLoadedGlobalSettings(
     terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
       parsed.settings?.terminalShortcutPolicy
     ),
-    disabledTuiAgents: migratedDisabledTuiAgents,
+    ...applyZotzVisibleAgents(migratedDisabledTuiAgents, parsed.settings?.zotzSeenTuiAgents),
     ...migratedAgentYoloDefaults,
     ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
