@@ -287,24 +287,13 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
   }
 }
 
-export const KEY_BLOCK_MARKER = /-----(BEGIN|END) [A-Z ]+-----/g
-
 /** Redacts the end of a longer text, which may begin inside a credential: drops the partial first
- *  line, and redacts body lines of a key block whose BEGIN marker was cut, up to the first marker.
- *  `startsInKeyBlock` says whether the stream was inside a block before its last `n` markers. */
-export function redactTextTail(
-  tail: string,
-  startsInKeyBlock: (laterMarkers: number) => boolean = () => false
-): string {
+ *  line and a key block cut from its BEGIN marker, which no pattern could recognise any more. */
+export function redactTextTail(tail: string): string {
   const lines = tail.slice(tail.indexOf('\n') + 1 || tail.length)
-  const markers = [...lines.matchAll(KEY_BLOCK_MARKER)]
-  const first = markers[0]
-  if (!startsInKeyBlock(markers.length) && first?.[1] !== 'END') {
-    return redactString(lines)
-  }
-  if (!first) {
-    return lines ? '[redacted:pem]' : ''
-  }
-  const rest = lines.slice(first[1] === 'END' ? first.index + first[0].length : first.index)
-  return `[redacted:pem]\n${redactString(rest.replace(/^\n/, ''))}`
+  const end = /-----END [A-Z ]+-----/.exec(lines)
+  const begin = lines.indexOf('-----BEGIN ')
+  return redactString(
+    end && (begin === -1 || begin > end.index) ? lines.slice(end.index + end[0].length) : lines
+  )
 }

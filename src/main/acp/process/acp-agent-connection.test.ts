@@ -160,7 +160,7 @@ describe('ACP process-owning connection', () => {
     ['whole', ['-----BEGIN PRIVATE KEY-----\n']],
     ['split across writes', ['-----BEG', 'IN PRIVATE KEY-----\n']]
   ])(
-    'drops an unfinished key block the stderr tail cut from its %s BEGIN marker',
+    'keeps an unfinished key block out of stderr when its %s BEGIN outgrows the tail',
     async (_, begin) => {
       const { connection, child } = fixture()
       await connection.start(start)
@@ -170,20 +170,31 @@ describe('ACP process-owning connection', () => {
       child.stderr.write(`${'K9'.repeat(32)}\n`.repeat(140))
       child.emit('exit', 1, null)
       child.emit('close', 1, null)
-      expect(connection.stderrTail()).toBe('[redacted:pem]')
+      expect(connection.stderrTail()).toBe('warming up\n[redacted:pem]')
     }
   )
 
-  it('drops the body of a cut key block when a second unfinished block follows it', async () => {
+  it('keeps both of two unfinished key blocks out of stderr', async () => {
     const { connection, child } = fixture()
     await connection.start(start)
+    child.stderr.write('warming up\n')
     child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${`${'K9'.repeat(32)}\n`.repeat(140)}`)
     child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${'Z8'.repeat(32)}\n`)
     child.emit('exit', 1, null)
     child.emit('close', 1, null)
-    const tail = connection.stderrTail()
-    expect(tail).not.toContain('K9K9')
-    expect(tail).not.toContain('Z8Z8')
+    expect(connection.stderrTail()).toBe('warming up\n[redacted:pem]')
+  })
+
+  it('keeps a key body out of stderr when sign-in watching drops the line holding BEGIN', async () => {
+    const { connection, child } = fixture({ signIn: { read: () => undefined } })
+    await connection.start(start)
+    child.stderr.write('warming up\n')
+    // A line over the sign-in line limit is dropped, and the BEGIN marker in it is split.
+    child.stderr.write(`${'x'.repeat(40_000)}-----BEGIN PRI`)
+    child.stderr.write(`VATE KEY-----\n${`${'K9'.repeat(32)}\n`.repeat(20)}`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).toBe('warming up')
   })
 
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {

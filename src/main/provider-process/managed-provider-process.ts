@@ -25,7 +25,7 @@ import {
   type ProviderProcessTree
 } from './provider-process-close'
 
-import { createStderrKeyBlockWatch } from './stderr-key-block-watch'
+import { createStderrKeyBlockFilter } from './stderr-key-block-filter'
 
 export const STDERR_TAIL_MAX_CHARS = 8192
 
@@ -75,8 +75,6 @@ export type ManagedProviderProcess = {
   readonly spawnAbsence: ProviderSpawnAbsence | null
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
-  /** Whether stderr was inside a private key block before its last `laterMarkers` BEGIN/END markers. */
-  stderrInKeyBlockBefore(laterMarkers: number): boolean
   onExit(listener: (exit: ProviderProcessExit) => void): void
   terminateTree(): Promise<ProviderProcessTeardownVerdict>
   /** A close joining one already in flight shares that close's grace. */
@@ -123,7 +121,6 @@ export function spawnManagedProviderProcess(
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const exitProof = new RetryableProcessExitProof(options.acceptClose ?? acceptProviderWriterClose)
   let stderrTail = ''
-  const keyBlock = createStderrKeyBlockWatch()
   let stderrLine = ''
   let lineCut = false
   const lineMaxChars = options.stderrLineMaxChars ?? STDERR_TAIL_MAX_CHARS
@@ -133,22 +130,29 @@ export function spawnManagedProviderProcess(
       stderrTail = `${stderrTail}${line}\n`.slice(-STDERR_TAIL_MAX_CHARS)
     }
   }
-  // Drain stderr so a full pipe cannot block the child.
-  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
-    keyBlock.observe(chunk)
+  const ingest = (text: string): void => {
     if (options.onStderrLine) {
-      const lines = (stderrLine + chunk).split('\n')
+      const lines = (stderrLine + text).split('\n')
       const pending = lines.pop() ?? ''
       // Keep the prompt prefix until the complete line can be classified.
       lines.forEach((line, index) => retainLine(line, index === 0 && lineCut))
       lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
       stderrLine = pending.slice(0, lineMaxChars)
     } else {
-      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+      stderrTail = (stderrTail + text).slice(-STDERR_TAIL_MAX_CHARS)
     }
+  }
+  // Key blocks go before anything is kept, so no cut or dropped line can strand their bodies.
+  const keyBlocks = createStderrKeyBlockFilter()
+  // Drain stderr so a full pipe cannot block the child.
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    ingest(keyBlocks.push(chunk))
     options.onOutput?.()
   })
-  child.stderr.once('end', () => retainLine(stderrLine, lineCut))
+  child.stderr.once('end', () => {
+    ingest(keyBlocks.end())
+    retainLine(stderrLine, lineCut)
+  })
   if (options.onOutput) {
     observeReaderOutput(child.stdout, options.onOutput)
   }
@@ -269,7 +273,6 @@ export function spawnManagedProviderProcess(
       return spawnAbsence()
     },
     stderrTail: () => stderrTail,
-    stderrInKeyBlockBefore: keyBlock.inBlockBefore,
     get lastCloseResult() {
       return lastCloseResult
     },
