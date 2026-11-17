@@ -1,10 +1,14 @@
 import { stat } from 'node:fs/promises'
 import { join, win32 as pathWin32 } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { wslExeProcessSpec, WSL_PROBE_TIMEOUT_MS } from '../../wsl/execution/wsl-exe-process'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 
 type DirectoryExists = (path: string) => Promise<boolean>
+// null means wsl.exe failed and is retried; '' means the projects directory is absent.
 type ReadRealpath = (distro: string, linuxPath: string) => Promise<string | null>
 
 export type WslClaudeProjectsResolution = {
@@ -12,8 +16,8 @@ export type WslClaudeProjectsResolution = {
   issue: { path: string; message: string } | null
 }
 
-// An unreadable symlink target is retried next scan. A resolved directory, or a home that is
-// not a different symlink, stays for this process so later scans do not call wsl.exe again.
+// An unreadable target or failed wsl.exe call is retried next scan. A resolved directory, or a
+// home that is not a different symlink, stays for this process so later scans skip wsl.exe.
 const resolvedCache = new Map<string, WslClaudeProjectsResolution>()
 
 export function resetWslClaudeProjectsRootCacheForTests(): void {
@@ -93,7 +97,7 @@ export async function resolveWslClaudeProjectsDir(args: {
     real,
     exists
   })
-  if (useCache && !result.issue) {
+  if (useCache && real !== null && !result.issue) {
     resolvedCache.set(args.homeDir, result)
   }
   return result
@@ -140,21 +144,22 @@ async function directoryExists(path: string): Promise<boolean> {
 }
 
 async function defaultReadRealpath(distro: string, linuxPath: string): Promise<string | null> {
-  try {
-    const { runWslExe } = await import('../../wsl/execution/wsl-exe-process')
-    const stdout = await runWslExe([
-      '-d',
-      distro,
-      '--',
-      'sh',
-      '-c',
-      'if [ ! -d "$1" ]; then exit 2; fi; readlink -f -- "$1"',
-      'sh',
-      linuxPath
-    ])
-    const value = stdout.trim()
-    return value.startsWith('/') ? value : null
-  } catch {
+  // --exec keeps wsl.exe from expanding $1 before sh sees it.
+  const result = await runProcess(
+    wslExeProcessSpec(
+      buildWslExecArgs(distro, [
+        'sh',
+        '-c',
+        'if [ -d "$1" ]; then readlink -f -- "$1"; fi',
+        'sh',
+        linuxPath
+      ]),
+      WSL_PROBE_TIMEOUT_MS
+    )
+  ).catch(() => null)
+  if (!result || result.code !== 0 || result.timedOut) {
     return null
   }
+  const value = result.stdout.trim()
+  return value.startsWith('/') ? value : ''
 }

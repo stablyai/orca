@@ -202,6 +202,34 @@ describe('resolveWslClaudeProjectsDir', () => {
     expect(brokenReads).toBe(2)
   })
 
+  it('retries a failed wsl.exe read but remembers an absent projects directory', async () => {
+    let failedReads = 0
+    let absentReads = 0
+    const failed = {
+      homeDir: wslHome('wsl-failed'),
+      platform: 'win32' as const,
+      useProcessCache: true,
+      directoryExists: async () => false,
+      readRealpath: async () => {
+        failedReads += 1
+        return null
+      }
+    }
+    const absent = {
+      ...failed,
+      homeDir: wslHome('no-claude'),
+      readRealpath: async () => {
+        absentReads += 1
+        return ''
+      }
+    }
+    for (const args of [failed, failed, absent, absent]) {
+      expect(await resolveWslClaudeProjectsDir(args)).toEqual({ rootDir: null, issue: null })
+    }
+    expect(failedReads).toBe(2)
+    expect(absentReads).toBe(1)
+  })
+
   it('prefers a logical directory that appears after a symlink was cached', async () => {
     const home = wslHome('replaced')
     const direct = claudeProjectsDirForWslHome(home)
