@@ -8,7 +8,8 @@ export const METRICS = [
   { key: 'pubsPerSec', label: 'store pubs/s', rel: 0.25, abs: 5 },
   { key: 'noopPubsPerSec', label: 'no-op store pubs/s', rel: 0.25, abs: 2 },
   { key: 'wakeupsPerSec', label: 'subscriber wakeups/s', rel: 0.25, abs: 500 },
-  { key: 'longTaskMsPerSec', label: 'long tasks ms/s', rel: 0.5, abs: 20 },
+  // Same-build runs differed by up to ~60 ms/s on Xvfb, so smaller long-task deltas are noise.
+  { key: 'longTaskMsPerSec', label: 'long tasks ms/s', rel: 0.5, abs: 50 },
   { key: 'stalls100', label: 'main stalls >100ms', rel: 0.5, abs: 3 },
   { key: 'stallMaxMs', label: 'main stall max ms', rel: 1, abs: 250 },
   { key: 'mainHeapMb', label: 'main heap MB', rel: 0.15, abs: 50 },

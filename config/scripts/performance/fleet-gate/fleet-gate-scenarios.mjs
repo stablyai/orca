@@ -247,6 +247,8 @@ async function switchWorkspaces({ page, windowMs }) {
   let firstError = null
   while (Date.now() < deadline) {
     const id = pair[switches % 2]
+    // Notices appear after a delay, so clear them before every click, not just the first.
+    await dismissOverlays(page)
     try {
       await page
         .locator(`[data-worktree-id="${id}"] [data-worktree-card-surface]`)
