@@ -5,7 +5,9 @@ const MAX_LABEL_NAME_LENGTH = 255
 export function isGitLabLabelFilterName(name: unknown): name is string {
   return (
     typeof name === 'string' &&
-    name.trim() !== '' &&
+    name !== '' &&
+    // Requests trim names, so one with outer whitespace would no longer match its picker option.
+    name === name.trim() &&
     // GitLab joins label lists with commas, so a comma cannot be part of one name.
     !name.includes(',') &&
     // A line break ends the CSV value glab reads from --label, dropping the labels after it.
