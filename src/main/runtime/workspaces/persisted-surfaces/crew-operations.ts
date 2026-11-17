@@ -16,7 +16,10 @@ import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orche
 
 import { accountMoveReleases } from '../../agent-session/environment/account-move-releases'
 import type { StructuredAgentSessionRuntimeDeps } from '../../agent-session/installation/structured-agent-session-runtime-contract'
-import { structuredWorkerOwesWork } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import {
+  structuredWorkerOwesWork,
+  structuredWorkersOwingWork
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
@@ -39,14 +42,19 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record),
       // A Dispatch settling can release a chat's sends held for an account move.
-      accountMoveWakes: accountMoveReleases(this.orchestrationDbChanges, () => {
-        try {
-          return this.requireStore()
-        } catch {
-          // A runtime without settings never moves a chat between accounts.
-          return null
-        }
-      })
+      accountMoveWakes: accountMoveReleases(
+        this.orchestrationDbChanges,
+        () => {
+          try {
+            return this.requireStore()
+          } catch {
+            // A runtime without settings never moves a chat between accounts.
+            return null
+          }
+        },
+        (records) =>
+          structuredWorkersOwingWork(this.getOrchestrationDbIfAvailable?.() ?? null, records)
+      )
     }
   }
 

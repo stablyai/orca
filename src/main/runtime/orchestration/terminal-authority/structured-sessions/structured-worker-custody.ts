@@ -121,16 +121,43 @@ export function structuredWorkerOwesWork(
   db: OrchestrationDb | null,
   record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
 ): boolean {
-  const incarnation = db && ownedWorkerIncarnation(db, record)
-  return (
-    !!db &&
-    !!incarnation &&
-    db.db
-      .prepare(
-        `SELECT 1 FROM dispatch_contexts
-          WHERE process_incarnation = ? AND status IN ('pending', 'dispatched') LIMIT 1`
-      )
-      .get(incarnation) !== undefined
+  return structuredWorkersOwingWork(db, [record]).has(record.sessionId)
+}
+
+/** The workers among `records` that owe work, read in one statement however many there are. */
+export function structuredWorkersOwingWork(
+  db: OrchestrationDb | null,
+  records: readonly Pick<AgentSessionConversationView, 'sessionId' | 'location'>[]
+): ReadonlySet<string> {
+  const workers = records.flatMap((record) => {
+    const hostScope = structuredWorkerHostScope(record.location)
+    return hostScope
+      ? [[workerIncarnation(record.sessionId), JSON.stringify(hostScope), record.sessionId]]
+      : []
+  })
+  if (!db || workers.length === 0) {
+    return new Set()
+  }
+  const rows: unknown[] = db.db
+    .prepare(
+      `SELECT DISTINCT json_extract(worker.value, '$[2]') AS session_id FROM json_each(?) AS worker
+        WHERE EXISTS (SELECT 1 FROM worker_terminal_resources
+            WHERE process_incarnation = json_extract(worker.value, '$[0]')
+              AND host_scope IS json_extract(worker.value, '$[1]') AND ownership_state = 'owned')
+          AND EXISTS (SELECT 1 FROM dispatch_contexts
+            WHERE process_incarnation = json_extract(worker.value, '$[0]')
+              AND status IN ('pending', 'dispatched'))`
+    )
+    .all(JSON.stringify(workers))
+  return new Set(
+    rows.flatMap((row) =>
+      typeof row === 'object' &&
+      row !== null &&
+      'session_id' in row &&
+      typeof row.session_id === 'string'
+        ? [row.session_id]
+        : []
+    )
   )
 }
 
@@ -166,6 +193,12 @@ export function structuredWorkerOpenTaskTitle(
     : null
 }
 
+function workerIncarnation(sessionId: string): string {
+  return structuredWorkerProcessIncarnation(
+    isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+  )
+}
+
 function ownedWorkerIncarnation(
   db: OrchestrationDb,
   record: Pick<AgentSessionConversationView, 'sessionId' | 'location'>
@@ -174,9 +207,7 @@ function ownedWorkerIncarnation(
   if (!hostScope) {
     return null
   }
-  const incarnation = structuredWorkerProcessIncarnation(
-    isOrcaSessionId(record.sessionId) ? canonicalOrcaSessionId(record.sessionId) : record.sessionId
-  )
+  const incarnation = workerIncarnation(record.sessionId)
   const owned = db.db
     .prepare(
       `SELECT 1 FROM worker_terminal_resources

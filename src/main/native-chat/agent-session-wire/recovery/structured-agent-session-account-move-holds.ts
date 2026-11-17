@@ -49,8 +49,8 @@ export class AccountMoveHolds {
     private readonly deps: {
       wake: (sessionId: string) => void
       wakes: () => StructuredAgentSessionHostDeps['accountMoveWakes']
-      /** Whether the chat's own Dispatch is still open. */
-      dispatchOpen: (sessionId: string) => boolean
+      /** Which of these chats' own Dispatches are still open, read together. */
+      dispatchesOpen: (sessionIds: readonly string[]) => ReadonlySet<string>
       now: () => number
       sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
     }
@@ -224,7 +224,7 @@ export class AccountMoveHolds {
       this.selection++
       this.walk(edge)
     } else if (this.onDispatch.size > 0) {
-      // Events name no Dispatch, so each held chat's own is read: once per burst, not per event.
+      // Events name no Dispatch: held chats' own are read in one query, once per burst.
       this.dispatchWalk ??= setImmediate(() => {
         this.dispatchWalk = undefined
         this.walk('dispatch')
@@ -234,8 +234,13 @@ export class AccountMoveHolds {
 
   private walk(edge: StructuredAgentSessionAccountMoveEdge): void {
     // A copy: waking can release, which edits what is walked.
-    for (const id of Array.from(edge === 'account' ? this.held.keys() : this.onDispatch)) {
-      if (edge === 'dispatch' && this.deps.sessions.has(id) && this.deps.dispatchOpen(id)) {
+    const ids = Array.from(edge === 'account' ? this.held.keys() : this.onDispatch)
+    const open =
+      edge === 'dispatch'
+        ? this.deps.dispatchesOpen(ids.filter((id) => this.deps.sessions.has(id)))
+        : undefined
+    for (const id of ids) {
+      if (open?.has(id) && this.deps.sessions.has(id)) {
         continue
       }
       this.stale(id, edge === 'account' ? 'account' : 'work')

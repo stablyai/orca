@@ -19,8 +19,15 @@ export function start(
     publish: delivery.publishStatus,
     now: context.now,
     // A read, outside the chat's lane: one busy chat must not delay every other continue.
-    awaitsAccountMove: async (id, launchHome) =>
-      !!(await context.accountTransition?.(id, { launchHome, reader: 'sweep' })),
+    awaitsAccountMove: async (id, launchHome) => {
+      const move = await context.accountTransition?.(id, { launchHome, reader: 'sweep' })
+      if (move?.waitsFor !== 'dispatch') {
+        return !!move
+      }
+      // A limited worker's open Dispatch waits on this very continue: holding it would never end.
+      context.accountMoveSettled?.(id, 'sweep')
+      return false
+    },
     stopsAwaitingAccountMove: (id) => context.accountMoveSettled?.(id, 'sweep')
   })
   limit.start()

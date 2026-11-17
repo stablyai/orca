@@ -75,7 +75,11 @@ async function chatOnAccountA() {
       releases.add(wake)
       return () => releases.delete(wake)
     },
-    selection: () => [home]
+    selection: () => [home],
+    openDispatches: (records) => {
+      dispatchReads++
+      return new Set(openDispatch ? records.map((record) => record.sessionId) : [])
+    }
   }
   await eventually(() =>
     expect(current.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
@@ -254,6 +258,18 @@ it('sends no usage-limit continue to the old account while its subagent still ru
   await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
   expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
+
+it('still continues a usage-limited worker whose open Dispatch waits on that continue', async () => {
+  const chat = await chatOnAccountA()
+  chat.setOpenDispatch(true)
+  await chat.limited()
+  chat.switchTo('/homes/b')
+  await chat.sweep(15_000)
+  await chat.sweep(15_000)
+  await chat.sweep(15_000)
+  // Its Dispatch closes only once the worker continues; holding the continue would never end.
+  await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
 })
 
 it('lets go of the hold once the person deletes the message it held', async () => {

@@ -1,5 +1,5 @@
 import type { CrewChanges } from '../../orchestration/crew/crew-changes'
-import type { StructuredAgentSessionAccountMoveEdge } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -18,12 +18,11 @@ const SELECTION_KEYS: readonly (keyof GlobalSettings)[] = [
  *  usage update costs nothing here. */
 export function accountMoveReleases(
   dispatches: Pick<CrewChanges, 'subscribe'>,
-  settings: () => Pick<RuntimeStore, 'onSettingsChanged' | 'getSettings'> | null
-): {
-  subscribe: (wake: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
-  selection: () => readonly unknown[]
-} {
+  settings: () => Pick<RuntimeStore, 'onSettingsChanged' | 'getSettings'> | null,
+  openDispatches: NonNullable<StructuredAgentSessionHostDeps['accountMoveWakes']>['openDispatches']
+): NonNullable<StructuredAgentSessionHostDeps['accountMoveWakes']> {
   return {
+    ...(openDispatches ? { openDispatches } : {}),
     // Pruning a removed account rewrites these without notifying listeners.
     selection: () => {
       const current = settings()?.getSettings()

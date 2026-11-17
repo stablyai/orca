@@ -217,6 +217,10 @@ export type StructuredAgentSessionHostDeps = {
     subscribe: (listener: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
     /** The account selection as written now, compared by value: some writes fire no edge. */
     selection?: () => readonly unknown[]
+    /** Which of these chats still have an open Dispatch, read together in one query. */
+    openDispatches?: (
+      records: readonly Pick<AgentSessionRecord, 'sessionId' | 'location'>[]
+    ) => ReadonlySet<string>
   }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
