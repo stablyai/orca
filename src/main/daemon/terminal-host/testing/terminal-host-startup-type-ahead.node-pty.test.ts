@@ -105,4 +105,13 @@ describeZsh('typing while an agent tab starts', () => {
     await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 10_000 })
     expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
   }, 15_000)
+
+  // A real shell runs the launch from its first prompt hook.
+  it('runs a zle-less launch with the user shell options', async () => {
+    const tab = await start(
+      'unsetopt zle nomatch\n',
+      `[[ -o nonomatch ]] && printf 'AGENT_%s\\n' STARTED`
+    )
+    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 8_000 })
+  }, 15_000)
 })

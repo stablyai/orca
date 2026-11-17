@@ -160,21 +160,26 @@ ${
     : ''
 }  builtin unset _orca_shell_features _orca_histfile
 ${ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK}
-  builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init${
-    spec.startupCommandDelivery ? `\n${ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK}` : ''
-  }
+  builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
 }`
 }
 
-// Without zle, no line-init fires; run the command from this first precmd instead.
-const ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK = `  if [[ ! -o zle ]] && (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
-    builtin typeset __orca_command="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
-    builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
-    if __orca_claim_startup_command; then
-      builtin print -r -- "$__orca_command"
-      builtin eval "$__orca_command"
-    fi
-  fi`
+// Without zle no line-init fires. A hook of its own, not emulate-scoped, runs the launch with the user's options.
+const ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK = `__orca_no_zle_startup_command() {
+  precmd_functions=("\${(@)precmd_functions:#__orca_no_zle_startup_command}")
+  [[ -o zle ]] && return 0
+  (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )) || return 0
+  local __orca_command="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+  builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+  __orca_claim_startup_command || return 0
+  builtin print -r -- "$__orca_command"
+  builtin eval "$__orca_command"
+}
+# After the user's .zshenv, so the deferred init (PATH restores) runs first in the same precmd sweep.
+if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
+  builtin typeset -ag precmd_functions
+  precmd_functions+=(__orca_no_zle_startup_command)
+fi`
 
 export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
   return `${joinBlocks([
@@ -187,6 +192,7 @@ export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
     spec.startupCommandDelivery ? ZSH_STARTUP_COMMAND_CLAIM_BLOCK : null,
     ZSH_DEFERRED_LINE_INIT_BLOCK,
     buildDeferredInit(spec),
-    ZSH_USER_ZSHENV_SOURCE_BLOCK
+    ZSH_USER_ZSHENV_SOURCE_BLOCK,
+    spec.startupCommandDelivery ? ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK : null
   ])}\n`
 }

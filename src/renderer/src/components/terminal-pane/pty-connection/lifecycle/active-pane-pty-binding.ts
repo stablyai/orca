@@ -126,9 +126,10 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
     return true
   }
 
-  session.onPtySpawn = (ptyId: string): void => {
+  session.onPtySpawn = (ptyId: string, spawn?: { startupInputReachesCommand?: boolean }): void => {
     // Track actual fresh spawns so unused shell-startup failures remain visible; reattach/cold restore must retain ordinary exit semantics.
     session.spawnedFreshPtyId = ptyId
+    session.spawnStartupInputReachesCommand = spawn?.startupInputReachesCommand === true
     // Seed Command Code working state once bound; it has no prompt-start hook, and later hooks refine it.
     const bound = session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
     if (!bound) {

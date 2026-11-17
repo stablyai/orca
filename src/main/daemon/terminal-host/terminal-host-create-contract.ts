@@ -62,4 +62,6 @@ export type CreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY master. */
   inputClosed?: true
+  /** The shell runs the launch itself, so input written now queues for the agent; older hosts omit it. */
+  startupInputReachesCommand?: true
 }

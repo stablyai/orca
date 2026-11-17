@@ -124,7 +124,9 @@ export async function connectIpcPty(
     }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-      onPtySpawn?.(spawnResult.id)
+      onPtySpawn?.(spawnResult.id, {
+        startupInputReachesCommand: spawnResult.startupInputReachesCommand === true
+      })
       if (context.isDestroyed()) {
         return
       }

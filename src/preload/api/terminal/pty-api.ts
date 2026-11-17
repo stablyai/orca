@@ -118,6 +118,8 @@ export type PtyApi = {
     resumeProviderSession?: TerminalLaunchResult['resumeProviderSession']
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
+    /** The shell runs the launch itself, so input written now queues for the agent. */
+    startupInputReachesCommand?: true
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
   /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */

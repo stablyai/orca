@@ -123,6 +123,18 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       return
     }
     liveInputSinceBind = false
+    if (
+      freshSpawn &&
+      session.spawnStartupInputReachesCommand === true &&
+      !(session.ownsStartupDraftPaste && !session.startupDraftPasteAttempted)
+    ) {
+      // The host's shell runs the launch itself, so keys written now queue for the agent ahead of later typing.
+      const text = draft
+      draft = ''
+      phase = 'closed'
+      session.transport.sendInput(text, 'driving')
+      return
+    }
     phase = 'delivering'
     if (!freshSpawn) {
       // An attached pane may still be at the shell; pasting now would prefix its pending launch command.
