@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { access, lstat, mkdir, open, realpath, readFile, rm, stat } from 'node:fs/promises'
+import { access, link, lstat, mkdir, open, realpath, readFile, rm, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   durableWriteTempPath,
@@ -21,6 +21,8 @@ export type SettingsFileCreate = { kind: 'created' } | { kind: 'exists' } | { ki
 
 const READ_ONLY_CODES = new Set(['EACCES', 'EROFS', 'EPERM', 'EBUSY', 'EXDEV'])
 const MISSING_CODES = new Set(['ENOENT', 'ENOTDIR'])
+// Filesystems without hard links (e.g. FAT, some network shares) report these from link().
+const HARDLINK_UNSUPPORTED_CODES = new Set(['EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS'])
 // Windows reports a file briefly held by an editor or antivirus scan as EPERM/EBUSY.
 const WINDOWS_TRANSIENT_WRITE_CODES = new Set(['EPERM', 'EBUSY'])
 
@@ -118,22 +120,39 @@ async function removeIfSameFile(path: string, created: Stats): Promise<void> {
   }
 }
 
+// Fallback for filesystems without hard links: create in place, removing a partial file on failure.
+async function createExclusive(path: string, text: string): Promise<void> {
+  const handle = await open(path, 'wx')
+  let written = false
+  try {
+    await handle.writeFile(text, 'utf-8')
+    await handle.sync()
+    written = true
+  } finally {
+    // A partial file left behind would make every retry report `exists`.
+    const created = written ? null : await handle.stat().catch(() => null)
+    await handle.close()
+    if (created) {
+      await removeIfSameFile(path, created)
+    }
+  }
+}
+
 export async function createSettingsFile(path: string, text: string): Promise<SettingsFileCreate> {
   try {
     await mkdir(dirname(path), { recursive: true })
-    const handle = await open(path, 'wx')
-    let written = false
+    const tmpPath = durableWriteTempPath(path)
     try {
-      await handle.writeFile(text, 'utf-8')
-      await handle.sync()
-      written = true
+      await writeTempFileDurable(tmpPath, text)
+      // A hard link publishes the complete file at once and never replaces one that appeared meanwhile.
+      await link(tmpPath, path).catch(async (error: unknown) => {
+        if (!hasCode(error, HARDLINK_UNSUPPORTED_CODES)) {
+          throw error
+        }
+        await createExclusive(path, text)
+      })
     } finally {
-      // A partial file left behind would make every retry report `exists`.
-      const created = written ? null : await handle.stat().catch(() => null)
-      await handle.close()
-      if (created) {
-        await removeIfSameFile(path, created)
-      }
+      await rm(tmpPath, { force: true }).catch(() => {})
     }
     return { kind: 'created' }
   } catch (error) {
