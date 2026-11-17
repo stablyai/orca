@@ -43,13 +43,14 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from './repository/repo-types'
+import type { ZotzGlobalSettings } from './zotz/zotz-global-settings-types'
 
 export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = GlobalSettingsBase & {
+export type GlobalSettings = GlobalSettingsBase & ZotzGlobalSettings & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -337,8 +338,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   newWorkspaceSetupOnly?: boolean
   /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
-  /** Zotz: catalog agents already offered once, so only ones added later start hidden. */
-  zotzSeenTuiAgents?: TuiAgent[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
@@ -419,8 +418,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
   computerAwakeMode?: ComputerAwakeMode
-  /** Zotz: 'unset' shows the first-run wizard; 'server' keeps the node awake and network-exposed. */
-  zotzMachineMode?: 'unset' | 'personal' | 'server'
   /** macOS Option: auto uses keyboard layout (US → Meta, others compose); false composes; true sends Meta on both keys; left/right select one.
    * See docs/terminal-option-key-layout-aware-default.md. */
   terminalMacOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right'
