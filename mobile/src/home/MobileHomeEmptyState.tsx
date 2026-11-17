@@ -33,8 +33,8 @@ function onboardingSteps(t: Translate) {
       id: 'connected',
       title: t('home.emptyState.connectedTitle', "You're connected"),
       desc: t(
-        'home.emptyState.connectedDescription',
-        'Your desktop will appear here. Everything is encrypted end-to-end.'
+        'home.emptyState.connectedCloudDescription',
+        'Your desktop and your Orca Cloud workspaces will appear here. Everything is encrypted end-to-end.'
       )
     }
   ]
@@ -72,6 +72,13 @@ export function MobileHomeEmptyState(props: {
             {t(
               'home.emptyState.description',
               'Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.'
+            )}
+          </Text>
+          {/* Why: the phone reaches Orca Cloud through a paired desktop (#42), so say where cloud work shows up. */}
+          <Text style={styles.cloudNote}>
+            {t(
+              'home.emptyState.cloudNote',
+              'Your Orca Cloud workspaces show up here once a desktop is paired.'
             )}
           </Text>
         </View>
@@ -129,6 +136,13 @@ const styles = themedStyleSheet(() => ({
     marginBottom: 10
   },
   body: { fontSize: 17, lineHeight: 24, color: colors.textSecondary, textAlign: 'center' },
+  cloudNote: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12
+  },
   ctaHit: { alignSelf: 'center', marginTop: 22 },
   cta: {
     flexDirection: 'row',

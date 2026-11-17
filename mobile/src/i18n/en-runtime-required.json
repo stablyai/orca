@@ -164,6 +164,28 @@
       "seconds_other": "{{count}}s"
     }
   },
+  "cloud": {
+    "idle": {
+      "sleeps_one": "Sleeps after {{count}} minute idle.",
+      "sleeps_other": "Sleeps after {{count}} minutes idle."
+    },
+    "snapshot": {
+      "git": {
+        "files_one": "{{count}} changed file",
+        "files_other": "{{count}} changed files",
+        "more_one": "and {{count}} more",
+        "more_other": "and {{count}} more"
+      }
+    },
+    "usage": {
+      "archived_one": "{{hours}} sandbox hour used. Archived workspaces don’t use sandbox hours.",
+      "archived_other": "{{hours}} sandbox hours used. Archived workspaces don’t use sandbox hours.",
+      "asleep_one": "{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.",
+      "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
+      "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",
+      "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running."
+    }
+  },
   "components": {
     "codexResetCredit": {
       "available_one": "{{count}} reset available",

@@ -35,6 +35,8 @@ import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeFab } from './tabs/MobileHomeFab'
+import { useCloudEnrollment } from '../cloud/use-cloud-workspaces'
+import { useCloudHostIds } from '../cloud/use-cloud-host-ids'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
 import { MobileHomeSettingsTab } from './tabs/MobileHomeSettingsTab'
 import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
@@ -148,19 +150,23 @@ export function MobileHomeScreen() {
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
+  const cloudEnrollment = useCloudEnrollment()
+  const cloudHostIds = useCloudHostIds(cloudEnrollment)
+  // Cloud sandboxes are paired hosts too; "New workspace" targets computers only.
+  const connectedDesktops = data.connectedHosts.filter((host) => !cloudHostIds.has(host.id))
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
   const fab =
     tab === 'feed' && paired
       ? {
           label: t('home.bottomBar.newWorkspace', 'New workspace'),
-          disabled: data.connectedHosts.length === 0,
+          disabled: connectedDesktops.length === 0,
           // A desktop still on its first connect would make the hint flash at launch.
           hint: data.hostsConnecting
             ? undefined
             : t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
           onPress: () =>
-            data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
+            data.router.push(newWorkspaceOverlayHref(connectedDesktops.map((host) => host.id)))
         }
       : tab === 'automations' && automationsHostId && automationsHostConnected
         ? {
@@ -191,6 +197,14 @@ export function MobileHomeScreen() {
                     onOpenHostActions={openHostActions}
                     onPairDesktop={pairDesktop}
                     onOpenTasks={openTasks}
+                    onOpenCloudWorkspace={(workspace) =>
+                      data.router.push({
+                        pathname: '/cloud/[sandboxId]',
+                        params: { sandboxId: workspace.id }
+                      })
+                    }
+                    onNewCloudWorkspace={() => data.router.push('/cloud/new')}
+                    onManageCloudAccess={() => data.router.push('/cloud/access')}
                   />
                 ) : id === 'agents' ? (
                   <MobileHomeAgentsTab

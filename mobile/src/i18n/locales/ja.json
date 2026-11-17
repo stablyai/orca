@@ -1513,7 +1513,6 @@
       "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
     },
     "emptyState": {
-      "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
       "connectedTitle": "接続完了",
       "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
       "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",

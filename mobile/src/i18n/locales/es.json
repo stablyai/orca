@@ -1558,7 +1558,6 @@
       "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
     },
     "emptyState": {
-      "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
       "connectedTitle": "Ya tienes conexión",
       "description": "Empareja tu teléfono con Orca en tu ordenador para supervisar a tus agentes, acceder a cualquier terminal y gestionar el trabajo desde el móvil.",
       "openDesktopDescription": "Ve a Ajustes → Móvil y genera un código QR de emparejamiento.",

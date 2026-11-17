@@ -26,8 +26,8 @@ const bridge = vi.hoisted(() => {
 // The page's own router: an in-page hop puts the tapped pane in its URL, not in the shell route.
 const pageUrl = vi.hoisted(() => {
   const url: {
-    params: { paneKey?: string }
-    setParams: (next: { paneKey?: string }) => void
+    params: { paneKey?: string; paneView?: string }
+    setParams: (next: { paneKey?: string; paneView?: string }) => void
   } = {
     params: {},
     setParams: (next) => {
@@ -84,6 +84,7 @@ const TABS: MobileSessionTab[] = [
 ]
 
 const switched: MobileSessionTab[] = []
+const views: [string, string][] = []
 
 function Probe({
   terminalsLoaded,
@@ -99,7 +100,8 @@ function Probe({
     terminalsLoaded,
     switchSessionTab: (tab) => switched.push(tab),
     worktreeId: 'wt-1',
-    openNativeSession
+    openNativeSession,
+    setTabView: (tabId, view) => views.push([tabId, view])
   })
   return null
 }
@@ -128,6 +130,7 @@ beforeEach(() => {
   bridge.listeners = []
   bridge.cleared.length = 0
   switched.length = 0
+  views.length = 0
   pageUrl.params = {}
 })
 
@@ -165,5 +168,23 @@ describe('the page pane hook', () => {
     render(true)
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
     expect(pageUrl.params.paneKey).toBeUndefined()
+  })
+
+  it('opens the tapped pane in the view the tap asked for (Open terminal to sign in)', () => {
+    bridge.route = {
+      pathname: '/h/host-1/session/wt-1',
+      params: { paneKey: `tab-b:${LEAF}`, paneView: 'terminal' }
+    }
+    render(true)
+    expect(views).toEqual([['second', 'terminal']])
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('a later tap without a view leaves the stored per-tab view alone', () => {
+    pageUrl.params = { paneKey: `tab-a:${LEAF}`, paneView: 'terminal' }
+    render(true)
+    deliver(`tab-b:${LEAF}`)
+    expect(views).toEqual([['first', 'terminal']])
+    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
   })
 })

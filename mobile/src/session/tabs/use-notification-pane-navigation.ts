@@ -16,7 +16,8 @@ export function useNotificationPaneNavigation({
   connState,
   switchSessionTab,
   worktreeId,
-  openNativeSession
+  openNativeSession,
+  setTabView
 }: {
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
@@ -24,15 +25,24 @@ export function useNotificationPaneNavigation({
   switchSessionTab: (tab: MobileSessionTab) => void
   worktreeId?: string
   openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
+  /** Applies the view a tap asked for (paneView), over the stored per-tab override. */
+  setTabView?: (tabId: string, view: 'terminal' | 'chat') => void
 }) {
   const client = usePageBridgeClient()
   // This screen's own navigation: a screen in a preloaded first commit mounts before the router's container reports ready.
   const navigation = useNavigation<{ setParams: (params: { paneKey: undefined }) => void }>()
   // An in-page hop (an agent row, a sender jump) carries the tap only in the page URL; the shell route never names it.
-  const urlPaneKey =
-    firstParam(useLocalSearchParams<{ paneKey?: string | string[] }>().paneKey) || null
+  const urlParams = useLocalSearchParams<{
+    paneKey?: string | string[]
+    paneView?: string | string[]
+  }>()
+  const urlPaneKey = firstParam(urlParams.paneKey) || null
+  const urlPaneView = firstParam(urlParams.paneView) || null
   // The shell's pane wins: the URL copied it at bootstrap and can be older than a later notification tap.
-  const pending = useRef(client.getShellSession()?.route?.params?.paneKey || urlPaneKey)
+  const shellParams = client.getShellSession()?.route?.params
+  const pending = useRef(shellParams?.paneKey || urlPaneKey)
+  // The view rides with its paneKey: taken from the same source the pending paneKey came from.
+  const pendingView = useRef(shellParams?.paneKey ? (shellParams.paneView ?? null) : urlPaneView)
   const applied = useRef<string | null>(null)
   const [asked, setAsked] = useState(0)
 
@@ -45,12 +55,13 @@ export function useNotificationPaneNavigation({
     }
     if (urlPaneKey !== mountUrlPaneKey.current) {
       pending.current = urlPaneKey
+      pendingView.current = urlPaneView
       applied.current = null
       setAsked((count) => count + 1)
     }
     // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
     navigation.setParams({ paneKey: undefined })
-  }, [navigation, urlPaneKey])
+  }, [navigation, urlPaneKey, urlPaneView])
 
   useEffect(() => {
     // Acknowledge the initial init separately; read from the client to keep the effect keyed only on client.
@@ -71,6 +82,7 @@ export function useNotificationPaneNavigation({
         return
       }
       pending.current = paneKey
+      pendingView.current = route?.params?.paneView ?? null
       setAsked((count) => count + 1)
     })
   }, [client])
@@ -93,6 +105,11 @@ export function useNotificationPaneNavigation({
     // A pre-reconnect inventory can predate the pane named by the push.
     if (tab) {
       pending.current = null
+      const view = pendingView.current
+      pendingView.current = null
+      if (tab.type === 'terminal' && (view === 'terminal' || view === 'chat')) {
+        setTabView?.(tab.id, view)
+      }
       if (tab.type === 'agent-session' && openNativeSession && worktreeId) {
         void openNativeSession({
           kind: 'notification',
@@ -117,6 +134,7 @@ export function useNotificationPaneNavigation({
     switchSessionTab,
     terminalsLoaded,
     worktreeId,
-    openNativeSession
+    openNativeSession,
+    setTabView
   ])
 }

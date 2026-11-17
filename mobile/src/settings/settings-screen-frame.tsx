@@ -12,13 +12,15 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type SettingsNavBarProps = {
   title: string
+  /** A small glyph before the title (NavBar titleIcon). */
+  titleIcon?: ReactNode
   onBack: () => void
   /** At most two NavBarButtons. */
   trailing?: ReactNode
 }
 
 /** A settings screen's top bar: Back, the centred title, and up to two buttons. */
-export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps) {
+export function SettingsNavBar({ title, titleIcon, onBack, trailing }: SettingsNavBarProps) {
   const t = useMobileTranslation()
   return (
     <NavBar
@@ -30,6 +32,7 @@ export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps)
         />
       }
       title={title}
+      titleIcon={titleIcon}
       trailing={trailing}
     />
   )
@@ -53,7 +56,7 @@ export function SettingsScreen({
   useMobileColorScheme()
   const insets = useSafeAreaInsets()
   return (
-    <SafeAreaView style={settingsScreenStyles.container} edges={['top']}>
+    <SafeAreaView style={settingsScreenStyles.groupedContainer} edges={['top']}>
       <SettingsNavBar title={title} onBack={onBack} trailing={trailing} />
       <ScrollView
         contentContainerStyle={[
@@ -130,6 +133,9 @@ export function SettingsEmptyRow({ children }: { children: ReactNode }) {
 
 export const settingsScreenStyles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
+  // Grouped lists only: white groups need a grey backdrop in light (screens with their own cards keep
+  // `container`).
+  groupedContainer: { flex: 1, backgroundColor: colors.settingsSurface },
   scrollContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   fill: { flexGrow: 1 },
   untitledGap: { marginTop: spacing.lg },

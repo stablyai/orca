@@ -1,0 +1,302 @@
+import { useRouter } from 'expo-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useHostClient } from '../transport/connection/host-client-hooks'
+import { isCloudWorkspaceGoneFromRegistry, type CloudWorkspace } from './cloud-control-plane-client'
+import { cloudDeviceLabel } from './cloud-device-label'
+import {
+  deliverQueuedCloudPrompts,
+  listQueuedCloudPrompts,
+  markWaitingCloudPromptsFailed,
+  requeueUnsentCloudPrompts
+} from './cloud-prompt-queue'
+import { isCloudWorkspaceGone, pruneGoneCloudHost } from './cloud-host-pruning'
+import {
+  cloudHostRemover,
+  forgetRevokedCloudSession,
+  loadCloudControlPlane,
+  useCloudHostRemoval
+} from './cloud-session'
+import { attachCloudWorkspace, type CloudAttachPhase } from './cloud-workspace-attach'
+import {
+  attachErrorMessage,
+  cloudPromptErrorCode,
+  cloudPromptErrorMessage,
+  phaseLabel
+} from './cloud-workspace-copy'
+import {
+  ensureCloudProjectWorktree,
+  launchCloudPrompt,
+  type CloudLaunchedAgent
+} from './cloud-workspace-host-operations'
+import { runCloudDelivery } from './cloud-delivery-run'
+import { ownerForCloudError, roleForCloudError } from './cloud-entitlement-copy'
+import { cloudWorkspaceProjectRoot } from './cloud-workspace-links'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import { useCloudDeliveryWatchdog } from './use-cloud-delivery-watchdog'
+import { useInvalidateCloudWorkspaces } from './use-cloud-workspaces'
+
+export type CloudWorkspaceRun =
+  | { kind: 'idle' }
+  | { kind: 'attaching'; phase: CloudAttachPhase; startedAt: number; intent: 'open' | 'send' }
+  | {
+      kind: 'delivering'
+      hostId: string
+      startedAt: number
+      connectBy: number
+      intent: 'open' | 'send'
+      /** A saved host, not one this run just paired: if its orcad refuses us, pair afresh once. */
+      reused: boolean
+    }
+  | { kind: 'error'; message: string; retry: 'open' | 'send' | null }
+  | { kind: 'launched'; hostId: string; worktreeId: string; agent: CloudLaunchedAgent }
+
+// A paired VM that never reaches `connected` must end in an error the user can retry, not a spinner.
+const DELIVERY_CONNECT_DEADLINE_MS = 30_000
+
+/** Wake → per-device grant → direct E2EE pairing → deliver queued prompts → land in the session. */
+export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspace | null) {
+  const t = useMobileTranslation()
+  const router = useRouter()
+  const removal = useCloudHostRemoval()
+  const invalidate = useInvalidateCloudWorkspaces()
+  const [run, setRun] = useState<CloudWorkspaceRun>({ kind: 'idle' })
+  const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  const deliveryStarted = useRef<CloudWorkspaceRun | null>(null)
+  const inFlight = useRef(false)
+  // The latest attach, for the stale-host re-pair that starts from inside an effect.
+  const attachRef = useRef<(intent: 'open' | 'send', freshPairing: boolean) => Promise<void>>(
+    async () => undefined
+  )
+  const host = useHostClient(run.kind === 'delivering' ? run.hostId : undefined)
+  const active = run.kind === 'attaching' || run.kind === 'delivering'
+  const title = workspace?.title ?? ''
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      abortRef.current?.abort()
+    }
+  }, [])
+
+  // VoiceOver and TalkBack hear each step and any failure once, not every timer tick.
+  useEffect(() => {
+    if (run.kind === 'attaching') {
+      AccessibilityInfo.announceForAccessibility(phaseLabel(run.phase, t))
+    } else if (run.kind === 'error') {
+      AccessibilityInfo.announceForAccessibility(run.message)
+    }
+  }, [run, t])
+
+  useCloudDeliveryWatchdog({
+    run,
+    hostState: host.state,
+    sandboxId,
+    deliveryStarted,
+    mountedRef,
+    setRun,
+    repair: (intent) => attachRef.current(intent, true)
+  })
+
+  useEffect(() => {
+    // One delivery per run: a re-render must never launch the same prompts twice.
+    if (
+      run.kind !== 'delivering' ||
+      !host.client ||
+      host.state !== 'connected' ||
+      deliveryStarted.current === run
+    ) {
+      return
+    }
+    deliveryStarted.current = run
+    const client = host.client
+    const hostId = run.hostId
+    const intent = run.intent
+    void (async () => {
+      const outcome = await runCloudDelivery(sandboxId, intent, {
+        listQueued: listQueuedCloudPrompts,
+        ensureWorktree: async () =>
+          ensureCloudProjectWorktree(
+            client,
+            (await cloudWorkspaceProjectRoot(sandboxId)) ?? undefined
+          ),
+        launch: (worktreeId, prompt) => launchCloudPrompt(client, worktreeId, prompt),
+        deliverQueued: deliverQueuedCloudPrompts,
+        markWaitingFailed: markWaitingCloudPromptsFailed,
+        errorCodeFor: cloudPromptErrorCode
+      }).catch((error: unknown) => ({
+        kind: 'failed' as const,
+        code: cloudPromptErrorCode(error),
+        open: intent === 'open'
+      }))
+      invalidate()
+      if (!mountedRef.current) {
+        return
+      }
+      if (outcome.kind === 'launched') {
+        // A cloud agent may still need its sign-in: say what happened before dropping into the
+        // session, and let the user pick the chat or the terminal.
+        setRun({ kind: 'launched', hostId, worktreeId: outcome.worktreeId, agent: outcome.agent })
+        return
+      }
+      if (outcome.kind === 'failed') {
+        // Delivery failures are about the prompt, not the sandbox: say which, never "something".
+        // The failed prompts wait in the list with Retry and Remove; nothing retries them here.
+        setRun({
+          kind: 'error',
+          message:
+            outcome.code === null
+              ? t(
+                  'cloud.error.deliver',
+                  'The workspace is running, but a prompt didn’t start. Your files are safe.'
+                )
+              : cloudPromptErrorMessage(outcome.code, t),
+          retry: null
+        })
+        if (!outcome.open) {
+          return
+        }
+      } else {
+        setRun({ kind: 'idle' })
+      }
+      // Nothing (more) to send, or the user asked to open: the connection is proven, so open it.
+      router.push(`/h/${hostId}`)
+    })()
+  }, [run, host.client, host.state, sandboxId, invalidate, router, t, title])
+
+  const attach = useCallback(
+    async (intent: 'open' | 'send', freshPairing: boolean) => {
+      // A ref, not state: a second tap in the same frame must not start a second grant.
+      if (!workspace || inFlight.current) {
+        return
+      }
+      inFlight.current = true
+      const plane = await loadCloudControlPlane()
+      if (!plane) {
+        inFlight.current = false
+        router.replace('/')
+        return
+      }
+      // Prompts held back by an earlier failed attach go out with this one, whichever button started it.
+      await requeueUnsentCloudPrompts(sandboxId).catch(() => undefined)
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+      const startedAt = Date.now()
+      setRun({ kind: 'attaching', phase: 'waking', startedAt, intent })
+      try {
+        const { hostId, paired, replacedHostId } = await attachCloudWorkspace({
+          plane,
+          sandboxId,
+          title: workspace.title,
+          deviceLabel: cloudDeviceLabel(),
+          signal: controller.signal,
+          freshPairing,
+          onPhase: (phase) =>
+            setRun((current) =>
+              current.kind === 'attaching' && current.phase !== phase
+                ? { ...current, phase }
+                : current
+            )
+        })
+        invalidate()
+        if (replacedHostId) {
+          // A fresh pairing replaced the saved host: the old one belongs to a sandbox that is gone.
+          await removeHostAndCloseClient(
+            replacedHostId,
+            removal.forgetHostClient,
+            removal.queryClient
+          ).catch(() => undefined)
+        }
+        if (controller.signal.aborted || !mountedRef.current) {
+          return
+        }
+        // Opening also waits for the sandbox's orcad to accept this phone, so a stale pairing ends in
+        // a retryable error here rather than on a dead host screen.
+        setRun({
+          kind: 'delivering',
+          hostId,
+          startedAt,
+          connectBy: Date.now() + DELIVERY_CONNECT_DEADLINE_MS,
+          intent,
+          reused: !paired
+        })
+      } catch (error) {
+        if (controller.signal.aborted || !mountedRef.current) {
+          return
+        }
+        await forgetRevokedCloudSession(error, removal)
+        if (
+          isCloudWorkspaceGone(error) &&
+          (await isCloudWorkspaceGoneFromRegistry(plane, sandboxId).catch(() => false))
+        ) {
+          // Destroyed: its pairing and queued prompts go, so nothing retries a VM that no longer exists.
+          await pruneGoneCloudHost(sandboxId, cloudHostRemover(removal)).catch(() => undefined)
+        }
+        // Prompts that were going out with this attach now say so, instead of "waiting".
+        await markWaitingCloudPromptsFailed(sandboxId, 'not_connected').catch(() => undefined)
+        // A per-seat limit counts the owner's seat, so the message names whose it is.
+        const [role, owner] = await Promise.all([
+          roleForCloudError(error, plane, controller.signal),
+          ownerForCloudError(error, plane, sandboxId, controller.signal)
+        ])
+        if (controller.signal.aborted || !mountedRef.current) {
+          return
+        }
+        setRun({
+          kind: 'error',
+          message: attachErrorMessage(error, t, role, owner),
+          retry: intent
+        })
+        invalidate()
+      } finally {
+        inFlight.current = false
+      }
+    },
+    [workspace, router, sandboxId, invalidate, t, removal]
+  )
+  useEffect(() => {
+    attachRef.current = attach
+  }, [attach])
+
+  /**
+   * `freshPairing`: skip the saved host and pair through a new grant (the read view saw the
+   * workspace's snapshot signer change, a sign its sandbox was rebuilt). A failed pairing keeps it.
+   */
+  const start = useCallback(
+    (intent: 'open' | 'send', options: { freshPairing?: boolean } = {}) =>
+      active ? Promise.resolve() : attach(intent, options.freshPairing === true),
+    [active, attach]
+  )
+
+  const openSession = useCallback(
+    (view: 'chat' | 'terminal') => {
+      if (run.kind !== 'launched') {
+        return
+      }
+      // The worktree already exists, so no `created=1` (it would auto-create a blank terminal).
+      const params = new URLSearchParams({ name: title })
+      const paneKey = view === 'terminal' ? run.agent.paneKey : undefined
+      if (paneKey) {
+        params.set('paneKey', paneKey)
+        // The agent waits in its terminal (sign-in); the page must not open the tab in chat view.
+        params.set('paneView', 'terminal')
+      }
+      setRun({ kind: 'idle' })
+      router.push(
+        `/h/${encodeURIComponent(run.hostId)}/session/${encodeURIComponent(run.worktreeId)}?${params}`
+      )
+    },
+    [run, router, title]
+  )
+
+  const fail = useCallback((message: string) => setRun({ kind: 'error', message, retry: null }), [])
+  const clearError = useCallback(
+    () => setRun((current) => (current.kind === 'error' ? { kind: 'idle' } : current)),
+    []
+  )
+  return { run, active, start, fail, clearError, openSession }
+}

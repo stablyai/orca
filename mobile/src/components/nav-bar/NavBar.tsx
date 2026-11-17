@@ -22,6 +22,8 @@ type NavBarProps = {
   /** Usually the back button; a side-panel or close button where a screen has no back. */
   leading?: ReactNode
   title?: string
+  /** A small glyph before the title that names what the screen is, e.g. Cloud on a cloud workspace. */
+  titleIcon?: ReactNode
   /** One short line under the title: host, workspace, or a status. */
   subtitle?: ReactNode
   /** Replaces the title block, e.g. the session title that opens its details card. */
@@ -42,6 +44,7 @@ type NavBarProps = {
 export function NavBar({
   leading,
   title,
+  titleIcon,
   subtitle,
   center,
   trailing,
@@ -59,7 +62,18 @@ export function NavBar({
         <Animated.View style={[styles.center, titleOpacity && { opacity: titleOpacity }]}>
           {center ?? (
             <>
-              {title !== undefined ? (
+              {title !== undefined && titleIcon ? (
+                <View style={styles.titleRow}>
+                  {titleIcon}
+                  <Text
+                    style={[styles.title, styles.titleShrink]}
+                    numberOfLines={1}
+                    accessibilityRole="header"
+                  >
+                    {title}
+                  </Text>
+                </View>
+              ) : title !== undefined ? (
                 <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
                   {title}
                 </Text>
@@ -226,6 +240,13 @@ const styles = themedStyleSheet(() => ({
     fontSize: 16,
     fontWeight: '600'
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 0
+  },
+  titleShrink: { flexShrink: 1 },
   subtitleRow: {
     flexDirection: 'row',
     alignItems: 'center',

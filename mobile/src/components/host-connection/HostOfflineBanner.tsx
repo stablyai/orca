@@ -113,7 +113,7 @@ export function HostOfflineBanner({
           onPress={onRetry}
           accessibilityRole="button"
         >
-          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
+          <Text style={styles.retryText}>{t('common.tryAgain', 'Try again')}</Text>
         </Pressable>
       ) : null}
     </View>

@@ -17,6 +17,7 @@ import { projectGroupRowIndent } from '../project-sections/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from './worktree-meta-glyph-presence'
 import { AgentSpinner } from '../../agents/presentation/AgentSpinner'
 import { HostKindIcon } from '../../components/icons/HostKindIcon'
+import { WorktreeRowHostGlyph, cloudWorktreeRowStatus } from '../../components/WorktreeCloudGlyph'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WorktreeAgentList } from '../agent-lineage/presentation/WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
@@ -84,6 +85,7 @@ function WorktreeListRowComponent({
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
   const showHostGlyph = !cardDetails.metaRow && isRemoteExecutionHostId(hostId)
+  const cloud = cloudWorktreeRowStatus(item.orcaCloud)
   const showHostBadge =
     cardDetails.host && Boolean(view.hostContextLabel || view.hostContextHealthLabel)
   // Why: like the desktop, skip a blank meta lane when every part of it is off.
@@ -125,15 +127,14 @@ function WorktreeListRowComponent({
 
       <View style={styles.worktreeMain}>
         <View style={styles.worktreeNameRow}>
-          {showHostGlyph && (
-            <View
-              accessibilityLabel={
-                hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
-              }
-            >
-              <HostKindIcon hostId={hostId} size={11} />
-            </View>
-          )}
+          <WorktreeRowHostGlyph
+            cloud={cloud}
+            remote={showHostGlyph}
+            hostId={hostId}
+            label={
+              hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
+            }
+          />
           {showRepoChip && (
             <View
               style={styles.repoChip}
@@ -187,7 +188,7 @@ function WorktreeListRowComponent({
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
-                <HostKindIcon hostId={hostId} size={10} />
+                <HostKindIcon hostId={hostId} size={10} cloud={Boolean(cloud)} />
                 {view.hostContextLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
                     {view.hostContextLabel}

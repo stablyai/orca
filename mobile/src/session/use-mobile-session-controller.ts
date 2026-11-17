@@ -99,7 +99,11 @@ export function useMobileSessionController() {
   const preferences = useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   const openNativeSession = useMobileStructuredSessionOpening(tabSwitching)
-  useNotificationPaneNavigation({ ...tabSwitching, openNativeSession })
+  useNotificationPaneNavigation({
+    ...tabSwitching,
+    openNativeSession,
+    setTabView: tabSwitching.nativeChatController.setTabView
+  })
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(
     terminalWebview,
