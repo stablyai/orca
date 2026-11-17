@@ -1,4 +1,4 @@
-import { worktreeRow } from '../sidebar/worktree-row-locators'
+import { worktreeRow } from '../workspaces/sidebar/worktree-row-locators'
 import { tabCreateMenuTrigger } from '../terminal/layout/terminal-tab-menu'
 /**
  * Invariant: a plugin's new-file type appears in the tab bar + menu, creates an untitled file of
