@@ -20,6 +20,8 @@ export type RelayControlClientOptions = {
   connectDeadlineMs?: number
   /** Arms the path-stall detector (two-path failover); unset keeps liveness exactly as before. */
   onStall?: () => void
+  /** Two-path connect race: false means another path won, so this challenge is never answered. */
+  claimChallenge?: () => boolean
   // Test seam: deterministic probe jitter.
   livenessRandom?: () => number
 }
