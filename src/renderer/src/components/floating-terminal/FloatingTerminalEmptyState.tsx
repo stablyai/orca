@@ -1,7 +1,7 @@
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
-import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import type { ShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 
 type FloatingTerminalEmptyStateProps = {

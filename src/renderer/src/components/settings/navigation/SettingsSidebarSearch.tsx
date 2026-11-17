@@ -1,7 +1,7 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import { Search, X } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'

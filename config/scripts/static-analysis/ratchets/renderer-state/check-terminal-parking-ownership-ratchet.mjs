@@ -155,11 +155,11 @@ const ORDINARY_WRITERS = [
   'store/terminals/tabs/presentation/terminal-tab-presentation.ts',
   'store/terminals/sleep/terminal-shutdown-state.ts',
   'store/terminals/tabs/creation/window-tab-start-in-main.ts',
-  'store/slices/agent-status/agent-status-live-reducer.ts',
-  'store/slices/agent-status/agent-status-launch-actions.ts',
-  'store/slices/agent-status/agent-status-provider-session-actions.ts',
-  'store/slices/agent-status/agent-status-recovery-actions.ts',
-  'store/slices/agent-status/agent-status-authority-actions.ts'
+  'store/slices/agent-status/live-status/agent-status-live-reducer.ts',
+  'store/slices/agent-status/launch-config/agent-status-launch-actions.ts',
+  'store/slices/agent-status/live-status/agent-status-provider-session-actions.ts',
+  'store/slices/agent-status/sleep-recovery/agent-status-recovery-actions.ts',
+  'store/slices/agent-status/pane-authority/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
   'replaceRecordEntries',

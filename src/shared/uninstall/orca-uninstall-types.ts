@@ -14,13 +14,16 @@ export type OrcaUninstallStep =
   | 'background-service'
   | 'hook-scripts'
   | 'ssh-hosts'
+  | 'terminal-daemon'
 
 export const ORCA_UNINSTALL_STEPS: readonly OrcaUninstallStep[] = [
   'agent-hooks',
   'cli-command',
   'background-service',
   'hook-scripts',
-  'ssh-hosts'
+  'ssh-hosts',
+  // Last, so no other step depends on it; it ends the user's open terminals.
+  'terminal-daemon'
 ]
 
 /**
@@ -71,6 +74,8 @@ export type OrcaUninstallPlan = {
   backgroundService: OrcaUninstallSimpleEntry | null
   hookScripts: OrcaUninstallSimpleEntry | null
   hosts: OrcaUninstallHostEntry[]
+  /** This machine's terminal daemon, present only while one is running; stopping it ends open terminals. */
+  terminalDaemon: OrcaUninstallSimpleEntry | null
   /** Set when another Orca build (stable, RC or dev) still uses the shared hooks. */
   otherOrcaBuildName: string | null
   /** The app bundle, AppImage or install folder to reveal, when there is one. */

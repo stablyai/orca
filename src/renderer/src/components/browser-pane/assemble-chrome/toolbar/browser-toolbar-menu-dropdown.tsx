@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
-import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,

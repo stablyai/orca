@@ -6,8 +6,8 @@ import {
   retireParkedTerminalTab
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../../types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
-import { readTabRowChanges } from '@/store/keyed-tab-row-changes'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { readTabRowChanges } from '@/store/record-transitions/keyed-tab-row-changes'
 import {
   sameTerminalParkingTab,
   sameTerminalParkingTitleSlots,

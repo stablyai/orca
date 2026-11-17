@@ -3,7 +3,7 @@ import { createTestStore } from '@/store/slices/linear/linear-slice-test-harness
 import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
 import React from 'react'
 import type * as ReactModule from 'react'
-import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-client-ipc-bridge'
+import { registerRuntimeClientIpcBridge } from '@/hooks/ipc-events/runtime-events/runtime-client-ipc-bridge'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
 import { WorkspaceAttachmentSourceStatus } from '../../src/renderer/src/components/sidebar/workspace-card/review/WorkspaceAttachmentSourceStatus'

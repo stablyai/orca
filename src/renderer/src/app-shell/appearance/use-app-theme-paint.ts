@@ -5,7 +5,7 @@ import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugins/appearance/
 import type { PluginThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { useAppStore } from '../../store'
 import { usePluginThemeStore, usePluginThemes } from '../../store/plugins/appearance/plugin-themes'
-import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import {
   applyCachedPluginAppTheme,

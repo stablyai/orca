@@ -13,7 +13,7 @@ import PinnedTabCloseDialog from './components/terminal-pane/layout/close/Pinned
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
-import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import { useUnreadDockBadge } from './attention/unread/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'

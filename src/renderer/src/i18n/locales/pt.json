@@ -554,7 +554,8 @@
         "installLockWait_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minutos.",
         "installLockWaitGivesUp_one": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minuto.",
         "installLockWaitGivesUp_many": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
-        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos."
+        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
+        "installLockWaitHolderGone": "A outra instalação do Orca nesta distribuição parou. O Orca assume em alguns segundos."
       }
     },
     "agentSummary": {

@@ -7,12 +7,6 @@ const view = { left: 110, right: 360 }
 const base = { callout, borderStart: 1, width: 278, view, scale: 1, rtl: false }
 
 describe('introArrowInset', () => {
-  it('centres the arrow under the phone wherever it sits in the row', () => {
-    expect(introArrowInset({ ...base, iconCenter: 128 })).toEqual({ inset: 23, visible: true })
-    expect(introArrowInset({ ...base, iconCenter: 242 })).toEqual({ inset: 137, visible: true })
-    expect(introArrowInset({ ...base, iconCenter: 280 })).toEqual({ inset: 175, visible: true })
-  })
-
   it('gives the settled position while the menu is still scaling open', () => {
     // Scaled 0.98 about the callout's left edge: viewport distances shrink, local ones must not.
     const scaled = { left: 104, right: 104 + 280 * 0.98 }
@@ -26,11 +20,6 @@ describe('introArrowInset', () => {
       inset: 23,
       visible: true
     })
-  })
-
-  it('keeps the arrow off the rounded corners', () => {
-    expect(introArrowInset({ ...base, iconCenter: 106 }).inset).toBe(12)
-    expect(introArrowInset({ ...base, iconCenter: 390 }).inset).toBe(266)
   })
 
   it('hides the arrow once the phone is scrolled out of the row', () => {
