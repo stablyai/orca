@@ -1,7 +1,7 @@
 import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 
-// CREATE TRIGGER IF NOT EXISTS keeps an old body, so a changed trigger needs a new name here.
+// IF NOT EXISTS keeps old trigger bodies: rename a changed trigger and DROP the old name.
 const PENDING_OBJECTS = [
   'journal_retire_pending',
   'journal_retire_pending_head_insert',
