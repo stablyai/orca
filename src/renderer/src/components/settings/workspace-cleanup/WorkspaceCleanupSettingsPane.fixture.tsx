@@ -49,7 +49,12 @@ function setup(): void {
       call: async ({ method }: { method: string }) => ({
         id: 'fixture',
         ok: true,
-        result: method === 'workspaceCleanup.report' ? report : { evaluatedAt: 0, rows: [] }
+        result:
+          method === 'workspaceCleanup.report'
+            ? report
+            : method === 'workspaceCleanup.codexHistoryDiskUsage'
+              ? { bytes: 53_500_000_000, rollouts: 41_905, complete: true }
+              : { evaluatedAt: 0, rows: [] }
       })
     }
   })
