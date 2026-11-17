@@ -1483,7 +1483,6 @@
       "src/main/ipc/workspace-cleanup/workspace-cleanup-document-lifetime.test.ts": 1130,
       "src/main/ipc/workspace-cleanup/workspace-cleanup-execution-host-routing.test.ts": 641,
       "src/main/ipc/workspace-space/workspace-space.test.ts": 60,
-      "src/main/ipc/worktrees/creation/worktree-base-directory-poller-marker-fanout.test.ts": 193,
       "src/main/ipc/worktrees/creation/worktree-base-directory-watch-targets.test.ts": 494,
       "src/main/ipc/worktrees/creation/worktree-create-lineage.test.ts": 1033,
       "src/main/ipc/worktrees/git/worktree-git-common-native-upgrade-poll.test.ts": 57,
