@@ -113,28 +113,28 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
       [groups]
     )
-    const { structuredTabs, structuredTabIds } = useMemo(() => {
-      const tabs = unifiedTabs.filter((tab): tab is StructuredAgentSessionTab =>
-        isStructuredTab(tab)
-      )
-      return { structuredTabs: tabs, structuredTabIds: new Set(tabs.map((tab) => tab.id)) }
-    }, [unifiedTabs])
+    const structuredTabs = useMemo(
+      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
+      [unifiedTabs]
+    )
     // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
     const [shownTabIds, setShownTabIds] = useState(NO_SHOWN_TAB_IDS)
     const mountedTabs = useMemo(
-      () => structuredTabs.filter((tab) => shownTabIds.has(tab.id)),
-      [structuredTabs, shownTabIds]
+      () =>
+        structuredTabs.filter(
+          (tab) => shownTabIds.has(tab.id) || groupActiveTabById.get(tab.groupId) === tab.id
+        ),
+      [structuredTabs, shownTabIds, groupActiveTabById]
     )
-    const newlyShownTabIds = groups.flatMap((group) =>
-      group.activeTabId &&
-      structuredTabIds.has(group.activeTabId) &&
-      !shownTabIds.has(group.activeTabId)
-        ? [group.activeTabId]
-        : []
-    )
-    // A closed chat leaves a recorded id with no mounted tab; drop it so a reopened tab waits to be shown.
-    if (newlyShownTabIds.length > 0 || mountedTabs.length < shownTabIds.size) {
-      setShownTabIds(new Set([...mountedTabs.map((tab) => tab.id), ...newlyShownTabIds]))
+    let newlyShownCount = 0
+    for (const tab of mountedTabs) {
+      if (!shownTabIds.has(tab.id)) {
+        newlyShownCount++
+      }
+    }
+    // Recording exactly the mounted chats also drops closed ones, so a reopened tab waits to be shown.
+    if (newlyShownCount > 0 || mountedTabs.length - newlyShownCount < shownTabIds.size) {
+      setShownTabIds(new Set(mountedTabs.map((tab) => tab.id)))
     }
 
     return (
