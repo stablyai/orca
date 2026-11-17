@@ -82,7 +82,7 @@ export function steeringQueuedMessageEchoes(
     .map((message) => ({
       clientMessageId: message.messageId,
       body: message.body,
-      queuedAt: sentAt.get(message.messageId) ?? 0,
+      queuedAt: sentAt.get(message.messageId) ?? null,
       phase: 'recorded'
     }))
 }

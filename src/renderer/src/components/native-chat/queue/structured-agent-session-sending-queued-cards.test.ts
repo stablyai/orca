@@ -20,13 +20,11 @@ it('draws a steer the running turn has yet to take in as a sent message, not a q
       (card) => card.messageId
     )
   ).toEqual(['queued'])
-  expect(
-    steeringQueuedMessageEchoes(queued, [], [{ clientMessageId: 'steer', queuedAt: 42 }], working)
-  ).toEqual([
+  expect(steeringQueuedMessageEchoes(queued, [], [], working)).toEqual([
     {
       clientMessageId: 'steer',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'now' }] },
-      queuedAt: 42,
+      queuedAt: null,
       phase: 'recorded'
     }
   ])
