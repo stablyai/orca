@@ -3,7 +3,7 @@ import {
   waitForPromiseWithSignal
 } from '../../../../shared/concurrency/abort-signal-reason'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   releaseStartupRemovalFence,
@@ -15,7 +15,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval

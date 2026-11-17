@@ -1,9 +1,9 @@
-import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/agent-session-fork'
+import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation

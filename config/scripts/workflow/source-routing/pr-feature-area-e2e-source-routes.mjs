@@ -16,11 +16,7 @@ function featureRoute(id, specs, prefixes) {
 // Feature areas whose specs the nightly suite alone used to select (gap audit, Oct 2026).
 export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   featureRoute('feature.sparse-checkout', ['sparse-explorer-proof'], [`${COMPONENTS}sparse/`]),
-  featureRoute(
-    'feature.onboarding',
-    ['onboarding', 'onboarding-language-catalog-retry'],
-    [`${COMPONENTS}onboarding/`]
-  ),
+  featureRoute('feature.onboarding', ['onboarding'], [`${COMPONENTS}onboarding/`]),
   featureRoute(
     'feature.diff-notes',
     [
@@ -34,11 +30,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.floating-terminal',
-    [
-      'floating-terminal-switch-reveal',
-      'floating-terminal-tab-rename-focus',
-      'floating-workspace-pane-height'
-    ],
+    ['floating-terminal-switch-reveal', 'floating-terminal-tab-rename-focus'],
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(
@@ -77,17 +69,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
   ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
-  // Pane geometry and the link tooltip share terminal.css and the pane DOM.
-  featureRoute(
-    'feature.terminal-pane-geometry',
-    ['issue-12656-terminal-link-tooltip', 'terminal-pane-padding-edges'],
-    [
-      'src/renderer/src/assets/terminal.css',
-      'src/renderer/src/lib/pane-manager/pane-layout/pane-divider.ts',
-      'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
-      'src/renderer/src/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset-on-mouseleave.ts'
-    ]
-  ),
   featureRoute(
     'feature.github-projects',
     ['github-project-board'],

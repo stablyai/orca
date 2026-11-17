@@ -102,6 +102,7 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
+  '@radix-ui/react-collapsible@1.1.20': config/patches/@radix-ui__react-collapsible@1.1.20.patch
   '@xterm/addon-image@0.10.0-beta.331': config/patches/@xterm__addon-image@0.10.0-beta.331.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.330': config/patches/@xterm__addon-ligatures@0.11.0-beta.330.patch
@@ -125,3 +126,6 @@ patchedDependencies:
   minimatch@9.0.9: config/patches/minimatch@9.0.9.patch
   minimatch@10.2.5: config/patches/minimatch@10.2.5.patch
   minimatch@10.2.6: config/patches/minimatch@10.2.6.patch
+permissions:
+  agent-browser:
+    skills: false

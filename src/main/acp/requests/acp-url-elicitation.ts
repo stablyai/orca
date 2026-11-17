@@ -7,7 +7,7 @@ import {
   readApprovalUrl,
   URL_APPROVAL_DECLINE_OPTION_ID,
   URL_APPROVAL_OPEN_OPTION_ID
-} from '../../../shared/agent-session/agent-session-approval-subject'
+} from '../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import {
   pendingAcpResolution,
   type AcpDialect,

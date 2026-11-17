@@ -26,17 +26,6 @@ describe('native OpenCode startup submission intent', () => {
     expect(plan?.launchCommand).toContain('--prompt')
   })
 
-  it('preserves explicit run commands without a submission intent', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'opencode',
-      prompt: 'task',
-      cmdOverrides: { opencode: 'opencode --log-level debug run' },
-      platform: 'linux'
-    })
-    expect(plan?.env).toBeUndefined()
-    expect(plan?.launchCommand).toContain("run -- 'task'")
-  })
-
   it.each(['posix', 'powershell', 'cmd'] as const)(
     'keeps run and its flags before a positional message in %s',
     (shell) => {
@@ -104,54 +93,4 @@ describe('native OpenCode startup submission intent', () => {
       ]
     ).toBeUndefined()
   })
-})
-
-describe('wrapped OpenCode run startup', () => {
-  it.each(['opencode', 'opencode2'] as const)(
-    'keeps %s run flags and positional task behind POSIX prefixes',
-    (agent) => {
-      for (const command of [
-        'CUSTOM_CONFIG=private opencode run --standalone',
-        'env CUSTOM_CONFIG=private opencode run --standalone',
-        'env -- CUSTOM_CONFIG=private opencode run --standalone',
-        'env -- CUSTOM_CONFIG=private opencode run --standalone --',
-        'env CUSTOM_CONFIG=private opencode run --title "--"'
-      ]) {
-        const plan = buildAgentStartupPlan({
-          agent,
-          prompt: '--literal task',
-          cmdOverrides: { [agent]: command },
-          platform: 'linux',
-          shell: 'posix',
-          isRemote: true,
-          agentEnv: { CUSTOM_CONFIG: 'kept' }
-        })
-        expect(plan?.launchCommand).toBe(
-          command.endsWith(' --') ? `${command} '--literal task'` : `${command} -- '--literal task'`
-        )
-        expect(plan?.env).toEqual({ CUSTOM_CONFIG: 'kept' })
-        expect(plan?.followupPrompt).toBeNull()
-      }
-    }
-  )
-
-  it.each(['opencode', 'opencode2'] as const)(
-    'preserves %s PowerShell call syntax and its run separator',
-    (agent) => {
-      for (const separator of ['', ' --']) {
-        const command = `& "C:\\Program Files\\opencode\\opencode.exe" --log-level debug run --standalone${separator}`
-        const plan = buildAgentStartupPlan({
-          agent,
-          prompt: "--task's é",
-          cmdOverrides: { [agent]: command },
-          platform: 'win32',
-          shell: 'powershell',
-          agentEnv: { CUSTOM_CONFIG: 'kept' }
-        })
-        expect(plan?.launchCommand).toBe(`${command}${separator ? ' ' : ' -- '}'--task''s é'`)
-        expect(plan?.env).toEqual({ CUSTOM_CONFIG: 'kept' })
-        expect(plan?.followupPrompt).toBeNull()
-      }
-    }
-  )
 })

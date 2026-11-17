@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
 import {
   isWslUncPathForCallerLinuxPath,
   normalizeRuntimePathForComparison,

@@ -13,7 +13,7 @@ import {
   newTabFolderProjectGroupListRead,
   newTabFolderRepoListRead
 } from './mobile-new-tab-folder-host-operations'
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
 import { type MobileRuntimeRepoSummary, newTabRepoListRead } from './mobile-runtime-repo-operations'
 import {

@@ -22,6 +22,7 @@ import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automations/automation-api'
 import type { BrowserApi } from './api/browser/browser-api'
 import type { CliApi } from './api/cli-install/cli-install-api'
+import type { OrcaUninstallApi } from './api/orca-uninstall/orca-uninstall-api'
 import type { CrashReportsApi, FeedbackApi } from './api/diagnostics/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/window-ui/dashboard-api'
 import type { DocPreviewApi } from './api/document-preview/doc-preview-api'
@@ -128,6 +129,7 @@ export type PreloadApi = {
   codexAccounts: CodexAccountsApi
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
+  orcaUninstall: OrcaUninstallApi
   codexConfigSync: CodexConfigSyncApi
   preflight: PreflightApi
   notifications: NotificationsApi

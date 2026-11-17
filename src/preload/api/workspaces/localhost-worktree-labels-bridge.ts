@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
-} from '../../../shared/localhost-worktree-labels'
+} from '../../../shared/workspace/ports/localhost-worktree-labels'
 import type { PreloadApi } from '../../api-types'
 
 export const localhostWorktreeLabelsApi = {

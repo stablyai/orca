@@ -3,7 +3,7 @@ import type {
   CustomWorktreeVisibilitySource,
   WorktreeVisibilityDefaults
 } from '../../../../../shared/repository/repo-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,

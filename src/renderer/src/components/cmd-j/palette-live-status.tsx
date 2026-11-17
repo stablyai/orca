@@ -28,7 +28,7 @@ import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
-} from '@/components/tab-bar/terminal-tab-activity-status'
+} from '@/components/tab-bar/terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'

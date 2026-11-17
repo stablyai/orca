@@ -5,7 +5,7 @@ import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foregrou
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useAppStore } from '@/store'
-import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   nativeChatSlotIndexOf,
   nativeChatSlotKey

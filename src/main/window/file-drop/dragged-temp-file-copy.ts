@@ -6,7 +6,7 @@ import {
   formatByteCeiling,
   REMOTE_IMPORT_MAX_FILE_BYTES,
   REMOTE_IMPORT_MAX_TOTAL_BYTES
-} from '../../ipc/runtime-import-limits'
+} from '../../ipc/runtime-transfers/runtime-import-limits'
 import {
   hasDragTempMarker,
   isPathWithin,

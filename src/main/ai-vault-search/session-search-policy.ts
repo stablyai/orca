@@ -3,7 +3,7 @@ import {
   resolveAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault/search/ai-vault-search-settings'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 // Read settings at each lazy spawn or respawn so children receive current consent.
 let readSettings: (() => AiVaultSearchSettings) | null = null

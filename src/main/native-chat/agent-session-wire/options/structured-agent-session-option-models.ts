@@ -1,9 +1,7 @@
 // Include unlisted current models without inferred capabilities, for both live and resting reads.
 
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { labelFromModelId } from '../../../../shared/agent-session/options/model-catalog/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../../agent-model-catalog/agent-model-catalog-entry'

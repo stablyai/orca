@@ -14,7 +14,7 @@ import '../../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeStore } from '../../../../../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   getAppEnvironment,
   hasAppEnvironment,

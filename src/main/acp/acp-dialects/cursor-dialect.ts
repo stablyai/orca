@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
-} from '../../../shared/agent-session/agent-session-question-answer'
+} from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { AcpRpcError } from '../transport/acp-errors'

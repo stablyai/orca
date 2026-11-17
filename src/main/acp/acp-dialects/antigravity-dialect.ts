@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentJournalApprovalSubject } from '../../../shared/agent-session/journal/agent-session-journal-approval-subject'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/agent-session-question-answer'
+import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import {

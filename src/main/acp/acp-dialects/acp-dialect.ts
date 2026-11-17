@@ -1,11 +1,11 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type {
   AgentJournalThreadGoal,
   AgentJournalToolCallItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
