@@ -25807,6 +25807,7 @@
     "machineMode": {
       "autostartRemoveFailed": "Could not remove the sign-in task: {{detail}}",
       "autostartRemoved": "Zotz no longer starts at sign-in.",
+      "pairedDevicesKeepAccess": "Paired computers and phones can still connect until you revoke them in Settings → Remote Orca Servers.",
       "back": "Back",
       "change": "Change",
       "description": "You can change this later in Settings → General.",

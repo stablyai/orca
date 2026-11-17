@@ -2,7 +2,10 @@ import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
-import { isZotzServerAccessReady } from '../../shared/zotz/zotz-machine-mode'
+import {
+  isZotzServerAccessReady,
+  zotzServerNetworkSources
+} from '../../shared/zotz/zotz-machine-mode'
 import type { ZotzNodeSetupResult } from '../../shared/zotz/zotz-node-setup-contract'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
@@ -74,12 +77,16 @@ async function createEnvironment(
       if (!runtimeRpc) {
         throw new Error('the runtime server is not running')
       }
+      const sources = zotzServerNetworkSources({ zotzMachineMode: 'server' })
+      if (sources) {
+        await runtimeRpc.adoptServeNetworkSources(sources)
+      }
       await runtimeRpc.ensureNetworkExposure()
     },
-    isKeptAwake: () => {
+    ensureKeptAwake: () => {
       const awakeService = deps.getAgentAwakeService()
       awakeService?.setMode('on')
-      return awakeService?.getStatus().active === true
+      return awakeService?.isSleepPrevented() === true
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: Date.now,

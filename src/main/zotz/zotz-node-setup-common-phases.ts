@@ -1,8 +1,10 @@
 import { ZOTZ_AUTOLOGON_URL } from '../../shared/zotz/zotz-node-setup-contract'
 import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
 import type { ZotzNodeSetupPhase, ZotzNodeSetupPhaseContext } from './zotz-node-setup-orchestrator'
+import { processOutput } from './zotz-process-runner'
 import {
   findTailscaleCli,
+  grantLinuxTailscaleOperator,
   installTailscale,
   readTailscaleStatus,
   tailscaleDownloadUrl
@@ -37,7 +39,11 @@ export function tailscalePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeS
       }
       const deadline = environment.now() + environment.tailscaleWaitMs
       let loginRequested = false
+      let loginError: string | null = null
       while (!status.running) {
+        if (loginError) {
+          return { tailscale: { status: 'failed', detail: loginError, url: downloadUrl } }
+        }
         if (environment.now() >= deadline) {
           return {
             tailscale: {
@@ -50,8 +56,16 @@ export function tailscalePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeS
         const cli = await findTailscaleCli(environment)
         if (cli && !status.authUrl && !loginRequested) {
           loginRequested = true
+          const operator = await grantLinuxTailscaleOperator(environment, cli, environment.username)
+          if (!operator.ok) {
+            return { tailscale: { status: 'failed', detail: operator.detail, url: downloadUrl } }
+          }
           // `login` publishes an AuthURL that the next status read returns; it exits once logged in.
-          void environment.run(cli, ['login'], environment.tailscaleWaitMs)
+          void environment.run(cli, ['login'], environment.tailscaleWaitMs).then((result) => {
+            if (result.code !== 0 && result.code !== null) {
+              loginError = processOutput(result) || `tailscale login exited ${String(result.code)}`
+            }
+          })
         }
         context.report('tailscale', 'waiting for login', status.authUrl ?? undefined)
         await environment.sleep(TAILSCALE_POLL_MS)
@@ -72,7 +86,7 @@ export function keepAwakePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeS
         return { keepAwake: { status: 'skipped', detail: blocked } }
       }
       return {
-        keepAwake: environment.isKeptAwake()
+        keepAwake: environment.ensureKeptAwake()
           ? { status: 'done' }
           : { status: 'failed', detail: 'the keep-awake assertion is not active' }
       }

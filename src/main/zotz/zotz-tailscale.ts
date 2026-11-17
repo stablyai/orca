@@ -159,3 +159,25 @@ export async function installTailscale(
   }
   return { ok: false, detail }
 }
+
+/** Linux tailscaled refuses `login` from a non-root user until that user is the operator. */
+export async function grantLinuxTailscaleOperator(
+  environment: ZotzTailscaleEnvironment,
+  cli: string,
+  username: string
+): Promise<{ ok: boolean; detail: string }> {
+  if (environment.platform !== 'linux' || username === 'root') {
+    return { ok: true, detail: 'not needed' }
+  }
+  if (!(await environment.exists('/usr/bin/pkexec'))) {
+    return { ok: false, detail: `run: sudo ${cli} set --operator=${username}` }
+  }
+  const result = await environment.run(
+    '/usr/bin/pkexec',
+    [cli, 'set', `--operator=${username}`],
+    5 * 60_000
+  )
+  return result.code === 0
+    ? { ok: true, detail: 'operator set' }
+    : { ok: false, detail: processOutput(result) || `exit ${String(result.code)}` }
+}

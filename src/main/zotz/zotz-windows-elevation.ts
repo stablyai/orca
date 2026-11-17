@@ -10,6 +10,8 @@ export type ZotzElevationResult =
 
 // ERROR_CANCELLED: the user declined the UAC prompt.
 const UAC_DECLINED = 1223
+// HRESULT_FROM_WIN32(ERROR_CANCELLED) as a signed 32-bit integer.
+const UAC_DECLINED_HRESULT = -2147023673
 
 export function windowsArgumentLine(args: readonly string[]): string {
   return args.map(quoteWindowsArgument).join(' ')
@@ -22,7 +24,13 @@ try {
   $process = Start-Process -FilePath ${quotePowerShellLiteral(filePath)} -ArgumentList ${quotePowerShellLiteral(argumentLine)} -Verb RunAs -Wait -PassThru -WindowStyle Hidden
   [pscustomobject]@{ launched = $true; exitCode = $process.ExitCode } | ConvertTo-Json -Compress
 } catch {
-  [pscustomobject]@{ launched = $false; nativeErrorCode = $_.Exception.NativeErrorCode; message = $_.Exception.Message } | ConvertTo-Json -Compress
+  # Start-Process wraps the declined-UAC Win32Exception in an InvalidOperationException.
+  $code = $null
+  for ($e = $_.Exception; $e; $e = $e.InnerException) {
+    if ($e -is [System.ComponentModel.Win32Exception]) { $code = $e.NativeErrorCode; break }
+    if ($e.HResult -eq ${UAC_DECLINED_HRESULT}) { $code = ${UAC_DECLINED}; break }
+  }
+  [pscustomobject]@{ launched = $false; nativeErrorCode = $code; message = $_.Exception.Message } | ConvertTo-Json -Compress
 }`
 }
 

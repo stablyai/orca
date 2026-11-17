@@ -50,7 +50,7 @@ function fakeEnvironment(
     port: 6768,
     setupScriptPath: null,
     ensureNetworkExposure: async () => {},
-    isKeptAwake: () => true,
+    ensureKeptAwake: () => true,
     sleep: async (ms) => {
       clock += ms
     },
@@ -168,6 +168,58 @@ describe('Tailscale phase', () => {
     })
     expect(result.tailscaleIp).toBeNull()
   })
+
+  it('makes the Linux user the tailscaled operator before logging in', async () => {
+    let loggedIn = false
+    const { environment, calls } = fakeEnvironment(
+      {
+        platform: 'linux',
+        exists: (path) => path === '/usr/bin/tailscale' || path === '/usr/bin/pkexec'
+      },
+      ({ args }) => {
+        if (args[0] === 'login') {
+          loggedIn = true
+        }
+        if (args[0] === 'status') {
+          return loggedIn
+            ? { stdout: runningTailnet }
+            : { code: 1, stdout: JSON.stringify({ BackendState: 'NeedsLogin' }) }
+        }
+        return {}
+      }
+    )
+    const result = await runZotzNodeSetup([buildZotzNodeSetupPhases(environment)[0]!], () => {})
+
+    expect(result.steps[0]).toMatchObject({ status: 'done', detail: '100.88.1.2' })
+    const order = calls
+      .filter((call) => call.args[0] !== 'status')
+      .map((call) => [call.program, ...call.args].join(' '))
+    expect(order).toEqual([
+      '/usr/bin/pkexec /usr/bin/tailscale set --operator=hugo',
+      '/usr/bin/tailscale login'
+    ])
+  })
+
+  it('reports a refused login instead of waiting for the deadline', async () => {
+    const { environment } = fakeEnvironment(
+      {
+        platform: 'linux',
+        exists: (path) => path === '/usr/bin/tailscale' || path === '/usr/bin/pkexec'
+      },
+      ({ args }) =>
+        args[0] === 'login'
+          ? { code: 1, stderr: 'Access denied: checkprefs access denied' }
+          : args[0] === 'status'
+            ? { code: 1, stdout: JSON.stringify({ BackendState: 'NeedsLogin' }) }
+            : {}
+    )
+    const result = await runZotzNodeSetup([buildZotzNodeSetupPhases(environment)[0]!], () => {})
+
+    expect(result.steps[0]).toMatchObject({
+      status: 'failed',
+      detail: 'Access denied: checkprefs access denied'
+    })
+  })
 })
 
 describe('Windows server setup', () => {
@@ -243,7 +295,7 @@ describe('Windows server setup', () => {
     const exposure = vi.fn(async () => {})
     const keepAwake = vi.fn(() => true)
     const { environment } = fakeEnvironment(
-      { ...windows, ensureNetworkExposure: exposure, isKeptAwake: keepAwake },
+      { ...windows, ensureNetworkExposure: exposure, ensureKeptAwake: keepAwake },
       ({ program }) =>
         program.endsWith('tailscale.exe')
           ? { stdout: runningTailnet }

@@ -416,6 +416,15 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Windows limita las horas activas a 18 h (no 0–23).
 - `-ExecutionPolicy RemoteSigned` (no `Bypass`, por EDR) para el script empaquetado; si el archivo llegara con Mark-of-the-Web, PowerShell lo bloquea y el paso lo reporta.
 - Pasar de servidor a personal solo quita el arranque automático; energía, firewall, SSH y políticas se deshacen a mano (comandos en NODE-SETUP.md).
-- Homebrew renombró el cask de la app a `tailscale-app`; se intenta ese y luego `tailscale`. En Linux el login de Tailscale sigue siendo `sudo tailscale up` (el asistente espera y lo indica).
-- Hasta reiniciar Zotz, la exposición que abre el asistente no tiene la política de origen (igual que "Compartir este equipo" de upstream).
+- Homebrew renombró el cask de la app a `tailscale-app`; se intenta ese y luego `tailscale`. En Linux, `tailscaled` rechaza `tailscale login` de un usuario sin privilegios: el asistente lo hace operador con `pkexec tailscale set --operator=<usuario>` antes del login y reporta el error real si el login falla.
+- La exposición que abre el asistente adopta en caliente la política de origen de `serve --refuse-public` (`adoptServeNetworkSources` en `runtime-rpc-network-exposure.ts`), sin esperar reinicio.
 - La CLI empaquetada sigue llamándose `orca` (`orca.exe`); no se renombró.
+
+**Revisión del PR #7 (2026-11-16)** — arreglos tras code review:
+
+- Elegir "Personal" quita la tarea de arranque siempre que el modo no fuera ya personal: una configuración de servidor a medias (Tailscale falló) podía registrar la tarea sin guardar el modo. Al dejar el modo servidor avisa que los dispositivos emparejados siguen con acceso hasta revocarlos.
+- El paso "no dormirse" verifica que un bloqueo del SO quedó activo (`AgentAwakeService.isSleepPrevented`), no solo que se pidió.
+- En Windows el bloqueo de sistema es **adicional** al de pantalla (no lo reemplaza): con Modern Standby, apagar la pantalla podía dormir la máquina y sacarla de la tailnet.
+- Rechazar el UAC se detecta recorriendo las excepciones internas (`Win32Exception` 1223 / `0x800704C7`), para mostrar "permiso rechazado" en vez del error crudo.
+- `orca serve service` en Windows registra la tarea con `S4U` (sin ventana) en vez de `InteractiveToken`: `orca.exe` es de consola y abría una ventana visible en cada inicio de sesión.
+- Pendientes anotados, no arreglados: (1) la repetición cada minuto podría relanzar Zotz durante una actualización NSIS (hoy el updater está apagado por Fase 3); (2) `xmlText`/`systemdArgument` duplican escapadores de `serve-service-unit.ts`.

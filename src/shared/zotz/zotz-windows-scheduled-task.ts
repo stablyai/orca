@@ -12,6 +12,8 @@ export type ZotzWindowsScheduledTaskInput = {
   args: readonly string[]
   workingDirectory?: string
   description: string
+  /** S4U runs without a window or desktop session: right for headless `serve`, wrong for the app. */
+  logonType?: 'InteractiveToken' | 'S4U'
 }
 
 // Element text only: quotes stay literal so the stored command line reads as typed.
@@ -58,7 +60,7 @@ export function renderZotzWindowsScheduledTaskXml(input: ZotzWindowsScheduledTas
   <Principals>
     <Principal id="Author">
       <UserId>${user}</UserId>
-      <LogonType>InteractiveToken</LogonType>
+      <LogonType>${input.logonType ?? 'InteractiveToken'}</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
   </Principals>

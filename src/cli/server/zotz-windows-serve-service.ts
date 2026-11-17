@@ -71,7 +71,9 @@ export function renderWindowsServeService(
       command: options.command,
       args,
       workingDirectory: deps.homeDir,
-      description: 'Zotz headless server (orca serve), restarted when it stops.'
+      description: 'Zotz headless server (orca serve), restarted when it stops.',
+      // orca.exe is a console program; an interactive task would show its window at every logon.
+      logonType: 'S4U'
     })
   }
 }

@@ -59,7 +59,7 @@ describe('orca serve service on Windows', () => {
       '<Arguments>"serve" "--no-pairing" "--port" "6768" "--bind" "100.101.102.103"</Arguments>'
     )
     expect(xml).toContain('<UserId>MSI\\zotz</UserId>')
-    expect(xml).toContain('<LogonType>InteractiveToken</LogonType>')
+    expect(xml).toContain('<LogonType>S4U</LogonType>')
     expect(xml).toContain('<Interval>PT1M</Interval>')
     expect(xml).toContain('<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>')
     expect(xml).toContain('<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>')

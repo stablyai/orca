@@ -24181,6 +24181,7 @@
     "machineMode": {
       "autostartRemoveFailed": "No se pudo quitar la tarea de inicio de sesión: {{detail}}",
       "autostartRemoved": "Zotz ya no arranca al iniciar sesión.",
+      "pairedDevicesKeepAccess": "Los equipos y teléfonos emparejados pueden seguir conectándose hasta que los revoques en Ajustes → Servidores remotos de Orca.",
       "back": "Atrás",
       "change": "Cambiar",
       "description": "Puedes cambiarlo después en Ajustes → General.",

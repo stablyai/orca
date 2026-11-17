@@ -40,4 +40,4 @@ export type ZotzTailscaleStatus = {
   authUrl: string | null
 }
 
-export type ZotzAutostartRemovalResult = { ok: boolean; detail: string }
+export type ZotzAutostartRemovalResult = { ok: boolean; removed: boolean; detail: string }

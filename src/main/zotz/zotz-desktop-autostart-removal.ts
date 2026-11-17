@@ -21,7 +21,7 @@ export async function removeZotzDesktopAutostart(
     windowsUserId: environment.username
   })
   if (!spec) {
-    return { ok: true, detail: 'nothing to remove' }
+    return { ok: true, removed: false, detail: 'nothing to remove' }
   }
   if (environment.platform === 'win32') {
     const schtasks = windowsSystem32Binary('schtasks.exe', environment.env)
@@ -29,7 +29,7 @@ export async function removeZotzDesktopAutostart(
     const query = await environment.run(schtasks, ['/Query', '/TN', ZOTZ_SERVER_TASK_PATH])
     if (query.code !== 0) {
       await environment.removeFile(spec.path)
-      return { ok: true, detail: 'not installed' }
+      return { ok: true, removed: false, detail: 'not installed' }
     }
     const direct = await environment.run(schtasks, args)
     // The task was registered elevated, so a standard account usually needs the prompt to delete it.
@@ -47,7 +47,10 @@ export async function removeZotzDesktopAutostart(
     if (ok) {
       await environment.removeFile(spec.path)
     }
-    return { ok, detail: ok ? ZOTZ_SERVER_TASK_PATH : processOutput(direct) }
+    return { ok, removed: ok, detail: ok ? ZOTZ_SERVER_TASK_PATH : processOutput(direct) }
+  }
+  if (!(await environment.exists(spec.path))) {
+    return { ok: true, removed: false, detail: 'not installed' }
   }
   if (environment.platform === 'linux') {
     await environment.run('systemctl', ['--user', 'disable', ZOTZ_SERVER_SYSTEMD_UNIT])
@@ -56,5 +59,5 @@ export async function removeZotzDesktopAutostart(
   if (environment.platform === 'linux') {
     await environment.run('systemctl', ['--user', 'daemon-reload'])
   }
-  return { ok: true, detail: spec.path }
+  return { ok: true, removed: true, detail: spec.path }
 }

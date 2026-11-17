@@ -54,15 +54,15 @@ export default function ZotzMachineModeWizard({
       return
     }
     onClose()
-    if (previousMode !== 'server') {
+    if (previousMode === 'personal') {
       return
     }
-    // Leaving server mode stops the OS from relaunching Zotz; system tweaks are undone by hand.
+    // A partial server setup can register the sign-in task without ever saving server mode.
     try {
       const removal = await window.api.zotzNode.removeAutostart()
-      if (removal.ok) {
+      if (removal.ok && removal.removed) {
         toast.success(t('zotz.machineMode.autostartRemoved', 'Zotz no longer starts at sign-in.'))
-      } else {
+      } else if (!removal.ok) {
         toast.error(
           t(
             'zotz.machineMode.autostartRemoveFailed',
@@ -75,6 +75,14 @@ export default function ZotzMachineModeWizard({
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
+    }
+    if (previousMode === 'server') {
+      toast.info(
+        t(
+          'zotz.machineMode.pairedDevicesKeepAccess',
+          'Paired computers and phones can still connect until you revoke them in Settings → Remote Orca Servers.'
+        )
+      )
     }
   }
 

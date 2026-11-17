@@ -49,7 +49,7 @@ La tarea, el LaunchAgent y la unidad de systemd arrancan **la app de escritorio*
 
 Si ya hay un Zotz abierto, el relanzamiento de cada minuto sale en silencio sin traer la ventana al frente.
 
-Para quien quiera el servidor sin ventana sigue existiendo `orca serve service install` (ahora también en Windows, ver más abajo).
+Para quien quiera el servidor sin ventana sigue existiendo `orca serve service install` (ahora también en Windows, ver más abajo). En Windows esa tarea se registra con `S4U`: corre en segundo plano sin abrir la consola de `orca.exe`, pero sin escritorio (sin computer use ni navegador).
 
 ### Exposición de red
 
@@ -62,7 +62,7 @@ Antes, la app de escritorio solo escuchaba en `0.0.0.0:6768` después de pulsar 
 
 ## Cómo deshacerlo
 
-Elegir **Personal** en Ajustes quita el arranque automático (en Windows puede pedir permiso de administrador porque la tarea se registró elevada). El resto se deshace a mano:
+Elegir **Personal** en Ajustes quita el arranque automático, también si una configuración de servidor quedó a medias (en Windows puede pedir permiso de administrador porque la tarea se registró elevada). Los equipos y teléfonos ya emparejados siguen pudiendo conectarse hasta que los revoques en **Ajustes → Servidores remotos de Orca**. El resto se deshace a mano:
 
 **Windows (PowerShell de administrador)**
 

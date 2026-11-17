@@ -18,7 +18,7 @@ export type ZotzNodeSetupEnvironment = {
   port: number
   setupScriptPath: string | null
   ensureNetworkExposure: () => Promise<void>
-  isKeptAwake: () => boolean
+  ensureKeptAwake: () => boolean
   sleep: (ms: number) => Promise<void>
   now: () => number
   tailscaleWaitMs: number

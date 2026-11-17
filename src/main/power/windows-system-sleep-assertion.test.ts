@@ -41,30 +41,35 @@ function createService(windowsBlocker: ReturnType<typeof createBlocker>) {
 }
 
 describe('Windows system sleep assertion in AgentAwakeService', () => {
-  it('holds only a system-sleep assertion while on, and releases it when off', () => {
+  it('holds the system assertion and the display blocker while on, and releases both when off', () => {
     const windowsBlocker = createBlocker()
     const { service, displayBlocker } = createService(windowsBlocker)
 
     service.setMode('on')
     expect([...windowsBlocker.started.values()]).toEqual(['prevent-app-suspension'])
-    expect(displayBlocker.started.size).toBe(0)
-    expect(service.getStatus()).toEqual({ mode: 'on', active: true })
+    expect([...displayBlocker.started.values()]).toEqual(['prevent-display-sleep'])
+    expect(service.isSleepPrevented()).toBe(true)
 
     service.setMode('off')
     expect(windowsBlocker.started.size).toBe(0)
     expect(displayBlocker.started.size).toBe(0)
+    expect(service.isSleepPrevented()).toBe(false)
     service.dispose()
   })
 
-  it('falls back to the display blocker when the system assertion cannot start', () => {
+  it('reports sleep as not prevented when no blocker could start', () => {
     const windowsBlocker = createBlocker()
     windowsBlocker.start.mockImplementation(() => {
       throw new Error('denied')
     })
     const { service, displayBlocker } = createService(windowsBlocker)
+    displayBlocker.start.mockImplementation(() => {
+      throw new Error('denied')
+    })
 
     service.setMode('on')
-    expect([...displayBlocker.started.values()]).toEqual(['prevent-display-sleep'])
+    expect(service.getStatus()).toEqual({ mode: 'on', active: true })
+    expect(service.isSleepPrevented()).toBe(false)
     service.dispose()
   })
 })

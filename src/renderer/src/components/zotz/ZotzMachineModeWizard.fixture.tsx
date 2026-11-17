@@ -28,7 +28,7 @@ function stubServerSetup(): void {
     autoShowFirstRun: false,
     onSetupProgress: () => () => {},
     runServerSetup: async () => ({ steps: FINISHED_STEPS, tailscaleIp: '100.88.1.2' }),
-    removeAutostart: async () => ({ ok: true, detail: '' })
+    removeAutostart: async () => ({ ok: true, removed: false, detail: '' })
   }
   window.api.mobile = {
     ...window.api.mobile,

@@ -42,6 +42,7 @@ type AgentAwakeServiceOptions = {
 export class AgentAwakeService {
   private mode: ComputerAwakeMode = 'off'
   private blockerId: number | null = null
+  private systemAssertionHeld = false
   private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
   private lastPublishedStatus: ComputerAwakeStatus | null = null
   private readonly blocker: PowerSaveBlocker
@@ -124,6 +125,10 @@ export class AgentAwakeService {
     }
   }
 
+  isSleepPrevented(): boolean {
+    return this.systemAssertionHeld || this.isBlockerStarted()
+  }
+
   getStatus(): ComputerAwakeStatus {
     const workingAgentCount = this.getEligibleRunningStatusCount()
     return {
@@ -160,18 +165,17 @@ export class AgentAwakeService {
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
       const macosAssertionActive = this.startMacosAssertion(reason)
+      // Additive on Windows: Modern Standby can drop off the network once the display sleeps.
       const windowsAssertionActive = this.startPlatformAssertion(this.windowsAssertion, reason)
-      // A system-only assertion lets the display sleep; fall back to the display blocker without one.
-      const systemAssertionActive =
-        (this.platform === 'darwin' && macosAssertionActive) ||
-        (this.platform === 'win32' && windowsAssertionActive)
-      if (!systemAssertionActive) {
+      if (this.platform !== 'darwin' || !macosAssertionActive) {
         this.startBlocker(reason, runningStatusCount)
       } else {
-        this.stopBlocker('system-assertion-active', runningStatusCount)
+        this.stopBlocker('macos-assertion-active', runningStatusCount)
       }
       this.startLinuxAssertion(reason)
+      this.systemAssertionHeld = macosAssertionActive || windowsAssertionActive
     } else {
+      this.systemAssertionHeld = false
       this.stopBlocker(reason, runningStatusCount)
       this.stopMacosAssertion(reason)
       this.stopLinuxAssertion(reason)
@@ -215,6 +219,14 @@ export class AgentAwakeService {
         runningStatusCount,
         error: err
       })
+    }
+  }
+
+  private isBlockerStarted(): boolean {
+    try {
+      return this.blockerId !== null && this.blocker.isStarted(this.blockerId)
+    } catch {
+      return false
     }
   }
 
