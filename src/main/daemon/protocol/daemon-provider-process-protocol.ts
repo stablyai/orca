@@ -9,6 +9,11 @@ export type HostedProviderSpawn = {
   env: Record<string, string>
 }
 
+/** A spawn the host could not start reports its error as data, so the app classifies it as here. */
+export type HostedProviderSpawnResult =
+  | { pid: number }
+  | { spawnError: { code: string; path?: string } }
+
 export type HostedProviderRequest =
   | { id: string; type: 'probeProviderCwd'; payload: { cwd: string } }
   | { id: string; type: 'spawnProvider'; payload: HostedProviderSpawn }

@@ -4,7 +4,8 @@ import { spawnProcess } from '@orca/process-host'
 import { hostedProviderOwners } from './hosted-provider-owners'
 import {
   HOSTED_PROVIDER_PIPE_FDS,
-  type HostedProviderSpawn
+  type HostedProviderSpawn,
+  type HostedProviderSpawnResult
 } from '../protocol/daemon-provider-process-protocol'
 
 const CONNECT_TIMEOUT_MS = 5_000
@@ -66,7 +67,7 @@ function connectPipe(path: string, nonce: string, fd: number): Promise<Socket> {
 export async function spawnHostedProvider(
   spec: HostedProviderSpawn | undefined,
   accepting: boolean
-): Promise<{ pid: number }> {
+): Promise<HostedProviderSpawnResult> {
   if (!accepting) {
     throw new Error('Provider host unavailable')
   }
@@ -91,15 +92,16 @@ export async function spawnHostedProvider(
     })
     child.on('error', () => {})
     // Its pipes belong to the app; this host only reaps the native parent when it exits.
-    const pid = await new Promise<number | undefined>((resolve) => {
+    const pid = await new Promise<number | NodeJS.ErrnoException>((resolve) => {
       if (child.pid !== undefined) {
         resolve(child.pid)
         return
       }
-      child.once('error', () => resolve(undefined))
+      child.once('error', resolve)
     })
-    if (pid === undefined) {
-      throw new Error('Provider owner could not start')
+    if (typeof pid !== 'number') {
+      const { code = 'UNKNOWN', path } = pid
+      return { spawnError: { code, ...(typeof path === 'string' ? { path } : {}) } }
     }
     hostedProviderOwners.add(pid)
     child.once('exit', () => hostedProviderOwners.delete(pid))

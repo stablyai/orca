@@ -1,6 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
-import type { HostedProviderSpawn } from '../daemon/protocol/daemon-provider-process-protocol'
+import type {
+  HostedProviderSpawn,
+  HostedProviderSpawnResult
+} from '../daemon/protocol/daemon-provider-process-protocol'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import type { DeferredProviderOwner } from './deferred-provider-owner'
 import { ProviderOwnerListener } from './provider-owner-channels'
@@ -174,13 +177,25 @@ export async function launchProviderOwner(
     if (owner.canceled) {
       throw new Error('Provider launch canceled')
     }
+    // A reconnect may have reached a host that never read this folder.
+    if (!isCurrentHostedIdentity(client, identity)) {
+      throw new Error('Provider host changed before launch')
+    }
     // From here a lost reply may still have started an owner, so this app never launches another.
     dispatched = true
-    const { pid } = await client.request<{ pid: number }>(
+    const result = await client.request<HostedProviderSpawnResult>(
       'spawnProvider',
       hostedLaunch(spec, path, listener.nonce),
       START_TIMEOUT_MS
     )
+    if ('spawnError' in result) {
+      const { code, path: failedPath } = result.spawnError
+      throw Object.assign(new Error(`spawn ${failedPath ?? spec.program} ${code}`), {
+        code,
+        ...(failedPath ? { path: failedPath } : {})
+      })
+    }
+    const { pid } = result
     if (!Number.isSafeInteger(pid) || pid <= 1) {
       throw new Error('Provider host returned no process')
     }
