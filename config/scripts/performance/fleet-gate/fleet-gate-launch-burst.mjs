@@ -24,6 +24,7 @@ export function writeClaudeStub(stubDir, repoRoot) {
   return { command, launchLog }
 }
 
+/** Chat launches only: native chats run the CLI in stream-json mode, unlike version and catalog probes. */
 function countLaunches(launchLog) {
   if (!fs.existsSync(launchLog)) {
     return 0
@@ -31,7 +32,7 @@ function countLaunches(launchLog) {
   return fs
     .readFileSync(launchLog, 'utf8')
     .split('\n')
-    .filter((line) => line && !/"--version"|"-v"/.test(line)).length
+    .filter((line) => line.includes('"--input-format"')).length
 }
 
 async function waitForLaunches(launchLog, expected, timeoutMs = LAUNCH_WAIT_MS) {

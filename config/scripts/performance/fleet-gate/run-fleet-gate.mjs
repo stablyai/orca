@@ -551,7 +551,7 @@ async function main() {
   const windowScenarios = options.scenarios.filter((name) => name !== 'burst')
   const bursts = []
   try {
-    for (const pair of schedule) {
+    for (const pair of windowScenarios.length > 0 ? schedule : []) {
       for (const arm of pair) {
         runs.push(
           await measureOnce({
@@ -594,7 +594,7 @@ async function main() {
     notes.push(`${name}: ${drivenNotes.join(' / ')}`)
   }
   const header = [
-    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${options.runs} runs each (alternating)  ${os.hostname()} ${process.platform}`,
+    `FLEET GATE  OLD ${oldSha.slice(0, 11)}  NEW ${newSha.slice(0, 11)}  ${windowScenarios.length > 0 ? `${String(options.runs)} runs each (alternating)` : 'launch burst only'}  ${os.hostname()} ${process.platform}`,
     `census (read back after settle): ${census ? `${String(census.workspaces)} workspaces, ${String(census.chatTabs)} chat tabs, ${String(census.terminalTabs)} terminal tabs, ${String(census.agentPanes)} agent panes` : 'n/a'}; seed ${seed.receipt ? `synthetic, built by ${String(seed.receipt.builtBy).slice(0, 11)}` : String(options.seed)}`,
     `hot-path files: ${hot.length}${options.force && hot.length === 0 ? ' (forced)' : ''}`
   ].join('\n')
