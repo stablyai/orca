@@ -18,30 +18,25 @@ const DARWIN_PS_CAPTURE = [
   '    [ -z "$orca_agent_start" ] || orca_agent_process="{\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\"$orca_agent_start\\"}"'
 ]
 
-/** Linux reads /proc; macOS needs ps. With `reuseOnToolEvents`, a Claude tool event takes the pane's
- *  last ps answer for the same PID and launch; every other event asks ps again, and each Claude process
- *  sends SessionStart first, so a reused PID never inherits an old answer. Needs
- *  `buildPosixHookMetadataCacheLines` first. */
+/** Linux reads /proc; macOS needs ps. With `reuseOnToolEvents`, a tool event (`orca_hook_tool_event`, set by
+ *  `buildPosixClaudeDecisionModeLines`) takes the pane's last ps answer for the same PID and launch; every other
+ *  event asks ps again, and each Claude process sends SessionStart first, so a reused PID never inherits an old
+ *  answer. Needs `buildPosixHookMetadataCacheLines` first. */
 export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean } = {}): string[] {
   const darwin = options.reuseOnToolEvents
     ? [
-        '    orca_agent_cache= orca_agent_cached= orca_agent_key="$orca_agent_pid ${#ORCA_AGENT_LAUNCH_TOKEN}:${ORCA_AGENT_LAUNCH_TOKEN:-}"',
-        '    if orca_hook_cache_file agent; then',
+        '    orca_agent_cache= orca_agent_cached= orca_agent_header= orca_agent_key="$orca_agent_pid ${#ORCA_AGENT_LAUNCH_TOKEN}:${ORCA_AGENT_LAUNCH_TOKEN:-}"',
+        // The pane's header cache file holds the record as its second line, so it adds no file.
+        '    if orca_hook_cache_file; then',
         '      orca_agent_cache=$orca_hook_cache_path',
-        '      IFS= read -r orca_agent_cached 2>/dev/null < "$orca_agent_cache"',
+        '      orca_hook_cache_read',
+        '      orca_agent_header=$orca_hook_cache_line orca_agent_cached=$orca_hook_cache_agent',
         '    fi',
-        '    case "$orca_agent_cached" in "$orca_agent_key {\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\""?*\'"}\')',
-        // A key, as only a key is followed by a colon, and only tool-scoped payloads have it. Bytes, not the
-        // locale: UTF-8 matching decodes the whole payload.
-        '      orca_agent_lc=${LC_ALL+1} orca_agent_lc_all=${LC_ALL-}',
-        '      LC_ALL=C',
-        `      case "$payload" in *'"tool_name":'*) orca_agent_process=\${orca_agent_cached#"$orca_agent_key "} ;; esac`,
-        '      if [ -n "$orca_agent_lc" ]; then LC_ALL=$orca_agent_lc_all; else unset LC_ALL; fi ;;',
-        '    esac',
+        `    case "\${orca_hook_tool_event:-}:$orca_agent_cached" in "1:$orca_agent_key {\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\""?*'"}') orca_agent_process=\${orca_agent_cached#"$orca_agent_key "} ;; esac`,
         '    if [ -z "$orca_agent_process" ]; then',
         ...DARWIN_PS_CAPTURE.map((line) => `  ${line}`),
         // Only the hook's own caller: an unwrapped shell's PID is new on every run.
-        '      [ -z "$orca_agent_process" ] || [ -z "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_key $orca_agent_process" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_key $orca_agent_process"',
+        '      [ -z "$orca_agent_process" ] || [ -z "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_key $orca_agent_process" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_header" "$orca_agent_key $orca_agent_process"',
         '    fi'
       ]
     : DARWIN_PS_CAPTURE

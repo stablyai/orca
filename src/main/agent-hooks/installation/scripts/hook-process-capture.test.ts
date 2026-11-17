@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -6,6 +6,7 @@ import { runProcess } from '@orca/process-host'
 
 import { buildHookProcessCapture, HOOK_PARENT_CAPTURE } from './hook-process-capture'
 import { buildPosixHookMetadataCacheLines } from './hook-post-command'
+import { buildPosixClaudeDecisionModeLines } from '../../../claude/hooks/claude-hook-decision-script'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcessIdentity } from '../../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../../shared/agent-status/process/agent-process-presence-probe'
@@ -70,6 +71,7 @@ describe('Claude outer hook process capture', () => {
           [
             '#!/bin/sh',
             'payload=$(cat)',
+            ...buildPosixClaudeDecisionModeLines(),
             ...buildPosixHookMetadataCacheLines(),
             ...buildHookProcessCapture({ reuseOnToolEvents: true }),
             'printf "%s" "$orca_agent_process"',
@@ -80,11 +82,11 @@ describe('Claude outer hook process capture', () => {
         const endpoint = join(home, 'endpoint.env')
         await writeFile(endpoint, '')
         await mkdir(join(home, 'hook-metadata'))
-        const cacheFile = join(home, 'hook-metadata', 'agent-presence-test-pane')
+        const cacheFile = join(home, 'hook-metadata', 'pane-presence-test-pane')
         const seed = (token: string): Promise<void> =>
           writeFile(
             cacheFile,
-            `${process.pid} ${token.length}:${token} {"pid":${process.pid},"platform":"darwin","startTime":"cached"}\n`
+            `header\n${process.pid} ${token.length}:${token} {"pid":${process.pid},"platform":"darwin","startTime":"cached"}\n`
           )
         let lcAllAfter = ''
         const run = async (payload: string, lcAll?: string): Promise<string | undefined> => {
@@ -103,7 +105,8 @@ describe('Claude outer hook process capture', () => {
             timeoutMs: 5000
           })
           lcAllAfter = result.stderr
-          return readAgentProcessIdentity(result.stdout)?.startTime
+          // The decision lines answer `{}` first, as Claude Code requires.
+          return readAgentProcessIdentity(result.stdout.split('\n').pop())?.startTime
         }
 
         const toolEvent = '{"hook_event_name": "PostToolUse", "tool_name": "Bash"}'
@@ -122,6 +125,8 @@ describe('Claude outer hook process capture', () => {
           })
         ).toBe('live')
         expect(await run(toolEvent)).toBe(fresh)
+        // The pane's packed-header line survives the rewrite.
+        expect((await readFile(cacheFile, 'utf8')).split('\n')[0]).toBe('header')
 
         await seed('launch-1')
         expect(
