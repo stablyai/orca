@@ -50,8 +50,10 @@ export type ClaudeJournalTranslator = {
   beginCommand: (start: ClaudeCommandStart) => void
   forgetCommand: (turnId: string) => void
   commandInterruptRequested: (turnId: string) => void
-  /** Root work since cycle init makes the open turn eligible for folded sends. */
+  /** Root work since cycle init, including output held by a turn from a previous cycle. */
   readonly openTurnInLiveProviderCycle: boolean
+  readonly openTurnOwnsLiveProviderCycle: boolean
+  confirmTurnProviderCycle: () => void
   readonly openTurnHasInputWork: boolean
   flush: () => void
   childTaskParent?: (taskId: string, run?: string) => string | undefined

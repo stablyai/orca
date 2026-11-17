@@ -268,6 +268,10 @@ export function createClaudeJournalTranslator(
     get openTurnInLiveProviderCycle() {
       return turn.openedInLiveProviderCycle
     },
+    get openTurnOwnsLiveProviderCycle() {
+      return turn.ownsLiveProviderCycle
+    },
+    confirmTurnProviderCycle: () => turn.confirmProviderCycle(),
     get openTurnHasInputWork() {
       return turn.isOpen && turn.inputChoiceWorkObserved
     },
