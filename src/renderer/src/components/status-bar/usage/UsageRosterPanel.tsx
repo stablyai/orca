@@ -243,20 +243,18 @@ export function UsageRow({
       ) : null}
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
-            <DetailMetric
-              key={section.label}
-              section={section}
-              label={shortUsageLabel(p, section)}
-              display={display}
-              title={scopedUsageTitle(
-                p,
-                { ...section, label: shortUsageLabel(p, section) },
-                display,
-                t
-              )}
-            />
-          ))}
+          {sections.map((section) => {
+            const label = shortUsageLabel(p, section, false, t)
+            return (
+              <DetailMetric
+                key={section.label}
+                section={section}
+                label={label}
+                display={display}
+                title={scopedUsageTitle(p, { ...section, label }, display, t)}
+              />
+            )
+          })}
         </div>
       ) : null}
     </div>
