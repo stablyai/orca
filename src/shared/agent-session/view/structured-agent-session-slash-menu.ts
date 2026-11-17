@@ -73,7 +73,8 @@ export function structuredSessionSlashCommands(
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
   interactionModeSupported = false,
-  mcpPanel = false
+  mcpPanel = false,
+  remoteControl = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
@@ -86,7 +87,7 @@ export function structuredSessionSlashCommands(
   const orcaOwned = [
     ...modeCommands,
     ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : []),
-    ...(agent === 'claude'
+    ...(agent === 'claude' && remoteControl
       ? [
           STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND,
           STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_ALIAS_COMMAND

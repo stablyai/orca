@@ -72,6 +72,20 @@ describe('Claude Remote Control link', () => {
     expect(steps[4].phase).toEqual({ kind: 'off', generation: 2 })
   })
 
+  it('restores what Claude proved during a refused disconnect, so the link is not left half-connected', () => {
+    const restored = last([
+      { type: 'connect', enabledByDefault: false },
+      { type: 'disconnect' },
+      { type: 'bridge', state: 'connected' },
+      { type: 'answered', generation: 1, sessionUrl: 'https://claude.ai/code/session_1' },
+      { type: 'disconnect-refused', generation: 2 }
+    ])
+    expect(claudeRemoteControlView(restored)).toEqual({
+      state: 'connected',
+      sessionUrl: 'https://claude.ai/code/session_1'
+    })
+  })
+
   it('reports a failure and follows Claude when it recovers on its own', () => {
     const failed = last([
       { type: 'connect', enabledByDefault: false },

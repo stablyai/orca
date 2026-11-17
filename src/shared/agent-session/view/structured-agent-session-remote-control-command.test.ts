@@ -4,6 +4,7 @@ import {
   dispatchStructuredAgentSessionComposerCommand,
   type StructuredAgentSessionComposerOptions
 } from './structured-agent-session-composer'
+import { structuredSessionSlashCommands } from './structured-agent-session-slash-menu'
 
 function chat(
   agent: AgentType,
@@ -62,5 +63,15 @@ describe('/remote-control in a chat', () => {
 
     expect(outcome).toEqual({ handled: false, accepted: false, error: null })
     expect(toggle).not.toHaveBeenCalled()
+  })
+
+  it('is offered in the / menu only where the host saves the choice', () => {
+    const offered = (remoteControl: boolean) =>
+      structuredSessionSlashCommands('claude', [], [], false, false, false, remoteControl)
+        .map(({ name }) => name)
+        .filter((name) => name === 'rc' || name === 'remote-control')
+
+    expect(offered(true)).toEqual(['remote-control', 'rc'])
+    expect(offered(false)).toEqual([])
   })
 })

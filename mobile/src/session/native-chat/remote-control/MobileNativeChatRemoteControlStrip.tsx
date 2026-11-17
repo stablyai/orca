@@ -42,6 +42,7 @@ export function MobileNativeChatRemoteControlStrip({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
   const link = remoteControl?.link
   if (!remoteControl || (!link && !remoteControl.pending)) {
     return null
@@ -49,10 +50,14 @@ export function MobileNativeChatRemoteControlStrip({
   const { toggle, retry } = remoteControl
   const run = (action: () => Promise<boolean>): void => {
     setBusy(true)
-    void action().finally(() => setBusy(false))
+    setFailed(false)
+    void action()
+      .then((saved) => setFailed(!saved))
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false))
   }
   const url = link?.sessionUrl
-  const warn = link?.state === 'failed' || link?.state === 'policy-disabled'
+  const warn = failed || link?.state === 'failed' || link?.state === 'policy-disabled'
   return (
     <View
       style={[queuedMessageStyles.box, queuedMessageStyles.composerTab, styles.strip]}
@@ -61,7 +66,7 @@ export function MobileNativeChatRemoteControlStrip({
       <MobileClaudeRemoteControlIcon size={14} surface="panel" />
       <Text style={[styles.text, warn && styles.warning]} numberOfLines={2}>
         <Text style={styles.status}>{t('chat.remoteControl.label', 'Remote Control')}</Text>{' '}
-        {stateText(link, t)}
+        {failed ? t('chat.remoteControl.changeFailed', "couldn't change it") : stateText(link, t)}
       </Text>
       {url ? (
         <StripAction

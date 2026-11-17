@@ -88,17 +88,13 @@ export function advanceClaudeRemoteControl(
       }
     }
     case 'answered':
-      if (!isLink(phase) || phase.generation !== event.generation) {
-        return { phase }
+      // A disable still pending keeps what Claude proves, in case it is refused.
+      if (phase.kind === 'disconnecting' && phase.link.generation === event.generation) {
+        return { phase: { ...phase, link: withAnswer(phase.link, event.sessionUrl) } }
       }
-      return {
-        phase: {
-          ...phase,
-          // A bridge frame can beat the answer; the answer never moves a link backwards.
-          kind: phase.kind === 'requesting' ? 'connecting' : phase.kind,
-          ...(event.sessionUrl ? { sessionUrl: event.sessionUrl } : {})
-        }
-      }
+      return isLink(phase) && phase.generation === event.generation
+        ? { phase: withAnswer(phase, event.sessionUrl) }
+        : { phase }
     case 'refused':
       // A timeout after the bridge connected says nothing about the link Claude already proved.
       return isLink(phase) && phase.generation === event.generation && phase.kind !== 'connected'
@@ -119,12 +115,25 @@ export function advanceClaudeRemoteControl(
   }
 }
 
+function withAnswer(link: LinkPhase, sessionUrl: string | undefined): LinkPhase {
+  return {
+    ...link,
+    // A bridge frame can beat the answer; the answer never moves a link backwards.
+    kind: link.kind === 'requesting' ? 'connecting' : link.kind,
+    ...(sessionUrl ? { sessionUrl } : {})
+  }
+}
+
 function advanceOnBridge(
   phase: ClaudeRemoteControlPhase,
   state: string,
   detail: string | undefined
 ): ClaudeRemoteControlPhase {
-  if (phase.kind === 'off' || phase.kind === 'disconnecting') {
+  if (phase.kind === 'disconnecting') {
+    const link = advanceOnBridge(phase.link, state, detail)
+    return isLink(link) ? { ...phase, link } : phase
+  }
+  if (phase.kind === 'off') {
     return phase
   }
   if (state === 'policy_disabled') {

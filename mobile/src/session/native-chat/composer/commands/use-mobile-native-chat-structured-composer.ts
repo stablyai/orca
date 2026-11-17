@@ -28,14 +28,16 @@ export function useMobileNativeChatStructuredComposer(args: {
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const offersMcpPanel = mcpPanel !== null
+  const offersRemoteControl = remoteControl !== null
   const catalog = useMemo(
     () => ({
       reported: commands,
       conversationCommands,
       compactInstructions,
-      mcpPanel: offersMcpPanel
+      mcpPanel: offersMcpPanel,
+      remoteControl: offersRemoteControl
     }),
-    [commands, compactInstructions, conversationCommands, offersMcpPanel]
+    [commands, compactInstructions, conversationCommands, offersMcpPanel, offersRemoteControl]
   )
   return useMemo(
     () =>

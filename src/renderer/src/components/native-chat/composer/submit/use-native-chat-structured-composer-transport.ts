@@ -155,6 +155,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           : undefined,
       mcpPanel,
+      ...(props.agent === 'claude' && remoteControl.set ? { remoteControl: true as const } : {}),
       fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),

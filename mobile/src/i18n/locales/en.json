@@ -3598,6 +3598,7 @@
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     },
     "remoteControl": {
+      "changeFailed": "couldn't change it",
       "openOnClaudeAi": "Open on claude.ai",
       "retry": "Retry",
       "disconnect": "Disconnect",

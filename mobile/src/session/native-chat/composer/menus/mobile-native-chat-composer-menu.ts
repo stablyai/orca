@@ -32,6 +32,8 @@ export type MobileComposerStructuredCatalog = {
   compactInstructions?: boolean
   /** `/mcp` opens the chat's MCP tray. */
   mcpPanel?: boolean
+  /** `/rc` toggles the chat's Remote Control. */
+  remoteControl?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -67,7 +69,8 @@ export function mobileComposerCatalog({
         reported,
         structured.compactInstructions,
         interactionModeSupported,
-        structured.mcpPanel
+        structured.mcpPanel,
+        structured.remoteControl
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {

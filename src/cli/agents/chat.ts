@@ -62,9 +62,11 @@ function remoteControlText(result: AgentSessionProviderRemoteControlResult): str
       : link.state
   return [
     `Remote Control: ${state}${link?.detail ? ` (${link.detail})` : ''}`,
+    ...(link?.enabledByDefault ? ['Turned on by an organization or rollout default.'] : []),
     ...(link?.sessionUrl ? [`Link: ${link.sessionUrl}`] : []),
     `Saved choice: ${result.choice ?? 'follows the Remote Control setting'}`,
-    ...(result.choice && !result.live && !link ? ['Applies when the chat next starts.'] : [])
+    // `live` is false on every status read, so only a pending "on" says when it connects.
+    ...(result.choice === 'on' && !link ? ['Connects when the chat next starts.'] : [])
   ].join('\n')
 }
 
