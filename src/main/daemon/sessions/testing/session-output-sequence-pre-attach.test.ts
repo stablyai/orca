@@ -51,6 +51,8 @@ describe('Session output sequence before the first attach', () => {
     emit('prompt> ')
     emit('\x1b[38;5;46mok\x1b[0m')
 
+    // Pin what the client received, so a silently dropped delivery cannot make both sides 0.
+    expect(received.join('')).toBe('prompt> \x1b[38;5;46mok\x1b[0m')
     expect(session.getSnapshot()!.outputSequence).toBe(received.join('').length)
 
     // A detached session keeps counting: the next attach reconciles against the snapshot's sequence.
