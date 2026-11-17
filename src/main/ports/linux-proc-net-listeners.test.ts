@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseProcNetTcp } from './local-workspace-platform-port-scanner'
+import { parseProcNetTcp } from './linux-proc-net-listeners'
 
 // We are uid 1000; 1001 and directory user 1234567 are coworkers; 113 and 61200 (DynamicUser) are services.
 const PROC_NET_TCP = `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
@@ -21,6 +21,12 @@ describe('parseProcNetTcp', () => {
       { host: '127.0.0.1', port: 5432, inode: 20777 },
       { host: '127.0.0.1', port: 11111, inode: 20888 },
       { host: '127.0.0.1', port: 8009, inode: 20999 }
+    ])
+  })
+
+  it('keeps every listener when the scanning host runs as root', () => {
+    expect(parseProcNetTcp(PROC_NET_TCP, 0).map((listener) => listener.port)).toEqual([
+      8080, 8081, 22, 5432, 11111, 3000, 8009
     ])
   })
 })
