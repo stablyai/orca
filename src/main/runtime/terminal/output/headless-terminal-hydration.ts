@@ -18,7 +18,7 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
-import { extractHiddenStartupRendererQueryData } from '../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
+import { answerSeedCoveredQueries, splitAtProviderSeed } from './provider-seed-covered-bytes'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -221,50 +221,46 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       .catch(() => {})
   }
 
-  /** Splits a live chunk at the provider snapshot seed: `covered` is already in the seed, `uncovered` (null: none) still needs parsing. */
-  private splitAtProviderSeed(
+  /** Per-chunk screen observers; covered chunks run them too, since the seed painted their screen. */
+  private observeHeadlessChunk(
+    ptyId: string,
     state: RuntimeHeadlessTerminal,
-    data: string,
-    outputSequence: number,
-    rawChunk: boolean
-  ): { covered: string; uncovered: string | null; startsAtSeed: boolean } {
-    const seed = state.providerSeed
-    if (seed === undefined) {
-      return { covered: '', uncovered: data, startsAtSeed: false }
-    }
-    if (outputSequence <= seed.seq) {
-      return { covered: data, uncovered: null, startsAtSeed: false }
-    }
-    // Why: the daemon merges emissions, so a chunk can straddle the snapshot; only an untransformed one maps to raw seq.
-    const coveredChars = seed.seq - (outputSequence - data.length)
-    if (!rawChunk) {
-      return { covered: '', uncovered: data, startsAtSeed: false }
-    }
-    return coveredChars > 0
-      ? {
-          covered: data.slice(0, coveredChars),
-          uncovered: data.slice(coveredChars),
-          startsAtSeed: true
-        }
-      : { covered: '', uncovered: data, startsAtSeed: coveredChars === 0 }
-  }
-
-  /** The seed already painted covered bytes, but the program still waits on their queries, as with daemon-dropped ones. */
-  private async answerSeedCoveredQueries(
-    state: RuntimeHeadlessTerminal,
-    covered: string,
-    forwardQueryReplies: boolean
-  ): Promise<void> {
-    const seed = state.providerSeed
-    if (!seed || covered === '') {
+    chunk: string,
+    outputObservedAt: number
+  ): void {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || this.headlessTerminals.get(ptyId) !== state) {
       return
     }
-    const extracted = extractHiddenStartupRendererQueryData(covered, seed.queryCarry)
-    seed.queryCarry = extracted.pending
-    const queries =
-      extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
-    if (forwardQueryReplies && queries) {
-      await state.emulator.write(queries, { forwardQueryReplies: true })
+    const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
+    const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
+    // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
+    if (observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)) {
+      this.settleLostAgentSession(ptyId)
+    }
+    if (!pty.connectionId) {
+      this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
+      const payload =
+        observeCodexCapacityTerminalStatus(
+          state.emulator,
+          chunk,
+          command,
+          pty.launchAgent,
+          readStatus,
+          outputObservedAt
+        ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
+      if (payload) {
+        pty.lastExplicitAgentStatus = {
+          state: payload.state,
+          updatedAt: Date.now(),
+          sessionBoundary: payload.sessionBoundary
+        }
+        this.emitTerminalAgentStatusEvents(ptyId, {
+          cleanData: '',
+          payloads: [payload],
+          lastPayloadCleanOffset: null
+        })
+      }
     }
   }
 
@@ -282,13 +278,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         covered,
         uncovered: data,
         startsAtSeed
-      } = this.splitAtProviderSeed(
-        state,
-        chunkData,
-        outputSequence,
-        rawChunk
-      )
-      await this.answerSeedCoveredQueries(state, covered, forwardQueryReplies)
+      } = splitAtProviderSeed(state, chunkData, outputSequence, rawChunk)
+      await answerSeedCoveredQueries(state, covered, forwardQueryReplies)
+      if (covered !== '') {
+        this.observeHeadlessChunk(ptyId, state, covered, outputObservedAt)
+      }
       if (data === null) {
         return
       }
@@ -318,42 +312,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
         await state.emulator.write(chunk, { forwardQueryReplies })
-        const pty = this.ptysById.get(ptyId)
-        if (!pty || this.headlessTerminals.get(ptyId) !== state) {
-          continue
-        }
-        const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
-        const readStatus = () => this.readPtyAgentStatusRow(ptyId, pty)
-        // Remote hosts report status themselves, but only this runtime can settle its own dispatches.
-        if (
-          observeCodexReconnectFailure(state.emulator, chunk, command, pty.launchAgent, readStatus)
-        ) {
-          this.settleLostAgentSession(ptyId)
-        }
-        if (!pty.connectionId) {
-          this.trustDialogStatus.observe(ptyId, state.emulator, chunk)
-          const payload =
-            observeCodexCapacityTerminalStatus(
-              state.emulator,
-              chunk,
-              command,
-              pty.launchAgent,
-              readStatus,
-              outputObservedAt
-            ) ?? observeFreebuffTerminalStatus(state.emulator, chunk, command, pty.launchAgent)
-          if (payload) {
-            pty.lastExplicitAgentStatus = {
-              state: payload.state,
-              updatedAt: Date.now(),
-              sessionBoundary: payload.sessionBoundary
-            }
-            this.emitTerminalAgentStatusEvents(ptyId, {
-              cleanData: '',
-              payloads: [payload],
-              lastPayloadCleanOffset: null
-            })
-          }
-        }
+        this.observeHeadlessChunk(ptyId, state, chunk, outputObservedAt)
       }
       state.outputSequence = outputSequence
     })

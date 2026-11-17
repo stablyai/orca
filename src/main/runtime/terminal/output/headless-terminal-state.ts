@@ -15,8 +15,6 @@ import {
 } from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
-const GAP_RESEED_STALE_RETRIES = 2
-
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** SSH and paired-runtime panes run on their host's PTY, so the ConPTY model follows that machine. */
   private windowsPtyForHeadlessPty(ptyId: string): XtermConptyOptions | undefined {
@@ -136,18 +134,15 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       pending.gapReseedEndSeq = gapEndSeq
       return
     }
-    this.reseedHeadlessTerminalFromProvider(ptyId, {
-      retryLateSeed: true,
-      gapEndSeq,
-      staleRetries: GAP_RESEED_STALE_RETRIES
-    })
+    // Two stale retries bound a sustained storm; the next gap re-arms them.
+    this.reseedHeadlessTerminalFromProvider(ptyId, { gapEndSeq, staleRetries: 2 })
   }
 
   private reseedHeadlessTerminalFromProvider(
     ptyId: string,
-    opts: { retryLateSeed: boolean; gapEndSeq?: number; staleRetries?: number }
+    opts: { retryLateSeed?: boolean; gapEndSeq?: number; staleRetries?: number }
   ): void {
-    const { retryLateSeed } = opts
+    const retryLateSeed = opts.retryLateSeed ?? true
     const afterGap = opts.gapEndSeq !== undefined
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
@@ -265,7 +260,10 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
                 })
               }
             })
+            return
           }
+          // Out of retries: trust the live suffix as before rather than leave screen readers blind until the next gap.
+          this.providerSnapshotPreferredPtys.delete(ptyId)
           return
         }
         // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
