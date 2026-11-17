@@ -21,7 +21,9 @@ const BROWSER_CLIENT_PAGE_REFUSAL_COPY: Record<string, string> = {
 }
 
 export function browserClientPageRefusal(code: string, message?: string): BrowserError {
-  return new BrowserError(code, message ?? BROWSER_CLIENT_PAGE_REFUSAL_COPY[code] ?? code)
+  // Hosts often refuse with the bare code as the message; that is no detail.
+  const detail = message === code ? undefined : message
+  return new BrowserError(code, detail ?? BROWSER_CLIENT_PAGE_REFUSAL_COPY[code] ?? code)
 }
 
 /** Plain refusals carry only their code as the message; give known ones readable text. */
