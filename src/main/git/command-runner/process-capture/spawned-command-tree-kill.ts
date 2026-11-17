@@ -8,6 +8,21 @@ import {
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
 
+/** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. */
+export function killAbandonedWorkerChildTree(
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
+): Promise<void> {
+  if (
+    process.platform !== 'win32' ||
+    !child.pid ||
+    (child.exitCode ?? null) !== null ||
+    (child.signalCode ?? null) !== null
+  ) {
+    return Promise.resolve()
+  }
+  return killSpawnedCommandTree(child)
+}
+
 export function killSpawnedCommandTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {

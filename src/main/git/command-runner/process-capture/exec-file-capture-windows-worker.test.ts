@@ -1,9 +1,31 @@
+import type { EventEmitter } from 'node:events'
+import type * as NodeChildProcess from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const worker = vi.hoisted(() => ({
   available: true,
   spawn: vi.fn()
+}))
+const treeKills = vi.hoisted(() => ({ args: [] as string[][], killers: [] as EventEmitter[] }))
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeChildProcess>()
+  const { EventEmitter } = await import('node:events')
+  return {
+    ...actual,
+    spawn: (command: string, args: string[], options: NodeChildProcess.SpawnOptions) => {
+      if (command !== 'taskkill') {
+        return actual.spawn(command, args, options)
+      }
+      const killer = Object.assign(new EventEmitter(), { unref: () => {}, kill: () => true })
+      treeKills.args.push(args)
+      treeKills.killers.push(killer)
+      return killer
+    }
+  }
+})
+vi.mock('../../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
+  admitSelfInitiatedTreeKill: () => true
 }))
 vi.mock('../../../worker-thread-child-process/worker-thread-child-process', async (original) => {
   const actual = await original<typeof WorkerChildModule>()
@@ -38,6 +60,8 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   worker.available = true
   worker.spawn.mockReset()
+  treeKills.args = []
+  treeKills.killers = []
 })
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -91,7 +115,7 @@ describe('Windows process creation off the calling loop', () => {
     })
   })
 
-  it('releases its termination wait when the worker dies under it', async () => {
+  it('ends the running Git tree before releasing it when the worker dies under it', async () => {
     const child = new WorkerThreadChildProcess(1, () => true)
     worker.spawn.mockReturnValue(child)
     const terminated = vi.fn()
@@ -107,7 +131,10 @@ describe('Windows process creation off the calling loop', () => {
       }
     })
     await expect(pending).rejects.toThrow('Child process worker exited with code 1')
-    expect(terminated).toHaveBeenCalledOnce()
+    expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']])
+    expect(terminated).not.toHaveBeenCalled()
+    treeKills.killers[0]!.emit('close', 0)
+    await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
   })
 
   it('runs on the calling loop when the worker cannot start', async () => {

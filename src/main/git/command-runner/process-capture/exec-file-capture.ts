@@ -6,7 +6,7 @@ import { nativeExecutableResolver } from '@orca/process-host/native-executable-r
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
@@ -273,11 +273,10 @@ export function execFileCapture(
         }
         // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
         // Plain captures still release admission then: the worker's pipes closed with it, and nothing else would.
-        if (
-          (!useWorker && !child?.pid) ||
-          (!ownedPosixGroup && isAbandonedWorkerChildError(error))
-        ) {
+        if (!useWorker && !child?.pid) {
           reportChildTerminated()
+        } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
+          void killAbandonedWorkerChildTree(child).then(reportChildTerminated)
         }
         if (!terminating) {
           finish(error)

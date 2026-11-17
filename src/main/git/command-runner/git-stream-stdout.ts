@@ -3,7 +3,10 @@ import { createPosixGroupTermination } from '@orca/process-host/posix-group-term
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
-import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
+import {
+  killAbandonedWorkerChildTree,
+  killSpawnedCommandTree
+} from './process-capture/spawned-command-tree-kill'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import {
@@ -124,8 +127,10 @@ function streamInSpan(
           }
           // Not once: an earlier child error must not hide a later worker abandonment.
           child.on('error', (error) => {
-            if (!child.pid || isAbandonedWorkerChildError(error)) {
+            if (!child.pid) {
               reportTermination()
+            } else if (isAbandonedWorkerChildError(error)) {
+              void killAbandonedWorkerChildTree(child).then(reportTermination)
             }
           })
         })
