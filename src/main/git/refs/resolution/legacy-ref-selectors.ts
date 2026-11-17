@@ -6,9 +6,9 @@ import { resolveBaseRefSearchSelector } from './base-ref-search-selector'
 /** canonical: full refs; git-short: Git's short name, qualified only when ambiguous; unqualified: ambiguous refs omitted. */
 export type RepoSearchRefSelectorForm = 'canonical' | 'git-short' | 'unqualified'
 
-// WSL's login-shell fallback quotes each pattern twice and repeats the command three times; Windows caps it at 32K.
-const MAX_PATTERN_CHARS_PER_CALL = 4_000
-const PATTERN_QUOTING_CHARS = 10
+// WSL's login-shell fallback quotes each argument twice and repeats the command three times; Windows caps it at 32K.
+const MAX_REF_CHARS_PER_CALL = 4_000
+const REF_QUOTING_CHARS = 10
 // Quotes are the only ref-name characters shell or Windows quoting grows; such refs keep their full name.
 const QUOTE_CHARACTER = /['"]/
 
@@ -19,19 +19,19 @@ export async function toGitShortRefSelectors(
   signal?: AbortSignal
 ): Promise<BaseRefSearchResult[]> {
   const shortByRef = new Map<string, string>()
-  const patterns = refDetails.flatMap(({ refName }) => exactRefPattern(refName) ?? [])
-  for (const chunk of chunkByLength(patterns)) {
+  const refs = refDetails.map(({ refName }) => refName).filter((ref) => !QUOTE_CHARACTER.test(ref))
+  for (const chunk of chunkByLength(refs)) {
     signal?.throwIfAborted()
     try {
-      const { stdout } = await gitExecFileAsync(
-        ['for-each-ref', '--format=%(refname)%00%(refname:short)', ...chunk],
-        { ...gitExecOptions(path), signal }
-      )
-      for (const line of stdout.split('\n')) {
-        const [full, short] = line.replace(/\r$/, '').split('\0')
-        if (full && short) {
-          shortByRef.set(full, short)
-        }
+      // Same shortening as %(refname:short), but by exact lookups; for-each-ref reads whole loose-ref directories.
+      const { stdout } = await gitExecFileAsync(['rev-parse', '--abbrev-ref', ...chunk], {
+        ...gitExecOptions(path),
+        signal
+      })
+      const shorts = stdout.split(/\r?\n/).filter(Boolean)
+      // Output is positional and Git may drop a line for a ref it can't resolve, so a short count trusts none of it.
+      if (shorts.length === chunk.length) {
+        chunk.forEach((ref, index) => shortByRef.set(ref, shorts[index]))
       }
     } catch (err) {
       signal?.throwIfAborted()
@@ -46,35 +46,18 @@ export async function toGitShortRefSelectors(
   })
 }
 
-/**
- * A plain pattern also matches every ref below it; refs can't hold glob characters, so any bracketed character makes
- * the pattern an exact glob. Git's classes match one byte and `[!` negates, so bracket the last single-byte character.
- */
-function exactRefPattern(refName: string): string | null {
-  if (QUOTE_CHARACTER.test(refName)) {
-    return null
-  }
-  for (let index = refName.length - 1; index >= 0; index--) {
-    const char = refName[index]
-    if (char.charCodeAt(0) < 0x80 && char !== '!' && char !== '/') {
-      return `${refName.slice(0, index)}[${char}]${refName.slice(index + 1)}`
-    }
-  }
-  return null
-}
-
-function chunkByLength(patterns: string[]): string[][] {
+function chunkByLength(refs: string[]): string[][] {
   const chunks: string[][] = []
   let chunk: string[] = []
   let length = 0
-  for (const pattern of patterns) {
-    const quotedLength = pattern.length + PATTERN_QUOTING_CHARS
-    if (chunk.length > 0 && length + quotedLength > MAX_PATTERN_CHARS_PER_CALL) {
+  for (const ref of refs) {
+    const quotedLength = ref.length + REF_QUOTING_CHARS
+    if (chunk.length > 0 && length + quotedLength > MAX_REF_CHARS_PER_CALL) {
       chunks.push(chunk)
       chunk = []
       length = 0
     }
-    chunk.push(pattern)
+    chunk.push(ref)
     length += quotedLength
   }
   if (chunk.length > 0) {
