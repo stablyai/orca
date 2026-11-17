@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   buildActiveCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -8,17 +7,12 @@ import {
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   consumeHostCodexResetCredit,
+  hasUnansweredHostCodexReset,
   hostSupportsCodexResetCredit
 } from '@/runtime/provider-accounts/usage/runtime-codex-reset-credit-client'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { getCodexResetProjection } from './codex-switcher-projection'
-
-type HostResetAttempt = {
-  environmentId: string
-  idempotencyKey: string
-  expectedScope: CodexResetCreditExpectedScope
-}
 
 /** The status bar's Codex reset: this desktop's login locally, the owning host's account remotely. */
 export function useCodexResetAction(
@@ -35,7 +29,6 @@ export function useCodexResetAction(
     environmentId: string
     supported: boolean
   } | null>(null)
-  const hostAttemptRef = useRef<HostResetAttempt | null>(null)
   const confirmedScopeRef = useRef<CodexResetCreditExpectedScope | null>(null)
   const mountedRef = useRef(true)
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
@@ -75,36 +68,15 @@ export function useCodexResetAction(
     }
   }, [menuOpen, hostEnvironmentId])
 
-  const redeemOnHost = async (
-    environmentId: string,
-    scope: CodexResetCreditExpectedScope | null
-  ): Promise<void> => {
-    const pending = hostAttemptRef.current
-    // Why: an attempt without a reply keeps its key and scope, so the host's ledger never spends twice.
-    const attempt =
-      pending?.environmentId === environmentId
-        ? pending
-        : scope
-          ? { environmentId, idempotencyKey: createBrowserUuid(), expectedScope: scope }
-          : null
-    if (!attempt) {
-      return
-    }
-    hostAttemptRef.current = attempt
-    await consumeHostCodexResetCredit(environmentId, {
-      idempotencyKey: attempt.idempotencyKey,
-      expectedScope: attempt.expectedScope
-    })
-    hostAttemptRef.current = null
-  }
-
   const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
     if (isRedeemingReset) {
       return
     }
     setIsRedeemingReset(true)
     try {
-      await (hostEnvironmentId ? redeemOnHost(hostEnvironmentId, scope) : consumeLocalResetCredit())
+      await (hostEnvironmentId
+        ? consumeHostCodexResetCredit(hostEnvironmentId, scope)
+        : consumeLocalResetCredit())
     } catch (error) {
       console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
     } finally {
@@ -115,7 +87,10 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
-    if (skipResetConfirm || hostAttemptRef.current?.environmentId === hostEnvironmentId) {
+    if (
+      skipResetConfirm ||
+      (hostEnvironmentId !== null && hasUnansweredHostCodexReset(hostEnvironmentId))
+    ) {
       void redeem(hostScope)
       return
     }

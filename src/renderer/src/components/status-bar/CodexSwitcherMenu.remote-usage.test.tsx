@@ -53,6 +53,7 @@ vi.mock(
 
 vi.mock('@/runtime/provider-accounts/usage/runtime-codex-reset-credit-client', () => ({
   hostSupportsCodexResetCredit: async () => true,
+  hasUnansweredHostCodexReset: () => false,
   consumeHostCodexResetCredit: mocks.consumeHostReset
 }))
 
@@ -250,13 +251,10 @@ describe('Codex account usage on a paired host', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Reset now' }))
     await vi.waitFor(() => expect(mocks.consumeHostReset).toHaveBeenCalledTimes(1))
     expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
-      idempotencyKey: expect.any(String),
-      expectedScope: {
-        target: { runtime: 'host', wslDistro: null },
-        accountId: 'active-id',
-        accountRevision: 1,
-        offerRevision: expect.stringMatching(/^v1:/)
-      }
+      target: { runtime: 'host', wslDistro: null },
+      accountId: 'active-id',
+      accountRevision: 1,
+      offerRevision: expect.stringMatching(/^v1:/)
     })
   })
 })
