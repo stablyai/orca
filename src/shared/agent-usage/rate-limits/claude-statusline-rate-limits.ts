@@ -24,6 +24,10 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   if (typeof value !== 'object' || value === null) {
     return null
@@ -84,10 +88,7 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
 export function parseClaudeStatusLineSessionWindow(
   body: unknown
 ): { sessionId: string; windowTokens: number } | null {
-  if (typeof body !== 'object' || body === null) {
-    return null
-  }
-  const { payload: rawPayload } = body as { payload?: unknown }
+  const rawPayload = isRecord(body) ? body.payload : null
   if (typeof rawPayload !== 'string' || !rawPayload) {
     return null
   }
@@ -97,14 +98,13 @@ export function parseClaudeStatusLineSessionWindow(
   } catch {
     return null
   }
-  if (typeof payload !== 'object' || payload === null) {
+  if (!isRecord(payload)) {
     return null
   }
-  const { session_id: sessionId, context_window: contextWindow } = payload as {
-    session_id?: unknown
-    context_window?: { context_window_size?: unknown } | null
-  }
-  const windowTokens = finiteNumber(contextWindow?.context_window_size)
+  const { session_id: sessionId, context_window: contextWindow } = payload
+  const windowTokens = isRecord(contextWindow)
+    ? finiteNumber(contextWindow.context_window_size)
+    : undefined
   if (typeof sessionId !== 'string' || !sessionId || !windowTokens || windowTokens <= 0) {
     return null
   }

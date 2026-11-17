@@ -11,6 +11,7 @@ function statusHandler(): (params: unknown, ctx: RpcContext) => Promise<unknown>
   if (!method) {
     throw new Error('claudeSessionStatus method not registered')
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these cases pass the params the dispatcher would have parsed.
   return method.handler as (params: unknown, ctx: RpcContext) => Promise<unknown>
 }
 

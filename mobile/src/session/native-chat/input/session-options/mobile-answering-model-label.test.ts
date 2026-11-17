@@ -18,8 +18,10 @@ function model(
         { value: 'sonnet', label: 'Sonnet' }
       ]
     },
-    valueSource
-  } as SessionOptionDescriptor
+    valueSource,
+    transport: 'catalog',
+    settable: true
+  }
 }
 
 function labels(descriptor: SessionOptionDescriptor): string[] {

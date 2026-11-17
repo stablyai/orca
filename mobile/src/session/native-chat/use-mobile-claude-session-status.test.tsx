@@ -21,8 +21,8 @@ let renderer: ReactTestRenderer | null = null
 let latest: ClaudeSessionStatus | null = null
 
 function clientWith(reply: (sessionId: string) => Reply | Promise<Reply>) {
-  const sendRequest = vi.fn(async (_method: string, params: unknown) =>
-    reply((params as { sessionId: string }).sessionId)
+  const sendRequest = vi.fn(async (_method: string, params: { sessionId: string }) =>
+    reply(params.sessionId)
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only sendRequest.
   return { client: { sendRequest } as unknown as RpcClient, sendRequest }
