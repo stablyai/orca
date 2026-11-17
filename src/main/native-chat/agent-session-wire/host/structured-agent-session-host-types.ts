@@ -61,8 +61,11 @@ import type { StructuredAgentSessionStartupLimits } from '../startup/structured-
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
 
-/** What can end an account-move hold besides a journal write in its own chat. */
-export type StructuredAgentSessionAccountMoveEdge = 'dispatch' | 'account'
+/** What can end an account-move hold besides a journal write in its own chat: Dispatch work
+ *  ending for the named keys (see `accountMoveWakes.dispatchKey`), or the selection changing. */
+export type StructuredAgentSessionAccountMoveEdge =
+  | { kind: 'dispatch'; ended: readonly string[] }
+  | { kind: 'account' }
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
@@ -217,10 +220,8 @@ export type StructuredAgentSessionHostDeps = {
     subscribe: (listener: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
     /** The account selection as written now, compared by value: some writes fire no edge. */
     selection?: () => readonly unknown[]
-    /** Which of these chats still have an open Dispatch, read together in one query. */
-    openDispatches?: (
-      records: readonly Pick<AgentSessionRecord, 'sessionId' | 'location'>[]
-    ) => ReadonlySet<string>
+    /** The key a chat's Dispatch ends are reported under; absent, only the recheck sees them. */
+    dispatchKey?: (sessionId: string) => string
   }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed

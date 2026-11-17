@@ -74,18 +74,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   const holds = new AccountMoveHolds({
     wake: input.wake,
     wakes: () => deps.accountMoveWakes,
-    dispatchesOpen: (sessionIds) => {
-      const batched = deps.accountMoveWakes?.openDispatches
-      if (!batched) {
-        return new Set(sessionIds.filter((id) => retainedWork(id).hasOpenDispatch()))
-      }
-      return batched(
-        sessionIds.flatMap((id) => {
-          const record = deps.store.getConversation(id)
-          return record ? [record] : []
-        })
-      )
-    },
+    dispatchKey: (sessionId) => deps.accountMoveWakes?.dispatchKey?.(sessionId),
     now,
     sessions
   })

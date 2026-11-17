@@ -17,9 +17,13 @@ import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orche
 import { accountMoveReleases } from '../../agent-session/environment/account-move-releases'
 import type { StructuredAgentSessionRuntimeDeps } from '../../agent-session/installation/structured-agent-session-runtime-contract'
 import {
-  structuredWorkerOwesWork,
-  structuredWorkersOwingWork
+  structuredWorkerIncarnation,
+  structuredWorkerOwesWork
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import {
+  takeStructuredWorkerDispatchEnds,
+  watchStructuredWorkerDispatchEnds
+} from '../../orchestration/terminal-authority/structured-sessions/structured-worker-dispatch-closes'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
@@ -52,8 +56,19 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
             return null
           }
         },
-        (records) =>
-          structuredWorkersOwingWork(this.getOrchestrationDbIfAvailable?.() ?? null, records)
+        {
+          watch: () => {
+            const db = this.getOrchestrationDbIfAvailable?.()
+            if (db) {
+              watchStructuredWorkerDispatchEnds(db)
+            }
+          },
+          take: () => {
+            const db = this.getOrchestrationDbIfAvailable?.()
+            return db ? takeStructuredWorkerDispatchEnds(db) : []
+          },
+          key: structuredWorkerIncarnation
+        }
       )
     }
   }

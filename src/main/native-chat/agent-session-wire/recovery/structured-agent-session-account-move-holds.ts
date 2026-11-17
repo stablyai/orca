@@ -5,6 +5,11 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
+
+/** The part of a live session a hold reads and marks. */
+type HeldSession = Pick<StructuredAgentSessionHostSession, 'awaitsAccountMove'> & {
+  child: Pick<NonNullable<StructuredAgentSessionHostSession['child']>, 'fence'> | null
+}
 import type { StructuredAgentSessionAccountTransition } from './structured-agent-session-outgrown-child'
 
 /** A turn, prompt, held send or owed wake-up ends with a write in the chat itself, so each drain
@@ -23,6 +28,8 @@ type Hold = {
   stale: 'none' | 'work' | 'account'
   timer: ReturnType<typeof setTimeout>
   readers: Set<AccountMoveReader>
+  /** Set while it waits on the chat's own Dispatch: the key that Dispatch's end is reported by. */
+  dispatchKey?: string
 }
 
 /** Chats whose sends wait for an account move: the move read once, kept until an edge that can
@@ -30,19 +37,18 @@ type Hold = {
 export class AccountMoveHolds {
   private readonly held = new Map<string, Hold>()
   /** Held chats a Dispatch change can release, so one walks only these. */
-  private readonly onDispatch = new Set<string>()
+  private readonly onDispatch = new Map<string, Set<string>>()
   /** Reads run outside the chat's lane; only the newest may set or clear its hold. */
   private readonly reading = new Map<string, number>()
   /** Children whose next start stays on their account, as of a selection; per live session. */
   private readonly noMove = new WeakMap<
-    StructuredAgentSessionHostSession,
+    HeldSession,
     { fence: number; selection: number; values: readonly unknown[] }
   >()
   /** Bumped by every account selection change: a cached "no move" from before it is void. */
   private selection = 0
   private reads = 0
   private unsubscribe: (() => void) | undefined
-  private dispatchWalk: ReturnType<typeof setImmediate> | undefined
   private disposed = false
 
   constructor(
@@ -50,17 +56,14 @@ export class AccountMoveHolds {
       wake: (sessionId: string) => void
       wakes: () => StructuredAgentSessionHostDeps['accountMoveWakes']
       /** Which of these chats' own Dispatches are still open, read together. */
-      dispatchesOpen: (sessionIds: readonly string[]) => ReadonlySet<string>
+      dispatchKey: (sessionId: string) => string | undefined
       now: () => number
-      sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
+      sessions: Pick<ReadonlyMap<string, HeldSession>, 'get' | 'has'>
     }
   ) {}
 
   /** An untouched hold the person's cards wait on: nothing they hold can be sent yet. */
-  heldForPerson(
-    session: StructuredAgentSessionHostSession | undefined,
-    sessionId: string
-  ): boolean {
+  heldForPerson(session: HeldSession | undefined, sessionId: string): boolean {
     return (
       this.reusable(session, sessionId)?.fresh === true &&
       this.held.get(sessionId)?.readers.has('person') === true
@@ -69,7 +72,7 @@ export class AccountMoveHolds {
 
   /** The kept move for this child; `fresh` when no edge has touched it since. */
   reusable(
-    session: StructuredAgentSessionHostSession | undefined,
+    session: HeldSession | undefined,
     sessionId: string
   ): { transition: StructuredAgentSessionAccountTransition; fresh: boolean } | undefined {
     const hold = this.held.get(sessionId)
@@ -83,7 +86,7 @@ export class AccountMoveHolds {
   }
 
   /** The child's next start was read to stay on its account, and no selection changed since. */
-  staysOnAccount(session: StructuredAgentSessionHostSession | undefined): boolean {
+  staysOnAccount(session: HeldSession | undefined): boolean {
     const known = session && this.noMove.get(session)
     const values = this.deps.wakes()?.selection?.()
     return (
@@ -96,7 +99,7 @@ export class AccountMoveHolds {
     )
   }
 
-  staysOnAccountFrom(session: StructuredAgentSessionHostSession | undefined): void {
+  staysOnAccountFrom(session: HeldSession | undefined): void {
     const values = this.deps.wakes()?.selection?.()
     if (session?.child && values && !this.disposed) {
       this.subscribe()
@@ -129,11 +132,7 @@ export class AccountMoveHolds {
   }
 
   /** `reader` now waits on the kept move (it was fresh, so nothing was read). */
-  adopt(
-    session: StructuredAgentSessionHostSession | undefined,
-    sessionId: string,
-    reader: AccountMoveReader
-  ): void {
+  adopt(session: HeldSession | undefined, sessionId: string, reader: AccountMoveReader): void {
     const hold = this.held.get(sessionId)
     if (hold && session && !hold.readers.has(reader)) {
       hold.readers.add(reader)
@@ -142,7 +141,7 @@ export class AccountMoveHolds {
   }
 
   observe(
-    session: StructuredAgentSessionHostSession | undefined,
+    session: HeldSession | undefined,
     sessionId: string,
     transition: StructuredAgentSessionAccountTransition | null,
     reader: AccountMoveReader
@@ -170,23 +169,30 @@ export class AccountMoveHolds {
     timer.unref?.()
     const readers = previous?.readers ?? new Set<AccountMoveReader>()
     readers.add(reader)
-    const hold: Hold = { transition, fence: session.child.fence, stale: 'none', timer, readers }
+    this.leaveDispatch(sessionId)
+    const dispatchKey =
+      transition.waitsFor === 'dispatch' ? this.deps.dispatchKey(sessionId) : undefined
+    const hold: Hold = {
+      transition,
+      fence: session.child.fence,
+      stale: 'none',
+      timer,
+      readers,
+      ...(dispatchKey === undefined ? {} : { dispatchKey })
+    }
     this.held.set(sessionId, hold)
-    if (transition.waitsFor === 'dispatch') {
-      this.onDispatch.add(sessionId)
-    } else {
-      this.onDispatch.delete(sessionId)
+    if (dispatchKey !== undefined) {
+      this.onDispatch.set(
+        dispatchKey,
+        (this.onDispatch.get(dispatchKey) ?? new Set()).add(sessionId)
+      )
     }
     this.subscribe()
     this.publishPerson(session, sessionId, hold)
   }
 
   /** `reader` no longer waits; the hold goes once nobody does. */
-  forget(
-    session: StructuredAgentSessionHostSession | undefined,
-    sessionId: string,
-    reader: AccountMoveReader
-  ): void {
+  forget(session: HeldSession | undefined, sessionId: string, reader: AccountMoveReader): void {
     const hold = this.held.get(sessionId)
     if (!hold) {
       return
@@ -201,11 +207,7 @@ export class AccountMoveHolds {
   }
 
   /** Only a hold the person's cards wait on changes what the queue shows. */
-  private publishPerson(
-    session: StructuredAgentSessionHostSession,
-    sessionId: string,
-    hold: Hold
-  ): void {
+  private publishPerson(session: HeldSession, sessionId: string, hold: Hold): void {
     if (hold.readers.has('person') && !session.awaitsAccountMove) {
       session.awaitsAccountMove = true
       // Republish so the queue stops naming the held card as next.
@@ -218,37 +220,34 @@ export class AccountMoveHolds {
     this.unsubscribe ??= this.deps.wakes()?.subscribe((edge) => this.edge(edge))
   }
 
-  /** A Dispatch change ends only a hold whose own Dispatch closed; a selection change ends any. */
+  /** A Dispatch ending reaches only the chats held on it, by key; a selection change, every hold. */
   private edge(edge: StructuredAgentSessionAccountMoveEdge): void {
-    if (edge === 'account') {
+    if (edge.kind === 'account') {
       this.selection++
-      this.walk(edge)
-    } else if (this.onDispatch.size > 0) {
-      // Events name no Dispatch: held chats' own are read in one query, once per burst.
-      this.dispatchWalk ??= setImmediate(() => {
-        this.dispatchWalk = undefined
-        this.walk('dispatch')
-      })
+    }
+    const ids =
+      edge.kind === 'account'
+        ? [...this.held.keys()]
+        : edge.ended.flatMap((key) => [...(this.onDispatch.get(key) ?? [])])
+    // Collected first: waking can release, which edits both maps.
+    for (const id of ids) {
+      // Read again on its wake; one still owed re-joins under its key.
+      this.leaveDispatch(id)
+      this.stale(id, edge.kind === 'account' ? 'account' : 'work')
+      this.wakeOrRelease(id)
     }
   }
 
-  private walk(edge: StructuredAgentSessionAccountMoveEdge): void {
-    // A copy: waking can release, which edits what is walked.
-    const ids = Array.from(edge === 'account' ? this.held.keys() : this.onDispatch)
-    const open =
-      edge === 'dispatch'
-        ? this.deps.dispatchesOpen(ids.filter((id) => this.deps.sessions.has(id)))
-        : undefined
-    for (const id of ids) {
-      if (open?.has(id) && this.deps.sessions.has(id)) {
-        continue
-      }
-      if (edge === 'dispatch') {
-        // Seen closed: a later read that finds it open again puts it back.
-        this.onDispatch.delete(id)
-      }
-      this.stale(id, edge === 'account' ? 'account' : 'work')
-      this.wakeOrRelease(id)
+  private leaveDispatch(sessionId: string): void {
+    const hold = this.held.get(sessionId)
+    const key = hold?.dispatchKey
+    if (!hold || key === undefined) {
+      return
+    }
+    delete hold.dispatchKey
+    const waiting = this.onDispatch.get(key)
+    if (waiting?.delete(sessionId) && waiting.size === 0) {
+      this.onDispatch.delete(key)
     }
   }
 
@@ -261,13 +260,13 @@ export class AccountMoveHolds {
     }
   }
 
-  private release(session: StructuredAgentSessionHostSession | undefined, sessionId: string): void {
+  private release(session: HeldSession | undefined, sessionId: string): void {
     const hold = this.held.get(sessionId)
     if (hold) {
       clearTimeout(hold.timer)
     }
+    this.leaveDispatch(sessionId)
     this.held.delete(sessionId)
-    this.onDispatch.delete(sessionId)
     this.reading.delete(sessionId)
     if (session?.awaitsAccountMove) {
       delete session.awaitsAccountMove
@@ -286,9 +285,5 @@ export class AccountMoveHolds {
     this.reading.clear()
     this.unsubscribe?.()
     this.unsubscribe = undefined
-    if (this.dispatchWalk) {
-      clearImmediate(this.dispatchWalk)
-      this.dispatchWalk = undefined
-    }
   }
 }

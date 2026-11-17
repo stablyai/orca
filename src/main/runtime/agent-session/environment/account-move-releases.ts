@@ -14,35 +14,43 @@ const SELECTION_KEYS: readonly (keyof GlobalSettings)[] = [
 ]
 
 /** A Dispatch settling or the account selection changing can release a chat's held sends; mail
- *  traffic and usage readings cannot. Selection is read from the settings write itself, so a
- *  usage update costs nothing here. */
+ *  traffic and usage readings cannot. Each names what changed: the Dispatch ends the database
+ *  recorded, and the selection keys of the settings write, so other changes cost nothing here. */
 export function accountMoveReleases(
   dispatches: Pick<CrewChanges, 'subscribe'>,
   settings: () => Pick<RuntimeStore, 'onSettingsChanged' | 'getSettings'> | null,
-  openDispatches: NonNullable<StructuredAgentSessionHostDeps['accountMoveWakes']>['openDispatches']
+  dispatchEnds: {
+    /** Starts recording ends; earlier ones are not reported. */
+    watch: () => void
+    /** The keys whose Dispatch work ended since the last call. */
+    take: () => readonly string[]
+    key: (sessionId: string) => string
+  }
 ): NonNullable<StructuredAgentSessionHostDeps['accountMoveWakes']> {
   return {
-    ...(openDispatches ? { openDispatches } : {}),
+    dispatchKey: dispatchEnds.key,
     // Pruning a removed account rewrites these without notifying listeners.
     selection: () => {
       const current = settings()?.getSettings()
       return current ? SELECTION_KEYS.map((key) => current[key]) : []
     },
     subscribe: (wake) => {
+      dispatchEnds.watch()
       const stopDispatches = dispatches.subscribe((facets) => {
-        if (facets.has('topology')) {
-          wake('dispatch')
+        const ended = facets.has('topology') ? dispatchEnds.take() : []
+        if (ended.length > 0) {
+          wake({ kind: 'dispatch', ended })
         }
       })
       const stopSettings =
         settings()?.onSettingsChanged?.((updates) => {
           if (SELECTION_KEYS.some((key) => key in updates)) {
-            wake('account')
+            wake({ kind: 'account' })
           }
         }) ?? (() => {})
       // OpenCode and Devin keep their selection in the data-account service; it changes rarely.
       const stopDataAccounts = hasAppEnvironment()
-        ? getManagedDataAccountService().onChanged(() => wake('account'))
+        ? getManagedDataAccountService().onChanged(() => wake({ kind: 'account' }))
         : () => {}
       return () => {
         stopDispatches()

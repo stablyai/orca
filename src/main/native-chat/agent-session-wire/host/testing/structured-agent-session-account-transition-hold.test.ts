@@ -11,6 +11,7 @@ import { reportedChildWork } from './structured-agent-session-host.test-fixture'
 import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
 import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
+import type { StructuredAgentSessionAccountMoveEdge } from '../structured-agent-session-host-types'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW
@@ -69,17 +70,14 @@ async function chatOnAccountA() {
     return openDispatch
   }
   // What the runtime fires when a Dispatch settles or the account selection changes.
-  const releases = new Set<(edge: 'dispatch' | 'account') => void>()
+  const releases = new Set<(edge: StructuredAgentSessionAccountMoveEdge) => void>()
   current.host.deps.accountMoveWakes = {
     subscribe: (wake) => {
       releases.add(wake)
       return () => releases.delete(wake)
     },
     selection: () => [home],
-    openDispatches: (records) => {
-      dispatchReads++
-      return new Set(openDispatch ? records.map((record) => record.sessionId) : [])
-    }
+    dispatchKey: (sessionId) => `structured:${sessionId}`
   }
   await eventually(() =>
     expect(current.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
@@ -115,7 +113,7 @@ async function chatOnAccountA() {
     /** The selection changes: what a start would use, and the edge settings fire for it. */
     switchTo: (path: string) => {
       home = path
-      releases.forEach((wake) => wake('account'))
+      releases.forEach((wake) => wake({ kind: 'account' }))
     },
     /** The selection changes with no edge, as when a removed account is pruned from it. */
     switchSilentlyTo: (path: string) => {
@@ -124,7 +122,7 @@ async function chatOnAccountA() {
     /** The Dispatch settles in the orchestration store, with no write to this chat. */
     closeDispatch: () => {
       openDispatch = false
-      releases.forEach((wake) => wake('dispatch'))
+      releases.forEach((wake) => wake({ kind: 'dispatch', ended: [`structured:${SESSION}`] }))
     },
     accountReads: () => accountReads,
     dispatchReads: () => dispatchReads,
@@ -136,7 +134,7 @@ async function chatOnAccountA() {
     /** Orchestration changes that touch no Dispatch of this chat. */
     unrelatedDispatchChanges: (count: number) => {
       for (let i = 0; i < count; i++) {
-        releases.forEach((wake) => wake('dispatch'))
+        releases.forEach((wake) => wake({ kind: 'dispatch', ended: [`structured:other-${i}`] }))
       }
     },
     setOpenDispatch: (open: boolean) => {
@@ -452,7 +450,7 @@ it('delivers a kept queued card once on the new account when the old work settle
   expect(chat.child()!.fence).not.toBe(chat.accountA)
 })
 
-it("reads a held chat's own Dispatch once per burst and wakes it for none of 10 or 100 other Dispatch changes", async () => {
+it("reads and wakes nothing for 10 or 100 other workers' Dispatch ends, then sends once when its own ends", async () => {
   const chat = await chatOnAccountA()
   chat.setOpenDispatch(true)
   chat.switchTo('/homes/b')
@@ -460,17 +458,23 @@ it("reads a held chat's own Dispatch once per burst and wakes it for none of 10 
   const host = rig!.host.collaboratorsForTests()
   await eventually(() => expect(host.sessions.get(SESSION)?.awaitsAccountMove).toBe(true))
   const wake = vi.spyOn(host.conversationDelivery.loop, 'wake')
-  const burst = async (count: number) => {
+  const events = async (count: number) => {
     const before = chat.dispatchReads()
-    chat.unrelatedDispatchChanges(count)
-    await new Promise((settled) => setImmediate(settled))
+    for (let i = 0; i < count; i++) {
+      chat.unrelatedDispatchChanges(1)
+      await new Promise((settled) => setImmediate(settled))
+    }
     return chat.dispatchReads() - before
   }
 
-  expect(await burst(10)).toBe(1)
-  expect(await burst(100)).toBe(1)
+  expect(await events(10)).toBe(0)
+  expect(await events(100)).toBe(0)
   expect(wake).not.toHaveBeenCalled()
   expect(chat.dispatchedTo('held for the dispatch')).toEqual([])
+
+  chat.closeDispatch()
+  await eventually(() => expect(chat.dispatchedTo('held for the dispatch')).toHaveLength(1))
+  expect(chat.dispatchedTo('held for the dispatch')).not.toEqual([chat.accountA])
 })
 
 it('reads no Dispatch custody again for a due continue that stays on its account, over 10 or 100 sweeps', async () => {
