@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   Dialog,
   DialogContent,
@@ -13,10 +13,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
-import { translate } from '@/i18n/i18n'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { useAppStore } from '@/store/index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'
@@ -28,7 +31,7 @@ import { removeWslHost } from './wsl-host-removal'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type HostRemoveDialogProps = {
   open: boolean
@@ -63,6 +66,7 @@ function HostRemoveDialogBody({
   busy: boolean
   setBusy: (busy: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // Keep workspaces by default; destructive remote removal requires explicit Advanced opt-in.
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [deleteWorkspaces, setDeleteWorkspaces] = useState(false)
@@ -79,7 +83,7 @@ function HostRemoveDialogBody({
     return resolveSshHostRemoval({
       targetId: target.targetId,
       repos,
-      worktrees: getAllWorktreesFromState({ worktreesByRepo })
+      worktrees: getIndexedAllWorktrees(worktreesByRepo)
     })
   }, [target, repos, worktreesByRepo])
 
@@ -130,7 +134,7 @@ function HostRemoveDialogBody({
         // Keep the host if workspace cleanup fails so stranded rows remain reachable for retry.
         if (failedIds.length > 0) {
           toast.error(
-            translate(
+            t(
               'auto.components.sidebar.HostRemoveDialog.workspacesFailed',
               'Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.',
               { count: failedIds.length }
@@ -150,7 +154,7 @@ function HostRemoveDialogBody({
         onOpenChange(false)
       }
       toast.success(
-        translate('auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e', 'Removed {{value0}}', {
+        t('auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e', 'Removed {{value0}}', {
           value0: label
         })
       )
@@ -158,10 +162,7 @@ function HostRemoveDialogBody({
       toast.error(
         err instanceof Error
           ? err.message
-          : translate(
-              'auto.components.sidebar.HostRemoveDialog.2b3c4d5e6f',
-              'Failed to remove host'
-            )
+          : t('auto.components.sidebar.HostRemoveDialog.2b3c4d5e6f', 'Failed to remove host')
       )
     } finally {
       setBusy(false)
@@ -170,18 +171,18 @@ function HostRemoveDialogBody({
 
   const description =
     target.kind === 'wsl'
-      ? translate(
+      ? t(
           'auto.components.sidebar.HostRemoveDialog.wslHostEndsTerminalsUnlessShared',
           'Removes {{value0}} from Orca. Unless another Orca that’s open on this computer is using it, this also ends its open terminals and stops Orca’s server in that distro. Files in the distro are untouched.',
           { value0: label }
         )
       : target.kind === 'runtime'
-        ? translate(
+        ? t(
             'auto.components.sidebar.HostRemoveDialog.4d5e6f7a8b',
             'This opens the Orca servers settings where you can remove this server.'
           )
         : hasWorkspaces
-          ? translate(
+          ? t(
               'auto.components.sidebar.HostRemoveDialog.hostKeepsWorkspaces',
               'Removes {{host}} and its credentials from this computer. Its {{count}} workspaces stay in Orca — remote files are not touched.',
               {
@@ -191,12 +192,12 @@ function HostRemoveDialogBody({
                   'Removes {{host}} and its credentials from this computer. Its {{count}} workspace stays in Orca — remote files are not touched.'
               }
             )
-          : translate(
+          : t(
               'auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c',
               'This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.'
             )
 
-  const deleteOptionLabel = translate(
+  const deleteOptionLabel = t(
     'auto.components.sidebar.HostRemoveDialog.alsoRemoveWorkspaces',
     'Also remove these {{count}} workspaces from Orca',
     { count: workspaceCount, defaultValue_one: 'Also remove this workspace from Orca' }
@@ -206,7 +207,7 @@ function HostRemoveDialogBody({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate('auto.components.sidebar.HostRemoveDialog.3c4d5e6f7a', 'Remove {{value0}}?', {
+          {t('auto.components.sidebar.HostRemoveDialog.3c4d5e6f7a', 'Remove {{value0}}?', {
             value0: label
           })}
         </DialogTitle>
@@ -223,7 +224,7 @@ function HostRemoveDialogBody({
             aria-expanded={advancedOpen}
             className="-ml-2 text-xs"
           >
-            {translate('auto.components.sidebar.HostRemoveDialog.advanced', 'Advanced')}
+            {t('auto.components.sidebar.HostRemoveDialog.advanced', 'Advanced')}
             <ChevronDown
               className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
             />
@@ -249,7 +250,7 @@ function HostRemoveDialogBody({
                 <span className="min-w-0 flex-1 text-xs leading-snug">
                   <span className="font-medium text-foreground">{deleteOptionLabel}</span>
                   <span className="mt-0.5 block text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.sidebar.HostRemoveDialog.alsoForgetLocalHint',
                       'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.'
                     )}
@@ -265,7 +266,7 @@ function HostRemoveDialogBody({
 
       <DialogFooter className="gap-2 sm:gap-2">
         <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
-          {translate('auto.components.sidebar.HostRemoveDialog.6f7a8b9c0d', 'Cancel')}
+          {t('auto.components.sidebar.HostRemoveDialog.6f7a8b9c0d', 'Cancel')}
         </Button>
         {target.kind === 'runtime' ? (
           <Button
@@ -273,7 +274,7 @@ function HostRemoveDialogBody({
             variant="destructive"
             onClick={() => handleRemoveRuntime(target.environmentId)}
           >
-            {translate('auto.components.sidebar.HostRemoveDialog.7a8b9c0d1e', 'Open settings')}
+            {t('auto.components.sidebar.HostRemoveDialog.7a8b9c0d1e', 'Open settings')}
           </Button>
         ) : (
           <Button
@@ -283,7 +284,7 @@ function HostRemoveDialogBody({
             onClick={() => void runSshRemoval()}
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {translate('auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f', 'Remove host')}
+            {t('auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f', 'Remove host')}
           </Button>
         )}
       </DialogFooter>

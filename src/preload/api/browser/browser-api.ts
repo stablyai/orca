@@ -1,8 +1,10 @@
+import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
-import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
-import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser-annotation-viewport-bridge'
+import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
+import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
 import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
@@ -13,13 +15,13 @@ import type {
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../shared/browser-user-agent-mode'
+} from '../../../shared/browser/identity/browser-user-agent-mode'
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
@@ -27,17 +29,17 @@ import type {
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
-} from '../../../shared/browser-webauthn-account'
+} from '../../../shared/browser/prompts/browser-webauthn-account'
 import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import type {
-  BrowserSitePermission,
+  BrowserSitePermissionKey,
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
-} from '../../../shared/browser-site-permission'
+} from '../../../shared/browser/site-settings/browser-site-permission'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -49,7 +51,7 @@ import type {
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult,
   GrabIntent
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -59,7 +61,7 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent,
   BrowserTargetUrlChangedEvent
-} from '../../../shared/browser-guest-events'
+} from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -70,7 +72,7 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   BrowserViewportScrollState
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
@@ -84,6 +86,11 @@ export type BrowserApi = {
       request: BrowserClientPageRendererRequest
     ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
   ) => () => void
+  getGuestMetadata: (args: {
+    browserPageId: string
+    webContentsId: number
+  }) => Promise<BrowserGuestMetadata | null | undefined>
+  onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string
@@ -92,14 +99,12 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
-  repairGuestRegistration: (args: {
+  repairGuestRegistration: BrowserApi['registerGuest']
+  unregisterGuest: (args: {
     browserPageId: string
-    workspaceId: string
-    worktreeId: string
-    sessionProfileId?: string | null
-    webContentsId: number
-  }) => Promise<boolean>
-  unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+    webContentsId?: number
+    replacement?: boolean
+  }) => Promise<void>
   onWebAuthnAccountRequest: (
     callback: (request: BrowserWebAuthnAccountRequest) => void
   ) => () => void
@@ -130,6 +135,8 @@ export type BrowserApi = {
     browserPageId: string
     point: { x: number; y: number }
   }) => Promise<boolean>
+  /** Types dictated text into the page's focused field; false when no field is focused. */
+  insertDictationText: (args: { browserPageId: string; text: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
@@ -258,7 +265,7 @@ export type BrowserApi = {
   sitePermissionsSet: (args: {
     profileId: string
     origin: string
-    permission: BrowserSitePermission
+    permission: BrowserSitePermissionKey
     decision: BrowserSitePermissionDecision | null
   }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
@@ -292,7 +299,8 @@ export type BrowserApi = {
   }) => Promise<BrowserExtensionActionResult>
   /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
   onExtensionsChanged: (callback: () => void) => () => void
-} & BrowserExtensionToolbarApi &
+} & BrowserGuestDiscardApi &
+  BrowserExtensionToolbarApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &

@@ -2,11 +2,14 @@ import {
   remoteSessionContentLines,
   type RemoteSessionContent
 } from '../../transcripts/remote-session-content-lines'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/agent-session/journal/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import type {
   FileWithMtime,
@@ -21,15 +24,20 @@ import {
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
-import { asRecord } from '../../session-scanner-record-value'
-import { claudeUsageTotal } from '../../session-scanner-token-values'
-import { extractMessageText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { claudeUsageTotal } from '../../parsing/session-scanner-token-values'
+import {
+  extractMessageText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }
@@ -173,7 +181,8 @@ export async function finalizeClaudeSessionParseState(
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
-      snapshot.accumulator.filePath
+      snapshot.accumulator.filePath,
+      options.signal
     )
   }
   // A rename (custom-title) or Claude's generated name is the session's own; prompts and metadata are stand-ins.

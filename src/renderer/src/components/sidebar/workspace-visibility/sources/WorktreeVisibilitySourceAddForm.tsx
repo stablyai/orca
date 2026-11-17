@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type WorktreeVisibilitySourceAddResult =
   | 'added'
@@ -13,11 +13,15 @@ export type WorktreeVisibilitySourceAddResult =
 
 export function WorktreeVisibilitySourceAddForm({
   disabled,
+  compact = false,
   onAdd
 }: {
   disabled: boolean
+  compact?: boolean
   onAdd: (rootPath: string) => Promise<WorktreeVisibilitySourceAddResult>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const [expanded, setExpanded] = useState(!compact)
   const [rootPath, setRootPath] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
 
@@ -27,6 +31,7 @@ export function WorktreeVisibilitySourceAddForm({
     const result = await onAdd(rootPath)
     if (result === 'added') {
       setRootPath('')
+      setExpanded(!compact)
       return
     }
     if (result === 'save-failed') {
@@ -34,42 +39,55 @@ export function WorktreeVisibilitySourceAddForm({
     }
     setInputError(
       result === 'limit'
-        ? translate(
+        ? t(
             'auto.components.sidebar.WorktreeVisibilitySourceList.limit',
             'Remove a custom location before adding another.'
           )
         : result === 'duplicate-path'
-          ? translate(
+          ? t(
               'auto.components.sidebar.WorktreeVisibilitySourceList.duplicatePath',
               'This location is already listed.'
             )
-          : translate(
+          : t(
               'auto.components.sidebar.WorktreeVisibilitySourceList.invalidPath',
               'Enter an absolute path for this host.'
             )
     )
   }
 
+  if (!expanded) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={disabled}
+        className="justify-self-start"
+        onClick={() => setExpanded(true)}
+      >
+        {t('settings.general.worktrees.addFolder', 'Add folder…')}
+      </Button>
+    )
+  }
+
   return (
     <form
       className="grid gap-2 border-t border-border bg-background/50 px-2.5 py-2.5"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.sidebar.WorktreeVisibilitySourceList.addLocation',
         'Add location'
       )}
       onSubmit={(event) => void handleAdd(event)}
     >
       <Label htmlFor="custom-worktree-root" className="text-[13px]">
-        {translate(
-          'auto.components.sidebar.WorktreeVisibilitySourceList.worktreeRoot',
-          'Worktree root'
-        )}
+        {t('auto.components.sidebar.WorktreeVisibilitySourceList.worktreeRoot', 'Worktree root')}
       </Label>
       <div className="flex items-center gap-2">
         <Input
           id="custom-worktree-root"
           className="font-mono text-xs"
           value={rootPath}
+          autoFocus={compact}
           autoComplete="off"
           spellCheck={false}
           disabled={disabled}
@@ -81,16 +99,31 @@ export function WorktreeVisibilitySourceAddForm({
           }}
         />
         <Button type="submit" size="sm" disabled={disabled || !rootPath.trim()}>
-          {translate('auto.components.sidebar.WorktreeVisibilitySourceList.add', 'Add')}
+          {t('auto.components.sidebar.WorktreeVisibilitySourceList.add', 'Add')}
         </Button>
       </div>
+      {compact ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="justify-self-start"
+          onClick={() => {
+            setExpanded(false)
+            setRootPath('')
+            setInputError(null)
+          }}
+        >
+          {t('settings.general.worktrees.cancelAdd', 'Cancel')}
+        </Button>
+      ) : null}
       <p
         id="custom-worktree-root-help"
         className={`text-[11px] ${inputError ? 'text-destructive' : 'text-muted-foreground'}`}
         role={inputError ? 'alert' : undefined}
       >
         {inputError ??
-          translate(
+          t(
             'auto.components.sidebar.WorktreeVisibilitySourceList.rootHelp',
             'Orca will recognize worktrees beneath this folder.'
           )}

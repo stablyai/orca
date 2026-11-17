@@ -1,5 +1,5 @@
 import type { ConnectConfig } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   findEncryptedPrivateKeyPath,
@@ -9,8 +9,8 @@ import {
   resolvePrivateKeys,
   resolveUnencryptedExplicitPrivateKeys,
   type SkippedIdentityFiles
-} from '../ssh-auth-resolution'
-import { configurePrivateKeyAuthentication } from '../ssh-private-key-authentication'
+} from '../authentication/ssh-auth-resolution'
+import { configurePrivateKeyAuthentication } from '../authentication/ssh-private-key-authentication'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 

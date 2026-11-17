@@ -1,10 +1,11 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
-import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 export type CommandCodeManagedScriptTarget = 'local' | 'posix'
 
@@ -15,6 +16,7 @@ export function buildCommandCodeManagedScript(
     return [
       '@echo off',
       'setlocal',
+      `if "%${ORCA_AGENT_HOOKS_DISABLED_ENV}%"=="1" exit /b 0`,
       'if "%ORCA_AGENT_HOOK_PORT%"=="" if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if not "%ORCA_AGENT_HOOK_PORT%"=="" call :sourceEndpointByPort',
       ...buildWindowsHookEnvironmentGuardLines(),
@@ -42,18 +44,22 @@ export function buildCommandCodeManagedScript(
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
+    `if [ "\${${ORCA_AGENT_HOOKS_DISABLED_ENV}:-}" = 1 ]; then exit 0; fi`,
     ...buildPosixHookSpoolLines('command-code'),
     '__orca_read_ancestor_var() {',
     '  __orca_name="$1"',
     '  __orca_pid="${PPID:-}"',
     '  while [ -n "$__orca_pid" ] && [ "$__orca_pid" != "0" ] && [ "$__orca_pid" != "1" ]; do',
-    '    __orca_value=""',
+    '    __orca_env=""',
     '    if [ -r "/proc/$__orca_pid/environ" ]; then',
-    '      __orca_value=$(tr "\\000" "\\n" < "/proc/$__orca_pid/environ" 2>/dev/null | sed -n "s/^${__orca_name}=//p" | head -n 1)',
+    '      __orca_env=$(tr "\\000" "\\n" < "/proc/$__orca_pid/environ" 2>/dev/null)',
     '    fi',
-    '    if [ -z "$__orca_value" ]; then',
-    '      __orca_value=$(ps eww -p "$__orca_pid" -o command= 2>/dev/null | tr " " "\\n" | sed -n "s/^${__orca_name}=//p" | head -n 1)',
+    '    if [ -z "$__orca_env" ]; then',
+    '      __orca_env=$(ps eww -p "$__orca_pid" -o command= 2>/dev/null | tr " " "\\n")',
     '    fi',
+    // A scrubbed hook may recover identity, but must never cross a background launch.
+    `    if printf '%s\\n' "$__orca_env" | grep -qx '${ORCA_AGENT_HOOKS_DISABLED_ENV}=1'; then return 1; fi`,
+    '    __orca_value=$(printf "%s\\n" "$__orca_env" | sed -n "s/^${__orca_name}=//p" | head -n 1)',
     '    if [ -n "$__orca_value" ]; then',
     '      printf "%s\\n" "$__orca_value"',
     '      return 0',

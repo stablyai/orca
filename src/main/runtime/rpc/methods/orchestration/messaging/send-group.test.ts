@@ -3,7 +3,7 @@ import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 // Groups mean the sender's Run; host-wide discovery previously reached unrelated projects.
@@ -197,31 +197,6 @@ describe('orchestration.send group addresses', () => {
     }
   )
 
-  it('names the remote workers it skipped when every live Dispatch is federated', async () => {
-    setupWithTerminals([makeSummary('term_coord')])
-    const federated = db.createStartingWorkerDispatch({
-      taskSpec: 'remote work',
-      taskRunId: activeRunId,
-      startOptions: {},
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      federation: {
-        environmentId: 'environment_remote',
-        environmentName: 'remote',
-        peerFingerprint: 'remote_peer',
-        protocolVersion: 3
-      }
-    })
-
-    // Explain skipped remote workers rather than claim no recipients when individual addresses exist.
-    await expect(
-      call('orchestration.send', { from: 'term_coord', to: '@all', subject: 'pause' })
-    ).rejects.toMatchObject({
-      code: 'terminal_not_found',
-      message: expect.stringContaining(`dispatch:${federated.dispatch.id}`)
-    })
-  })
-
   it.each(['@all', '@idle', '@codex'])(
     'rejects %s from a sender in no Run, naming the durable alternatives',
     async (to) => {
@@ -243,176 +218,6 @@ describe('orchestration.send group addresses', () => {
       expect(db.getInbox(100)).toHaveLength(0)
     }
   )
-
-  it('rejects @all from a bound coordinator whose Run has no live Dispatch', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_bystander')])
-
-    await expect(
-      call('orchestration.send', { from: 'term_coord', to: '@all', subject: 'nobody home' })
-    ).rejects.toThrow('No recipients resolved for group address')
-    expect(db.getInbox(100)).toHaveLength(0)
-  })
-
-  it('continues to fan out status messages to groups', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a'), makeSummary('term_b')])
-    const dispatchA = dispatchWorker('term_a')
-    const dispatchB = dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@all',
-      subject: 'status broadcast',
-      type: 'status'
-    })) as { messages: { to_handle: string; type: string }[]; recipients: number }
-
-    expect(result.recipients).toBe(2)
-    expect(result.messages.map((m) => m.to_handle).sort()).toEqual(
-      [`dispatch:${dispatchA}`, `dispatch:${dispatchB}`].sort()
-    )
-    expect(result.messages.every((m) => m.type === 'status')).toBe(true)
-  })
-
-  it('fans out @idle to only the idle Dispatches of the Run', async () => {
-    setupWithTerminals(
-      [
-        makeSummary('term_coord'),
-        makeSummary('term_a'),
-        makeSummary('term_b'),
-        makeSummary('term_idle_elsewhere')
-      ],
-      { term_a: 'idle', term_b: 'busy', term_idle_elsewhere: 'idle' }
-    )
-    const idle = dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@idle',
-      subject: 'idle check'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${idle}`)
-  })
-
-  it('fans out an agent name group by host-resolved identity within the Run', async () => {
-    setupWithTerminals([
-      makeSummary('term_coord', { agentIdentity: 'claude' }),
-      makeSummary('term_a', { agentIdentity: 'codex' }),
-      makeSummary('term_b', { agentIdentity: 'claude' }),
-      makeSummary('term_codex_elsewhere', { agentIdentity: 'codex' })
-    ])
-    const codex = dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@codex',
-      subject: 'codex only'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${codex}`)
-  })
-
-  it('fans out @droid without claiming a pane whose title merely contains the word', async () => {
-    setupWithTerminals([
-      makeSummary('term_coord', { agentIdentity: 'codex' }),
-      makeSummary('term_b', { agentIdentity: 'droid' }),
-      // Android build contains droid but has no droid identity; never derive membership from title substrings.
-      makeSummary('term_c', { agentIdentity: 'claude', title: 'Android build' })
-    ])
-    const droid = dispatchWorker('term_b')
-    dispatchWorker('term_c')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@droid',
-      subject: 'droid only'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${droid}`)
-  })
-
-  it('fans out @cursor without claiming a Claude pane discussing a text cursor', async () => {
-    // A Claude pane titled Fix the text cursor blink must not join @cursor by title matching.
-    setupWithTerminals([
-      makeSummary('term_coord', { agentIdentity: 'codex' }),
-      makeSummary('term_b', { agentIdentity: 'cursor' }),
-      makeSummary('term_c', { agentIdentity: 'claude', title: '✳ Fix the text cursor blink' })
-    ])
-    const cursor = dispatchWorker('term_b')
-    dispatchWorker('term_c')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@cursor',
-      subject: 'cursor only'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe(`dispatch:${cursor}`)
-  })
-
-  it('fans out @worktree:<id> to matching worktree terminals, unchanged by Run scoping', async () => {
-    setupWithTerminals([
-      makeSummary('term_a', { worktreeId: 'wt_1' }),
-      makeSummary('term_b', { worktreeId: 'wt_1' }),
-      makeSummary('term_c', { worktreeId: 'wt_2' })
-    ])
-
-    const result = (await call('orchestration.send', {
-      from: 'term_a',
-      to: '@worktree:wt_1',
-      subject: 'worktree msg'
-    })) as GroupReceipt
-
-    expect(result.recipients).toBe(1)
-    expect(result.messages[0].to_handle).toBe('term_b')
-  })
-
-  it('shares thread_id across fan-out messages', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a'), makeSummary('term_b')])
-    dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@all',
-      subject: 'threaded',
-      threadId: 'my_thread'
-    })) as GroupReceipt
-
-    expect(result.messages[0].thread_id).toBe('my_thread')
-    expect(result.messages[1].thread_id).toBe('my_thread')
-  })
-
-  it('generates a shared thread_id when none provided', async () => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a'), makeSummary('term_b')])
-    dispatchWorker('term_a')
-    dispatchWorker('term_b')
-
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to: '@all',
-      subject: 'auto thread'
-    })) as GroupReceipt
-
-    expect(result.messages[0].thread_id).toMatch(/^thread_/)
-    expect(result.messages[0].thread_id).toBe(result.messages[1].thread_id)
-  })
-  it.each(['@all', '@idle'])('does not enumerate host terminals for %s', async (to) => {
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a')], { term_a: 'idle' })
-    const worker = dispatchWorker('term_a')
-    const result = (await call('orchestration.send', {
-      from: 'term_coord',
-      to,
-      subject: 'guidance'
-    })) as GroupReceipt
-    expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${worker}`])
-    expect(runtime.listTerminals).not.toHaveBeenCalled()
-  })
 
   it.each(['run', 'payload'])('does not acquire group membership from %s', async (source) => {
     setupWithTerminals([

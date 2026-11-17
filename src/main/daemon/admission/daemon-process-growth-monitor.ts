@@ -3,7 +3,7 @@ import {
   isWindowsProcessTableAvailable,
   readWindowsProcessIdentityTableFresh
 } from '../../windows/windows-process-table'
-import type { HostPressureLevel } from '../../../shared/host-spawn-admission'
+import type { HostPressureLevel } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   countDescendantsByRoot,
   createProcessGrowthState,
@@ -11,7 +11,7 @@ import {
   evaluateProcessGrowth,
   type ProcessGrowthLimits,
   type ProcessGrowthTrip
-} from '../../../shared/process-growth-breaker'
+} from './process-growth-breaker'
 
 type ProcessRow = { pid: number; ppid: number }
 

@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isHostAnsweredSnapshotRetryCause } from '@/runtime/remote-runtime-terminal-multiplexer-types'
+import { isHostAnsweredSnapshotRetryCause } from '@/runtime/hosted-terminals/snapshots/remote-terminal-snapshot-outcome'
 import { readE2eHiddenSnapshotOverride } from '../instrumentation/e2e-terminal-pty-harness'
 import type { PtyBufferSnapshot } from '../../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

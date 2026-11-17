@@ -7,7 +7,7 @@ import {
   type WslHostAddRefusalCode,
   type WslHostCopyParams,
   type WslHostStatusDetailCode
-} from '../../../../shared/wsl-host-failure-copy'
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   getWslHostsPausedLabel,
   getWslHostServerFilesMissingLabel,
@@ -107,7 +107,31 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
       : translate('sidebar.wslHosts.statusDetails.removalUnrecorded', DETAIL.removalUnrecorded, {
           detail
         })
-  }
+  },
+  installLockWait: ({ count: readCount }) => {
+    const count = readCount('count')
+    return count === null
+      ? null
+      : translate('sidebar.wslHosts.statusDetails.installLockWait', DETAIL.installLockWait.other, {
+          count,
+          defaultValue_one: DETAIL.installLockWait.one
+        })
+  },
+  installLockWaitGivesUp: ({ count: readCount }) => {
+    const count = readCount('count')
+    return count === null
+      ? null
+      : translate(
+          'sidebar.wslHosts.statusDetails.installLockWaitGivesUp',
+          DETAIL.installLockWaitGivesUp.other,
+          { count, defaultValue_one: DETAIL.installLockWaitGivesUp.one }
+        )
+  },
+  installLockWaitHolderGone: () =>
+    translate(
+      'sidebar.wslHosts.statusDetails.installLockWaitHolderGone',
+      DETAIL.installLockWaitHolderGone
+    )
 }
 
 function isCopyCode<Code extends string>(copy: Record<Code, unknown>, code: unknown): code is Code {

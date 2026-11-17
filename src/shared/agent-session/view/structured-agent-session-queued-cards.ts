@@ -1,6 +1,6 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { agentMessageDisplayText } from '../agent-message-display-text'
+import { agentMessageDisplayText } from './messages/agent-message-display-text'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -15,20 +15,23 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from '../agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../requests/agent-session-queued-message-wire'
-import { readAgentMessageSource, type AgentMessageSource } from '../agent-session-message-source'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../native-chat/native-chat-image-label'
+} from '../../native-chat/attachments/native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */
@@ -36,7 +39,6 @@ export type QueuedMessageCardHold =
   /** The header owns queue-wide pause wording; answering a prompt does not resume draining. */
   | 'queue-paused'
   | 'paused'
-  | 'behind-returned'
   | 'returned'
   /** Disable actions until the host replaces this sending card under the same id. */
   | 'sending'
@@ -50,7 +52,7 @@ export type QueuedMessageCard = {
   images?: readonly NativeChatImageRefBlock[]
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
-  /** Visible unheld waiting work before an ordinary returned barrier in published order. */
+  /** Visible unheld waiting work. */
   resumeEligible?: true
   /** A conversation command such as /compact: it never steers into a running turn. */
   command?: true
@@ -84,21 +86,17 @@ export function projectQueuedMessageCards(
     submissions.filter((submission) => submission.dispatchState !== 'rejected')
   )
   const ordered = [...(queuedMessages ?? [])].sort((left, right) => left.position - right.position)
-  let behindReturned = false
   // Establish semantic membership before handoff filtering, including during catch-up.
   const cards = ordered.map((message) => {
-    const resumeEligible = message.state === 'waiting' && !message.paused && !behindReturned
+    const resumeEligible = message.state === 'waiting' && !message.paused
     const hold: QueuedMessageCardHold =
       message.state === 'returned'
         ? 'returned'
         : message.paused
           ? 'paused'
-          : behindReturned
-            ? 'behind-returned'
-            : session.queuePaused
-              ? 'queue-paused'
-              : 'turn'
-    behindReturned = behindReturned || message.state === 'returned'
+          : session.queuePaused
+            ? 'queue-paused'
+            : 'turn'
     const from = readAgentMessageSource(message.body.from)
     return {
       messageId: message.messageId,

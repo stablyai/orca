@@ -1,15 +1,16 @@
+import { recordEnvironmentStoreRead } from '../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
 import {
   RuntimeAgentSenderAssociations,
   type AgentSenderHandleReads
-} from '../runtime-agent-sender-associations'
+} from '../agent-senders/runtime-agent-sender-associations'
 import { fingerprintOrchestrationPeer } from '../orchestration/federation/environment-transport'
 import {
   RuntimeAgentOrchestrationProjection,
   type RuntimeAgentOrchestrationDependencies
-} from '../runtime-agent-orchestration-projection'
+} from '../orchestration/crew/runtime-agent-orchestration-projection'
 import type { RuntimeConstructionServices } from './runtime-construction-services'
-import { environmentStoreWriteCount } from '../../../shared/remote-runtime/host-store/runtime-environment-store-file'
-import type { AgentSenderPrincipal } from '../runtime-agent-sender-history'
+import { environmentStoreWriteCount } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+import type { AgentSenderPrincipal } from '../agent-senders/agent-sender-principals'
 
 type SenderHost = Pick<
   RuntimeConstructionServices,
@@ -46,14 +47,20 @@ export function createRuntimeAgentProjections(
       return key ? fingerprintOrchestrationPeer(key) : undefined
     },
     pairingGeneration: environmentStoreWriteCount,
-    principal: (environmentId) => {
+    principal: async (environmentId) => {
       if (pairing !== environmentStoreWriteCount()) {
         pairing = environmentStoreWriteCount()
         principals.clear()
       }
       if (!principals.has(environmentId)) {
-        principals.set(environmentId, resolvePrincipal(host, environmentId))
+        const generation = pairing
+        const principal = await resolvePrincipal(host, environmentId)
+        if (environmentStoreWriteCount() !== generation || pairing !== generation) {
+          return principal
+        }
+        principals.set(environmentId, principal)
       }
+      recordEnvironmentStoreRead(pairing)
       return principals.get(environmentId)
     }
   })
@@ -67,13 +74,13 @@ export function createRuntimeAgentProjections(
   }
 }
 
-function resolvePrincipal(
+async function resolvePrincipal(
   host: SenderHost,
   environmentId: string
-): AgentSenderPrincipal | undefined {
+): Promise<AgentSenderPrincipal | undefined> {
   try {
     const { peerFingerprint, homePeerFingerprint } =
-      host.resolveOrchestrationWorkerServer(environmentId)
+      await host.resolveOrchestrationWorkerServer(environmentId)
     return homePeerFingerprint ? { peerFingerprint, homePeerFingerprint } : undefined
   } catch {
     return undefined

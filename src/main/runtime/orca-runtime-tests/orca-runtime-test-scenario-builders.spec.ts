@@ -2,11 +2,11 @@ import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import './runtime-test-module-registration.spec'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
@@ -19,7 +19,7 @@ const { TEST_WORKTREE_PATH, makeHeadlessTerminalLayout, makeRuntimeStoreWithWork
   fixtures
 const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 
-import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserClientHostCommandEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
@@ -127,20 +127,20 @@ async function publishClientHostedPage(
 }
 
 // #10333: serve publishes a ready graph without BrowserWindow; focus-requested creates must stay headless.
-const wireHeadlessServeRuntime = (): RuntimeService => {
+const wireHeadlessServeRuntime = async (): Promise<RuntimeService> => {
   const runtime = new OrcaRuntimeService(store)
   electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   return runtime
 }
 
-function publishLegacyWorkerReveal(
+async function publishLegacyWorkerReveal(
   runtime: RuntimeService,
   identity: { worktreeId: string; tabId: string; leafId: string; ptyId: string },
   title = 'Recovered legacy worker'
-): { tabId: string; identity: typeof identity } {
+): Promise<{ tabId: string; identity: typeof identity }> {
   runtime.attachWindow(TEST_WINDOW_ID)
-  runtime.syncWindowGraph(TEST_WINDOW_ID, {
+  await runtime.syncWindowGraph(TEST_WINDOW_ID, {
     tabs: [
       {
         tabId: identity.tabId,
@@ -218,8 +218,10 @@ function makePostRevealWorkerRecoveryHarness(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
     crewChanges: new CrewChanges(),
+    hasAnyDispatchContexts: () => true,
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
+    getDispatchContextById: () => undefined,
     getActiveDispatchForTerminal: () => undefined,
     findActiveRemoteAttachmentForPane: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
@@ -284,10 +286,12 @@ function makePostRevealWorkerRecoveryHarness(
   }
 }
 
-function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string[] } = {}): {
+async function makePendingAgentTabActivationRuntime(
+  opts: { disabledTuiAgents?: string[] } = {}
+): Promise<{
   runtime: RuntimeService
   spawn: ReturnType<typeof vi.fn>
-} {
+}> {
   const spawn = vi.fn().mockResolvedValue({ id: 'serve-materialized-pty' })
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
@@ -325,7 +329,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, spawn }
 }
 

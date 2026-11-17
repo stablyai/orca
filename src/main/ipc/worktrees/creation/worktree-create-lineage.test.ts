@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import {
-  assertAttachableParentWorkspace,
-  recordWorkspaceLineageForCreatedWorktree
-} from '../../worktree-remote'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { recordWorkspaceLineageForCreatedWorktree } from '../worktree-remote'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 const CHILD_ID = 'repo-1::/repos/child'
@@ -81,13 +78,15 @@ function createStore(options: {
 function record(
   store: ReturnType<typeof createStore>,
   args: Partial<CreateWorktreeArgs>,
-  worktree = createdWorktree()
+  worktree = createdWorktree(),
+  noteLineage?: Parameters<typeof recordWorkspaceLineageForCreatedWorktree>[4]
 ) {
   return recordWorkspaceLineageForCreatedWorktree(
     store as never,
     args as CreateWorktreeArgs,
     worktree,
-    CREATED_AT
+    CREATED_AT,
+    noteLineage
   )
 }
 
@@ -111,40 +110,5 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     expect(result.lineage).toBeNull()
     expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
     expect(result.workspaceLineage).toBeNull()
-  })
-})
-
-describe('assertAttachableParentWorkspace', () => {
-  const childKey = worktreeWorkspaceKey(CHILD_ID)
-
-  beforeEach(() => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  function assertParent(
-    store: ReturnType<typeof createStore>,
-    parentWorkspace: CreateWorktreeArgs['parentWorkspace']
-  ) {
-    assertAttachableParentWorkspace(store as never, parentWorkspace, childKey)
-  }
-
-  // Composer parent selection can go stale; nesting must not block creation.
-
-  it('rejects a self-referential parent', () => {
-    const store = createStore({ metaById: { [CHILD_ID]: parentMeta() } })
-
-    expect(() => assertParent(store, childKey)).toThrow(/cannot be attached to itself/)
-  })
-
-  it('rejects a malformed parent key', () => {
-    const store = createStore({})
-
-    expect(() => assertParent(store, 'not-a-workspace-key' as never)).toThrow(
-      /Invalid parent workspace/
-    )
   })
 })

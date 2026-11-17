@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 /** Structured workers have no PTY; register their bearer handle, pane key and host scope as orchestration authority.
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../crew/crew-changes'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -16,16 +16,19 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
-} from '../../../../../shared/structured-worker-handle'
+} from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
-} from '../../../../../shared/worker-terminal-host-scope'
+} from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 
 export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 

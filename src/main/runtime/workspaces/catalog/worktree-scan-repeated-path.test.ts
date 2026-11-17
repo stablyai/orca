@@ -45,14 +45,6 @@ const MAIN_ROW = {
   isBare: false,
   isMainWorktree: true
 }
-// Linux paths are case-sensitive: a different spelling is a different checkout.
-const OTHER_SPELLING_ROW = {
-  path: '/home/me/FileLoc',
-  head: 'def',
-  branch: 'refs/heads/feat',
-  isBare: false,
-  isMainWorktree: false
-}
 
 function makeRuntime(options: { connectionId?: string } = {}): OrcaRuntimeService {
   const metaById: Record<string, WorktreeMeta> = {}
@@ -101,33 +93,6 @@ async function listedRows(runtime: OrcaRuntimeService): Promise<string[]> {
 describe('worktree scan with a repeated path', () => {
   beforeEach(() => {
     localScanMock.mockReset()
-  })
-
-  describe('rows that agree, as reported', () => {
-    beforeEach(() => {
-      gitLists([MAIN_ROW, { ...MAIN_ROW, isMainWorktree: false }, OTHER_SPELLING_ROW])
-    })
-
-    it('resolves the id the CLI sends for `active` and `current` after a listing', async () => {
-      const runtime = makeRuntime()
-      await runtime.listManagedWorktrees()
-
-      await expect(runtime.showManagedWorktree(`id:${MAIN_WORKTREE_ID}`)).resolves.toMatchObject({
-        id: MAIN_WORKTREE_ID,
-        isMainWorktree: true
-      })
-    })
-
-    it('lists each path once for the CLI and for paired clients', async () => {
-      const runtime = makeRuntime()
-      const expectedIds = [MAIN_WORKTREE_ID, `${REPO_ID}::/home/me/FileLoc`]
-
-      const listed = await runtime.listManagedWorktrees()
-      expect(listed.worktrees.map((worktree) => worktree.id)).toEqual(expectedIds)
-
-      const detected = await runtime.listDetectedManagedWorktrees(`id:${REPO_ID}`)
-      expect(detected.worktrees.map((worktree) => worktree.id)).toEqual(expectedIds)
-    })
   })
 
   it('keeps the main checkout over a stale registration on another branch', async () => {

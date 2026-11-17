@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Parse native load events; caller owns recovery, view never reloads/retries.
-// generation-unreadable: delete host cache and download once. document-load-failed: remount once without deletion; Try again downloads fresh. render-process-gone: remount once without deletion; memory pressure/provider updates look like bad bundles.
+// generation-unreadable: delete host cache and download once. document-load-failed: remount once without deletion; Try again downloads fresh. render-process-gone: remount once without deletion (reclaimed losses do not spend it); memory pressure/provider updates look like bad bundles.
 export const MOBILE_WEB_SHELL_FAILURE_REASONS = [
   /** The generation directory has no readable manifest, or declares an asset we refuse to map. */
   'generation-unreadable',
@@ -18,12 +18,15 @@ export type MobileWebShellFailureReason = (typeof MOBILE_WEB_SHELL_FAILURE_REASO
 export type MobileWebShellLoadState =
   | { state: 'loading' }
   | { state: 'ready' }
-  | { state: 'failed'; reason: MobileWebShellFailureReason }
+  // reclaimed: the OS took the renderer while Orca was off screen or for memory (Android didCrash false), not the page failing.
+  | { state: 'failed'; reason: MobileWebShellFailureReason; reclaimed?: true }
 
 // Check own properties: Zod shape reads would otherwise accept inherited reason as a native event.
 const loadStatePayloadSchema = z.object({
   state: z.string(),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  background: z.boolean().optional(),
+  crashed: z.boolean().optional()
 })
 
 export type MobileWebShellLoadStatePayload = z.infer<typeof loadStatePayloadSchema>
@@ -49,12 +52,17 @@ export function parseMobileWebShellLoadState(payload: unknown): MobileWebShellLo
   if (!parsed.success) {
     return null
   }
-  const { state, reason } = parsed.data
+  const { state, reason, background, crashed } = parsed.data
   if (state === 'loading' || state === 'ready') {
     return { state }
   }
   if (state !== 'failed') {
     return null
   }
-  return isFailureReason(reason) ? { state: 'failed', reason } : null
+  if (!isFailureReason(reason)) {
+    return null
+  }
+  return reason === 'render-process-gone' && (background === true || crashed === false)
+    ? { state: 'failed', reason, reclaimed: true }
+    : { state: 'failed', reason }
 }

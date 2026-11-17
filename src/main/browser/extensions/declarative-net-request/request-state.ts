@@ -1,4 +1,4 @@
-import { compareActions, isAllowAction, type DnrRequestAction } from './ruleset-matcher'
+import { compareActions, isAllowAction, type DnrRequestAction } from './matching/ruleset-matcher'
 
 // What WebRequestInfo carries for one request between onBeforeRequest and onHeadersReceived
 // (dnr_actions, max_priority_allow_action), and the event router's merge between the stages

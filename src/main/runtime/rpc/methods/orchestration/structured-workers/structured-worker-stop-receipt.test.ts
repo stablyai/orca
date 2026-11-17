@@ -1,9 +1,9 @@
-import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 /** An absent structured host cannot issue a close; receipts must not claim closed_agent_terminal and falsely tell coordinators its tab is gone. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +27,7 @@ const SESSION = 'session-stop-receipt'
 const HANDLE = 'structworker_22222222-2222-4222-a222-222222222222'
 const WORKTREE = 'repo::worktree'
 
-describe('worker-stop on a structured worker this runtime cannot reach', () => {
+describe('worker-stop on a structured worker', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
 
@@ -120,13 +120,35 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 
-  it('reports that nothing was closed', async () => {
+  it('reports the stop when closing the chat already settled it', async () => {
     const dispatchId = startStructuredWorker()
-    await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
-      {
-        processAction: 'none',
-        state: 'stop_unknown'
-      }
+    let attached = true
+    const { host, store } = hostTestState()
+    // The chat's close tells the runtime it closed while worker-stop is still running.
+    vi.spyOn(host, 'close').mockImplementation(async () => {
+      attached = false
+      runtime.onStructuredSessionTabHidden(SESSION)
+    })
+    vi.spyOn(host, 'hasSession').mockImplementation(() => attached)
+    vi.spyOn(host, 'setSessionTabVisibility').mockResolvedValue(undefined)
+    vi.spyOn(store, 'getConversation').mockImplementation(() =>
+      agentSessionConversationView(
+        agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            sessionId: SESSION,
+            claimStatus: attached ? 'live' : 'released',
+            deathEvidence: attached
+              ? null
+              : { kind: 'exit-observed', detail: 'closed by Orca', observedAt: 1 }
+          })
+        )
+      )
     )
+    setStructuredAgentSessionHost(host)
+
+    await expect(call('orchestration.workerStop', { dispatch: dispatchId })).resolves.toMatchObject(
+      { state: 'stopped', processAction: 'closed_agent_terminal' }
+    )
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
   })
 })

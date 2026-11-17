@@ -1,5 +1,5 @@
 import { screen } from 'electron'
-import type { BrowserTargetUrlChangedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserTargetUrlChangedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
 
 const POINTER_REFRESH_MS = 100

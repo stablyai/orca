@@ -5,7 +5,7 @@ import {
   type CrewRecipientRun,
   type DispatchInput
 } from './crew-recipient-owner-queries'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
@@ -18,7 +18,7 @@ import {
   activeDispatchMailboxBranch,
   equivalentDispatchMailboxOwners
 } from '../db/dispatch-mailbox-selection'
-import { selectBareRecipientOwner } from '../../rpc/methods/orchestration/messaging/recipient-routing'
+import { selectBareRecipientOwner } from '../../rpc/methods/orchestration/messaging/recipient-owner-selection'
 import { deriveStructuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
 
 import { createCrewRecipientMailboxSelection } from './crew-recipient-mailbox-selection'

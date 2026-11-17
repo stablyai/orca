@@ -1,4 +1,4 @@
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection-deps'
 import { vi, type Mock } from 'vitest'
 
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'

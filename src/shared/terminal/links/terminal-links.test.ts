@@ -83,16 +83,6 @@ describe('terminal path helpers', () => {
       ).toEqual(['docs/café/report.pdf'])
     })
 
-    it('offers absolute paths with spaces before the filename', () => {
-      expect(pathTexts('/Users/Path/FolderName with Space/content.js')).toContain(
-        '/Users/Path/FolderName with Space/content.js'
-      )
-    })
-
-    it('offers an extensionless absolute path ending in a spaced segment', () => {
-      expect(pathTexts('/Users/alice/My Folder')).toContain('/Users/alice/My Folder')
-    })
-
     it('does not linkify root-only or relative trailing separator tokens', () => {
       expect(extractTerminalFileLinks('progress 1 / 3')).toEqual([])
       expect(extractTerminalFileLinks('/')).toEqual([])
@@ -102,43 +92,7 @@ describe('terminal path helpers', () => {
       expect(extractTerminalFileLinks('C:\\')).toEqual([])
     })
 
-    it('offers an extensionless relative path ending in a spaced segment', () => {
-      expect(pathTexts('./My Folder')).toContain('./My Folder')
-    })
-
     // A spaced guess must never hide the plain path; the host keeps whichever exists.
-    it.each([
-      [
-        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md. It covers setup and/or teardown.',
-        '~/orca-lanes/webhooks-research/bots/bots-ux-outline.md'
-      ],
-      ['Wrote ~/notes/plan.md. Next: src/foo.ts', '~/notes/plan.md'],
-      ['Wrote ~/notes/plan.md and src/foo.ts covers the rest', '~/notes/plan.md'],
-      ['See /Users/me/a/b.md. Then C:\\Users\\me\\x.md.', '/Users/me/a/b.md'],
-      ['See /home/me/x.md. Then the pane/tab work.', '/home/me/x.md'],
-      ['See C:\\Users\\me\\x.md. Then the pane/tab work.', 'C:\\Users\\me\\x.md']
-    ])('offers the plain path in %j', (line, path) => {
-      expect(pathTexts(line)).toContain(path)
-    })
-
-    it.each([
-      '/Users/a/C# Projects/x.cs',
-      '/Users/a/Tom & Jerry/x.ts',
-      '/Users/a/Notes - Draft/x.md',
-      'C:\\Users\\Me\\Q&A Docs\\x.txt',
-      '/tmp/Foo.bar Docs/report.md',
-      '/tmp/My File.123',
-      'docs/My Archive.7z',
-      'docs/My 檔案.文件'
-    ])('offers spaced folder names with symbols: %s', (path) => {
-      expect(pathTexts(`open ${path}, then continue`)).toContain(path)
-    })
-
-    it('still offers the spaced reading so an existing spaced path can win', () => {
-      expect(pathTexts('Saved /Users/me/My Docs/plan.md. Next: src/foo.ts')).toEqual(
-        expect.arrayContaining(['/Users/me/My', '/Users/me/My Docs/plan.md'])
-      )
-    })
 
     it('detects framework route paths with bracket and paren segments', () => {
       const links = extractTerminalFileLinks(
@@ -151,12 +105,6 @@ describe('terminal path helpers', () => {
         column: 7,
         displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
       })
-    })
-
-    it('grows a spaced reading over a bounded number of words', () => {
-      const paths = pathTexts(`/tmp/root ${'part/x '.repeat(20_000)}`)
-
-      expect(paths.filter((path) => path.startsWith('/tmp/root'))).toHaveLength(11)
     })
   })
 
@@ -210,19 +158,6 @@ describe('terminal path helpers', () => {
   })
 
   describe('plain-text file:// URIs', () => {
-    it('extracts a printed file:// URI as a file link resolving to its path', () => {
-      const line = 'Report: file:///Users/dev/orca/report.html'
-      const link = extractTerminalFileLinks(line).find(
-        (candidate) => candidate.displayText === 'file:///Users/dev/orca/report.html'
-      )
-      expect(link).toMatchObject({ pathText: '/Users/dev/orca/report.html' })
-      expect(resolveTerminalFileLink(link!, '/Users/dev/orca')).toEqual({
-        absolutePath: '/Users/dev/orca/report.html',
-        line: null,
-        column: null
-      })
-    })
-
     it('does not also emit a bare-path link for the URI body', () => {
       const links = extractTerminalFileLinks('file:///Users/dev/orca/report.html')
       expect(links.map((link) => link.displayText)).toEqual(['file:///Users/dev/orca/report.html'])

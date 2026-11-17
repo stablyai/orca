@@ -1,16 +1,18 @@
+import type { Dirent } from 'node:fs'
 import type {
   AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   TranscriptMessageSink,
   TranscriptSessionIdentity
 } from './transcripts/session-transcript-consumers'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import type { SessionDiscoveryStatCache } from './discovery/session-discovery-stat-cache'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
@@ -58,8 +60,12 @@ export type AiVaultScanOptions = {
   limitPerAgent?: number
   // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
+  // Return only scopePaths sessions, skipping the global recency pass (Workspace and Project).
+  scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  /** Search indexing reuses stats of quiet files between complete sweeps. */
+  statCache?: SessionDiscoveryStatCache
   signal?: AbortSignal
 }
 
@@ -85,20 +91,35 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
 }
 
+// Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
+export type SessionFileChoice = SessionFileCandidate & {
+  alternatives?: readonly SessionFileCandidate[]
+}
+
+export function physicalSessionCandidates(
+  choice: SessionFileChoice
+): readonly SessionFileCandidate[] {
+  return choice.alternatives ?? [choice]
+}
+
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
   // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
   scopeFiles?: FileWithMtime[]
+  // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
+  antigravityArtifactPaths?: ReadonlyMap<string, string>
 }
 
 export type SessionParseResult = {
+  sourceFailed?: boolean
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
 }
 
 export type ResumableParseFinalizeOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }
@@ -154,4 +175,14 @@ export type CodexUsageSnapshot = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
+}
+
+export type SessionFileWalkOptions = {
+  extensions: Set<string>
+  filePredicate?: (path: string) => boolean
+  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
+  directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
+  readDirectory?: (dirPath: string) => Promise<Dirent[]>
+  signal?: AbortSignal
 }

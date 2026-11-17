@@ -1,23 +1,23 @@
 import { memo, useCallback, useEffect, useMemo } from 'react'
-import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
+import { registerBrowserOverlaySlotViewport } from '../host-guest/viewport/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../store'
+import { useAppStore } from '../../../store/index'
 import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
-import type { BrowserTab as BrowserTabState } from '../../../../../shared/browser-workspace-types'
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { useBrowserGuestPaintRetention } from '../host-guest/browser-guest-paint-retention'
+import { tabGroupBodyAnchorName } from '../../tab-group/retained-pane/tab-group-body-anchor'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import { useBrowserGuestPaintRetention } from '../host-guest/retention/browser-guest-paint-retention'
 import {
   isClientHostedBrowserRowSelectionLive,
   useClientHostedBrowserRowSelection,
   useClientHostedBrowserRows
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
-import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { ClientHostedBrowserHostRowPane } from './client-hosted/client-hosted-browser-host-row-pane'
+import { useAnyBrowserPageMountAdmission } from '../host-guest/retention/browser-page-mount-admission'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
@@ -26,12 +26,12 @@ type BrowserOverlayAssignment = {
   isActiveInGroup: boolean
 }
 
-const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+const EMPTY_BROWSER_TABS: readonly BrowserWorkspace[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
-  browserTab: BrowserTabState
+  browserTab: BrowserWorkspace
   isWorktreeActive: boolean
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
@@ -100,7 +100,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   return (
     <div
       style={style}
-      className="relative flex min-h-0 flex-1 flex-col"
+      // Clip without scrolling: a squeezed toolbar must neither cover the divider nor slide when a hidden control takes focus.
+      className="relative flex min-h-0 flex-1 flex-col overflow-clip"
       data-browser-overlay-tab-id={browserTab.id}
       onPointerDown={handleFocus}
       onFocusCapture={handleFocus}

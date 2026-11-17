@@ -1,6 +1,6 @@
-import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
+import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/retention/browser-guest-paint-retention'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
-import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
+import { selectParkedEquivalentMountTabIds } from './terminal/workspace-mounting/startup-terminal-tab-hold'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSplitWorkspaceSurfaces({

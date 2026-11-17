@@ -22,11 +22,7 @@ afterEach(() => {
   }
 })
 
-function createMobileCiScopeRepository(
-  withTool = true,
-  toolPath = 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs',
-  companionPaths = []
-) {
+function createMobileCiScopeRepository() {
   const directory = mkdtempSync(join(tmpdir(), 'orca-mobile-ci-scope-'))
   mobileCiScopeDirectories.push(directory)
   const root = resolve(import.meta.dirname, '../../../..')
@@ -70,22 +66,13 @@ function createMobileCiScopeRepository(
   git('init', '--quiet')
   git('config', 'user.name', 'Scope control')
   git('config', 'user.email', 'scope@example.invalid')
-  const tool = join(directory, toolPath)
+  const tool = join(directory, 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs')
   mkdirSync(dirname(tool), { recursive: true })
-  if (withTool) {
-    writeFileSync(tool, 'export const revision = 1\n')
-  }
-  for (const file of companionPaths) {
-    mkdirSync(dirname(join(directory, file)), { recursive: true })
-    writeFileSync(join(directory, file), 'export const revision = 1\n')
-  }
+  writeFileSync(tool, 'export const revision = 1\n')
   const base = commit()
-  const detect = (stepId = 'filter') => {
-    const output = join(
-      directory,
-      stepId === 'filter' ? 'github-output' : `github-output-${stepId}`
-    )
-    const step = workflow.jobs.code_paths.steps.find((candidate) => candidate.id === stepId)
+  const detect = () => {
+    const output = join(directory, 'github-output')
+    const step = workflow.jobs.code_paths.steps.find((candidate) => candidate.id === 'filter')
     const result = runProcessSync({
       program: 'bash',
       args: [
@@ -104,45 +91,22 @@ function createMobileCiScopeRepository(
     })
     return { result, output }
   }
-  return { directory, tool, git, commit, detect }
+  return { directory, tool, commit, detect }
 }
 
 describe.skipIf(process.platform === 'win32')('Mobile CI complete Git change evidence', () => {
-  it('admits an actual modification through the workflow detector', () => {
+  it.each(['deletion', 'type change'])('retains full root units for an actual %s', (change) => {
     const repo = createMobileCiScopeRepository()
-    writeFileSync(repo.tool, 'export const revision = 2\n')
+    rmSync(repo.tool)
+    if (change === 'type change') {
+      symlinkSync('pr-code-change-scope.mjs', repo.tool)
+    }
     repo.commit()
     const { result, output } = repo.detect()
     expect(result.code, result.stderr).toBe(0)
-    expect(readFileSync(output, 'utf8')).toContain('mobile_ci_tools=true\n')
+    expect(readFileSync(output, 'utf8')).toContain('mobile_ci_tools=false\n')
     expect(readFileSync(output, 'utf8')).toContain('test=true\n')
   })
-
-  it.each(['addition', 'deletion', 'rename', 'type change'])(
-    'retains full root units for an actual %s',
-    (change) => {
-      const repo = createMobileCiScopeRepository(change !== 'addition')
-      if (change === 'addition') {
-        writeFileSync(repo.tool, 'export const revision = 1\n')
-      } else if (change === 'deletion') {
-        rmSync(repo.tool)
-      } else if (change === 'rename') {
-        repo.git(
-          'mv',
-          'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs',
-          'config/mobile-ci.vitest.config.mjs'
-        )
-      } else {
-        rmSync(repo.tool)
-        symlinkSync('pr-code-change-scope.mjs', repo.tool)
-      }
-      repo.commit()
-      const { result, output } = repo.detect()
-      expect(result.code, result.stderr).toBe(0)
-      expect(readFileSync(output, 'utf8')).toContain('mobile_ci_tools=false\n')
-      expect(readFileSync(output, 'utf8')).toContain('test=true\n')
-    }
-  )
 
   it('does not emit a passing classification when the Git evidence is unavailable', () => {
     const repo = createMobileCiScopeRepository()

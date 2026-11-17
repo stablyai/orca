@@ -1,18 +1,21 @@
 // Apply layout.subscribe frames to the oracle cache and partition them for model-rule checks.
 
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import type {
   LayoutLeaf,
   LayoutTab,
   WorkspaceLayout,
   WorkspaceLayoutModel
 } from '../../../src/shared/workspace-layout/workspace-layout-model'
-import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
-import { applyWorkspaceLayoutRecordChange } from '../../../src/shared/workspace-layout/workspace-layout-records'
+import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-records'
 import {
   readWorkspaceLayoutStreamFrame,
   type WorkspaceLayoutChangeFrame
-} from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../src/shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 /** One published workspace and the partition it belongs to. */
 export type LiveWorkspace = {

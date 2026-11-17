@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/agent-session/accounts/codex/codex-stale-pane-sweep'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../../shared/terminal/links/terminal-github-pr-link-detector'
@@ -101,6 +101,7 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       // Publish the tab identity first so a late layout callback cannot leave a tab and pane split.
       session.syncPanePtyLayoutBinding(ptyId)
     }
+    session.deps.releaseResumeInPlace?.()
     if (session.paneStartup && !session.startupPtyBound) {
       // Settles the captured one-shot startup only after this pane owns a concrete PTY.
       session.startupPtyBound = true

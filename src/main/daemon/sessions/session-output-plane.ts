@@ -2,7 +2,7 @@ import {
   resolveProcessExitCause,
   type TerminalExitCause
 } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { XtermConptyOptions } from '../../../shared/xterm-conpty-options'
+import type { XtermConptyOptions } from '../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { HeadlessEmulator } from '../emulation/headless-emulator'
 import { StartupDeviceAttributesQueryFilter } from '../emulation/startup-device-attributes-responder'
 import { normalizePtySize } from '../protocol/daemon-pty-size'
@@ -43,6 +43,8 @@ export class SessionOutputPlane {
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
   private _outputSequence = 0
+  // Main counts a new session's stream from its first attach, so bytes emitted before it (ConPTY's startup preamble) stay out of the sequence.
+  private streamOpened = false
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private disposed = false
 
@@ -74,6 +76,7 @@ export class SessionOutputPlane {
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     const token = Symbol('attach')
+    this.streamOpened = true
     this.attachedClients.push({ token, ...client })
     return token
   }
@@ -200,7 +203,9 @@ export class SessionOutputPlane {
     let { data } = emission
     const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Count raw input even when thinning drops bytes so snapshots and renderer tail deduplication align.
-    this._outputSequence += rawLength
+    if (this.streamOpened) {
+      this._outputSequence += rawLength
+    }
     if (data.length > 0) {
       this.emulator.write(data)
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data

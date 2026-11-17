@@ -59,6 +59,7 @@ export function assessProcessHostImports(
   ])
   for (const [file, contents] of sources) {
     const ownSource = file.startsWith(PACKAGE_SOURCE)
+    let runtimeSpecifiers
     for (const sourceSpecifier of specifiersFor(file, contents)) {
       const specifier = normalized(sourceSpecifier)
       const local = packageRelativeImport(file, specifier)
@@ -103,7 +104,12 @@ export function assessProcessHostImports(
         !isTestOnlySourcePath(file) &&
         (specifier === 'child_process' || specifier === 'node:child_process')
       ) {
-        direct.add(file)
+        runtimeSpecifiers ??= new Set(
+          collectModuleSpecifiers(file, contents, { runtimeOnly: true })
+        )
+        if (runtimeSpecifiers.has(specifier)) {
+          direct.add(file)
+        }
       }
     }
   }

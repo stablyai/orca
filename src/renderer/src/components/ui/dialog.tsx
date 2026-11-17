@@ -6,13 +6,21 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { Minus, XIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
-import { cn } from '@/lib/utils'
-import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { usePortalContainer } from './portal-container-context'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  DialogLayoutContext,
+  isUnifiedDialogSize,
+  useDialogLayout,
+  type DialogLayout,
+  type UnifiedDialogSize
+} from './dialog-layout-context'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -22,8 +30,13 @@ function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
-function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+function DialogPortal({
+  container,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+  const inherited = usePortalContainer()
+  const portalContainer = container === undefined ? (inherited ?? undefined) : container
+  return <DialogPrimitive.Portal data-slot="dialog-portal" container={portalContainer} {...props} />
 }
 
 function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {
@@ -63,10 +76,11 @@ const dialogContentSurfaceVariants = cva('', {
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
+  const t = useTranslate()
   const label =
     variant === 'minimize'
-      ? translate('auto.components.ui.dialog.minimize', 'Minimize')
-      : translate('auto.components.ui.dialog.f26c4baeda', 'Close')
+      ? t('auto.components.ui.dialog.minimize', 'Minimize')
+      : t('auto.components.ui.dialog.f26c4baeda', 'Close')
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
@@ -88,27 +102,44 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
   )
 }
 
+const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
+  confirm: 'sm:max-w-[420px]',
+  form: 'sm:max-w-[480px]',
+  list: 'sm:max-w-[520px]'
+}
+
 function DialogContent({
   className,
   children,
   overlayClassName,
-  showCloseButton = true,
+  showCloseButton,
   closeButtonVariant = 'close',
   surface,
   size,
   scrollable = false,
+  busy = false,
+  initialFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> &
   VariantProps<typeof dialogContentSurfaceVariants> & {
     overlayClassName?: string
+    /** Defaults on, except for the unified sizes, whose footer Cancel closes instead. */
     showCloseButton?: boolean
     closeButtonVariant?: 'close' | 'minimize'
-    /** `compact` is a short confirmation's width, like the close prompts. */
-    size?: 'default' | 'compact'
+    /** `compact` is a short confirmation's width, like the close prompts. `confirm`, `form` and
+     *  `list` are the unified layout: one padding and type scale, footer with a start slot. */
+    size?: 'default' | 'compact' | UnifiedDialogSize
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
+    /** Work is running: Esc, outside presses and `DialogCancel` cannot close the dialog. */
+    busy?: boolean
+    /** `cancel` starts focus on the `DialogCancel`, for destructive and trust decisions. */
+    initialFocus?: 'cancel'
   }) {
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
+  const unified = isUnifiedDialogSize(size)
+  const layout = React.useMemo<DialogLayout>(() => ({ unified, busy }), [unified, busy])
+  const { onOpenAutoFocus, onPointerDownOutside, onInteractOutside } = props
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
@@ -118,18 +149,59 @@ function DialogContent({
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
         className={cn(
           'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
+          unified &&
+            cn(
+              'gap-3 rounded-[10px] p-5 [&_[data-slot=checkbox][data-state=unchecked]]:border-muted-foreground',
+              unifiedDialogSizeClass[size]
+            ),
           dialogContentSurfaceVariants({ surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
           className
         )}
         {...props}
         ref={focusScopeRef}
+        onOpenAutoFocus={(event) => {
+          onOpenAutoFocus?.(event)
+          if (event.defaultPrevented || initialFocus !== 'cancel') {
+            return
+          }
+          const cancel =
+            event.target instanceof HTMLElement
+              ? event.target.querySelector<HTMLElement>('[data-dialog-cancel]')
+              : null
+          if (cancel && !cancel.matches(':disabled')) {
+            event.preventDefault()
+            cancel.focus()
+          }
+        }}
+        onPointerDownOutside={(event) => {
+          if (busy) {
+            event.preventDefault()
+          }
+          onPointerDownOutside?.(event)
+        }}
+        onInteractOutside={(event) => {
+          if (busy) {
+            event.preventDefault()
+          }
+          onInteractOutside?.(event)
+        }}
         onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+        onEscapeKeyDown={(event) => {
+          if (busy) {
+            event.preventDefault()
+            return
+          }
+          handleImeOverlayEscape(event, props.onEscapeKeyDown)
+        }}
       >
         <OverlayFocusScope value={scope}>
-          {children}
-          {showCloseButton && <DialogContentCloseButton variant={closeButtonVariant} />}
+          <DialogLayoutContext.Provider value={layout}>
+            {children}
+            {(showCloseButton ?? !unified) && !busy && (
+              <DialogContentCloseButton variant={closeButtonVariant} />
+            )}
+          </DialogLayoutContext.Provider>
         </OverlayFocusScope>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -137,23 +209,81 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  const { unified } = useDialogLayout()
   return (
     <div
       data-slot="dialog-header"
-      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
+      className={cn(
+        'flex flex-col gap-2 text-center sm:text-left',
+        unified && 'gap-0.5 text-left',
+        className
+      )}
       {...props}
     />
   )
 }
 
+// Why data-slot: a Radix checkbox is also a <button> and must keep its own box.
+const unifiedFooterButtonClass =
+  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
+
+// Why: a ghost action's text lines up with the dialog's left edge, like the link-style extras.
+const unifiedFooterStartClass = 'has-[>[data-variant=ghost]:first-child]:-ml-3'
+
 function DialogFooter({
   className,
   showCloseButton = false,
+  start,
   children,
   ...props
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
+  /** Unified layout only: one extra on the left (a link, a ghost action or "Don't ask again"). */
+  start?: React.ReactNode
 }) {
+  const t = useTranslate()
+  const { unified } = useDialogLayout()
+  const closeButton = showCloseButton && (
+    <DialogPrimitive.Close asChild>
+      <Button variant="outline" size={unified ? 'sm' : 'default'}>
+        {t('auto.components.ui.dialog.f26c4baeda', 'Close')}
+      </Button>
+    </DialogPrimitive.Close>
+  )
+  if (unified) {
+    // Why one wrapping row: the action group moves below the start item instead of clipping.
+    // A label too long for the row wraps inside its button rather than truncating.
+    return (
+      <div
+        data-slot="dialog-footer"
+        className={cn('mt-2 flex flex-wrap items-center gap-2', className)}
+        {...props}
+      >
+        {start ? (
+          <div
+            data-slot="dialog-footer-start"
+            className={cn(
+              'flex min-w-0 items-center gap-2',
+              unifiedFooterButtonClass,
+              unifiedFooterStartClass
+            )}
+          >
+            {start}
+          </div>
+        ) : null}
+        <div
+          data-slot="dialog-footer-actions"
+          className={cn(
+            'ml-auto flex max-w-full flex-wrap items-center justify-end gap-2',
+            unifiedFooterButtonClass
+          )}
+        >
+          {children}
+          {closeButton}
+        </div>
+      </div>
+    )
+  }
   return (
     <div
       data-slot="dialog-footer"
@@ -161,13 +291,7 @@ function DialogFooter({
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">
-            {translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
-          </Button>
-        </DialogPrimitive.Close>
-      )}
+      {closeButton}
     </div>
   )
 }
@@ -181,12 +305,14 @@ function DialogTitle({
    *  confirmation's title. */
   size?: 'default' | 'display' | 'compact'
 }) {
+  const { unified } = useDialogLayout()
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       data-size={size}
       className={cn(
         'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        unified && 'text-[15px] data-[size=compact]:text-[15px]',
         className
       )}
       {...props}
@@ -199,14 +325,20 @@ function DialogDescription({
   size = 'default',
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description> & {
-  /** `compact` pairs with a compact title in a short confirmation. */
+  /** `compact` pairs with a compact title in a short confirmation; in the unified layout it is
+   *  the 12px meta line under the title. */
   size?: 'default' | 'compact'
 }) {
+  const { unified } = useDialogLayout()
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
       data-size={size}
-      className={cn('text-sm text-muted-foreground data-[size=compact]:text-xs', className)}
+      className={cn(
+        'text-sm text-muted-foreground data-[size=compact]:text-xs',
+        unified && 'text-[13px] leading-normal',
+        className
+      )}
       {...props}
     />
   )

@@ -4,7 +4,7 @@ import {
   createAntigravitySessionResumeState,
   parseAntigravitySessionContent
 } from './session-scanner-antigravity-parser'
-import { jsonLines } from '../../session-scanner-test-fixtures'
+import { jsonLines } from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const openingTime = '2026-07-15T11:39:10.000Z'
 const historyPath = '/home/ada/.gemini/antigravity-cli/history.jsonl'

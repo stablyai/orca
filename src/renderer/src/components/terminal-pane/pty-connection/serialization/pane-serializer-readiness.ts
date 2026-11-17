@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindPaneSerializerReadiness(session: ConnectPanePtySession): void {

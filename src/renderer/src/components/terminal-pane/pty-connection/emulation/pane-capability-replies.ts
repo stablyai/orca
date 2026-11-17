@@ -1,16 +1,16 @@
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { useAppStore } from '@/store'
-import { isPaneReplaying } from '../../replay-guard'
-import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
-import { CONPTY_DA1_RESPONSE } from '../../../../../../shared/conpty-device-attributes'
+import { isPaneReplaying } from '../../snapshots/replay-guard'
+import { terminalRendersInlineImages } from '@/lib/pane-manager/terminal-rendering/pane-inline-images'
+import { CONPTY_DA1_RESPONSE } from '../../../../../../shared/terminal/protocol/queries/conpty-device-attributes'
 import {
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
 } from '../../emulation/terminal-capability-replies'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../../../../shared/program-status/protocol'
-import { readCachedRuntimeEnvironmentCapability } from '../../../../runtime/runtime-rpc-client'
+import { readCachedRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 export function bindDesktopCapabilityReplyGate(session: ConnectPanePtySession): void {
   session.canSendDesktopQueryReply = (): boolean => {

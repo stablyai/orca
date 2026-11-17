@@ -2,7 +2,7 @@ import {
   hasCanonicalNumericCsiParams,
   parseAnsiControlSequence
 } from '../terminal-ansi-normalization'
-import { ownRetainedString } from '../../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../../shared/text/own-retained-string'
 import { clampTerminalPreviewCursor } from './terminal-tail-line-controls'
 import { MAX_TAIL_CHARS, MAX_TAIL_LINES, MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
 import {

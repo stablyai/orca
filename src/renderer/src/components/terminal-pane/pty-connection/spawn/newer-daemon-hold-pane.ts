@@ -1,4 +1,7 @@
-import { holdPaneForNewerDaemon, type HeldPaneReopenOutcome } from '../../newer-daemon-hold-state'
+import {
+  holdPaneForNewerDaemon,
+  type HeldPaneReopenOutcome
+} from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

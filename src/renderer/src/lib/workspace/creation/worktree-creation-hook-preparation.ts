@@ -1,11 +1,16 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
+import { setupHooksCreateSource } from '../../../../../shared/worktree/setup-hooks-create-source'
 import {
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
-} from '../../ensure-hooks-confirmed'
-import { confirmWorkspaceSetupDecision } from '../../workspace-setup-trust'
-import { buildTrustedComposerIssueCommand } from '../../composer-issue-command'
+} from '../../../runtime/repo-hooks/ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './setup/workspace-setup-trust'
+import { buildTrustedComposerIssueCommand } from './composer-issue-command'
 import { getInitialWorktreeCreationPhase } from './worktree-creation-flow-startup'
 
 export async function prepareWorktreeCreationHooks(
@@ -17,6 +22,7 @@ export async function prepareWorktreeCreationHooks(
     return request
   }
 
+  const trustContext = request.ephemeralVmRecipe ? 'vm' : 'workspace'
   const isCancelled = (): boolean => !useAppStore.getState().pendingWorktreeCreations[creationId]
   const confirmHook = (kind: 'setup' | 'vmRecipe'): Promise<'run' | 'skip'> =>
     ensureHooksConfirmed(
@@ -25,27 +31,34 @@ export async function prepareWorktreeCreationHooks(
       kind,
       preparation.executionHostId,
       undefined,
-      isCancelled
+      isCancelled,
+      undefined,
+      undefined,
+      trustContext
     )
   const confirmed = await confirmWorkspaceSetupDecision(
     useAppStore.getState,
     request.repoId,
     request.setupDecision,
     preparation.executionHostId,
-    isCancelled
+    isCancelled,
+    undefined,
+    setupHooksCreateSource(request),
+    trustContext
   )
   if (confirmed === 'cancelled') {
     return null
   }
 
-  const { setupDecision, trustDecision, approvedSetupHash } = confirmed
+  const { setupDecision, trustDecision } = confirmed
   let issueCommand = request.issueCommand
   if (preparation.issueCommand && preparation.executionHostId && trustDecision !== 'skip') {
     const confirmed = await readAndConfirmRuntimeIssueCommand(
       useAppStore.getState(),
       request.repoId,
       preparation.executionHostId,
-      isCancelled
+      isCancelled,
+      trustContext
     )
     if (isCancelled()) {
       return null
@@ -74,7 +87,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision,
-    ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
+    ...pickApprovedSetupHashes(confirmed),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -86,12 +99,14 @@ export async function prepareWorktreeCreationHooks(
 
 /** Setup fields for the create call; the approved hash lets the host check the created branch. */
 export function setupCreateArgs(
-  request: Pick<WorktreeCreationRequest, 'setupOnly' | 'approvedSetupHash'>
-): { setupOnly?: boolean; approvedSetupHash?: string } {
+  request: Pick<
+    WorktreeCreationRequest,
+    'setupOnly' | 'ephemeralVmRecipe' | keyof ApprovedSetupHashes
+  >
+): { setupOnly?: boolean; hookTrustContext?: 'vm' } & ApprovedSetupHashes {
   return {
     setupOnly: request.setupOnly,
-    ...(request.approvedSetupHash !== undefined
-      ? { approvedSetupHash: request.approvedSetupHash }
-      : {})
+    ...pickApprovedSetupHashes(request),
+    ...(request.ephemeralVmRecipe ? { hookTrustContext: 'vm' as const } : {})
   }
 }

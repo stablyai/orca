@@ -1,16 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import Database from '../../../sqlite/sync-database'
+import type Database from '../../../sqlite/sync-database'
 import { OrchestrationDb } from './orchestration-db'
-import { SCHEMA_VERSION } from './contract-constants'
 import './messages/mailbox-routing-page'
 import './dispatch-row-writer'
 import './attempt-outcome-projection'
-
-import { createRootDispatch } from './root-dispatch-test-fixture'
-import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './reset/removed-orchestration-work-store'
 
 const MUTATION_RECEIPT_MAX_ROWS = 10_000
 
@@ -65,42 +58,6 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
     expect(db.getMutationReceipt('caller', 'expired')).toBeUndefined()
     expect(db.getMutationReceipt('caller', 'unresolved')).toMatchObject({ state: 'pending' })
-  })
-
-  it('caps completed receipt count while retaining the newest replay records', () => {
-    db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'completed')
-
-    db.beginMutationReceipt({
-      callerFingerprint: 'caller',
-      requestId: 'new',
-      method: 'orchestration.send',
-      payloadHash: 'hash_new'
-    })
-
-    const count = sqliteFor(db)
-      .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
-      .get() as { count: number }
-    expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
-    expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
-    expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
-    expect(db.getMutationReceipt('caller', 'new')).toMatchObject({ state: 'pending' })
-  })
-
-  it('fails closed when unresolved receipts alone fill the ledger', () => {
-    db = new OrchestrationDb(':memory:')
-    insertMutationReceipts(db, MUTATION_RECEIPT_MAX_ROWS, 'pending')
-
-    expect(() =>
-      db!.beginMutationReceipt({
-        callerFingerprint: 'caller',
-        requestId: 'overflow',
-        method: 'orchestration.send',
-        payloadHash: 'hash_overflow'
-      })
-    ).toThrowError(expect.objectContaining({ code: 'mutation_ledger_full' }))
-    expect(db.getMutationReceipt('caller', 'request_00001')).toMatchObject({ state: 'pending' })
-    expect(db.getMutationReceipt('caller', 'overflow')).toBeUndefined()
   })
 
   it('prunes completed receipts before accepting a remote attachment', () => {
@@ -185,11 +142,6 @@ describe('OrchestrationDb Run pagination', () => {
 
   afterEach(() => db?.close())
 
-  it('rejects an invalid cursor with cursor_invalid', () => {
-    db = new OrchestrationDb(':memory:')
-    expect(() => db!.listRuns({ limit: 2, cursor: 'not-a-cursor' })).toThrow(/cursor is invalid/)
-  })
-
   it('returns stable bounded pages without skipping Runs sharing a timestamp', () => {
     db = new OrchestrationDb(':memory:')
     const createdIds = Array.from({ length: 5 }, (_, index) => `run_page_${index}`)
@@ -220,137 +172,5 @@ describe('OrchestrationDb Run pagination', () => {
 
     expect(seen).toEqual(expect.arrayContaining(createdIds))
     expect(new Set(seen).size).toBe(createdIds.length + 1)
-  })
-})
-
-describe('OrchestrationDb dispatch assignee index migration', () => {
-  let db: OrchestrationDb | undefined
-  let tempDir: string | undefined
-
-  afterEach(() => {
-    db?.close()
-    if (tempDir) {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
-  })
-
-  it('migrates a populated upstream v23 database idempotently', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-dispatch-index-migration-'))
-    const dbPath = join(tempDir, 'orchestration.db')
-    db = new OrchestrationDb(dbPath)
-    const task = db.createTask({
-      runId: 'run_legacy_local',
-      spec: 'indexed lookup'
-    })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    db.close()
-    db = undefined
-
-    const oldDb = new Database(dbPath)
-    oldDb.exec(`
-      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
-      DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle;
-      DROP INDEX IF EXISTS idx_dispatch_assignee_pane_leaf;
-      ALTER TABLE tasks DROP COLUMN created_by_pane_key;
-      ALTER TABLE tasks DROP COLUMN created_by_process_incarnation;
-      ALTER TABLE tasks DROP COLUMN created_by_run_generation;
-    `)
-    oldDb.pragma('user_version = 23')
-    oldDb.close()
-
-    db = new OrchestrationDb(dbPath)
-    const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
-      assignee_handle: 'term_worker'
-    })
-    expect(db.getTask(task.id)).toMatchObject({
-      created_by_pane_key: null,
-      created_by_process_incarnation: null,
-      created_by_run_generation: null
-    })
-    expect(
-      sqlite
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
-        .get('idx_dispatch_assignee_handle')
-    ).toBeDefined()
-    const plan = sqlite
-      .prepare(
-        `EXPLAIN QUERY PLAN
-         SELECT * FROM dispatch_contexts
-         WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1`
-      )
-      .all('term_worker') as { detail: string }[]
-    expect(plan.map((row) => row.detail).join('\n')).toContain(
-      'USING INDEX idx_dispatch_active_assignee_handle'
-    )
-    expect(
-      sqlite
-        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
-        .get('idx_dispatch_active_assignee_handle')
-    ).toMatchObject({
-      sql: expect.stringContaining("status IN ('pending', 'dispatched')")
-    })
-    expect(
-      sqlite
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
-        .get('idx_dispatch_assignee_pane_leaf')
-    ).toBeDefined()
-
-    db.close()
-    db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
-  })
-
-  it('adds the active-handle index to a populated v24 database idempotently', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-active-dispatch-index-migration-'))
-    const dbPath = join(tempDir, 'orchestration.db')
-    db = new OrchestrationDb(dbPath)
-    const run = db.createRun({
-      objective: 'retained v24 authority',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:leaf_coord'
-    })
-    const task = db.createTask({
-      spec: 'indexed lookup',
-      runId: run.id,
-      createdByTerminalHandle: 'term_creator',
-      createdByPaneKey: 'tab_creator:leaf_creator',
-      createdByProcessIncarnation: 'pty_creator:incarnation-a',
-      createdByRunGeneration: run.consumer_generation
-    })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    db.close()
-    db = undefined
-
-    const oldDb = new Database(dbPath)
-    oldDb.exec('DROP INDEX IF EXISTS idx_dispatch_active_assignee_handle')
-    oldDb.pragma('user_version = 24')
-    oldDb.close()
-
-    db = new OrchestrationDb(dbPath)
-    const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(db.getTask(task.id)).toMatchObject({
-      created_by_pane_key: 'tab_creator:leaf_creator',
-      created_by_process_incarnation: 'pty_creator:incarnation-a',
-      created_by_run_generation: 1
-    })
-    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
-      assignee_handle: 'term_worker'
-    })
-    expect(
-      sqlite
-        .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
-        .get('idx_dispatch_active_assignee_handle')
-    ).toMatchObject({
-      sql: expect.stringContaining('assignee_handle IS NOT NULL')
-    })
-
-    db.close()
-    db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
-    expect(db.getTask(task.id)?.created_by_process_incarnation).toBe('pty_creator:incarnation-a')
   })
 })

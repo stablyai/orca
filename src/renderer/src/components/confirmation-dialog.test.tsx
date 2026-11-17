@@ -44,34 +44,41 @@ function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnTy
 describe('ConfirmationDialogProvider', () => {
   afterEach(cleanup)
 
-  it('focuses the primary action when requested and confirms with Enter', async () => {
-    const { onSettled } = renderDialog({
-      title: 'Reveal hidden workspace?',
-      confirmLabel: 'Clear filters and reveal',
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Clear filters and reveal' })).toHaveFocus()
+  it('focuses Cancel when the next queued question replaces a confirmed one', async () => {
+    const secondSettled = vi.fn()
+    function Queue(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          onClick={() => {
+            void confirm({ title: 'First?', confirmLabel: 'Go' })
+            void confirm({ title: 'Second?', confirmLabel: 'Go' }).then(secondSettled)
+          }}
+        >
+          queue
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <Queue />
+      </ConfirmationDialogProvider>
     )
+    await userEvent.click(screen.getByRole('button', { name: 'queue' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Go' }))
+    await screen.findByText('Second?')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
     await userEvent.keyboard('{Enter}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
-  })
-
-  it('still cancels with Escape when the primary action has focus', async () => {
-    const { onSettled } = renderDialog({
-      title: 'Reveal hidden workspace?',
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toHaveFocus())
-    await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
+    await waitFor(() => expect(secondSettled).toHaveBeenCalledWith(false))
   })
 
   it('tells the cancel button apart from Escape', async () => {
     const onCancelClicked = vi.fn()
-    const { onSettled } = renderDialog({ title: 'Use your camera?', onCancelClicked })
+    const { onSettled } = renderDialog({
+      title: 'Use your camera?',
+      confirmLabel: 'Allow',
+      onCancelClicked
+    })
 
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
     await screen.findByText('Use your camera?')
@@ -89,6 +96,7 @@ describe('ConfirmationDialogProvider', () => {
     const onCancelClicked = vi.fn()
     const { onSettled } = renderDialog({
       title: 'Use your camera?',
+      confirmLabel: 'Allow',
       ignoresOpeningGesture: true,
       onCancelClicked
     })
@@ -97,39 +105,19 @@ describe('ConfirmationDialogProvider', () => {
     const cancel = await screen.findByRole('button', { name: 'Cancel' })
     await waitFor(() => expect(cancel).toHaveFocus())
     // The Enter that made the page ask is still held: its repeats must not press either button.
-    for (const name of ['Cancel', 'Confirm']) {
+    for (const name of ['Cancel', 'Allow']) {
       const button = screen.getByRole('button', { name })
       expect(fireEvent.keyDown(button, { key: 'Enter', repeat: true })).toBe(false)
     }
     // A double-click's first click opened the prompt in the page; its second lands here.
     fireEvent.click(cancel, { detail: 2 })
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }), { detail: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }), { detail: 2 })
     expect(onSettled).not.toHaveBeenCalled()
     expect(onCancelClicked).not.toHaveBeenCalled()
 
     await userEvent.click(cancel)
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
     expect(onCancelClicked).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the default cancel focus for callers that do not opt in', async () => {
-    renderDialog({ title: 'Delete artifact?', confirmVariant: 'destructive' })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
-  })
-
-  it('shows only the confirm button for a notice', async () => {
-    const { onSettled } = renderDialog({
-      title: "Can't use p1 here yet",
-      confirmLabel: 'OK',
-      acknowledgeOnly: true,
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus())
-    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
-    await userEvent.keyboard('{Enter}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
   it('runs the skip callback when confirmed with the box checked', async () => {
@@ -152,6 +140,7 @@ describe('ConfirmationDialogProvider', () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({
       title: 'Delete artifact?',
+      confirmLabel: 'Delete',
       dontAskAgain: { onConfirmed }
     })
 
@@ -172,10 +161,12 @@ describe('ConfirmationDialogProvider', () => {
         <button
           type="button"
           onClick={() => {
-            void confirm({ title: 'First?', signal: first.signal }).then((c) =>
+            void confirm({ title: 'First?', confirmLabel: 'Go', signal: first.signal }).then((c) =>
               settled.push(['first', c])
             )
-            void confirm({ title: 'Second?' }).then((c) => settled.push(['second', c]))
+            void confirm({ title: 'Second?', confirmLabel: 'Go' }).then((c) =>
+              settled.push(['second', c])
+            )
           }}
         >
           ask both
@@ -219,6 +210,7 @@ describe('ConfirmationDialogProvider', () => {
     const onConfirmed = vi.fn()
     const { onSettled } = renderDialog({
       title: 'Sign in',
+      confirmLabel: 'Sign in',
       fields: {
         inputs: [
           { id: 'username', label: 'Username' },

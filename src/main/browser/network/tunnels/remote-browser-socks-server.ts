@@ -3,6 +3,7 @@ import type { Duplex } from 'node:stream'
 import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from './browser-network-tunnel-stream-state'
 import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
+import { reserveBrowserTunnelOrcaListenerPort } from './browser-network-tunnel-destination-policy'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
@@ -37,6 +38,7 @@ export class RemoteBrowserSocksServer {
   private listenPromise: Promise<{ host: string; port: number }> | null = null
   private closePromise: Promise<void> | null = null
   private state: 'idle' | 'starting' | 'listening' | 'closing' | 'closed' = 'idle'
+  private releaseTunnelReservation = (): void => {}
 
   constructor(options: RemoteBrowserSocksServerOptions) {
     this.open = options.open
@@ -68,6 +70,8 @@ export class RemoteBrowserSocksServer {
         if (this.state === 'starting') {
           this.state = 'listening'
         }
+        // Unauthenticated SOCKS on loopback must not be chained through another client's tunnel.
+        this.releaseTunnelReservation = reserveBrowserTunnelOrcaListenerPort(address.port)
         resolve({ host: '127.0.0.1', port: address.port })
       })
     })
@@ -87,18 +91,22 @@ export class RemoteBrowserSocksServer {
     if (this.listenPromise) {
       await this.listenPromise.catch(() => undefined)
     }
-    for (const socket of this.clients) {
-      socket.destroy()
-    }
-    this.clients.clear()
-    if (!this.server.listening) {
+    try {
+      for (const socket of this.clients) {
+        socket.destroy()
+      }
+      this.clients.clear()
+      if (!this.server.listening) {
+        this.state = 'closed'
+        return
+      }
+      await new Promise<void>((resolve, reject) => {
+        this.server.close((error) => (error ? reject(error) : resolve()))
+      })
       this.state = 'closed'
-      return
+    } finally {
+      this.releaseTunnelReservation()
     }
-    await new Promise<void>((resolve, reject) => {
-      this.server.close((error) => (error ? reject(error) : resolve()))
-    })
-    this.state = 'closed'
   }
 
   private accept(socket: Socket): void {

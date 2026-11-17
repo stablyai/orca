@@ -1,7 +1,8 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
-import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
+import { useAppStore } from '@/store/index'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -10,35 +11,32 @@ import { FilledBellIcon } from '@/components/sidebar/workspace-card/identity/wor
 import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
-} from '../../../../shared/sidebar-list/smart-attention'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+} from '../../../../shared/sidebar-list/sorting/smart-attention'
 import {
-  getLiveAgentStatusByWorktreeId,
-  type LiveAgentWorktreeStatus
-} from '@/lib/worktree-activity-state'
-import {
-  getWorktreeStatus,
-  getWorktreeStatusLabel,
-  type WorktreeStatus
-} from '@/lib/worktree-status'
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
+import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
-} from '@/lib/recent-workspace-tab-rows'
+} from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
-} from '@/components/tab-bar/terminal-tab-activity-status'
-import { translate } from '@/i18n/i18n'
+} from '@/components/tab-bar/terminal-tabs/terminal-tab-activity-status'
+import { useTranslate } from '@/i18n/use-translate'
 
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -162,7 +160,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
       }
       if (
         entry.restoredUnconfirmed !== true &&
-        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
       ) {
         stalePaneIds.add(paneId)
         continue
@@ -180,7 +178,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},
@@ -237,6 +235,7 @@ export function PaletteRecentTabStatusDot({
   row: RecentWorkspaceTabRow | null
   fallback: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const live = useLiveStatus()
   const terminalTabId = row?.terminalTab?.id
   const status: WorktreeStatus | null =
@@ -258,10 +257,7 @@ export function PaletteRecentTabStatusDot({
   const statusLabel =
     badge === 'unread'
       ? // Reuse the translated tab-bar label for the same unread signal.
-        translate(
-          'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
-          'Unread agent completion'
-        )
+        t('auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea', 'Unread agent completion')
       : getWorktreeStatusLabel(badge)
   // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (

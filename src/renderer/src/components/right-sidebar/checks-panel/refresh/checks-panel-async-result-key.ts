@@ -1,5 +1,5 @@
-import type { GitHubOwnerRepo } from '../../../../../../shared/github/pull-request-types'
-import { githubRepoIdentityKey } from '../../../../../../shared/github/repository-identity-key'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 
 function normalizedPRRepoIdentity(prRepo?: GitHubOwnerRepo | null): string {
   return prRepo ? githubRepoIdentityKey(prRepo) : 'none'

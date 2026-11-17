@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as OsModule from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-com
 import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
-import { wrapPosixHookCommand } from '../agent-hooks/posix-hook-command'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
 import {
@@ -176,17 +176,26 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
     expect(body.hookEventName).toBe('PreInvocation')
   })
 
-  it('returns after a bounded wait when stdin has no bytes and remains open', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-agy-empty-hook-'))
-    const result = await invoke(installedCommand(home, 'PreInvocation'), '', {
-      ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: '',
-      ORCA_AGENT_HOOK_PORT: '',
-      ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: ''
-    })
-    expect(result.code).toBe(0)
-    expect(result.stdout).toBe('{}')
-    expect(result.elapsedMs).toBeLessThan(8000)
-  }, 10000)
+  it.each([
+    ['PreToolUse', '{"decision":"ask"}'],
+    ['Stop', '{"decision":""}'],
+    ['PreInvocation', '{}']
+  ])(
+    'outside an Orca pane, %s skips the managed script and returns while stdin stays open',
+    async (event, expectedStdout) => {
+      home = mkdtempSync(join(tmpdir(), 'orca-agy-outside-'))
+      const command = installedCommand(home, event)
+      const marker = join(home, 'script-ran')
+      writeFileSync(
+        join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'),
+        `#!/bin/sh\n: > ${quotePosixShell(marker)}\n`
+      )
+      const { ORCA_PANE_KEY: _paneKey, ORCA_AGENT_PANE: _paneAlias, ...outsideEnv } = process.env
+      const result = await invoke(command, '{"tool_name":"run_command"}', outsideEnv)
+      expect(result.code).toBe(0)
+      expect(result.stdout).toBe(expectedStdout)
+      expect(existsSync(marker)).toBe(false)
+    },
+    10000
+  )
 })

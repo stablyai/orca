@@ -9,7 +9,8 @@ import {
 const PRE_CHANGE_REF = 'v1.4.212'
 const SUITE_TIMEOUT_MS = 180_000
 // Both builds load a copy in the checkout cache, out of reach of `mobile/tsconfig.json`.
-const PHONE_ROW_READER = 'mobile/src/worktree/agent-row-display.ts'
+// Releases cut before the agent-lineage/ move load it from where they define it.
+const PHONE_ROW_READER = 'mobile/src/worktree/agent-lineage/agent-row-display.ts'
 
 const WORKTREE_ID = 'repo::/worktree'
 const NOW = 1_000_000
@@ -90,9 +91,10 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
-    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
+    // Builds read workingTerminalEvidenceByWorktreeId, then terminalTitleEvidenceByWorktreeId, now terminalTitleEvidenceByRow.
     workingTerminalEvidenceByWorktreeId: new Map(),
     terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: SNAPSHOTS,
       mirroredWorktreeIdByTabId: new Map(),
@@ -103,8 +105,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
       }
     }),
     orchestrationByPaneKey: null,
-    // Old builds pass (summaries, pathIndex, missingIds, id); newer ones pass (id). The id is last in both.
-    getSummary: (...args: unknown[]) => summaries.get(String(args.at(-1))) ?? null
+    // Old builds pass (summaries, pathIndex, missingIds, id), then (id), now (id, hostId).
+    getSummary: (...args: unknown[]) =>
+      summaries.get(String(args.find((arg) => arg === WORKTREE_ID))) ?? null
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the rows the host just attached, which are plain objects keyed by paneKey.
   const rows = JSON.parse(JSON.stringify(summary.agents)) as AgentRow[]

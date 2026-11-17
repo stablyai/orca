@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { AcpAgentError } from '../acp-errors'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
@@ -75,6 +76,19 @@ function promptFailure(error: AcpAgentError, at: number) {
   }
 }
 
+// OpenCode 2.x refuses a session/load outside the session's folder with exactly this data.
+const otherFolderRefusalSchema = z.strictObject({ sessionId: z.string(), cwd: z.string() })
+
+function sessionInOtherFolder(error: AcpAgentError, sessionId: string, cwd: string): boolean {
+  const data = otherFolderRefusalSchema.safeParse(error.data)
+  return (
+    error.code === -32602 &&
+    data.success &&
+    data.data.sessionId === sessionId &&
+    data.data.cwd === cwd
+  )
+}
+
 function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const parsed = commandRawOutputSchema.safeParse(update.rawOutput)
   if (!parsed.success) {
@@ -102,8 +116,17 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
-  clientCapabilities: { elicitation: { form: {} } },
+  clientCapabilities: {
+    elicitation: { form: {} },
+    _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }
+  },
+  childSessionStop: {
+    supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
+  },
   effortChangesModel: true,
+  linksFileMentions: true,
   normalizeToolUpdate,
-  promptFailure
+  notification: openCodeChildUpdate,
+  promptFailure,
+  sessionInOtherFolder
 }

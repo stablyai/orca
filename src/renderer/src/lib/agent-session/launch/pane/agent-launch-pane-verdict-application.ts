@@ -1,8 +1,9 @@
 /** Apply main’s typed spawn/takeback verdicts, retaining final pane outcomes until session cleanup. */
 
 import type { AgentLaunchPaneVerdictEvent } from '../../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
+import '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { useAppStore } from '@/store/index'
 import { forgetAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
 import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
@@ -35,7 +36,7 @@ export function applyAgentLaunchPaneVerdict(event: AgentLaunchPaneVerdictEvent):
     case 'not-started':
     case 'unconfirmed': {
       const root = state.terminalLayoutsByTabId[tabId]?.root
-      if (root && !collectLeafIdsInOrder(root).includes(leafId)) {
+      if (root && !collectLayoutLeafIdsInOrder(root).includes(leafId)) {
         forgetAgentLaunchPanePrompt(tabId)
         state.setTabAgentLaunchPane(tabId, undefined)
         return

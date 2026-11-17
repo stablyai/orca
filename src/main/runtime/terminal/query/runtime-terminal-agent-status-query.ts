@@ -6,8 +6,8 @@ import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/pro
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

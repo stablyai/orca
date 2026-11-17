@@ -1,4 +1,7 @@
-import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../../agent-interrupt-inference'
+import {
+  isCtrlCKeyEvent,
+  isPlainEscapeKeyEvent
+} from '../../input/keyboard/agent-interrupt-key-event'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installTerminalKeydownIntent(session: ConnectPanePtySession): void {

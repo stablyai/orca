@@ -1,5 +1,8 @@
-import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../github/repositories/github-repository-identity'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   cachedHostedReviewOutcome,
   type HostedReviewForBranchOutcome,
@@ -138,7 +141,7 @@ export async function readHostedReviewForBranch(
           ...(providerOptions.localGitExecOptions
             ? { localGitExecOptions: providerOptions.localGitExecOptions }
             : {}),
-          githubCurrentHeadOid: headOid,
+          currentHeadOid: headOid,
           ...(input.userRefresh === true ? { userRefresh: true } : {}),
           ...reviewLinkForProvider(input, provider.id)
         })

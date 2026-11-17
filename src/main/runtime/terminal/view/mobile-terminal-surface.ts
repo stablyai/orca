@@ -1,9 +1,7 @@
 import { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal } from '../launch/mobile-terminal-owned-create'
 import type { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
-import type {
-  RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { MOBILE_TERMINAL_SURFACE_TIMEOUT_MS } from './terminal-surface-deadlines'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalSessionWorktreeId } from '../../workspaces/catalog/runtime-worktree-path-identity'

@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   session: { fromPartition: sessionFromPartitionMock }
 }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { clearPendingCookieImport: clearPendingCookieImportMock }
 }))
 vi.mock('../browser-cookie-clear-store', () => ({
@@ -40,7 +40,7 @@ import {
 import {
   loadBrowserSessionMeta,
   persistBrowserSessionMeta
-} from '../../sessions/browser-session-meta-store'
+} from '../../sessions/profiles/browser-session-meta-store'
 
 const PARTITION = 'persist:test'
 

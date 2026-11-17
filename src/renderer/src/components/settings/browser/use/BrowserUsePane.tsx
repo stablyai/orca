@@ -1,39 +1,48 @@
 import { useEffect, useState } from 'react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/components/settings/browser/use/browser-use-setup-state'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { cn } from '@/lib/utils'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
-import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'
-import { getBrowserUsePaneSearchEntries } from './browser-use-search'
+import {
+  BROWSER_USE_SETTINGS_TARGET_ID,
+  getBrowserUsePaneSearchEntries
+} from './browser-use-search'
 import { BrowserUseExamples } from './BrowserUseExamples'
 import { BrowserUseComputerUseNotice } from './BrowserUseComputerUseNotice'
 import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserUseSetupProps = {
+  /** The host the pane's host picker shows; the skill is checked and installed there. */
+  hostId: ExecutionHostId
   onConfigureMoreBrowsers?: () => void
   onOpenComputerUse?: () => void
 }
 
 export function BrowserUseSetup({
+  hostId,
   onConfigureMoreBrowsers,
   onOpenComputerUse
-}: BrowserUseSetupProps = {}): React.JSX.Element {
+}: BrowserUseSetupProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
 
-  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const skillRuntime = useActiveProjectSkillRuntime(hostId)
 
   const [browserUseEnabled, setBrowserUseEnabled] = useState<boolean>(() => {
     return localStorage.getItem(BROWSER_USE_ENABLED_STORAGE_KEY) === '1'
@@ -64,7 +73,8 @@ export function BrowserUseSetup({
     refresh: refreshSkill
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     enabled: browserUseEnabled,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    runtimeTarget: skillRuntime.discoveryRuntimeTarget,
+    discoveryTarget: skillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
@@ -78,7 +88,7 @@ export function BrowserUseSetup({
   ])
   const steps = [skillDetected, cookiesImported]
   const completedCount = steps.filter(Boolean).length
-  const skillDisabled = Boolean(activeSkillRuntime.installDisabledReason)
+  const skillDisabled = Boolean(skillRuntime.installDisabledReason)
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -86,13 +96,16 @@ export function BrowserUseSetup({
 
   if (!browserUseEnabled) {
     return (
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div
+        id={BROWSER_USE_SETTINGS_TARGET_ID}
+        className="flex items-center justify-between gap-4 py-3"
+      >
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserUsePane.96b91c6349',
               'Let coding agents drive this browser with your logins.'
             )}
@@ -107,14 +120,14 @@ export function BrowserUseSetup({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/60 bg-card/30 p-4">
+    <div id={BROWSER_USE_SETTINGS_TARGET_ID} className="space-y-3 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">
-            {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserUsePane.finishSteps',
               'Let coding agents drive this browser with your logins. Finish the steps below.'
             )}
@@ -143,11 +156,11 @@ export function BrowserUseSetup({
 
       {showSkillStep ? (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.BrowserUsePane.2d6ead9ab2',
-            'Install Browser Use Skill'
+          title={t(
+            'auto.components.settings.BrowserUsePane.4451b3c0a6',
+            'Install browser use skill'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.BrowserUsePane.68ea76eb71',
             "Install the Browser Use skill so agents can operate Orca's browser."
           )}
@@ -160,8 +173,10 @@ export function BrowserUseSetup({
           <BrowserUseSkillStep
             skillDetected={skillDetected}
             skillLoading={skillLoading}
-            skillError={activeSkillRuntime.installDisabledReason ?? skillError}
+            skillError={skillRuntime.installDisabledReason ?? skillError}
             disabled={skillDisabled}
+            target={skillRuntime.bundledSkillTarget}
+            terminalRuntime={skillRuntime.agentRuntime}
             onBeforeInstall={() => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
             }}

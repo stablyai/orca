@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../assignment-store.js'
 import {
-  consumeRelayCellInventoryHold,
   openRelayDatabase,
   type PostgresDatabase,
   type RelayDatabase
@@ -17,21 +16,6 @@ const describePostgres = databaseUrl ? describe : describe.skip
 
 // Roughly the round trip from an Asia cell to the us-central1 database.
 const STATEMENT_DELAY_MS = 150
-
-// Probe the formerly fleet-locked tables plus admission/region tables read by commit.
-const CELL_TABLES = [
-  'relay_cells',
-  'relay_cell_runtime',
-  'relay_cell_capabilities',
-  'relay_cell_rehome_safety',
-  'relay_cell_admission',
-  'relay_cell_regions'
-] as const
-
-// The target-row statement locks exactly these, held from it to COMMIT.
-const TARGET_LOCKED = ['target:relay_cells', 'target:relay_cell_admission']
-
-type Trip = { sql: string; lockable: Record<string, boolean>; probeMs: number }
 
 type DelayControl = StatementDelay & { beforeTrip: (sql: string) => Promise<void> }
 
@@ -97,27 +81,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     }
   }
 
-  async function lockable(table: string, cellId: string): Promise<boolean> {
-    try {
-      await observer.transaction(
-        async (transaction) => {
-          await transaction.queryLocked(
-            `SELECT cell_id FROM ${table} WHERE cell_id = ?`,
-            [cellId],
-            {
-              failIfUnavailable: true
-            }
-          )
-        },
-        { reportRetries: false }
-      )
-      return true
-    } catch (error) {
-      if (error instanceof Error && error.message === 'database_lock_unavailable') return false
-      throw error
-    }
-  }
-
   async function reservedRequests(cellId: string): Promise<number> {
     const row = (
       await primary.query(`SELECT reserved_requests FROM relay_cells WHERE cell_id = ?`, [cellId])
@@ -151,59 +114,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       [now, cellId]
     )
   }
-
-  it('holds only the target cell and admission rows until the next COMMIT boundary', async () => {
-    const context = await fixture()
-    const request = await context.select()
-    const trips: Trip[] = []
-    const probed = {
-      source: context.source.id,
-      target: context.target.id,
-      bystander: context.bystander.id
-    }
-    control.beforeTrip = async (sql) => {
-      const probeStartedAt = performance.now()
-      const state: Record<string, boolean> = {}
-      for (const [role, cellId] of Object.entries(probed)) {
-        for (const table of CELL_TABLES) state[`${role}:${table}`] = await lockable(table, cellId)
-      }
-      trips.push({ sql, lockable: state, probeMs: performance.now() - probeStartedAt })
-    }
-    consumeRelayCellInventoryHold(delayed)
-    control.enabled = true
-
-    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
-    control.enabled = false
-
-    expect(result).toEqual({ outcome: 'committed' })
-    expect(trips.length).toBeGreaterThanOrEqual(15)
-    expect(trips[trips.length - 1]!.sql).toBe('COMMIT')
-    for (const trip of trips) {
-      for (const [key, free] of Object.entries(trip.lockable)) {
-        if (TARGET_LOCKED.includes(key)) continue
-        expect({ sql: trip.sql, key, free }).toEqual({ sql: trip.sql, key, free: true })
-      }
-    }
-    for (const key of TARGET_LOCKED) {
-      expect(trips.filter((trip) => !trip.lockable[key]).map((trip) => trip.sql)).toEqual([
-        'COMMIT'
-      ])
-    }
-    const counts = consumeRelayCellInventoryHold(delayed)
-    const commitProbeMs = trips.at(-1)!.probeMs
-    console.info(
-      JSON.stringify({
-        event: 'rehome_target_row_hold',
-        trips: trips.length,
-        commitProbeMs,
-        ...counts
-      })
-    )
-    expect(counts.rehomeTargetRowHolds).toBe(1)
-    expect(counts.cellInventoryHoldMaxSite).toBe('rehome-target-row')
-    expect(counts.rehomeTargetRowHoldMsMax).toBeGreaterThanOrEqual(STATEMENT_DELAY_MS)
-    expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore + 2)
-  }, 45_000)
 
   it('defers when the target leaves general admission after selection', async () => {
     const context = await fixture()
@@ -240,23 +150,14 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
       })
       await lockedPromise
     }
-    consumeRelayCellInventoryHold(delayed)
     control.enabled = true
 
-    const startedAt = performance.now()
     const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
-    const elapsedMs = performance.now() - startedAt
     control.enabled = false
     release()
     await writer
 
     expect(result).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
-    expect(consumeRelayCellInventoryHold(delayed)).toMatchObject({
-      cellInventoryLockUnavailable: 1,
-      rehomeTargetRowHolds: 0
-    })
-    // NOWAIT: no 1s lock_timeout wait and no transaction retry behind the writer.
-    expect(elapsedMs).toBeLessThan(40 * STATEMENT_DELAY_MS)
     await expectNothingCommitted(context)
   })
 

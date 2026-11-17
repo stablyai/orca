@@ -1,6 +1,9 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { takeSleepingAgentWakeRequest } from '@/lib/sleeping-agent-wake-requests'
-import { holdPaneResumeUntilShown, releasePaneResumeHold } from '@/lib/pane-spawn-deferral-registry'
+import { takeSleepingAgentWakeRequest } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import {
+  holdPaneResumeUntilShown,
+  releasePaneResumeHold
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { startDeferredSessionReattach } from '../reattach/deferred-session-reattach-connect'
 import { pendingSpawnByPaneKey } from './pending-pane-spawn'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'

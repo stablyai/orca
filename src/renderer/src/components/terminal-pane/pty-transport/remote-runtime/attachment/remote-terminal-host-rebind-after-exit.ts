@@ -1,7 +1,7 @@
 import {
   subscribeAcceptedWebSessionTerminalHandle,
   type WebSessionTerminalHandleUpdate
-} from '../../../../../runtime/web-session-terminal-handle-events'
+} from '../../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
 import { sameWhenBothKnown } from './remote-terminal-host-exit-record'
 
 export type HostRebindAfterExitWatch = {

@@ -76,6 +76,8 @@ export type AgentHookEventPayload = {
   structuredHost?: StructuredHostStatus
   /** Rejoin moved pane rows by runtime terminal handle; never persist beyond its issuing runtime. */
   terminalHandle?: string
+  /** Full reply text this hook carried; main's ingest consumes it and never stores, relays or persists it. */
+  replyCandidate?: string
   /** Execution-host clock retained for age-preserving projection replay; never sent verbatim. */
   hostEvidenceObservedAt?: number
   payload: ParsedAgentStatusPayload

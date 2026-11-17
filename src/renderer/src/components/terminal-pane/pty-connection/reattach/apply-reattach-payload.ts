@@ -2,7 +2,7 @@ import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
 } from '../startup/terminal-launch-result-policy'
-import { waitForTerminalReplayWritesParsed } from '../../replay-guard'
+import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
@@ -16,7 +16,7 @@ import {
   shouldSkipAltFrameForWidthMismatch
 } from '../../snapshots/terminal-snapshot-replay-paint'
 
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'
 import { mainStartsPane } from '../spawn/main-starts-pane'
 import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
@@ -116,7 +116,11 @@ export function createReattachPayloadHandlers(
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       if (typeof ctx.connectResult.snapshotSeq === 'number') {
-        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+        session.streamPosition.anchor(
+          ctx.ptyId,
+          ctx.connectResult.snapshotSeq,
+          ctx.connectResult.pendingEscapeTailAnsi ?? ''
+        )
       }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
@@ -186,7 +190,11 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         if (typeof modelSnapshot.seq === 'number') {
-          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+          session.streamPosition.anchor(
+            ctx.ptyId,
+            modelSnapshot.seq,
+            modelSnapshot.pendingEscapeTailAnsi ?? ''
+          )
         }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {
@@ -296,8 +304,8 @@ export function createReattachPayloadHandlers(
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
-      // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
-      session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))
+      // Why: under ConPTY a taller destination fit must not pull recovered rows back into the fresh shell's viewport.
+      session.writeFreshShellViewport(Math.max(destinationRows, session.pane.terminal.rows))
       ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {
         session.schedulePendingStartupCommandDelivery()

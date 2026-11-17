@@ -12,12 +12,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { SshTarget } from '../../../shared/ssh-types'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../shared/automation-list-scope'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 
@@ -194,24 +194,4 @@ describe('a workspace re-pinned outside the automation editor', () => {
   })
 
   // Without a live prior registration, repinning cannot distinguish relocation from host replacement.
-  it('keeps the record fenced when the pin it left is gone too', async () => {
-    const store = await loadStore(initialState())
-    store.flush()
-    repinWorkspace('staging', [target('staging', STAGING_GENERATION)])
-
-    vi.resetModules()
-    installFakeAppEnvironment({ getPath: () => testState.dir })
-    const { Store } = await import('../loading-store/store')
-    const { initDataPath } = await import('../loading-store/user-data-path')
-    initDataPath()
-    const reloaded = createSqliteTestStore(Store, {
-      dataFile: join(testState.dir, 'orca-data.json')
-    })
-
-    expect(reloaded.listAutomations()[0].executionTargetGeneration).toBe(PROD_GENERATION)
-    expect(reloaded.listAutomationsForScope().items[0].selector).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-  })
 })

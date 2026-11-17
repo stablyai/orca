@@ -1,8 +1,11 @@
 /// <reference types="chrome" />
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
@@ -39,14 +42,16 @@ const mocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => mocks.guests.get(id) }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getGuestWebContentsId: (pageId: string) =>
       [...mocks.pageByGuest].find(([, page]) => page === pageId)?.[0] ?? null,
     getWebContentsIdByTabId: () =>
       new Map([...mocks.pageByGuest].map(([id, pageId]) => [pageId, id])),
     getTabIdForWebContentsId: (id: number) => mocks.pageByGuest.get(id) ?? null,
-    getWorktreeIdForTab: () => undefined
+    getWorktreeIdForTab: () => undefined,
+    isAgentLeadingGuest: () => false,
+    findAgentPageInSession: () => null
   }
 }))
 vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
@@ -83,7 +88,8 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => {
     getBrowserExtensionProfileForPartition: (partition: string) =>
       profile(partition.replace('persist:', '')),
     getBrowserExtensionSessionForProfile: (id: string) =>
-      id === 'default' || id === 'work' ? mocks.sessions[id] : null
+      id === 'default' || id === 'work' ? mocks.sessions[id] : null,
+    isBrowserExtensionProfileLoading: () => false
   }
 })
 vi.mock('./browser-extension-window-model', () => ({
@@ -99,7 +105,7 @@ vi.mock('./browser-extension-window-model', () => ({
   presentBrowserExtensionWindow: vi.fn()
 }))
 vi.mock('../api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))
-vi.mock('../api/permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: (_extension: unknown, sess: unknown) =>
     sess === mocks.sessions.default ? mocks.grantedOrigins : []
 }))
@@ -109,8 +115,8 @@ const discardedTabs = await import('./browser-extension-discarded-tabs')
 const { recordActiveBrowserPage } = await import('./browser-extension-tab-model')
 const { registerTabsNamespace } = await import('../api/tabs')
 const { announceRegisteredBrowserExtensionTab, observeBrowserExtensionTabLifecycle } =
-  await import('../api/tabs-lifecycle')
-await import('../../../../preload/browser-extension-document-targets')
+  await import('./browser-extension-tab-lifecycle')
+await import('../../../../preload/browser/extensions/documents/browser-extension-document-targets')
 
 function page(id: string, workspaceId: string, overrides: Partial<BrowserPage> = {}): BrowserPage {
   return {
@@ -254,17 +260,26 @@ beforeEach(() => {
       page('streamed', 'bt-ssh', { remoteBrowserPageId: 'runtime-page' })
     ])
   }
-  discardedTabs.setSavedBrowserTabsSource({
-    getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
-    getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
-    onWorkspaceSessionWritten: (listener) => {
-      writeListener = listener
-      return () => {
-        writeListener = null
+  discardedTabs.setSavedBrowserTabsSource(
+    {
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
+      getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
+      onWorkspaceSessionWritten: (listener) => {
+        writeListener = listener
+        return () => {
+          writeListener = null
+        }
       }
-    }
-  })
+    },
+    (id) =>
+      // 'idle' is a profile whose extensions have not started: it has no extension session.
+      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
+  )
   discardedTabs.forgetBrowserPageGuestsGone()
+  // Retire ids an earlier test handed out, so each test starts with none listed.
+  for (const pageId of ['live', 'cold', 'doc', 'notes', 'job', 'remote', 'streamed']) {
+    discardedTabs.takeDiscardedBrowserTabId(pageId)
+  }
   registerTabsNamespace()
   guest(11, mocks.sessions.default, 'https://live.test/')
   mocks.pageByGuest.set(11, 'live')
@@ -272,61 +287,19 @@ beforeEach(() => {
 })
 
 describe('restored browser pages without a guest are discarded tabs', () => {
-  it('lists every unloaded page of the caller’s profile after the loaded tabs, with a stable id', async () => {
-    const tabs = await query({}, [{ id: 11, url: 'https://live.test/' }])
-    expect(tabs.map((entry) => [entry.url, entry.discarded, entry.status, entry.index])).toEqual([
-      ['https://live.test/', false, 'loading', 0],
-      ['https://cold.test/', true, 'unloaded', 1],
-      ['https://notes.test/', true, 'unloaded', 3],
-      ['https://remote.test/', true, 'unloaded', 4]
-    ])
-    const cold = tabs[1]
-    expect(cold).toMatchObject({ title: 'cold title', windowId: 1, active: false })
-    expect(cold.id).toBeGreaterThanOrEqual(discardedTabs.FIRST_DISCARDED_BROWSER_TAB_ID)
-    expect((await query({ discarded: true })).map((entry) => entry.id)).toEqual(
-      tabs.slice(1).map((entry) => entry.id)
-    )
-    expect(await call('get', [cold.id, null])).toMatchObject({ id: cold.id, discarded: true })
-    // Electron's native query already filtered the loaded tabs by url.
-    expect((await query({ url: 'https://cold.test/*' })).map((entry) => entry.id)).toEqual([
-      cold.id
-    ])
-    // The other profile's extensions see only its own page.
-    expect((await query({}, [], mocks.sessions.work)).map((entry) => entry.url)).toEqual([
-      'https://job.test/'
-    ])
-  })
-
-  it('activates through the renderer, then is replaced by the loaded guest', async () => {
-    const [cold] = await query({ discarded: true })
-    const coldId = cold.id!
-    // Showing the page makes it active before its guest exists.
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toContainEqual([{ tabId: coldId, windowId: 1 }])
-    await call('update', [coldId, { active: true }])
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'cold')
-
-    // The guest starts loading before the renderer registers it: no onCreated for a reloaded tab.
-    const loaded = guest(12, mocks.sessions.default, 'https://cold.test/')
-    loaded.emit('did-start-loading')
-    expect(events('onCreated')).toEqual([])
-    mocks.pageByGuest.set(12, 'cold')
-    announceRegisteredBrowserExtensionTab('cold', 12)
-    expect(events('onReplaced')).toEqual([[12, coldId]])
-    expect(events('onCreated')).toEqual([])
-    expect(events('onUpdated')).toContainEqual([
-      12,
-      expect.objectContaining({ status: 'loading' }),
-      expect.objectContaining({ id: 12 })
-    ])
-    // The renderer republishes the active page once registered; it is the same activation.
-    const activations = events('onActivated').length
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toHaveLength(activations)
-    await expect(call('get', [coldId, null])).rejects.toThrow(`No tab with id: ${coldId}.`)
-    expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
-      'https://cold.test/'
-    )
+  it("lists no page of a profile whose extensions have not started, not even to Default's", async () => {
+    saved.local.browserTabsByWorktree = {
+      ...saved.local.browserTabsByWorktree,
+      'wt-2': [tab('bt-idle', { sessionProfileId: 'idle' })]
+    }
+    saved.local.browserPagesByWorkspace = {
+      ...saved.local.browserPagesByWorkspace,
+      'bt-idle': [page('idle', 'bt-idle')]
+    }
+    writeListener?.('local')
+    const urls = (await query({ discarded: true })).map((entry) => entry.url)
+    expect(urls).toContain('https://cold.test/')
+    expect(urls).not.toContain('https://idle.test/')
   })
 
   it('does not list a closed page until the session save drops it, nor an evicted one after', async () => {
@@ -345,6 +318,24 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     // A write that still saves the page: its guest was evicted, so it is discarded now.
     writeListener?.('local')
     expect(await urls()).toContain('https://live.test/')
+  })
+
+  it('showing one restored page gives no other page a tab id extensions never saw', async () => {
+    recordActiveBrowserPage('cold')
+    guest(12, mocks.sessions.default, 'https://cold.test/')
+    mocks.pageByGuest.set(12, 'cold')
+    announceRegisteredBrowserExtensionTab('cold', 12)
+    saved.local.browserPagesByWorkspace = Object.fromEntries(
+      Object.entries(saved.local.browserPagesByWorkspace ?? {}).map(([id, pages]) => [
+        id,
+        pages.filter((entry) => entry.id !== 'notes')
+      ])
+    )
+    writeListener?.('local')
+    expect(events('onRemoved')).toEqual([])
+    expect((await query({ discarded: true })).map((entry) => entry.url)).toEqual([
+      'https://remote.test/'
+    ])
   })
 
   it('reports a discarded tab closed once, when the session save drops its page', async () => {

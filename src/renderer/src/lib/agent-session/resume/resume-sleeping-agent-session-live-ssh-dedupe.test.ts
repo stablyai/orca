@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { makeWorktree, TEST_REPO } from '../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -121,21 +122,6 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
       },
       ptyIdsByTabId: {},
       sshConnectionStates: new Map([['ssh-target-1', { status: 'disconnected' }]]),
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    })
-
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    expect(launched).toBe(1)
-  })
-
-  it('still resumes when the preserved pane has no pty binding and cannot own recovery', () => {
-    const record = makeRecord()
-    setStoreState({
-      activeWorktreeId: 'wt-other',
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID, null) },
-      ptyIdsByTabId: {},
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     })
 

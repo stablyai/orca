@@ -2,26 +2,26 @@ import { agentSessionExecutionLocationsEqual } from '../../../../shared/agent-se
 import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
-} from '../../../../shared/notification-attention-acknowledgement'
-import type { NotificationAttentionAcknowledgement } from '../../../../shared/notification-settings-types'
-import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/notifications/notification-attention-acknowledgement'
+import type { NotificationAttentionAcknowledgement } from '../../../../shared/notifications/notification-settings-types'
+import { reserveNotificationCooldown } from '../../../../shared/notifications/notification-burst-cooldown'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   StructuredAttentionOrigin,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import type {
   MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
-} from '../../../../shared/mobile-push-contract'
+} from '../../../../shared/notifications/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
 import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'
-import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'
+import type { DeliveredNotificationIdentity } from '../../../../shared/notifications/mobile-notification-identity'
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'

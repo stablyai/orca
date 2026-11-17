@@ -1,4 +1,4 @@
-import BrowserPane from './browser-pane/BrowserPane'
+import BrowserPane from './browser-pane/assemble-chrome/browser-workspace-pane'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalLegacyBrowserPanes({

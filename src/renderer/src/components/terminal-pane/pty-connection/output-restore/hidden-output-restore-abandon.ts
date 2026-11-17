@@ -1,4 +1,4 @@
-import { cancelScheduledHiddenOutputRestore } from '../../hidden-output-restore-scheduler'
+import { cancelScheduledHiddenOutputRestore } from './hidden-output-restore-scheduler'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

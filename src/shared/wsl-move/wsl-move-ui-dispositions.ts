@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../global-settings-types'
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import {
   moveDisposition,
   notApplicableDisposition,
@@ -22,7 +22,9 @@ export const UI_STATE_DISPOSITIONS = {
     rewriteDesktopCopy: true,
     newManifestSection: true
   }),
+  gitGraphFiltersByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   showDotfilesByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
+  notificationsMutedByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   filterRepoIds: moveDisposition(38),
   agentsFilterRepoIds: moveDisposition(38),
   setupScriptPromptDismissedRepoIds: moveDisposition(38),
@@ -72,7 +74,11 @@ export const UI_STATE_DISPOSITIONS = {
     38,
     'Filters belong to the Jira host, not a moved workspace.'
   ),
-  taskResumeState: notApplicableDisposition(38)
+  taskResumeState: notApplicableDisposition(38),
+  hiddenWslMovedProjectKeys: notApplicableDisposition(
+    38,
+    'Names already-moved projects by the ids a move keeps; pruned once a project is no longer moved.'
+  )
 } as const satisfies Partial<Record<keyof PersistedUIState, WslMoveFieldDisposition>>
 
 export const UI_STATE_GLOBAL_FIELDS = [
@@ -83,6 +89,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'rightSidebarTab',
   'rightSidebarExplorerView',
   'rightSidebarWidth',
+  'activityBarPosition',
   'markdownTocPanelWidth',
   'combinedDiffFileTreeWidth',
   'groupBy',
@@ -120,6 +127,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'statusBarVisible',
   'usagePercentageDisplay',
   'statusBarUsageMode',
+  'statusBarUsageFormat',
   'dismissedUpdateVersion',
   'dismissedUnexpectedSignoutVersion',
   'lastUpdateCheckAt',
@@ -143,8 +151,12 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'pluginsAlphaNoticeDismissed',
   'codexTerminalServerIsolationNoticeSeen',
   'codexSharedSettingsNoticeSeen',
+  'worktreeCardsUpdateNoticeSeen',
+  'worktreeCardsIntroNoticeSeen',
+  'speechModelUpdateNoticeSeen',
   'claudeDiffPanelNoticeSeen',
   'claudeAccountSignInNoticeSeen',
+  'wslMovedSectionCollapsed',
   'browserDefaultUrl',
   'browserDefaultSearchEngine',
   'browserDefaultZoomLevel',
@@ -152,6 +164,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'browserDevToolsDock',
   'windowBounds',
   'windowMaximized',
+  'windowFullScreen',
   'dashboardPopoutBounds',
   'starNagBaselineAgents',
   'starNagAppVersion',
@@ -176,6 +189,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_cursorStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
   '_explorerDisplayRootMigrated',
+  '_gitBlameStatusBarDefaultAdded',
   '_grokStatusBarDefaultAdded',
   '_hostWorktreeCardPropertyDefaulted',
   '_inlineAgentsDefaultedForAllUsers',
@@ -183,6 +197,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
+  '_museStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',
   '_sortBySmartMigrated',
   '_workspaceStatusesDefaultOrderMigrated',

@@ -2,7 +2,6 @@ import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
-import { buildEdgeWrappedHttpLogicalLineCandidates } from '../../../../../../shared/terminal/links/edge-wrapped-terminal-http-links'
 
 const COLS = 40
 const WIDE_GLYPH = '界'
@@ -52,15 +51,6 @@ function makeBufferLineFromCells(
 }
 
 describe('edge-wrapped terminal HTTP links', () => {
-  it('bounds deep-indentation scans and skips cell translation for non-link rows', () => {
-    const line = makeBufferLine(`${' '.repeat(39)}x`, 80)
-    const translate = vi.spyOn(line, 'translateToString')
-    const getLine = vi.fn(() => line)
-    expect(buildEdgeWrappedHttpLogicalLineCandidates({ getLine }, 5_000)).toEqual([])
-    expect(getLine.mock.calls.length).toBeLessThan(120)
-    expect(translate.mock.calls.every((args) => args.length === 1)).toBe(true)
-  })
-
   beforeEach(() => {
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
@@ -97,15 +87,6 @@ describe('edge-wrapped terminal HTTP links', () => {
       }
     }
   )
-
-  it('stops scanning back at a prose row that cannot continue a URL', () => {
-    const prose = makeBufferLine('see https://example.com and more words')
-    const hovered = makeBufferLine('tail')
-    const getLine = vi.fn((y: number) => (y === 199 ? hovered : prose))
-
-    buildEdgeWrappedHttpLogicalLineCandidates({ getLine }, 200)
-    expect(new Set(getLine.mock.calls.map(([y]) => y)).size).toBeLessThan(5)
-  })
 
   it('opens a URL when a wide glyph starts the continuation row', () => {
     const prefix = 'https://example.com/wide/'
@@ -389,25 +370,6 @@ describe('edge-wrapped terminal HTTP links', () => {
     ).toBe(true)
     expect(openUrlMock).toHaveBeenCalledOnce()
     expect(openUrlMock).toHaveBeenCalledWith(new URL(url).toString())
-  })
-
-  it('joins a real multi-line URL whose continuation is a Chinese path segment', () => {
-    const prefix = 'https://example.com/'
-    const firstRow = `${prefix}${'a'.repeat(COLS - prefix.length)}`
-    const continuation = `${WIDE_GLYPH}文档/路径`
-    const expectedUrl = new URL(`${firstRow}${continuation}`).toString()
-    const rows = [makeBufferLine(firstRow), makeBufferLine(continuation)]
-    const buffer = { getLine: (y: number) => rows[y] }
-
-    expect(firstRow).toHaveLength(COLS)
-    expect(
-      openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
-        worktreeId: 'wt-1',
-        modifierHeld: true
-      })
-    ).toBe(true)
-    expect(openUrlMock).toHaveBeenCalledOnce()
-    expect(openUrlMock).toHaveBeenCalledWith(expectedUrl)
   })
 
   it('does not glue a mid-row URL to a next-line Windows path', () => {

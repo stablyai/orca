@@ -1,7 +1,7 @@
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusHooksSettings } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { ExternalConversationLink } from '../../shared/external-conversation-link'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
   createLaunchedAgentWriteGuard,
   type LaunchedAgentWriteGuardRuntime
@@ -10,7 +10,7 @@ import {
   TerminalAgentPromptAnswers,
   type PanePromptTarget,
   type TerminalAgentPromptAnswerRuntime
-} from '../runtime/terminal-agent-prompt-answer'
+} from '../runtime/terminal/input/terminal-agent-prompt-answer'
 import { admitConnectorAgent } from './connector-agents'
 import type { Delivery } from './external-conversation-types'
 

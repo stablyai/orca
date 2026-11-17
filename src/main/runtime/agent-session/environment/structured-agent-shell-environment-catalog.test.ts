@@ -1,6 +1,6 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogFingerprintForRecord } from '../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -11,8 +11,8 @@ import {
 
 const shell = vi.hoisted(
   (): {
-    current: { PATH: string; IGNORED: string }
-    next: { PATH: string; IGNORED: string }
+    current: { PATH: string; Path?: string; path?: string; IGNORED: string }
+    next: { PATH: string; Path?: string; path?: string; IGNORED: string }
     saved: string[]
     nextSaved: string[]
   } => ({
@@ -22,7 +22,7 @@ const shell = vi.hoisted(
     nextSaved: []
   })
 )
-vi.mock('../../../startup/login-shell-environment', () => ({
+vi.mock('../../../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
     if (options?.startedAfter !== undefined) {
       shell.current = { ...shell.next }
@@ -40,13 +40,14 @@ const cleanups: (() => void)[] = []
 afterEach(() => {
   cleanups.splice(0).forEach((stop) => stop())
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   shell.current = { PATH: '/a', IGNORED: 'a' }
   shell.next = { ...shell.current }
   shell.saved = []
   shell.nextSaved = []
 })
 
-function rig() {
+function rig(overlay?: Record<string, string>) {
   const record = {
     ...agentSessionRecordFixture(),
     provider: 'grok',
@@ -67,10 +68,12 @@ function rig() {
     workspaceMayOverrideDefaultModel: defaults
   })
   const environment = createStructuredAgentEnvironmentResolvers({
-    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: [] })
+    resolveShellEnvironmentPolicy: () => ({ inheritAll: false, names: ['IGNORED'] }),
+    resolveAgentLaunchEnv: () => overlay ?? {}
   })
   cleanups.push(service.stop, environment.bindCatalogSources(['grok']))
   const listing = (id: string) => ({
+    origin: 'probe' as const,
     models: [{ id, label: id, isDefault: true, efforts: [] }],
     configuredDefault: { modelId: id, effort: 'high' }
   })
@@ -83,6 +86,39 @@ function rig() {
     fingerprint: agentModelCatalogFingerprintForRecord(record)
   }
 }
+
+it.each(['darwin', 'win32'] as const)(
+  'keeps a %s catalog source through PATH-only and overlay-shadowed changes',
+  async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
+    shell.current = { PATH: '/a', Path: '/shadow-a', path: '/shadow-b', IGNORED: 'a' }
+    const overlay = { IGNORED: 'configured' }
+    const h = rig(overlay)
+    const source = h.service.captureSource(h.record)
+    cleanups.push(() => source.release?.())
+    agentModelCatalogStore.recordSuccess(h.fingerprint, 'grok', h.listing('saved'), 'discovery')
+    const held = Promise.withResolvers<ReturnType<typeof h.listing>>()
+    const flight = agentModelCatalogStore.refresh(h.fingerprint, 'grok', () => held.promise)
+    await Promise.resolve()
+    await captureHostShellEnvironment(async () => {
+      shell.next = {
+        PATH: '/changed',
+        Path: '/other-shadow-a',
+        path: '/other-shadow-b',
+        IGNORED: 'shadowed'
+      }
+    })
+    expect(source()).toBe(true)
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('saved')
+    held.resolve(h.listing('current'))
+    await flight
+    expect(agentModelCatalogStore.get(h.fingerprint)?.models[0]?.id).toBe('current')
+    await captureHostShellEnvironment(async () => {
+      overlay.IGNORED = 'new-configured'
+    })
+    expect(source()).toBe(false)
+  }
+)
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
   const h = rig()
@@ -98,7 +134,7 @@ it('retires a producer on effective Refresh before new publication and fences la
   h.service.recordLiveListing(h.record.sessionId, h.listing('A'), sourceA)
   await vi.waitFor(() => expect(h.defaults).toHaveBeenCalledOnce())
   await captureHostShellEnvironment(async () => {
-    shell.next = { PATH: '/b', IGNORED: 'a' }
+    shell.next = { PATH: '/b', IGNORED: 'b' }
   })
   expect(sourceA()).toBe(false)
   const sourceB = h.service.captureSource(h.record)

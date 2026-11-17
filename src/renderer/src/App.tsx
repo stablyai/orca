@@ -1,3 +1,4 @@
+import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
 import { useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
@@ -5,43 +6,43 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
 import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
-import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
+import { BrowserPagePrompts } from './components/browser-pane/page-prompts/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
-import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
-import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
-import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
+import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
+import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
+import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
-import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import { useUnreadDockBadge } from './attention/unread/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
-import { WindowControls } from './app-shell/WindowControls'
+import { WindowControls } from './app-shell/chrome/WindowControls'
 import {
   MAC_TRAFFIC_LIGHTS_WIDTH,
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
   hasCustomTitleBar
-} from './app-shell/app-window-chrome'
-import { useAppChromeLayout } from './app-shell/use-app-chrome-layout'
-import { useAppSessionPersistence } from './app-shell/use-app-session-persistence'
+} from './app-shell/chrome/app-window-chrome'
+import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
+import { useAppSessionPersistence } from './app-shell/storage/use-app-session-persistence'
 import { useAppShellServices } from './app-shell/use-app-shell-services'
-import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
-import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
-import { runWslMoveRendererStoreRewrites } from './lib/wsl-move-renderer-store-rewrites'
-import { runWslDriveUncRendererStoreRewrites } from './lib/wsl-drive-unc-renderer-store-rewrites'
-import { useDocumentAppearance } from './app-shell/use-document-appearance'
-import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
-import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
-import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feature-tips'
-import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
-import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
-import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
+import { useAppStartupHydration } from './app-shell/startup/use-app-startup-hydration'
+import { startNativeChatDraftLoad } from './components/native-chat/drafts/native-chat-draft-startup'
+import { runWslMoveRendererStoreRewrites } from './lib/workspace/persistence/wsl-move-renderer-store-rewrites'
+import { runWslDriveUncRendererStoreRewrites } from './lib/workspace/persistence/wsl-drive-unc-renderer-store-rewrites'
+import { useDocumentAppearance } from './app-shell/appearance/use-document-appearance'
+import { useFloatingWorkspacePanel } from './components/floating-terminal/workspace/use-floating-workspace-panel'
+import { useGlobalKeybindings } from './hooks/app-commands/use-global-keybindings'
+import { useOnboardingAndFeatureTips } from './app-shell/startup/use-onboarding-and-feature-tips'
+import { usePersistedUIWriter } from './app-shell/storage/use-persisted-ui-writer'
+import { useRuntimeGraphSync } from './runtime/sync-runtime-graph/use-runtime-graph-sync'
+import { useWindowVisibilityEffects } from './app-shell/chrome/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
-import { AddToChatPointMenuHost } from './components/native-chat/AddToChatMenu'
-import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
+import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
+import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -102,7 +103,7 @@ function App(): React.JSX.Element {
         } as React.CSSProperties
       }
     >
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <ConfirmationDialogProvider>
           <BrowserPagePrompts />
           <AddToChatPointMenuHost />
@@ -124,6 +125,7 @@ function App(): React.JSX.Element {
         )}
         <PlainSshTerminalPanels />
         <PluginShotReplayMount />
+        <PluginUpdateReviewHost />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

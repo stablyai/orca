@@ -22,7 +22,7 @@ vi.mock('./browser-extension-webstore-download', async (importOriginal) => ({
   ...(await importOriginal<typeof DownloadModule>()),
   downloadWebStoreCrx: mocks.download
 }))
-vi.mock('../installation/browser-extension-webstore-install', () => ({
+vi.mock('../installation/browser-extension-mutation-lock', () => ({
   withBrowserExtensionLock: (_id: string, action: () => Promise<unknown>) => action(),
   isBrowserExtensionBusy: () => false
 }))

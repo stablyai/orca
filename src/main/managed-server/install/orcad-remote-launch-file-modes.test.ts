@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { ORCAD_LOG_FILENAME, ORCAD_READINESS_FILENAME } from './orcad-remote-host-support'
 import { orcadLaunchCommand } from './orcad-remote-launch'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 // Pairing tokens in readiness require owner-only launch artifacts even under login umask 022.

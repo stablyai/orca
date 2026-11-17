@@ -1,14 +1,14 @@
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope,
   buildTaskSourceContextFromRepo
-} from '../../../../../../shared/task-source-context'
+} from '../../../../../../shared/work-items/task-source-context'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
@@ -17,8 +17,8 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export type WorkspaceReferenceDetails = {
   stale?: boolean

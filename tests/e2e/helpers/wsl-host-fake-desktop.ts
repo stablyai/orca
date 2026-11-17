@@ -22,8 +22,8 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-sh
 import { createElectronHomeIsolation } from './electron-home-isolation'
 import { forwardElectronProcessLogs } from './orca-app'
 import { waitForSessionReady } from './store'
-import { toRuntimeExecutionHostId } from '../../../src/shared/execution-host'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../src/shared/wsl-host-internal-gate'
+import { toRuntimeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../src/shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 
 export const WSL_ENVIRONMENT_ID = 'wsl:ubuntu'
 export const RUNNING = [{ name: 'Ubuntu', state: 'running', version: 2 }]
@@ -51,8 +51,8 @@ export async function launchDesktopWithFakeWsl(
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: {
-      // WSL hosts exist only behind this internal gate; the gated-off test leaves it closed.
-      ...(options.internalGate === false ? {} : { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' }),
+      // The gate is open by default; the gated-off test closes it with `0`.
+      [WSL_HOSTS_INTERNAL_GATE_ENV]: options.internalGate === false ? '0' : '1',
       ORCA_E2E_FAKE_WSL_HOSTS: JSON.stringify(fake)
     },
     userDataDir

@@ -4,10 +4,10 @@
  * Git for Windows with their terminals still in the distro. Pure; the caller writes the result.
  */
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { LocalWindowsRuntimePreference } from '../../../shared/project-execution-runtime'
-import type { Project } from '../../../shared/project-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { LocalWindowsRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
+import type { Project } from '../../../shared/project/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   getRepoMainWorktreeId,
@@ -15,12 +15,15 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
-import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
+import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-drive-unc-state-dispositions'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import {
   createWslDriveUncRewriter,
   mergeWslDriveUncKeyedEntries,

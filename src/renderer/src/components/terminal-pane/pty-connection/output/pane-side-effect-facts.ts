@@ -1,6 +1,6 @@
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
-import { registerTerminalSideEffectFactConsumer } from '../../terminal-side-effect-facts-handler'
+import { registerTerminalSideEffectFactConsumer } from '../../pty-transport/output/terminal-side-effect-facts-handler'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindPaneSideEffectFacts(session: ConnectPanePtySession): void {

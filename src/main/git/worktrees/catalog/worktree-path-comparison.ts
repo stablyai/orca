@@ -1,8 +1,8 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/wsl-paths'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/file-access/wsl-paths'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
-import { translateWslOutputPaths } from '../../command-runner/wsl-path-translation'
+import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 
 /** Path syntax determines case folding: preserve POSIX and WSL ext4 tails even on Windows to avoid merging checkouts. */
 export function canonicalWorktreePath(pathValue: string, platform = process.platform): string {

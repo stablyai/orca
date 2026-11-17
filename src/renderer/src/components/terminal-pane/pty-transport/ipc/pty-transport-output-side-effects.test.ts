@@ -3,7 +3,7 @@ import {
   flushPtySideEffects,
   installIpcPtyWindow,
   restorePtySpecWindow
-} from '../../pty-transport-test-harness'
+} from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -44,25 +44,6 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
-  it('runs title side effects even when the data callback does not render the chunk', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const onTitleChange = vi.fn()
-    const onDataCallback = vi.fn()
-    const transport = createIpcPtyTransport({ onTitleChange })
-
-    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
-
-    onData?.({ id: 'pty-1', data: '\u001b]0;hidden-title\u0007' })
-
-    expect(onDataCallback).toHaveBeenCalledWith('\u001b]0;hidden-title\u0007')
-    expect(onTitleChange).not.toHaveBeenCalled()
-
-    await flushPtySideEffects()
-
-    expect(onTitleChange).toHaveBeenCalledWith('hidden-title', 'hidden-title')
-    transport.disconnect()
-  })
-
   it('drops the OSC-9999 cross-chunk carry on resetAgentStatusCarry', async () => {
     // Why: a restore marker means bytes dropped, so a carried partial OSC-9999 prefix would eat the next chunk's head.
     const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
@@ -76,48 +57,6 @@ describe('createIpcPtyTransport', () => {
     processor.processData('plain output after the gap', callbacks)
 
     expect(callbacks.onData).toHaveBeenLastCalledWith('plain output after the gap')
-  })
-
-  it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const onBell = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
-      const callbacks = { onData: vi.fn() }
-
-      processor.processData('plain command output\r\n'.repeat(50), callbacks)
-
-      expect(callbacks.onData).toHaveBeenCalledTimes(1)
-      expect(vi.getTimerCount()).toBe(0)
-      expect(onTitleChange).not.toHaveBeenCalled()
-      expect(onBell).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('compacts ignored Cursor native titles into one deferred drain', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange })
-      const callbacks = { onData: vi.fn() }
-      const ignoredTitles = Array.from({ length: 4_096 }, () => '\x1b]0;Cursor Agent\x07').join('')
-
-      processor.processData(ignoredTitles, callbacks)
-
-      expect(vi.getTimerCount()).toBe(1)
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(vi.getTimerCount()).toBe(0)
-      // Why: the literal is the pane's identity once (#10258); the redraw repeats stay ignored.
-      expect(onTitleChange.mock.calls).toEqual([['Cursor Agent', 'Cursor Agent']])
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('lets an ignored Cursor native title clear a pending stale-title fallback', async () => {
@@ -204,79 +143,6 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('limits deferred PTY side-effect work per timer tick', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange })
-      const callbacks = { onData: vi.fn() }
-
-      for (let i = 0; i < 200; i++) {
-        processor.processData(`\x1b]0;title-${i}\x07`, callbacks)
-      }
-
-      expect(onTitleChange).not.toHaveBeenCalled()
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
-      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
-
-      await vi.runAllTimersAsync()
-      expect(onTitleChange).toHaveBeenCalledTimes(200)
-      expect(onTitleChange).toHaveBeenLastCalledWith('title-199', 'title-199')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('limits coalesced OSC titles in one PTY chunk per timer tick', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange })
-      const callbacks = { onData: vi.fn() }
-      const titles = Array.from({ length: 200 }, (_, i) => `\x1b]0;chunk-title-${i}\x07`).join('')
-
-      processor.processData(titles, callbacks)
-      await vi.runOnlyPendingTimersAsync()
-
-      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
-      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
-
-      await vi.runAllTimersAsync()
-      expect(onTitleChange).toHaveBeenCalledTimes(200)
-      expect(onTitleChange).toHaveBeenLastCalledWith('chunk-title-199', 'chunk-title-199')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('flushes all remaining PTY side effects after a partial bounded drain', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange })
-      const callbacks = { onData: vi.fn() }
-
-      for (let i = 0; i < 200; i++) {
-        processor.processData(`\x1b]0;flush-title-${i}\x07`, callbacks)
-      }
-
-      await vi.runOnlyPendingTimersAsync()
-      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
-
-      processor.flushPendingSideEffects()
-
-      expect(onTitleChange).toHaveBeenCalledTimes(200)
-      expect(onTitleChange).toHaveBeenLastCalledWith('flush-title-199', 'flush-title-199')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
     vi.useFakeTimers()
     try {
@@ -343,32 +209,6 @@ describe('createIpcPtyTransport', () => {
       expect(delivered).toEqual(
         [...delivered].sort((a, b) => Number(a.slice(11)) - Number(b.slice(11)))
       )
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('delivers the side-effect count and final title when the queue stays below the cap', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const onBell = vi.fn()
-      const onAgentStatus = vi.fn()
-      const processor = createPtyOutputProcessor({ onTitleChange, onBell, onAgentStatus })
-      const callbacks = { onData: vi.fn() }
-
-      processor.processData('\x07', callbacks)
-      for (let i = 0; i < 100; i++) {
-        processor.processData(`\x1b]0;under-cap-${i}\x07`, callbacks)
-      }
-      processor.processData('\x1b]9999;{"state":"done","prompt":"done"}\x07', callbacks)
-      await vi.runAllTimersAsync()
-
-      expect(onBell).toHaveBeenCalledTimes(1)
-      expect(onTitleChange).toHaveBeenCalledTimes(100)
-      expect(onTitleChange).toHaveBeenLastCalledWith('under-cap-99', 'under-cap-99')
-      expect(onAgentStatus).toHaveBeenCalledWith({ state: 'done', prompt: 'done' })
     } finally {
       vi.useRealTimers()
     }

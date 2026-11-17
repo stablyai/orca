@@ -1,6 +1,6 @@
 import { ArrowRight, Files, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 export function ArtifactsPageErrorBanner({
@@ -12,11 +12,12 @@ export function ArtifactsPageErrorBanner({
   loading: boolean
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-3 py-2 md:px-5">
       <p className="min-w-0 flex-1 text-xs text-destructive">{error}</p>
       <Button type="button" variant="outline" size="xs" disabled={loading} onClick={onRetry}>
-        {translate('auto.components.artifacts.ArtifactsPage.retry', 'Retry')}
+        {t('auto.components.artifacts.ArtifactsPage.retry', 'Retry')}
       </Button>
     </div>
   )
@@ -31,28 +32,26 @@ export function ArtifactsPageAuthState({
   configured: boolean
   onOpenAccountSettings: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-3 px-5 py-5 text-center md:px-8">
       <Files className="size-8 text-muted-foreground" />
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">
           {needsReconnect
-            ? translate(
-                'auto.components.artifacts.ArtifactsPage.reconnectHeading',
-                'Sign in to Orca again'
-              )
-            : translate(
+            ? t('auto.components.artifacts.ArtifactsPage.reconnectHeading', 'Sign in to Orca again')
+            : t(
                 'auto.components.artifacts.ArtifactsPage.shareSignInHeading',
                 'Sign in to share artifacts'
               )}
         </h2>
         <p className="max-w-sm text-xs leading-5 text-muted-foreground">
           {needsReconnect
-            ? translate(
+            ? t(
                 'auto.components.artifacts.ArtifactsPage.reconnectCopy',
                 'Sign in again to view and manage the artifacts shared through your account.'
               )
-            : translate(
+            : t(
                 'auto.components.artifacts.ArtifactsPage.shareSignInCopy',
                 'Use your Orca account to upload artifacts and manage their public links.'
               )}
@@ -62,24 +61,21 @@ export function ArtifactsPageAuthState({
         <>
           <OrcaSignInButton size="sm">
             {needsReconnect
-              ? translate(
-                  'auto.components.artifacts.ArtifactsPage.signInAgainAction',
-                  'Sign in again'
-                )
-              : translate('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
+              ? t('auto.components.artifacts.ArtifactsPage.signInAgainAction', 'Sign in again')
+              : t('auto.components.artifacts.ArtifactsPage.signIn', 'Sign in to Orca')}
           </OrcaSignInButton>
           <OrcaSignInWaitNotice className="justify-center" />
         </>
       ) : (
         <div className="flex flex-col items-center gap-2">
           <p className="max-w-sm text-xs leading-5 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.artifacts.ArtifactsPage.unconfiguredCopy',
               'Orca account sign-in is not configured on this machine yet.'
             )}
           </p>
           <Button variant="outline" size="sm" onClick={onOpenAccountSettings}>
-            {translate(
+            {t(
               'auto.components.artifacts.ArtifactsPage.openAccountSettings',
               'Open account settings'
             )}
@@ -104,34 +100,32 @@ export function ArtifactsPageEmptyState({
   onLoadMore: () => void
   onOpenArtifactsSettings: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-5 text-center md:px-8">
       <Files className="size-8 text-muted-foreground" />
       <h2 className="text-sm font-semibold">
         {hasMore
-          ? translate(
+          ? t(
               'auto.components.artifacts.ArtifactsPage.moreAvailable',
               'More artifacts are available'
             )
           : publishingBlocked
-            ? translate(
-                'auto.components.artifacts.ArtifactsPage.publishingOff',
-                'Publishing is turned off'
-              )
-            : translate('auto.components.artifacts.ArtifactsPage.empty', 'No shared artifacts')}
+            ? t('auto.components.artifacts.ArtifactsPage.publishingOff', 'Publishing is turned off')
+            : t('auto.components.artifacts.ArtifactsPage.empty', 'No shared artifacts')}
       </h2>
       <p className="max-w-sm text-xs leading-5 text-muted-foreground">
         {hasMore
-          ? translate(
+          ? t(
               'auto.components.artifacts.ArtifactsPage.moreAvailableCopy',
               'Load the next page to continue.'
             )
           : publishingBlocked
-            ? translate(
+            ? t(
                 'auto.components.artifacts.ArtifactsPage.publishingOffCopy',
                 'Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.'
               )
-            : translate(
+            : t(
                 'auto.components.artifacts.ArtifactsPage.emptyCopy',
                 'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
               )}
@@ -144,7 +138,7 @@ export function ArtifactsPageEmptyState({
           className="mt-1"
           onClick={onOpenArtifactsSettings}
         >
-          {translate(
+          {t(
             'auto.components.artifacts.ArtifactsPage.openArtifactsSettings',
             'Open Settings → Artifacts'
           )}
@@ -160,7 +154,7 @@ export function ArtifactsPageEmptyState({
           onClick={onLoadMore}
         >
           {loadingMore ? <Loader2 className="animate-spin" /> : null}
-          {translate('auto.components.artifacts.ArtifactCollection.loadMore', 'Load more')}
+          {t('auto.components.artifacts.ArtifactCollection.loadMore', 'Load more')}
         </Button>
       ) : null}
     </div>

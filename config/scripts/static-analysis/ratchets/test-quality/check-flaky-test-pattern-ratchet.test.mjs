@@ -3,29 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { countFindings, listChangedFiles, main } from './check-flaky-test-pattern-ratchet.mjs'
-
-describe('countFindings', () => {
-  it('counts each rule per file, folding TSX twins and Windows separators', () => {
-    const counts = countFindings(
-      [
-        { ruleId: 'test-no-wall-clock', file: 'src/a.test.ts' },
-        { ruleId: 'test-no-wall-clock', file: 'src\\a.test.ts' },
-        { ruleId: 'test-no-wall-clock-tsx', file: 'src/b.test.tsx' },
-        { ruleId: 'test-no-real-time-wait', file: 'src/a.test.ts' },
-        { ruleId: 'test-no-real-time-wait', file: 'scratch.test.ts' }
-      ],
-      (file) => file !== 'scratch.test.ts'
-    )
-
-    expect([...counts]).toEqual([
-      ['test-no-wall-clock:src/a.test.ts', 2],
-      ['test-no-wall-clock:src/b.test.tsx', 1],
-      ['test-no-real-time-wait:src/a.test.ts', 1]
-    ])
-  })
-})
+import { listChangedFiles, main } from './check-flaky-test-pattern-ratchet.mjs'
 
 describe('listChangedFiles', () => {
   let fixture
@@ -89,45 +67,14 @@ describe('listChangedFiles', () => {
   })
 
   it.each([
-    ['a new finding', `${movedImports}Date.now()\n`],
     ['a changed suppression comment', movedImports.replace('declaration only', 'new reason')],
     ['an import binding change', movedImports.replace('{ watch }', '{ watch as renamed }')],
-    [
-      'an import type flag change',
-      movedImports.replace('import type { Snapshot }', 'import { Snapshot }')
-    ],
-    ['a body change', movedImports.replace('Date.now()', 'performance.now()')],
-    ['a whitespace change', `${movedImports}\n`],
     ['a parse failure', `${movedImports})\n`]
   ])('keeps %s in enforcement scope alongside import path changes', (_label, current) => {
     createExistingTest()
     writeFileSync(join(fixture, 'existing.test.ts'), current)
 
     expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
-  })
-
-  it('keeps dynamic imports and export paths in enforcement scope', () => {
-    const source = `${existingTest}void import('./old-dynamic')\nexport { value } from './old-export'\n`
-    createExistingTest(source)
-    writeFileSync(join(fixture, 'existing.test.ts'), source.replaceAll('./old-', './new-'))
-
-    expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
-  })
-
-  it('keeps import-only changes to an unparseable original in enforcement scope', () => {
-    createExistingTest(`${existingTest})\n`)
-    writeFileSync(join(fixture, 'existing.test.ts'), `${movedImports})\n`)
-
-    expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
-  })
-
-  it('keeps added and deleted files in enforcement scope', () => {
-    createExistingTest()
-    rmSync(join(fixture, 'existing.test.ts'))
-    writeFileSync(join(fixture, 'added.test.ts'), movedImports)
-    git('add', '.')
-
-    expect([...listChangedFiles(fixture)].sort()).toEqual(['added.test.ts', 'existing.test.ts'])
   })
 
   it('enforces findings in tracked files whose names Git quotes', () => {

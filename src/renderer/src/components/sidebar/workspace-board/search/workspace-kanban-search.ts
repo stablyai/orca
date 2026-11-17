@@ -2,7 +2,7 @@ import { isWorktreePaletteQueryTooLarge } from '../../../../../../shared/palette
 import { searchWorktreeDocuments } from '@/lib/workspace/search/worktrees/worktree-palette-search'
 import { buildWorktreePaletteDocuments } from '@/lib/workspace/search/worktrees/worktree-palette-document'
 import type { PaletteDocument } from '../../../../../../shared/palette-match/palette-document'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import {
   composeWorktreeHostIdentity,

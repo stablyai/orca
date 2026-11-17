@@ -1,4 +1,4 @@
-import type { PtyPaneStartup } from '../../pty-connection-types'
+import type { PtyPaneStartup } from './pty-pane-startup'
 
 import type { ColdRestoreAgentResumeStartup, PendingStartupCommand } from './fresh-spawn-types'
 

@@ -5,19 +5,19 @@ import {
 } from '../../shared/source-control/hosted-review/hosted-review-refs'
 import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
 import type { GitUpstreamStatus } from '../../shared/git/status/git-status-types'
-import { gitExecFileAsync } from '../github/gh-utils'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
-import { probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
-import { gitOptionalLocksDisabledEnv } from '../git/runner'
+import { probeExactRefsViaForEachRef } from '../git/refs/resolution/exact-ref-probe'
+import { gitOptionalLocksDisabledEnv } from '../git/command-runner/git-environment/git-process-env'
 import {
   parsePorcelainV1Records,
   type PorcelainV1Record
-} from '../git/source-control/porcelain-v1-records'
+} from '../git/source-control/status/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
-import { getUpstreamStatus } from '../git/source-control/upstream'
+import { getUpstreamStatus } from '../git/source-control/upstream/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -194,18 +194,20 @@ export async function baseRefExistsOnRemote(
   }
 }
 
-export async function getCurrentBranch(
+export async function getCurrentBranchAndHead(
   repoPath: string,
   executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
-): Promise<string> {
+): Promise<{ branch: string; headOid: string | null }> {
+  // One process: the first HEAD prints the commit, the --abbrev-ref HEAD after it the branch.
   const { stdout } = await runGitForHostedReview(
     repoPath,
-    ['rev-parse', '--abbrev-ref', 'HEAD'],
+    ['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD'],
     executionHostId,
     options
   )
-  return stripRefPrefix(stdout.trim())
+  const [headOid = '', branch = ''] = stdout.trim().split(/\r?\n/)
+  return { branch: stripRefPrefix(branch.trim()), headOid: headOid.trim() || null }
 }
 
 export async function hasUncommittedChanges(

@@ -1,7 +1,7 @@
 import { isPtyIncarnationId } from '../../../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
-import { keptSuffixMeta, markedAfterEviction } from '../../terminal-stream-position'
+import { keptSuffixMeta, markedAfterEviction } from './terminal-stream-position'
 
 type BufferedPreHandlerPtyData = {
   data: string
@@ -292,7 +292,7 @@ export function hasPreHandlerPtyExit(ptyId: string, incarnationId?: unknown): bo
 
 export function drainPreHandlerPtyExit(
   ptyId: string,
-  handler: (code: number) => void,
+  handler: (code: number, incarnationId?: string) => void,
   incarnationId?: unknown
 ): void {
   // Select the newest admissible lifetime record to preserve last-write-wins behavior.
@@ -307,7 +307,7 @@ export function drainPreHandlerPtyExit(
   }
   preHandlerPtyExit.delete(ptyId)
   try {
-    handler(exit.code)
+    handler(exit.code, exit.incarnationId)
   } finally {
     // Draining transfers exit ownership despite handler throws; duplicates cannot become new pre-handler events.
     consumePreHandlerPtyState(ptyId)

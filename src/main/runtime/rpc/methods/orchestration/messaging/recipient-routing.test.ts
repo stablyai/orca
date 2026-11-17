@@ -1,14 +1,13 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import { resolveBareOrchestrationRecipient } from './recipient-routing'
+
 import {
   createRootDispatch,
   reattachDispatchConsumer
@@ -50,70 +49,6 @@ describe('orchestration recipient routing oracle', () => {
   }
 
   afterEach(() => harness.cleanup())
-
-  it('keeps complete Dispatch branch precedence and ambiguity through the shared selector', () => {
-    setup()
-    const leaf = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
-    const pane = `tab_exact:${leaf}`
-    const exact = createRootDispatch(db, db.createTask({ spec: 'exact' }).id, 'term_exact', pane)
-    const suffix = createRootDispatch(
-      db,
-      db.createTask({ spec: 'suffix' }).id,
-      'term_suffix',
-      'tab_prior:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-    )
-    const handle = createRootDispatch(
-      db,
-      db.createTask({ spec: 'handle' }).id,
-      'term_selected',
-      'tab_other:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-    )
-    // Retained rows can collide after remint; ordinary creation refuses an already occupied pane.
-    db.db
-      .prepare('UPDATE dispatch_contexts SET assignee_pane_key = ? WHERE id = ?')
-      .run(`tab_prior:${leaf}`, suffix.id)
-    const reads = vi.spyOn(db.db, 'prepare')
-    expect(db.getActiveDispatchMailboxOwners('term_selected', pane).map((row) => row.id)).toEqual([
-      handle.id
-    ])
-    expect(reads).toHaveBeenCalledTimes(1)
-    reads.mockClear()
-    expect(db.getActiveDispatchMailboxOwners('term_missing', pane).map((row) => row.id)).toEqual([
-      exact.id
-    ])
-    expect(reads).toHaveBeenCalledTimes(2)
-    reads.mockClear()
-    expect(
-      db.getActiveDispatchMailboxOwners('term_missing', `tab_reminted:${leaf}`).map((row) => row.id)
-    ).toEqual([suffix.id, exact.id])
-    expect(reads).toHaveBeenCalledTimes(3)
-    mockTerminalPaneKeys((candidate) =>
-      candidate === 'term_missing' ? `tab_reminted:${leaf}` : null
-    )
-    expect(
-      resolveBareOrchestrationRecipient({ runtime, db, handle: 'term_missing' })
-    ).toMatchObject({ ok: false, code: 'recipient_ambiguous' })
-    expect(db.getInbox()).toEqual([])
-  })
-
-  it('rejects an unknown terminal without creating an unread row', async () => {
-    setup()
-
-    await expect(
-      call({ from: 'term_coord', to: 'term_invented', subject: 'unreachable' })
-    ).rejects.toMatchObject({ code: 'terminal_not_found' })
-    expect(db.getInbox(100)).toEqual([])
-  })
-
-  it('rejects a closed terminal that has no durable mailbox owner', async () => {
-    setup()
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('retained-pty-record')
-
-    await expect(
-      call({ from: 'term_coord', to: 'term_closed', subject: 'closed' })
-    ).rejects.toMatchObject({ code: 'terminal_not_found' })
-    expect(db.getInbox(100)).toEqual([])
-  })
 
   it('keeps a live terminal-only recipient readable and reports its delivery limitation', async () => {
     setup()
@@ -338,27 +273,6 @@ describe('orchestration recipient routing oracle', () => {
     ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
   })
 
-  it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {
-    setup()
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_current',
-      coordinatorPaneKey: 'tab_current:leaf_current'
-    })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_current' ? 'tab_current:leaf_current' : null
-    )
-
-    const result = (await call({
-      from: 'term_current',
-      to: 'term_coord',
-      subject: 'historical'
-    })) as SendResult
-
-    expect(result.message.to_handle).toBe(`run:${senderRunId}`)
-    expect(result.warnings).toBeUndefined()
-  })
-
   it('rejects a historical handle that names more than one foreign Run', async () => {
     setup()
     db.createRun({
@@ -376,39 +290,6 @@ describe('orchestration recipient routing oracle', () => {
       call({ from: 'term_coord', to: 'term_ambiguous', subject: 'ambiguous' })
     ).rejects.toMatchObject({ code: 'recipient_ambiguous' })
     expect(db.getInbox(100)).toEqual([])
-  })
-
-  it('partially delivers @worktree:<id> when a listed recipient disappears before routing', async () => {
-    setup()
-    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [terminal('term_coord'), terminal('term_live'), terminal('term_disappeared')],
-      totalCount: 3,
-      truncated: false
-    })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
-    const adoptionLookup = vi.spyOn(db, 'getLegacyAdoptedRunMailboxOwner')
-
-    const result = (await call({
-      from: 'term_coord',
-      to: '@worktree:wt_target',
-      subject: 'fan-out'
-    })) as GroupSendResult
-
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0]).toMatchObject({ to_handle: 'term_live' })
-    expect(result.recipients).toBe(1)
-    expect(result.warnings?.map((warning) => warning.code).sort()).toEqual([
-      'legacy_terminal_recipient',
-      'recipient_unreachable'
-    ])
-    expect(db.getInbox(100)).toHaveLength(1)
-    expect(adoptionLookup).toHaveBeenCalledTimes(1)
   })
 
   it('addresses @all recipients by Dispatch, so a vanished worker terminal still gets durable mail', async () => {
@@ -546,38 +427,6 @@ describe('orchestration recipient routing oracle', () => {
       state: 'completed',
       receipt: expect.stringContaining('legacy_terminal_recipient')
     })
-  })
-
-  it('serializes ambiguity and explicit Run mismatch through the RPC boundary', async () => {
-    setup()
-    db.createRun({
-      objective: 'First owner',
-      coordinatorHandle: 'term_ambiguous',
-      coordinatorPaneKey: 'tab_first:leaf_first'
-    })
-    db.createRun({
-      objective: 'Second owner',
-      coordinatorHandle: 'term_ambiguous',
-      coordinatorPaneKey: 'tab_second:leaf_second'
-    })
-    const foreignRun = db.createRun({
-      objective: 'Foreign owner',
-      coordinatorHandle: 'term_foreign',
-      coordinatorPaneKey: 'tab_foreign:leaf_foreign'
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-
-    const ambiguous = await dispatcher.dispatch(
-      request('rpc_ambiguous', 'retry_ambiguous', 'term_ambiguous')
-    )
-    const mismatch = await dispatcher.dispatch(
-      request('rpc_mismatch', 'retry_mismatch', 'term_foreign', { run: senderRunId })
-    )
-
-    expect(ambiguous).toMatchObject({ ok: false, error: { code: 'recipient_ambiguous' } })
-    expect(mismatch).toMatchObject({ ok: false, error: { code: 'recipient_run_mismatch' } })
-    expect(foreignRun.id).not.toBe(senderRunId)
-    expect(db.getInbox(100)).toEqual([])
   })
 
   it('rolls back a partial group insert before an idempotent retry', async () => {

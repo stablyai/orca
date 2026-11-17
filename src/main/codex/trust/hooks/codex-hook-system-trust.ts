@@ -1,4 +1,4 @@
-import type { HookDefinition } from '../../../agent-hooks/installer-utils'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
   type CodexEventLabel,

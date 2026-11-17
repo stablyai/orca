@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -9,9 +10,9 @@ import type { AppState } from '@/store/types'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -103,7 +104,9 @@ describe('resume sleeping agent provider claims', () => {
     useAppStore.setState({
       ...makePreservedPaneState(record),
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
-      agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({ [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) })
+      )
     })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
@@ -122,9 +125,11 @@ describe('resume sleeping agent provider claims', () => {
       tabsByWorktree: {
         'wt-1': [makeTerminalTab('tab-1'), makeTerminalTab('tab-2')]
       },
-      agentStatusByPaneKey: {
-        [otherPaneKey]: makeWorkingStatus(otherPaneKey, 'tab-2', record)
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [otherPaneKey]: makeWorkingStatus(otherPaneKey, 'tab-2', record)
+        })
+      )
     })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
@@ -143,7 +148,9 @@ describe('resume sleeping agent provider claims', () => {
       activeTabId: null,
       activeTabIdByWorktree: {},
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1')] },
-      agentStatusByPaneKey: { [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({ [paneKey]: makeWorkingStatus(paneKey, 'tab-1', record) })
+      )
     })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
@@ -172,13 +179,15 @@ describe('resume sleeping agent provider claims', () => {
       },
       ptyIdsByTabId: { 'tab-peer': ['pty-peer'] },
       sleepingAgentSessionsByPaneKey: { [paneKey]: record },
-      agentStatusByPaneKey: {
-        [peerPaneKey]: {
-          ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
-          worktreeId: 'wt-2',
-          state: 'done'
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [peerPaneKey]: {
+            ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
+            worktreeId: 'wt-2',
+            state: 'done'
+          }
+        })
+      )
     })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
@@ -207,13 +216,15 @@ describe('resume sleeping agent provider claims', () => {
       },
       ptyIdsByTabId: {},
       sleepingAgentSessionsByPaneKey: { [paneKey]: record },
-      agentStatusByPaneKey: {
-        [peerPaneKey]: {
-          ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
-          worktreeId: 'wt-2',
-          state: 'done'
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [peerPaneKey]: {
+            ...makeWorkingStatus(peerPaneKey, 'tab-peer', record),
+            worktreeId: 'wt-2',
+            state: 'done'
+          }
+        })
+      )
     })
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)

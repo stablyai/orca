@@ -6,7 +6,7 @@ import {
   findTextMatchRanges,
   isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge,
   type TextMatchOptions
-} from '../../../../lib/text-match-ranges'
+} from '../../../../lib/text-search/text-match-ranges'
 import {
   createRichMarkdownVisibleTextMap,
   type RichMarkdownVisibleTextSegment

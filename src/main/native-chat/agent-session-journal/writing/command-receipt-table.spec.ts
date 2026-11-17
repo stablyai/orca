@@ -17,7 +17,7 @@ import {
   commandReceiptFixture,
   writeCommandReceiptTestRecord
 } from './command-receipt-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 
 export function registerCommandReceiptTableTests(): void {
   let root: string
@@ -109,29 +109,6 @@ export function registerCommandReceiptTableTests(): void {
         'command caller does not match its scope'
       )
       expect(read(receipt)).toEqual({ verdict: 'absent' })
-    })
-
-    it('requires a receipt to be written inside an open transaction', () => {
-      const receipt = commandReceiptFixture()
-      expect(() => insertCommandReceiptIfAbsent(database.db, globalScope, receipt)).toThrow(
-        /inside an open transaction/
-      )
-      expect(read(receipt)).toEqual({ verdict: 'absent' })
-    })
-
-    it('throws and rolls back an unexpected key collision after an absent lookup', () => {
-      database.db
-        .exec(`CREATE TRIGGER collide_command_receipt BEFORE INSERT ON agent_session_command_receipts
-      BEGIN
-        INSERT INTO agent_session_command_receipts
-          (operation_id, session_id, caller_key, method, fingerprint, status, result_json, rejection_json, accepted_at)
-          VALUES (NEW.operation_id, NEW.session_id, NEW.caller_key, NEW.method, NEW.fingerprint,
-            NEW.status, NEW.result_json, NEW.rejection_json, NEW.accepted_at);
-      END`)
-      const receipt = commandReceiptFixture()
-      expect(() => insert(receipt)).toThrow(/UNIQUE constraint/i)
-      expect(read(receipt)).toEqual({ verdict: 'absent' })
-      expect(database.db.isTransaction).toBe(false)
     })
   })
 

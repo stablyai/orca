@@ -1,7 +1,10 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import {
+  getFitOverrideForPty,
+  onOverrideChange
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-import { isPassiveTerminalInputReport } from '../../terminal-passive-input-report'
+import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 
 export function installPaneViewportClaim(session: ConnectPanePtySession): void {
   session.claimViewportForUserActivity = (input?: string): void => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
-import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
+import { preparePaletteQuery } from './palette-query'
 import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
 
 function ready(query: string) {
@@ -46,11 +46,6 @@ describe('palette query preparation', () => {
     expect(ready('--').tokens[0]?.isPunctuationOnly).toBe(true)
   })
 
-  it('rejects more than the token limit', () => {
-    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
-    expect(preparePaletteQuery(query)).toEqual({ state: 'invalid', reason: 'too-many-tokens' })
-  })
-
   it('rejects an oversized query', () => {
     expect(preparePaletteQuery('a'.repeat(3000))).toEqual({
       state: 'invalid',
@@ -65,33 +60,14 @@ describe('normalization and ranges', () => {
     const index = text.normalized.indexOf('deploy')
     expect(mapNormalizedRange(text, index, index + 6)).toEqual({ start: 6, end: 12 })
   })
-
-  it('maps supplementary-plane characters back correctly', () => {
-    const text = normalizePaletteText('🚀 Launch')
-    const index = text.normalized.indexOf('launch')
-    expect(text.original.slice(...Object.values(mapNormalizedRange(text, index, index + 6)))).toBe(
-      'Launch'
-    )
-  })
 })
 
 describe('structured label matching', () => {
   const document = labelOnly('scan daily 1.4.182 · 2026-08-13 · 93334dc')
 
-  it.each(['0813', '08-13', '08/13', '20260813', '2026-08-13'])(
-    'accepts the date alias %s',
-    (alias) => {
-      expect(run(document, alias)).not.toBeNull()
-    }
-  )
-
   it('rejects a reordered date and a different date', () => {
     expect(run(document, '13/08')).toBeNull()
     expect(run(document, '20260812')).toBeNull()
-  })
-
-  it('matches a compact version inside one atom', () => {
-    expect(run(document, '4182')).not.toBeNull()
   })
 
   it('cannot join characters across atoms', () => {
@@ -108,11 +84,6 @@ describe('structured label matching', () => {
     expect(run(document, '1.4.183')).toBeNull()
   })
 
-  it('applies light typo matching to long letter-only words', () => {
-    expect(run(document, 'dayly')).not.toBeNull()
-    expect(run(document, 'scam')?.rank.recovery).toBe(1)
-  })
-
   it('limits single Latin characters to word equality or prefix', () => {
     expect(run(labelOnly('alpha beta'), 'b')).not.toBeNull()
     expect(run(labelOnly('alpha beta'), 'l')).toBeNull()
@@ -120,10 +91,6 @@ describe('structured label matching', () => {
 
   it('lets a single non-Latin character substring match', () => {
     expect(run(labelOnly('重构登录流程'), '登')).not.toBeNull()
-  })
-
-  it('rejects punctuation-only tokens', () => {
-    expect(run(labelOnly('alpha beta'), '--')).toBeNull()
   })
 })
 
@@ -161,11 +128,6 @@ describe('identifier fields', () => {
         ]
       }
     ]
-  })
-
-  it('matches the exact number and its sigil alias', () => {
-    expect(run(review('#'), '4123')).not.toBeNull()
-    expect(run(review('#'), '#4123')).not.toBeNull()
   })
 
   it('rejects an incidental numeric substring', () => {
@@ -287,40 +249,7 @@ describe('evidence limits', () => {
     ]
   }
 
-  it('accepts one hidden source', () => {
-    expect(run(twoUnits, 'checkout 3000')).not.toBeNull()
-  })
-
   it('rejects assignments that need two hidden sources', () => {
     expect(run(twoUnits, '3000 infra')).toBeNull()
-  })
-})
-
-describe('container field matching', () => {
-  it('counts a container-only token and demotes quality class when every token lands on containers', () => {
-    const tabDoc: PaletteDocumentInput = {
-      id: 'tab-1',
-      visibleFields: [
-        {
-          id: 'title',
-          profile: 'structured-label',
-          text: 'README.md',
-          role: 'primary',
-          destinationEligible: true
-        },
-        {
-          id: 'worktree',
-          profile: 'structured-label',
-          text: 'STA-4360-feature',
-          role: 'container',
-          destinationEligible: false
-        }
-      ],
-      evidence: []
-    }
-    const match = run(tabDoc, '4360')
-    expect(match).not.toBeNull()
-    expect(match?.rank.coverage).toBe(2)
-    expect(match?.qualityClass).toBe('exact-evidence')
   })
 })

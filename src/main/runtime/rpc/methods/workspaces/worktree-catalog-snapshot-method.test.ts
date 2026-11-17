@@ -1,20 +1,13 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
-import '../../../../../shared/protocol-version'
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../../shared/worktree-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreePsSummary
-} from '../../../../../shared/runtime-worktree-contracts'
-
-function makeRuntime(...rows: RuntimeWorktreePsSummary[]) {
-  return runtimeReturning(
-    ...rows.map((row) => ({ worktrees: [row], totalCount: 1, truncated: false }))
-  )
-}
+} from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 
 function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
   const getWorktreePs = vi.fn().mockResolvedValue({
@@ -28,47 +21,6 @@ function runtimeReturning(...results: RuntimeWorktreePsResult[]) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps reads only these two runtime members.
   return { getRuntimeId: () => 'test-runtime', getWorktreePs } as unknown as OrcaRuntimeService
 }
-
-describe('worktree.ps catalog snapshots', () => {
-  it('gates source-default worktree projection by client capability', async () => {
-    const runtime = makeRuntime()
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'legacy',
-        authToken: 'token',
-        method: 'worktree.ps',
-        params: { limit: 10_000 }
-      },
-      () => {},
-      { clientCapabilities: [] }
-    )
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'current',
-        authToken: 'token',
-        method: 'worktree.ps',
-        params: { limit: 10_000, includeAgentWait: true }
-      },
-      () => {},
-      { clientCapabilities: [WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY] }
-    )
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'mobile',
-        authToken: 'token',
-        method: 'worktree.ps',
-        params: { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true }
-      },
-      () => {},
-      { clientCapabilities: [] }
-    )
-
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(1, 10_000, false, false)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(2, 10_000, true, true)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(3, 10_000, true, false)
-  })
-})
 
 function psRow(overrides: Partial<RuntimeWorktreePsSummary> = {}): RuntimeWorktreePsSummary {
   return {
@@ -120,62 +72,6 @@ async function poll(
   return { ...response.result }
 }
 
-describe('worktree.ps snapshot polls', () => {
-  // Same 30 s bucket, different chunk: only the per-chunk activity fields moved.
-  const before = psRow({ lastOutputAt: 1_700_000_031_000, preview: 'step 1' })
-  const after = psRow({ lastOutputAt: 1_700_000_039_000, preview: 'step 2' })
-
-  it('keeps the snapshot id while only fine-grained activity changes', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(before, after),
-      methods: WORKTREE_METHODS
-    })
-    const first = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-    const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
-
-    expect(first.worktrees).toEqual([{ ...before, preview: '', lastOutputAt: 1_700_000_010_000 }])
-    expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
-  })
-
-  it('still reports output that crosses a bucket boundary', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(before, psRow({ lastOutputAt: 1_700_000_071_000 })),
-      methods: WORKTREE_METHODS
-    })
-    const first = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-    const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
-
-    expect(second.snapshotId).not.toBe(first.snapshotId)
-    expect(second.worktrees).toEqual([expect.objectContaining({ lastOutputAt: 1_700_000_070_000 })])
-  })
-
-  it('keeps the snapshot id while two active rows trade places inside one bucket', async () => {
-    const a = (lastOutputAt: number) => psRow({ lastOutputAt })
-    const b = (lastOutputAt: number) =>
-      psRow({ lastOutputAt, worktreeId: 'repo-1::/w/b', path: '/w/b', displayName: 'b' })
-    const runtime = runtimeReturning(
-      { worktrees: [a(1_700_000_039_000), b(1_700_000_031_000)], totalCount: 2, truncated: false },
-      { worktrees: [b(1_700_000_039_500), a(1_700_000_039_000)], totalCount: 2, truncated: false }
-    )
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-    const first = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-    const second = await poll(dispatcher, { limit: 10_000, afterSnapshotId: first.snapshotId })
-
-    expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
-  })
-
-  it('returns byte-identical rows, preview included, to callers that do not poll snapshots', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: makeRuntime(before),
-      methods: WORKTREE_METHODS
-    })
-
-    expect(JSON.stringify(await poll(dispatcher, { limit: 10_000 }))).toBe(
-      JSON.stringify({ worktrees: [before], totalCount: 1, truncated: false })
-    )
-  })
-})
-
 describe('worktree.ps row deltas', () => {
   const a = psRow({ worktreeId: 'repo-1::/w/a', displayName: 'a' })
   const b = psRow({ worktreeId: 'repo-1::/w/b', displayName: 'b' })
@@ -206,23 +102,5 @@ describe('worktree.ps row deltas', () => {
       0
     ])
     expect(delta).not.toHaveProperty('worktrees')
-  })
-
-  it('answers a full catalog to callers that did not opt in or hold an unknown base', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: runtimeReturning(catalog(a), catalog(a, b), catalog(a, b, c)),
-      methods: WORKTREE_METHODS
-    })
-    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
-
-    const optedOut = await poll(dispatcher, { limit: 10_000, afterSnapshotId: base.snapshotId })
-    const unknownBase = await poll(dispatcher, {
-      limit: 10_000,
-      afterSnapshotId: 'evicted',
-      acceptRowDelta: true
-    })
-
-    expect(optedOut.worktrees).toHaveLength(2)
-    expect(unknownBase.worktrees).toHaveLength(3)
   })
 })

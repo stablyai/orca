@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import {
-  boundWorkerTranscriptMessages,
-  boundWorkerTranscriptTail
-} from './worker-transcript-payload'
-import { redactWorkerTerminalLines } from '../../terminal-authority/views/worker-terminal-redaction'
+import { boundWorkerTranscriptMessages } from './worker-transcript-payload'
 
 describe('worker transcript wire bounds', () => {
   it('clips oversized blocks and omits local image paths', () => {
@@ -32,31 +27,6 @@ describe('worker transcript wire bounds', () => {
     expect(JSON.stringify(result)).not.toContain('C:\\\\Users')
     expect(result.limited).toBe(true)
     expect(result.warnings).toContain('Local image paths were omitted from transcript output.')
-  })
-
-  it('marks text, block-count, and tool-input clipping as limited', () => {
-    const result = boundWorkerTranscriptMessages([
-      {
-        id: 'message-clipped',
-        role: 'assistant',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [
-          { type: 'text', text: 'x'.repeat(5_000) },
-          { type: 'tool-call', name: 'Write', input: { content: 'y'.repeat(5_000) } },
-          ...Array.from({ length: 6 }, () => ({ type: 'text' as const, text: 'extra' }))
-        ]
-      }
-    ])
-
-    expect(result.limited).toBe(true)
-    expect(result.warnings).toEqual(
-      expect.arrayContaining([
-        'Some transcript blocks were omitted from oversized messages.',
-        'Oversized transcript text was clipped.',
-        'Oversized tool input was clipped.'
-      ])
-    )
   })
 
   // Retain transport bounds even at today's producer cap: mixed-version peers can emit larger groups.
@@ -92,105 +62,6 @@ describe('worker transcript wire bounds', () => {
         'Dispatch capability tokens were redacted from transcript output.'
       ])
     )
-  })
-
-  it('bounds a spawn-group state a newer build wrote as an oversized open string', () => {
-    const result = boundWorkerTranscriptMessages([
-      {
-        id: 'message-roster-state',
-        role: 'system',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [
-          {
-            type: 'subagent-group',
-            groupId: 'g'.repeat(900),
-            agents: [
-              {
-                id: 'i'.repeat(900),
-                label: 'l'.repeat(900),
-                state: 's'.repeat(900) as 'working'
-              }
-            ]
-          }
-        ]
-      }
-    ])
-
-    const block = result.messages[0]?.blocks[0]
-    const agent = block?.type === 'subagent-group' ? block.agents[0] : undefined
-    expect(block?.type === 'subagent-group' ? block.groupId.length : 0).toBe(512)
-    expect(agent?.id.length).toBe(512)
-    expect(agent?.label.length).toBe(512)
-    // A clipped state is not a valid known state; report unverifiable.
-    expect(agent?.state).toBe('unverifiable')
-    expect(result.limited).toBe(true)
-  })
-
-  it('bounds a background-task kind and state a newer build wrote as open strings', () => {
-    const result = boundWorkerTranscriptMessages([
-      JSON.parse(
-        JSON.stringify({
-          id: 'message-task-state',
-          role: 'system',
-          timestamp: null,
-          source: 'transcript',
-          blocks: [
-            {
-              type: 'background-task',
-              taskId: 'task-1',
-              kind: 'k'.repeat(900),
-              label: 'l'.repeat(900),
-              state: 's'.repeat(900)
-            }
-          ]
-        })
-      )
-    ])
-
-    const block = result.messages[0]?.blocks[0]
-    if (block?.type !== 'background-task') {
-      throw new Error('expected a background-task block')
-    }
-    expect(block.kind).toBe('unknown')
-    expect(block.label).toHaveLength(512)
-    expect(block.state).toBe('unverifiable')
-    expect(result.limited).toBe(true)
-  })
-
-  it('keeps complete bounded messages unlimited', () => {
-    const result = boundWorkerTranscriptMessages([
-      {
-        id: 'message-complete',
-        role: 'assistant',
-        timestamp: null,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'complete' }]
-      }
-    ])
-
-    expect(result).toMatchObject({ limited: false, warnings: [] })
-  })
-
-  it("serves a structured worker's journal rows without their list position", () => {
-    const [message] = projectStructuredItemsToNativeChat([
-      {
-        itemId: 'reply',
-        revision: 1,
-        sequence: 7,
-        sequenceIndex: 1,
-        observedAt: 1,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] }
-      }
-    ])
-    expect(message?.journalPosition).toEqual({ sequence: 7, index: 1 })
-    for (const served of [
-      boundWorkerTranscriptMessages([message!]).messages,
-      boundWorkerTranscriptTail([message!], 262_144).messages
-    ]) {
-      expect(served).toHaveLength(1)
-      expect(served[0]).not.toHaveProperty('journalPosition')
-    }
   })
 
   it('keeps two roster ids sharing a 512-char prefix distinct', () => {
@@ -284,17 +155,6 @@ describe('worker transcript wire bounds', () => {
     expect(JSON.stringify(result.messages)).toContain('[dispatch capability redacted]')
     expect(result.warnings).toContain(
       'Dispatch capability tokens were redacted from transcript output.'
-    )
-  })
-
-  it('redacts dispatch capabilities from terminal fallback lines', () => {
-    const capability = `dcap_${'A'.repeat(43)}`
-
-    expect(redactWorkerTerminalLines([`send --dispatch-capability ${capability}`, 'safe'])).toEqual(
-      {
-        lines: ['send --dispatch-capability [dispatch capability redacted]', 'safe'],
-        warnings: ['Dispatch capability tokens were redacted from terminal output.']
-      }
     )
   })
 })

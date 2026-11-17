@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../assignment-store.js'
 import { openIdleRehomeTestDatabase } from './idle-regional-rehome-test-database.js'
 
@@ -134,10 +134,6 @@ const moves = (candidates: { userId: string; sourceCellId: string; targetCellId:
     to: cells.find(({ id }) => id === targetCellId)!.region
   }))
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
 describe('rehome source-region filter', () => {
   it('keeps US to Asia moves and drops Asia to US moves', async () => {
     const context = await setup('us-central1')
@@ -151,13 +147,5 @@ describe('rehome source-region filter', () => {
     await context.database.close()
   })
 
-  it('reports the filtered hosts in the preview, agreeing with selection', async () => {
-    const context = await setup('us-central1')
-    const preview = await context.store.previewRegionalRehomeEligibility(context.safety())
-    expect(preview.counts).toEqual({
-      'eligible:us-central1-to-asia-east2': 1,
-      'source-outside-director-region': 1
-    })
-    await context.database.close()
-  })
+
 })

@@ -1,3 +1,4 @@
+import type { WorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import type React from 'react'
 import type {
   WorkspaceStatus,
@@ -53,9 +54,18 @@ export type WorktreeDropCommitContext = {
     pickedCopies: DraggedWorktreeCopies,
     parentIdentity: string
   ) => boolean
+  captureFolderRetention?: (
+    point: WorktreeReorderDropPoint | undefined,
+    pickedCopies: DraggedWorktreeCopies,
+    sourceGroupKey: string
+  ) => WorktreeReorderDropPoint | undefined
   clearReorderedWorktreeParents: (args: {
     draggedIds: readonly string[]
     sourceGroupKey: string
+    /** Host-qualified, so a folder workspace's child unnests on its own machine. */
+    pickedCopies?: DraggedWorktreeCopies
+    /** Where it dropped: a folder's child dropped inside its folder's card reorders, not unnests. */
+    dropPoint?: WorktreeReorderDropPoint
   }) => void
   clearWorktreeDrag: () => void
   onMoveWorktreesToStatus: (

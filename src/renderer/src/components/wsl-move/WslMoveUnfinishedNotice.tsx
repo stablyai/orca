@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react'
 import { Info } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { refreshWslMoveUnfinished, useWslMoveDialogStore } from './wsl-move-dialog-store'
 
 /** Committed moves whose automations the host has not turned back on yet; never left unsaid. */
 export function WslMoveUnfinishedNotice(): React.JSX.Element | null {
+  const t = useTranslate()
   const unfinished = useWslMoveDialogStore((s) => s.unfinished)
   useEffect(() => {
     void refreshWslMoveUnfinished()
@@ -20,12 +21,12 @@ export function WslMoveUnfinishedNotice(): React.JSX.Element | null {
           <Info className="mt-0.5 size-3.5 shrink-0" />
           <span>
             {move.automationsPending.length === 1
-              ? translate(
+              ? t(
                   'wslMove.unfinished.one',
                   'One automation moved to the {{distro}} host is still off. Orca keeps asking the host to turn it back on.',
                   { distro: move.distro }
                 )
-              : translate(
+              : t(
                   'wslMove.unfinished.many',
                   '{{n}} automations moved to the {{distro}} host are still off. Orca keeps asking the host to turn them back on.',
                   { n: move.automationsPending.length, distro: move.distro }

@@ -2,7 +2,7 @@ import { formatTerminalStartFailure } from '../../../../../shared/terminal/pty/l
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS
-} from '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
+} from '../../../workspaces/lineage/runtime-lineage-error'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { AgentLaunchTarget } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {

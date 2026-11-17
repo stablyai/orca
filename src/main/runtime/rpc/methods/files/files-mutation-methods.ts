@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../../shared/file-bytes-write'
+import { FILE_REPLACE_WITH_UPLOAD_METHOD } from '../../../../../shared/file-write/file-bytes-write'
 import {
   FileCommitUpload,
   FileReplaceWithUpload,
@@ -12,7 +12,7 @@ import {
   FileWriteIfUnchanged,
   FileWriteBase64,
   FileWriteBase64Chunk
-} from '../../../../../shared/rpc-contract/files-mutation-params'
+} from '../../../../../shared/rpc-contract/filesystem/files-mutation-params'
 
 type SshMutationParams = {
   expectedExecutionHostId?: string

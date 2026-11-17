@@ -1,13 +1,16 @@
 import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import { isTerminalHttpLinkActivation } from '../gestures/terminal-http-link-activation'
+import {
+  isTerminalLinkDirectActivation as isTerminalHttpLinkActivation,
+  isTerminalOwnedLinkGesture
+} from '../gestures/terminal-link-activation'
 import {
   installTerminalLinkPtyMouseSuppression,
   type TerminalLinkPtyMouseSuppression
 } from '../gestures/terminal-link-pty-mouse-suppression'
-import { getTerminalBufferPositionForMouseEvent } from '../../terminal-mouse-buffer-position'
+import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
-import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,
@@ -16,7 +19,6 @@ import {
   type HttpLinkDestination,
   type HttpLinkRoutingPreferenceRequester
 } from '@/lib/browser/navigation/http-link-destinations'
-import { isTerminalOwnedLinkGesture } from '../gestures/terminal-link-activation'
 import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext
@@ -27,11 +29,11 @@ type UrlLinkHitTestDeps = {
   sourceTabId?: string | null
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   linkActionContext?: TerminalLinkActionContext | null
-  actionDestinations?: TerminalHttpLinkActionDestinations
+  actionDestinations?: HttpLinkActionDestinations
   actionDestination?: string
-  forceDestination?: TerminalHttpLinkDestination
+  forceDestination?: HttpLinkDestination
 }
 
 type UrlLinkClickFallbackDeps = {
@@ -39,20 +41,14 @@ type UrlLinkClickFallbackDeps = {
   sourceTabId?: string | null
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   getLinkActionContext?: () => TerminalLinkActionContext | null
-  getActionDestinations?: () => TerminalHttpLinkActionDestinations
+  getActionDestinations?: () => HttpLinkActionDestinations
 }
 
 export type HttpLinkClickFallbackBinding = IDisposable & {
   ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
-
-export type TerminalHttpLinkDestination = HttpLinkDestination
-
-export type TerminalHttpLinkActionDestinations = HttpLinkActionDestinations
-
-export type TerminalLinkRoutingPreferenceRequester = HttpLinkRoutingPreferenceRequester
 
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || (event.button !== 0 && event.button !== 1)) {
@@ -124,20 +120,23 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
+export function isTerminalLinkAtMouseEvent(terminal: Terminal, event: MouseEvent): boolean {
+  if (isTerminalLinkifierHoverActive(terminal)) {
+    return true
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return Boolean(
+    position &&
+    findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+  )
+}
+
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): HttpLinkClickFallbackBinding {
-  const isLinkMouseEvent = (event: MouseEvent): boolean => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
-      return true
-    }
-    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-    return Boolean(
-      position &&
-      findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-    )
-  }
+  const isLinkMouseEvent = (event: MouseEvent): boolean =>
+    isTerminalLinkAtMouseEvent(terminal, event)
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
     terminal,
     isLinkMouseEvent,

@@ -6,7 +6,10 @@ import type { Plugin, Rollup } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
-import { createSandboxedScriptBundlesPlugin } from './config/build-plugins/sandboxed-script-bundles'
+import {
+  createSandboxedScriptBundlesPlugin,
+  ONE_BYTE_UNMINIFIED_OUTPUT
+} from './config/build-plugins/sandboxed-script-bundles'
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
 import { createSucraseUnusedTransformersPlugin } from './config/build-plugins/sucrase-unused-transformers'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
@@ -15,6 +18,11 @@ import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cach
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
+import { reactPluginOptions } from './config/build-plugins/react-compiler'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
@@ -32,6 +40,7 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'unified',
   'remark-parse',
   'remark-gfm',
+  'hast-util-from-html-isomorphic',
   // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
   'zod'
 ])
@@ -222,6 +231,7 @@ export const electronViteConfig: UserConfig = {
       },
       rollupOptions: {
         input: MAIN_BUILD_ENTRY_POINTS,
+        onwarn: ignoreIneffectiveDynamicImport,
         // CLI builds replace exported entries; keep their internals separate without moving startup paths.
         preserveEntrySignatures: 'exports-only',
         // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
@@ -262,10 +272,7 @@ export const electronViteConfig: UserConfig = {
   preload: {
     build: {
       externalizeDeps: false,
-      rollupOptions: {
-        // Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
-        output: { charset: 'ascii', comments: { legal: true, annotation: true, jsdoc: false } }
-      }
+      rollupOptions: { output: ONE_BYTE_UNMINIFIED_OUTPUT }
     }
   },
   renderer: {
@@ -283,7 +290,7 @@ export const electronViteConfig: UserConfig = {
       }
     },
     plugins: [
-      react(),
+      react(reactPluginOptions()),
       tailwindcss(),
       createPdfjsViewerAssetsPlugin(),
       createViteCacheRetentionPlugin()
@@ -297,6 +304,7 @@ export const electronViteConfig: UserConfig = {
     build: {
       manifest: true,
       reportCompressedSize: false,
+      chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
@@ -304,6 +312,7 @@ export const electronViteConfig: UserConfig = {
       rollupOptions: {
         // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
+        onwarn: ignoreIneffectiveDynamicImport,
         output: { charset: 'ascii' },
         input: {
           index: resolve('src/renderer/index.html'),

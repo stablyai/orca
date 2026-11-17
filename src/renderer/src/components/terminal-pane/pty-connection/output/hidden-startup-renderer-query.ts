@@ -1,6 +1,6 @@
 import { containsCsiRendererQuery } from '../../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
-import { isKnownTuiAgentTerminalStartupCommand } from '../../terminal-startup-command-classifier'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import { isKnownTuiAgentTerminalStartupCommand } from '../startup/terminal-startup-command-classifier'
+import type { PtyConnectionDeps } from '../pty-connection-deps'
 
 export function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']

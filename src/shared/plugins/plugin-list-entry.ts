@@ -47,6 +47,17 @@ export type PluginHostNewFile = {
   icon?: string
 }
 
+export type PluginHostFont = {
+  /** The manifest's family name; clients register it as `pluginFontFamilyName`. */
+  family: string
+  faces: {
+    /** orca-plugin-image URL main serves while the plugin is enabled. */
+    url: string
+    weight: string
+    style: 'normal' | 'italic'
+  }[]
+}
+
 export type PluginHostListEntry = {
   pluginKey: string
   consentFingerprint: string | null
@@ -80,6 +91,8 @@ export type PluginHostListEntry = {
   customEditors?: PluginHostCustomEditor[]
   /** Absent on hosts that predate new-file templates. */
   newFiles?: PluginHostNewFile[]
+  /** Absent on hosts that predate plugin fonts. */
+  fonts?: PluginHostFont[]
   commands: {
     id: string
     title: string

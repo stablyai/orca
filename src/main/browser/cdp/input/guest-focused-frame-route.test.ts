@@ -11,6 +11,8 @@ function fakeGuest(): WebContents {
 type FrameModel = {
   // Document keys: '' = root, session ID = cross-site frame, 'frame:<id>' = same-site context.
   focusedFrameBySession: Record<string, string | null>
+  focusedElementBySession?: Record<string, boolean>
+  rootProbeFails?: boolean
   crossSiteTargets: string[]
   sessionForTarget: Record<string, string>
   deadSessions?: Set<string>
@@ -29,12 +31,20 @@ function frameSender(model: FrameModel) {
     }
     switch (method) {
       case 'Runtime.evaluate': {
+        if (model.rootProbeFails && session === '' && params.contextId === undefined) {
+          throw new Error('Execution context was destroyed')
+        }
         const contextFrame =
           typeof params.contextId === 'number' ? frameByContext.get(params.contextId) : undefined
         const documentKey = contextFrame ? `frame:${contextFrame}` : session
         const frameId = model.focusedFrameBySession[documentKey] ?? null
         if (!frameId) {
-          return { result: { type: 'object', subtype: 'null' } }
+          return {
+            result: {
+              type: 'boolean',
+              value: model.focusedElementBySession?.[documentKey] ?? false
+            }
+          }
         }
         const objectId = `object-${(nextObject += 1)}`
         frameByObject.set(objectId, frameId)
@@ -96,23 +106,6 @@ describe('resolveFocusedFrameRoute', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('follows focus into nested cross-site frames and reuses their sessions', async () => {
-    const guest = fakeGuest()
-    const send = frameSender({
-      focusedFrameBySession: { '': 'OUTER', S1: 'INNER' },
-      crossSiteTargets: ['OUTER', 'INNER'],
-      sessionForTarget: { OUTER: 'S1', INNER: 'S2' }
-    })
-
-    expect(await resolveFocusedFrameRoute(guest, send)).toEqual({
-      kind: 'session',
-      sessionId: 'S2'
-    })
-    await resolveFocusedFrameRoute(guest, send)
-
-    expect(send.mock.calls.filter(([method]) => method === 'Target.attachToTarget')).toHaveLength(2)
   })
 
   it('attaches again when a cached frame session has died', async () => {

@@ -8,8 +8,8 @@ import { useTerminalParkingFoundation } from './use-terminal-parking-foundation'
 import { useTerminalParkingPass } from './use-terminal-parking-pass'
 import { useTerminalBrowserRetention } from './use-terminal-browser-retention'
 import { applyTerminalColdActivation } from './terminal-cold-activation'
-import { useActivationDeferredTabAdmission } from './terminal/use-activation-deferred-tab-admission'
-import { useTerminalWorktreePrewarm } from './terminal/use-terminal-worktree-prewarm'
+import { useActivationDeferredTabAdmission } from './terminal/workspace-mounting/use-activation-deferred-tab-admission'
+import { useTerminalWorktreePrewarm } from './terminal/worktree-prewarm/use-terminal-worktree-prewarm'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
 import { useTerminalCreateActions } from './use-terminal-create-actions'
 import { useTerminalCloseActions } from './use-terminal-close-actions'
@@ -27,7 +27,7 @@ export function useTerminalController() {
   const editorClose = Object.assign(closeQueue, useTerminalEditorCloseDialogActions(closeQueue))
   const parking = Object.assign(editorClose, useTerminalParkingFoundation(editorClose))
   useTerminalParkingPass(parking)
-  useTerminalBrowserRetention(parking)
+  useTerminalBrowserRetention()
   const coldActivation = Object.assign(parking, applyTerminalColdActivation(parking))
   useTerminalWatcherEffects(coldActivation)
   useActivationDeferredTabAdmission(coldActivation)

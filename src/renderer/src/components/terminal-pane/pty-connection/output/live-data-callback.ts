@@ -1,11 +1,11 @@
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../../input/paste/terminal-bracketed-paste'
 import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../../emulation/terminal-capability-replies'
-import { isDropSentinelMeta } from '../../terminal-stream-position'
+import { isDropSentinelMeta } from '../../pty-transport/delivery/terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 import { registerE2eTerminalPtyDataInjection } from '../instrumentation/e2e-terminal-pty-harness'

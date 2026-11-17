@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing-copy'
 import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
-
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
+import { BrowserMemorySaverSetting } from './BrowserMemorySaverSetting'
+import { getBrowserMemorySaverSearchEntry } from './browser-memory-saver-search'
 import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
@@ -20,10 +21,11 @@ import { BrowserSshWorkspaceRoutingSetting } from './routing/BrowserSshWorkspace
 import { BrowserProfileScopeSetting } from './profiles/BrowserProfileScopeSetting'
 import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { BrowserSessionCookiesSection } from './profiles/BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './profiles/BrowserNewProfileDialog'
 import { BrowserExtensionsSection } from './extensions/BrowserExtensionsSection'
+import { getBrowserExtensionsSearchEntry } from './extensions/browser-extensions-search'
 import { BrowserPasswordsSection } from './passwords/BrowserPasswordsSection'
 import { getBrowserPasswordsSearchEntry } from './passwords/browser-passwords-copy'
 import {
@@ -31,19 +33,21 @@ import {
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
 import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/execution-host/execution-host'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type BrowserPaneProps = {
   settings: GlobalSettings
@@ -63,6 +67,7 @@ export function BrowserPane({
   updateSettings,
   onOpenComputerUse
 }: BrowserPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -112,7 +117,7 @@ export function BrowserPane({
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
-  const browserSearchEntries = getBrowserPaneSearchEntries()
+  const browserSearchEntries = getBrowserPaneSearchEntries(undefined, t)
   const showHomePage = matchesSettingsSearch(searchQuery, [browserSearchEntries[0]])
   const showSearchEngine = matchesSettingsSearch(searchQuery, [browserSearchEntries[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [browserSearchEntries[2]])
@@ -127,33 +132,41 @@ export function BrowserPane({
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
-  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry()])
+  const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
+  // Browser tabs run in this desktop app; the web client has none to free.
+  const showMemorySaver =
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, [getBrowserMemorySaverSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
     { isMac },
-    settings.openLinksInAppModifierInverts === true
+    settings.openLinksInAppModifierInverts === true,
+    t
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
-      buildSidebarHostOptions({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      })
+      buildSidebarHostOptions(
+        {
+          repos,
+          sshTargetLabels,
+          sshConnectionStates,
+          settings,
+          runtimeEnvironments,
+          runtimeStatusByEnvironmentId,
+          hostLabelOverrides
+        },
+        t
+      )
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
-          label: host.label,
+          label: translateHostDisplayLabel(host, t),
           detail:
             host.kind === 'local'
-              ? translate('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
-              : translate(
+              ? t('auto.components.settings.BrowserPane.86b7c83fee', 'This computer')
+              : t(
                   'auto.components.settings.BrowserPane.c0f85056d9',
                   'Browser profiles on this Orca server.'
                 )
@@ -167,7 +180,8 @@ export function BrowserPane({
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
       hostLabelOverrides,
-      languageRevision
+      languageRevision,
+      t
     ]
   )
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
@@ -179,9 +193,10 @@ export function BrowserPane({
   const activeBrowserSessionProfileId =
     useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
-  const activeBrowserSessionProfileLabel =
-    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label ??
+  const activeBrowserSessionProfileLabel = translateBrowserSessionProfileLabel(
+    browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)?.label,
     activeBrowserSessionProfileId
+  )
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -231,65 +246,95 @@ export function BrowserPane({
     })
   }
 
+  const showPasswordsSection =
+    showPasswords &&
+    !isWebClientLocation() &&
+    selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
+  const showExtensions =
+    matchesSettingsSearch(searchQuery, [getBrowserExtensionsSearchEntry()]) &&
+    selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID
+
   return (
-    <div ref={setBrowserPaneRootNode} className="space-y-6">
+    <div ref={setBrowserPaneRootNode} className="space-y-8">
       {showBrowserUse ? (
-        <BrowserUseSetup
-          onConfigureMoreBrowsers={scrollToSessionCookies}
-          onOpenComputerUse={onOpenComputerUse}
-        />
+        <SettingsGroup>
+          <BrowserUseSetup
+            hostId={selectedBrowserSessionHostId}
+            onConfigureMoreBrowsers={scrollToSessionCookies}
+            onOpenComputerUse={onOpenComputerUse}
+          />
+        </SettingsGroup>
       ) : null}
 
-      {showHomePage ? (
-        <BrowserHomePageSetting
-          value={homePageDraft}
-          onChange={setHomePageDraft}
-          onSave={(url) => {
-            setBrowserDefaultUrl(url)
-            setHomePageDraftState(createBrowserHomePageDraftState(url ?? ''))
-          }}
-        />
-      ) : null}
+      {showHomePage ||
+      showSearchEngine ||
+      showDefaultZoom ||
+      showMemorySaver ||
+      showUserAgent ||
+      showSitePermissions ||
+      showLinkRouting ||
+      showLinkRoutingModifier ||
+      showLinkRoutingBackground ? (
+        <SettingsGroup>
+          {showHomePage ? (
+            <BrowserHomePageSetting
+              value={homePageDraft}
+              onChange={setHomePageDraft}
+              onSave={(url) => {
+                setBrowserDefaultUrl(url)
+                setHomePageDraftState(createBrowserHomePageDraftState(url ?? ''))
+              }}
+            />
+          ) : null}
 
-      {showSearchEngine ? (
-        <BrowserSearchEngineSetting
-          selectedSearchEngine={selectedSearchEngine}
-          onSearchEngineChange={(engine) => {
-            setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
-          }}
-        />
-      ) : null}
+          {showSearchEngine ? (
+            <BrowserSearchEngineSetting
+              selectedSearchEngine={selectedSearchEngine}
+              onSearchEngineChange={(engine) => {
+                setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
+              }}
+            />
+          ) : null}
 
-      {showDefaultZoom ? (
-        <BrowserDefaultZoomSetting
-          value={browserDefaultZoomLevel}
-          onChange={setBrowserDefaultZoomLevel}
-        />
-      ) : null}
+          {showDefaultZoom ? (
+            <BrowserDefaultZoomSetting
+              value={browserDefaultZoomLevel}
+              onChange={setBrowserDefaultZoomLevel}
+            />
+          ) : null}
 
-      {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+          {showMemorySaver ? (
+            <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
 
-      {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
+          {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
 
-      {showLinkRouting ? (
-        <BrowserLinkRoutingSetting
-          settings={settings}
-          linkRoutingDescription={linkRoutingDescription}
-          isMac={isMac}
-          updateSettings={updateSettings}
-        />
-      ) : null}
+          {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
 
-      {showLinkRoutingModifier ? (
-        <BrowserLinkRoutingModifierSetting
-          settings={settings}
-          isMac={isMac}
-          updateSettings={updateSettings}
-        />
-      ) : null}
+          {showLinkRouting ? (
+            <BrowserLinkRoutingSetting
+              settings={settings}
+              linkRoutingDescription={linkRoutingDescription}
+              isMac={isMac}
+              updateSettings={updateSettings}
+            />
+          ) : null}
 
-      {showLinkRoutingBackground ? (
-        <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+          {showLinkRoutingModifier ? (
+            <BrowserLinkRoutingModifierSetting
+              settings={settings}
+              isMac={isMac}
+              updateSettings={updateSettings}
+            />
+          ) : null}
+
+          {showLinkRoutingBackground ? (
+            <BrowserLinkRoutingBackgroundSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
+        </SettingsGroup>
       ) : null}
 
       {showTerminalLinkActions ? (
@@ -300,71 +345,80 @@ export function BrowserPane({
         />
       ) : null}
 
-      {showLocalhostLabels ? (
-        <BrowserLocalhostWorktreeLabelsSetting
-          settings={settings}
-          updateSettings={updateSettings}
-        />
-      ) : null}
+      {showLocalhostLabels || showProfileScope ? (
+        <SettingsGroup>
+          {showLocalhostLabels ? (
+            <BrowserLocalhostWorktreeLabelsSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
 
-      {showProfileScope ? (
-        <BrowserProfileScopeSetting settings={settings} updateSettings={updateSettings} />
+          {showProfileScope ? (
+            <BrowserProfileScopeSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
+        </SettingsGroup>
       ) : null}
 
       {showClientHostedRemote || showSshWorkspaceRouting ? (
-        <SettingsSubsectionHeader
-          className="pt-2"
-          title={translate('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
-          description={translate(
+        <SettingsGroup
+          title={t('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
+          description={t(
             'settings.browser.remoteBrowsing.headingDescription',
             'Where remote workspace pages render, and where their network traffic leaves from.'
           )}
-        />
+        >
+          {showClientHostedRemote ? (
+            <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
+          ) : null}
+
+          {showSshWorkspaceRouting ? (
+            <BrowserSshWorkspaceRoutingSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
+        </SettingsGroup>
       ) : null}
 
-      {showClientHostedRemote ? (
-        <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
-      ) : null}
+      {showCookies || showPasswordsSection || showExtensions ? (
+        <SettingsGroup>
+          {showCookies ? (
+            <BrowserSessionCookiesSection
+              defaultProfile={defaultProfile}
+              nonDefaultProfiles={nonDefaultProfiles}
+              detectedBrowsers={detectedBrowsers}
+              importState={browserSessionImportState}
+              hostOptions={browserSessionHostOptions}
+              selectedHostId={selectedBrowserSessionHostId}
+              activeProfileId={activeBrowserSessionProfileId}
+              onAddProfile={() => setNewProfileDialogOpen(true)}
+              onSelectHost={selectBrowserSessionHost}
+              onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
+              onSelectProfile={setDefaultBrowserSessionProfileId}
+            />
+          ) : null}
 
-      {showSshWorkspaceRouting ? (
-        <BrowserSshWorkspaceRoutingSetting settings={settings} updateSettings={updateSettings} />
-      ) : null}
+          {/* The vault lives on this computer only, so it follows the local host's profiles. */}
+          {showPasswordsSection ? (
+            <BrowserPasswordsSection
+              browserProfileId={activeBrowserSessionProfileId}
+              profileLabel={activeBrowserSessionProfileLabel}
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
 
-      {showCookies ? (
-        <BrowserSessionCookiesSection
-          defaultProfile={defaultProfile}
-          nonDefaultProfiles={nonDefaultProfiles}
-          detectedBrowsers={detectedBrowsers}
-          importState={browserSessionImportState}
-          hostOptions={browserSessionHostOptions}
-          selectedHostId={selectedBrowserSessionHostId}
-          activeProfileId={activeBrowserSessionProfileId}
-          onAddProfile={() => setNewProfileDialogOpen(true)}
-          onSelectHost={selectBrowserSessionHost}
-          onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
-          onSelectProfile={setDefaultBrowserSessionProfileId}
-        />
-      ) : null}
-
-      {/* The vault lives on this computer only, so it follows the local host's profiles. */}
-      {showPasswords &&
-      !isWebClientLocation() &&
-      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
-        <BrowserPasswordsSection
-          browserProfileId={activeBrowserSessionProfileId}
-          profileLabel={activeBrowserSessionProfileLabel}
-          settings={settings}
-          updateSettings={updateSettings}
-        />
-      ) : null}
-
-      {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
-      {settings.experimentalBrowserExtensions === true &&
-      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
-        <BrowserExtensionsSection
-          profileId={activeBrowserSessionProfileId}
-          profileLabel={activeBrowserSessionProfileLabel}
-        />
+          {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
+          {showExtensions ? (
+            <BrowserExtensionsSection
+              profileId={activeBrowserSessionProfileId}
+              profileLabel={activeBrowserSessionProfileLabel}
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
+        </SettingsGroup>
       ) : null}
 
       <BrowserNewProfileDialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen} />

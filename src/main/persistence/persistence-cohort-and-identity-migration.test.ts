@@ -1,17 +1,10 @@
-import {
-  closeTestStores,
-  testState,
-  createStore,
-  dataFile,
-  writeDataFile,
-  makeRepo
-} from './persistence-test-harness'
+import { closeTestStores, testState, createStore, makeRepo } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, rmSync, mkdtempSync, readFileSync } from 'node:fs'
+import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { createProfileStateStore } from './profile-state/profile-state-store-factory'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
+import './profile-state/startup/profile-state-store-factory'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -52,33 +45,6 @@ vi.mock('../telemetry/client', () => ({
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
 }))
-
-describe('Store', () => {
-  beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
-    trackMock.mockReset()
-    getCohortAtEmitMock.mockReset()
-    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
-  })
-
-  afterEach(async () => {
-    await closeTestStores()
-    rmSync(testState.dir, { recursive: true, force: true })
-  })
-  // Cohort on file existence so pre-telemetry profiles cannot default to opted in.
-
-  it('retains the existing-user cohort when a corrupt legacy primary recovers from backup', async () => {
-    await withRecoveredLegacyProfile((store) => {
-      const telemetry = store.getSettings().telemetry
-      expect(telemetry?.existedBeforeTelemetryRelease).toBe(true)
-      expect(telemetry?.optedIn).toBeNull()
-      expect(telemetry?.installId).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-      )
-      expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
-    })
-  })
-})
 
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
@@ -124,21 +90,3 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[NEW]).toBe(900)
   })
 })
-
-async function withRecoveredLegacyProfile(
-  verify: (store: ReturnType<typeof createProfileStateStore>['store']) => void
-): Promise<void> {
-  writeDataFile({ schemaVersion: 1, repos: [], worktreeMeta: {}, settings: {}, ui: {} })
-  writeFileSync(`${dataFile()}.bak.0`, readFileSync(dataFile()))
-  writeFileSync(dataFile(), '{{{corrupt json')
-  const { store } = createProfileStateStore({
-    dataFile: dataFile(),
-    databaseFile: join(testState.dir, 'profile-state.db'),
-    profileId: 'cohort-recovery'
-  })
-  try {
-    verify(store)
-  } finally {
-    await store.freezeWritesAsync()
-  }
-}

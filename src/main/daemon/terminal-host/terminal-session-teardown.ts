@@ -123,7 +123,8 @@ export class TerminalSessionTeardown {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, session.shellIsRootChild),
       awaitEscalation: true
     })
     await session.forceKillAndWaitForExit()
@@ -176,7 +177,8 @@ export class TerminalSessionTeardown {
               entry.descendantVerification = terminateShutdownDescendants(
                 session.launchAgent || entry.immediate
                   ? snapshot
-                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild)
+                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
+                session.shellIsRootChild
               )
               return entry.descendantVerification
             },

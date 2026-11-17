@@ -18,15 +18,16 @@ import type {
 } from '../terminal-host/terminal-host-create-contract'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { isSpawnIntent } from '../../../shared/host-spawn-admission'
+import { isSpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import { parsePtyStartupIngressIntent } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
-} from '../../../shared/agent-session/agent-session-host-authority'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
+import { sessionExitCauseLogFields } from '../observability/session-exit-log-fields'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -183,6 +184,7 @@ export class DaemonTerminalAdmission {
       shellState: result.shellState,
       incarnationId: result.incarnationId,
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+      ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
@@ -229,7 +231,7 @@ export class DaemonTerminalAdmission {
         this.options.log.log('session-exited', {
           sessionId: routedSessionId,
           code,
-          cause: cause?.kind
+          ...sessionExitCauseLogFields(cause)
         })
         this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
           type: 'event',

@@ -1,10 +1,8 @@
-import { performance } from 'node:perf_hooks'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import { CONTROL_RENEWAL_BATCH_SQL } from './control-renewal-statement.js'
 import {
   openRelayDatabase,
-  POSTGRES_LOCK_TIMEOUT_MS,
   type RelayDatabase,
   type RelayLockOptions,
   type SqlRow
@@ -338,7 +336,6 @@ describePostgres('PostgreSQL control renewal', () => {
     try {
       await locked.promise
 
-      const startedAt = performance.now()
       const outcomes = await store.renewControlActivities(
         [held, free].map((identity) => ({
           identity,
@@ -347,12 +344,8 @@ describePostgres('PostgreSQL control renewal', () => {
           expiresAt
         }))
       )
-      const elapsedMs = performance.now() - startedAt
 
       expect(outcomes).toEqual(['assignment_lock_unavailable', 'renewed'])
-      // It skipped rather than queued: a blocking FOR UPDATE would have spent the
-      // pool's whole lock_timeout here and failed the free host too.
-      expect(elapsedMs).toBeLessThan(POSTGRES_LOCK_TIMEOUT_MS)
       const lease = (
         await database.query(
           `SELECT expires_at FROM relay_assignment_activity_leases

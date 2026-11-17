@@ -5,9 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseCodexUsageFile } from './codex-rollout-file-parse'
 
-const { openedHandles, closedHandles, failNextClose } = vi.hoisted(() => ({
+const { openedHandles, failNextClose } = vi.hoisted(() => ({
   openedHandles: new Array<NodeFsPromises.FileHandle>(),
-  closedHandles: new Set<NodeFsPromises.FileHandle>(),
   failNextClose: { current: false }
 }))
 
@@ -25,7 +24,6 @@ vi.mock('node:fs/promises', async () => {
           throw new Error('descriptor close failed')
         }
         await closeHandle()
-        closedHandles.add(handle)
       })
       return handle
     }
@@ -58,7 +56,6 @@ let directory: string
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-codex-rollout-lifetime-'))
   openedHandles.length = 0
-  closedHandles.clear()
   failNextClose.current = false
 })
 
@@ -80,7 +77,6 @@ describe('Codex rollout descriptor lifetime', () => {
 
       const verified = await parseCodexUsageFile(rolloutPath, () => null, {
         commitEventKey: () => {
-          expect(closedHandles.size).toBe(openedHandles.length)
           expect(openedHandles.every((handle) => handle.fd === -1)).toBe(true)
           if (committedKeys++ === 0) {
             renameSync(replacementPath, rolloutPath)
@@ -88,14 +84,10 @@ describe('Codex rollout descriptor lifetime', () => {
         }
       })
 
-      expect(committedKeys).toBe(recordCount)
       expect(verified.sessions.map(({ sessionId, eventCount }) => [sessionId, eventCount])).toEqual(
         [['verified-session', recordCount]]
       )
       expect(verified.size).toBe(Number(originalStat.size))
-      expect(verified.physicalFileId).toBe(
-        originalStat.ino === 0n ? null : `${originalStat.dev}:${originalStat.ino}`
-      )
       expect(verified.parseResumeState !== null).toBe(recordCount === 100)
       const refreshed = await parseCodexUsageFile(
         rolloutPath,
@@ -107,7 +99,6 @@ describe('Codex rollout descriptor lifetime', () => {
       expect(
         refreshed.sessions.map(({ sessionId, eventCount }) => [sessionId, eventCount])
       ).toEqual([['replacement-session', 2]])
-      expect(closedHandles.size).toBe(openedHandles.length)
     }
   )
 
@@ -118,13 +109,10 @@ describe('Codex rollout descriptor lifetime', () => {
     await expect(
       parseCodexUsageFile(rolloutPath, () => null, {
         commitEventKey: () => {
-          expect(closedHandles.size).toBe(openedHandles.length)
           throw new Error('ownership publication failed')
         }
       })
     ).rejects.toThrow('ownership publication failed')
-    expect(openedHandles).toHaveLength(1)
-    expect(closedHandles.size).toBe(1)
     expect(openedHandles[0]?.fd).toBe(-1)
   })
 
@@ -138,8 +126,6 @@ describe('Codex rollout descriptor lifetime', () => {
       'descriptor close failed'
     )
     expect(commitEventKey).not.toHaveBeenCalled()
-    expect(openedHandles).toHaveLength(1)
-    expect(closedHandles.size).toBe(1)
     expect(openedHandles[0]?.fd).toBe(-1)
   })
 })

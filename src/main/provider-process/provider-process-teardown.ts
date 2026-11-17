@@ -1,6 +1,7 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ProviderChild } from './provider-child'
 import {
   captureDescendantSnapshot,
+  sendDescendantSignal,
   type DescendantSnapshot
 } from '../pty/process-retirement/pty-descendant-termination'
 import {
@@ -8,7 +9,7 @@ import {
   type DescendantTreeVerdict
 } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
@@ -19,7 +20,10 @@ export type ProviderProcessTeardownVerdict =
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
-type TeardownChild = Pick<ChildProcessHandle, 'pid' | 'kill'>
+type TeardownChild = Pick<
+  ProviderChild,
+  'pid' | 'kill' | 'leaderExited' | 'writerPid' | 'groupVerdict' | 'numericIdentityRetired'
+>
 
 export type ProviderProcessTeardownDeps = {
   site: string
@@ -57,29 +61,28 @@ function terminateDedicatedPosixGroup(
   return { tree: null, killDelivered: true }
 }
 
-/** A supervisor kill alone cannot fence the conversation writer. */
+/** Native handles address the writer; a compatibility supervisor needs its held child group. */
 export function killProviderWriter(
   child: TeardownChild,
   snapshot: DescendantSnapshot | null,
   deps: Pick<ProviderProcessTeardownDeps, 'supervised' | 'signalProcessGroup'>
 ): boolean {
+  if (!deps.supervised || child.writerPid === child.pid) {
+    return child.kill('SIGKILL')
+  }
   const signalGroup =
     deps.signalProcessGroup ??
     ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
   let delivered = false
-  if (deps.supervised) {
-    for (const descendant of snapshot?.descendants ?? []) {
-      if (descendant.ppid === child.pid && descendant.pgid === descendant.pid) {
-        try {
-          signalGroup(descendant.pid, 'SIGKILL')
-          delivered = true
-        } catch {
-          // The retained root still needs its kill attempt.
-        }
-      }
+  for (const descendant of snapshot?.descendants ?? []) {
+    if (descendant.ppid === child.pid && descendant.pgid === descendant.pid) {
+      try {
+        signalGroup(descendant.pid, 'SIGKILL')
+        delivered = true
+      } catch {}
     }
   }
-  return deps.supervised ? delivered : child.kill('SIGKILL')
+  return delivered
 }
 
 async function terminatePosixTree(
@@ -87,30 +90,45 @@ async function terminatePosixTree(
   rootPid: number,
   deps: ProviderProcessTeardownDeps
 ): Promise<ProviderProcessTeardownVerdict> {
-  child.kill('SIGSTOP')
+  const retired = (): boolean =>
+    child.numericIdentityRetired === true ||
+    child.leaderExited === true ||
+    child.groupVerdict === 'exited'
+  if (!child.kill('SIGSTOP')) {
+    return child.kill('SIGKILL') ? { tree: null, killDelivered: true } : null
+  }
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
+  if (retired()) {
+    return null
+  }
   if (!snapshot) {
     // Preserve Codex compatibility: missing snapshot is no observation (null), not an unverifiable verdict.
     const delivered = killProviderWriter(child, null, deps)
-    if (deps.supervised) {
+    if (deps.supervised && child.writerPid !== child.pid) {
       child.kill('SIGKILL')
     }
     return delivered ? { tree: null, killDelivered: true } : null
   }
   const terminate =
     deps.terminateDescendants ??
-    ((captured: DescendantSnapshot) => terminateDescendantSnapshotWithVerdict(captured))
+    ((captured: DescendantSnapshot) =>
+      terminateDescendantSnapshotWithVerdict(captured, {
+        sendSignal: (pid, signal) => {
+          if (retired()) {
+            throw new Error('Provider process identity retired during teardown')
+          }
+          return sendDescendantSignal(pid, signal)
+        }
+      }))
   let verdict: DescendantTreeVerdict = 'unverifiable'
   let killDelivered = false
   try {
-    if (deps.supervised) {
-      killDelivered = killProviderWriter(child, snapshot, deps)
-    }
     verdict = await terminate(snapshot)
   } catch {
     // Descendant observation cannot undo a delivered writer kill.
-  } finally {
+  }
+  if (!retired()) {
     const signal = deps.signalProcess ?? process.kill
     const signalGroup =
       deps.signalProcessGroup ??
@@ -120,7 +138,7 @@ async function terminatePosixTree(
       if (descendant.ppid !== rootPid) {
         continue
       }
-      if (!deps.supervised && descendant.pgid === descendant.pid) {
+      if (descendant.pgid === descendant.pid) {
         try {
           signalGroup(descendant.pid, 'SIGKILL')
         } catch {
@@ -146,10 +164,9 @@ async function terminatePosixTree(
       }
     }
     try {
-      if (deps.supervised) {
+      killDelivered = killProviderWriter(child, snapshot, deps)
+      if (deps.supervised && child.writerPid !== child.pid) {
         child.kill('SIGKILL')
-      } else {
-        killDelivered = killProviderWriter(child, snapshot, deps)
       }
     } catch {
       // A wrapper failure cannot undo termination of its writer.
@@ -179,6 +196,14 @@ async function terminateOnce(
     }
     // The root may be a cmd.exe shim, so only taskkill proves the writer was terminated.
     return treeTerminated ? { tree: 'exited', killDelivered: true } : 'unverifiable'
+  }
+  // Group absence retires the numeric writer even if its actual wait status was lost.
+  if (child.groupVerdict === 'exited') {
+    return null
+  }
+  if (child.numericIdentityRetired || child.leaderExited) {
+    const delivered = child.kill('SIGKILL')
+    return delivered ? { tree: null, killDelivered: true } : null
   }
   if (deps.dedicatedProcessGroup) {
     return terminateDedicatedPosixGroup(rootPid, deps)

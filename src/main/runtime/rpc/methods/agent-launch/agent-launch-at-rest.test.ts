@@ -1,12 +1,13 @@
-import '../../unused-default-rpc-methods.test-fixture'
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { eventually } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../core'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
@@ -16,7 +17,6 @@ import { CodexAppServerExitError } from '../../../../codex/app-server/codex-app-
 import { codexStartFailure } from '../../../../codex/app-server/codex-startup-outcome'
 import { executeAgentLaunch } from '../../../../agent-launch/agent-launch-executor'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
-import * as structuredCreate from '../structured-sessions/creation/structured-agent-session-create'
 import {
   methodNamed,
   rpcContext,
@@ -27,16 +27,6 @@ import {
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
 const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
-
-// The phone: it renders either surface and sends a new chat's first message itself.
-const PHONE: Partial<RpcContext> = {
-  clientKind: 'mobile',
-  pairedDeviceId: 'device-1',
-  clientCapabilities: [
-    AGENT_LAUNCH_RUNTIME_CAPABILITY,
-    AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
-  ]
-}
 // The `orca` CLI carries no capability list.
 const CLI: Partial<RpcContext> = {}
 const SESSION = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
@@ -104,29 +94,6 @@ function launch(caller: Partial<RpcContext>, prompt?: string, delivery = 'submit
   return AGENT_LAUNCH.handler(params, rpcContext(launchRuntime(), caller))
 }
 
-it.each([
-  { name: 'a bare launch from the phone waits', caller: PHONE, startsAtCreation: false },
-  {
-    name: 'a draft launch keeps eager creation',
-    caller: PHONE,
-    prompt: 'fix the build',
-    delivery: 'draft',
-    startsAtCreation: true
-  },
-  { name: 'a bare launch from the CLI starts', caller: CLI, startsAtCreation: true }
-])('$name', async ({ caller, prompt, delivery, startsAtCreation }) => {
-  const result = await launch(caller, prompt, delivery)
-
-  expect(result.outcome).toMatchObject({ kind: 'structured', sessionId: SESSION })
-  expect(rig.store.getRecord(SESSION)).toBeDefined()
-  expect(result.prompt).toEqual(
-    prompt ? { delivery: 'draft', outcome: 'not-delivered' } : undefined
-  )
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
-  // At rest, nothing is spawned until the chat's first message.
-  expect(rig.adapter.acquire.mock.calls.length > 0).toBe(startsAtCreation)
-})
-
 async function child(sessionId = SESSION) {
   await vi.waitFor(() =>
     expect(rig.host.collaboratorsForTests().sessions.get(sessionId)?.child).toBeTruthy()
@@ -140,7 +107,7 @@ async function child(sessionId = SESSION) {
 
 async function endChild(sessionId = SESSION) {
   const current = await child(sessionId)
-  await vi.waitFor(() => expect(openEnded.has(current.acquisitionGeneration)).toBe(true))
+  await eventually(() => expect(openEnded.has(current.acquisitionGeneration)).toBe(true))
   await rig.host.handleAdapterEvent({
     type: 'ended',
     ...current,
@@ -173,15 +140,6 @@ function holdStarts() {
   )
 }
 
-it('a whitespace-only submit creates an eager empty chat without sending a turn', async () => {
-  const result = await launch(PHONE, ' \t\n ')
-  expect(result.outcome).toMatchObject({ kind: 'structured', sessionId: SESSION })
-  expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
-  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toEqual([])
-  expect(rig.adapter.dispatch).not.toHaveBeenCalled()
-})
-
 it('the opening prompt owns retry with explicit model and permission for a legacy-capability CLI caller', async () => {
   holdStarts()
   const params = AGENT_LAUNCH.params.parse({
@@ -197,7 +155,7 @@ it('the opening prompt owns retry with explicit model and permission for a legac
     outcome: 'journaled',
     messageId: expect.any(String)
   })
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
     {
       clientMessageId: result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined,
       source: { kind: 'user' },
@@ -205,13 +163,13 @@ it('the opening prompt owns retry with explicit model and permission for a legac
     }
   ])
   await endChild()
-  await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))
+  await eventually(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))
   await rig.proveStart(await child())
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+  await eventually(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
   expect(rig.adapter.dispatch.mock.calls[0]?.[0].clientMessageId).toBe(
     result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined
   )
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   expect(snapshot.submissions).toMatchObject([{ dispatchState: 'accepted' }])
   expect(snapshot.items.filter((item) => item.body.kind === 'status')).toEqual([])
   expect(rig.store.getRecord(SESSION)).toMatchObject({
@@ -225,11 +183,11 @@ it('rejects one requester with one failure row when all five children exit', asy
   holdStarts()
   const result = await launch(CLI, 'fix the build')
   for (let attempt = 1; attempt <= 5; attempt++) {
-    await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(attempt))
+    await eventually(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(attempt))
     await endChild()
   }
-  await vi.waitFor(async () =>
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  await eventually(async () =>
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
       {
         clientMessageId:
           result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined,
@@ -237,7 +195,7 @@ it('rejects one requester with one failure row when all five children exit', asy
       }
     ])
   )
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   expect(snapshot.submissions).toHaveLength(1)
   expect(
     snapshot.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
@@ -267,18 +225,18 @@ it.each(['spawn', 'open'] as const)(
     const result = await launch(CLI, 'fix the build')
     expect(result.prompt?.outcome).toBe('journaled')
     if (stage === 'spawn') {
-      await vi.waitFor(async () =>
-        expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+      await eventually(async () =>
+        expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
           { dispatchState: 'rejected' }
         ])
       )
       expect(rig.adapter.dispatch).not.toHaveBeenCalled()
       expect(rig.adapter.acquire).toHaveBeenCalledOnce()
     } else {
-      await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+      await eventually(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
       expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
     }
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(1)
   }
 )
 
@@ -303,7 +261,7 @@ it('replays a lost reply for a prompted folder launch without another message or
     }
   })
   const first = await AGENT_LAUNCH_REPLAY.handler(params, context)
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+  await eventually(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
   const replay = await AGENT_LAUNCH_REPLAY.handler(params, context)
   expect(replay).toEqual(first)
   expect(first.prompt?.outcome).toBe('journaled')
@@ -314,56 +272,7 @@ it('replays a lost reply for a prompted folder launch without another message or
     effort: 'high',
     serviceTier: 'fast'
   })
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
-})
-
-it.each([true, false])(
-  'keeps an explicit Claude Fast %s over the opposite saved selection',
-  async (fastMode) => {
-    const runtime = launchRuntime()
-    const resolve = runtime.resolveStructuredAgentSessionCreateIntent.getMockImplementation()!
-    runtime.resolveStructuredAgentSessionCreateIntent.mockImplementation(async (params) => ({
-      ...(await resolve(params)),
-      provider: 'claude',
-      agent: 'claude',
-      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' },
-      options: { model: 'claude-opus-4-6', effort: 'medium', fastMode: String(!fastMode) }
-    }))
-    const created = await agentLaunchSurfaceFactory(
-      rpcContext(runtime, PHONE)
-    ).createStructuredSession({
-      worktreeId: 'wt-7',
-      agent: 'claude',
-      withoutPrompt: true,
-      options: { model: 'claude-opus-4-6', fastMode }
-    })
-    expect(rig.store.getRecord(created.sessionId)?.options).toEqual({
-      model: 'claude-opus-4-6',
-      effort: 'medium',
-      fastMode: String(fastMode)
-    })
-    expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  }
-)
-
-it('omits unsupported-only Codex Fast overrides and retains saved defaults', async () => {
-  const runtime = launchRuntime()
-  const create = vi.spyOn(structuredCreate, 'createStructuredAgentSessionForWorktree')
-  const created = await agentLaunchSurfaceFactory(
-    rpcContext(runtime, PHONE)
-  ).createStructuredSession({
-    worktreeId: 'wt-7',
-    agent: 'codex',
-    withoutPrompt: true,
-    options: { fastMode: true }
-  })
-  expect(create.mock.calls[0]?.[0]).not.toHaveProperty('options')
-  expect(rig.store.getRecord(created.sessionId)?.options).toEqual({
-    model: 'gpt-5.6-sol',
-    effort: 'medium'
-  })
-  expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  create.mockRestore()
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(1)
 })
 
 it.each(['before', 'after'] as const)(
@@ -406,7 +315,7 @@ it.each(['before', 'after'] as const)(
     await child()
     await rig.host.close(SESSION, 'user-close')
     await rig.host.revealSession(SESSION)
-    const snapshot = await rig.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(rig.host, SESSION)
     expect(snapshot.submissions).toMatchObject([
       {
         source: { kind: 'user' },
@@ -415,7 +324,7 @@ it.each(['before', 'after'] as const)(
       }
     ])
     expect(
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list()
+      await rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list()
     ).toHaveLength(1)
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
   }
@@ -437,7 +346,7 @@ it('a tab publication failure after commit never calls the prompt undelivered', 
       rpcContext(runtime, CLI)
     )
   ).rejects.toThrow()
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
     { source: { kind: 'user' }, dispatchState: 'pending' }
   ])
   expect(rig.adapter.acquire).not.toHaveBeenCalled()

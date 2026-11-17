@@ -27,6 +27,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   // Gated on the phone by agent-session.thread-goal.phone.v1.
   'agentSession.threadGoal',
   'agentSession.commands',
+  // The `/mcp` sheet; phones offer it where the host advertises agent-session.mcp.v1.
+  'agentSession.mcp',
   'agentSession.history',
   'agentSession.currentRequests',
   'agentSession.subscribe',
@@ -37,10 +39,14 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.readVisual',
   // One item whole, for "Show full output" and "Show full message".
   'agentSession.item',
+  // Whether the host recorded a send, for one the phone lost track of; gated on agent-session.send-recorded.v1.
+  'agentSession.sendRecorded',
   // "Rewind to here"; phones offer it only where AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY says so.
   'agentSession.rewind',
   // "Don't continue" on a usage-limit row the host will continue at its reset.
   'agentSession.cancelUsageLimitContinue',
+  // Skip on a Codex async question card; phones offer it where the host advertises it.
+  'agentSession.skipAsyncQuestions',
   // A file the phone attaches to a chat, stored on this host; the agent sees only the host path.
   'agentSessionAttachment.uploadStart',
   'agentSessionAttachment.uploadAppend',

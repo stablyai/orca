@@ -1,16 +1,17 @@
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
-import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
+import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAttentionMobileDelivery } from '../structured-agent-session-mobile-attention'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { StructuredAttentionMobileDelivery } from '../lifecycle/structured-agent-session-mobile-attention'
 import type {
   StructuredAgentCommand,
   StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
-import type { NativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
-import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import type { NativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
+import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import type { RuntimeAgentAccountHomeResolver } from '../model-catalog/structured-agent-model-catalog-wiring'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
@@ -42,6 +43,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     /** Read this host's preference when a chat starts a provider process. */
     isEnabled: () => boolean
   }
+  /** Whether Pi chats refresh Orca's managed extensions in their agent dir. */
+  piManagedExtensionsEnabled?: () => boolean
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
   resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
@@ -77,13 +80,22 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
   attentionDelivery?: StructuredAttentionMobileDelivery
   /** Every live turn completion and pending prompt, with the host's status at that edge. */
-  onTurnAttention?: (
-    event: AgentSessionTurnCompletionEvent,
-    readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
-  ) => void
+  createTurnAttention?: () => {
+    onTurnAttention: (
+      event: AgentSessionTurnCompletionEvent,
+      readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
+    ) => void
+    start: () => void
+    stop: () => void
+  }
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
   /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
   launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
+  /** That account home, prepared for a start of `record` in `launchDirectory`. */
+  prepareLaunchAccountHome?: (
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ) => Promise<AgentSessionAccountHome | null>
 } & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>
