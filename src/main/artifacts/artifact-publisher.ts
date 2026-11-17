@@ -99,10 +99,10 @@ export class ArtifactPublisher {
           slug: created.result.item.artifact.slug,
           editToken: created.editToken
         })
-        this.removeCreateIntent(request, auth, created.intent)
+        await this.removeCreateIntent(request, auth, created.intent)
         return item
       }
-      this.removeCreateIntent(request, auth, created.intent)
+      await this.removeCreateIntent(request, auth, created.intent)
       return created.result.item
     })
   }
@@ -125,14 +125,14 @@ export class ArtifactPublisher {
       if (pending) {
         const created = await this.create(request, token, apiUrl, auth, idempotencyKey, pending)
         if (artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))) {
-          this.removeCreateIntent(request, auth, created.intent)
+          await this.removeCreateIntent(request, auth, created.intent)
           return created.result
         }
         const item = await this.updateExisting(request, token, apiUrl, auth, {
           slug: created.result.item.artifact.slug,
           editToken: created.editToken
         })
-        this.removeCreateIntent(request, auth, created.intent)
+        await this.removeCreateIntent(request, auth, created.intent)
         return { change: 'created', item }
       }
       const record = getArtifactShareRecord(
@@ -150,14 +150,17 @@ export class ArtifactPublisher {
             throw error
           }
           auth.assertCurrent()
-          removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
-            sourceKey: request.sourceKey,
-            slug: record.slug
-          })
+          await removeArtifactShareRecords(
+            auth.profileId,
+            this.userDataPath,
+            auth.scope,
+            { sourceKey: request.sourceKey, slug: record.slug },
+            auth.assertCurrent
+          )
         }
       }
       const created = await this.create(request, token, apiUrl, auth, idempotencyKey, null)
-      this.removeCreateIntent(request, auth, created.intent)
+      await this.removeCreateIntent(request, auth, created.intent)
       return created.result
     })
   }
@@ -194,13 +197,14 @@ export class ArtifactPublisher {
         rateLimitReplay: auth.rateLimitReplay
       })
       auth.assertCurrent()
-      refreshArtifactShareRecordExpiration(
+      await refreshArtifactShareRecordExpiration(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
         auth.scope,
         record,
-        item.artifact.expiresAt
+        item.artifact.expiresAt,
+        auth.assertCurrent
       )
       return item
     })
@@ -217,14 +221,15 @@ export class ArtifactPublisher {
     const replaying = pending !== null
     const intent =
       pending ??
-      getOrCreateArtifactCreateIntent(
+      (await getOrCreateArtifactCreateIntent(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
         auth.scope,
         idempotencyKey,
-        artifactWriteBody(request)
-      )
+        artifactWriteBody(request),
+        auth.assertCurrent
+      ))
     let response: ArtifactCreateResponse
     try {
       response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
@@ -236,7 +241,7 @@ export class ArtifactPublisher {
     } catch (error) {
       // A replay may outlive its server receipt, so never abandon a possibly committed artifact.
       if (!replaying && discardsCreateIntent(error)) {
-        removeArtifactCreateIntent(
+        await removeArtifactCreateIntent(
           auth.profileId,
           this.userDataPath,
           request.sourceKey,
@@ -247,13 +252,19 @@ export class ArtifactPublisher {
       throw error
     }
     auth.assertCurrent()
-    saveArtifactShareRecord(auth.profileId, this.userDataPath, request.sourceKey, {
-      slug: response.artifact.slug,
-      editToken: response.editToken,
-      shareUrl: response.shareUrl,
-      expiresAt: response.artifact.expiresAt,
-      ...auth.scope
-    })
+    await saveArtifactShareRecord(
+      auth.profileId,
+      this.userDataPath,
+      request.sourceKey,
+      {
+        slug: response.artifact.slug,
+        editToken: response.editToken,
+        shareUrl: response.shareUrl,
+        expiresAt: response.artifact.expiresAt,
+        ...auth.scope
+      },
+      auth.assertCurrent
+    )
     return {
       editToken: response.editToken,
       intent,
@@ -268,8 +279,8 @@ export class ArtifactPublisher {
     request: ArtifactWriteRequest,
     auth: ArtifactPublishAuthContext,
     intent: ArtifactCreateIntent
-  ): void {
-    removeArtifactCreateIntent(
+  ): Promise<void> {
+    return removeArtifactCreateIntent(
       auth.profileId,
       this.userDataPath,
       request.sourceKey,

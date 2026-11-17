@@ -139,13 +139,14 @@ export class ArtifactCloudService {
             }
           )
           auth.assertCurrent()
-          refreshArtifactShareRecordExpiration(
+          await refreshArtifactShareRecordExpiration(
             auth.profileId,
             this.userDataPath,
             request.sourceKey,
             auth.scope,
             record,
-            response.artifact.expiresAt
+            response.artifact.expiresAt,
+            auth.assertCurrent
           )
           return response
         })
@@ -172,10 +173,13 @@ export class ArtifactCloudService {
           auth.assertCurrent()
           await deleteArtifactRequest(apiUrl, token, `/${record.slug}`, auth, record.editToken)
           auth.assertCurrent()
-          removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
-            sourceKey: request.sourceKey,
-            slug: record.slug
-          })
+          await removeArtifactShareRecords(
+            auth.profileId,
+            this.userDataPath,
+            auth.scope,
+            { sourceKey: request.sourceKey, slug: record.slug },
+            auth.assertCurrent
+          )
         })
       })
     )
@@ -187,7 +191,13 @@ export class ArtifactCloudService {
         auth.assertCurrent()
         await deleteArtifactRequest(apiUrl, token, `/${encodeURIComponent(id)}`, auth)
         auth.assertCurrent()
-        removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
+        await removeArtifactShareRecords(
+          auth.profileId,
+          this.userDataPath,
+          auth.scope,
+          { slug: id },
+          auth.assertCurrent
+        )
       })
     )
   }

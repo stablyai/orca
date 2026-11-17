@@ -5,6 +5,10 @@ import {
   writeDurableSecureJsonFile,
   writeSecureJsonFile
 } from '../../shared/secure-storage/secure-file'
+import {
+  serializeArtifactFileChange,
+  writeArtifactFileWhileCurrent
+} from './artifact-guarded-secure-write'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 
 export type ArtifactShareScope = {
@@ -177,16 +181,42 @@ export function getArtifactShareRecord(
   return record && matchesScope(record, scope) ? record : null
 }
 
+/** Read, change and write the record file one change at a time. `assertCurrent` holds the
+ *  change to the account and record lifecycle it started under, before it reads and as it
+ *  publishes, so a sign-out's clear is never undone by a change queued before it. */
+function changeRecords(
+  profileId: string,
+  userDataPath: string,
+  assertCurrent: () => void,
+  options: {
+    durable: boolean
+    preserveExpired?: { sourceKey: string; slug: string; editToken: string }
+  },
+  change: (records: ArtifactShareRecordFile) => boolean
+): Promise<void> {
+  const path = recordPath(profileId, userDataPath)
+  return serializeArtifactFileChange(path, async () => {
+    assertCurrent()
+    const records = readRecords(profileId, userDataPath, options.preserveExpired)
+    if (change(records)) {
+      const contents = JSON.stringify(records, null, 2)
+      await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent)
+    }
+  })
+}
+
 export function saveArtifactShareRecord(
   profileId: string,
   userDataPath: string,
   sourceKey: string,
-  record: ArtifactShareRecord
-): void {
-  const records = readRecords(profileId, userDataPath)
-  records.shares[sourceKey] = { ...record, savedAt: Date.now() }
-  records.shares = pruneRecords(records.shares, Date.now()).shares
-  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), records)
+  record: ArtifactShareRecord,
+  assertCurrent: () => void
+): Promise<void> {
+  return changeRecords(profileId, userDataPath, assertCurrent, { durable: true }, (records) => {
+    records.shares[sourceKey] = { ...record, savedAt: Date.now() }
+    records.shares = pruneRecords(records.shares, Date.now()).shares
+    return true
+  })
 }
 
 export function refreshArtifactShareRecordExpiration(
@@ -195,43 +225,54 @@ export function refreshArtifactShareRecordExpiration(
   sourceKey: string,
   scope: ArtifactShareScope,
   expected: { slug: string; editToken: string },
-  expiresAt: string
-): void {
-  const records = readRecords(profileId, userDataPath, { sourceKey, ...expected })
-  const current = records.shares[sourceKey]
-  if (
-    !current ||
-    !matchesScope(current, scope) ||
-    current.slug !== expected.slug ||
-    current.editToken !== expected.editToken
-  ) {
-    return
-  }
-  records.shares[sourceKey] = {
-    ...current,
-    cloudOrganizationId: scope.cloudOrganizationId,
-    expiresAt,
-    savedAt: Date.now()
-  }
-  writeSecureJsonFile(recordPath(profileId, userDataPath), records)
+  expiresAt: string,
+  assertCurrent: () => void
+): Promise<void> {
+  const preserveExpired = { sourceKey, ...expected }
+  return changeRecords(
+    profileId,
+    userDataPath,
+    assertCurrent,
+    { durable: false, preserveExpired },
+    (records) => {
+      const current = records.shares[sourceKey]
+      if (
+        !current ||
+        !matchesScope(current, scope) ||
+        current.slug !== expected.slug ||
+        current.editToken !== expected.editToken
+      ) {
+        return false
+      }
+      records.shares[sourceKey] = {
+        ...current,
+        cloudOrganizationId: scope.cloudOrganizationId,
+        expiresAt,
+        savedAt: Date.now()
+      }
+      return true
+    }
+  )
 }
 
 export function removeArtifactShareRecords(
   profileId: string,
   userDataPath: string,
   scope: ArtifactShareScope,
-  match: { sourceKey?: string; slug?: string }
-): void {
-  const records = readRecords(profileId, userDataPath)
-  for (const [sourceKey, record] of Object.entries(records.shares)) {
-    if (
-      matchesScope(record, scope) &&
-      (match.slug === record.slug || (match.slug === undefined && match.sourceKey === sourceKey))
-    ) {
-      delete records.shares[sourceKey]
+  match: { sourceKey?: string; slug?: string },
+  assertCurrent: () => void
+): Promise<void> {
+  return changeRecords(profileId, userDataPath, assertCurrent, { durable: true }, (records) => {
+    for (const [sourceKey, record] of Object.entries(records.shares)) {
+      if (
+        matchesScope(record, scope) &&
+        (match.slug === record.slug || (match.slug === undefined && match.sourceKey === sourceKey))
+      ) {
+        delete records.shares[sourceKey]
+      }
     }
-  }
-  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), records)
+    return true
+  })
 }
 
 export function clearArtifactShareRecords(profileId: string, userDataPath: string): void {

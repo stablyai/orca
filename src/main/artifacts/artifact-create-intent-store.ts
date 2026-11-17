@@ -8,9 +8,10 @@ import {
   artifactWriteRequestByteLength
 } from '../../shared/artifacts/artifacts'
 import {
-  bestEffortFsyncDirectorySync,
-  writeSecureFile
+  bestEffortFsyncDirectory,
+  bestEffortFsyncDirectorySync
 } from '../../shared/secure-storage/secure-file'
+import { writeArtifactFileWhileCurrent } from './artifact-guarded-secure-write'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
@@ -154,14 +155,17 @@ export function getArtifactCreateIntent(
   return intent
 }
 
-export function getOrCreateArtifactCreateIntent(
+/** The intent is on disk before this resolves, so a crash after the request can replay it.
+ *  `assertCurrent` must still pass when it is published, or nothing is written. */
+export async function getOrCreateArtifactCreateIntent(
   profileId: string,
   userDataPath: string,
   sourceKey: string,
   scope: ArtifactShareScope,
   idempotencyKey: string,
-  body: ArtifactWriteBody
-): ArtifactCreateIntent {
+  body: ArtifactWriteBody,
+  assertCurrent: () => void
+): Promise<ArtifactCreateIntent> {
   if (artifactContentByteLength(body.content) > ARTIFACT_MAX_CONTENT_BYTES) {
     throw new Error('Artifact content exceeds the 10 MiB limit.')
   }
@@ -189,19 +193,22 @@ export function getOrCreateArtifactCreateIntent(
   if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
-  writeSecureFile(intentPath(profileId, userDataPath, sourceKey, scope), serializedIntent, {
-    durable: true
-  })
+  await writeArtifactFileWhileCurrent(
+    intentPath(profileId, userDataPath, sourceKey, scope),
+    serializedIntent,
+    true,
+    assertCurrent
+  )
   return intent
 }
 
-export function removeArtifactCreateIntent(
+export async function removeArtifactCreateIntent(
   profileId: string,
   userDataPath: string,
   sourceKey: string,
   scope: ArtifactShareScope,
   expectedIdempotencyKey: string
-): void {
+): Promise<void> {
   const path = intentPath(profileId, userDataPath, sourceKey, scope)
   if (!existsSync(path)) {
     return
@@ -214,7 +221,7 @@ export function removeArtifactCreateIntent(
   }
   if (matches) {
     rmSync(path, { force: true })
-    bestEffortFsyncDirectorySync(intentDirectory(profileId, userDataPath))
+    await bestEffortFsyncDirectory(intentDirectory(profileId, userDataPath))
   }
 }
 

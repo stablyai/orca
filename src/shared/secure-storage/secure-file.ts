@@ -10,6 +10,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { open } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   DEFAULT_HARDENING_CACHE_BOUNDS,
@@ -115,21 +116,16 @@ export function writeDurableSecureJsonFile(
   return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { ...options, durable: true })
 }
 
-/** Publish a staged file and return whether user-only file permissions hold. Windows addon creates restricted or throws;
- * without it, plain best-effort writes report false, as do filesystems dropping restrictions.
- * shouldPublish may discard the hardened stage. Windows parent hardening may finish later; true says nothing about its ACL. */
-export function writeSecureFile(
-  targetPath: string,
-  contents: string,
-  options: { durable?: boolean; shouldPublish?: () => boolean; onPublished?: () => void } = {}
-): boolean {
+type SecureWriteOptions = { shouldPublish?: () => boolean; onPublished?: () => void }
+type StagedSecureFile = { tmpFile: string; dir: string; restricted: boolean }
+
+function stageSecureFile(targetPath: string, contents: string): StagedSecureFile {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
   // Windows dir hardening stays async + path-cached (it stormed the main thread, #4901); POSIX keeps the metadata cache to catch chmod/ctime drift.
   hardenSecurePathOnce(dir, true)
-
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
   try {
     // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
@@ -137,30 +133,77 @@ export function writeSecureFile(
       process.platform === 'win32'
         ? writeRestrictedWindowsFile(tmpFile, contents)
         : writeModeRestrictedFile(tmpFile, contents)
-    if (options.durable) {
-      fsyncFileSync(tmpFile)
-    }
-    // Recheck after hardening; the check and rename are separate, non-atomic operations.
-    if (options.shouldPublish && !options.shouldPublish()) {
-      rmSync(tmpFile, { force: true })
-      return false
-    }
-    // The rename publishes the staged inode, so its DACL or mode is already the published file's.
-    renameSync(tmpFile, targetPath)
-    options.onPublished?.()
-    // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
-    if (restricted) {
-      rememberHardenedPath(targetPath, false)
-      recordHardeningOutcome(targetPath, true)
-    }
-    if (options.durable) {
-      bestEffortFsyncDirectorySync(dir)
-    }
-    return restricted
+    return { tmpFile, dir, restricted }
   } catch (error) {
     rmSync(tmpFile, { force: true })
     throw error
   }
+}
+
+function publishStagedSecureFile(
+  staged: StagedSecureFile,
+  targetPath: string,
+  options: SecureWriteOptions
+): boolean {
+  // Recheck after hardening; the check and rename are separate, non-atomic operations.
+  if (options.shouldPublish && !options.shouldPublish()) {
+    rmSync(staged.tmpFile, { force: true })
+    return false
+  }
+  // The rename publishes the staged inode, so its DACL or mode is already the published file's.
+  renameSync(staged.tmpFile, targetPath)
+  options.onPublished?.()
+  // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
+  if (staged.restricted) {
+    rememberHardenedPath(targetPath, false)
+    recordHardeningOutcome(targetPath, true)
+  }
+  return staged.restricted
+}
+
+/** Publish a staged file and return whether user-only file permissions hold. Windows addon creates restricted or throws;
+ * without it, plain best-effort writes report false, as do filesystems dropping restrictions.
+ * shouldPublish may discard the hardened stage. Windows parent hardening may finish later; true says nothing about its ACL. */
+export function writeSecureFile(
+  targetPath: string,
+  contents: string,
+  options: SecureWriteOptions & { durable?: boolean } = {}
+): boolean {
+  const staged = stageSecureFile(targetPath, contents)
+  let restricted: boolean
+  try {
+    if (options.durable) {
+      fsyncFileSync(staged.tmpFile)
+    }
+    restricted = publishStagedSecureFile(staged, targetPath, options)
+  } catch (error) {
+    rmSync(staged.tmpFile, { force: true })
+    throw error
+  }
+  if (options.durable) {
+    bestEffortFsyncDirectorySync(staged.dir)
+  }
+  return restricted
+}
+
+/** `writeSecureFile` with `durable`, waiting for the disk without blocking the thread. The
+ *  shouldPublish check and the rename still run together, after the staged file is on disk. */
+export async function writeDurableSecureFile(
+  targetPath: string,
+  contents: string,
+  options: SecureWriteOptions = {}
+): Promise<boolean> {
+  const staged = stageSecureFile(targetPath, contents)
+  let restricted: boolean
+  try {
+    await fsyncPath(staged.tmpFile, process.platform === 'win32' ? 'r+' : 'r')
+    restricted = publishStagedSecureFile(staged, targetPath, options)
+  } catch (error) {
+    rmSync(staged.tmpFile, { force: true })
+    throw error
+  }
+  await bestEffortFsyncDirectory(staged.dir)
+  return restricted
 }
 
 function writeModeRestrictedFile(tmpFile: string, contents: string): boolean {
@@ -184,6 +227,13 @@ export function fsyncFileSync(path: string): void {
   fsyncPathSync(path, process.platform === 'win32' ? 'r+' : 'r')
 }
 
+function isUnsupportedDirectoryFsync(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+  )
+}
+
 export function bestEffortFsyncDirectorySync(directory: string): void {
   if (process.platform === 'win32') {
     return
@@ -191,13 +241,32 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
   try {
     fsyncPathSync(directory, 'r')
   } catch (error) {
-    if (
-      error instanceof Error &&
-      UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
-    ) {
-      return
+    if (!isUnsupportedDirectoryFsync(error)) {
+      throw error
     }
-    throw error
+  }
+}
+
+async function fsyncPath(path: string, flags: 'r' | 'r+'): Promise<void> {
+  const handle = await open(path, flags)
+  try {
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+}
+
+/** `bestEffortFsyncDirectorySync` off the thread. */
+export async function bestEffortFsyncDirectory(directory: string): Promise<void> {
+  if (process.platform === 'win32') {
+    return
+  }
+  try {
+    await fsyncPath(directory, 'r')
+  } catch (error) {
+    if (!isUnsupportedDirectoryFsync(error)) {
+      throw error
+    }
   }
 }
 
