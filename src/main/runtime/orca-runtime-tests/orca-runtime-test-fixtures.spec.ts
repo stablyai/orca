@@ -520,6 +520,9 @@ function makeRuntimeStoreWithWorkspaceSession(
       getWorkspaceSession: (hostId?: string) =>
         hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
       setWorkspaceSession: vi.fn(setSession),
+      patchWorkspaceSession: (patch: Partial<WorkspaceSessionState>) => {
+        session = { ...session, ...patch }
+      },
       getWorkspaceSessionHostIds: () => [ownerHostId],
       applyLayoutCommand: vi.fn(
         async (

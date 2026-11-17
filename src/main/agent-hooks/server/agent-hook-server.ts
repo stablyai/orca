@@ -133,8 +133,11 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   }
 
   /** Legacy hooks cannot say a tmux server hosts them; the pane's foreground client can, before
-   *  a sleep or adoption captures the conversation as the pane's own. */
+   *  a sleep captures the conversation as the pane's own. Other presence reads never probe. */
   private async observeTmuxHostedWriter(paneKey: string, sleepCapture: boolean): Promise<void> {
+    if (!sleepCapture) {
+      return
+    }
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main stores enriched accepted rows in the base-typed cache.
     const row = this.state.lastStatusByPaneKey.get(resolved) as
@@ -143,15 +146,9 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     const binding = row?.providerSession
     const read = this.readPaneTmuxHost
     if (!row) {
-      return sleepCapture ? this.releaseTmuxHostedCheckpoint(resolved) : undefined
+      return this.releaseTmuxHostedCheckpoint(resolved)
     }
-    if (
-      !read ||
-      !row ||
-      !binding ||
-      row.connectionId !== null ||
-      cliWriterTopology(row) !== 'pane-owned'
-    ) {
+    if (!read || !binding || row.connectionId !== null || cliWriterTopology(row) !== 'pane-owned') {
       return
     }
     const presence = row.agentPresence

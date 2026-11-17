@@ -68,7 +68,7 @@ it.each([
     runningPane(4050, CLIENT, ...TMUX)
     await turn(server)
     expect(server.row()).toMatchObject({ state: 'working', providerSession: {} })
-    await server.checkAgentPresenceSince(PANE, 0)
+    await server.checkAgentPresenceSince(PANE, 0, { sleepCapture: true })
     // A fresh hook can land between capture's presence check and the PTY's physical stop.
     await turn(server)
     server.setTerminalPaneLifecycle({
@@ -85,7 +85,8 @@ it.each([
       launchByPtyId: new Map(),
       readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
       readIdentity: (key, saved) => server.paneAgentIdentity(key, saved),
-      checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
+      checkAgentPresence: (key, since) =>
+        server.checkAgentPresenceSince(key, since ?? 0, { sleepCapture: true }),
       capturedAt: NOW
     })
     expect(capture.get('pty')).toEqual({ records: [], retiredPaneKeys: [PANE] })
@@ -160,7 +161,8 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
     readSavedRecord: async () => saved,
     readIdentity: (key, record) => server.paneAgentIdentity(key, record),
-    checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
+    checkAgentPresence: (key, since) =>
+      server.checkAgentPresenceSince(key, since ?? 0, { sleepCapture: true }),
     capturedAt: NOW + 1_000
   })
   expect(capture.get('pty')?.records).toEqual([])

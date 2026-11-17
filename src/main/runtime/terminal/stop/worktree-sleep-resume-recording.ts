@@ -15,6 +15,7 @@ import {
 } from './hook-status-resume-records'
 import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
+import { removeSleepingRecordDurably } from './sleeping-record-removal'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
@@ -57,16 +58,11 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       if (!existing || existing.updatedAt > exitedAt) {
         return Promise.resolve()
       }
-      return this.commitWorkspaceSessionEdit(
-        this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-        (session) => {
-          const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
-          if (!saved || saved.updatedAt > exitedAt) {
-            return null
-          }
-          const { [paneKey]: _exited, ...kept } = session.sleepingAgentSessionsByPaneKey ?? {}
-          return { ...session, sleepingAgentSessionsByPaneKey: kept }
-        }
+      return removeSleepingRecordDurably(
+        this.store,
+        hostId,
+        paneKey,
+        (saved) => saved.updatedAt <= exitedAt
       )
     }).catch((error) =>
       console.warn('[runtime] could not retire an exited agent resume record', error)
