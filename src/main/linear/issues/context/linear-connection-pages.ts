@@ -48,6 +48,11 @@ export async function readConnectionPages<T>(
   let hasMore = false
 
   while (nodes.length < limit) {
+    // Past the budget (including after queueing for a slot), leave the page unread and truncated.
+    if (Date.now() >= deadline) {
+      hasMore = true
+      break
+    }
     // Walk capped backend pages to satisfy larger context limits.
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, pageSize, limit - nodes.length)
     const connection = await loadConnection(after ? { first, after } : { first })
@@ -61,14 +66,12 @@ export async function readConnectionPages<T>(
       !nextCursor ||
       nextCursor === after ||
       pageNodes.length === 0 ||
+      nodes.length >= limit ||
       Date.now() >= deadline
     ) {
       break
     }
     await beforeNextPage?.()
-    if (Date.now() >= deadline) {
-      break
-    }
     after = nextCursor
   }
 

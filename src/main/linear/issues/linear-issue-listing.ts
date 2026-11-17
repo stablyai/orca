@@ -215,9 +215,7 @@ async function readListIssuePages(
   // A budget-stopped walk keeps only the span every unfinished workspace has covered.
   const coveredSince = Math.max(
     Number.NEGATIVE_INFINITY,
-    ...states
-      .filter((state) => state.hasMore && state.items.length > 0)
-      .map((state) => getOldestIssueTime(state.items))
+    ...states.filter((state) => state.hasMore).map((state) => getOldestIssueTime(state.items))
   )
   const limited = sortLimitAndDescribeIssues(
     states
