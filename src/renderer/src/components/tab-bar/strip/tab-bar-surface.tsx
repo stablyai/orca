@@ -253,10 +253,7 @@ export function renderTabBarSurface(
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 excludedTabId={
-                  activeClientHostedBrowserRowId === null
-                    ? (orderedItems.find((item) => item.id === itemProjection.activeVisibleTabId)
-                        ?.unifiedTabId ?? null)
-                    : null
+                  activeClientHostedBrowserRowId === null ? itemProjection.activeUnifiedTabId : null
                 }
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}

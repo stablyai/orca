@@ -18,6 +18,8 @@ export type TabBarItemProjection = {
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   activeVisibleTabId: string | null
+  /** The active item's unified tab id; resolved here so strip re-renders don't search every tab. */
+  activeUnifiedTabId: string | null
   tabStripLayoutKey: string
 }
 
@@ -144,6 +146,10 @@ export function useTabBarItemProjection({
       orderedItems
     ]
   )
+  const activeUnifiedTabId = useMemo(
+    () => orderedItems.find((item) => item.id === activeVisibleTabId)?.unifiedTabId ?? null,
+    [activeVisibleTabId, orderedItems]
+  )
   const chatNames = useStructuredChatTabNames()
   const tabStripLayoutKey = useMemo(
     () =>
@@ -162,6 +168,7 @@ export function useTabBarItemProjection({
     sortableIds,
     dropIndicatorByVisibleId,
     activeVisibleTabId,
+    activeUnifiedTabId,
     tabStripLayoutKey
   }
 }
