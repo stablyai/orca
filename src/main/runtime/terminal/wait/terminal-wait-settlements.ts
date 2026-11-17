@@ -144,7 +144,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!terminal) {
       return null
     }
-    if (!this.orchestrationMailboxOwner.resolve(terminal, mailbox, { routeDirectMail: false })) {
+    if (mailbox === terminal.handle && this.isRemoteAttachedMailboxTerminal(terminal.paneKeys)) {
       return { kind: 'unreachable', terminal: terminal.handle }
     }
     const refusal = this.deliveryRefusal(terminal.ptyId)
@@ -158,6 +158,14 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return refusal && CORROBORATED_HOLDS.has(refusal.kind)
       ? refusal
       : { kind: 'unverified', terminal: terminal.handle }
+  }
+
+  /** A remote-attached pane reads only its Task's `dispatch:` mail, so direct mail stays unread there.
+   *  Send routing already moved direct mail for a pane with a local Run or Dispatch to that mailbox,
+   *  so one indexed LIMIT 1 read per pane decides this without loading the pane's Run history. */
+  private isRemoteAttachedMailboxTerminal(paneKeys: readonly string[]): boolean {
+    const db = this._orchestrationDb
+    return !!db && paneKeys.some((paneKey) => !!db.findActiveRemoteAttachmentForPane?.(paneKey))
   }
 
   /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */

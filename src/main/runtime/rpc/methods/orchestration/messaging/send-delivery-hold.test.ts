@@ -11,11 +11,6 @@ const PTY_ID = 'pty-titleless'
 const RECIPIENT = 'term_titleless'
 const WORKTREE_ID = 'repo-receipt::/tmp/receipt'
 
-type SendResult = {
-  message: { to_handle: string }
-  warnings?: { code: string; recipient: string; message: string }[]
-}
-
 describe('send receipt for a terminal Orca cannot notify', () => {
   const harness = createOrchestrationRpcHarness()
   afterEach(() => harness.cleanup())
@@ -61,12 +56,26 @@ describe('send receipt for a terminal Orca cannot notify', () => {
     return state
   }
 
-  function send(ctx: { runtime: OrcaRuntimeService }) {
+  function send(ctx: { runtime: OrcaRuntimeService }): Promise<unknown> {
     return harness.call(
       'orchestration.send',
       { from: 'term_coord', to: RECIPIENT, subject: 'status?' },
       ctx
-    ) as Promise<SendResult>
+    )
+  }
+
+  function heldWarning(recipient: string, command: string) {
+    return {
+      warnings: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'recipient_delivery_held',
+          recipient,
+          message: expect.stringContaining(
+            `The agent in ${RECIPIENT} can read it by running \`${command}\` in its own terminal; don't run this yourself.`
+          )
+        })
+      ])
+    }
   }
 
   it('warns that the agent is not notified and names the check it can run', async () => {
@@ -74,13 +83,9 @@ describe('send receipt for a terminal Orca cannot notify', () => {
 
     const result = await send(ctx)
 
-    expect(result.message.to_handle).toBe(RECIPIENT)
-    expect(result.warnings).toContainEqual(
-      expect.objectContaining({
-        code: 'recipient_delivery_held',
-        recipient: RECIPIENT,
-        message: expect.stringContaining(`orca orchestration check --terminal ${RECIPIENT}`)
-      })
+    expect(result).toMatchObject({ message: { to_handle: RECIPIENT } })
+    expect(result).toMatchObject(
+      heldWarning(RECIPIENT, 'orca orchestration check --terminal term_titleless')
     )
   })
 
@@ -90,13 +95,15 @@ describe('send receipt for a terminal Orca cannot notify', () => {
 
     const result = await send(ctx)
 
-    expect(result.warnings ?? []).not.toContainEqual(
-      expect.objectContaining({ code: 'recipient_delivery_held' })
-    )
+    expect(result).not.toMatchObject({
+      warnings: expect.arrayContaining([
+        expect.objectContaining({ code: 'recipient_delivery_held' })
+      ])
+    })
     await expect(waiting).resolves.toBeInstanceOf(MessageWake)
   })
 
-  it("reports a Run recipient's coordinator terminal", async () => {
+  it("names the addressed Run in its coordinator's check", async () => {
     const { ctx, db } = await setupTitlelessRecipient()
     const run = db.createRun({
       objective: 'Coordinated from the title-less terminal',
@@ -106,13 +113,12 @@ describe('send receipt for a terminal Orca cannot notify', () => {
 
     const result = await send(ctx)
 
-    expect(result.message.to_handle).toBe(`run:${run.id}`)
-    expect(result.warnings).toContainEqual(
-      expect.objectContaining({
-        code: 'recipient_delivery_held',
-        recipient: `run:${run.id}`,
-        message: expect.stringContaining(`orca orchestration check --terminal ${RECIPIENT}`)
-      })
+    expect(result).toMatchObject({ message: { to_handle: `run:${run.id}` } })
+    expect(result).toMatchObject(
+      heldWarning(
+        `run:${run.id}`,
+        `orca orchestration check --run ${run.id} --terminal term_titleless`
+      )
     )
   })
 })

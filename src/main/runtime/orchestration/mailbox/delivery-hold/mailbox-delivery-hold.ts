@@ -1,3 +1,5 @@
+import { orchestrationCheckRunFlag } from '../formatting/message-formatting'
+
 /** Why mail to a worker is not delivered right now, read from the same gates that hold it, so a send
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
@@ -18,7 +20,7 @@ export type MailboxDeliveryHold =
   | { kind: 'unsettled' }
   /** No live status shows an agent in this terminal that takes typed input, so no note is typed for now. */
   | { kind: 'unverified'; terminal: string }
-  /** The terminal is open but does not read this mailbox, so no note is ever typed there. */
+  /** The terminal is open but cannot read this mailbox (it reads only its Task's mail). */
   | { kind: 'unreachable'; terminal: string }
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
@@ -82,9 +84,9 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
     case 'unsettled':
       return `Queued. ${recipient} has not settled at its prompt (an open request or question, or output still arriving); delivery waits until it does.`
     case 'unverified':
-      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. It can read the message with \`orca orchestration check --terminal ${hold.terminal}\`; Orca will notify it once it can verify the agent accepts input.`
+      return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. The agent in ${hold.terminal} can read it by running \`orca orchestration check${orchestrationCheckRunFlag(recipient)} --terminal ${hold.terminal}\` in its own terminal; don't run this yourself. Orca will notify it once it can verify the agent accepts input.`
     case 'unreachable':
-      return `Queued for ${hold.terminal}, but Orca has no way to notify it; its agent must run \`orca orchestration check --terminal ${hold.terminal}\`.`
+      return `Queued for ${hold.terminal}, but it can't be read in that terminal: it only reads its Task's mail. Message its coordinator instead.`
     case 'behind-prompt':
       return `Queued behind an open prompt; ${recipient} sees it after the prompt is answered.`
     case 'detached':
@@ -93,3 +95,4 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
       return `Queued. ${recipient}'s chat refuses new messages for now (${hold.reason}); delivery is retried when that changes.`
   }
 }
+

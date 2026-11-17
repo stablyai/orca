@@ -131,6 +131,11 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
+/** A Run mailbox's `check` must name its Run: a plain check reads only the terminal's newest Run. */
+export function orchestrationCheckRunFlag(mailboxHandle: string | undefined): string {
+  return mailboxHandle?.startsWith('run:') ? ` --run ${mailboxHandle.slice('run:'.length)}` : ''
+}
+
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
@@ -138,9 +143,7 @@ export function formatMessagePointer(
   heldDeliveryId?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
-  const runFlag = mailboxHandle?.startsWith('run:')
-    ? ` --run ${mailboxHandle.slice('run:'.length)}`
-    : ''
+  const runFlag = orchestrationCheckRunFlag(mailboxHandle)
   if (heldDeliveryId) {
     return `\nYou have ${count} new orchestration ${noun} after delivery ${heldDeliveryId}, which you have not acknowledged. If you no longer have it, run \`${cliCommand} orchestration check${runFlag}\` to see it again; once it is handled, run \`${cliCommand} orchestration check${runFlag} --ack ${heldDeliveryId}\`, then \`${cliCommand} orchestration check${runFlag}\` for the new mail.\n`
   }
