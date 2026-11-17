@@ -15,6 +15,26 @@ const HOT_PATH_PREFIXES = [
 
 const HOT_PATH_FILES = new Set(['package.json', 'pnpm-lock.yaml', 'electron.vite.config.ts'])
 
+// Launch, restart-continuation and process-ownership code. Ownership reads only time out on macOS (libproc/ps;
+// Linux reads /proc), so a change here also needs the launch burst on a Mac.
+const LAUNCH_PATH_PREFIXES = [
+  'src/main/provider-process/',
+  'src/main/native-chat/agent-launch/',
+  'src/main/native-chat/agent-session-wire/recovery/',
+  'src/main/claude/child-process/',
+  'src/main/claude/sdk-transport/',
+  'src/main/claude/structured/launch/',
+  'src/main/claude/structured/startup/',
+  'src/main/codex/structured/session-lifecycle/',
+  'src/main/acp/process/',
+  'src/main/acp/session/start/',
+  'src/main/pty/process-retirement/',
+  'src/shared/process-observation/',
+  'native/provider-exec/',
+  'config/provider-exec-resources.cjs',
+  'config/scripts/performance/fleet-gate/fleet-gate-launch-burst.mjs'
+]
+
 // Test, fixture, doc and locale edits can't change what the shipped app sends or wakes.
 const COLD_PATTERNS = [
   /\.(test|spec|performance\.test|unit\.test)\.[cm]?[jt]sx?$/,
@@ -33,6 +53,13 @@ export function isHotPath(file) {
   return HOT_PATH_FILES.has(file) || HOT_PATH_PREFIXES.some((prefix) => file.startsWith(prefix))
 }
 
+export function isLaunchPath(file) {
+  if (COLD_PATTERNS.some((pattern) => pattern.test(file))) {
+    return false
+  }
+  return LAUNCH_PATH_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix))
+}
+
 export function changedFiles(base, head, cwd) {
   const output = execFileSync('git', ['diff', '--name-only', `${base}...${head}`], {
     cwd,
@@ -43,9 +70,9 @@ export function changedFiles(base, head, cwd) {
 }
 
 /** Fails open: a diff that can't be resolved counts as touching every hot path, so the gate runs. */
-export function hotPathChanges(base, head, cwd) {
+export function hotPathChanges(base, head, cwd, filter = isHotPath) {
   try {
-    return changedFiles(base, head, cwd).filter(isHotPath)
+    return changedFiles(base, head, cwd).filter(filter)
   } catch (error) {
     console.log(
       `hot-path filter couldn't diff ${base}...${head} (${String(error?.message ?? error).split('\n')[0]}); running the gate`
@@ -62,6 +89,17 @@ function main() {
   }
   const head = read('--head', 'HEAD')
   const base = read('--base', 'origin/main')
+  if (args.includes('--launch-paths')) {
+    const launch = hotPathChanges(base, head, process.cwd(), isLaunchPath)
+    console.log(
+      launch.length === 0
+        ? 'mac burst: not needed (no launch, restart or process-ownership changes)'
+        : `mac burst: required (${launch.length} launch file(s), e.g. ${launch[0]})`
+    )
+    // Exit 11 so the wrapper can branch on "needs the macOS burst".
+    process.exitCode = launch.length === 0 ? 0 : 11
+    return
+  }
   const hot = hotPathChanges(base, head, process.cwd())
   if (hot.length === 0) {
     console.log('skipped: no hot-path changes')
