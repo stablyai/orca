@@ -40,6 +40,7 @@ import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startDeviceStore } from '../src/device-store/device-store'
+import { useScreenAwake } from '../src/settings/mobile-screen-awake'
 
 export { NativeScreenRecovery as ErrorBoundary } from '../src/components/feedback/NativeScreenRecovery'
 
@@ -67,6 +68,7 @@ Notifications.setNotificationHandler({
 const handledNotificationIds = new Set<string>()
 
 export default function RootLayout() {
+  useScreenAwake()
   const colorScheme = useMobileColorScheme()
   useFollowDeviceUiLocale()
   const pathname = usePathname()

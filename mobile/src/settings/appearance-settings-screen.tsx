@@ -1,4 +1,6 @@
 import { useRouter } from 'expo-router'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
+import { setScreenAwakePreference, useScreenAwakePreference } from './mobile-screen-awake'
 import { ListRow } from '../components/list/ListGroup'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -24,6 +26,8 @@ export default function AppearanceSettingsScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const preference = useMobileAppearancePreference()
+  const screenAwake = useScreenAwakePreference()
+  const screenAwakeLabel = t('settings.appearance.keepScreenAwake', 'Keep screen awake')
 
   return (
     <SettingsScreen
@@ -49,6 +53,27 @@ export default function AppearanceSettingsScreen() {
             }}
           />
         ))}
+      </SettingsSection>
+
+      <SettingsSection
+        title={t('settings.appearance.screenHeading', 'SCREEN')}
+        footer={t(
+          'settings.appearance.keepScreenAwakeDescription',
+          'Keep the screen on while Orca is open.'
+        )}
+      >
+        <ListRow
+          title={screenAwakeLabel}
+          accessory={
+            <MobileSwitch
+              accessibilityLabel={screenAwakeLabel}
+              value={screenAwake}
+              onValueChange={(value) => {
+                void setScreenAwakePreference(value).catch(() => {})
+              }}
+            />
+          }
+        />
       </SettingsSection>
 
       <UiLanguageSettingsSection />
