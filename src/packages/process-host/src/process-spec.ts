@@ -54,6 +54,8 @@ export type ProcessSpec = {
   serialization?: NodeSpawnOptions['serialization']
   /** Native POSIX stops require group proof; the final caller deadline never releases physical ownership. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
+  /** The process exists; a worker-hosted launch may first wait behind others. */
+  onSpawn?: () => void
   /** Normal close or verified termination; native POSIX close after stop alone is insufficient. */
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */

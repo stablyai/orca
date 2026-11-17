@@ -238,6 +238,9 @@ export function runProcess(
         stopAndSettle()
       }
     )
+    if (spec.onSpawn) {
+      child.once('spawn', spec.onSpawn)
+    }
 
     const onAbort = (): void => stopAndSettle()
     spec.signal?.addEventListener('abort', onAbort, { once: true })
