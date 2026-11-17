@@ -85,7 +85,8 @@ export function selectJournalEligibleQueueCard(
   now: number,
   facts: JournalSqlQueueFacts,
   allowSteer: boolean,
-  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>,
+  childAcceptsInput = true
 ): JournalDomainQueuePick & { steer: boolean; command: boolean } {
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
@@ -94,7 +95,8 @@ export function selectJournalEligibleQueueCard(
     return none
   }
   const mailOnly = state.handover.length > 0
-  if (mailOnly && !(steer && owedSendsAreFromAgents(state.handover))) {
+  // Earlier mail used to stop selection here; a child that cannot take input yet still does.
+  if (mailOnly && !(steer && childAcceptsInput && owedSendsAreFromAgents(state.handover))) {
     return none
   }
   return {

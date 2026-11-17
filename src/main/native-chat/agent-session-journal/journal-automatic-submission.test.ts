@@ -209,6 +209,9 @@ it("steers the next agent's mail into a running turn while earlier mail is still
   await agents.enqueue('person', { options: { model: 'active' } })
   expect(await claim(agents, 'send-first')).toMatchObject({ kind: 'claimed', messageId: 'first' })
   await handOver(agents, 'send-first')
+  agents.selection.child!.ready = false
+  expect(await claim(agents, 'send-second')).toEqual({ kind: 'waiting' })
+  agents.selection.child!.ready = true
   expect(await claim(agents, 'send-second')).toMatchObject({ kind: 'claimed', messageId: 'second' })
   await handOver(agents, 'send-second')
   expect(await claim(agents, 'send-person')).toEqual({ kind: 'waiting' })
