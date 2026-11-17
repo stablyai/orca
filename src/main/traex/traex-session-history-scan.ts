@@ -104,12 +104,7 @@ function consumeTraexHistoryLine(state: TraexHistoryScanState, line: string): vo
     payload.items.forEach(consumeMessage)
   } else if (!state.canonical && !state.paginated && record.type === 'response_item') {
     consumeMessage(payload)
-  } else if (
-    !state.canonical &&
-    state.paginated &&
-    record.type === 'event_msg' &&
-    payload.type === 'item_completed'
-  ) {
+  } else if (state.paginated && record.type === 'event_msg' && payload.type === 'item_completed') {
     const item = traexRecord(payload.item)
     const user = item.type === 'UserMessage' || item.type === 'user_message'
     if (user || item.type === 'AgentMessage' || item.type === 'agent_message') {
