@@ -25516,6 +25516,7 @@
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
     "sameAsTextDefault": "Same as default · {{value0}}",
+    "effortDefault": "Default",
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",

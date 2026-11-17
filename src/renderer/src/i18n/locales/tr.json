@@ -23815,6 +23815,7 @@
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",
     "workspaceStartupFailed": "{{agent}} başlatılamadı. Bu kurulumdaki Argümanlar'ı kontrol edip tekrar deneyin.",
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
+    "effortDefault": "Varsayılan",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
   },

@@ -23675,6 +23675,7 @@
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",
     "workspaceStartupFailed": "{{agent}} konnte nicht gestartet werden. Überprüfe die Argumente in dieser Einrichtung und versuche es erneut.",
     "sameAsTextDefault": "Wie Standard · {{value0}}",
+    "effortDefault": "Standard",
     "chatChoicesNote": "Modell- oder Effort-Auswahlen für {{agent}} ohne CLI-Flag gelten für Chats.",
     "composedChoicesNote": "Effort- und Geschwindigkeitsauswahlen für {{agent}} sind im Modellargument enthalten."
   },

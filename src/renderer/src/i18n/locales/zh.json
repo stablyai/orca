@@ -24830,6 +24830,7 @@
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件",
     "workspaceStartupFailed": "无法启动 {{agent}}。请检查此设置中的参数并重试。",
     "sameAsTextDefault": "与默认值相同 · {{value0}}",
+    "effortDefault": "默认",
     "chatChoicesNote": "没有 CLI 标志的 {{agent}} 模型或推理力度选项适用于聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度选项包含在模型参数中。",
     "searchAgents": "搜索智能体…"
