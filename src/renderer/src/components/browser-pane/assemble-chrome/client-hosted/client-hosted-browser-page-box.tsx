@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserViewportPresetToOverride,
@@ -11,12 +19,17 @@ import {
 import { useBrowserPageViewportScrollReporting } from '../../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
 
 /** Sends the page's preset to its guest; CDP overrides don't survive a cross-origin load, so callers reapply on dom-ready. */
-export function applyClientHostedBrowserViewportOverride(
+function applyClientHostedBrowserViewportOverride(
   browserPageId: string,
   presetId: BrowserViewportPresetId | null,
-  scroller: HTMLElement | null
+  scroller: HTMLElement | null,
+  trigger: 'attach' | 'load'
 ): void {
   const preset = getBrowserViewportPreset(presetId)
+  // A pane remount must not clear a viewport an agent set on the retained guest; a load resets it, as on a local page.
+  if (!preset && trigger === 'attach') {
+    return
+  }
   void window.api.browser
     .setViewportOverride({
       browserPageId,
@@ -41,11 +54,14 @@ export function useClientHostedBrowserPageViewport(
   scrollerRef: RefObject<HTMLDivElement | null>
   /** The box the guest attaches to: the scroller's size, or the preset's. Refs, so the guest attaches in the pane's first commit. */
   contentRef: RefObject<HTMLDivElement | null>
+  applyOverride: (trigger: 'attach' | 'load') => void
 } {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const presetIdRef = useRef(presetId)
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   useLayoutEffect(() => {
+    presetIdRef.current = presetId
     const scroller = scrollerRef.current
     const content = contentRef.current
     if (!scroller || !content) {
@@ -72,10 +88,20 @@ export function useClientHostedBrowserPageViewport(
       }
     })
   }, [browserPageId, scroller])
-  return { scrollerRef, contentRef }
+  const applyOverride = useCallback(
+    (trigger: 'attach' | 'load') =>
+      applyClientHostedBrowserViewportOverride(
+        browserPageId,
+        presetIdRef.current,
+        scrollerRef.current,
+        trigger
+      ),
+    [browserPageId]
+  )
+  return { scrollerRef, contentRef, applyOverride }
 }
 
-/** The scroller and preset-sized box the guest attaches to, with what must share the guest's box. */
+/** The scroller and preset-sized box the guest attaches to; children such as the drawing screenshot share the guest's box. */
 export function ClientHostedBrowserPageBox({
   box,
   children

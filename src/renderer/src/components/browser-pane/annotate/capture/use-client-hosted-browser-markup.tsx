@@ -11,7 +11,8 @@ export function useClientHostedBrowserMarkup({
   placement,
   isActive,
   unavailable,
-  showFailureOverlay
+  showFailureOverlay,
+  controlsContainer
 }: {
   webviewRef: RefObject<Electron.WebviewTag | null>
   browserPageId: string
@@ -20,6 +21,8 @@ export function useClientHostedBrowserMarkup({
   isActive: boolean
   unavailable: boolean
   showFailureOverlay: boolean
+  /** A footer for the drawing controls while a preset box, which can outgrow the pane, holds the drawing. */
+  controlsContainer: HTMLElement | null
 }) {
   const markup = useBrowserPageMarkupCapture(webviewRef)
   const disabled = !isActive || placement === null || unavailable || showFailureOverlay
@@ -78,6 +81,7 @@ export function useClientHostedBrowserMarkup({
           busy={markup.state === 'composing'}
           onComplete={(input) => void markup.complete(input)}
           onCancel={markup.cancel}
+          controlsContainer={controlsContainer}
         />
       ) : null
   }

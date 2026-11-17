@@ -22,7 +22,7 @@ export function bindBrowserClientPageChromeListeners(
     updatePageState: (tabId: string, updates: BrowserTabPageState) => void
     dismissAddressBarSuggestions: () => void
     /** CDP overrides don't survive a cross-origin load, and the guest may have loaded while no pane showed it. */
-    applyViewportPreset: () => void
+    applyViewportPreset: (trigger: 'attach' | 'load') => void
   }
 ): () => void {
   const guestUrl = (): string | null => cachedBrowserGuestMetadata(webview)?.url ?? null
@@ -59,14 +59,15 @@ export function bindBrowserClientPageChromeListeners(
   }
   // Guests never send outside pointer events to the renderer, so a page click can't close suggestions otherwise.
   const onFocus = (): void => dismissAddressBarSuggestions()
-  applyViewportPreset()
-  webview.addEventListener('dom-ready', applyViewportPreset)
+  const onDomReady = (): void => applyViewportPreset('load')
+  applyViewportPreset('attach')
+  webview.addEventListener('dom-ready', onDomReady)
   webview.addEventListener('page-favicon-updated', onFavicon)
   webview.addEventListener('did-start-navigation', onLeaveDocument)
   webview.addEventListener('did-redirect-navigation', onLeaveDocument)
   webview.addEventListener('focus', onFocus)
   return () => {
-    webview.removeEventListener('dom-ready', applyViewportPreset)
+    webview.removeEventListener('dom-ready', onDomReady)
     webview.removeEventListener('page-favicon-updated', onFavicon)
     webview.removeEventListener('did-start-navigation', onLeaveDocument)
     webview.removeEventListener('did-redirect-navigation', onLeaveDocument)

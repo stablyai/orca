@@ -26,7 +26,6 @@ import BrowserFind from '../find/BrowserFind'
 import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-toolbar'
 import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
 import {
-  applyClientHostedBrowserViewportOverride,
   ClientHostedBrowserPageBox,
   useClientHostedBrowserPageViewport
 } from './client-hosted-browser-page-box'
@@ -65,7 +64,6 @@ export function ClientHostedBrowserPagePane(props: Props) {
   } = props
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const pageBox = useClientHostedBrowserPageViewport(browserTab.id, viewportPresetId)
-  const readViewportPresetId = useEffectEvent(() => viewportPresetId)
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
@@ -76,6 +74,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const isActiveRef = useRef(isActive)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [findOpen, setFindOpen] = useState(false)
+  const [paneRoot, setPaneRoot] = useState<HTMLDivElement | null>(null)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
   const setUrlFromGuest = useEffectEvent(onSetUrl)
   const recordHistoryFromGuest = useEffectEvent(useAppStore((s) => s.addBrowserHistoryEntry))
@@ -276,12 +275,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       browserPageId: browserTab.id,
       updatePageState: (pageId, updates) => updatePageStateFromGuest(pageId, updates),
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
-      applyViewportPreset: () =>
-        applyClientHostedBrowserViewportOverride(
-          browserTab.id,
-          readViewportPresetId(),
-          pageBox.scrollerRef.current
-        )
+      applyViewportPreset: pageBox.applyOverride
     })
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       loadFailureRef.current = loadError
@@ -313,7 +307,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   }, [
     browserTab.id,
     pageBox.contentRef,
-    pageBox.scrollerRef,
+    pageBox.applyOverride,
     initialization.suppressAttachment,
     browserHostClientId,
     browserHostGeneration,
@@ -329,11 +323,13 @@ export function ClientHostedBrowserPagePane(props: Props) {
     placement,
     isActive,
     unavailable: initialization.unavailable,
-    showFailureOverlay: initialization.showFailureOverlay
+    showFailureOverlay: initialization.showFailureOverlay,
+    controlsContainer: viewportPresetId ? paneRoot : null
   })
 
   return (
     <div
+      ref={setPaneRoot}
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
       data-browser-page-pane-id={browserTab.id}
     >
@@ -371,7 +367,6 @@ export function ClientHostedBrowserPagePane(props: Props) {
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
           {...fileDrop}
         >
-          {/* The drawing screenshot is the guest's, so it takes the guest's box. */}
           <ClientHostedBrowserPageBox box={pageBox}>{markup.overlay}</ClientHostedBrowserPageBox>
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
