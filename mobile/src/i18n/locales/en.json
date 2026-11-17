@@ -2239,6 +2239,8 @@
       "copyPath": "Copy Path",
       "file": "File",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI only",
       "unsavedMarkdown": "Unsaved markdown changes",
       "draftsHint": "Copy or discard phone drafts before leaving.",
       "copyAllAndLeave": "Copy All & Leave",
