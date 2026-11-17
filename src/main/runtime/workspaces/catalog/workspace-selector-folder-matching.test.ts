@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { Repo } from '../../../../shared/repository/repo-types'

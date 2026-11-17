@@ -10,7 +10,7 @@ import { SshChannelMultiplexer } from '../../../src/main/ssh/protocol/ssh-channe
 import {
   leaveShellInReleasedRelay,
   openShellRelayTransport
-} from '../cross-version-wire/released-relay-transport'
+} from '../cross-version-wire/relay/released-relay-transport'
 import { execDockerSshHostTargetCommand, type DockerSshHostTarget } from './docker-ssh-host-target'
 
 export type DockerReleasedRelay = { dir: string; version: string }

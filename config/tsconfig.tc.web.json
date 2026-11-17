@@ -75,6 +75,7 @@
     "../src/main/ipc/worktrees/paths/deferred-emoji-shortcode-dataset.ts",
     "../src/main/ipc/worktrees/creation/worktree-branch-name.ts",
     "../src/main/ipc/worktrees/paths/worktree-logic.ts",
+    "../src/main/ipc/worktrees/paths/worktree-name-sanitization.ts",
     "../src/main/ipc/worktrees/paths/worktree-path-settings.ts",
     "../src/main/ipc/worktrees/creation/worktree-display-name.ts",
     "../src/main/ipc/worktrees/metadata/worktree-linked-work-item-metadata.ts",

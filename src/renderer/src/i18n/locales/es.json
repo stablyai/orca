@@ -19040,6 +19040,7 @@
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "historyUnusable": "No se puede cargar este chat.",
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+        "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
         "savedByNewerOrca": "Los chats se guardaron con una versión más reciente de Orca.",
         "updateOrcaToKeepUsing": "Actualice Orca para seguir usándolos.",
         "chatSavedByNewerOrca": "Este chat se guardó con una versión más reciente de Orca.",
@@ -21710,7 +21711,8 @@
         "installLockWait_other": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca la retomará en aproximadamente {{count}} minutos.",
         "installLockWaitGivesUp_one": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minuto.",
         "installLockWaitGivesUp_many": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minutos.",
-        "installLockWaitGivesUp_other": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minutos."
+        "installLockWaitGivesUp_other": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minutos.",
+        "installLockWaitHolderGone": "La otra instalación de Orca en esta distribución se detuvo. Orca la retomará en unos segundos."
       }
     },
     "agentSummary": {

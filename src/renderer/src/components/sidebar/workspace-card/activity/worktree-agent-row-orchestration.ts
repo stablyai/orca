@@ -3,7 +3,7 @@ import type {
   AgentStatusOrchestrationContext
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 
 export function entryWithRuntimeOrchestration(
   entry: AgentStatusEntry,

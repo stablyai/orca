@@ -107,7 +107,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       ...projectQueuedMessageCards(queuedMessages, submissions, {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
-        queuePaused: queuePause !== null
+        queuePaused: queuePause !== null,
+        steersInTranscript: true
       }),
       ...sendingQueuedMessageCards(
         pendingQueueSendsOnTheirWay(

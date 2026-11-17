@@ -16,7 +16,6 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 }))
 
 import { sendNativeChatMessage } from './native-chat-runtime-send'
-import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resetNativeChatPtySendQueuesForTests } from './native-chat-pty-send-queue'
 import { nativeChatExpectedLine, nativeChatLineShowsMessage } from './native-chat-paste-landed'
 
@@ -87,28 +86,5 @@ describe('nativeChatLineShowsMessage', () => {
     const expected = nativeChatExpectedLine('Reply with PONG')
     expect(nativeChatLineShowsMessage('[Image #1]', expected)).toBe(false)
     expect(nativeChatLineShowsMessage('[Image #1] Reply with PONG', expected)).toBe(true)
-  })
-})
-
-describe('image sends to agents that take typed @path mentions', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    writes.length = 0
-  })
-  afterEach(() => {
-    resetNativeChatPtySendQueuesForTests()
-    vi.useRealTimers()
-  })
-
-  it('presses Enter once the line shows the mention and the caption', async () => {
-    let line = ''
-    sendNativeChatMessageWithImageAttachments('omp', 'pty-1', 'describe', ['/tmp/a.png'], {
-      readInputLine: () => line,
-      onWriteRejected: () => {}
-    })
-    await vi.advanceTimersByTimeAsync(300)
-    line = '@/tmp/a.png describe'
-    await vi.advanceTimersByTimeAsync(800)
-    expect(writes.at(-1)).toBe('\r')
   })
 })

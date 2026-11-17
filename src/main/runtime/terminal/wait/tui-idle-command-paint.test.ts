@@ -1,10 +1,7 @@
 /** Quiet foreground is insufficient until the agent paints; use command-start markers to exclude shell prompts and launch echo. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTranscriptPane,
-  TRANSCRIPT_PANE_PTY_ID
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 const POLL_INTERVAL_MS = 2_000
 

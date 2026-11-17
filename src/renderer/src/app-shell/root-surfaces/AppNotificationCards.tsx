@@ -1,9 +1,9 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
-import { CodexSharedSettingsNoticeCard } from '../../components/CodexSharedSettingsNoticeCard'
-import { NotificationCardStack } from '../../components/NotificationCardStack'
-import { StarNagCard } from '../../components/StarNagCard'
+import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
+import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
+import { StarNagCard } from '../../components/star-nag/StarNagCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
 const ChatUiHereCornerCard = lazy(() =>
@@ -12,10 +12,12 @@ const ChatUiHereCornerCard = lazy(() =>
   }))
 )
 const UpdateCard = lazy(() =>
-  import('../../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+  import('../../components/maintenance/update-card/UpdateCard').then((module) => ({
+    default: module.UpdateCard
+  }))
 )
 const UnexpectedSignoutCard = lazy(() =>
-  import('../../components/UnexpectedSignoutCard').then((module) => ({
+  import('../../components/unexpected-signout/UnexpectedSignoutCard').then((module) => ({
     default: module.UnexpectedSignoutCard
   }))
 )

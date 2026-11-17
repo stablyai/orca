@@ -176,7 +176,8 @@
         "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
         "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
         "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
-        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes."
+        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.",
+        "installLockWaitHolderGone": "The other Orca install in this distro stopped. Orca takes over in a few seconds."
       }
     },
     "agentSummary": {
@@ -1533,7 +1534,7 @@
     "uninstall": {
       "groupTitle": "Uninstall",
       "title": "Uninstall Orca",
-      "searchDescription": "Remove agent hooks, the orca command, the background service and hooks on SSH hosts.",
+      "searchDescription": "Remove agent hooks, the orca command, the orca serve server and hooks on SSH hosts.",
       "keywords": {
         "uninstall": "uninstall",
         "remove": "remove",
@@ -1557,14 +1558,16 @@
       "tryAgain": "Try again",
       "keeps": "Projects, worktrees and Orca settings stay.",
       "keepsShared": "{{name}} is also installed, so hooks it shares stay too.",
+      "closesTerminals": "Open terminals will close.",
       "removing": "Removing…",
       "button": "Uninstall",
       "uninstalling": "Uninstalling…",
       "rows": {
         "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
-        "service": "Background service",
-        "hookScripts": "Hook scripts"
+        "service": "<cmd>orca serve</cmd> server",
+        "hookScripts": "Hook scripts",
+        "terminalDaemon": "Terminal background process"
       },
       "retry": "Retry",
       "hookTargets": {
@@ -1586,7 +1589,8 @@
       "summary": {
         "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
-        "service": "a background service",
+        "service": "the <cmd>orca serve</cmd> server",
+        "terminalDaemon": "the terminal background process",
         "hookScripts": "hook scripts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",
@@ -18639,6 +18643,10 @@
                 }
               }
             }
+          },
+          "BrowserExtensionSidePanelDock": {
+            "close": "Close side panel",
+            "resize": "Resize side panel"
           }
         },
         "webauthn": {
@@ -20691,6 +20699,7 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "savedInOtherFolder": "This conversation was saved in another folder.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -22260,6 +22269,10 @@
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
         "linkPreviewsSearchHover": "hover card",
+        "composerSpellcheckTitle": "Spellcheck and autocorrect",
+        "composerSpellcheckCopy": "Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.",
+        "composerSpellcheckSearchSpelling": "spellcheck",
+        "composerSpellcheckSearchAutocorrect": "autocorrect",
         "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",

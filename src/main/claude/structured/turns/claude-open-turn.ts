@@ -61,6 +61,7 @@ export class ClaudeOpenTurn {
   private reopenSuppressed = false
   /** Track root work since cycle init; background output may open a turn before that init. */
   private cycleWorkObserved = false
+  private cycleTurn: ClaudeCurrentTurn | null = null
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
   /** The ending of a step a steer cut short, until the steer's own cycle starts. */
@@ -123,6 +124,14 @@ export class ClaudeOpenTurn {
     return this.current !== null && this.cycleWorkObserved
   }
 
+  get ownsLiveProviderCycle(): boolean {
+    return this.current !== null && this.current === this.cycleTurn && this.cycleWorkObserved
+  }
+
+  confirmProviderCycle(): void {
+    this.cycleTurn = this.current
+  }
+
   /** Reset per frame so send ownership cannot leak into later frames. */
   observeStartedSend(send: ClaudeStartedSend | null): void {
     this.startedSend = send
@@ -136,6 +145,7 @@ export class ClaudeOpenTurn {
   observeProviderCycleStart(): void {
     this.steerHandoffEnd = null
     this.cycleWorkObserved = false
+    this.cycleTurn = null
     this.inputChoiceWorkObserved = false
   }
 
@@ -158,6 +168,7 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
+    this.cycleTurn = turn
     this.publish(turn)
     this.deps.sink.setActivity?.(null)
   }
@@ -177,6 +188,7 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
+    this.cycleTurn = turn
     this.deps.sink.setActivity?.(null)
   }
 
@@ -192,6 +204,7 @@ export class ClaudeOpenTurn {
       this.usageLimitEvidence = null
       this.inputChoiceWorkObserved = false
       this.current = null
+      this.cycleTurn = null
     }
   }
 
@@ -227,6 +240,7 @@ export class ClaudeOpenTurn {
     }
     this.suppressReopenOnFailure(readings.ran || readings.stopped)
     this.cycleWorkObserved = false
+    this.cycleTurn = null
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
     // End suppressed work even when no turn is open, at the real settle time.
@@ -243,6 +257,7 @@ export class ClaudeOpenTurn {
         }
       )
       this.current = null
+      this.cycleTurn = null
     }
     this.deps.sink.setActivity?.(null)
   }

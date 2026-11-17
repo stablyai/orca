@@ -130,10 +130,9 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
     printResult(response, json, formatLinearTeamLabels)
   },
   'linear project list': async ({ flags, client, json }) => {
-    const limit = clampLinearSearchLimit(getOptionalPositiveIntegerFlag(flags, 'limit'))
     const request: LinearProjectListRequest = {
       query: getOptionalStringFlag(flags, 'query'),
-      limit,
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     }
     const response = await client.call<LinearProjectListResult>('linear.agentProjectList', request)
