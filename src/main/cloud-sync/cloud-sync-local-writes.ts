@@ -82,7 +82,7 @@ export async function removeCopies(
 }
 
 /** Directories emptied by removals go too (never the folder itself or `.context`). */
-export async function pruneEmptyDirs(folder: string, removed: readonly string[]): Promise<void> {
+async function pruneEmptyDirs(folder: string, removed: readonly string[]): Promise<void> {
   const dirs = new Set<string>()
   for (const path of removed) {
     const parts = path.split('/')
@@ -97,7 +97,7 @@ export async function pruneEmptyDirs(folder: string, removed: readonly string[])
   }
 }
 
-export type DownloadInput = {
+type DownloadInput = {
   call: SyncCall
   selector: string
   folder: string

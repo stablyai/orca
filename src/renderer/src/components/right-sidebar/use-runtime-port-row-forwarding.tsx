@@ -41,7 +41,7 @@ function localUrl(forward: RuntimePortForward, port: WorkspacePort): string {
   }
 }
 
-export type RuntimePortRowForwarding = {
+type RuntimePortRowForwarding = {
   forwarding: PortRowForwarding
   /** Forwards (if needed) and opens the port in the system browser through this computer's localhost. */
   openLocally: (port: WorkspacePort) => Promise<void>

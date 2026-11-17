@@ -12,7 +12,7 @@ import {
 type CleanupStep = Promise<boolean>
 
 /** Which runtime records belong to the canceled create. */
-export type OrcaCloudCancelScope = {
+type OrcaCloudCancelScope = {
   runtimeId?: string
   createStartedAt: number
   canceledAt: number

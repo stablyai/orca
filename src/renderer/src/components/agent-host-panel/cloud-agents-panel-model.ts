@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { orcaCloudAgentCoverage } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 
-export type CloudAgentPanelStatus =
+type CloudAgentPanelStatus =
   | { kind: 'account'; label: string | null }
   | { kind: 'key'; keyKind: AgentKeyKind }
   | { kind: 'notSetUp' }

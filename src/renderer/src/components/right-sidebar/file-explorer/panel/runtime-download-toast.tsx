@@ -16,8 +16,7 @@ import {
   type RuntimeDownloadPlace
 } from './runtime-download-failure-copy'
 
-export type { RuntimeDownloadPlace }
-export type RuntimeDownloadItemKind = 'file' | 'folder'
+type RuntimeDownloadItemKind = 'file' | 'folder'
 export type RuntimeDownloadToastIntent = 'save' | 'open'
 
 export type RuntimeDownloadToastState =
@@ -61,7 +60,7 @@ const ETA_MIN_RATE_WINDOW_MS = 2_000
 // Titles truncate at the end in CSS, which hides the extension; shorten long names in the middle.
 const MAX_TITLE_NAME_CHARS = 40
 
-export function middleTruncateName(name: string, max = MAX_TITLE_NAME_CHARS): string {
+function middleTruncateName(name: string, max = MAX_TITLE_NAME_CHARS): string {
   const chars = Array.from(name)
   if (chars.length <= max) {
     return name
@@ -75,7 +74,7 @@ const CARD =
   'relative w-[356px] rounded-lg border border-border bg-popover px-3 py-2.5 text-sm text-popover-foreground shadow-lg'
 
 /** Fraction done, or null while the size is unknown (folder walk, empty file). */
-export function runtimeDownloadFraction(
+function runtimeDownloadFraction(
   snapshot: RuntimeDownloadProgressSnapshot | null
 ): number | null {
   if (!snapshot || snapshot.phase !== 'transferring' || !snapshot.totalBytes) {

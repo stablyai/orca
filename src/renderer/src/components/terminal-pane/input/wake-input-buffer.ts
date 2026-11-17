@@ -37,9 +37,9 @@ type WorkspaceWake = {
   panes: Map<string, PaneBuffer>
 }
 
-export type WakeInputDelivery = { workspaceId: string; paneId: string }
+type WakeInputDelivery = { workspaceId: string; paneId: string }
 /** Held typing that was not sent (wake failed, never re-attached). */
-export type WakeInputDropped = { workspaceId: string }
+type WakeInputDropped = { workspaceId: string }
 
 const wakes = new Map<string, WorkspaceWake>()
 if (import.meta.env?.DEV && typeof window !== 'undefined') {

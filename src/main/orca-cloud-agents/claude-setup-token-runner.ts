@@ -18,14 +18,14 @@ export type SubmitSetupCode = (code: string) => boolean
 /** Rejects with `{ code: 'ENOENT' }` when there is no `claude` to run. */
 export type SpawnSetupToken = () => Promise<SetupTokenProcess>
 
-export type ClaudeSetupTokenFailure =
+type ClaudeSetupTokenFailure =
   | 'no_cli'
   | 'denied'
   | 'timed_out'
   | 'capture_failed'
   | 'cancelled'
 
-export type ClaudeSetupTokenOutcome =
+type ClaudeSetupTokenOutcome =
   | { ok: true; token: string }
   | { ok: false; error: ClaudeSetupTokenFailure }
 

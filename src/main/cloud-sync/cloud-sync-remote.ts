@@ -17,7 +17,7 @@ const STAT_TIMEOUT_MS = 60_000
 const FALLBACK_STAT_CONCURRENCY = 12
 const CONTEXT_MAX_DEPTH = 8
 
-export class SyncRemoteError extends Error {
+class SyncRemoteError extends Error {
   constructor(
     readonly code: string,
     message: string = code

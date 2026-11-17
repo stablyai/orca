@@ -48,7 +48,7 @@ async function writeCache(file: string, entry: CacheEntry): Promise<void> {
   }
 }
 
-export type PlanCatalogLoadOptions = {
+type PlanCatalogLoadOptions = {
   billingApiUrl: string
   cacheFile: string
   now: number

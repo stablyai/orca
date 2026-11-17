@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { OrcaOrgRole } from '../../shared/orca-profiles/orca-profiles'
 
-export const BILLING_DEV_ISSUER = 'orca-billing-dev-test'
+const BILLING_DEV_ISSUER = 'orca-billing-dev-test'
 const TOKEN_TTL_SECONDS = 300
 
 const DevKeyFile = z.object({
@@ -27,16 +27,11 @@ export function getBillingDevKeyFile(env: NodeJS.ProcessEnv, packaged: boolean):
   return env.ORCA_BILLING_DEV_KEY_FILE?.trim() || null
 }
 
-export type BillingDevClaims = {
+type BillingDevClaims = {
   userId: string
   email?: string
   orgId?: string
   orgRole?: OrcaOrgRole
-}
-
-export function normalizeDevOrgRole(raw: string | undefined): OrcaOrgRole {
-  const value = raw?.trim().toLowerCase()
-  return value === 'owner' || value === 'admin' ? value : 'member'
 }
 
 export async function mintDevBillingToken(

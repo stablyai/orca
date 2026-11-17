@@ -8,7 +8,7 @@ export const AFTER_WAKE_DEADLINE_MS = 60_000
 /** A sandbox still asleep this many answers after a wake did not wake. */
 const ASLEEP_ANSWERS_BEFORE_FAILING = 2
 
-export type OpenAfterWakeOutcome =
+type OpenAfterWakeOutcome =
   | { kind: 'opened'; environmentId: string; url: string }
   | { kind: 'failed'; code: CloudRemoteDesktopToastFailure }
   /** The wake flow reported its own failure (Unarchive's toast), or the workspace went away. */

@@ -199,8 +199,3 @@ export function useVmBuildAgentSignIn(
   const run = useSyncExternalStore(subscribe, () => runs.get(creationId) ?? null)
   return run?.environmentId === environmentId ? run : null
 }
-
-export function _resetVmBuildAgentSignInForTest(): void {
-  runs.clear()
-  listeners.clear()
-}

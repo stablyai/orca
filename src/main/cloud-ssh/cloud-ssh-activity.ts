@@ -22,7 +22,3 @@ export function cloudSshActiveAt(runtimeEnvironmentId: string, now = Date.now())
   }
   return at
 }
-
-export function resetCloudSshActivityForTests(): void {
-  lastActiveAt.clear()
-}

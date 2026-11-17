@@ -22,7 +22,7 @@ export type WatchSubscribe = (
   handlers: { onEvent: (event: unknown) => void; onClose: () => void }
 ) => Promise<WatchSubscription>
 
-export type WatchBatch =
+type WatchBatch =
   | { kind: 'ready' }
   | { kind: 'rescan' }
   | { kind: 'paths'; paths: string[] }

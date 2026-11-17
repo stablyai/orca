@@ -27,7 +27,7 @@ import { SHARE_CONFIRM_ATTRIBUTE, ShareLinkRow, shareLinkState } from './share-l
 import { CreatedLink, PortPicker } from './share-port-dialog-parts'
 import { shareErrorMessage, useShareClock } from './share-link-status'
 
-export type SharePortDialogProps = {
+type SharePortDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   /** The port to share; null asks for one. */

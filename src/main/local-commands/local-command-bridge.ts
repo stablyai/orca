@@ -30,10 +30,10 @@ import {
   createLocalCommandRequestLimits
 } from './local-command-request-limits'
 
-export type { LocalCloudWorkspaceRef, LocalCommandBridgeDeps } from './local-command-bridge-types'
+export type { LocalCloudWorkspaceRef } from './local-command-bridge-types'
 
 /** A person can't have read a prompt this fresh: an allow that lands sooner is refused. */
-export const LOCAL_COMMAND_MIN_DECISION_MS = 600
+const LOCAL_COMMAND_MIN_DECISION_MS = 600
 const HANDLED_LIMIT = 500
 
 /**

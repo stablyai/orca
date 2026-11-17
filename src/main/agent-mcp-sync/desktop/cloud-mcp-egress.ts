@@ -13,7 +13,7 @@ import {
 
 const EgressHostsResponse = z.object({ hosts: z.array(z.string()) })
 
-export type McpEgressResult = { hosts: string[]; dropped: string[] }
+type McpEgressResult = { hosts: string[]; dropped: string[] }
 
 export type CloudMcpEgress = {
   /** Makes `wanted` reachable from the sandbox; returns what the sandbox now allows. */

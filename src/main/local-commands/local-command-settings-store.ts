@@ -11,7 +11,7 @@ import {
 
 const MAX_RULES = 200
 /** A saved approval lapses; the person sees the command again after this long. */
-export const LOCAL_COMMAND_RULE_TTL_MS = 30 * 24 * 60 * 60_000
+const LOCAL_COMMAND_RULE_TTL_MS = 30 * 24 * 60 * 60_000
 const SandboxId = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 
 const WorkspaceSettingSchema = z.object({
@@ -38,7 +38,7 @@ const FileSchema = z.object({
 })
 
 export type LocalCommandWorkspaceSetting = z.infer<typeof WorkspaceSettingSchema>
-export type LocalCommandRule = z.infer<typeof RuleSchema>
+type LocalCommandRule = z.infer<typeof RuleSchema>
 type LocalCommandSettingsFile = z.infer<typeof FileSchema>
 
 const EMPTY: LocalCommandSettingsFile = { version: 1, workspaces: {}, rules: [] }

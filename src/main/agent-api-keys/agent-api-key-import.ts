@@ -27,7 +27,7 @@ const AGENT_BY_NAME: Record<SwappableAgentKeyName, TuiAgent> = {
   AI_GATEWAY_API_KEY: 'opencode'
 }
 
-export function importAgentFor(key: Pick<LocalAgentKey, 'name' | 'source'>): TuiAgent {
+function importAgentFor(key: Pick<LocalAgentKey, 'name' | 'source'>): TuiAgent {
   if (key.source === 'opencode-auth') {
     return 'opencode'
   }

@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/secret-request-contract'
 
 /** What this window is showing for a request once the person acted on it. */
-export type SecretRequestLocalPhase =
+type SecretRequestLocalPhase =
   | 'saving'
   /** Saved and the agent was told. */
   | 'saved'

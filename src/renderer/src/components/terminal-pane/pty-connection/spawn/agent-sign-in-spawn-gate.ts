@@ -65,7 +65,7 @@ function noteCancelledLaunch(prompt: string | null): void {
  * Holds the pane's first spawn until its agent is signed in on the host. The held spawn is
  * registered as pending so a remount waits for it instead of starting a second agent.
  */
-export function gateFreshSpawnOnAgentSignIn(
+function gateFreshSpawnOnAgentSignIn(
   session: ConnectPanePtySession,
   request: GateRequest,
   spawn: (startupOverride?: null) => Promise<string | null>

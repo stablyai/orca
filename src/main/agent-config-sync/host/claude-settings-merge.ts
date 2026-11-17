@@ -16,7 +16,7 @@ type Json = Record<string, unknown>
 const isRecord = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-export type SettingsMergeResult =
+type SettingsMergeResult =
   | { kind: 'merged'; text: string | null; ledger: ClaudeSettingsLedger }
   /** settings.json in the sandbox isn't a JSON object: it's left exactly as it is. */
   | { kind: 'unreadable' }

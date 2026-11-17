@@ -6,7 +6,7 @@ import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 
 /** `~/orca/cloud/<repository>/<workspace>`, beside the `~/orca/workspaces/…` convention. */
-export const CLOUD_SYNC_BASE_SEGMENTS = ['orca', 'cloud'] as const
+const CLOUD_SYNC_BASE_SEGMENTS = ['orca', 'cloud'] as const
 export const CONTEXT_DIR = '.context'
 /** Temp files for in-flight copies; inside the folder so the final rename stays on one volume. */
 export const SYNC_TEMP_DIR = '.orca-sync-tmp'

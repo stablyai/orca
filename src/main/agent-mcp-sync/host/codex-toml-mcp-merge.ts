@@ -6,9 +6,9 @@ import { fingerprintMcpValue } from './mcp-sync-ledger'
 
 export const CODEX_MCP_BLOCK_START =
   '# >>> Orca: MCP servers synced from your computer. Orca rewrites this block; add your own servers outside it.'
-export const CODEX_MCP_BLOCK_END = '# <<< Orca MCP servers'
+const CODEX_MCP_BLOCK_END = '# <<< Orca MCP servers'
 
-export type CodexMcpMergeResult = {
+type CodexMcpMergeResult = {
   text: string | null
   /** Fingerprint of the block body written (null when no block remains). */
   blockPrint: string | null
@@ -17,7 +17,7 @@ export type CodexMcpMergeResult = {
 
 type Block = { before: string; body: string; after: string }
 
-export type CodexMcpBlockMarkers = { start: string; end: string }
+type CodexMcpBlockMarkers = { start: string; end: string }
 
 /** One marked block per syncing computer, so two computers syncing one host never rewrite each other's. */
 export function codexMcpBlockMarkers(syncer: string | undefined): CodexMcpBlockMarkers {

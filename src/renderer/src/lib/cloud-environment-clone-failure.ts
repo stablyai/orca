@@ -3,7 +3,7 @@
 // and auth are not (an agent can't grant access), so those go to GitHub. Anything unrecognized gets
 // neither, so we never point an agent at a problem it can't fix.
 
-export type CloneFailure =
+type CloneFailure =
   | { kind: 'content'; repoUrl: string | null }
   | { kind: 'access'; repoUrl: string | null }
   | { kind: 'unknown'; repoUrl: string | null }
