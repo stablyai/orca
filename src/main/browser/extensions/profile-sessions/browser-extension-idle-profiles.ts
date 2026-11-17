@@ -1,12 +1,13 @@
 import { webContents } from 'electron'
+import {
+  hasOpenBrowserPages,
+  onBrowserPartitionPagesClosed
+} from '../../guest-lifecycle/browser-page-partition-presence'
 import { isHiddenHelperContents } from '../../hidden-helper-window'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
-  savedBrowserTabPartitions,
-  onSavedBrowserTabsWritten
-} from '../tabs-and-windows/browser-extension-discarded-tabs'
-import {
   getBrowserExtensionProfile,
+  getBrowserExtensionProfileForPartition,
   getBrowserExtensionSessionForProfile,
   unloadBrowserExtensionsFromIdleProfile,
   whenBrowserExtensionProfileUnloaded
@@ -16,13 +17,11 @@ import {
 const IDLE_PROFILE_UNLOAD_DELAY_MS = 60_000
 
 const idleChecks = new Map<string, NodeJS.Timeout>()
-/** Observed pages alive per extension session, so a close never scans every WebContents. */
-const livePages = new WeakMap<Electron.Session, number>()
-/** Profiles with no live page that only saved tabs kept running, by partition: a session write may drop the last one. */
-const keptBySavedTabs = new Map<string, { sess: Electron.Session; partition: string }>()
+/** Live pages the browser page registry doesn't own: serve's offscreen pages and extension windows. */
+const otherPages = new WeakMap<Electron.Session, number>()
 let observePage: (contents: Electron.WebContents) => void = () => {}
 
-/** Tabs (webview guests and serve's offscreen pages) and extension windows: what keeps a profile running. */
+/** Tabs (webview guests and serve's offscreen pages) and extension windows. */
 export function isBrowserExtensionPageContents(contents: Electron.WebContents): boolean {
   const type = contents.getType()
   return (
@@ -31,66 +30,66 @@ export function isBrowserExtensionPageContents(contents: Electron.WebContents): 
   )
 }
 
-/** How pages get their extension observers; a reattach must observe pages opened meanwhile. */
-export function setIdleBrowserExtensionPageObserver(
+/**
+ * Installs the idle checks once. Desktop tabs come from the browser page registry, which keeps a
+ * tab Memory Saver freed until it closes, so only closing a profile's last tab stops its extensions,
+ * as in Chromium. `observe` gives pages opened during an unload their extension observers.
+ */
+export function installIdleBrowserExtensionProfiles(
   observe: (contents: Electron.WebContents) => void
 ): void {
   observePage = observe
-  onSavedBrowserTabsWritten(() => {
-    if (keptBySavedTabs.size === 0) {
-      return
-    }
-    // One pass for every waiting profile; a profile is checked again only once its tabs are gone.
-    const saved = savedBrowserTabPartitions()
-    for (const [profileId, kept] of keptBySavedTabs) {
-      if (!saved.has(kept.partition)) {
-        keptBySavedTabs.delete(profileId)
-        scheduleIdleBrowserExtensionProfileCheck(profileId, kept.sess)
-      }
+  onBrowserPartitionPagesClosed((partition) => {
+    const profileId = getBrowserExtensionProfileForPartition(partition)?.id
+    const sess = profileId ? getBrowserExtensionSessionForProfile(profileId) : null
+    if (profileId && sess) {
+      scheduleIdleCheck(profileId, sess)
     }
   })
 }
 
-/** Counts an observed page toward its profile; when the profile's last one closes, the idle check starts. */
+/** Counts an observed page the browser page registry doesn't own toward its profile. */
 export function trackBrowserExtensionPage(profileId: string, contents: Electron.WebContents): void {
+  if (contents.getType() === 'webview') {
+    return
+  }
   const sess = contents.session
-  livePages.set(sess, (livePages.get(sess) ?? 0) + 1)
+  otherPages.set(sess, (otherPages.get(sess) ?? 0) + 1)
   contents.once('destroyed', () => {
-    const left = (livePages.get(sess) ?? 1) - 1
-    livePages.set(sess, left)
+    const left = (otherPages.get(sess) ?? 1) - 1
+    otherPages.set(sess, left)
     if (left === 0) {
-      scheduleIdleBrowserExtensionProfileCheck(profileId, sess)
+      scheduleIdleCheck(profileId, sess)
     }
   })
 }
 
-/**
- * Open tabs keep a profile's extensions running, as in Chromium, including tabs Memory Saver
- * freed and saved tabs not shown yet: only closing the profile's last tab stops them.
- */
-function scheduleIdleBrowserExtensionProfileCheck(profileId: string, sess: Electron.Session): void {
+function hasPages(profileId: string, sess: Electron.Session): boolean {
+  const partition = getBrowserExtensionProfile(profileId)?.partition ?? null
+  return (otherPages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
+}
+
+function scheduleIdleCheck(profileId: string, sess: Electron.Session): void {
   clearTimeout(idleChecks.get(profileId))
+  const partition = getBrowserExtensionProfile(profileId)?.partition ?? null
   const timer = setTimeout(() => {
     idleChecks.delete(profileId)
-    keptBySavedTabs.delete(profileId)
-    if ((livePages.get(sess) ?? 0) > 0) {
-      return
-    }
-    const partition = getBrowserExtensionProfile(profileId)?.partition
-    if (partition && savedBrowserTabPartitions().has(partition)) {
-      keptBySavedTabs.set(profileId, { sess, partition })
+    if (hasPages(profileId, sess)) {
       return
     }
     void unloadBrowserExtensionsFromIdleProfile(profileId, (reattachRequested) => {
-      // Pages created while it unloaded saw no extension session, so they were never observed.
-      const opened = webContents
-        .getAllWebContents()
-        .filter((contents) => !contents.isDestroyed() && contents.session === sess)
-      if (!reattachRequested && !opened.some(isBrowserExtensionPageContents)) {
+      const reopened =
+        (otherPages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
+      if (!reattachRequested && !reopened) {
         return
       }
       browserSessionRegistry.attachExtensions(profileId)
-      opened.forEach(observePage)
+      // Pages created while it unloaded saw no extension session, so they were never observed.
+      for (const contents of webContents.getAllWebContents()) {
+        if (!contents.isDestroyed() && contents.session === sess) {
+          observePage(contents)
+        }
+      }
     })
   }, IDLE_PROFILE_UNLOAD_DELAY_MS)
   timer.unref?.()
@@ -102,7 +101,7 @@ export async function startBrowserExtensionsForSettings(profileId: string): Prom
   browserSessionRegistry.attachExtensions(profileId)
   await whenBrowserExtensionProfileUnloaded(profileId)
   const sess = getBrowserExtensionSessionForProfile(profileId)
-  if (sess && (livePages.get(sess) ?? 0) === 0) {
-    scheduleIdleBrowserExtensionProfileCheck(profileId, sess)
+  if (sess && !hasPages(profileId, sess)) {
+    scheduleIdleCheck(profileId, sess)
   }
 }

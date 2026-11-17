@@ -248,12 +248,14 @@ async function prepare(
 }
 
 const pending = new Map<string, Promise<PreparedBrowserExtensionDirectory>>()
-const copiedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
+const preparedThisRun = new Map<string, PreparedBrowserExtensionDirectory>()
+/** Bumped when a folder's contents are replaced, so a preparation already running isn't kept. */
+const folderGenerations = new Map<string, number>()
 
 /**
- * Store folders are re-checked on every load (an Orca update brings a new shim). An unpacked
- * folder is copied once per run, so a second profile never rewrites a copy another profile runs;
- * `refresh` (Settings › Reload) copies it again.
+ * A folder is prepared once per run (an Orca update, which brings a new shim, is a new run), so a
+ * profile reopening later, or a second profile, reuses it. An unpacked copy is never rewritten
+ * under a profile running it; `refresh` (Settings › Reload) prepares it again.
  */
 export async function prepareBrowserExtensionDirectory(
   extension: BrowserExtensionLoadSource,
@@ -261,24 +263,33 @@ export async function prepareBrowserExtensionDirectory(
 ): Promise<PreparedBrowserExtensionDirectory> {
   const key = resolve(extension.path)
   let running = pending.get(key)
-  const copied = copiedThisRun.get(key)
-  // Why not while a copy runs: a profile starting mid-Reload must load the finished copy.
-  if (copied && !options.refresh && !running) {
-    return copied
+  const prepared = preparedThisRun.get(key)
+  // Why not while a preparation runs: a profile starting mid-Reload must load the finished copy.
+  if (prepared && !options.refresh && !running) {
+    return prepared
   }
+  const generation = folderGenerations.get(key) ?? 0
   if (!running) {
     running = prepare(extension)
     pending.set(key, running)
   }
   try {
-    const prepared = await running
-    if (extension.source === 'unpacked') {
-      copiedThisRun.set(key, prepared)
+    const result = await running
+    if ((folderGenerations.get(key) ?? 0) === generation) {
+      preparedThisRun.set(key, result)
     }
-    return prepared
+    return result
   } finally {
     if (pending.get(key) === running) {
       pending.delete(key)
     }
   }
+}
+
+/** A store version folder is about to be replaced on disk: prepare it afresh next time. */
+export function forgetPreparedBrowserExtensionDirectory(path: string): void {
+  const key = resolve(path)
+  preparedThisRun.delete(key)
+  pending.delete(key)
+  folderGenerations.set(key, (folderGenerations.get(key) ?? 0) + 1)
 }

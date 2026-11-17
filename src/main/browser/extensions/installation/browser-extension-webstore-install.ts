@@ -12,7 +12,10 @@ import {
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
-import { refuseOrcaFileCollisions } from './browser-extension-load-directory'
+import {
+  forgetPreparedBrowserExtensionDirectory,
+  refuseOrcaFileCollisions
+} from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -138,6 +141,7 @@ export async function commitStagedWebStoreExtension(
     // Same version already in use: keep the loaded folder untouched.
     await discardStagedWebStoreExtension(staged)
   } else {
+    forgetPreparedBrowserExtensionDirectory(target)
     await rm(target, { recursive: true, force: true })
     await rename(staged.directory, target)
   }

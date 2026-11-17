@@ -28,8 +28,8 @@ import {
 } from './installation/browser-extension-list-changes'
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
 import {
+  installIdleBrowserExtensionProfiles,
   isBrowserExtensionPageContents,
-  setIdleBrowserExtensionPageObserver,
   trackBrowserExtensionPage
 } from './profile-sessions/browser-extension-idle-profiles'
 import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
@@ -116,7 +116,7 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
-  setIdleBrowserExtensionPageObserver(observeExtensionContents)
+  installIdleBrowserExtensionProfiles(observeExtensionContents)
   // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
   app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
 }
