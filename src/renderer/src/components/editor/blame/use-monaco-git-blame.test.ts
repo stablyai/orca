@@ -8,6 +8,7 @@ import { useMonacoGitBlame } from './use-monaco-git-blame'
 type FakeState = {
   openFiles: { id: string }[]
   activeFileId: string | null
+  activeTabType: string
   gitStatusHeadByWorktree: Record<string, string>
   statusBarVisible: boolean
   statusBarItems: string[]
@@ -58,6 +59,7 @@ it('runs git blame once for the active file among many mounted editors', async (
   const useStore = create<FakeState>(() => ({
     openFiles: fileIds.map((id) => ({ id })),
     activeFileId: 'file-0.ts',
+    activeTabType: 'editor',
     gitStatusHeadByWorktree: { wt: 'head-a' },
     statusBarVisible: true,
     statusBarItems: ['git-blame']
@@ -83,4 +85,16 @@ it('runs git blame once for the active file among many mounted editors', async (
   // A hidden editor owes its blame and loads it once it becomes the active file.
   await act(async () => useStore.setState({ activeFileId: 'file-3.ts' }))
   expect(blame.mock.calls.map((call) => call[1])).toEqual(['file-0.ts', 'file-0.ts', 'file-3.ts'])
+
+  // A terminal in front keeps the remembered file id, but nothing shows blame then.
+  await act(async () => useStore.setState({ activeTabType: 'terminal' }))
+  await act(async () => useStore.setState({ gitStatusHeadByWorktree: { wt: 'head-c' } }))
+  expect(blame).toHaveBeenCalledTimes(3)
+  await act(async () => useStore.setState({ activeTabType: 'editor' }))
+  expect(blame.mock.calls.map((call) => call[1])).toEqual([
+    'file-0.ts',
+    'file-0.ts',
+    'file-3.ts',
+    'file-3.ts'
+  ])
 })

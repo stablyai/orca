@@ -25,9 +25,11 @@ const inFlightBlame = new Map<string, Promise<GitBlameResult>>()
 
 function loadBlameOnce(
   target: GitBlameTarget,
-  knownHeadOid: string | undefined
+  knownHeadOid: string | undefined,
+  headSignal: unknown
 ): Promise<GitBlameResult> {
-  const key = JSON.stringify([target.git, target.relativePath, knownHeadOid ?? null])
+  // The HEAD signal keeps a load started after HEAD moved from adopting the pre-move reply.
+  const key = JSON.stringify([target.git, target.relativePath, knownHeadOid ?? null, headSignal])
   let pending = inFlightBlame.get(key)
   if (!pending) {
     pending = getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).finally(() => {
@@ -120,6 +122,11 @@ export function useMonacoGitBlame(params: {
       return commit ? { kind: 'commit', commit } : null
     }
 
+    // The status bar shows blame only for the front editor tab; a terminal or browser in front keeps
+    // the remembered file id.
+    const isFrontFile = (state: { activeTabType: string; activeFileId: string | null }): boolean =>
+      state.activeTabType === 'editor' && state.activeFileId === fileId
+
     // The focused pane is active; the active file also takes over from another file or a closed
     // tab, but never from a live split pane of itself.
     const isActivePane = (): boolean => {
@@ -187,11 +194,8 @@ export function useMonacoGitBlame(params: {
       // Invalidate any pending reply first, including when no target resolves below.
       loads.generation += 1
       const generation = loads.generation
-      // Only the focused or active-file pane runs git: hidden worktrees and other splits stay mounted.
-      if (
-        !ed.hasTextFocus() &&
-        !(useAppStore.getState().activeFileId === fileId && isActivePane())
-      ) {
+      // Only the focused or front editor runs git: hidden worktrees and other splits stay mounted.
+      if (!ed.hasTextFocus() && !(isFrontFile(useAppStore.getState()) && isActivePane())) {
         if (reason === 'headMoved') {
           loadedRef.current = null
           mapping = null
@@ -225,7 +229,8 @@ export function useMonacoGitBlame(params: {
         known.target.relativePath === target.relativePath
       // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
       const knownHeadOid = sameFile ? known.blame.headOid : undefined
-      void loadBlameOnce(target, knownHeadOid).then((result) => {
+      const headSignal = headKey ? state.gitStatusHeadByWorktree[headKey] : null
+      void loadBlameOnce(target, knownHeadOid, headSignal ?? null).then((result) => {
         if (disposed || generation !== loads.generation) {
           return
         }
@@ -277,7 +282,7 @@ export function useMonacoGitBlame(params: {
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
-      if (state.activeFileId === fileId && previous.activeFileId !== fileId) {
+      if (isFrontFile(state) && !isFrontFile(previous)) {
         if (loadOwed) {
           load('status')
           return
