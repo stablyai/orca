@@ -172,68 +172,89 @@ type ListedBlob = { object: string; size: number } | null
 const LS_TREE_PATH_CHUNK_CHARS = 16 * 1024
 
 /** Loads files from the catalog commit, refusing to read any larger than its requested limit.
- *  Reads past the round's byte cap stay unloaded so the next extraction pass asks again with its
- *  remaining image budget. False once retaining another file would pass the retained cap. */
+ *  Paths past the round's byte cap stay unlisted and unloaded so the next extraction pass asks again
+ *  with its remaining image budget. False once retaining another file would pass the retained cap. */
 async function loadCatalogFiles(
   repository: string,
   commit: string,
   requests: ReadonlyMap<string, number>,
   { files, listed, failed }: CatalogLoadState
 ): Promise<boolean> {
-  const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
-  const unlisted = [...requests.keys()].filter((path) => !listed.has(path))
-  for (const chunk of chunkByLength(unlisted, LS_TREE_PATH_CHUNK_CHARS)) {
-    try {
-      const listing = await gitExecFileAsyncBuffer(
-        ['ls-tree', '-l', '-z', commit, '--', ...chunk],
-        {
-          ...options,
-          maxBuffer: chunk.length * 4 * 1024
-        }
-      )
-      const entries = new Map<string, { object: string; size: number }>()
-      for (const record of listing.stdout.toString('utf8').split('\0')) {
-        const match = /^100(?:644|755) blob ([0-9a-f]{40}) +([0-9]+)\t(.+)$/s.exec(record)
-        if (match) {
-          entries.set(match[3]!, { object: match[1]!, size: Number(match[2]) })
-        }
-      }
-      for (const path of chunk) {
-        listed.set(path, entries.get(gitTreePath(path)) ?? null)
-      }
-    } catch {
-      for (const path of chunk) {
-        failed.add(path)
-      }
-    }
-  }
   let retainedBytes = 0
   for (const file of files.values()) {
     retainedBytes += file?.bytes?.byteLength ?? 0
   }
   const reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[] = []
   let roundBytes = 0
-  for (const [path, maxBytes] of requests) {
-    const found = listed.get(path)
-    if (found && found.size > maxBytes) {
-      files.set(path, { size: found.size, bytes: null })
-      continue
+  // List in request order only until the round fills, so paths past it wait for a later pass.
+  for (const chunk of chunkByLength([...requests.keys()], LS_TREE_PATH_CHUNK_CHARS)) {
+    const unlisted = chunk.filter((path) => !listed.has(path))
+    if (unlisted.length > 0) {
+      await listCatalogPaths(repository, commit, unlisted, listed, failed)
     }
-    if (!found) {
-      files.set(path, null)
-      continue
+    for (const path of chunk) {
+      const found = listed.get(path)
+      if (found && found.size > requests.get(path)!) {
+        files.set(path, { size: found.size, bytes: null })
+        continue
+      }
+      if (!found) {
+        files.set(path, null)
+        continue
+      }
+      if (retainedBytes + found.size > CATALOG_BLOB_CACHE_MAX_BYTES) {
+        // Sequential reads keep only what extraction holds, so a catalog this large still loads.
+        return false
+      }
+      if (reads.length > 0 && roundBytes + found.size > CATALOG_BLOB_ROUND_MAX_BYTES) {
+        return readCatalogRound(repository, commit, reads, files, failed)
+      }
+      roundBytes += found.size
+      retainedBytes += found.size
+      reads.push({ kind: 'blob', path, object: found.object, size: found.size, executable: false })
     }
-    if (retainedBytes + found.size > CATALOG_BLOB_CACHE_MAX_BYTES) {
-      // Sequential reads keep only what extraction holds, so a catalog this large still loads.
-      return false
-    }
-    if (reads.length > 0 && roundBytes + found.size > CATALOG_BLOB_ROUND_MAX_BYTES) {
-      continue
-    }
-    roundBytes += found.size
-    retainedBytes += found.size
-    reads.push({ kind: 'blob', path, object: found.object, size: found.size, executable: false })
   }
+  return readCatalogRound(repository, commit, reads, files, failed)
+}
+
+async function listCatalogPaths(
+  repository: string,
+  commit: string,
+  paths: string[],
+  listed: Map<string, ListedBlob>,
+  failed: Set<string>
+): Promise<void> {
+  try {
+    const listing = await gitExecFileAsyncBuffer(['ls-tree', '-l', '-z', commit, '--', ...paths], {
+      cwd: repository,
+      timeout: MARKETPLACE_GIT_TIMEOUT_MS,
+      maxBuffer: paths.length * 4 * 1024
+    })
+    const entries = new Map<string, { object: string; size: number }>()
+    for (const record of listing.stdout.toString('utf8').split('\0')) {
+      const match = /^100(?:644|755) blob ([0-9a-f]{40}) +([0-9]+)\t(.+)$/s.exec(record)
+      if (match) {
+        entries.set(match[3]!, { object: match[1]!, size: Number(match[2]) })
+      }
+    }
+    for (const path of paths) {
+      listed.set(path, entries.get(gitTreePath(path)) ?? null)
+    }
+  } catch {
+    for (const path of paths) {
+      failed.add(path)
+    }
+  }
+}
+
+async function readCatalogRound(
+  repository: string,
+  commit: string,
+  reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[],
+  files: Map<string, CatalogFile>,
+  failed: Set<string>
+): Promise<true> {
+  const options = { cwd: repository, timeout: MARKETPLACE_GIT_TIMEOUT_MS }
   if (reads.length === 0) {
     return true
   }
