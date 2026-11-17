@@ -1584,7 +1584,7 @@
         "ssh": "SSH",
         "connected": "Connected",
         "notConnected": "Not connected.",
-        "notConnectedRun": "Not connected. Run <cmd>{{command}}</cmd> on the host."
+        "notConnectedRetry": "Not connected. Connect this host, then Retry."
       },
       "summary": {
         "hooksIn": "hooks in {{targets}}",
