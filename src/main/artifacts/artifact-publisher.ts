@@ -54,6 +54,7 @@ type ArtifactPublishAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
+  assertCanSend: () => void
   rateLimitReplay: ArtifactRateLimitReplay
 }
 
@@ -226,7 +227,7 @@ export class ArtifactPublisher {
         auth.scope,
         idempotencyKey,
         artifactWriteBody(request),
-        auth.assertCurrent
+        auth.assertCanSend
       ))
     let response: ArtifactCreateResponse
     try {

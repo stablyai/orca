@@ -40,6 +40,14 @@ function ensureIntentDirectory(profileId: string, userDataPath: string): string 
   return directory
 }
 
+const waitingCreatesByFolder = new Map<string, number>()
+
+function persistedIntentCount(folder: string): number {
+  return existsSync(folder)
+    ? readdirSync(folder).filter((name) => name.endsWith('.json')).length
+    : 0
+}
+
 function removeTemporaryIntents(directory: string): void {
   for (const name of readdirSync(directory)) {
     if (name.endsWith('.tmp')) {
@@ -175,8 +183,16 @@ export async function getOrCreateArtifactCreateIntent(
   if (artifactIntentRequestByteLength(sourceKey, body) > ARTIFACT_MAX_REQUEST_BYTES) {
     throw new Error('Artifact create recovery record exceeds the supported size.')
   }
+  const folder = intentDirectory(profileId, userDataPath)
+  // Waiting creates hold their bodies, so they count against the cap before they queue.
+  const waiting = waitingCreatesByFolder.get(folder) ?? 0
+  if (waiting + persistedIntentCount(folder) >= MAX_PENDING_ARTIFACT_CREATES) {
+    throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
+  }
+  waitingCreatesByFolder.set(folder, waiting + 1)
   // One create per profile at a time: the temp sweep and the pending cap read the whole folder.
-  return serializeArtifactFileChange(intentDirectory(profileId, userDataPath), async () => {
+  return serializeArtifactFileChange(folder, async () => {
+    assertCurrent()
     const existing = getArtifactCreateIntent(profileId, userDataPath, sourceKey, scope)
     if (existing) {
       return existing
@@ -202,9 +218,17 @@ export async function getOrCreateArtifactCreateIntent(
       intentPath(profileId, userDataPath, sourceKey, scope),
       serializedIntent,
       true,
-      assertCurrent
+      assertCurrent,
+      true
     )
     return intent
+  }).finally(() => {
+    const left = (waitingCreatesByFolder.get(folder) ?? 1) - 1
+    if (left > 0) {
+      waitingCreatesByFolder.set(folder, left)
+    } else {
+      waitingCreatesByFolder.delete(folder)
+    }
   })
 }
 

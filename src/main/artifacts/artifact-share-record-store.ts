@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
@@ -195,7 +195,7 @@ function changeRecords(
     const records = readRecords(profileId, userDataPath, options.preserveExpired)
     if (change(records)) {
       const contents = JSON.stringify(records, null, 2)
-      await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent)
+      await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent, false)
     }
   })
 }
@@ -285,9 +285,27 @@ export function clearArtifactShareRecords(profileId: string, userDataPath: strin
   })
 }
 
+const lifecycleByPath = new Map<string, { stamp: string; lifecycle: string }>()
+
+/** Every write replaces the file (new inode), so its stat stamp names one lifecycle: account checks
+ *  read the whole index only when the file changed. */
 export function captureArtifactShareLifecycle(profileId: string, userDataPath: string): string {
+  const path = recordPath(profileId, userDataPath)
+  let stamp = 'missing'
+  try {
+    const stat = statSync(path, { bigint: true })
+    stamp = `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
+  } catch {
+    // A missing or unreadable file goes through the full read, which reports it as before.
+  }
+  const cached = lifecycleByPath.get(path)
+  if (cached?.stamp === stamp) {
+    return cached.lifecycle
+  }
   const records = readRecords(profileId, userDataPath, undefined, false)
-  return `${records.lifecycleGeneration}:${records.lifecycleNonce}`
+  const lifecycle = `${records.lifecycleGeneration}:${records.lifecycleNonce}`
+  lifecycleByPath.set(path, { stamp, lifecycle })
+  return lifecycle
 }
 
 export function isArtifactShareLifecycleCurrent(

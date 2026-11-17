@@ -9,7 +9,9 @@ export async function writeArtifactFileWhileCurrent(
   path: string,
   contents: string,
   durable: boolean,
-  assertCurrent: () => void
+  assertCurrent: () => void,
+  /** Re-check once the write resolves, for callers that act on it next (sending a request). */
+  recheckAfterWrite: boolean
 ): Promise<void> {
   let published = false
   const options = {
@@ -36,9 +38,11 @@ export async function writeArtifactFileWhileCurrent(
     assertCurrent()
     throw error
   }
-  assertCurrent()
   if (!published) {
     throw new Error(ACCOUNT_CHANGED)
+  }
+  if (recheckAfterWrite) {
+    assertCurrent()
   }
 }
 
