@@ -43,7 +43,7 @@ type WorktreeSnapshot = WorktreeOverlay & {
   allWorktrees: Worktree[] | null
   /** Same object while no replacement could change lineage resolution; selectors key caches on it. */
   lineageKey: WorktreeLineageKey
-  /** This write's replaced rows and the catalog they replaced; absent after a rebuild or compaction. */
+  /** This write's replaced rows and the catalog they replaced, kept through compaction; absent after a membership rebuild. */
   replacement?: { from: WeakRef<AppState['worktreesByRepo']>; rows: readonly ReplacedWorktreeRow[] }
 }
 
@@ -158,14 +158,12 @@ function overlayWorktreeSnapshot(
     ? previous.lineageKey
     : null
   // Compaction rebuilds the title catalog; with no structure moved, surfaces keep the same topology.
-  if (rows.size > MAX_OVERLAY_ROWS) {
-    return viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, topology, lineageKey)
-  }
-  return {
-    ...viewOf(base, { rows, slots, firstById, byId, structureById }, topology, lineageKey),
-    // Weak so this catalog never keeps the one it replaced alive.
-    replacement: { from: new WeakRef(previousRows), rows: replaced }
-  }
+  const view =
+    rows.size > MAX_OVERLAY_ROWS
+      ? viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, topology, lineageKey)
+      : viewOf(base, { rows, slots, firstById, byId, structureById }, topology, lineageKey)
+  // Compaction rebuilds the index but not the write; weak so this catalog never keeps the one it replaced alive.
+  return { ...view, replacement: { from: new WeakRef(previousRows), rows: replaced } }
 }
 
 function rowsOf(snapshot: WorktreeSnapshot): Worktree[] {

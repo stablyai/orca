@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import {
+  getIndexedWorktreeMap,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import type * as CatalogIndex from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { replacedWorktreeRows } from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 import type * as CatalogMembership from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -22,6 +26,11 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import { applyLocalPinnedDisplayName } from './pinned-display-name-apply'
 
 import { TITLE, folderWorkspace, repo, row } from './pinned-display-name-test-fixtures'
+
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', async (importOriginal) => {
+  const actual = await importOriginal<typeof CatalogIndex>()
+  return { ...actual, getIndexedWorktreesById: vi.fn(actual.getIndexedWorktreesById) }
+})
 
 vi.mock('@/store/slices/worktrees/listing/worktree-catalog-membership', async (importOriginal) => {
   const actual = await importOriginal<typeof CatalogMembership>()
@@ -339,4 +348,71 @@ describe('applyLocalPinnedDisplayName folder lineage', () => {
       }
     }
   )
+
+  it.each([750, 7500])('overlay compaction keeps %i resolved folder children', (size) => {
+    const children = Array.from({ length: size }, (_, index): Worktree => ({
+      ...row(size + 9, index, false, () => {}),
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }))
+    const unrelated = Array.from({ length: 130 }, (_, index) =>
+      row(size + 8, index, false, () => {})
+    )
+    const records = Object.fromEntries(
+      children.map((child, index) => {
+        const childKey = worktreeWorkspaceKey(child.id)
+        return [
+          childKey,
+          {
+            childWorkspaceKey: childKey,
+            childInstanceId: `instance-${size + 9}-${index}`,
+            parent: {
+              installationId: 'own-install',
+              workspaceKey: folderWorkspaceKey('folder-1'),
+              instanceId: 'folder-1'
+            },
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt: 0
+          }
+        ]
+      })
+    )
+    useAppStore.setState({
+      repos: [repo(`repo-${size + 9}`), repo(`repo-${size + 8}`)],
+      worktreesByRepo: { [`repo-${size + 9}`]: children, [`repo-${size + 8}`]: unrelated },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folderWorkspace('folder-1')],
+      workspaceLineageByChildKey: {},
+      worktreeLineageById: {},
+      ownLineageInstallationId: 'own-install',
+      crossStoreLineageByStoreKey: { [OWN_LINEAGE_STORE_KEY]: records }
+    })
+    const warm = selectCrossStoreFolderChildrenById(useAppStore.getState())
+    expect(warm.get('folder-1')).toHaveLength(size)
+    // The selector projects each child through this lookup; the index's own compaction is not counted.
+    const childProjections = vi.mocked(getIndexedWorktreesById)
+    childProjections.mockClear()
+
+    // Titles 65 and 130 pass the 64-row overlay and compact the index.
+    for (const [index, worktree] of unrelated.entries()) {
+      applyLocalPinnedDisplayName({
+        worktreeId: worktree.id,
+        displayName: `Unrelated ${index + 1}`
+      })
+      expect(selectCrossStoreFolderChildrenById(useAppStore.getState())).toBe(warm)
+    }
+    expect(childProjections).toHaveBeenCalledTimes(0)
+
+    // A child retitled on a compacting write still shows its new title.
+    for (const worktree of unrelated.slice(0, 64)) {
+      applyLocalPinnedDisplayName({ worktreeId: worktree.id, displayName: `${worktree.id} again` })
+      selectCrossStoreFolderChildrenById(useAppStore.getState())
+    }
+    applyLocalPinnedDisplayName({ worktreeId: children[0].id, displayName: TITLE })
+    const retitled = selectCrossStoreFolderChildrenById(useAppStore.getState())
+    expect(retitled).not.toBe(warm)
+    expect(retitled.get('folder-1')?.find(({ id }) => id === children[0].id)?.displayName).toBe(
+      TITLE
+    )
+  })
 })
