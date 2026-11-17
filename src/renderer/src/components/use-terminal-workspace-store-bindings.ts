@@ -1,6 +1,6 @@
 import { useAppStore } from '../store'
-import { useActivityTerminalPortals } from './activity/activity-terminal-portal'
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import { useActivityTerminalPortals } from './activity/terminal-portal/activity-terminal-portal'
+import type { ActivityTerminalPortalTarget } from './activity/terminal-portal/activity-terminal-portal'
 import type { TerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 
 export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceFoundation) {

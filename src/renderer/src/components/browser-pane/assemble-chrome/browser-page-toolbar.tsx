@@ -18,7 +18,7 @@ import {
   BrowserPageStateChips
 } from './address-bar/browser-address-chips'
 import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
-import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
+import { useBrowserExtensionsTour } from './extensions/use-browser-extensions-tour'
 import { SshEgressIndicator } from './feedback/browser-egress-indicator'
 import {
   getShareableBrowserArtifactFile,

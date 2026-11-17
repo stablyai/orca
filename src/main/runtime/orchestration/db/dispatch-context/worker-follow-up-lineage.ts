@@ -166,14 +166,14 @@ export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string):
 }
 
 /** In the follow-up's claim, so its first `check` finds the mail. A terminal's start prompt is that mail's
- *  wake; a pointer whose Enter is in flight keeps its stamps to settle. A chat gets each message as a card
+ *  wake; a pointer whose Enter is in flight keeps its stamps to settle. A chat is handed each message whole
  *  after its Task, so the mail stays undelivered for that. */
 export function takeFollowUpMail(
   db: OrchestrationDb,
   fromDispatchId: string,
   toDispatchId: string
 ): void {
-  const chat = receivesMailAsChatCards(db.getDispatchContextById(fromDispatchId)?.assignee_handle)
+  const chat = receivesMailWhole(db.getDispatchContextById(fromDispatchId)?.assignee_handle)
   db.db
     .prepare(
       `UPDATE messages
@@ -190,8 +190,8 @@ export function takeFollowUpMail(
   markUnreadFollowUpMail(db, toDispatchId)
 }
 
-/** A chat worker, assigned by session or started by Orca, gets each message as a chat card rather than a terminal pointer. */
-export function receivesMailAsChatCards(assigneeHandle: string | null | undefined): boolean {
+/** A chat worker, assigned by session or started by Orca, gets mail whole rather than a pointer at `check`. */
+export function receivesMailWhole(assigneeHandle: string | null | undefined): boolean {
   return (
     parseOrcaSessionAddress(assigneeHandle) !== null || isStructuredWorkerHandle(assigneeHandle)
   )

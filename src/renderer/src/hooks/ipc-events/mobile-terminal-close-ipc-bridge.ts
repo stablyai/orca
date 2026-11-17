@@ -1,6 +1,6 @@
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
-import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import { closeTerminalTab } from '@/components/terminal/tab-lifecycle/terminal-tab-actions'
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'

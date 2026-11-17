@@ -111,19 +111,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
-  // The component catalog: Orca draws each component, so the gallery exercises every one.
-  pluginRoute(
-    'plugins.components-catalog',
-    ['plugin-components-gallery'],
-    [
-      `${UI}declarative\\/`,
-      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
-      'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
-      'examples\\/plugins\\/components-gallery\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
   // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
   pluginRoute(
     'plugins.buildless-tsx',

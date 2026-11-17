@@ -11,10 +11,10 @@ import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/R
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
-import { TitlebarLeftControls } from './TitlebarLeftControls'
-import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
-import type { AppChromeLayout } from './use-app-chrome-layout'
-import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { RightSidebarToggle, TitlebarMainStrip } from './chrome/TitlebarMainStrip'
+import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
+import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)

@@ -7,6 +7,7 @@ import type { SlashCommandSuggestion } from '../commands/native-chat-slash-comma
 
 import type { DiscoveredSkill } from '../../../skills/discovery/skills'
 import { getNativeChatAgentProfile } from '../commands/native-chat-agent-profiles'
+import { buildNativeChatPickerItems } from './native-chat-picker-items'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },
@@ -68,5 +69,86 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(result.mode === 'slash' && result.items).toEqual([
       expect.objectContaining({ kind: 'skill', name: 'fwx:discuss', token: '/fwx:discuss' })
     ])
+  })
+})
+
+function repoSkills(count: number, prefix = 'repo-skill'): DiscoveredSkill[] {
+  return Array.from({ length: count }, (_, index) =>
+    skill({
+      name: `${prefix}-${String(index).padStart(3, '0')}`,
+      skillFilePath: `/repo/.agents/skills/${prefix}-${index}/SKILL.md`
+    })
+  )
+}
+
+describe('skill picker scope retention', () => {
+  it('shows personal and plugin skills after a large project catalog in the bare slash menu', () => {
+    const skills = [
+      ...repoSkills(61),
+      skill({ name: 'personal', sourceKind: 'home', skillFilePath: '/home/personal/SKILL.md' }),
+      skill({ name: 'plugin', sourceKind: 'plugin', skillFilePath: '/cache/plugin/SKILL.md' })
+    ]
+    const result = deriveComposerAutocomplete(
+      '/',
+      1,
+      COMMANDS,
+      skills,
+      getNativeChatAgentProfile('claude')
+    )
+    expect(result.mode === 'slash' && result.items.slice(-3).map((item) => item.token)).toEqual([
+      '/repo-skill-060',
+      '/personal',
+      '/plugin'
+    ])
+  })
+
+  it('retains smaller and unlocated reported scopes when the safety cap binds', () => {
+    const skills = [
+      ...repoSkills(800),
+      skill({ name: 'personal', sourceKind: 'home', skillFilePath: '/home/personal/SKILL.md' }),
+      skill({ name: 'plugin', sourceKind: 'plugin', skillFilePath: '/cache/plugin/SKILL.md' }),
+      skill({ name: 'not-loaded', sourceKind: 'bundled', skillFilePath: '/bundle/absent/SKILL.md' })
+    ]
+    const sessionSkills = [
+      ...skills
+        .filter((item) => item.name !== 'not-loaded')
+        .map((item) => ({
+          name: item.name,
+          path: item.skillFilePath
+        })),
+      { name: 'reported-only' }
+    ]
+    const items = buildNativeChatPickerItems([], skills, '', '/', sessionSkills)
+    expect(items).toHaveLength(500)
+    expect(items.slice(-4).map((item) => item.name)).toEqual([
+      'repo-skill-496',
+      'personal',
+      'plugin',
+      'reported-only'
+    ])
+    expect(items.some((item) => item.name === 'not-loaded')).toBe(false)
+    expect(items.find((item) => item.name === 'personal')).toMatchObject({
+      path: '/home/personal/SKILL.md',
+      token: '/personal'
+    })
+    expect(buildNativeChatPickerItems([], skills, '', '/', [])).toEqual([])
+  })
+
+  it('keeps search relevance ahead of scope fairness', () => {
+    const skills = [
+      ...repoSkills(600, 'deploy'),
+      skill({ name: 'alpha-deploy', sourceKind: 'home', skillFilePath: '/home/deploy/SKILL.md' })
+    ]
+    const items = buildNativeChatPickerItems([], skills, 'deploy', '/')
+    expect(items).toHaveLength(500)
+    expect(items[0].name).toBe('deploy-000')
+    expect(items[499].name).toBe('deploy-499')
+    expect(items.some((item) => item.name === 'alpha-deploy')).toBe(false)
+  })
+
+  it('keeps the unlimited catalog used by mobile skill token recognition', () => {
+    const items = buildNativeChatPickerItems([], repoSkills(601), '', '$', undefined, Infinity)
+    expect(items).toHaveLength(601)
+    expect(items[600].token).toBe('$repo-skill-600')
   })
 })

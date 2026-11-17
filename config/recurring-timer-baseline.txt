@@ -69,8 +69,8 @@
 1 src/main/telemetry/wsl-usage-reporter.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts
-1 src/renderer/src/app-shell/use-app-session-persistence.ts
-1 src/renderer/src/components/browser-pane/browser-client-page-position-driver.ts
+1 src/renderer/src/app-shell/storage/use-app-session-persistence.ts
+1 src/renderer/src/components/browser-pane/host-guest/viewport/browser-client-page-position-driver.ts
 1 src/renderer/src/components/contextual-tours/use-contextual-tour.ts
 1 src/renderer/src/components/right-sidebar/plugin-panels/health/plugin-panel-watchdog.ts
 1 src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx

@@ -90,6 +90,8 @@ export function resolveCommand(
   cwd: string | undefined,
   wslDistroOverride?: string,
   options: {
+    /** Task text must bypass path translation even when it looks like a Windows path. */
+    literalArgIndices?: readonly number[]
     useWslLoginShell?: boolean
     captureLoginShellOutput?: boolean
     wslGitReadEnvironment?: WslGitReadEnvironment
@@ -120,10 +122,14 @@ export function resolveCommand(
   // Drive paths resolve in the guest, which alone knows its automount root.
   const hostCwd = cwdWsl ? null : cwd && wslDistroOverride ? cwd : null
   const cwdFailureExitCode = options.cwdFailureExitCode ?? (command === 'git' ? 128 : 1)
-  const guestArgs = args.map(translateUncArgForWsl)
+  const literals = new Set(options.literalArgIndices)
+  const guestArgs = args.map((arg, index) =>
+    literals.has(index) ? arg : translateUncArgForWsl(arg)
+  )
   const guest = wslGuestShellPaths(
     hostCwd === null ? guestArgs : [hostCwd, ...guestArgs],
-    cwdFailureExitCode
+    cwdFailureExitCode,
+    hostCwd === null ? literals : new Set([...literals].map((index) => index + 1))
   )
   const cwdWord = cwdWsl
     ? quotePosixShell(cwdWsl.linuxPath)

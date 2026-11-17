@@ -93,20 +93,34 @@ const ENTRIES: AgentPickerEntry[] = [
   entry('gemini', 'Gemini', ['terminal'])
 ]
 
-const MODEL: NewTabAgentMenuModel = {
-  state: 'settled',
-  rows: ENTRIES.flatMap((row) => row.rows),
-  detection: {
-    detectedIds: ENTRIES.map((row) => row.agent),
-    isLoading: false,
-    isRefreshing: false,
-    detectionFailed: false,
-    needsServerUpdate: false,
-    refresh: async () => ENTRIES.map((row) => row.agent)
+function menuModel(entries: AgentPickerEntry[]): NewTabAgentMenuModel {
+  return {
+    state: 'settled',
+    rows: entries.flatMap((row) => row.rows),
+    detection: {
+      detectedIds: entries.map((row) => row.agent),
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => entries.map((row) => row.agent)
+    }
   }
 }
 
-function HandOffField(): React.JSX.Element {
+const MODEL = menuModel(ENTRIES)
+
+// A listing that failed offers Retry; the owner key names the picker's live acquisition.
+const FAILED_ENTRIES: AgentPickerEntry[] = [
+  ENTRIES[0],
+  {
+    ...entry('antigravity', 'Antigravity', ['chat', 'terminal']),
+    catalogRead: 'failed',
+    ownerKey: 'fixture'
+  }
+]
+
+function HandOffField({ entries = ENTRIES }: { entries?: AgentPickerEntry[] }): React.JSX.Element {
   const [pick, setPick] = useState<{ agent: TuiAgent; draft?: AgentPickerDraft }>({
     agent: 'claude',
     draft: {
@@ -120,8 +134,8 @@ function HandOffField(): React.JSX.Element {
       <div className="w-[420px] space-y-1.5">
         <label className="text-xs font-medium">Agent</label>
         <AgentLaunchPicker
-          model={MODEL}
-          entries={ENTRIES}
+          model={entries === ENTRIES ? MODEL : menuModel(entries)}
+          entries={entries}
           agent={pick.agent}
           value={pick.draft}
           cli={pick.draft?.surface !== 'chat'}
@@ -168,6 +182,16 @@ export const dropdownNotInstalled = defineFixture({
   }
 })
 
+export const dropdownModelsFailed = defineFixture({
+  width: 460,
+  render: () => <HandOffField entries={FAILED_ENTRIES} />,
+  interact: async () => {
+    await openDropdown()
+    click('[role="tab"][aria-label="Antigravity"]')
+    await settle()
+  }
+})
+
 export const dropdownSearch = defineFixture({
   width: 460,
   render: () => <HandOffField />,
@@ -194,6 +218,26 @@ export const dropdownWithBlankTerminal = defineFixture({
           model={MODEL}
           entries={ENTRIES}
           agent="codex"
+          emptyLabel="Blank Terminal"
+          onSelectBlankTerminal={() => {}}
+          onPick={() => {}}
+        />
+      </div>
+    </div>
+  ),
+  interact: openDropdown
+})
+
+/** The form holds Blank Terminal: its rail tile is the selected tab. */
+export const dropdownBlankTerminalCurrent = defineFixture({
+  width: 460,
+  render: () => (
+    <div className="min-h-[200px] bg-background p-4">
+      <div className="w-[420px]">
+        <AgentLaunchPicker
+          model={MODEL}
+          entries={ENTRIES}
+          agent={null}
           emptyLabel="Blank Terminal"
           onSelectBlankTerminal={() => {}}
           onPick={() => {}}
