@@ -9,6 +9,7 @@ import type { BrowserMemorySaverGlobalSettings } from '../browser/guest-lifecycl
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
 import type { ExternalConversationSettings } from '../connectors/external-conversation-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
+import type { NotchStatusSettings } from '../notch/notch-status-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
 import type { PluginAppearanceSettings } from '../plugins/appearance/plugin-appearance-settings-types'
@@ -37,6 +38,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
+  NotchStatusSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
