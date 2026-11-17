@@ -43,14 +43,13 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from './repository/repo-types'
-import type { ZotzGlobalSettings } from './zotz/zotz-global-settings-types'
 
 export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = GlobalSettingsBase & ZotzGlobalSettings & {
+export type GlobalSettings = GlobalSettingsBase & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
