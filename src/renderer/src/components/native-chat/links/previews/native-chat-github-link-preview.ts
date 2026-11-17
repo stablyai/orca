@@ -166,12 +166,13 @@ async function loadPreviewFromCatalog(
       }
     }
   })
+  let identity: string
   try {
     const repo = await select(repos)
     if (!repo) {
       return null
     }
-    const identity = githubPreviewRepoIdentity(repo)
+    identity = githubPreviewRepoIdentity(repo)
     const accepts = () => {
       const currentRepos = useAppStore.getState().repos
       const currentRepo = read(currentRepos)
@@ -182,16 +183,22 @@ async function loadPreviewFromCatalog(
         githubPreviewRepoIdentity(currentRepo) === identity
       )
     }
-    if (!accepts()) {
-      return null
+    if (accepts()) {
+      const item = await previews.load(
+        githubLinkPreviewKey(repo, link),
+        () => fetchPreview(repo, link, accepts),
+        accepts
+      )
+      if (accepts()) {
+        return item
+      }
     }
-    const item = await previews.load(
-      githubLinkPreviewKey(repo, link),
-      () => fetchPreview(repo, link, accepts),
-      accepts
-    )
-    return accepts() ? item : null
   } finally {
     stop()
   }
+  // A binding that changed and came back keeps the card's key, so nothing else would ask again.
+  const current = read(useAppStore.getState().repos)
+  return retired.has(identity) && current && githubPreviewRepoIdentity(current) === identity
+    ? loadPreviewFromCatalog(routeAuthority, link, select, read)
+    : null
 }
