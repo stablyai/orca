@@ -4,7 +4,7 @@ import {
   getSetupRunnerCommandPlatformForPath
 } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
 import type { SetupRunnerShell } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { WorktreeSetupLaunch } from '../../../../../../shared/worktree/creation/launch-types'
 
 function getSetupRunnerPlatform(runnerScriptPath: string): 'windows' | 'posix' {
