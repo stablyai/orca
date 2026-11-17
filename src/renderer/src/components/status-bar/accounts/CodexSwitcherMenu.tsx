@@ -52,6 +52,7 @@ export function CodexSwitcherMenu({
     open,
     openSettingsPage,
     openSettingsTarget,
+    providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
     resetCreditCount,
@@ -191,6 +192,9 @@ export function CodexSwitcherMenu({
         onSkipChange={setSkipFutureResetConfirm}
         isRedeemingReset={isRedeemingReset}
         onConfirm={handleConfirmReset}
+        {...(providerAccountHostLabel
+          ? { accountLabel: activeTarget?.label, hostLabel: providerAccountHostLabel }
+          : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection

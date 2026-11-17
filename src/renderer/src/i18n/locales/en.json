@@ -5436,6 +5436,7 @@
             "e159fc1fd7": "Reset now",
             "972a1ff497": "Reset Codex limits?",
             "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "confirmHostReset": "This uses one Codex rate-limit reset credit for {{account}} on {{host}} and resets any eligible usage windows immediately.",
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "3bbf140864": "MiniMax Usage",
