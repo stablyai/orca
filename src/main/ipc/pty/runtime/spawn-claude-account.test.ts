@@ -73,3 +73,16 @@ describe('resolveRuntimeSpawnClaudeAccount: project account fallback', () => {
     expect(resolveFor('acct-2')).toBe('acct-2')
   })
 })
+
+describe('resolveRuntimeSpawnClaudeAccount: explicit --account', () => {
+  it('refuses SSH and non-Claude launches, and accepts a gated Claude setup launch', () => {
+    const resolve = (args: Partial<RuntimePtySpawnArgs>) =>
+      resolveRuntimeSpawnClaudeAccount(runtimeCtx({ args: { claudeAccountId: 'acct-2', ...args } }))
+
+    expect(() => resolve({ command: 'claude', connectionId: 'ssh-1' })).toThrow(
+      'Claude --account launches are not supported for SSH workspaces.'
+    )
+    expect(() => resolve({ command: 'zsh' })).toThrow('--account applies only to Claude launches.')
+    expect(resolve({ command: 'pnpm setup', launchAgent: 'claude' })).toBe('acct-2')
+  })
+})
