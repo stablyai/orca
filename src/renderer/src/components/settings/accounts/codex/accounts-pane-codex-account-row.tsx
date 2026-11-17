@@ -28,7 +28,7 @@ export function renderCodexAccountRow(
     accountRuntimeUnavailable,
     accountVisibilityOptions,
     activeCodexAccountId,
-    codexAccountPlans,
+    codexAccountUsage,
     codexAccounts,
     codexAction,
     codexRateLimits,
@@ -58,7 +58,7 @@ export function renderCodexAccountRow(
   const needsReauthentication = Boolean(accountAuthWarning)
   const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
   const plan = getObservedCodexAccountPlan(
-    codexAccountPlans,
+    codexAccountUsage,
     account,
     getProviderAccountRuntime(account)
   )

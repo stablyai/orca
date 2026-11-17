@@ -31,6 +31,20 @@ const RateLimitResetCreditsSchema = z
   })
   .passthrough()
 
+// Names whose login a reading (or failed attempt) used; null id is System default. Malformed stamps name no one.
+const UsageReadingAccountSchema = z.object({
+  accountId: AccountIdSchema.nullable(),
+  runtime: z.enum(['host', 'wsl']),
+  wslDistro: z.string().min(1).nullable()
+})
+
+const UsageMetadataSchema = z
+  .object({
+    readingAccount: UsageReadingAccountSchema.optional().catch(undefined),
+    attemptedAccount: UsageReadingAccountSchema.optional().catch(undefined)
+  })
+  .passthrough()
+
 export const ProviderRateLimitsSchema = z
   .object({
     // Any provider the host polls, so a provider added on desktop decodes here too.
@@ -45,7 +59,8 @@ export const ProviderRateLimitsSchema = z
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
     updatedAt: TimestampSchema,
     error: z.string().nullable(),
-    status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable'])
+    status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable']),
+    usageMetadata: UsageMetadataSchema.optional().catch(undefined)
   })
   .passthrough()
 

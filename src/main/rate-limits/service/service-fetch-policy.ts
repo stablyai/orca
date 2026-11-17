@@ -227,9 +227,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
-        fableWeekly: inherited?.fableWeekly ?? null,
-        extraUsage: inherited?.extraUsage ?? null,
+        // Statusline lacks Fable scope and credits; retain the latest OAuth values for this same login.
+        fableWeekly: sameLogin ? (inherited.fableWeekly ?? null) : null,
+        extraUsage: sameLogin ? (inherited.extraUsage ?? null) : null,
         ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
         updatedAt: Date.now(),
         error: null,

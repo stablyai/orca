@@ -1,6 +1,6 @@
 import { RateLimitServiceResultPolicy } from './service-result-policy'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
-import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
+import { withUsageReadingAccount } from '../providers/usage-reading-account'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import {
   isSystemDefaultClaudeAuth,
@@ -169,7 +169,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         this.getCodexProvenance(target, codexHomePath)
     // Still the redeemed home, so its account (if it is that account's own home) took this reading.
     const attributed = stillActive
-      ? withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
+      ? withUsageReadingAccount(fresh, currentCodexHome.readingAccount)
       : fresh
     const scopedCodex = this.applyStalePolicy(attributed, stateBeforeReset.codex)
     if (stillActive) {

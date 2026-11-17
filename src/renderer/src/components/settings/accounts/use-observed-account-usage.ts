@@ -1,14 +1,12 @@
 import { useMemo } from 'react'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import {
-  indexObservedAccountPlans,
-  type ObservedAccountPlans
-} from '@/lib/provider-accounts/observed-account-plans'
+import { indexAccountUsageObservations } from '../../../../../shared/agent-usage/rate-limits/account-usage-observations'
+import type { ObservedAccountUsage } from '@/lib/provider-accounts/observed-account-plans'
 import { useAppStore } from '../../../store/index'
 
 /** Remote rows read only their owner's streamed usage; this desktop's polls describe other logins.
  *  A provider section hidden by search reads nothing, so usage pushes rebuild no index for it. */
-export function useObservedAccountPlans({
+export function useObservedAccountUsage({
   isRemoteAccountScope,
   ownerUsage,
   claudeShown,
@@ -18,7 +16,7 @@ export function useObservedAccountPlans({
   ownerUsage: RateLimitState | null
   claudeShown: boolean
   codexShown: boolean
-}): { claudeAccountPlans: ObservedAccountPlans; codexAccountPlans: ObservedAccountPlans } {
+}): { claudeAccountUsage: ObservedAccountUsage; codexAccountUsage: ObservedAccountUsage } {
   const readsLocal = !isRemoteAccountScope
   const usage = isRemoteAccountScope ? ownerUsage : null
   const localClaude = useAppStore((s) => (readsLocal && claudeShown ? s.rateLimits.claude : null))
@@ -33,13 +31,13 @@ export function useObservedAccountPlans({
   const inactiveClaude = claudeShown ? (usage?.inactiveClaudeAccounts ?? localInactiveClaude) : null
   const codex = codexShown ? (usage?.codex ?? localCodex) : null
   const inactiveCodex = codexShown ? (usage?.inactiveCodexAccounts ?? localInactiveCodex) : null
-  const claudeAccountPlans = useMemo(
-    () => indexObservedAccountPlans(claude, inactiveClaude),
+  const claudeAccountUsage = useMemo(
+    () => indexAccountUsageObservations(claude, inactiveClaude),
     [claude, inactiveClaude]
   )
-  const codexAccountPlans = useMemo(
-    () => indexObservedAccountPlans(codex, inactiveCodex),
+  const codexAccountUsage = useMemo(
+    () => indexAccountUsageObservations(codex, inactiveCodex),
     [codex, inactiveCodex]
   )
-  return { claudeAccountPlans, codexAccountPlans }
+  return { claudeAccountUsage, codexAccountUsage }
 }

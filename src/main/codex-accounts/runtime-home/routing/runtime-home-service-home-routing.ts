@@ -279,7 +279,11 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
       }
       // Pin the native home so nested Orca cannot inherit a managed-home OAuth conflict (#5370).
-      return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
+      return {
+        kind: 'ready',
+        codexHomePath: getSystemCodexHomePath(),
+        readingAccount: { accountId: null, runtime: 'host', wslDistro: null }
+      }
     }
     this.syncMirrorForReadOnlyAppServer()
     return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }

@@ -309,7 +309,7 @@ describe('RateLimitService', () => {
       })
     }
   )
-  it('keeps the read plan and its account on live posts only from that same login', async () => {
+  it('keeps the read plan, account and supplements on live posts only from that same login', async () => {
     mockFreshBackgroundProviderFetches()
     const service = new RateLimitService()
     let provenance = 'profile:a'
@@ -338,7 +338,23 @@ describe('RateLimitService', () => {
 
     // The same folder now holds another login: its posts must not inherit a's plan.
     provenance = 'system'
-    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 5))
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+      ...okProvider('claude', 5),
+      fableWeekly: {
+        usedPercent: 70,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      extraUsage: {
+        unit: 'credits',
+        balance: 9,
+        unlimited: false,
+        enabled: true,
+        disabledReason: null,
+        resetsAt: null
+      }
+    })
     await service.refreshClaudeForTarget()
     service.ingestLiveClaudeRateLimits({
       configDir: '/claude/a',
@@ -346,7 +362,42 @@ describe('RateLimitService', () => {
       sevenDay: null
     })
     expect(service.getState().claude?.session?.usedPercent).toBe(40)
+    expect(service.getState().claude).toMatchObject({ fableWeekly: null, extraUsage: null })
     expect(service.getState().claude?.planType).toBeUndefined()
+    expect(service.getState().claude?.usageMetadata?.readingAccount).toBeUndefined()
+  })
+  it("never keeps one login's usage behind another login's failure", async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    let provenance = 'profile:a'
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/claude/current',
+      envPatch: {},
+      provenance
+    }))
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+      ...okProvider('claude', 10),
+      usageMetadata: {
+        authProvenance: 'profile:a',
+        readingAccount: { accountId: 'a', runtime: 'host', wslDistro: null }
+      }
+    })
+    await service.refresh()
+
+    // Another window switched to b; b's read fails before this window hears about the switch.
+    provenance = 'profile:b'
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 2,
+      error: 'Claude usage is unavailable.',
+      status: 'error',
+      usageMetadata: { authProvenance: 'profile:b' }
+    })
+    await service.refreshClaudeForTarget()
+
+    expect(service.getState().claude).toMatchObject({ session: null, status: 'error' })
     expect(service.getState().claude?.usageMetadata?.readingAccount).toBeUndefined()
   })
   it('keeps the account on the usage read right after redeeming a Codex reset', async () => {

@@ -4,6 +4,7 @@ import type {
 } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexSystemDefaultIdentity } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { isCodexAuthError } from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { isSameUsageSlot } from '../../../../../../shared/agent-usage/rate-limits/account-usage-observations'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'
@@ -43,11 +44,24 @@ export function getCodexAccountAuthWarning(args: {
   if (args.accountId === null && args.authKind === 'none') {
     return 'missing-sign-in'
   }
-  if (!codexRateLimitTargetMatchesAccountRuntime(args.target, args.runtime)) {
-    return null
-  }
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
-  return 'stale-sign-in'
+  // Another window can switch accounts mid-fetch; only the slot the fetch tried failed to sign in.
+  const attempted = args.limits.usageMetadata?.attemptedAccount
+  // An unnamed WSL target reads the default distro, which its own attempt names.
+  const target: RateLimitRuntimeTarget =
+    args.target.runtime === 'wsl' && args.target.wslDistro === null
+      ? { runtime: 'wsl', wslDistro: attempted?.wslDistro ?? null }
+      : args.target
+  if (!codexRateLimitTargetMatchesAccountRuntime(target, args.runtime)) {
+    return null
+  }
+  return isSameUsageSlot(attempted, {
+    accountId: args.accountId,
+    runtime: target.runtime,
+    wslDistro: target.wslDistro
+  })
+    ? 'stale-sign-in'
+    : null
 }

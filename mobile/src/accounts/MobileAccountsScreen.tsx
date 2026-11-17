@@ -22,6 +22,7 @@ import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
 import './usage/UsageBar'
 import {
   type ProviderKey,
+  getAccountUsageReadings,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getOtherUsageProviders,
@@ -188,6 +189,8 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+    const readingFor = getAccountUsageReadings(snapshot, provider)
+    const systemDefaultUsage = readingFor(null)
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     // Stored rows may name a selection or Codex target the desktop has since changed.
@@ -208,8 +211,8 @@ export function MobileAccountsScreen() {
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
               // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
+              activeAccountId === null && hasActiveProviderUsage(systemDefaultUsage) ? (
+                <ProviderUsageWindows limits={systemDefaultUsage} now={now} showEmptyWindows />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -221,9 +224,9 @@ export function MobileAccountsScreen() {
             const inactiveEntry = !isActive
               ? getInactiveProviderUsage(snapshot, provider, account.id)
               : null
-            const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
+            const usage = readingFor(account)
             const isFetching =
-              (isActive && usage?.status === 'fetching') ||
+              (isActive && activeUsage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
             return (
               <ListRow

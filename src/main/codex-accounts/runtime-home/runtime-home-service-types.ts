@@ -64,6 +64,6 @@ export type CodexMirroredHomeStatus =
 
 /** Result used by quota polling, where `skip` means no process should be spawned. */
 export type CodexRateLimitHomeResolution =
-  /** `readingAccount`: the saved account whose own home this is; absent for System default and the shared mirror. */
+  /** `readingAccount`: whose own home this is (null id: System default); absent for the shared mirror. */
   | { kind: 'ready'; codexHomePath: string | null; readingAccount?: UsageReadingAccount }
   | { kind: 'skip' }

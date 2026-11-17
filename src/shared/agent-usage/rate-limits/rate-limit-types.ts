@@ -70,9 +70,9 @@ export type OwnerNotSetUpPlaceholder =
   /** The host reports Claude on API-key billing and with no login alike, so it cannot say which. */
   | { kind: 'claude-unknown'; ownerLabel: string }
 
-/** The saved account and runtime slot whose credentials a successful reading used. */
+/** The account and runtime slot whose credentials a reading used; a null id is System default. */
 export type UsageReadingAccount = {
-  accountId: string
+  accountId: string | null
   runtime: 'host' | 'wsl'
   wslDistro: string | null
 }
@@ -92,8 +92,10 @@ export type UsageRateLimitMetadata = {
   ownerNotSetUp?: OwnerNotSetUpPlaceholder
   /** Antigravity: the native login verified before and after the read; id is null for an unsaved login. */
   account?: { id: string | null; email: string | null }
-  /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
+  /** Claude/Codex: set only on a successful reading of one account slot; older hosts omit it. */
   readingAccount?: UsageReadingAccount
+  /** Claude/Codex: the slot this fetch tried, so a failure names its account like a success does. */
+  attemptedAccount?: UsageReadingAccount
 }
 
 export type ProviderRateLimits = {

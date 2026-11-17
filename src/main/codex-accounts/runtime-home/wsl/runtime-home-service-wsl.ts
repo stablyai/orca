@@ -33,8 +33,14 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     return {
       kind: 'ready',
       codexHomePath: home.path,
-      ...(home.account && distro
-        ? { readingAccount: { accountId: home.account.id, runtime: 'wsl', wslDistro: distro } }
+      ...(distro && home.path
+        ? {
+            readingAccount: {
+              accountId: home.account?.id ?? null,
+              runtime: 'wsl',
+              wslDistro: distro
+            }
+          }
         : {})
     }
   }

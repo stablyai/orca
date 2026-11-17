@@ -2,6 +2,10 @@
 import { formatResetCountdown } from '../../../../src/shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { hasUsageData } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
 import {
+  getObservedAccountUsage,
+  indexAccountUsageObservations
+} from '../../../../src/shared/agent-usage/rate-limits/account-usage-observations'
+import {
   ProviderRateLimitsSchema,
   type AccountsSnapshot,
   type InactiveAccountUsage,
@@ -34,6 +38,52 @@ export function getInactiveProviderUsage(
       ? snapshot.rateLimits.inactiveClaudeAccounts
       : snapshot.rateLimits.inactiveCodexAccounts
   return list.find((u) => u.accountId === accountId) ?? null
+}
+
+type UsageAccount = {
+  id: string
+  managedAuthRuntime?: 'host' | 'wsl'
+  managedHomeRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+}
+
+/** Each account's usage from the readings that name it, never from which account is selected:
+ *  the selection can change while a fetch is in flight. `account` null is System default. */
+export function getAccountUsageReadings(
+  snapshot: AccountsSnapshot,
+  provider: ProviderKey
+): (account: UsageAccount | null) => ProviderRateLimits | null {
+  const active = getActiveProviderRateLimits(snapshot, provider)
+  const observations = indexAccountUsageObservations(
+    active,
+    provider === 'claude'
+      ? snapshot.rateLimits.inactiveClaudeAccounts
+      : snapshot.rateLimits.inactiveCodexAccounts
+  )
+  const target =
+    provider === 'claude' ? snapshot.rateLimits.claudeTarget : snapshot.rateLimits.codexTarget
+  const activeSlot =
+    active?.usageMetadata?.readingAccount ?? active?.usageMetadata?.attemptedAccount
+  // An unnamed WSL target reads the default distro, which its own reading names.
+  const targetDistro =
+    target.runtime === 'wsl' ? (target.wslDistro ?? activeSlot?.wslDistro ?? null) : null
+  // A host that predates the stamp reads only System default while it has no saved accounts.
+  const unstampedSystemDefault =
+    !activeSlot && snapshot[provider].accounts.length === 0 ? active : null
+  return (account) =>
+    account
+      ? // Saved accounts are read in their own runtime's login, whichever target is shown.
+        getObservedAccountUsage(observations, {
+          accountId: account.id,
+          runtime: account.managedHomeRuntime ?? account.managedAuthRuntime ?? 'host',
+          wslDistro: account.wslDistro ?? null
+        })
+      : (unstampedSystemDefault ??
+        getObservedAccountUsage(observations, {
+          accountId: null,
+          runtime: target.runtime,
+          wslDistro: targetDistro
+        }))
 }
 
 // System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.
