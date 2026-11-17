@@ -2060,7 +2060,6 @@
       "src/main/runtime/files/watch/file-watcher-host.test.ts": 338,
       "src/main/runtime/files/search/file-search.test.ts": 555,
       "src/main/runtime/files/search/mobile-path-search-expiry.test.ts": 225,
-      "src/main/runtime/files/search/mobile-path-search.test.ts": 50,
       "src/main/runtime/files/staged-file-save-commands.test.ts": 372,
       "src/main/runtime/files/staged-file-saves.test.ts": 468,
       "src/main/runtime/files/watch/windows-file-watch.test.ts": 64,
