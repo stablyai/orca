@@ -5044,7 +5044,9 @@
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
             "footerDetailAria": "Kullanım altbilgi ayrıntısı",
             "notChecked": "Kontrol edilmedi",
-            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}"
+            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}",
+            "resetsIn": "{{duration}} içinde sıfırlanır",
+            "resetsNow": "Şimdi sıfırlanır"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -15133,9 +15135,9 @@
             "databaseCount_other": "{{value0}} veritabanı",
             "scanning": "{{value0}} taranıyor",
             "checking": "{{value0}} kontrol ediliyor",
-            "scanned": "{{value0}} tarandı",
             "agentCheckedCount_other": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
-            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi"
+            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
+            "historyRefreshed": "Geçmiş yenilendi"
           },
           "run": {
             "source": {
@@ -21689,7 +21691,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Dizinlenmiş geçmişte eşleşen oturum yok. Başka bir sorgu veya kapsam deneyin.",
       "loadMore": "Daha fazla eşleşme yükle",
       "indexedHistory": "Dizinlenmiş geçmiş",
       "hostsSkipped": "Aranmadı: {{value0}}",
@@ -21725,7 +21726,9 @@
         "unreachable": "erişilemiyor",
         "scopeNotFound": "arama kapsamı orada bulunamadı",
         "agentNotSupported": "ajan desteklenmiyor"
-      }
+      },
+      "consentTranscriptIndex": "Arama, oturum ayrıntılarında ve mesaj önizlemelerinde eşleşme arar. Konuşmaların tamamında aramak için tam metin aramasını açın (yerel dökümleri sansürlemeden dizinler). Eşleştirilmiş cihazlar da bunlarda arama yapabilir.",
+      "noMatchesToShow": "Gösterilecek eşleşen oturum yok."
     }
   },
   "sessionHistory": {

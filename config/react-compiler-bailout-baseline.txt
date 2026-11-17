@@ -704,4 +704,4 @@
 1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
 1 src/renderer/src/store/plugins/appearance/plugin-icon-themes.ts
 5 src/renderer/src/store/retained-views/app-state-view.ts
-2 src/renderer/src/web/WebConnect.tsx
+2 src/renderer/src/web/pairing/WebConnect.tsx

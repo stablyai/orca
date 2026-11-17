@@ -4937,7 +4937,9 @@
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
             "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
             "notChecked": "未检查",
-            "modelWeeklyLimit": "{{model}} 每周上限：{{usage}}"
+            "modelWeeklyLimit": "{{model}} 每周上限：{{usage}}",
+            "resetsIn": "{{duration}}后重置",
+            "resetsNow": "现在重置"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -15164,8 +15166,8 @@
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
             "checking": "正在检查 {{value0}}",
-            "scanned": "已扫描 {{value0}}",
-            "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项"
+            "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项",
+            "historyRefreshed": "历史记录已刷新"
           },
           "run": {
             "source": {
@@ -23078,7 +23080,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已索引的历史记录中没有匹配的会话，请尝试其他查询或范围",
       "loadMore": "加载更多匹配项",
       "indexedHistory": "已索引的历史记录 · 最佳匹配",
       "hostsSkipped": "未搜索：{{value0}}",
@@ -23112,7 +23113,8 @@
         "scopeNotFound": "该主机上未找到搜索范围",
         "agentNotSupported": "不支持该智能体"
       },
-      "consent": "启用全文搜索？Orca 会根据此计算机上的本地智能体记录创建索引，其中包括完整对话，内容不会被脱敏，已通过身份验证的配对客户端可以搜索这些内容"
+      "consentTranscriptIndex": "搜索会匹配会话详情和消息预览，如需搜索完整对话，请启用全文搜索（为本地记录建立索引，内容不会脱敏），配对设备也可以搜索这些内容",
+      "noMatchesToShow": "没有可显示的匹配会话"
     }
   },
   "sessionHistory": {
