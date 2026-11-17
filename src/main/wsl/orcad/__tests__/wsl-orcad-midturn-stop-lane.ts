@@ -17,7 +17,7 @@ import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runti
 import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../../../claude/structured/lifecycle/claude-structured-session-id'
 import '../../../orcad/artifact-slots/orcad-artifact-materializer'
 import { packagedClaudeChatScenario } from '../../../orcad/testing/structured-chat/orcad-structured-chat-scenario'
 import { wslDistroHolderKey } from '../../discovery/wsl-distro-holder-record'

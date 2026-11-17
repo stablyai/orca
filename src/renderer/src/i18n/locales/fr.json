@@ -683,7 +683,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
-      "sameAsChoice": "Identique à {{agent}} · {{choice}}",
       "modelListFallback": "Liste intégrée. Orca n’a pas pu obtenir de liste de modèles depuis cet hôte.",
       "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours.",
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte."
@@ -711,9 +710,6 @@
         "extraArgs": "Arguments CLI supplémentaires",
         "launchOptions": "Modèle et autorisations",
         "savedLaunchOptions": "Options enregistrées : {{value0}}. Les anciens serveurs utilisent leurs propres réglages d’autorisations."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Comme {{agent}}"
       }
     },
     "ssh": {
@@ -4716,7 +4712,9 @@
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
             "footerDetailAria": "Détail du pied de page d'utilisation",
             "notChecked": "Non vérifié",
-            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}"
+            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}",
+            "resetsIn": "Réinitialisation dans {{duration}}",
+            "resetsNow": "Réinitialisation maintenant"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",
@@ -7936,6 +7934,9 @@
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
             "modePopout": "Fenêtre indépendante"
+          },
+          "worktreeCardStyle": {
+            "title": "Style des cartes"
           }
         },
         "FloatingWorkspacePane": {
@@ -11857,7 +11858,7 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser vos identifiants enregistrés et vos clés SSH, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
           "uiWarning": "Exécute le code de l’éditeur dans Orca pour dessiner sa vue. Orca indique à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
@@ -14950,10 +14951,10 @@
             "databaseCount_many": "{{value0}} bases de données",
             "scanning": "Analyse de {{value0}}",
             "checking": "Vérification de {{value0}}",
-            "scanned": "{{value0}} analysés",
             "agentCheckedCount_one": "{{agent}} : {{settled}} sur {{total}} candidat de l’historique vérifié",
             "agentCheckedCount_other": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",
-            "agentCheckedCount_many": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés"
+            "agentCheckedCount_many": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",
+            "historyRefreshed": "Historique actualisé"
           },
           "ssh": {
             "unrestored": {
@@ -21377,6 +21378,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Essayez les nouvelles cartes",
+      "dismiss": "Pas maintenant",
+      "body": "Statut des agents, points non lus et résumés des enfants sur chaque carte.",
+      "switchBack": "Revenez en arrière à tout moment dans <path>Options des espaces de travail › Style des cartes</path>",
+      "switchLabel": "Style des cartes",
+      "classic": "Classique",
+      "new": "Nouveau",
+      "keep": "Garder le nouveau",
+      "useClassic": "Utiliser le classique",
+      "laterToast": "Essayez les nouvelles cartes à tout moment depuis Options des espaces de travail › Style des cartes",
+      "saveFailedToast": "Impossible d'enregistrer le style des cartes. Réessayez.",
+      "keptTitle": "Les nouvelles cartes sont activées",
+      "keptBody": "Modifiez-le ici, sous Style des cartes."
+    },
     "revealFiltered": {
       "title": "Révéler l'espace de travail caché ?",
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",
@@ -21385,6 +21401,10 @@
     },
     "wslMoved": {
       "movedToHost": "Déplacé vers l'hôte {{distro}}",
+      "sectionTitle": "Déplacés vers des hôtes WSL ({{count}})",
+      "hide": "Masquer de cette liste",
+      "hiddenToast": "{{name}} masqué de cette liste",
+      "hiddenToastDescription": "« Utiliser à nouveau sur cet ordinateur » reste dans son menu, sous l'hôte {{distro}}.",
       "useHere": "Utiliser à nouveau sur cet ordinateur",
       "useHereTitle": "Utiliser à nouveau {{name}} sur cet ordinateur ?",
       "useHereDescription": "Orca ouvrira ce projet ici tel qu'il était avant le déplacement. Votre code n'est pas concerné : il n'a jamais été déplacé. Les modifications faites sur l'hôte {{distro}} depuis le déplacement, comme de nouveaux onglets et chats, restent sur l'hôte et ne reviennent pas. Les projets déplacés avec celui-ci reviennent aussi. Le projet reste également sur l'hôte {{distro}} jusqu'à ce que vous l'y supprimiez. Cette fenêtre va se recharger.",
@@ -21446,7 +21466,13 @@
         "restartGaveUp_many": "Impossible de redémarrer le serveur Orca dans {{distro}} après {{count}} tentatives",
         "serviceUnconfirmed": "Le service WSL n'a pas confirmé si la distro est en cours d'exécution.",
         "peerCheckFailed": "Orca n'a pas pu demander à l'hôte WSL si un autre Orca sur cet ordinateur l'utilise encore : {{detail}}",
-        "removalUnrecorded": "Orca n'a pas pu enregistrer ce qui est resté en cours d'exécution après cette suppression : {{detail}}"
+        "removalUnrecorded": "Orca n'a pas pu enregistrer ce qui est resté en cours d'exécution après cette suppression : {{detail}}",
+        "installLockWait_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minute.",
+        "installLockWait_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
+        "installLockWait_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
+        "installLockWaitGivesUp_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minute.",
+        "installLockWaitGivesUp_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
+        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes."
       }
     },
     "agentSummary": {
@@ -21547,6 +21573,7 @@
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "accept": "Exécuter comme hôte",
       "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale.",
+      "savedUnderAnotherPath": "Ce dossier est déjà un projet ici sous {{path}}, qui ne peut pas encore être déplacé vers l'hôte {{distro}}. Supprimez ce projet, puis ajoutez de nouveau le dossier pour le déplacer.",
       "existingTitle": "Ajouter sur l’hôte {{distro}} (recommandé)",
       "existingWhy": "{{distro}} s’exécute déjà comme hôte : Git, les fichiers et les terminaux s’exécutent donc nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "existingAccept": "Ajouter sur l’hôte"
@@ -21910,7 +21937,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Aucune session correspondante dans l'historique indexé. Essayez une autre requête ou une autre étendue.",
       "loadMore": "Charger plus de matchs",
       "indexedHistory": "Historique indexé",
       "hostsSkipped": "Non recherché : {{value0}}",
@@ -21949,7 +21975,9 @@
         "unreachable": "injoignable",
         "scopeNotFound": "périmètre de recherche introuvable sur cet hôte",
         "agentNotSupported": "agent non pris en charge"
-      }
+      },
+      "consentTranscriptIndex": "La recherche porte sur les détails des sessions et les aperçus des messages. Pour rechercher dans les conversations complètes, activez la recherche en texte intégral (indexe les transcriptions locales, sans masquage). Les appareils appairés peuvent aussi y effectuer des recherches.",
+      "noMatchesToShow": "Aucune session correspondante à afficher."
     }
   },
   "sessionHistory": {
@@ -23505,7 +23533,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vous pouvez conserver vos choix ou utiliser les arguments.",
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
     "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
@@ -23521,11 +23548,9 @@
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",
-    "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
     "moreModelsWithCount": "Plus de modèles ({{total}})",
-    "use": "Utiliser",
     "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers",

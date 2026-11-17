@@ -11,6 +11,9 @@ import {
   type ProfileStateWriterRequest,
   type ProfileStateWriterResponse
 } from './profile-state-writer-protocol'
+import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-profile-state-writer')
 
 if (!parentPort) {
   throw new Error('Profile state writer requires a worker thread')

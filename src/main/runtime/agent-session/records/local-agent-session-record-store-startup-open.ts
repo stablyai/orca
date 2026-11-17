@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { withPRWatchRecovery } from '../pr-watch-runtime'
+import { withPRWatchRecovery } from '../lifecycle/pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import {
   createStructuredAgentSessionLogger,

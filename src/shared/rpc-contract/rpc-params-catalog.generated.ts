@@ -539,6 +539,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -572,6 +573,7 @@ import {
   SkillsGetInstallProgressParams
 } from './skills/skills-params'
 import {
+  GitBlame,
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
@@ -1154,6 +1156,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.abortMerge': WorktreeSelectorOfGitParams,
   'git.abortRebase': WorktreeSelectorOfGitParams,
   'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
+  'git.blame': GitBlame,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
@@ -1522,7 +1525,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
-  'repo.hooks': RepoSelector,
+  'repo.hooks': RepoHooksRead,
   'repo.hooksCheck': RepoHooksCheck,
   'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
