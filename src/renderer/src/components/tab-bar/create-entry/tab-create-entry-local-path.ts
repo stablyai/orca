@@ -34,6 +34,8 @@ type TabEntryAbsolutePathOwnerState = Pick<
   ReturnType<typeof useAppStore.getState>,
   | 'settings'
   | 'repos'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
   | 'folderWorkspaces'
@@ -159,6 +161,8 @@ export function createTabEntryAbsolutePathPolicySelector(
     if (
       previousSlices?.settings === state.settings &&
       previousSlices.repos === state.repos &&
+      previousSlices.activeWorktreeId === state.activeWorktreeId &&
+      previousSlices.activeWorkspaceExecutionHostId === state.activeWorkspaceExecutionHostId &&
       selectWorktreesByRepo(previousSlices) === selectWorktreesByRepo(state) &&
       selectDetectedWorktreesByRepo(previousSlices) === selectDetectedWorktreesByRepo(state) &&
       selectFolderWorkspaces(previousSlices) === selectFolderWorkspaces(state) &&
@@ -178,6 +182,8 @@ export function createTabEntryAbsolutePathPolicySelector(
     previousSlices = {
       settings: state.settings,
       repos: state.repos,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
       worktreesByRepo: selectWorktreesByRepo(state),
       detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
       folderWorkspaces: selectFolderWorkspaces(state),
