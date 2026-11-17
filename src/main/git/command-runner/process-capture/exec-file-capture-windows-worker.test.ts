@@ -137,6 +137,21 @@ describe('Windows process creation off the calling loop', () => {
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
   })
 
+  it('ends the whole Git tree when output passes maxBuffer', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    worker.spawn.mockReturnValue(child)
+    const terminated = vi.fn()
+    const pending = execFileCapture('git', ['log'], { maxBuffer: 4, onChildTerminated: terminated })
+    await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
+    await vi.waitFor(() => expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']]))
+    treeKills.killers[0]!.emit('close', 0)
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+    child.receive({ type: 'close', id: 1, code: 1, signal: null })
+    expect(terminated).toHaveBeenCalledOnce()
+  })
+
   it('runs on the calling loop when the worker cannot start', async () => {
     worker.available = false
     const result = await execFileCapture(process.execPath, ['-e', 'process.stdout.write("ran")'], {

@@ -114,6 +114,26 @@ describe('Git command tree termination', () => {
     await Promise.all([cancel, abandoned])
     expect(spawnMock).toHaveBeenCalledOnce()
   })
+  it('ends every tree a dying worker abandons with one taskkill', async () => {
+    const children = [4321, 4322].map((pid, index) => {
+      const child = new WorkerThreadChildProcess(index + 1, () => true)
+      child.receive({ type: 'spawn', id: index + 1, pid })
+      return child
+    })
+    const killer = childWithPid(5678)
+    spawnMock.mockReturnValue(killer)
+    const abandoned = Promise.all(children.map((child) => killAbandonedWorkerChildTree(child)))
+
+    await Promise.resolve()
+    killer.emit('close', 0)
+    await abandoned
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '4321', '/pid', '4322', '/t', '/f'],
+      { stdio: 'ignore', windowsHide: true }
+    )
+  })
   it('still kills the tree when the worker reports the PID after the wait', async () => {
     vi.useFakeTimers()
     try {

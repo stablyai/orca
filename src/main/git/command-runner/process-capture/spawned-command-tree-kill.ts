@@ -9,6 +9,9 @@ const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
+// PIDs a dying worker abandons in one turn share a taskkill, so main pays one launch per worker death.
+let abandonedPids: number[] | null = null
+let abandonedTreeKill: Promise<void> = Promise.resolve()
 
 /** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. */
 export function killAbandonedWorkerChildTree(
@@ -18,15 +21,31 @@ export function killAbandonedWorkerChildTree(
   if (started) {
     return started
   }
+  const pid = child.pid
   if (
     process.platform !== 'win32' ||
-    !child.pid ||
+    !pid ||
     (child.exitCode ?? null) !== null ||
-    (child.signalCode ?? null) !== null
+    (child.signalCode ?? null) !== null ||
+    !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {
     return Promise.resolve()
   }
-  return killSpawnedCommandTree(child)
+  if (!abandonedPids) {
+    const pids: number[] = []
+    abandonedPids = pids
+    abandonedTreeKill = new Promise((resolve) => {
+      queueMicrotask(() => {
+        abandonedPids = null
+        void runTaskkill(pids).then(() => resolve())
+      })
+    })
+  }
+  abandonedPids.push(pid)
+  if (child instanceof WorkerThreadChildProcess) {
+    workerTreeKills.set(child, abandonedTreeKill)
+  }
+  return abandonedTreeKill
 }
 
 export function killSpawnedCommandTree(
@@ -66,27 +85,34 @@ function startTreeKill(
     child.kill()
     return Promise.resolve()
   }
+  // Await Windows tree cleanup so shim/WSL descendants cannot outlive their probe.
+  return runTaskkill([pid]).then((ended) => {
+    if (!ended) {
+      child.kill()
+    }
+  })
+}
+
+/** True when taskkill reported every tree ended within its wait. */
+function runTaskkill(pids: number[]): Promise<boolean> {
   return new Promise((resolve) => {
     let killer: ChildProcess
     try {
-      // Await Windows tree cleanup so shim/WSL descendants cannot outlive their probe.
-      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+      killer = spawn('taskkill', [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true
       })
       if (!killer || typeof killer.unref !== 'function') {
-        child.kill()
-        resolve()
+        resolve(false)
         return
       }
     } catch {
-      child.kill()
-      resolve()
+      resolve(false)
       return
     }
     let settled = false
     let timer: NodeJS.Timeout | null = null
-    const finish = (fallbackToChildKill: boolean): void => {
+    const finish = (ended: boolean): void => {
       if (settled) {
         return
       }
@@ -95,16 +121,13 @@ function startTreeKill(
         clearTimeout(timer)
       }
       killer.removeAllListeners()
-      if (fallbackToChildKill) {
-        child.kill()
-      }
-      resolve()
+      resolve(ended)
     }
-    killer.once('error', () => finish(true))
-    killer.once('close', (code) => finish(code !== 0))
+    killer.once('error', () => finish(false))
+    killer.once('close', (code) => finish(code === 0))
     timer = setTimeout(() => {
       killer.kill()
-      finish(true)
+      finish(false)
     }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
   })

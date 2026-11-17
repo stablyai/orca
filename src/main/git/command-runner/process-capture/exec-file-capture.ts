@@ -236,16 +236,13 @@ export function execFileCapture(
             )
           )
         } else {
+          // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
+          const workerOptions =
+            process.platform === 'win32'
+              ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
+              : captureOptions
           child = useWorker
-            ? workerExecFile(
-                command,
-                args,
-                // Keep execFile's error text so callers matching it see no difference.
-                process.platform === 'win32'
-                  ? { ...captureOptions, errorCommand: [command, ...args].join(' ') }
-                  : captureOptions,
-                complete
-              )
+            ? workerExecFile(command, args, workerOptions, complete)
             : ownedPosixGroup
               ? spawnedExecFile(command, captureOptions, complete, () =>
                   spawnNativeProcess(
