@@ -7,7 +7,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   ZCODE_PLAN_SITE_CONSOLE_URLS,
   type ZcodePlanSite
-} from '../../../../../../shared/zcode-plan-sites'
+} from '../../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { useNow } from '../../../../hooks/use-now'

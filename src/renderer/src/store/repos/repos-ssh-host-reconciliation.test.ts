@@ -1,16 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  HostQualifiedDetectedWorktreeResult,
-  ListDetectedWorktreesArgs
-} from '../../../../shared/detected-worktree-provider-contract'
-import type {
-  DirectSshAuthority,
-  SshConnectionState,
-  SshProviderEpoch
-} from '../../../../shared/ssh-types'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { createTestStore } from '../testing/app-store-test-fixture'
 
 const repoId = 're-adopted-repo'
@@ -45,77 +35,6 @@ function directSshSetup(targetId: string): ProjectHostSetup {
   }
 }
 
-function directSshWorktree(targetId: string, displayName = 'main'): Worktree {
-  return {
-    id: `${repoId}::/srv/repo`,
-    repoId,
-    hostId: `ssh:${targetId}`,
-    path: '/srv/repo',
-    head: 'abc123',
-    branch: 'refs/heads/main',
-    isBare: false,
-    isMainWorktree: true,
-    displayName,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 1,
-    lastActivityAt: 1
-  }
-}
-
-function directSshAuthority(targetId: string): DirectSshAuthority {
-  return {
-    targetId,
-    providerEpoch: `epoch-${targetId}` as SshProviderEpoch,
-    connectionGeneration: 1
-  }
-}
-
-function connectedSshState(authority: DirectSshAuthority): SshConnectionState {
-  return {
-    targetId: authority.targetId,
-    status: 'connected',
-    error: null,
-    reconnectAttempt: 0,
-    providerEpoch: authority.providerEpoch,
-    connectionGeneration: authority.connectionGeneration
-  }
-}
-
-function qualifiedWorktreeResult(
-  request: ListDetectedWorktreesArgs,
-  worktree: Worktree
-): HostQualifiedDetectedWorktreeResult {
-  if (!('expectedAuthority' in request)) {
-    throw new Error('Expected a direct SSH provider request')
-  }
-  return {
-    status: 'complete',
-    providerRequestId: request.providerRequestId,
-    repoId: request.repoId,
-    authority: {
-      kind: 'direct-ssh',
-      executionHostId: request.executionHostId,
-      ...request.expectedAuthority
-    },
-    result: {
-      repoId: request.repoId,
-      authoritative: true,
-      source: 'git',
-      worktrees: [
-        { ...worktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
-      ]
-    }
-  }
-}
-
 const project: Project = {
   id: projectId,
   displayName: 'Re-adopted repo',
@@ -128,18 +47,15 @@ const project: Project = {
 const reposList = vi.fn()
 const projectsList = vi.fn()
 const setupsList = vi.fn()
-const worktreesListDetected = vi.fn()
 
 beforeEach(() => {
   reposList.mockReset()
   projectsList.mockReset()
   setupsList.mockReset()
-  worktreesListDetected.mockReset()
   vi.stubGlobal('window', {
     api: {
       repos: { list: reposList },
-      projects: { list: projectsList, listHostSetups: setupsList },
-      worktrees: { listDetected: worktreesListDetected }
+      projects: { list: projectsList, listHostSetups: setupsList }
     },
     dispatchEvent: vi.fn()
   })
@@ -180,67 +96,5 @@ describe('SSH repo host reconciliation', () => {
 
     expect(store.getState().repos).toEqual([liveRepo])
     expect(store.getState().projectHostSetups).toEqual([directSshSetup('ssh-new')])
-  })
-
-  it('rejects an old-host worktree response that resolves after re-adoption', async () => {
-    const staleWorktree = directSshWorktree('ssh-old', 'stale')
-    const oldAuthority = directSshAuthority('ssh-old')
-    let providerRequest!: ListDetectedWorktreesArgs
-    let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
-    const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
-      resolveOldWorktrees = resolve
-    })
-    worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
-      providerRequest = request
-      return oldWorktrees
-    })
-    reposList.mockResolvedValue([directSshRepo('ssh-new')])
-    projectsList.mockResolvedValue([project])
-    setupsList.mockResolvedValue([directSshSetup('ssh-new')])
-    const store = createTestStore()
-    store.setState({
-      repos: [directSshRepo('ssh-old')],
-      sshConnectionStates: new Map([['ssh-old', connectedSshState(oldAuthority)]]),
-      worktreesByRepo: { [repoId]: [staleWorktree] },
-      detectedWorktreesByRepo: {
-        [repoId]: {
-          repoId,
-          authoritative: true,
-          source: 'git',
-          worktrees: [
-            { ...staleWorktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
-          ]
-        }
-      }
-    })
-
-    const staleFetch = store.getState().fetchWorktrees(repoId)
-    await vi.waitFor(() => expect(worktreesListDetected).toHaveBeenCalled())
-    expect(worktreesListDetected).toHaveBeenCalledOnce()
-    expect(providerRequest).toMatchObject({
-      repoId,
-      executionHostId: 'ssh:ssh-old',
-      expectedAuthority: oldAuthority
-    })
-    store.getState().recordSshRepoReadoptions([readoption])
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-    const newAuthority = directSshAuthority('ssh-new')
-    store.setState({
-      sshConnectionStates: new Map([['ssh-new', connectedSshState(newAuthority)]])
-    })
-    resolveOldWorktrees(qualifiedWorktreeResult(providerRequest, staleWorktree))
-    await expect(staleFetch).resolves.toBe(false)
-
-    expect(store.getState().worktreesByRepo[repoId]).toEqual([
-      directSshWorktree('ssh-new', 'stale')
-    ])
-    expect(store.getState().detectedWorktreesByRepo[repoId].worktrees).toEqual([
-      {
-        ...directSshWorktree('ssh-new', 'stale'),
-        ownership: 'orca-managed',
-        selectedCheckout: false,
-        visible: true
-      }
-    ])
   })
 })

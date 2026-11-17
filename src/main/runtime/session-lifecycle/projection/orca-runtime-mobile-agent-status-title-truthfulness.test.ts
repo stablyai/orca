@@ -2,6 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
+import { agentHookRuntimeDeps } from '../../../agent-hooks/runtime/agent-hook-runtime-deps'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { projectSessionTabAgentStatus } from '../../rpc/methods/session-tabs/session-tab-agent-status-projection'
 
@@ -26,7 +29,8 @@ const PROVIDER_SESSION = {
 
 async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows
+    getAgentStatusSnapshot: () => rows,
+    getPublicAgentStatusSnapshotForPane: (paneKey) => rows.filter((row) => row.paneKey === paneKey)
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -54,9 +58,13 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
 }
 
 /** Publish the renderer's terminal/title/byte-derived status as a paired host mirrors it. */
-function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: string): void {
+async function publishRendererWorkingPane(
+  runtime: OrcaRuntimeService,
+  paneTitle: string,
+  status?: AgentStatusEntry
+): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -92,7 +100,7 @@ function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: stri
             leafId: LEAF_ID,
             title: paneTitle,
             launchAgent: 'claude',
-            agentStatus: {
+            agentStatus: status ?? {
               state: 'working',
               prompt: 'Configurar y entender los comprobantes',
               updatedAt: T0,
@@ -128,7 +136,7 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
       runtime.onPtyData(PTY_ID, '\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x07', T0 - 1_000)
 
       vi.setSystemTime(T0)
-      publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
+      await publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
 
       expect(await projectAgentStatus(runtime)).toEqual(
         expect.objectContaining({
@@ -152,6 +160,77 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('mobile session tabs: a permission report after its hook', () => {
+  const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'ls' } })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function blockAfterApprovalHook(blockedAt: number): Promise<OrcaRuntimeService> {
+    vi.setSystemTime(T0)
+    const rows: AgentStatusIpcPayload[] = []
+    const runtime = await createRuntime(rows)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07\x1b]7501;state=working\x1b\\', T0)
+    vi.setSystemTime(T0 + 1_000)
+    rows.push({
+      paneKey: PANE_KEY,
+      state: 'waiting',
+      prompt: 'list files',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: T0 + 1_000,
+      stateStartedAt: T0 + 1_000,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      toolName: 'Bash',
+      toolInput: 'ls',
+      interactivePrompt: approval
+    })
+    vi.setSystemTime(blockedAt)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', blockedAt)
+    return runtime
+  }
+
+  it('keeps the approval the PermissionRequest hook published', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+
+    expect(await projectAgentStatus(runtime)).toEqual(
+      expect.objectContaining({
+        state: 'waiting',
+        toolName: 'Bash',
+        interactivePrompt: approval,
+        stateStartedAt: T0 + 1_000
+      })
+    )
+  })
+
+  it('does not offer that approval for a later block with no hook of its own', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+    await projectAgentStatus(runtime)
+    vi.setSystemTime(T0 + 2_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=working\x1b\\', T0 + 2_000)
+    vi.setSystemTime(T0 + 5_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', T0 + 5_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 5_000 }))
+  })
+
+  it('does not offer a wait hook from long before a hookless block in the same working interval', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 30_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 30_000 }))
   })
 })
 
@@ -215,34 +294,173 @@ describe('mobile session tabs: a process started after its pane last reported', 
     vi.useRealTimers()
   })
 
-  it('publishes identity only, and legacy done to clients that cannot read it', async () => {
-    const completedBeforeRestart: AgentStatusIpcPayload = {
-      paneKey: PANE_KEY,
-      state: 'done',
-      prompt: 'ship it',
-      agentType: 'codex',
-      connectionId: null,
-      receivedAt: T0 - 120_000,
-      stateStartedAt: T0 - 120_000,
-      tabId: TAB_ID,
-      worktreeId: WORKTREE_ID,
-      providerSession: PROVIDER_SESSION
-    }
-    const runtime = await createRuntime([completedBeforeRestart])
-    runtime.noteTerminalSpawnCommit({ id: PTY_ID })
-    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0)
+  it.each(['headless', 'published'] as const)(
+    'publishes %s identity only after a new process starts',
+    async (route) => {
+      const completedBeforeRestart: AgentStatusIpcPayload = {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'ship it',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: T0 - 120_000,
+        stateStartedAt: T0 - 120_000,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        providerSession: PROVIDER_SESSION
+      }
+      const rows = [completedBeforeRestart]
+      const runtime = await createRuntime(rows)
+      runtime.noteTerminalSpawnCommit({ id: PTY_ID })
+      vi.setSystemTime(T0 + 20)
+      runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0 + 20)
+      if (route === 'published') {
+        await publishRendererWorkingPane(runtime, 'zsh', {
+          state: 'done',
+          prompt: '',
+          paneKey: PANE_KEY,
+          agentType: 'codex',
+          updatedAt: T0 - 120_000,
+          stateStartedAt: T0 - 120_000,
+          stateHistory: [],
+          paneSleep: { ptyId: PTY_ID }
+        })
+      }
 
-    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    const tab = result.tabs[0]
-    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
-      expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
-    )
-    const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
-      expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
-    )
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
-      'restoredUnconfirmed'
-    )
+      const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      const tab = result.tabs[0]
+      expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+        expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
+      )
+      const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
+        expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
+      )
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
+        'restoredUnconfirmed'
+      )
+      rows.length = 0
+      expect(await projectAgentStatus(runtime)).toBeUndefined()
+      vi.setSystemTime(T0 + 40)
+      runtime.onPtyData(PTY_ID, '\x1b]0;⠧ New turn\x07', T0 + 40)
+      const successor = await projectAgentStatus(runtime)
+      expect(successor?.state).toBe('working')
+      expect(successor).not.toHaveProperty('paneSleep')
+    }
+  )
+})
+
+// A title repaint and physical Sleep must not make the same finished turn newly unread.
+describe('mobile session tabs: accepted completion identity through Sleep', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(T0)
+    _internals.resetCachesForTests()
   })
+  afterEach(() => {
+    _internals.resetCachesForTests()
+    vi.useRealTimers()
+  })
+
+  it.each([
+    { route: 'headless', stopTitle: 'root@host: ~/repo' },
+    { route: 'published', stopTitle: 'root@host: ~/repo' },
+    { route: 'headless', stopTitle: 'zsh' },
+    { route: 'published', stopTitle: 'zsh' }
+  ])(
+    'preserves the accepted end on $route output through $stopTitle and settlement',
+    async ({ route, stopTitle }) => {
+      const rows: AgentStatusIpcPayload[] = []
+      const server = new AgentHookServer()
+      server.setListener(() =>
+        rows.splice(0, rows.length, ...server.getStatusSnapshotForPane(PANE_KEY))
+      )
+      server.ingestRemote(
+        {
+          paneKey: PANE_KEY,
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          providerSession: PROVIDER_SESSION,
+          turnEndedAt: T0,
+          turnEndDisposition: 'identified',
+          payload: { state: 'done', agentType: 'claude', prompt: 'Finished work' }
+        },
+        'ssh-test'
+      )
+      const runtime = await createRuntime(rows)
+      const deps = agentHookRuntimeDeps(
+        server,
+        { read: () => ({ kind: 'unobserved' }) },
+        () => ({})
+      )
+      Reflect.set(
+        runtime,
+        'reconcileAgentStatusForEndedProcessFn',
+        deps.reconcileAgentStatusForEndedProcess
+      )
+      server.setTerminalPaneLifecycle({
+        ownsProcess: (key, id) => key === PANE_KEY && id === PTY_ID,
+        isStopping: () =>
+          runtime.intentionalPtyStops.claimExit(PTY_ID, null).includes('reversible'),
+        isReversibleStop: (id, incarnation) =>
+          runtime.intentionalPtyStops.claimExit(id, incarnation).includes('reversible'),
+        isPlaced: () => true
+      })
+      const frames: (AgentStatusEntry | null | undefined)[] = []
+      const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => {
+        for (const tab of frame.tabs) {
+          if (tab.type === 'terminal') {
+            frames.push(tab.agentStatus)
+          }
+        }
+      })
+      const observe = async () => {
+        const frame = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+        const tab = frame.tabs.find((tab) => tab.type === 'terminal')
+        expect(tab?.type).toBe('terminal')
+        if (tab?.type === 'terminal') {
+          frames.push(tab.agentStatus)
+        }
+      }
+      let finishStop: ((stopped: boolean) => void) | undefined
+      try {
+        vi.setSystemTime(T0 + 20)
+        runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07', T0 + 20)
+        if (route === 'published') {
+          await publishRendererWorkingPane(runtime, 'Claude Code', {
+            state: 'done',
+            prompt: '',
+            paneKey: PANE_KEY,
+            agentType: 'claude',
+            updatedAt: T0 + 1_000,
+            stateStartedAt: T0 + 20,
+            stateHistory: []
+          })
+          expect((await projectAgentStatus(runtime))?.updatedAt).toBeGreaterThanOrEqual(T0 + 1_000)
+        }
+        await observe()
+        finishStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', null)
+        vi.setSystemTime(T0 + 60_000)
+        runtime.onPtyData(PTY_ID, `\x1b]0;${stopTitle}\x07`, T0 + 60_000)
+        await observe()
+        await runtime.onPtyExit(PTY_ID, 0, undefined, { providerExitObserved: true })
+        finishStop(true)
+        expect(server.getStatusSnapshotForPane(PANE_KEY)[0].paneSleep).toEqual({ ptyId: PTY_ID })
+        await observe()
+        for (const status of frames) {
+          expect(status).toMatchObject({
+            state: 'done',
+            stateStartedAt: T0,
+            evidenceObservedAt: T0,
+            turnEndedAt: T0,
+            turnEndDisposition: 'identified'
+          })
+        }
+      } finally {
+        unsubscribe()
+        finishStop?.(false)
+        server.setListener(null)
+      }
+    }
+  )
 })

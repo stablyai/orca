@@ -4,7 +4,7 @@ import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
@@ -16,8 +16,8 @@ import {
   clipboardFormatsIncludeImage,
   clipboardImageThumbnailSize,
   type ClipboardImageThumbnail
-} from '../../../../shared/clipboard-image'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+} from '../../../../shared/clipboard/clipboard-image'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
 import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
@@ -78,24 +78,13 @@ export async function readClipboardImageThumbnail(): Promise<ClipboardImageThumb
   }
 }
 
-export async function readClipboardImagePngBase64(): Promise<string | null> {
-  const clipboard = navigator.clipboard as
-    | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
-    | undefined
-  if (!clipboard?.read) {
+export async function readClipboardImagePngBase64(eventImage?: Blob): Promise<string | null> {
+  const blob = eventImage ?? (await readClipboardImageBlob())
+  if (!blob) {
     return null
   }
-  const items = await clipboard.read()
-  for (const item of items) {
-    const imageType = item.types.find((type) => type.startsWith('image/'))
-    if (!imageType) {
-      continue
-    }
-    const blob = await item.getType(imageType)
-    assertClipboardImageBlobWithinLimit(blob)
-    return blobToBase64(await convertImageBlobToPng(blob, { downscaleToFit: true }))
-  }
-  return null
+  assertClipboardImageBlobWithinLimit(blob)
+  return blobToBase64(await convertImageBlobToPng(blob, { downscaleToFit: true }))
 }
 
 export async function writeWebClipboardText(text: string): Promise<void> {
@@ -212,11 +201,12 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   forNativeChatDraft?: boolean
   forStructuredChat?: boolean
+  eventImage?: Blob
 }) {
   if (!requireActiveEnvironmentOrNull()) {
     return null
   }
-  const contentBase64 = await readClipboardImagePngBase64()
+  const contentBase64 = await readClipboardImagePngBase64(args?.eventImage)
   if (!contentBase64) {
     return null
   }

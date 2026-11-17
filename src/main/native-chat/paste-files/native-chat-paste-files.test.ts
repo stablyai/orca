@@ -6,7 +6,7 @@ import { installFakeAppEnvironment } from '../../../../config/scripts/test-runti
 
 import type { Store } from '../../persistence/loading-store/store'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
-import { readLocalFileContent } from '../../ipc/filesystem/filesystem-file-content-inspection'
+import { readLocalFileContent } from '../../filesystem/local-file-io/filesystem-file-content-inspection'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 
 // A store with no projects: nothing but an access kind decides what a read may reach.

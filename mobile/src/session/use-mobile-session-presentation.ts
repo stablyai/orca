@@ -6,10 +6,10 @@ import {
   verdictDisplayLabel
 } from '../transport/connection/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useInitialSessionTerminalAutoCreate } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
 import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
 

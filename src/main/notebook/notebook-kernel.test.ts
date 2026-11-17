@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { KernelFrame } from '../../shared/notebook-kernel-types'
+import type { KernelFrame } from '../../shared/editor/notebooks/notebook-kernel-types'
 
 vi.mock('../../../resources/notebook/kernel-bridge.py?asset&asarUnpack', () => ({
   default: join(__dirname, '../../../resources/notebook/kernel-bridge.py')

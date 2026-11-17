@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 // Missing scope means unknown and requires a full read; only proven narrowing may skip metadata.
 

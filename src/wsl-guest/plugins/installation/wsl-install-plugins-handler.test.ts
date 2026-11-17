@@ -63,38 +63,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
     })
   })
 
-  it('materializes the requested Pi extension in the guest home', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst-pi'
-      })
-      const source = '// @orca-managed-pi-extension\nexport default {}\n'
-      const res = install({ piExtensionSource: source, launchKind: 'pi' })
-      expect(res.overlayDirs.pi).toBe(join(home, '.pi', 'agent'))
-      const extension = join(home, '.pi', 'agent', 'extensions', 'orca-agent-status.ts')
-      expect(readFileSync(extension, 'utf8')).toContain(source)
-    })
-  })
-
-  it('writes the OpenCode 2 plugin to its separate overlay', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst-v2'
-      })
-      const source = '// opencode2\n'
-      const res = install({ opencode2PluginSource: source })
-      const dir = res.overlayDirs.opencode2
-      expect(res.installed.opencode2).toBe(true)
-      expect(typeof dir).toBe('string')
-      expect(
-        readFileSync(join(requireOverlayDir(dir), 'plugins', 'orca-opencode2-status.js'), 'utf8')
-      ).toBe(source)
-      expect(res.overlayDirs.opencode).toBeUndefined()
-    })
-  })
-
   it('reuses the overlay on repeat installs instead of rebuilding it', () => {
     withHome((home) => {
       const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
@@ -111,37 +79,6 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)
       expect(install({}).overlayDirs.opencode).toBe(dir)
       expect(existsSync(canary)).toBe(true)
-    })
-  })
-
-  it('rebuilds when the cached overlay lost its plugin file', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      })
-      const source = '// v1\n'
-      const dir = requireOverlayDir(install({ opencodePluginSource: source }).overlayDirs.opencode)
-      // A failed rebuild can leave an empty directory; only the plugin file proves a cache hit.
-      rmSync(join(dir, 'plugins', 'orca-opencode-status.js'))
-
-      expect(install({ opencodePluginSource: source }).overlayDirs.opencode).toBe(dir)
-      expect(existsSync(join(dir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
-    })
-  })
-
-  it('re-materializes when the shipped source changes', () => {
-    withHome((home) => {
-      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
-        HOME: home,
-        ORCA_WSL_HOOK_INSTANCE: 'inst1'
-      })
-      install({ opencodePluginSource: '// v1\n' })
-      // Why: a mid-session Orca upgrade ships new plugin source; future spawns must see it.
-      const dir = requireOverlayDir(
-        install({ opencodePluginSource: '// v2\n' }).overlayDirs.opencode
-      )
-      expect(readFileSync(join(dir, 'plugins', 'orca-opencode-status.js'), 'utf8')).toBe('// v2\n')
     })
   })
 

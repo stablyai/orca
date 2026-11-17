@@ -1,9 +1,9 @@
-import type { Repo } from '../../../../shared/repo-types'
-import { isAgentScratchRepoRootPath } from '../../../../shared/agent-scratch-worktrees'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isAgentScratchRepoRootPath } from '../../../../shared/worktree/visibility/agent-scratch-worktrees'
 import {
   getRepoRoutingConnectionId,
   getRepoSshConnectionId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveLocalProjectRuntimeForRepo,

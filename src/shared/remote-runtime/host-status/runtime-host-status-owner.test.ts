@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusOwner } from './runtime-host-status-owner'
 import { runtimeHostStatusFailure, type RuntimeHostStatusResponse } from './runtime-host-status'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 const owners: RuntimeHostStatusOwner[] = []
 beforeEach(() => vi.useFakeTimers())

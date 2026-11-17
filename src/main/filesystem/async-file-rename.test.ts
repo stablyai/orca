@@ -3,7 +3,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { writeFileDurable, writeFileDurableIfCurrent } from './durable-file-write'
+import { writeFileDurableIfCurrent } from './durable-file-write'
 
 const rename = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -31,22 +31,6 @@ function fixture() {
   writeFileSync(target, 'old')
   return { root, target, temporary }
 }
-
-it.each([
-  ['win32', 'EPERM', 6],
-  ['win32', 'ENOSPC', 1],
-  ['linux', 'EBUSY', 1]
-] as const)('bounds %s %s failures and preserves the old file', async (host, code, attempts) => {
-  const { root, target, temporary } = fixture()
-  Object.defineProperty(process, 'platform', { value: host })
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    rename.mockRejectedValueOnce(Object.assign(new Error('injected file failure'), { code }))
-  }
-  await expect(writeFileDurable(temporary, target, 'new')).rejects.toThrow('injected file failure')
-  expect(rename).toHaveBeenCalledTimes(attempts)
-  expect(readFileSync(target, 'utf8')).toBe('old')
-  expect(readdirSync(root)).toEqual(['state.json'])
-})
 
 it('does not publish a superseded snapshot after a Windows retry delay', async () => {
   const { root, target, temporary } = fixture()

@@ -5,7 +5,7 @@ import {
   runtimeHostConnectionStateForEntry
 } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { getRuntimeSessionMirrorEnvironmentIds } from '../../../lib/workspace/ownership/runtime-session-mirror-owners'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorktreeRuntimeOwnerState } from '../../../lib/workspace/ownership/worktree-runtime-owner-state'
 
 type RuntimeMirrorStatus = {

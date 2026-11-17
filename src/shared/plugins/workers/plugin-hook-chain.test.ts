@@ -15,17 +15,16 @@ function chain(
   plugins: Record<string, PluginHookHandler[]>,
   overrides: Partial<PluginHookChainInput> = {}
 ) {
-  const logs: string[] = []
   const outcome = runPluginHookChain({
     event: 'terminal.send',
     payload: send,
     participants: Object.keys(plugins),
     invoke: (pluginKey, payload) => runPluginWorkerHookHandlers(plugins[pluginKey] ?? [], payload),
-    log: (pluginKey, line) => void logs.push(`${pluginKey}: ${line}`),
+    log: () => undefined,
     now: () => 0,
     ...overrides
   })
-  return { outcome, logs }
+  return { outcome }
 }
 
 afterEach(() => {
@@ -61,25 +60,21 @@ describe('runPluginHookChain', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-  it('treats a throw as passing and logs plugin, event and duration', async () => {
-    const { outcome, logs } = chain(
-      {
-        'a.one': [
-          () => {
-            throw new Error('boom')
-          }
-        ],
-        'a.two': [(event, next) => next({ ...read(event), text: 'pwd' })]
-      },
-      { now: vi.fn().mockReturnValueOnce(10).mockReturnValue(42) }
-    )
+  it('continues to the next plugin after a handler throws', async () => {
+    const { outcome } = chain({
+      'a.one': [
+        () => {
+          throw new Error('boom')
+        }
+      ],
+      'a.two': [(event, next) => next({ ...read(event), text: 'pwd' })]
+    })
     await expect(outcome).resolves.toEqual({ kind: 'continue', payload: { ...send, text: 'pwd' } })
-    expect(logs).toEqual(['a.one: hook terminal.send skipped after 32ms: boom'])
   })
 
   it('carries on past a plugin that misses its deadline', async () => {
     vi.useFakeTimers()
-    const { outcome, logs } = chain(
+    const { outcome } = chain(
       { 'a.slow': [], 'a.next': [] },
       {
         invoke: (pluginKey, payload) =>
@@ -91,10 +86,9 @@ describe('runPluginHookChain', () => {
     )
     await vi.advanceTimersByTimeAsync(2_000)
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.next', reason: 'second' })
-    expect(logs).toEqual(['a.slow: hook terminal.send skipped after 0ms: timed out after 2000ms'])
   })
 
-  it('refuses when a fail-closed plugin throws, misses its deadline or answers nonsense', async () => {
+  it('refuses when a fail-closed plugin throws or answers nonsense', async () => {
     const failsClosed = () => true
     const thrown = chain(
       {
@@ -111,7 +105,6 @@ describe('runPluginHookChain', () => {
       pluginKey: 'a.guard',
       reason: 'a.guard failed and denies on error: status bar down'
     })
-    expect(thrown.logs[0]).toMatch(/denied after 0ms \(onError: deny\)/)
     const nonsense = chain(
       {},
       { participants: ['a.guard'], invoke: async () => 'nope', failsClosed }

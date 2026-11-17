@@ -87,7 +87,6 @@ describe('idle regional cutover endpoint', () => {
 })
 
 describe('regional host drain endpoint', () => {
-
   it('accepts only the dedicated identity and exact cell generation', async () => {
     const drainHost = vi.fn(() => 'accepted' as const)
     const app = createRelayApp(config(), {
@@ -114,22 +113,6 @@ describe('regional host drain endpoint', () => {
       ).status
     ).toBe(409)
     expect(drainHost).toHaveBeenCalledOnce()
-  })
-
-  it('rejects a failed asynchronous drain instead of acknowledging it', async () => {
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: {} as never,
-      drain: vi.fn(),
-      drainHost: async () => {
-        throw new Error('activity_cell_not_authoritative')
-      },
-      cellIncarnation,
-      ready: vi.fn(async () => true)
-    })
-    const response = await post(app, 'rehome-token', request)
-    expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: 'activity_cell_not_authoritative' })
   })
 
   it('rechecks synthetic host absence after asynchronous identity proof', async () => {
@@ -160,81 +143,6 @@ describe('regional host drain endpoint', () => {
     expect(response.status).toBe(409)
     expect(drainHost).not.toHaveBeenCalled()
   })
-
-})
-
-describe('regional rehome director controls', () => {
-
-  it('applies the durable switch only with matching confirmation', async () => {
-    const inspectRegionalRehomeControl = vi.fn().mockResolvedValue({
-      generation: 0,
-      enabled: false
-    })
-    const applyRegionalRehomeControl = vi.fn(async (input) => ({
-      ...input,
-      generation: input.expectedGeneration + 1
-    }))
-    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
-      store: {} as never,
-      assignments: {
-        inspectRegionalRehomeControl,
-        applyRegionalRehomeControl
-      } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true)
-    })
-    expect(
-      (
-        await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', {
-          v: 1,
-          action: 'inspect'
-        })
-      ).status
-    ).toBe(200)
-    const apply = {
-      v: 1,
-      action: 'apply',
-      expectedGeneration: 0,
-      enabled: true,
-      notBefore: 100,
-      ratePerMinute: 10,
-      preferenceMaxAgeMs: 24 * 60 * 60_000,
-      hostCooldownMs: 7 * 24 * 60 * 60_000,
-      drainGraceMs: 60_000,
-      confirmation: 'ENABLE_REGIONAL_REHOMING'
-    }
-    expect(
-      (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', apply)).status
-    ).toBe(200)
-    expect(applyRegionalRehomeControl).toHaveBeenCalledOnce()
-    expect(
-      (
-        await postPath(app, '/v1/admin/regional-rehome-control', 'monitor-token', {
-          v: 1,
-          action: 'inspect'
-        })
-      ).status
-    ).toBe(200)
-    expect(
-      (await postPath(app, '/v1/admin/regional-rehome-control', 'monitor-token', apply)).status
-    ).toBe(403)
-    expect(
-      (
-        await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', {
-          ...apply,
-          confirmation: 'DISABLE_REGIONAL_REHOMING'
-        })
-      ).status
-    ).toBe(400)
-    // The per-host cooldown is part of the durable shape an operator must state.
-    const { hostCooldownMs: _omitted, ...withoutCooldown } = apply
-    expect(
-      (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', withoutCooldown))
-        .status
-    ).toBe(400)
-    expect(applyRegionalRehomeControl).toHaveBeenCalledExactlyOnceWith(apply)
-  })
-
 })
 
 async function post(

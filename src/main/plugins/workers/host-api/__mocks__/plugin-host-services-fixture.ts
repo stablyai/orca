@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../../../shared/plugins/capabilities/plugin-capabilities'
 import { executePluginHostCall } from '../plugin-host-methods'
 import type { PluginHostServices } from '../plugin-host-method-bindings'
-import type { PluginAuditLog } from '../../../plugin-audit-log'
+import type { PluginAuditLog } from '../../../logging/plugin-audit-log'
 
 /** Host services with inert stores and the given runtime RPC; `overrides` replaces any of them. */
 export function pluginHostTestServices(

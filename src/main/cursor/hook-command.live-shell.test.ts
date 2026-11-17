@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { getCursorHookResponse } from './hook-events'
 import { CursorHookService } from './hook-service'
 
@@ -74,7 +74,7 @@ describe.skipIf(process.platform === 'win32')('local Cursor hooks through login 
       ORCA_AGENT_HOOK_ENDPOINT: '',
       ORCA_AGENT_HOOK_PORT: '',
       ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: '',
+      ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TEST_EXPAND: 'expanded',
       ORCA_TEST_LITERAL: hostileLiteral,
       HOME: fixture,

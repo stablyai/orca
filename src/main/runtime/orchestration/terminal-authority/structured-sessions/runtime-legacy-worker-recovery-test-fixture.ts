@@ -1,6 +1,6 @@
 import type { PtyControllerInventory } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 import { vi, type Mock } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { OrchestrationError } from '../../orchestration-error'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
 import type {

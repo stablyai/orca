@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { useSshWorkspaceBrowserRoute as UseSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
 
 const mocks = vi.hoisted(() => {

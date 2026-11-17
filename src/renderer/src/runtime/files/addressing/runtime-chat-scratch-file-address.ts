@@ -1,4 +1,4 @@
-import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../shared/file-access/cross-platform-path'
 
 // `<host state dir>/chat-scratch/<32 hex>/<file>`, spelled with the host's own separators.
 const CHAT_SCRATCH_FILE = /^(.+?[\\/]chat-scratch[\\/][0-9a-f]{32})[\\/].+$/

@@ -116,11 +116,7 @@
       "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
-      "defaultText": "Predeterminado (100%)",
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
-      "largeText": "Grande (125%)",
-      "largerText": "Más grande (150%)",
-      "largestText": "Máximo (200%)",
       "leaveAppDescription": "Mientras usas un terminal en el teléfono, Orca lo reduce para ajustarlo a la pantalla. Al cerrar la aplicación o dejarla en segundo plano, este ajuste controla si el terminal mantiene el tamaño del teléfono (para que las herramientas CLI interactivas no redistribuyan su contenido) o recupera el tamaño del escritorio. Siempre puedes pulsar Restaurar en el banner del escritorio para cambiar el tamaño manualmente.",
       "leaveAppHeading": "AL SALIR DE LA APLICACIÓN",
       "noPairedDesktops": "Aún no hay escritorios emparejados. Empareja uno para controlar el comportamiento del terminal.",
@@ -131,13 +127,34 @@
       "restoreAfterSeconds_one": "Después de {{count}}s",
       "restoreAfterSeconds_other": "Después de {{count}}s",
       "restoreHost": "Restaurar {{name}}",
-      "smallerText": "Más pequeño (75%)",
-      "smallestText": "Mínimo (50%)",
-      "textSize": "Tamaño del texto",
-      "textSizeDescription": "Ajusta el tamaño del texto del terminal. Los tamaños pequeños permiten ver más columnas con márgenes laterales; los grandes muestran menos columnas. Arrastra hacia los lados para desplazarte. También puedes pellizcar la pantalla para hacer zoom en el propio terminal, lo que actualiza este ajuste. Solo afecta a la visualización en este dispositivo; no modifica el terminal del escritorio.",
-      "textSizeHeading": "TAMAÑO DEL TEXTO",
-      "textSizePickerTitle": "Tamaño del texto del terminal",
       "title": "Terminal"
+    }
+  },
+  "appMove": {
+    "play": {
+      "title": "Orca ya está en Google Play",
+      "description": "Esta app sigue funcionando, pero las actualizaciones ahora llegan desde Google Play. El cambio lleva unos minutos.",
+      "installTitle": "Instala Orca desde Google Play",
+      "installDescription": "Puedes hacerlo ahora, estés donde estés.",
+      "openGooglePlay": "Abrir Google Play",
+      "cantUseGooglePlay": "No puedo usar Google Play"
+    },
+    "download": {
+      "title": "Descarga la nueva app de Orca",
+      "description": "Esta app sigue funcionando, pero las actualizaciones y correcciones de seguridad ahora llegan a través de la nueva app. El cambio lleva unos minutos.",
+      "installTitle": "Descarga la nueva app",
+      "installDescription": "Si tu teléfono lo pide, permite que tu navegador instale apps.",
+      "download": "Descargar",
+      "keepThisVersion": "Seguir usando esta versión",
+      "keepThisVersionNote": "Te perderás las correcciones de seguridad. Te lo recordaremos en una semana."
+    },
+    "pairTitle": "Emparéjala con tu equipo",
+    "pairDescription": "En Orca en tu equipo, ve a Ajustes → Móvil y escanea el código.",
+    "deleteTitle": "Elimina esta app",
+    "deleteDescription": "Cuando la nueva app muestre tus agentes. Hasta entonces, sigue usando esta.",
+    "dataKept": "Tus agentes, chats y espacios de trabajo se guardan en tu equipo, así que los verás todos en la nueva app.",
+    "banner": {
+      "seeHowToSwitch": "Mira cómo cambiar"
     }
   },
   "browser": {
@@ -226,6 +243,7 @@
     "message": {
       "copyMessage": "Copiar mensaje",
       "forkFromResponse": "Crear una rama desde esta respuesta",
+      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
       "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
     },
     "messageActionsSheet": {
@@ -682,7 +700,10 @@
       "busy": "Se está abriendo otro chat o terminal. Espera y vuelve a crear una rama del chat de {{agent}}.",
       "unconfirmed": "{{agent}} no pudo confirmar la creación de la rama. Es posible que se haya abierto; revisa el historial de sesiones antes de volver a intentarlo.",
       "failed": "{{agent}} no pudo crear una rama de este chat. {{detail}}",
-      "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo."
+      "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
+      "mark": "Rama ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Rama: {{name}}"
     }
   },
   "common": {
@@ -919,7 +940,8 @@
       "copyCode": "Copiar código",
       "openImage": "Abrir imagen",
       "wrapLines": "Ajustar líneas",
-      "disableLineWrap": "Desactivar ajuste de línea"
+      "disableLineWrap": "Desactivar ajuste de línea",
+      "codeLabel": "Código"
     },
     "markdownCallout": {
       "note": "Nota",
@@ -981,8 +1003,10 @@
       "desktopTooOldBody": "La aplicación del escritorio emparejado es demasiado antigua para tu versión actual de Orca Mobile. Actualiza Orca en tu equipo y vuelve a intentarlo con este host.",
       "getVersion": "Obtener Orca {{version}}",
       "mobileTooOldAppStore": "Este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde la App Store y vuelve a intentarlo con este host.",
+      "mobileTooOldGooglePlay": "Este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde Google Play y vuelve a intentarlo con este host.",
       "mobileTooOldGitHubReleases": "Este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde GitHub Releases y vuelve a intentarlo con este host.",
       "openAppStore": "Abrir App Store",
+      "openGooglePlay": "Abrir Google Play",
       "openGitHubReleases": "Abrir GitHub Releases",
       "refreshRecoveryNote": "Si este mensaje persiste, elimina este host y vuelve a emparejarlo.",
       "refreshWorkspaceBody": "La versión en caché del espacio de trabajo de este host es anterior a la que espera el escritorio. Vuelve a conectarte a este host para descargar la versión actual.",
@@ -991,6 +1015,7 @@
       "updateMobileTitle": "Actualiza Orca Mobile",
       "updateRecoveryNote": "¿Ya has actualizado? Vuelve a Hosts y actualiza la conexión. Si este mensaje persiste, elimina este host y vuelve a emparejarlo.",
       "workspaceNeedsUpdateAppStore": "El espacio de trabajo móvil de este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde la App Store y vuelve a intentarlo con este host.",
+      "workspaceNeedsUpdateGooglePlay": "El espacio de trabajo móvil de este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde Google Play y vuelve a intentarlo con este host.",
       "workspaceNeedsUpdateGitHubReleases": "El espacio de trabajo móvil de este escritorio necesita una versión más reciente de Orca Mobile. Actualiza Orca Mobile desde GitHub Releases y vuelve a intentarlo con este host."
     },
     "richMarkdownEditor": {
@@ -1019,7 +1044,6 @@
       "clearSearch": "Borrar búsqueda"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "description": "El archivo orca.yaml de este repositorio se ejecuta antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio.",
       "dontRun": "No ejecutar",
       "newScriptLabel": "Nuevo script de configuración",
@@ -2868,12 +2892,14 @@
       "title": "Apariencia"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Preguntar cada vez",
+      "askEachTimeDescription": "Elige cada vez entre el navegador de Orca, el del teléfono o copiar el enlace.",
       "desktopBrowser": "Navegador de Orca en el escritorio",
       "desktopBrowserDescription": "Abrir en el navegador de tu escritorio emparejado y verlo en el teléfono.",
-      "linksDescription": "Elige dónde se abren los enlaces HTTP(S) que tocas en la salida de la terminal.",
+      "terminalAndChatLinksDescription": "Elige dónde se abren los enlaces web que tocas en la salida de la terminal y en el chat.",
       "linksHeading": "ENLACES",
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
-      "openTerminalLinks": "Abrir enlaces de la terminal",
+      "openLinks": "Abrir enlaces",
       "phoneBrowser": "Navegador del teléfono",
       "phoneBrowserDescription": "Abrir en Safari, Chrome u otro navegador de este teléfono.",
       "saveFailed": "No se pudieron guardar las preferencias del navegador. Vuelve a intentarlo.",
@@ -3975,28 +4001,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Confiar siempre y ejecutar",
       "creating": "Creando…",
       "directoriesLabel": "Directorios",
       "directories_many": "{{count}} directorios",
       "directories_one": "{{count}} directorio",
       "directories_other": "{{count}} directorios",
-      "dontRun": "No ejecutar",
       "editSparsePreset": "Editar preajuste de checkout disperso",
       "nameLabel": "Nombre",
       "namePlaceholder": "Interfaz del renderizador",
-      "newSetupScript": "Nuevo script de configuración",
       "newSparsePreset": "Nuevo preajuste de checkout disperso",
-      "runHooks": "Ejecutar hooks",
       "runSetupAndCreate": "Ejecutar configuración y crear",
-      "runSetupTitle": "¿Ejecutar la configuración de {{name}}?",
-      "setupChangedTitle": "El script de configuración de {{name}} ha cambiado",
-      "setupScript": "Script de configuración",
       "setupSubtitle": "{{name}} requiere que decidas si ejecutar la configuración antes de crear este espacio de trabajo.",
       "setupTitle": "¿Ejecutar script de configuración?",
       "skipSetupAndCreate": "Omitir configuración y crear",
-      "trustFailed": "No se pudo marcar el script de configuración como de confianza.",
-      "trustSubtitle": "El archivo orca.yaml de este repositorio se ejecuta en tu equipo antes de iniciar el espacio de trabajo. Ejecútalo solo si confías en este repositorio."
+      "trustFailed": "No se pudo marcar el script de configuración como de confianza."
     },
     "worktreeCreateRetry": {
       "createFailed": "No se pudo crear el espacio de trabajo"

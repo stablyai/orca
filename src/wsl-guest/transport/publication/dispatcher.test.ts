@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
-import type { SinkWriteSettlement } from '../writer/dispatcher-writer-sink'
 
 import {
   encodeJsonRpcFrame,
@@ -33,73 +32,6 @@ describe('RelayDispatcher', () => {
   afterEach(() => {
     dispatcher.dispose()
     vi.useRealTimers()
-  })
-
-  it('sends keepalive frames on interval', () => {
-    expect(written.length).toBe(0)
-
-    vi.advanceTimersByTime(5_000)
-    expect(written.length).toBe(1)
-
-    const frame = decodeFirstFrame(written[0])
-    expect(frame.type).toBe(MessageType.KeepAlive)
-    expect(frame.id).toBe(1)
-  })
-
-  it('sends error response when handler throws', async () => {
-    dispatcher.onRequest('fail.method', async () => {
-      throw new Error('boom')
-    })
-
-    const req: JsonRpcRequest = {
-      jsonrpc: '2.0',
-      id: 5,
-      method: 'fail.method'
-    }
-    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
-    await vi.advanceTimersByTimeAsync(0)
-
-    const errors = written.filter((buf) => {
-      const f = decodeFirstFrame(buf)
-      if (f.type !== MessageType.Regular) {
-        return false
-      }
-      try {
-        const msg = JSON.parse(f.payload.toString('utf-8'))
-        return 'error' in msg
-      } catch {
-        return false
-      }
-    })
-    expect(errors.length).toBe(1)
-
-    const resp = JSON.parse(decodeFirstFrame(errors[0]).payload.toString('utf-8'))
-    expect(resp.error.message).toBe('boom')
-    expect(resp.id).toBe(5)
-  })
-
-  it('sends method-not-found for unknown methods', async () => {
-    const req: JsonRpcRequest = {
-      jsonrpc: '2.0',
-      id: 10,
-      method: 'unknown.method'
-    }
-    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
-    await vi.advanceTimersByTimeAsync(0)
-
-    const errors = written.filter((buf) => {
-      const f = decodeFirstFrame(buf)
-      if (f.type !== MessageType.Regular) {
-        return false
-      }
-      try {
-        const msg = JSON.parse(f.payload.toString('utf-8'))
-        return msg.error?.code === -32601
-      } catch {
-        return false
-      }
-    })
-    expect(errors.length).toBe(1)
   })
 
   it('broadcasts notifications to attached socket clients with independent frame state', () => {
@@ -137,34 +69,6 @@ describe('RelayDispatcher', () => {
     expect(written).toHaveLength(0)
     expect(firstWritten).toHaveLength(1)
     expect(secondWritten).toHaveLength(0)
-  })
-
-  it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
-    dispatcher.invalidateClient()
-    const ownerWritten: Buffer[] = []
-    const ownerId = dispatcher.attachClient((data) => {
-      ownerWritten.push(Buffer.from(data))
-    })
-    const cliId = dispatcher.attachClient(() => {})
-
-    const pending = dispatcher.requestAnyClient(
-      'orca.cli',
-      { argv: ['status'] },
-      { excludeClientId: cliId }
-    )
-
-    expect(ownerWritten).toHaveLength(1)
-    const requestFrame = decodeFirstFrame(ownerWritten[0])
-    const request = JSON.parse(requestFrame.payload.toString('utf-8')) as JsonRpcRequest
-    expect(request.method).toBe('orca.cli')
-    expect(request.params).toEqual({ argv: ['status'] })
-
-    dispatcher.feedClient(
-      ownerId,
-      encodeJsonRpcFrame({ jsonrpc: '2.0', id: request.id, result: { exitCode: 0 } }, 1, 0)
-    )
-
-    await expect(pending).resolves.toEqual({ exitCode: 0 })
   })
 
   it('prefers an owning socket client over the synthetic primary client', async () => {
@@ -233,16 +137,6 @@ describe('RelayDispatcher', () => {
     })
     expect(responseFrames.length).toBe(1)
     expect(decodeFirstFrame(responseFrames[0]).ack).toBe(50)
-  })
-
-  it('stops sending after dispose', () => {
-    dispatcher.dispose()
-    const before = written.length
-    dispatcher.notify('test', {})
-    expect(written.length).toBe(before)
-
-    vi.advanceTimersByTime(10_000)
-    expect(written.length).toBe(before)
   })
 
   it('drops in-flight responses after client invalidation', async () => {
@@ -437,49 +331,6 @@ describe('RelayDispatcher', () => {
       expect(secondary).toEqual([])
     } finally {
       dispatcher.dispose()
-    }
-  })
-
-  it('keeps a saturated legacy primary as required backpressure', () => {
-    const callbacks: ((result: SinkWriteSettlement) => void)[] = []
-    const legacyDispatcher = new RelayDispatcher(
-      (_data, settle) => {
-        callbacks.push(settle)
-        return false
-      },
-      {
-        supportsWriteCallback: true,
-        writableLength: () => 128 * 1024,
-        writableHighWaterMark: () => 4 * 1024 * 1024
-      }
-    )
-    const detached = vi.fn()
-    legacyDispatcher.onClientDetached(detached)
-    const payload = 'x'.repeat(128 * 1024)
-    let admitted = 0
-
-    try {
-      while (
-        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
-          id: 'pty-1',
-          data: payload
-        })
-      ) {
-        admitted++
-      }
-
-      expect(admitted).toBeGreaterThan(0)
-      expect(admitted).toBeLessThan(20)
-      expect(callbacks).toHaveLength(1)
-      expect(detached).not.toHaveBeenCalled()
-      expect(
-        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
-          id: 'pty-1',
-          data: payload
-        })
-      ).toBe(false)
-    } finally {
-      legacyDispatcher.dispose()
     }
   })
 

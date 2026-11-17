@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-import { TERMINAL_DOCUMENT_SCRIPT } from '../terminal-webview-document-script.generated'
-import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html'
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import './native-terminal-html'
+import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 // Execute the shipped bundle through native message transport; structural module checks cannot prove the WebView entry runs.
 function engineDouble() {
   const opened: HTMLElement[] = []

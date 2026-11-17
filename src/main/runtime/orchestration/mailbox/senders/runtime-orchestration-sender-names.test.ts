@@ -2,7 +2,7 @@ import { acceptedAnswerSender } from './accepted-answer-sender'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
@@ -13,11 +13,11 @@ import type { AgentSessionRecord } from '../../../../../shared/agent-session/lif
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
-import '../../../../../shared/wsl-hook-relay-contract'
+import '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { OrchestrationDb } from '../../db/orchestration-db'
 
 import '../../db/contract-constants'
@@ -220,4 +220,44 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
     .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
     .run('p:2', next.id)
   expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
+})
+
+it("names a run's mail by its coordinator chat only under the binding it was sent from", () => {
+  session.unifiedTabs = {
+    [WORKTREE]: [
+      { contentType: 'agent-session', entityId: CHAT, customLabel: 'Release chat', label: 'Chat' }
+    ]
+  }
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  db.db.prepare('UPDATE runs SET updated_at = ? WHERE id = ?').run('2026-11-16 18:00:00', run.id)
+  const deliver = (...sentAt: string[]) =>
+    structuredMailSource({
+      db,
+      mailboxHandle: 'run:run_other',
+      dispatchId: null,
+      senderSnapshot: (party) => names().snapshotOf(party),
+      batch: sentAt.map((created_at, index) => ({
+        id: `note_${index}`,
+        from_handle: `run:${run.id}`,
+        run_id: 'run_other',
+        type: 'status',
+        payload: null,
+        answer_sender_snapshot: null,
+        created_at
+      }))
+    }).senders[0]
+  expect(deliver('2026-11-16 18:21:01')).toMatchObject({
+    name: 'Release chat',
+    agent: 'claude',
+    party: { address: `run:${run.id}`, orcaSessionId: CHAT, terminalHandle: null }
+  })
+  expect(deliver('2026-11-16 18:21:01', '2026-11-16 17:59:59')).toMatchObject({
+    name: null,
+    party: { orcaSessionId: null, terminalHandle: null }
+  })
 })

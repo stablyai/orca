@@ -2,7 +2,7 @@
 // no longer exists. The next tab creates a fresh group: this renders what the workspace then shows.
 // Before the fix the layout still named the vanished group, so the strip and pane were empty.
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { ConfirmationDialogProvider } from '../confirmation-dialog'
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 

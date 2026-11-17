@@ -9,7 +9,9 @@ function waitForAbort(signal?: AbortSignal | null): Promise<Credential | null> {
 }
 
 class PendingCredentialsContainer {
+  static asked = 0
   get(options?: CredentialRequestOptions): Promise<Credential | null> {
+    PendingCredentialsContainer.asked += 1
     return waitForAbort(options?.signal)
   }
   create(options?: CredentialCreationOptions): Promise<Credential | null> {
@@ -19,7 +21,7 @@ class PendingCredentialsContainer {
 
 const original = Object.getOwnPropertyDescriptor(globalThis, 'CredentialsContainer')
 
-function install(): {
+function install(mayAskSystem: () => boolean = () => true): {
   credentials: PendingCredentialsContainer
   reports: boolean[]
   cancel: () => void
@@ -29,7 +31,8 @@ function install(): {
     value: PendingCredentialsContainer
   })
   const reports: boolean[] = []
-  const cancel = installBrowserPasskeyRequestWatch((pending) => reports.push(pending))
+  PendingCredentialsContainer.asked = 0
+  const cancel = installBrowserPasskeyRequestWatch((pending) => reports.push(pending), mayAskSystem)
   return { credentials: new PendingCredentialsContainer(), reports, cancel }
 }
 
@@ -61,5 +64,22 @@ describe('installBrowserPasskeyRequestWatch', () => {
     page.abort(new DOMException('page gave up', 'AbortError'))
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
     expect(reports).toEqual([true, false])
+  })
+
+  it("holds a request main keeps from the system dialog until it is cancelled or the user's own request replaces it", async () => {
+    let mayAskSystem = false
+    const { credentials, reports, cancel } = install(() => mayAskSystem)
+    const cancelled = credentials.get({ publicKey })
+    expect(PendingCredentialsContainer.asked).toBe(0)
+    expect(reports).toEqual([true])
+    cancel()
+    await expect(cancelled).rejects.toMatchObject({ name: 'NotAllowedError' })
+
+    const replaced = credentials.get({ publicKey })
+    mayAskSystem = true
+    void credentials.get({ publicKey }).catch(() => {})
+    await expect(replaced).rejects.toMatchObject({ name: 'NotAllowedError' })
+    expect(PendingCredentialsContainer.asked).toBe(1)
+    cancel()
   })
 })

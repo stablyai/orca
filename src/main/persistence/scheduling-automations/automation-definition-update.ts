@@ -1,6 +1,6 @@
 import { retainAutomationReselectionContexts } from './automation-host-reselection'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { findAutomationRepoForWrite } from '../../../shared/automations/ownership/automation-repo-target'
 import {
   applyAutomationLaunchSetupPatch,

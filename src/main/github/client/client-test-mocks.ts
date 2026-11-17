@@ -1,6 +1,6 @@
 import type * as GithubApiRepositoryRemoteProbeModule from '../repositories/github-api-repository-remote-probe'
 import { vi, type Mock } from 'vitest'
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type * as GithubApiRepositoryModule from '../repositories/github-api-repository'
 import type * as GitHubEnterpriseRepositoryModule from '../repositories/github-enterprise-repository'

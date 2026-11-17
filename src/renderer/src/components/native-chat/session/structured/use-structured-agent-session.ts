@@ -9,7 +9,7 @@ import { structuredAgentSessionSendQueues } from '../../queue/structured-agent-s
 import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
-} from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+} from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
@@ -17,7 +17,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../../../shared/agent-session/view/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt
@@ -40,8 +40,8 @@ import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-st
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
 import { pendingSendsOutsideQueuedCards } from '../../queue/structured-agent-session-sending-queued-cards'
-import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
-import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
+import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from '../../messages/actions/use-structured-agent-session-rewind'
 
@@ -196,7 +196,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     support: threadGoalSupport,
     reported: reportedThreadGoal,
     mutate,
-    send
+    send,
+    agent
   })
   const transcriptPending = useMemo(
     () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),

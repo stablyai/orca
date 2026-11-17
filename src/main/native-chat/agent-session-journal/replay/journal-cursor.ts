@@ -4,7 +4,6 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { AgentJournalResetReason } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReadSince } from '../journal-store-contracts'
 import type { JournalRowsRead } from './journal-read-row'
-import '../outcomes/journal-outcome-codec'
 import { JournalOutcomeDecodeError } from '../writing/journal-write-guards'
 
 export type JournalCursorRange = {

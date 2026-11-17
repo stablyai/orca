@@ -1,4 +1,4 @@
-import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/create-timing-vocabulary'
+import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/creation/create-timing-vocabulary'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import { measureRetargetDivergence } from '../../../git/worktrees/creation/worktree-base-divergence'
 import { resolveLocalWorktreeBaseRef } from '../../../git/worktrees/creation/worktree-base-ref-probe'

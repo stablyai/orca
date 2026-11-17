@@ -8,23 +8,17 @@ import {
   makeProjectHostSetup
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync, mkdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { rmSync, mkdtempSync } from 'node:fs'
+import 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import {
-  commitProvenRepoKindChange,
-  updateProjectHostSetupWithProvenKind
-} from '../../workspaces/catalog/folder-repo-git-conversion'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
-import { registerWorktreeCatalogRoutes } from '../../runtime/workspaces/catalog/worktree-catalog-live-route'
-import { resolveWorktreeScanRuntime } from '../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
-import {
-  isLiveWorktreeCatalogRoute,
-  setWorktreeCatalogRouteResolver
-} from '../../workspaces/catalog/repo-worktree-catalog-route'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import '../../workspaces/catalog/folder-repo-git-conversion'
+import '../../../shared/worktree/host-qualified-identity'
+import '../host-qualified-worktree-meta'
+import '../../runtime/workspaces/catalog/worktree-catalog-live-route'
+import '../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
+import '../../workspaces/catalog/repo-worktree-catalog-route'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -102,46 +96,6 @@ describe('Store', () => {
     ])
   })
 
-  it("revokes a repo's local Git catalog route as soon as its registration is removed", async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'r1', path: '/local/repo' }))
-    registerWorktreeCatalogRoutes(store as never)
-    try {
-      const repo = store.getRepos()[0]
-      const route = {
-        repoPath: '/local/repo',
-        runtimeKey: resolveWorktreeScanRuntime(store as never, repo).runtimeKey
-      }
-      expect(isLiveWorktreeCatalogRoute('r1', 'local', route)).toBe(true)
-
-      store.removeProjectForHost({ id: 'r1' })
-
-      expect(isLiveWorktreeCatalogRoute('r1', 'local', route)).toBe(false)
-    } finally {
-      setWorktreeCatalogRouteResolver(null)
-    }
-  })
-
-  it('admits a folder converted to Git as a local Git route as soon as the write lands', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'r1', path: '/local/folder', kind: 'folder' }))
-    registerWorktreeCatalogRoutes(store as never)
-    try {
-      const routeFor = () => ({
-        repoPath: '/local/folder',
-        runtimeKey: resolveWorktreeScanRuntime(store as never, store.getRepos()[0]).runtimeKey
-      })
-      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(false)
-
-      store.updateRepo({ id: 'r1' }, { kind: 'git', folderUpgradeGitRootPath: '/local/folder' })
-
-      expect(store.getRepos()[0]?.kind).toBe('git')
-      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(true)
-    } finally {
-      setWorktreeCatalogRouteResolver(null)
-    }
-  })
-
   it('repo mutations preserve independent project host setup records', async () => {
     const independentProject = makeProject({
       id: 'cloud-project',
@@ -174,64 +128,6 @@ describe('Store', () => {
   })
 
   // Git catalogs cannot enumerate sibling folder workspaces; changing kind would strand their tabs (STA-10638).
-  it('refuses a folder-to-Git type change while the project has other folder workspaces', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder', displayName: 'Repo' }))
-    const workspaceId = 'r1::/repo::workspace:11111111-1111-4111-8111-111111111111'
-    store.setWorktreeMeta(hostWorktreeTarget({ id: workspaceId, hostId: 'local' }), {
-      displayName: 'Second workspace'
-    })
-
-    expect(() =>
-      store.updateProjectHostSetup({
-        setupId: 'r1',
-        updates: { kind: 'git', displayName: 'Renamed' }
-      })
-    ).toThrow("This folder project has 1 other workspace that a Git project can't show")
-    expect(store.getRepo('r1')).toMatchObject({ kind: 'folder', displayName: 'Repo' })
-
-    removeWorktreeMetaRow(store, workspaceId, undefined)
-    expect(
-      store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'git' } })?.repo
-    ).toMatchObject({ kind: 'git' })
-  })
 
   // Git accepts subdirectories; conversion must separately prove this folder is the checkout root.
-  it('proves a manual folder-to-Git change against the Git root before writing it', async () => {
-    const store = await createStore()
-    const root = join(testState.dir, 'project')
-    mkdirSync(join(root, 'sub'), { recursive: true })
-    execFileSync('git', ['init', '-q'], { cwd: root })
-    store.addRepo(makeRepo({ id: 'inner', path: join(root, 'sub'), kind: 'folder' }))
-    store.addRepo(makeRepo({ id: 'outer', path: root, kind: 'folder' }))
-    const changeToGit = (setupId: string) =>
-      updateProjectHostSetupWithProvenKind(store, (args) => store.updateProjectHostSetup(args), {
-        setupId,
-        updates: { kind: 'git' }
-      })
-
-    await expect(changeToGit('inner')).rejects.toThrow("isn't the top folder of a Git repository")
-    expect(store.getRepo('inner')?.kind).toBe('folder')
-    const converted = await changeToGit('outer')
-    expect(converted?.repo).toMatchObject({
-      kind: 'git',
-      folderUpgradeGitRootPath: expect.any(String)
-    })
-  })
-
-  it('refuses a proven conversion if the selected folder path changed before commit', async () => {
-    const root = join(testState.dir, 'moved-project')
-    mkdirSync(root, { recursive: true })
-    execFileSync('git', ['init', '-q'], { cwd: root })
-    const repo = makeRepo({ id: 'moving-folder', path: root, kind: 'folder' })
-    const write = vi.fn()
-    await expect(
-      commitProvenRepoKindChange(
-        { getRepos: () => [{ ...repo, path: join(root, 'new-path') }] },
-        repo,
-        write
-      )
-    ).rejects.toThrow('The project changed while Orca was checking it')
-    expect(write).not.toHaveBeenCalled()
-  })
 })

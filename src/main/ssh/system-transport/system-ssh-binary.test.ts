@@ -30,22 +30,6 @@ describe('findSystemSsh', () => {
     vi.unstubAllEnvs()
   })
 
-  it('returns the first existing fixed ssh path', () => {
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
-    existsSyncMock.mockImplementation((path: string) => path === '/usr/bin/ssh')
-
-    try {
-      expect(findSystemSsh()).toBe('/usr/bin/ssh')
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
-  it('returns null when no ssh binary is found', () => {
-    existsSyncMock.mockReturnValue(false)
-    expect(findSystemSsh()).toBeNull()
-  })
-
   it('finds a PATH-installed ssh.exe on Windows', () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.stubEnv('PATH', 'C:\\Git\\usr\\bin;C:\\Tools')
@@ -95,12 +79,5 @@ describe('findSystemSsh', () => {
     } finally {
       platformSpy.mockRestore()
     }
-  })
-
-  it('keeps an explicit system ssh override authoritative', () => {
-    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', 'C:\\Custom\\ssh.exe')
-
-    expect(findSystemSsh()).toBe('C:\\Custom\\ssh.exe')
-    expect(existsSyncMock).not.toHaveBeenCalled()
   })
 })

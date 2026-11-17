@@ -1,9 +1,9 @@
 import { existsSync, statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isWslUncPath, uncRouteKey } from '../../../shared/wsl-paths'
+import { isWslUncPath, uncRouteKey } from '../../../shared/file-access/wsl-paths'
 import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
 // Per-route limits keep dead UNC shares from consuming the default four-thread libuv fs pool.

@@ -6,6 +6,8 @@ export type WatcherProcessEvent = {
 
 export type WatcherProcessSubscribeOptions = {
   ignore?: string[]
+  /** Absolute paths Parcel excludes literally, never as globs. */
+  ignorePaths?: string[]
   ignoreGlobs?: string[]
   backend?: string
   mode?: 'recursive' | 'shallow'

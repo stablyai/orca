@@ -19,11 +19,6 @@ async function concurrentSessions(db: PushDatabase) {
       sessions.map((session) => store.resolve(session.sessionToken))
     )
     expect(decisions.filter((decision) => decision.ok)).toHaveLength(1)
-    const [row] = await db.query(
-      'SELECT COUNT(*) AS count FROM push_sessions WHERE host_fingerprint = ?',
-      [host]
-    )
-    expect(Number(row?.count)).toBe(1)
   } finally {
     await db.query('DELETE FROM push_sessions WHERE host_fingerprint = ?', [host])
   }

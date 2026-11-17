@@ -1,9 +1,9 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
-import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github-repo-target-params'
+import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
 import { ipcMain } from 'electron'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubPRFile } from '../../../shared/github/pull-requests/pull-request-types'
-import type { GitHubCreateIssueFields } from '../../../shared/issue-mutation-types'
+import type { GitHubCreateIssueFields } from '../../../shared/work-items/issue-mutation-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { countWorkItems } from '../../github/client/list/count-work-items'
 import { createIssue } from '../../github/issues/issue-create'
@@ -36,6 +36,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
         repoId?: string | null
         sourceContext?: TaskSourceContext | null
         number: number
+        ownerRepo?: GitHubOwnerRepo
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -48,7 +49,8 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
             repo.path,
             args.number,
             getGitHubRepoConnectionId(repo),
-            ...getGitHubLocalGitOptionArgs(store, repo)
+            getGitHubLocalGitOptionArgs(store, repo)[0],
+            args.ownerRepo
           ),
         NO_WAKING_RETRY
       )

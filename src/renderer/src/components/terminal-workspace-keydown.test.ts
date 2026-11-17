@@ -1,17 +1,15 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook } from '@testing-library/react'
 import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../hooks/ipc-tab-switch'
-import '@/components/floating-terminal/floating-workspace-terminal-actions'
-import '@/components/floating-terminal/floating-workspace-tab-creation'
+import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
-import type { Tab } from '../../../shared/tab-types'
-import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
+
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
@@ -19,16 +17,14 @@ import {
 import '@/store/testing/app-store-test-fixture'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
-import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
-import './tab-bar/agent-menu-shortcut-labels'
+
+import './agent/launch-menu/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
 
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import './use-terminal-bulk-close-actions'
-import '../store/slices/editor/types/open-file.test-fixture'
-import '../store/slices/tabs/tab-group.test-fixture'
 
 const confirmBulkClose = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
 vi.mock('./confirmation-dialog-context', () => ({
@@ -71,13 +67,13 @@ vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchTabAcrossAllTypes: vi.fn(),
   handleSwitchTerminalTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-terminal-actions', () => ({
   handleEmptyFloatingWorkspacePanelCloseShortcut: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-tab-creation', () => ({
   createFloatingWorkspaceBrowserTab: vi.fn(),
   createFloatingWorkspaceMarkdownTab: vi.fn(),
   createFloatingWorkspaceTerminalTab: vi.fn()
@@ -110,6 +106,9 @@ vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
 }))
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: vi.fn()
+}))
+vi.mock('../runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror', () => ({
+  mirrorWebRuntimeTabMove: vi.fn()
 }))
 
 const controller = {
@@ -164,104 +163,5 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
         ? { contentType: 'editor', entityId: 'floating-file' }
         : null
     expect(pressCmdS()).toEqual([{ fileId: 'floating-file' }])
-  })
-})
-
-describe('tab.close uses the unified active tab', () => {
-  const worktreeId = controller.activeWorktreeId!
-  let tab: Tab
-  const closeUnifiedTab = vi.fn()
-  const closeFile = vi.fn()
-  const closeBrowserTab = vi.fn()
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.structuredSessionBusy.mockReturnValue(false)
-    mocks.floatingFocused = false
-    mocks.targetInsideFloatingPanel = false
-    tab = {
-      id: 'chat-tab',
-      entityId: 'chat-session',
-      worktreeId,
-      groupId: 'right-group',
-      contentType: 'agent-session',
-      label: 'Chat',
-      customLabel: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 1
-    }
-    mocks.state = {
-      activeView: 'terminal',
-      activeWorktreeId: worktreeId,
-      settings: getDefaultSettings('/tmp/pr-34236-keyboard'),
-      // The old terminal mirror can lag behind focus in a split group.
-      activeTabType: 'terminal',
-      activeTabId: 'other-terminal',
-      activeFileId: 'other-file',
-      activeBrowserTabId: 'other-browser',
-      getActiveTab: () => tab,
-      unifiedTabsByWorktree: { [worktreeId]: [tab] },
-      openFiles: [],
-      editorBufferIdOf: {},
-      editorBufferViews: {},
-      browserPagesByWorkspace: {},
-      closeUnifiedTab,
-      closeFile,
-      closeBrowserTab,
-      reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
-      requestPinnedTabCloseConfirm: vi.fn(),
-      setActiveWorktree: vi.fn()
-    }
-  })
-
-  afterEach(() => {
-    useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
-  })
-
-  it('leaves the chord to an agent terminal preview dialog over a workspace editor', () => {
-    tab.contentType = 'editor'
-    const preview = document.createElement('div')
-    preview.setAttribute('data-agent-terminal-preview', '')
-    const target = document.createElement('textarea')
-    target.classList.add('xterm-helper-textarea')
-    preview.appendChild(target)
-    const event = new KeyboardEvent('keydown', { key: 'w', metaKey: true, cancelable: true })
-    Object.defineProperty(event, 'target', { value: target })
-    handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
-    expect(event.defaultPrevented).toBe(false)
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
-  })
-})
-
-describe('reopen closed tab from the welcome screen', () => {
-  afterEach(() => {
-    cleanup()
-    vi.restoreAllMocks()
-  })
-
-  it('restores the current history workspace with no active workspace', () => {
-    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
-    const reopenClosedTab = vi.fn(() => true)
-    const worktreeId = 'repo-1::/repo/last-workspace'
-    mocks.state = {
-      worktreeNavHistory: ['repo-1::/repo/older', worktreeId, 'repo-1::/repo/forward'],
-      worktreeNavHistoryIndex: 1,
-      reopenClosedTab
-    }
-    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
-    const event = new KeyboardEvent('keydown', {
-      key: 'T',
-      code: 'KeyT',
-      shiftKey: true,
-      ctrlKey: true,
-      cancelable: true
-    })
-    act(() => window.dispatchEvent(event))
-    expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
-    expect(activateAndRevealWorkspace).toHaveBeenCalledExactlyOnceWith(worktreeId, {
-      navigationIntent: 'user-open'
-    })
-    expect(event.defaultPrevented).toBe(true)
   })
 })

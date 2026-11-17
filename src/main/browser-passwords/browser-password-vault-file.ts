@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs'
-import type { BrowserPasswordEntrySummary } from '../../shared/browser-passwords-types'
-import { getSecretStore, hasSecretStore } from '../../shared/secret-store'
+import type { BrowserPasswordEntrySummary } from '../../shared/browser/passwords/browser-passwords-types'
+import { getSecretStore, hasSecretStore } from '../../shared/secure-storage/secret-store'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 /**

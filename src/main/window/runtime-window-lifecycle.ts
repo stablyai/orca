@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-session-contracts'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/creation/launch-types'
+import type { RuntimeMobileSessionTabMove } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './renderer-relays/agent-launch-tab-publish-relay'
@@ -16,7 +16,7 @@ import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-ta
 import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
 import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
@@ -52,6 +52,7 @@ export function registerRuntimeWindowLifecycle(
     reposChanged: () => send('repos:changed'),
     browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
+    workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,
       worktreeId,
@@ -175,7 +176,8 @@ export function registerRuntimeWindowLifecycle(
         worktreeId: opts.worktreeId,
         sourceLeafId: opts.sourceLeafId,
         telemetrySource: opts.telemetrySource,
-        newLeafId: opts.newLeafId
+        newLeafId: opts.newLeafId,
+        ...(opts.activate === false ? { activate: false } : {})
       })
     },
     renameTerminal: (tabId, title, options) =>

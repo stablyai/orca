@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export async function waitForMobileSessionTabsEvents(
   events: RuntimeMobileSessionTabsResult[],

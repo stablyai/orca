@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
 import type { BrowserActionEffects } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'
 import { readRemoteCliAdmittedPage } from '../../routing/input-ownership/remote-cli-page-admission'
 import { readPageChange } from './agent-browser-snapshot-delta'
@@ -190,6 +190,10 @@ async function settle(
         : []
     )
   )
+  const print = events.find((event) => event.kind === 'print')
+  if (print) {
+    effects.blockedPrint = { origin: clip(print.origin) }
+  }
   effects.consoleErrors = firstItems(watch.consoleErrors.map((error) => clip(error)))
   return effects
 }

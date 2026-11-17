@@ -8,7 +8,7 @@ import { createDesktopMobilePairingOffer } from './helpers/paired-electron-clien
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 type PhoneAlert = { source: string; agentState?: string; worktreeId?: string; title: string }
 

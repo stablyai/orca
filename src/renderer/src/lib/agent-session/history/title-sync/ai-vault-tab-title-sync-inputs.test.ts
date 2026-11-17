@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 
+afterEach(() => vi.restoreAllMocks())
+
 function makeState(count = 1): AppState {
-  const live: AppState['agentStatusByPaneKey'] = {}
-  const retained: AppState['retainedAgentsByPaneKey'] = {}
+  const live: Record<string, AgentStatusEntry> = {}
   const sleeping: AppState['sleepingAgentSessionsByPaneKey'] = {}
   const tabs: TerminalTab[] = []
-  for (let index = 0; index < count * 3; index++) {
+  for (let index = 0; index < count * 2; index++) {
     const tab: TerminalTab = {
       id: `tab-${index}`,
       worktreeId: 'wt-title',
@@ -34,14 +37,6 @@ function makeState(count = 1): AppState {
     tabs.push(tab)
     if (index < count) {
       live[entry.paneKey] = entry
-    } else if (index < count * 2) {
-      retained[entry.paneKey] = {
-        entry,
-        tab,
-        worktreeId: tab.worktreeId,
-        agentType: 'codex',
-        startedAt: 1
-      }
     } else {
       sleeping[entry.paneKey] = {
         ...entry,
@@ -51,9 +46,9 @@ function makeState(count = 1): AppState {
       }
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this selector fixture supplies every field the title collector reads.
   return {
-    agentStatusByPaneKey: live,
-    retainedAgentsByPaneKey: retained,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(live)),
     sleepingAgentSessionsByPaneKey: sleeping,
     tabsByWorktree: { 'wt-title': tabs },
     terminalLayoutsByTabId: {},
@@ -113,8 +108,10 @@ describe('AI Vault title subscription inputs', () => {
       const ownerOnly: AppState = { ...open, settings: structuredClone(open.settings) }
       expect(aiVaultTitleSyncInputsChanged(ownerOnly, open)).toBe(false)
       // Closing a tab replaces membership maps and returns before any owner comparison.
-      const [closedPane] = Object.keys(open.agentStatusByPaneKey)
-      const { [closedPane]: _closed, ...agentStatusByPaneKey } = open.agentStatusByPaneKey
+      const [closedPane] = Array.from(open.agentStatusByPaneKey.keys())
+      const agentStatusByPaneKey = acceptedAgentStatuses(
+        [...open.agentStatusByPaneKey].filter(([key]) => key !== closedPane)
+      )
       const closed: AppState = {
         ...ownerOnly,
         agentStatusByPaneKey,

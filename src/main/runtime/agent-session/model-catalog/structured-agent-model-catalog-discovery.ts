@@ -87,6 +87,7 @@ export function acpModelCatalogDiscovery(
     ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
+      resolveSavedEnvironment: () => environment.resolveBaseEnvironment(true),
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,
       dataDirectory: deps.stateDirectory,
       ...(deps.resolveAgentLaunchEnv ? { resolveLaunchEnv: deps.resolveAgentLaunchEnv } : {}),

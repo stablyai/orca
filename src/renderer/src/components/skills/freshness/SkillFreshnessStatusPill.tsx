@@ -1,4 +1,4 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'

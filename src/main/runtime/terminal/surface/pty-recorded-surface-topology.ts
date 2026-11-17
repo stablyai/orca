@@ -1,6 +1,6 @@
 import type { TerminalIdentitySource } from '../identity/terminal-identity-source'
 /** Use graph-sequenced evidence: self-consistency cannot prove attachment, while pending spawns and lost graphs cannot prove detachment (#18191, #7587). */
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { PtyPane } from './pty-pane-query'

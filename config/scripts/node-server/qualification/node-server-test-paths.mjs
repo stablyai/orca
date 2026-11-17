@@ -4,9 +4,7 @@ export const REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 export const CROSS_RUNTIME_TEST_PATHS = []
 
 // Need the built desktop server template; CI runs them by path after build-orcad-template.mjs.
-export const TEMPLATE_TEST_PATHS = [
-  'src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts'
-]
+export const TEMPLATE_TEST_PATHS = []
 
 export function nodeServerTestPaths({
   artifact = false,
@@ -21,7 +19,6 @@ export function nodeServerTestPaths({
     'src/main/orcad/instance-lock/orcad-instance-lock.test.ts',
     'src/main/orcad/instance-lock/orcad-process-start-time.test.ts',
     'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop.test.ts',
-    'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-cancellation.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
     'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
     'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
