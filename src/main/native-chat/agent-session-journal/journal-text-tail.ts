@@ -7,6 +7,7 @@ import { journalDomainItemWire } from './journal-domain-item-wire'
 import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import { runJournalTransaction } from './database/journal-database'
 import { JOURNAL_TEXT_TAIL_WRITES } from './journal-text-tail-writes'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 type Prefix = readonly [sessionId: string, epoch: string]
 type TailText = AgentJournalMessageItem & { blocks: [{ type: 'text'; text: string }] }
@@ -171,37 +172,61 @@ export function writeJournalTextPayload(
   )
 }
 
-/** Folds every tail into its payload. */
-function foldJournalTextTails(db: Database.Database): number {
-  const items = db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
-  for (const row of items) {
-    const target = { sessionId: String(row.session_id), epoch: String(row.epoch) }
+/** Folds every tail of one chat, or of the whole store, into its payload. */
+function foldJournalTextTails(db: Database.Database, chat?: Prefix): void {
+  const items = (
+    chat
+      ? db
+          .prepare(
+            'SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail WHERE session_id=? AND epoch=?'
+          )
+          .all(...chat)
+      : db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
+  ).map((row) => ({
+    prefix: [String(row.session_id), String(row.epoch)] as const,
+    itemId: String(row.item_id)
+  }))
+  for (const { prefix, itemId } of items) {
     const stored = db
       .prepare(
         'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
       )
-      .get(target.sessionId, target.epoch, row.item_id)
+      .get(...prefix, itemId)
     const item: AgentJournalRenderItem | undefined = stored
       ? JSON.parse(String(stored.payload_json))
       : undefined
-    const prefix = [target.sessionId, target.epoch] as const
     if (item && isTailText(item.body)) {
+      const target = { sessionId: prefix[0], epoch: prefix[1] }
       writeJournalTextPayload(db, target, joinTail(db, prefix, item, item.body))
     } else {
       db.prepare('DELETE FROM journal_text_tail WHERE session_id=? AND epoch=? AND item_id=?').run(
         ...prefix,
-        row.item_id
+        itemId
       )
     }
   }
-  tailsMayExist.set(db, JOURNAL_TEXT_TAIL_WRITES)
-  return items.length
+}
+
+/** A finished turn's streams are done, including those that ended without a last save. */
+export function foldJournalTurnTextTails(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  item: AgentJournalRenderItem
+): void {
+  if (
+    JOURNAL_TEXT_TAIL_WRITES &&
+    (readAgentJournalTurn(item.body)?.state ?? 'running') !== 'running'
+  ) {
+    foldJournalTextTails(db, [target.sessionId, target.epoch])
+  }
 }
 
 /** At store open, before any chat opens, and on clean quit; a failed fold leaves the tail to read. */
 export function tryFoldJournalTextTails(db: Database.Database): void {
   try {
     runJournalTransaction(db, () => foldJournalTextTails(db))
+    // Only after commit: a fold that rolled back left its tails to read.
+    tailsMayExist.set(db, JOURNAL_TEXT_TAIL_WRITES)
   } catch (error) {
     console.warn('[agent-session-journal] left streamed text tails to fold later', error)
   }

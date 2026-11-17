@@ -9,6 +9,8 @@ import {
   readJournalDomainItemDetail
 } from './journal-domain-item-presentation'
 import { openJournalDomainDatabase } from './database/journal-domain-database'
+import { runJournalTransaction } from './database/journal-database'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 
 const switches = vi.hoisted(() => ({ writes: true }))
 vi.mock('./journal-text-tail-writes', () => ({
@@ -101,6 +103,35 @@ it('saves only appended text, reads it whole, and folds at the size bound, a rew
       }
     }
   ])
+  expect(tailRows(db)).toBe(0)
+  expect(folded(db)).toBe(text)
+
+  // A stream that ends without a last save folds when its turn finishes.
+  text += ' and after'
+  await commit(message(text))
+  expect(tailRows(db)).toBe(1)
+  const turn = (state: 'running' | 'completed') => ({
+    itemId: 'turn',
+    revision: state === 'running' ? 1 : 2,
+    sequence: 1,
+    observedAt: 1,
+    body: { kind: 'turn' as const, turnId: 'turn', state }
+  })
+  runJournalTransaction(db, () =>
+    writeJournalDomainCurrentItem(db, target, {
+      item: turn('running'),
+      hidden: false,
+      ownerFence: 1
+    })
+  )
+  expect(tailRows(db)).toBe(1)
+  runJournalTransaction(db, () =>
+    writeJournalDomainCurrentItem(db, target, {
+      item: turn('completed'),
+      hidden: false,
+      ownerFence: 1
+    })
+  )
   expect(tailRows(db)).toBe(0)
   expect(folded(db)).toBe(text)
   db.close()
