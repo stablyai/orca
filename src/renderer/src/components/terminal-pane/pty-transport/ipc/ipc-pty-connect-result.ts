@@ -15,6 +15,8 @@ export function projectIpcPtyConnectResult(
       ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       id: spawnResult.id,
       ...(spawnResult.isReattach ? { isReattach: true } : {}),
+      // Cold restore skips onPtySpawn, so its bind reads the wrapper-launch fact from here.
+      ...(spawnResult.shellWrapperLaunch ? { shellWrapperLaunch: true as const } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
       snapshot: spawnResult.snapshot,

@@ -101,6 +101,8 @@ export type PtyConnectResult = TerminalLaunchResult & {
   /** The provider adopted an existing session rather than creating a fresh one.
    *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
   isReattach?: boolean
+  /** The daemon's shell wrapper runs this new process's launch, so typed-ahead keys reach the agent. */
+  shellWrapperLaunch?: true
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string

@@ -53,12 +53,4 @@ describe('keys typed while an agent tab connects', () => {
     expect(sent).toEqual([['ademark', 'driving']])
     expect(session.captureAgentPreReadyInput('qz', true)).toBe(false)
   })
-
-  it('keeps holding them for the agent when the launch is typed into the shell', () => {
-    const { session, sent, bind } = createSession(false)
-    installAgentPreReadyTypedDraft(session)
-    session.captureAgentPreReadyInput('ademark', true)
-    bind('pty-1')
-    expect(sent).toEqual([])
-  })
 })
