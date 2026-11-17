@@ -26,7 +26,6 @@ export const UNIT_SETUP_FILES = [
 
 export const UNIT_EXCLUDE = [
   ...defaultExclude,
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
   'src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts',
   'src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts',
@@ -39,7 +38,6 @@ export const UNIT_EXCLUDE = [
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts',
-  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
   'src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',

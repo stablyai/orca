@@ -17,13 +17,13 @@ import { useHostStructuredAgentsSync } from '../runtime/native-chat/agent-catalo
 import { useLegacyChatRenameMigration } from '../runtime/native-chat/naming/legacy-chat-rename-migration'
 import { useHostModelCatalogSnapshotsSync } from '../runtime/native-chat/model-catalogs/host-model-catalog-snapshots-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/hosts/connections/use-remote-runtime-recovery-triggers'
-import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
-import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
-import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/browser-client-hosted-download-notices'
+import { useTerminalViewerColorPublication } from '../components/terminal-pane/appearance/use-terminal-viewer-color-publication'
+import { useBrowserIdentityMigrationNotice } from '../components/settings/browser/browser-user-agent-migration-notice'
+import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/navigate/browser-client-hosted-download-notices'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
 import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
-import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
-import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useVisibleHostedReviewRefresh } from '../store/slices/hosted-review/refresh/use-visible-hosted-review-refresh'
+import { useProfileStateSaveDelayNotice } from './storage/use-profile-state-save-delay-notice'
 import { useRemoteUnsavedEditorReport } from '../runtime/workspace-cleanup/remote-unsaved-editor-report'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */

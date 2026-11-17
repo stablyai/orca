@@ -1,6 +1,6 @@
-import { withAgentStatusOwnership } from '../agent-status/agent-status-ownership-boundary'
+import { withAgentStatusOwnership } from '../agent-status/status-ownership/agent-status-ownership-boundary'
 import { createAgentStatusSlice } from '../agent-status/agent-status'
-import { createPaneForegroundAgentSlice } from '../agent-status/pane-foreground-agent'
+import { createPaneForegroundAgentSlice } from '../agent-status/pane-authority/pane-foreground-agent'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'

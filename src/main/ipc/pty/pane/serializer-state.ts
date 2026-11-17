@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
-import { RendererTerminalSerializerReadiness } from '../../renderer-terminal-serializer-readiness'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
+import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
 import { isValidPaneKey, paneKeyPtyId } from './key-state'
 
 // Predeclare renderer serialization before spawn to suppress daemon seeding; generations fence pane-key reuse.

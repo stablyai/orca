@@ -16,11 +16,11 @@ import {
   normalizeUrl
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 import {
   browserCertificateFailureEqual,
   browserPageEqual
-} from '@/runtime/web-session-tabs-sync/state-equality-tabs'
+} from '@/runtime/web-session-tabs-sync/snapshots/state-equality-tabs'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,

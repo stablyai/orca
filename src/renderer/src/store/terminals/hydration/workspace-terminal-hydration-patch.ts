@@ -5,10 +5,13 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolveAgentPaneAuthorityKey } from '../../slices/agent-status/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '../../slices/agent-status/pane-authority/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from '../terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from '../pty/terminal-unverified-pty-loss'
-import { markFullResync, replaceRecordEntries } from '../../keyed-record-transitions'
+import {
+  markFullResync,
+  replaceRecordEntries
+} from '../../record-transitions/keyed-record-transitions'
 
 export type WorkspaceHydrationPatch = Pick<
   AppState,

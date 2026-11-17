@@ -1123,7 +1123,6 @@
       "clearSearch": "Limpar busca"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "description": "O orca.yaml deste repositório é executado antes de o espaço de trabalho iniciar. Só o execute se você confiar neste repositório.",
       "dontRun": "Não executar",
       "newScriptLabel": "Novo script de configuração",
@@ -4521,28 +4520,20 @@
       "reconnecting": "Reconectando"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Sempre confiar e executar",
       "creating": "Criando…",
       "directoriesLabel": "Diretórios",
       "directories_many": "{{count}} diretórios",
       "directories_one": "{{count}} diretório",
       "directories_other": "{{count}} diretórios",
-      "dontRun": "Não executar",
       "editSparsePreset": "Editar predefinição de checkout esparso",
       "nameLabel": "Nome",
       "namePlaceholder": "Interface do renderizador",
-      "newSetupScript": "Novo script de configuração",
       "newSparsePreset": "Nova predefinição de checkout esparso",
-      "runHooks": "Executar hooks",
       "runSetupAndCreate": "Executar configuração e criar",
-      "runSetupTitle": "Executar a configuração de {{name}}?",
-      "setupChangedTitle": "O script de configuração de {{name}} mudou",
-      "setupScript": "Script de configuração",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
       "setupTitle": "Executar script de configuração?",
       "skipSetupAndCreate": "Pular configuração e criar",
-      "trustFailed": "Falha ao marcar o script de configuração como confiável.",
-      "trustSubtitle": "O orca.yaml deste repositório é executado no seu computador antes de iniciar o espaço de trabalho. Execute-o apenas se você confiar neste repositório."
+      "trustFailed": "Falha ao marcar o script de configuração como confiável."
     },
     "worktreeCreateRetry": {
       "createFailed": "Falha ao criar espaço de trabalho"
