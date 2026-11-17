@@ -166,8 +166,13 @@ export async function installOrcadBundle(
       takenOver = true
       throw new OrcadInstallTakenOverError(error)
     }
-    // Transports replace an abort's reason with a generic cancel; name the real one.
-    if (holderLost?.aborted && !options.signal?.aborted) {
+    // Transports replace an abort's reason with a generic cancel; name the real one, but keep a
+    // more specific failure (such as the distro being terminated).
+    if (
+      holderLost?.aborted &&
+      !options.signal?.aborted &&
+      (error === holderLost.reason || (error instanceof Error && error.name === 'AbortError'))
+    ) {
       throw new OrcadInstallHolderLostError(error)
     }
     throw error
@@ -207,7 +212,7 @@ export class OrcadInstallTakenOverError extends Error {
 export class OrcadInstallHolderLostError extends Error {
   constructor(cause: unknown) {
     super(
-      'The install lock holder exited, so Orca stopped installing its server in this distro. Try connecting again.',
+      'Orca lost track of its own install in this distro, so it stopped. Try connecting again.',
       { cause }
     )
     this.name = 'OrcadInstallHolderLostError'
@@ -240,7 +245,7 @@ async function holdInstallLock(
   const started = await startInstallLockHolder(options.conn, lockDir, owner, options.signal)
   const fenced = {
     conn: withFence.call(options.conn, installLockFenceStatement(lockDir, owner)),
-    releaseGate: installLockReleaseGate(lockDir)
+    releaseGate: installLockReleaseGate(lockDir, owner)
   }
   const { holder } = started
   if (!holder) {

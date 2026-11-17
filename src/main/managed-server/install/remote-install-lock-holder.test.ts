@@ -3,15 +3,21 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RemoteCommandChannel, RemoteInstallTransport } from './remote-install-transport'
 
 const unmarks = vi.hoisted((): string[] => [])
+const unmarkFailures = vi.hoisted(() => ({ left: 0 }))
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   execCommand: async (_conn: unknown, command: string) => {
     unmarks.push(command)
+    if (unmarkFailures.left > 0) {
+      unmarkFailures.left -= 1
+      throw new Error('wsl.exe did not answer')
+    }
     return ''
   }
 }))
 
-const { startInstallLockHolder } = await import('./remote-install-lock-holder')
+const { startInstallLockHolder, InstallLockUnmarkError } =
+  await import('./remote-install-lock-holder')
 
 const owner = { fileName: '.orca-fence-owner', token: 't-1' }
 // Lets the holder attach its listeners once the exec resolves.
@@ -105,6 +111,45 @@ describe('startInstallLockHolder', () => {
       holder: null,
       fenceable: false
     })
+  })
+
+  it('retries a failed unmark, then stops the install rather than install beside a stray mark', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    unmarks.length = 0
+    unmarkFailures.left = 2
+    const host = fakeHolder()
+    const started = startInstallLockHolder(host.conn, '/l', owner)
+    await attached()
+    host.say('HOLDER_READY')
+    await vi.waitFor(() => expect(host.written).toEqual(['mark\n']))
+    host.exit()
+    await expect(started).rejects.toBeInstanceOf(InstallLockUnmarkError)
+    expect(unmarks).toHaveLength(2)
+  })
+
+  it('keeps going when a retried unmark succeeds', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    unmarks.length = 0
+    unmarkFailures.left = 1
+    const host = fakeHolder()
+    const started = startInstallLockHolder(host.conn, '/l', owner)
+    await attached()
+    host.say('HOLDER_READY')
+    await vi.waitFor(() => expect(host.written).toEqual(['mark\n']))
+    host.exit()
+    await expect(started).resolves.toEqual({ holder: null, fenceable: true })
+    expect(unmarks).toHaveLength(2)
+  })
+
+  it('stops starting the holder, and closes it, when the caller aborts', async () => {
+    const host = fakeHolder()
+    const abort = new AbortController()
+    const started = startInstallLockHolder(host.conn, '/l', owner, abort.signal)
+    await attached()
+    abort.abort(new Error('connect cancelled'))
+    await expect(started).rejects.toThrow('connect cancelled')
+    expect(host.closed()).toBe(true)
+    expect(host.written).toEqual([])
   })
 
   it('falls back to an unbacked, still fenceable lock and clears any mark when HELD never comes', async () => {

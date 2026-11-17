@@ -10,6 +10,8 @@ type HolderInstallState = {
   abandonConfirmed: boolean
   forgotten: string[]
   loseHolderDuringUpload: boolean
+  callerAbort: AbortController | null
+  lostUploadError: Error | null
   loseHolder: () => void
   acquireOptions: { probeExitedHolder?: boolean } | null
 }
@@ -23,6 +25,8 @@ const state = vi.hoisted((): HolderInstallState => ({
   abandonConfirmed: true,
   forgotten: [],
   loseHolderDuringUpload: false,
+  callerAbort: null,
+  lostUploadError: null,
   loseHolder: () => {},
   acquireOptions: null
 }))
@@ -58,10 +62,11 @@ vi.mock('./remote-install-transfers', () => ({
     }
     if (state.loseHolderDuringUpload) {
       state.loseHolder()
+      state.callerAbort?.abort()
       await Promise.resolve()
       // Transports drop the abort reason for a generic cancel.
       if (options.signal?.aborted) {
-        throw createSshOperationAbortError()
+        throw state.lostUploadError ?? createSshOperationAbortError()
       }
     }
   },
@@ -125,7 +130,8 @@ function install(conn: OrcadHostTransport, localWslHost = true) {
       localOrcadDir: '/tmp/orcad',
       target: 'linux-x64-glibc',
       nodeRuntimeArchive: async () => '/tmp/node.tar.xz',
-      localWslHost
+      localWslHost,
+      signal: state.callerAbort?.signal
     },
     '0.1.0+aa01',
     '/home/u/.orca-remote/orcad-0.1.0+aa01'
@@ -142,6 +148,8 @@ describe('installOrcadBundle flock-backed install lock on WSL', () => {
     state.abandonConfirmed = true
     state.forgotten = []
     state.loseHolderDuringUpload = false
+    state.callerAbort = null
+    state.lostUploadError = null
     state.acquireOptions = null
   })
 
@@ -154,8 +162,20 @@ describe('installOrcadBundle flock-backed install lock on WSL', () => {
 
   it('stops the install when its holder exits mid-install', async () => {
     state.loseHolderDuringUpload = true
-    await expect(install(wslConn())).rejects.toThrow(/The install lock holder exited/)
+    await expect(install(wslConn())).rejects.toThrow(/Orca lost track of its own install/)
     expect(state.events).toEqual(['release', 'abandon:plain:gated'])
+  })
+
+  it('keeps a more specific failure when the holder is lost with it', async () => {
+    state.loseHolderDuringUpload = true
+    state.lostUploadError = sshCommandExitError('tar -x', 1, 'the distro was terminated')
+    await expect(install(wslConn())).rejects.toThrow(/the distro was terminated/)
+  })
+
+  it('reports the caller own cancel, not a lost holder, when both happen', async () => {
+    state.loseHolderDuringUpload = true
+    state.callerAbort = new AbortController()
+    await expect(install(wslConn())).rejects.toThrow('SSH operation was cancelled')
   })
 
   it('keeps its token when the gated removal gives up', async () => {

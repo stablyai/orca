@@ -111,6 +111,12 @@ export function installLockHolderExitedProbeCommand(
   ].join(' ')
 }
 
+/** Prints OWNED when the lock names `owner`, NOT_OWNED when it names no one or someone else. */
+export function installLockOwnedByCommand(lockDir: string, owner: InstallLockOwnerFile): string {
+  const ownerFile = quotePosixShell(ownerPath(lockDir, owner.fileName))
+  return `if [ "$(cat ${ownerFile} 2>/dev/null)" = ${quotePosixShell(owner.token)} ]; then echo OWNED; else echo NOT_OWNED; fi`
+}
+
 const PROBE_LINE = /^HOLDER_EXITED (\d+:\d+) ([A-Za-z0-9-]{1,128})$/u
 
 export function parseInstallLockHolderExit(output: string): InstallLockHolderExit | null {
@@ -155,9 +161,11 @@ function posixIsHolderProcess(pidVariable: string, token: string): string {
 
 /** Prefix for an owner's own lock removal: waits for its fenced commands to end, so a successor
  * never starts beside one. Still held after the bounded wait, it fails and leaves the lock, so the
- * owner keeps its token. */
-export function installLockReleaseGate(lockDir: string): string {
+ * owner keeps its token. A lock that already names another owner ends it at once. */
+export function installLockReleaseGate(lockDir: string, owner: InstallLockOwnerFile): string {
+  const ownerFile = quotePosixShell(ownerPath(lockDir, owner.fileName))
   return [
+    `if gate_owner=$(cat ${ownerFile} 2>/dev/null) && [ "$gate_owner" != ${quotePosixShell(owner.token)} ]; then exit 0; fi;`,
     `if { command exec 7<${quotePosixShell(holderPath(lockDir))}; } 2>/dev/null && command -v flock >/dev/null 2>&1; then`,
     lockLoop(7, '-x', `{ echo ${INSTALL_LOCK_RELEASE_BUSY} >&2; exit 1; }`),
     'fi;'

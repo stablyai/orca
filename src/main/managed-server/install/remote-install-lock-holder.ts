@@ -13,6 +13,18 @@ import {
 } from './remote-install-lock-holder-commands'
 
 const HOLDER_ANSWER_TIMEOUT_MS = 15_000
+const UNMARK_ATTEMPTS = 2
+
+/** The distro never confirmed an abandoned holder's mark was cleared, so installing is unsafe. */
+export class InstallLockUnmarkError extends Error {
+  constructor(cause: unknown) {
+    super(
+      'Orca couldn’t set up its install in this distro because the distro stopped answering, so it stopped. Try connecting again.',
+      { cause }
+    )
+    this.name = 'InstallLockUnmarkError'
+  }
+}
 
 /** A guest process keeping the install lock flock-backed; `lost` settles if it exits before release. */
 export type InstallLockHolder = { lost: Promise<void>; release(): void }
@@ -92,18 +104,24 @@ export async function startInstallLockHolder(
     close()
     signal?.throwIfAborted()
     console.warn('[ssh] Install lock holder did not confirm; keeping an unbacked lock')
-    try {
-      await execCommand(conn, installLockHolderUnmarkCommand(lockDir, owner), {
-        wrapCommand: true,
-        signal
-      })
-    } catch (error) {
-      if (isUnconfirmedSshCommandTermination(error)) {
-        throw error
+    let unmarkError: unknown
+    for (let attempt = 0; attempt < UNMARK_ATTEMPTS; attempt++) {
+      try {
+        await execCommand(conn, installLockHolderUnmarkCommand(lockDir, owner), {
+          wrapCommand: true,
+          signal
+        })
+        return { holder: null, fenceable: true }
+      } catch (error) {
+        if (isUnconfirmedSshCommandTermination(error)) {
+          throw error
+        }
+        signal?.throwIfAborted()
+        unmarkError = error
       }
-      signal?.throwIfAborted()
     }
-    return { holder: null, fenceable: true }
+    // A mark may outlive its holder and invite a takeover mid-install: stop, and let cleanup remove the lock.
+    throw new InstallLockUnmarkError(unmarkError)
   }
   channel.off('data', onData)
   channel.resume()

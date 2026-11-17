@@ -9,12 +9,14 @@ const lock: {
   holderGoneAt: number | null
   holderBackAt: number | null
   probes: number
+  loseStealReply: boolean
 } = {
   createdAt: 0,
   stolen: false,
   holderGoneAt: null,
   holderBackAt: null,
-  probes: 0
+  probes: 0,
+  loseStealReply: false
 }
 vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
   execHostCommand: async (_conn: unknown, _host: unknown, command: string) => {
@@ -25,7 +27,13 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
       (lock.holderBackAt === null || Date.now() < lock.holderBackAt)
     if (command.includes('echo HOLDER_EXITED_OK')) {
       lock.stolen = holderGone
+      if (lock.loseStealReply) {
+        throw new Error('wsl.exe closed before answering')
+      }
       return holderGone ? 'HOLDER_EXITED_OK' : 'BUSY'
+    }
+    if (command.includes('echo OWNED')) {
+      return lock.stolen ? 'OWNED\n' : 'NOT_OWNED\n'
     }
     if (command.includes('echo "HOLDER_EXITED')) {
       lock.probes += 1
@@ -71,6 +79,7 @@ describe('acquireInstallLock waiting on a held lock', () => {
     lock.stolen = false
     lock.holderGoneAt = null
     lock.holderBackAt = null
+    lock.loseStealReply = false
     lock.probes = 0
   })
   afterEach(() => {
@@ -93,6 +102,23 @@ describe('acquireInstallLock waiting on a held lock', () => {
     // First gone reading at 30s, confirmed by the next probe 5s later.
     expect(Date.now() - start).toBeGreaterThanOrEqual(35_000)
     expect(Date.now() - start).toBeLessThanOrEqual(41_000)
+  })
+
+  it('treats a takeover whose reply was lost as acquired once the lock names its token', async () => {
+    lock.createdAt = Date.now() - 60_000
+    lock.holderGoneAt = Date.now()
+    lock.loseStealReply = true
+    const start = Date.now()
+    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
+      relayGcClaim: false,
+      waitThroughStaleTakeover: true,
+      owner: { fileName: '.orca-fence-owner', token: 't-next' },
+      probeExitedHolder: true
+    })
+    expect(await settle(acquired, 60_000)).toBe('done')
+    expect(lock.stolen).toBe(true)
+    // Not the 20-minute age rule: the next probe finds the lock already ours.
+    expect(Date.now() - start).toBeLessThanOrEqual(16_000)
   })
 
   it('never probes without an owner token to bind the proof to', async () => {

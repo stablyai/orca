@@ -20,6 +20,7 @@ import {
   installLockHolderCommand,
   installLockHolderExitedProbeCommand,
   installLockHolderUnmarkCommand,
+  installLockOwnedByCommand,
   installLockReleaseGate,
   parseInstallLockHolderExit
 } from './remote-install-lock-holder-commands'
@@ -85,7 +86,14 @@ function exited(child: ChildProcessWithoutNullStreams): Promise<number | null> {
 }
 
 async function holdLock(lock: string): Promise<ChildProcessWithoutNullStreams> {
-  const holder = start(installLockHolderCommand(lock, first))
+  return holdLockAs(lock, first)
+}
+
+async function holdLockAs(
+  lock: string,
+  owner: typeof first
+): Promise<ChildProcessWithoutNullStreams> {
+  const holder = start(installLockHolderCommand(lock, owner))
   expect(await line(holder, 'HOLDER_READY')).toBe(true)
   holder.stdin.write('mark\n')
   expect(await line(holder, 'HOLDER_HELD')).toBe(true)
@@ -251,7 +259,7 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(await line(straggler, 'STARTED')).toBe(true)
     holder.stdin.end()
     const removal = start(
-      `${installLockReleaseGate(lock)} ${removeOwnedInstallLockCommand(host, lock, first)}`
+      `${installLockReleaseGate(lock, first)} ${removeOwnedInstallLockCommand(host, lock, first)}`
     )
     // ast-grep-ignore: test-no-real-time-wait -- proves the real flock wait blocks the removal; there is no event to await.
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -268,7 +276,7 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(await line(straggler, 'STARTED')).toBe(true)
     holder.stdin.end()
     const removal = start(
-      `${installLockReleaseGate(lock)} ${removeOwnedInstallLockCommand(host, lock, first)}`
+      `${installLockReleaseGate(lock, first)} ${removeOwnedInstallLockCommand(host, lock, first)}`
     )
     expect(await exited(removal)).toBe(1)
     expect(existsSync(lock)).toBe(true)
@@ -307,6 +315,18 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('')
   }, 30_000)
 
+  it('ends the gated removal at once, keeping the lock, when it already names a successor', async () => {
+    const lock = lockOwnedBy('t-second')
+    const successor = await holdLockAs(lock, second)
+    // Awaited, so the default 5 s test timeout fails a gate that sat out its 10 s wait.
+    const removal = start(
+      `${installLockReleaseGate(lock, first)} ${removeOwnedInstallLockCommand(host, lock, first)}`
+    )
+    expect(await exited(removal)).toBe(0)
+    expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('t-second')
+    successor.stdin.end()
+  })
+
   it('degrades to an unbacked lock where flock is missing', async () => {
     const lock = lockOwnedBy('t-first')
     const bin = join(lock, '..', 'bin')
@@ -316,6 +336,15 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     const holder = start(installLockHolderCommand(lock, first), { PATH: bin })
     expect(await line(holder, 'HOLDER_READY')).toBe(false)
     expect(await exited(holder)).toBe(0)
+  })
+})
+
+describe('lock ownership check', () => {
+  it('answers OWNED only for the token the lock names', () => {
+    const lock = lockOwnedBy('t-first')
+    expect(sh(installLockOwnedByCommand(lock, first)).stdout).toBe('OWNED')
+    expect(sh(installLockOwnedByCommand(lock, second)).stdout).toBe('NOT_OWNED')
+    expect(sh(installLockOwnedByCommand(join(lock, 'gone'), first)).stdout).toBe('NOT_OWNED')
   })
 })
 

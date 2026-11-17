@@ -8,20 +8,27 @@ import {
 } from './remote-install-lock-commands'
 import {
   installLockHolderExitedProbeCommand,
+  installLockOwnedByCommand,
   parseInstallLockHolderExit,
   type InstallLockHolderExit
 } from './remote-install-lock-holder-commands'
 
-/** A contender's view of a flock-backed lock across probes; one per acquire attempt. */
-export type HolderTakeoverState = { gone: InstallLockHolderExit | null }
+/** A contender's view of a flock-backed lock across probes; one per acquire attempt.
+ * `stealUnanswered`: a steal failed without an answer, so it may have committed. */
+export type HolderTakeoverState = { gone: InstallLockHolderExit | null; stealUnanswered?: boolean }
 
-async function answered(work: Promise<string>, fallback: string): Promise<string> {
+async function answered(
+  work: Promise<string>,
+  fallback: string,
+  onError?: () => void
+): Promise<string> {
   try {
     return await work
   } catch (error) {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
     }
+    onError?.()
     return fallback
   }
 }
@@ -37,6 +44,23 @@ export async function tryTakeOverExitedHolder(
   staleAfterSeconds: number,
   signal?: AbortSignal
 ): Promise<string | null> {
+  // A steal whose answer was lost may have made this owner the lock's: then the lock is ours.
+  if (state.stealUnanswered) {
+    const owned = (
+      await answered(
+        execHostCommand(conn, host, installLockOwnedByCommand(lockDir, owner), { signal }),
+        ''
+      )
+    ).trim()
+    if (owned === 'OWNED') {
+      state.stealUnanswered = false
+      state.gone = null
+      return 'HOLDER_EXITED_OK'
+    }
+    if (owned === 'NOT_OWNED') {
+      state.stealUnanswered = false
+    }
+  }
   const seen = parseInstallLockHolderExit(
     await answered(
       execHostCommand(conn, host, installLockHolderExitedProbeCommand(lockDir, owner.fileName), {
@@ -58,7 +82,8 @@ export async function tryTakeOverExitedHolder(
       tryStealInstallLockCommand(host, lockDir, staleAfterSeconds, owner, undefined, seen),
       { signal }
     ),
-    'BUSY'
+    'BUSY',
+    () => (state.stealUnanswered = true)
   )
   signal?.throwIfAborted()
   if (steal.trim().endsWith('OK')) {
