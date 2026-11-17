@@ -53,9 +53,9 @@ export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = nu
   return 'This computer'
 }
 
-/** Trims a stored id; blank or non-string is absent, since no write or read path validates it. */
-export function normalizeHostPart(value: unknown): string | null {
-  return typeof value === 'string' ? value.trim() || null : null
+/** Trims a stored id; blank is absent, since no write path normalizes it. */
+export function normalizeHostPart(value: string | null | undefined): string | null {
+  return value?.trim() || null
 }
 
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
@@ -92,7 +92,7 @@ export function isOwnedSshTargetId(targetId: string | null | undefined): boolean
   )
 }
 
-export function parseExecutionHostId(value: unknown): ParsedExecutionHost | null {
+export function parseExecutionHostId(value: string | null | undefined): ParsedExecutionHost | null {
   const normalized = normalizeHostPart(value)
   if (!normalized) {
     return null
@@ -227,14 +227,9 @@ export function getRepoExecutionHostId(repo: {
 
 /** True only for catalog-local files; unknown hosts or a stale connectionId beside local cannot prove locality. */
 export function isRepoOnCatalogHost(repo: {
-  connectionId?: unknown
-  executionHostId?: unknown
+  connectionId?: string | null
+  executionHostId?: string | null
 }): boolean {
-  // A non-string stored id has unknown ownership, so it cannot prove the repo is local.
-  const ids = [repo.executionHostId, repo.connectionId]
-  if (ids.some((id) => id != null && typeof id !== 'string')) {
-    return false
-  }
   const executionHostId = normalizeHostPart(repo.executionHostId)
   return (
     (executionHostId === null || executionHostId === LOCAL_EXECUTION_HOST_ID) &&

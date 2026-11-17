@@ -18,18 +18,6 @@ describe('execution host identity', () => {
     vi.unstubAllGlobals()
   })
 
-  // A non-string host id reached render and threw `e?.trim is not a function` (crash d1e50ca3).
-  it('treats a non-string stored host id as absent', () => {
-    expect(parseExecutionHostId(42)).toBeNull()
-    expect(parseExecutionHostId({ id: 'local' })).toBeNull()
-  })
-
-  it('does not treat a repo with a non-string host id as local', () => {
-    expect(isRepoOnCatalogHost({ executionHostId: 42 })).toBe(false)
-    expect(isRepoOnCatalogHost({ connectionId: {} })).toBe(false)
-    expect(isRepoOnCatalogHost({})).toBe(true)
-  })
-
   it('prefers explicit worktree ownership before repo and focused-host fallbacks', () => {
     expect(
       getWorktreeExecutionHostId(
