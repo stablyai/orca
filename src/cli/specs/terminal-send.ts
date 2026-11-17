@@ -15,7 +15,9 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
     'wait-submit',
     'retry-request'
   ],
+  examples: ['orca terminal send --terminal term_123 --text "npm test" --enter --json'],
   notes: [
+    'For shells, dev servers, REPLs and your own pane. To message another agent, use orca orchestration send; never type into its input.',
     "Without --enter, --text is written to the PTY verbatim, so control bytes pass through (Bash/Zsh: --text $'\\x1b' for Escape, $'\\x15' for Ctrl+U).",
     'With --enter and without --interrupt, a prompt to a recognized running agent is bracketed-pasted and embedded Escape bytes are made inert.',
     'For a text-plus-Enter agent prompt, the result separates input acceptance from observed submission and turn start.',
