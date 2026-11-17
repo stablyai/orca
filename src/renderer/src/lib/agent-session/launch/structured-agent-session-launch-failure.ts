@@ -10,7 +10,7 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
+import { wslHostsAvailable } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {

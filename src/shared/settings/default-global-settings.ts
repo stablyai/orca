@@ -4,8 +4,10 @@ import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from '../work-items/task-providers'
-import { getDefaultCommitMessageAiSettings } from './default-commit-message-ai-settings'
-import { getDefaultSourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings'
+import {
+  getDefaultCommitMessageAiSettings,
+  getDefaultSourceControlAiSettings
+} from '../source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from '../app-lifecycle/identity/app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from '../editor/launch/open-in-applications'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'

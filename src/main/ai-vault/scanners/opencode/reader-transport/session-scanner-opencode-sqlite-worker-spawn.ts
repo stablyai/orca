@@ -53,10 +53,10 @@ function getSharedClient(): OpenCodeSqliteWorkerClient {
   return sharedClient
 }
 
-type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
-type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
+export type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
+export type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
 
-type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'>
+export type SqliteListArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['list']>[0], 'agent'>
 
 export const listOpenCodeSqliteSessionsViaWorker = (
   args: SqliteListArgs
@@ -94,11 +94,12 @@ export const captureZcodeSqliteSessionViaWorker = (
   args: SqliteCaptureArgs
 ): Promise<OpenCodeSqliteCaptureValue> => captureForHost({ ...args, agent: 'zcode' })
 
-async function listForHost(
+export async function listForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
-  const scoped = Boolean(args.scopePaths?.length)
+  // A Hermes list is always its store's main list; a scope only adds rows to it.
+  const scoped = Boolean(args.scopePaths?.length) && agent !== 'hermes'
   const issues: AiVault.AiVaultScanIssue[] = []
   const closeSource =
     !scoped && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
@@ -155,7 +156,8 @@ async function listCandidatesForHost(
       const scopePaths = args.scopePaths?.length
         ? aiVaultScopePathsForWslDistro(args.scopePaths, distro)
         : args.scopePaths
-      if (args.scopePaths?.length && scopePaths?.length === 0) {
+      // A Hermes scope adds in-scope rows to its newest ones; elsewhere it is the whole request.
+      if (args.scopePaths?.length && scopePaths?.length === 0 && args.agent !== 'hermes') {
         return []
       }
       const first = paths.values().next().value!
@@ -213,7 +215,7 @@ async function listCandidatesForHost(
   return candidates.flat().sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
 }
 
-async function parseForHost(
+export async function parseForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['parse']>[0]
 ): Promise<AiVault.AiVaultSession | null> {
   const wsl = openCodeWslPath(args.dbPath)
@@ -236,7 +238,7 @@ async function parseForHost(
   return mapOpenCodeWslSession(session, args.dbPath)
 }
 
-async function captureForHost(
+export async function captureForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['capture']>[0]
 ): Promise<OpenCodeSqliteCaptureValue> {
   const wsl = openCodeWslPath(args.dbPath)

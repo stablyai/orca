@@ -35,6 +35,7 @@ export function createGitHubApi(): WebGitHubApi {
         repoId: candidate.repoId,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null,
+        ...(candidate.linkedPRUrl ? { linkedPRUrl: candidate.linkedPRUrl } : {}),
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
         currentHeadOid: candidate.currentHeadOid ?? null,
         ...(reason ? { reason } : {}),

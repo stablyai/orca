@@ -1,6 +1,6 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'

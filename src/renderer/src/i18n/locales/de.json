@@ -19351,6 +19351,7 @@
         "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
         "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
         "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+        "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
         "savedByNewerOrca": "Die Chats wurden mit einer neueren Orca-Version gespeichert.",
         "updateOrcaToKeepUsing": "Orca aktualisieren, um sie weiter zu verwenden.",
         "chatSavedByNewerOrca": "Dieser Chat wurde mit einer neueren Orca-Version gespeichert.",
@@ -19542,6 +19543,7 @@
         "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",
         "optionValue": {
+          "none": "Keine",
           "fast": "Schnell",
           "minimal": "Minimal",
           "low": "Niedrig",
@@ -20659,7 +20661,11 @@
         "turnDiffsTitle": "Durchgangsänderungen",
         "turnDiffsCopy": "Zeigt unter der Antwort die in jedem Durchgang geänderten Dateien mit Zeilenzahlen an.",
         "turnDiffsSearchChangedFiles": "geänderte Dateien",
-        "turnDiffsSearchEdits": "Änderungen"
+        "turnDiffsSearchEdits": "Änderungen",
+        "promptSuggestionsTitle": "Vorgeschlagene Prompts",
+        "promptSuggestionsCopy": "Nachdem Claude geantwortet hat, erscheint sein Vorschlag für deine nächste Nachricht im leeren Eingabefeld. Drücke Tab, um ihn zu übernehmen. Jeder Vorschlag ist eine zusätzliche Anfrage, die auf deine Claude-Nutzung angerechnet wird.",
+        "promptSuggestionsSearchNext": "nächster Prompt",
+        "promptSuggestionsSearchGhost": "Geistertext"
       },
       "voice": {
         "dictationLanguage": {

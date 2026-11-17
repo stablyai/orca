@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
+import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
 import {
   NativeChatCodeBlock,

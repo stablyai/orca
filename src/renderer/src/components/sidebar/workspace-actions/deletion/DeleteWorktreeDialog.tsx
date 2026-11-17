@@ -18,11 +18,6 @@ import {
 import { useRemovalUnsavedFiles } from './use-removal-unsaved-files'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
-  getDeleteWorktreeChangeCheckStates,
-  getDeleteWorktreeDirtyChangeCounts,
-  getDeleteWorktreeDirtyChangePreviews
-} from './delete-worktree-dirty-change-counts'
-import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
   getDeleteWorktreeDialogHeading,
@@ -33,13 +28,14 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
+import { useDeleteWorktreeDirtyChanges } from './use-delete-worktree-dirty-changes'
 import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
 import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
-import { translateHostDisplayLabel } from '../../execution-host-label'
+import { translateHostDisplayLabel } from '../../../../runtime/hosts/display/execution-host-label'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
@@ -59,7 +55,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
@@ -197,20 +192,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteTargets,
     repoMap
   })
-  const dirtyChanges = useMemo(() => {
-    const statusInput = { deleteTargets, gitStatusByWorktree, gitStatusByWorktreeIdentity, repoMap }
-    return {
-      checkStates: getDeleteWorktreeChangeCheckStates(statusInput),
-      counts: getDeleteWorktreeDirtyChangeCounts({ ...statusInput, deleteStateByWorktreeId }),
-      previews: getDeleteWorktreeDirtyChangePreviews(statusInput)
-    }
-  }, [
-    deleteStateByWorktreeId,
+  const dirtyChanges = useDeleteWorktreeDirtyChanges({
     deleteTargets,
-    gitStatusByWorktree,
     gitStatusByWorktreeIdentity,
+    deleteStateByWorktreeId,
     repoMap
-  ])
+  })
   // Per-target hints only warn once changes are known; pending or failed checks still lose data.
   const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
     ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)

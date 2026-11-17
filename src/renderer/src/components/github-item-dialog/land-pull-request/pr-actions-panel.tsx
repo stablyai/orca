@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, GitPullRequest, GitPullRequestClosed, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -11,7 +11,7 @@ import {
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId
 } from '@/lib/work-items/github/github-source-runtime-context'
-import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { presentGitHubPRMergeState } from '@/components/github/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'

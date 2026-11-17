@@ -111,6 +111,8 @@ export const PORTABLE_KEY_SPECS = {
   nativeChatInlineVisuals: 'boolean',
   nativeChatLinkPreviews: 'boolean',
   nativeChatOpenedPullRequests: 'boolean',
+  nativeChatComposerSpellcheck: 'boolean',
+  nativeChatPromptSuggestions: 'boolean',
   followSymlinkedDirectories: 'boolean',
   showGitIgnoredFiles: 'boolean',
   sourceControlViewMode: oneOf('sourceControlViewMode')('list', 'tree'),

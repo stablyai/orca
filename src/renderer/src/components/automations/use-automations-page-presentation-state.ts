@@ -13,7 +13,7 @@ import type { AutomationsPageListState } from './listing/use-automations-page-li
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 import { useTranslate } from '../../i18n/use-translate'
-import { translateLocalExecutionHostLabel } from '../sidebar/execution-host-label'
+import { translateLocalExecutionHostLabel } from '../../runtime/hosts/display/execution-host-label'
 
 /** Display labels and action availability derived from the selected host row. */
 export function useAutomationsPagePresentationState({

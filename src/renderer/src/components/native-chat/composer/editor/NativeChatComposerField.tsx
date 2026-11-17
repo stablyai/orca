@@ -26,6 +26,8 @@ import type { NativeChatComposerGoalMode } from '../submit/use-native-chat-compo
 import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatComposerDraftUnsaved } from '../../drafts/use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
+import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
 import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 
@@ -42,6 +44,8 @@ export type NativeChatComposerFieldProps = {
   hasPty: boolean
   canSend: boolean
   unavailableHint?: string | undefined
+  /** The agent's suggested next prompt, shown in the placeholder's place; Tab takes it. */
+  promptSuggestion?: string | undefined
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
@@ -97,23 +101,6 @@ export type NativeChatComposerFieldProps = {
   workspaceFooter?: React.ReactNode
 }
 
-/** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
-function imeComposedSegment(base: string, settled: string): string {
-  const limit = Math.min(base.length, settled.length)
-  let prefix = 0
-  while (prefix < limit && base[prefix] === settled[prefix]) {
-    prefix += 1
-  }
-  let suffix = 0
-  while (
-    suffix < limit - prefix &&
-    base[base.length - 1 - suffix] === settled[settled.length - 1 - suffix]
-  ) {
-    suffix += 1
-  }
-  return settled.slice(prefix, settled.length - suffix)
-}
-
 export function NativeChatComposerField({
   editSession,
   draftScopeKey,
@@ -124,6 +111,7 @@ export function NativeChatComposerField({
   hasPty,
   canSend,
   unavailableHint,
+  promptSuggestion,
   autocomplete,
   mentionFiles,
   activeSuggestion,
@@ -200,8 +188,18 @@ export function NativeChatComposerField({
     onDraftChange(value, input)
   })
   const editorSelect = useLatestHandler(onTextareaSelect)
+  // An open picker takes Tab first, so the suggestion only shows and accepts while none is.
+  const suggestion = autocomplete.mode === 'none' ? promptSuggestion : undefined
   const editorKeyDownCapture = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!imeEnterGesture.ownsKeyDown(event)) {
+    if (
+      !imeEnterGesture.ownsKeyDown(event) &&
+      !acceptNativeChatPromptSuggestion(
+        event,
+        suggestion,
+        textareaRef.current,
+        imeEnterGesture.isComposing
+      )
+    ) {
       onKeyDown(event)
     }
   })
@@ -365,6 +363,7 @@ export function NativeChatComposerField({
                           'Describe your goal, define measurable outcomes for best results'
                         )
                       : (unavailableHint ??
+                        suggestion ??
                         nativeChatComposerPlaceholder(hasPty, canSend, afterStop, t))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.

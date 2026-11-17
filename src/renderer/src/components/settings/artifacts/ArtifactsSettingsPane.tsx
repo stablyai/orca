@@ -7,7 +7,7 @@ import { useOrcaProfileAuthStatusRefresh } from '@/components/orca-profiles/use-
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../orca-profiles/OrcaSignInProgress'
 
 type HowToStep = { key: string; title: string; description: string }
 

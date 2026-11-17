@@ -2073,6 +2073,7 @@
         "conversationCleared": "This conversation has been cleared.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "savedInOtherFolder": "This conversation was saved in another folder.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "hostReconciling": "Orca is still checking on this chat after restarting.",

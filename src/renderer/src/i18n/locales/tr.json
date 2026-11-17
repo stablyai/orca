@@ -19495,6 +19495,7 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
         "chatSavedByNewerOrca": "Bu sohbet daha yeni bir Orca sürümüyle kaydedilmiş.",
@@ -19686,6 +19687,7 @@
         "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
         "optionUpdateFailed": "Seçenek güncellenemedi",
         "optionValue": {
+          "none": "Yok",
           "fast": "Hızlı",
           "minimal": "Minimal",
           "low": "Düşük",
@@ -20800,7 +20802,11 @@
         "turnDiffsTitle": "Tur farkları",
         "turnDiffsCopy": "Her turun değiştirdiği dosyaları satır sayılarıyla yanıtın altında gösterir.",
         "turnDiffsSearchChangedFiles": "değişen dosyalar",
-        "turnDiffsSearchEdits": "düzenlemeler"
+        "turnDiffsSearchEdits": "düzenlemeler",
+        "promptSuggestionsTitle": "Önerilen istemler",
+        "promptSuggestionsCopy": "Claude yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, Claude kullanımınıza sayılan ek bir istektir.",
+        "promptSuggestionsSearchNext": "sonraki istem",
+        "promptSuggestionsSearchGhost": "hayalet metin"
       },
       "voice": {
         "dictationLanguage": {

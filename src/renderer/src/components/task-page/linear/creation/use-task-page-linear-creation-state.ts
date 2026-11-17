@@ -13,8 +13,8 @@ import {
   linearIssueFormSignature as signatureOf,
   completeLinearIssueForm,
   handoffLinearIssueForm as handoff
-} from '@/components/use-task-creation-draft-retention'
-import { useNewLinearIssueProjects } from '../../../use-new-linear-issue-projects'
+} from '@/components/task-page/creation/use-task-creation-draft-retention'
+import { useNewLinearIssueProjects } from './use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../../task-page-draft-storage'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'

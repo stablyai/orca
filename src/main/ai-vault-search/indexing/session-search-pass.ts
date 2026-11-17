@@ -127,6 +127,9 @@ export async function runSessionSearchPass(
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
+          referenceOnlyRoots: swept.discoveries
+            .filter((discovery) => discovery.agent === 'hermes')
+            .map((discovery) => discovery.rootDir),
           directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
           signal
         })
