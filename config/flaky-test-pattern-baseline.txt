@@ -439,7 +439,6 @@
 10 test-no-wall-clock:src/wsl-guest/agent-hooks/publication/agent-hook-integration.test.ts
 1 test-no-wall-clock:src/wsl-guest/agent-hooks/server/agent-hook-server.test.ts
 1 test-no-wall-clock:src/wsl-guest/agent-hooks/presence/relay-idle-process-owner.test.ts
-1 test-no-wall-clock:tests/e2e/cross-version-wire/cross-version-web-device-key.unit.test.ts
 2 test-no-wall-clock:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 4 test-no-wall-clock:tests/e2e/cross-version-wire/release-checkout.unit.test.ts
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
