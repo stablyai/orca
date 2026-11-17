@@ -7,7 +7,11 @@ import {
   type JournalHistoryPrompt
 } from './journal-history-items'
 import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
-import { budgetItemsByKindPage, itemsByKindPayloads } from './journal-items-by-kind-page'
+import {
+  budgetItemsByKindPage,
+  itemsByKindPayloads,
+  ITEMS_BY_KIND_PAYLOAD_SQL
+} from './journal-items-by-kind-page'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -187,7 +191,8 @@ export function readJournalDomainItems(
         )
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
-      const page = itemsByKindPayloads(db, prefix, chosen)
+      const payload = db.prepare(ITEMS_BY_KIND_PAYLOAD_SQL)
+      const page = itemsByKindPayloads(chosen, (itemId) => payload.get(...prefix, itemId))
       const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       return { kind: 'items-by-kind', ...budgetItemsByKindPage(page, next) }
     }
