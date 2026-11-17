@@ -58,6 +58,7 @@ import {
   restartThisServeSupervisorIfReplaced
 } from './serve/updates/serve-replaced-app-restart'
 import { isSupervisedSpawnHeld } from './serve/supervision/serve-supervised-stop'
+import { appImageEphemeralRootOf } from '../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 import { openServeBundlePark } from '../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import {
   redactingSpawn,
@@ -210,14 +211,22 @@ async function serveWithSelectedRuntime(
       stripElectronRunAsNode(process.env),
       findBundledWebClientRoot(resolveAppRoot()),
       findAppSpeechRecognizerDir(resolveAppRoot()),
-      // The file, not the FUSE mount: it outlives this process and keeps its path across updates.
-      resolveAppImageBuildWatch(executable)?.appImagePath
+      servedAppImageForBrowser(executable)
     )
   }
   if (selection.reason) {
     process.stderr.write(`[serve] using Electron serve: ${selection.reason}\n`)
   }
   return serveWithElectron(executable, args, userDataPath)
+}
+
+/** The file, not the FUSE mount: it outlives this process and keeps its path across updates. */
+function servedAppImageForBrowser(executable: string): string | undefined {
+  // Extract-and-run means no FUSE here, so the file itself could not start.
+  if (appImageEphemeralRootOf(executable)?.kind === 'extract') {
+    return undefined
+  }
+  return resolveAppImageBuildWatch(executable)?.appImagePath
 }
 
 function serveWithElectron(

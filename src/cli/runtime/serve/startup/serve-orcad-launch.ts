@@ -14,10 +14,10 @@ import { superviseForegroundServe } from '../updates/serve-update-supervisor'
 import { isSupervisedSpawnHeld } from '../supervision/serve-supervised-stop'
 import { redactingSpawn, shouldRedactSupervisedStdout } from './serve-pairing-redaction'
 import {
-  ORCA_SERVE_APPIMAGE_ENV,
   orcadServeArgs,
   type ServeOrcaAppArgs
 } from '../../../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import { SPEECH_RECOGNIZER_DIR_ENV } from '../../../../shared/speech/native-recognizer/speech-recognizer-package'
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../../../shared/remote-runtime/serve-supervisor/serve-supervised-terminal-durability'
 

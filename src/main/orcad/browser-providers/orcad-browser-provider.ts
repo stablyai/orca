@@ -15,7 +15,7 @@ import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/errors/error-message'
-import { ORCA_SERVE_APPIMAGE_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
+import { ORCA_SERVE_APPIMAGE_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -93,11 +93,12 @@ export function installedElectronCandidates(
   }
   const servedAppImage = environment[ORCA_SERVE_APPIMAGE_ENV]
   return [
-    ...(servedAppImage && posix.isAbsolute(servedAppImage) ? [servedAppImage] : []),
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
-    '/opt/Orca/orca-ide'
+    '/opt/Orca/orca-ide',
+    // Last: hosts where an installer copy already works keep it.
+    ...(servedAppImage && posix.isAbsolute(servedAppImage) ? [servedAppImage] : [])
   ]
 }
 
