@@ -25,7 +25,8 @@ import {
   CODEX_DATABASE_FILE,
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR,
-  recordCodexHistoryLeftBehind
+  recordCodexHistoryLeftBehind,
+  withManifestLock
 } from './codex-account-history-cleanup-manifest'
 import {
   compressedRolloutsFirst,
@@ -313,17 +314,25 @@ export async function unshareCodexAccountHistory(args: {
     return complete
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
-  for (const entry of await readDirectoryEntries(args.accountHome)) {
-    if (!entry.isFile() || !CODEX_DATABASE_FILE.test(entry.name)) {
-      continue
-    }
-    try {
-      await mkdir(holding, { recursive: true })
-      await rename(join(args.accountHome, entry.name), join(holding, entry.name))
-    } catch (error) {
-      complete = false
-      args.onWarning(error)
-    }
+  // Under the manifest's lock, so a cleanup deleting them as unused never sees half of them moved.
+  try {
+    await withManifestLock(args.accountHome, async () => {
+      for (const entry of await readDirectoryEntries(args.accountHome)) {
+        if (!entry.isFile() || !CODEX_DATABASE_FILE.test(entry.name)) {
+          continue
+        }
+        try {
+          await mkdir(holding, { recursive: true })
+          await rename(join(args.accountHome, entry.name), join(holding, entry.name))
+        } catch (error) {
+          complete = false
+          args.onWarning(error)
+        }
+      }
+    })
+  } catch (error) {
+    complete = false
+    args.onWarning(error)
   }
   if (complete) {
     await unlink(pending)
