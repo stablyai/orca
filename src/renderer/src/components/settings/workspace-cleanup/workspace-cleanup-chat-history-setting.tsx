@@ -57,13 +57,14 @@ export function WorkspaceCleanupChatHistorySetting({
       { host: hostLabel }
     )
   })
-  const diskUsage = useCodexHistoryDiskUsage(hostScope.target)
+  const shown = matchesSettingsSearch(query, [search])
+  const diskUsage = useCodexHistoryDiskUsage(hostScope.target, shown)
   const [confirming, setConfirming] = useState(false)
   const save = (next: boolean): void => {
     void update(next).then(onChanged)
   }
   const enabled = setting.state === 'ready' && setting.enabled
-  if (!matchesSettingsSearch(query, [search])) {
+  if (!shown) {
     return null
   }
 

@@ -12,7 +12,11 @@ import type { CodexHistoryDiskUsage } from '../../../../../shared/workspace-clea
 const DISK_USAGE_TIMEOUT_MS = 2 * 60_000
 
 /** What the host's Codex chat history takes; null until read, or when the host can't say. */
-export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHistoryDiskUsage | null {
+export function useCodexHistoryDiskUsage(
+  owner: RuntimeClientTarget,
+  /** False while settings search hides the row: the host walks nothing for it. */
+  shown: boolean
+): CodexHistoryDiskUsage | null {
   const environmentId = runtimeTargetEnvironmentId(owner)
   const ownerKey = environmentId ?? 'local'
   const [state, setState] = useState<{
@@ -32,6 +36,9 @@ export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHisto
   )
 
   useEffect(() => {
+    if (!shown) {
+      return
+    }
     let current = true
     void callRuntimeRpc<CodexHistoryDiskUsage>(
       runtimeTargetForOwnerEnvironment(environmentId),
@@ -50,7 +57,7 @@ export function useCodexHistoryDiskUsage(owner: RuntimeClientTarget): CodexHisto
     return () => {
       current = false
     }
-  }, [environmentId, ownerKey, revision])
+  }, [environmentId, ownerKey, revision, shown])
 
   return state?.ownerKey === ownerKey ? state.usage : null
 }

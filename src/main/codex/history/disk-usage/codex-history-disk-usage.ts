@@ -22,6 +22,8 @@ const MAX_ENTRIES = 1_000_000
 const WALK_BUDGET_MS = 60_000
 const WORKER_TIMEOUT_MS = WALK_BUDGET_MS + 30_000
 const IDLE_TEARDOWN_MS = 30_000
+// Each walk stats every rollout name; reopening the page within this window reuses the last one.
+const REUSE_MS = 5 * 60_000
 
 /** Every folder a rollout can sit in: live, archived, and copies set aside when history was shared. */
 export function codexHistoryFolders(homes: readonly string[]): string[] {
@@ -62,6 +64,15 @@ function getQueue(): NonNullable<typeof queue> {
 }
 
 let inFlight: Promise<CodexHistoryDiskUsage> | null = null
+let last: { usage: CodexHistoryDiskUsage; at: number } | null = null
+// Bumped by deletions so a walk that started before one never refills the reuse slot.
+let generation = 0
+
+/** Orca deleted rollouts: the next read walks again. */
+export function forgetCodexHistoryDiskUsage(): void {
+  generation += 1
+  last = null
+}
 
 async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
@@ -79,10 +90,27 @@ async function measure(
 
 /** Read-only and off the main thread; callers asking during a walk share it. */
 export function getCodexHistoryDiskUsage(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
+  now = Date.now()
 ): Promise<CodexHistoryDiskUsage> {
-  inFlight ??= measure(settings).finally(() => {
-    inFlight = null
-  })
+  if (last && now - last.at < REUSE_MS) {
+    return Promise.resolve(last.usage)
+  }
+  if (!inFlight) {
+    const startedIn = generation
+    const walk = measure(settings)
+      .then((usage) => {
+        if (startedIn === generation) {
+          last = { usage, at: Date.now() }
+        }
+        return usage
+      })
+      .finally(() => {
+        if (inFlight === walk) {
+          inFlight = null
+        }
+      })
+    inFlight = walk
+  }
   return inFlight
 }
