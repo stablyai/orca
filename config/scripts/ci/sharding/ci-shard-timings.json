@@ -1438,7 +1438,6 @@
       "src/main/ipc/filesystem/watchers/filesystem-watcher-wsl.test.ts": 119,
       "src/main/ipc/filesystem/watchers/filesystem-watcher.test.ts": 295,
       "src/main/ipc/worktrees/floating-workspace-directory.test.ts": 78,
-      "src/main/ipc/worktrees/git/git-status-upstream-ref-watch-request.test.ts": 405,
       "src/main/ipc/source-control/gitlab.test.ts": 260,
       "src/main/ipc/hooks/worktree-hook-execution-host.test.ts": 483,
       "src/main/ipc/hooks/worktree-hook-inspection-unc-drive.test.ts": 73,
