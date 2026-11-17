@@ -1,3 +1,7 @@
+import {
+  noteAgentSessionTextAppendSource,
+  type AgentSessionTextAppendSource
+} from '../../../../shared/agent-session/view/live-read/agent-session-text-append-source'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -26,7 +30,8 @@ export class StructuredAgentSessionLiveTextRows {
       'bindLiveText' | 'publishLiveText'
     >,
     private readonly text: (key: string) => string | undefined,
-    private readonly body: (key: string, text: string) => AgentJournalItemBody | null
+    private readonly body: (key: string, text: string) => AgentJournalItemBody | null,
+    private readonly textSource?: (key: string) => AgentSessionTextAppendSource | undefined
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
     this.release = sink.bindLiveText?.({ read: (epoch) => this.read(epoch), flush: () => {} })
@@ -75,6 +80,10 @@ export class StructuredAgentSessionLiveTextRows {
       const body = this.body(key, text)
       if (body) {
         const item = { ...placement.row, body }
+        const source = this.textSource?.(key)
+        if (source) {
+          noteAgentSessionTextAppendSource(item, source)
+        }
         this.shown.set(key, { placement, length: text.length, item })
         items.push(item)
       }

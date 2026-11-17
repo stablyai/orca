@@ -1,3 +1,4 @@
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
   type AgentSessionTextAppendCapabilities,
@@ -36,10 +37,17 @@ export function startStructuredAgentSessionReadTransport(
   const { target, ...read } = args
   return startStructuredAgentSessionLiveRead({
     ...read,
-    // Only a network hop pays for whole-reply restatements; local IPC keeps opening in the same turn.
-    ...(target.kind === 'environment'
-      ? { textAppend: environmentTextAppends(target.environmentId) }
-      : {}),
+    textAppend:
+      target.kind === 'environment'
+        ? environmentTextAppends(target.environmentId)
+        : ensureLocalRuntimeCapabilities().then((capabilities) =>
+            agentSessionTextAppendRequest({
+              textAppend:
+                capabilities?.includes(AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY) === true,
+              toolOutputAppend:
+                capabilities?.includes(AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY) === true
+            })
+          ),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),
     subscribe: (params, onEvent, onError, onClose) =>

@@ -1,3 +1,4 @@
+import type { AgentSessionTextAppendSource } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append-source'
 // Byte-bounded streamed text: appends in place, or truncates at a UTF-8 boundary with a marker.
 
 export const AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER = '\n[Orca: streamed output truncated]'
@@ -69,4 +70,34 @@ function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): num
     }
   }
   return end + buffer.write(delta, end, buffer.length - end, 'utf8')
+}
+
+/** Read only chunks intersecting a suffix, even when a subscriber skipped live windows. */
+export function streamedTextAppendSource(
+  identity: object,
+  chunks: string[],
+  offsets: number[],
+  length: number
+): AgentSessionTextAppendSource {
+  const end = chunks.length
+  return {
+    identity,
+    length,
+    suffix: (from) => {
+      let low = 0
+      let high = end
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (offsets[middle]! <= from) {
+          low = middle + 1
+        } else {
+          high = middle
+        }
+      }
+      const at = Math.max(0, low - 1)
+      return from === length
+        ? ''
+        : chunks[at]!.slice(from - offsets[at]!) + chunks.slice(at + 1, end).join('')
+    }
+  }
 }

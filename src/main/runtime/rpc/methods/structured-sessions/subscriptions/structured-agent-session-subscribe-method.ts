@@ -19,8 +19,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   params: SubscribeParams,
   handler: async (params, ctx, emitFrame) => {
     const { capabilities } = params
-    const emit =
-      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
+    const appends =
+      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : undefined
+    const emit = appends ?? emitFrame
     const host = await requireInstalledHost(ctx, params.sessionId)
     const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
     // A stream reads; it never keeps an agent alive or starts one.
@@ -31,6 +32,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     }
     // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
+      projectLiveItem: appends?.item,
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
       id: subscriptionId,

@@ -1,3 +1,5 @@
+import { agentSessionTextAppendSource } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append-source'
+import { onlyStreamedTextChanged } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
@@ -170,9 +172,25 @@ export async function publishSubscriberLiveText(
     for (const source of items) {
       const prior = sent?.get(source.itemId)
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
-      const row = prior?.source === source ? prior : { source, sent: form(source).item }
+      const before = prior && agentSessionTextAppendSource(prior.source)
+      const after = agentSessionTextAppendSource(source)
+      const clippedUnchanged =
+        prior?.sent.shortened &&
+        before &&
+        after &&
+        before.identity === after.identity &&
+        before.length <= after.length &&
+        onlyStreamedTextChanged(prior.source, source)
+      const projected =
+        prior?.source === source || clippedUnchanged
+          ? prior.sent
+          : (subscriber.projectLiveItem?.(source) ?? source)
+      const fitted = prior?.sent === projected ? projected : form(projected).item
+      // A clipped append cannot be decoded; send the ordinary bounded item instead.
+      const wire = 'textAppend' in projected && fitted !== projected ? form(source).item : fitted
+      const row = prior?.source === source ? prior : { source, sent: wire }
       rows.push(row)
-      if (row !== prior && !sameSentForm(prior, row.sent)) {
+      if (row !== prior && row.sent !== prior?.sent && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)
       }
     }

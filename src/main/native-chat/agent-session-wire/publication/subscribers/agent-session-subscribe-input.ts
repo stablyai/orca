@@ -14,6 +14,7 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import type { SubscriberHostWork, SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
 export type AgentSessionSubscribeInput = {
+  projectLiveItem?: (item: AgentJournalRenderItem) => AgentJournalRenderItem
   commandsOnRequest?: boolean
   id: string
   sessionId: string
@@ -34,6 +35,7 @@ export type AgentSessionSubscribeInput = {
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type Subscriber = {
+  projectLiveItem?: (item: AgentJournalRenderItem) => AgentJournalRenderItem
   id: string
   emit: AgentSessionSubscriberEmit
   end?: (cause: unknown) => void

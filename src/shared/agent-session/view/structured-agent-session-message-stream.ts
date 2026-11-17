@@ -1,3 +1,4 @@
+import { streamedTextReplacementIndexes } from './structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -86,7 +87,8 @@ function reuseMessages(
     return null
   }
   let output: NativeChatMessage[] | null = null
-  for (let index = 0; index < previous.items.length; index += 1) {
+  for (const index of streamedTextReplacementIndexes(previous.items, items) ??
+    previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {

@@ -1,3 +1,4 @@
+import { streamedTextReplacementIndexes as textReplacements } from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 import type {
   AgentJournalRenderItem,
   AgentJournalQuestionItem
@@ -216,16 +217,13 @@ function questionRowIndexes(
   })
 }
 
-function reuseQuestions(
+function reuse(
   previous: QuestionStreamState,
   items: readonly AgentJournalRenderItem[],
   project: (item: AgentJournalRenderItem) => Projection
 ): QuestionStreamState | null {
-  if (items.length < previous.items.length) {
-    return null
-  }
   let messages: NativeChatMessage[] | null = null
-  for (let index = 0; index < previous.items.length; index += 1) {
+  for (const index of textReplacements(previous.items, items) ?? previous.items.keys()) {
     const before = previous.items[index]!
     const item = items[index]!
     if (before === item) {
@@ -293,7 +291,8 @@ export function createStructuredQuestionProjection(
       if (previous?.items === items) {
         return previous.projection
       }
-      const reused = previous && reuseQuestions(previous, items, project)
+      const reused =
+        previous && items.length >= previous.items.length && reuse(previous, items, project)
       if (reused) {
         previous = reused
       } else {

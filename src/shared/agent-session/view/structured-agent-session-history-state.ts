@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage, AgentSessionTurnActivity } from '../agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-wire'
@@ -15,6 +16,7 @@ import { foldStructuredAgentSubagentRosterPage } from './structured-agent-sessio
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
   noteStreamedTextRevision,
+  rowsBesideStreamedText,
   onlyStreamedTextChanged
 } from './structured-agent-session-streamed-text-rows'
 import { admitAgentSessionBackgroundTaskState } from '../background-tasks/agent-session-background-task-state-admission'
@@ -104,6 +106,7 @@ function replaceItemsInPlace(
 ): AgentJournalRenderItem[] | null {
   let next: AgentJournalRenderItem[] | null = null
   let textOnly = true
+  const changedIndexes: number[] = []
   for (const item of incoming) {
     const index = rowIndexAt(current, item)
     const prior = current[index]
@@ -111,13 +114,14 @@ function replaceItemsInPlace(
       return null
     }
     if (item.revision >= prior.revision) {
+      changedIndexes.push(index)
       textOnly &&= onlyStreamedTextChanged(prior, item)
       next ??= current.slice()
       next[index] = item
     }
   }
   if (next && textOnly) {
-    noteStreamedTextRevision(next, current)
+    noteStreamedTextRevision(next, current, changedIndexes)
   }
   return next ?? current
 }
@@ -195,4 +199,21 @@ export function liveItemsWithinWindow(
     return incoming
   }
   return incoming.filter((item) => item.sequence >= head.sequence)
+}
+
+export function hasOlderAfterLiveItems(
+  state: StructuredAgentSessionState,
+  items: AgentJournalRenderItem[],
+  merged: AgentJournalRenderItem[]
+): boolean {
+  return rowsBesideStreamedText(items) === rowsBesideStreamedText(state.items)
+    ? state.hasOlder
+    : agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder)
+}
+
+export function oldestStructuredAgentSessionCursor(
+  state: StructuredAgentSessionState
+): AgentJournalCursor | null {
+  const oldest = state.items[0]
+  return state.epoch && oldest ? { epoch: state.epoch, sequence: oldest.sequence } : null
 }

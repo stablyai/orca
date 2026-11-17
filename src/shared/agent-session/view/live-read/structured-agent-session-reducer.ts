@@ -1,6 +1,7 @@
 import { trimStructuredAgentSessionHistory } from './structured-agent-session-history-retention'
 import type { AgentSessionCurrentRequestsMarker } from '../../requests/agent-session-current-requests-wire'
 import {
+  hasOlderAfterLiveItems,
   hostClockField,
   replacePage,
   mergeItems,
@@ -239,7 +240,6 @@ export function reduceStructuredAgentSession(
         : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
   const liveItems = liveItemsWithinWindow(state, event.batch.items)
-  // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
     state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
     event.batch.items,
@@ -297,7 +297,7 @@ export function reduceStructuredAgentSession(
     items,
     subagentRoster,
     // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: hasOlderAfterLiveItems(state, items, merged),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions
@@ -320,9 +320,4 @@ export function reduceStructuredAgentSession(
   }
 }
 
-export function oldestStructuredAgentSessionCursor(
-  state: StructuredAgentSessionState
-): AgentJournalCursor | null {
-  const oldest = state.items[0]
-  return state.epoch && oldest ? { epoch: state.epoch, sequence: oldest.sequence } : null
-}
+export { oldestStructuredAgentSessionCursor } from '../structured-agent-session-history-state'

@@ -1,9 +1,17 @@
+import {
+  agentSessionTextAppendSource,
+  type AgentSessionTextAppendSource
+} from './agent-session-text-append-source'
 import type { AgentJournalRenderItem } from '../../journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 
 /** What a stream asks for on `agentSession.subscribe`, sent only when the host advertises it. Both
  *  ends of the stream follow the rules it names, so they hold the same bases. */
 export type AgentSessionTextAppendCapabilities = { textAppend: 1; toolOutputAppend?: 1 }
+const fullAppendItems = new WeakMap<AgentJournalRenderItem, AgentJournalRenderItem>()
+
+type TextAppendBase = { text: string; source?: AgentSessionTextAppendSource }
+
 type TextAppendRules = Pick<AgentSessionTextAppendCapabilities, 'toolOutputAppend'>
 
 /** What to ask a host for, from whether it advertises each append runtime capability. */
@@ -85,17 +93,22 @@ function withText(item: AgentJournalRenderItem, text: string): AgentJournalRende
  *  rules, so they hold the same base text for each item without exchanging anything else. */
 function textAppendStream(
   rules: TextAppendRules,
-  mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
+  mapItem: (
+    base: TextAppendBase | undefined,
+    item: AgentJournalRenderItem
+  ) => AgentJournalRenderItem | null,
+  exposeBase?: (read: (itemId: string) => TextAppendBase | undefined) => void
 ): (event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null {
-  const bases = new Map<string, string>()
+  const bases = new Map<string, TextAppendBase>()
   let epoch: string | null = null
+  exposeBase?.((itemId) => bases.get(itemId))
   const note = (item: AgentJournalRenderItem): void => {
     bases.delete(item.itemId)
     const text = growingText(item, rules)
     if (text === null || isFinished(item)) {
       return
     }
-    bases.set(item.itemId, text)
+    bases.set(item.itemId, { text, source: agentSessionTextAppendSource(item) })
     const limit = rules.toolOutputAppend === 1 ? MAX_TEXT_APPEND_BASES : MAX_REPLY_APPEND_BASES
     const oldest = bases.size > limit ? bases.keys().next().value : undefined
     if (oldest !== undefined) {
@@ -129,7 +142,7 @@ function textAppendStream(
       }
       changed ||= mapped !== item
       items.push(mapped)
-      note('textAppend' in mapped ? item : mapped)
+      note(fullAppendItems.get(mapped) ?? ('textAppend' in mapped ? item : mapped))
     }
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
@@ -140,18 +153,40 @@ function textAppendStream(
 export function sendingTextAppends<R>(
   emit: (event: AgentSessionSubscribeEvent) => R,
   rules: TextAppendRules
-): (event: AgentSessionSubscribeEvent) => R {
-  const send = textAppendStream(rules, (base, item) => {
-    const text = growingText(item, rules)
-    if (base === undefined || text === null || !text.startsWith(base)) {
+): ((event: AgentSessionSubscribeEvent) => R) & {
+  item: (item: AgentJournalRenderItem) => AgentJournalRenderItem
+} {
+  let preview: (item: AgentJournalRenderItem) => AgentJournalRenderItem = (item) => item
+  const mapItem = (base: TextAppendBase | undefined, item: AgentJournalRenderItem) => {
+    if ('textAppend' in item) {
       return item
     }
-    return {
+    const text = growingText(item, rules)
+    if (base === undefined || text === null) {
+      return item
+    }
+    const source = agentSessionTextAppendSource(item)
+    const proven =
+      source && base.source?.identity === source.identity && base.source.length <= source.length
+    if (!proven && !text.startsWith(base.text)) {
+      return item
+    }
+    const mapped = {
       ...withText(item, ''),
-      textAppend: { from: base.length, text: text.slice(base.length) }
+      textAppend: {
+        from: base.text.length,
+        text: proven ? source.suffix(base.text.length) : text.slice(base.text.length)
+      }
     } satisfies AgentSessionTextAppendItem
+    fullAppendItems.set(mapped, item)
+    return mapped
+  }
+  const send = textAppendStream(rules, mapItem, (readBase) => {
+    preview = (item) => mapItem(readBase(item.itemId), item)
   })
-  return (event) => emit(send(event) ?? event)
+  return Object.assign((event: AgentSessionSubscribeEvent) => emit(send(event) ?? event), {
+    item: (item: AgentJournalRenderItem) => preview(item)
+  })
 }
 
 /** Client side: whole items back from appends; null when an append does not start where this
@@ -167,9 +202,13 @@ export function createAgentSessionTextAppendReader(
       return null
     }
     const { textAppend, ...rest } = item
-    if (base === undefined || base.length !== textAppend.from || growingText(rest, rules) !== '') {
+    if (
+      base === undefined ||
+      base.text.length !== textAppend.from ||
+      growingText(rest, rules) !== ''
+    ) {
       return null
     }
-    return withText(rest, base + textAppend.text)
+    return withText(rest, base.text + textAppend.text)
   })
 }

@@ -141,7 +141,8 @@ export function latestTurnAfterStructuredAgentSessionBatch(
 ): AgentSessionLatestTurn | null | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  const next = carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  return JSON.stringify(next) === JSON.stringify(previous) ? previous : next
 }
 
 /** Row-carrying batches restate actionable prompts; missing fields from older hosts clear prior claims. */
@@ -151,9 +152,11 @@ export function actionablePromptIdsAfterStructuredAgentSessionBatch(
 ): string[] | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.actionablePromptIds !== undefined
-    ? event.actionablePromptIds
-    : previous
+  const next =
+    carriesRows || event.actionablePromptIds !== undefined ? event.actionablePromptIds : previous
+  return next?.length === previous?.length && next?.every((id, index) => id === previous?.[index])
+    ? previous
+    : next
 }
 
 /** Apply the same row-carrying/older-host reset rule as latestTurn. */

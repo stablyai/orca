@@ -1,3 +1,8 @@
+import {
+  rowsBesideStreamedText,
+  streamedTextReplacementIndexes,
+  noteStreamedTextRevision
+} from '../../../agent-session/view/structured-agent-session-streamed-text-rows'
 // Derive cut-turn notices from durable journal turns for desktop/mobile, including old journals and mid-settle quits.
 // Do not duplicate host-written stop explanations; derived rows are never stored.
 
@@ -27,6 +32,15 @@ import {
 } from '../../../agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
+
+const transcriptNotices = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  {
+    agentName: string | undefined
+    output: readonly AgentJournalRenderItem[]
+    rowAt: Map<string, number>
+  }
+>()
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 
@@ -188,6 +202,30 @@ export function withNativeChatCutTurnNotices(
   items: readonly AgentJournalRenderItem[],
   context: CutTurnNoticeContext = {}
 ): readonly AgentJournalRenderItem[] {
+  const base = rowsBesideStreamedText(items)
+  const cached = transcriptNotices.get(base)
+  if (cached?.agentName === context.agentName && cached) {
+    const indexes = streamedTextReplacementIndexes(base, items)
+    if (indexes) {
+      if (indexes.length === 0) {
+        return cached.output
+      }
+      const output = cached.output.slice()
+      const replaced: number[] = []
+      for (const index of indexes) {
+        const item = items[index]!
+        const at = cached.rowAt.get(item.itemId)!
+        output[at] = item
+        replaced.push(at)
+      }
+      noteStreamedTextRevision(output, cached.output, replaced)
+      return output
+    }
+  }
+  if (base !== items) {
+    withNativeChatCutTurnNotices(base, context)
+    return withNativeChatCutTurnNotices(items, context)
+  }
   const explained = explainedCutTurns(items)
   const statesScopes = hostStatesTurnScopes(items)
   const noticesAfter = new Map<number, AgentJournalRenderItem[]>()
@@ -198,8 +236,14 @@ export function withNativeChatCutTurnNotices(
       noticesAfter.set(last, [...(noticesAfter.get(last) ?? []), notice])
     }
   })
-  if (noticesAfter.size === 0) {
-    return items
-  }
-  return items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  const output =
+    noticesAfter.size === 0
+      ? items
+      : items.flatMap((item, index) => [item, ...(noticesAfter.get(index) ?? [])])
+  transcriptNotices.set(items, {
+    agentName: context.agentName,
+    output,
+    rowAt: new Map(output.map((item, index) => [item.itemId, index]))
+  })
+  return output
 }
