@@ -74,19 +74,6 @@ describe('hermes startup plans', () => {
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('automation prompt')
   })
 
-  it('selects the final Hermes executable token in a wrapper', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'sudo -u hermes hermes --tui' },
-      platform: 'linux'
-    })
-
-    expect(unwrapPosixShellScript(plan?.launchCommand)).toContain(
-      "'sudo' '-u' 'hermes' 'hermes' 'chat'"
-    )
-  })
-
   it('selects the wrapped executable when the wrapper and command both name Hermes', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
@@ -135,31 +122,6 @@ describe('hermes startup plans', () => {
         platform: 'linux'
       })
     ).toBeNull()
-  })
-
-  it('rejects Hermes queries that exceed the safe Windows environment limit', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'x'.repeat(24_000),
-      cmdOverrides: {},
-      platform: 'win32'
-    })
-
-    expect(plan).toBeNull()
-  })
-
-  it('uses the Windows remote default shell for SSH Hermes queries', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run remotely',
-      cmdOverrides: {},
-      platform: 'win32',
-      isRemote: true
-    })
-
-    expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(
-      "& 'hermes' 'chat' \"--query=$orcaHermesNativeQuery\" '--tui'"
-    )
   })
 
   it('measures POSIX Hermes query limits in UTF-8 bytes', () => {

@@ -137,7 +137,7 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
         ),
         description: translate(
           'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspaceDescription',
-          "Claude Code chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         ),
         keywords: [
           ...translateSearchKeyword('components.settings.workspaceCleanup.search.chat', 'chat'),

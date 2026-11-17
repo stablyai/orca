@@ -2628,6 +2628,10 @@
       },
       "statusDetails": {
         "guestUnanswered": "The distro is running but didn’t answer Orca’s check.",
+        "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
+        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.",
+        "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
+        "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
         "orcadUnanswered": "Orca’s server in the distro didn’t answer.",
         "peerCheckFailed": "Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}",
         "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}",

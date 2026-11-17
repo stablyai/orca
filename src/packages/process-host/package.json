@@ -115,6 +115,11 @@
       "types": "./dist/wsl-distro-allowlist.d.ts",
       "default": "./dist/wsl-distro-allowlist.js"
     },
+    "./wsl-not-installed-latch": {
+      "orca-source": "./src/wsl-not-installed-latch.ts",
+      "types": "./dist/wsl-not-installed-latch.d.ts",
+      "default": "./dist/wsl-not-installed-latch.js"
+    },
     "./posix-group-termination": {
       "orca-source": "./src/posix-group-termination.ts",
       "types": "./dist/posix-group-termination.d.ts",

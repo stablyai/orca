@@ -5,6 +5,7 @@ import { XIcon } from 'lucide-react'
 import * as SheetPrimitive from 'radix-ui/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
@@ -19,8 +20,10 @@ function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Clo
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
-function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+function SheetPortal({ container, ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
+  const inherited = usePortalContainer()
+  const portalContainer = container === undefined ? (inherited ?? undefined) : container
+  return <SheetPrimitive.Portal data-slot="sheet-portal" container={portalContainer} {...props} />
 }
 
 function SheetOverlay({

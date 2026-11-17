@@ -13,7 +13,7 @@ import {
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
 } from '../../../workspaces/removal/local-worktree-filesystem'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,

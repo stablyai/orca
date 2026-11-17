@@ -538,7 +538,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} は設定どおりチャットとして開きます。",
       "defaultSurfaceSetAllChat": "すべてチャットにする",
       "defaultSurfaceSetAllTerminal": "すべてターミナルにする",
-      "sameAsChoice": "{{agent}} と同じ · {{choice}}",
       "modelListFallback": "組み込みのリストです。Orca はこのホストからモデル一覧を取得できませんでした。",
       "chatUnavailableOnWindows": "{{value0}} Chat はまだ Windows では利用できないため、このホストでは {{value0}} がターミナルで開きます。macOS または Linux ホストでのチャットは引き続き利用できます。",
       "undetectedCommandHint": "{{agent}} CLI が PATH 以外にインストールされている場合、このホスト上の実行ファイルのフルパスを入力してください。",
@@ -570,9 +569,6 @@
         "extraArgs": "追加の CLI 引数",
         "launchOptions": "モデルと権限",
         "savedLaunchOptions": "保存されたオプション: {{value0}}。古いサーバーでは、サーバー側の権限設定が使用されます。"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "{{agent}} と同じ"
       }
     },
     "ssh": {
@@ -4908,7 +4904,9 @@
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
             "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
             "notChecked": "未確認",
-            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}"
+            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}",
+            "resetsIn": "{{duration}}後にリセット",
+            "resetsNow": "今リセット"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -12001,7 +11999,7 @@
             "agentLaunch": "SSH を含む、ワークスペースで Agent を起動"
           },
           "decisionFailed": "権限の選択を保存できませんでした。再試行してください。",
-          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
+          "fullAccessWarning": "フルアクセス：通常のプログラムとして実行され、ファイルの読み取り、保存済みのログイン情報や SSH キーの使用、ネットワークの使用、他のプログラムの実行、ターミナルや Agent を含む Orca の操作ができます。",
           "uiWarning": "発行元のコードを Orca 内で実行してビューを描画します。Orca はアクセスできる対象を表示し、有効化の前に確認します。"
         },
         "PluginConsentProvenance": {
@@ -15112,8 +15110,8 @@
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
             "checking": "{{value0}} を確認中",
-            "scanned": "{{value0}}をスキャン済み",
-            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み"
+            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
+            "historyRefreshed": "履歴を更新しました"
           },
           "run": {
             "source": {
@@ -22058,6 +22056,10 @@
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ホストに移動済み",
+      "sectionTitle": "WSL ホストに移動済み ({{count}})",
+      "hide": "この一覧から非表示",
+      "hiddenToast": "{{name}} をこの一覧から非表示にしました",
+      "hiddenToastDescription": "「このコンピューターで再び使用」は {{distro}} ホスト配下のメニューに残ります。",
       "useHere": "このコンピューターで再び使用",
       "useHereTitle": "{{name}} をこのコンピューターで再び使用しますか？",
       "useHereDescription": "Orca はこのプロジェクトを移動前の状態でここに開きます。コードには影響しません（移動していません）。移動後に {{distro}} ホストで行った変更（新しいタブやチャットなど）はホストに残り、戻りません。一緒に移動したプロジェクトも戻ります。プロジェクトは、{{distro}} ホストで削除するまでそこにも残ります。このウィンドウは再読み込みされます。",
@@ -22117,7 +22119,9 @@
         "restartGaveUp_other": "{{count}} 回試行しましたが、{{distro}} 内の Orca サーバーを再起動できませんでした",
         "serviceUnconfirmed": "WSL サービスからディストリビューションが実行中かどうかの確認が得られませんでした。",
         "peerCheckFailed": "Orca は WSL ホストに、このコンピューター上の別の Orca がまだ使用しているかを問い合わせられませんでした: {{detail}}",
-        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}"
+        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}",
+        "installLockWait_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca が引き継ぎます。",
+        "installLockWaitGivesUp_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca は待機をやめます。"
       }
     },
     "agentSummary": {
@@ -22175,6 +22179,7 @@
       "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "accept": "ホストとして実行",
       "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。",
+      "savedUnderAnotherPath": "このフォルダーは {{path}} としてすでにプロジェクトになっており、まだ {{distro}} ホストに移動できません。そのプロジェクトを削除してから、フォルダーをもう一度追加すると移動できます。",
       "existingTitle": "{{distro}} ホストに追加（推奨）",
       "existingWhy": "{{distro}} はすでにホストとして実行中のため、Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "existingAccept": "ホストに追加"
@@ -22663,14 +22668,12 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "インデックス付けされた履歴に一致するセッションがありません。別のクエリまたはスコープを試してください。",
       "loadMore": "さらに一致をロードする",
       "indexedHistory": "インデックス付き履歴",
       "hostsSkipped": "検索されていません: {{value0}}",
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか？Orca は、会話の全文を含むローカルの Agent トランスクリプトから、このコンピュータ上にインデックスを作成します。内容はマスキングされません。ペアリングされた認証済みクライアントは、このインデックスを検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -22697,7 +22700,9 @@
         "unreachable": "接続不可",
         "scopeNotFound": "そのホストに検索範囲が見つかりません",
         "agentNotSupported": "Agent 未対応"
-      }
+      },
+      "consentTranscriptIndex": "検索ではセッションの詳細とメッセージのプレビューが照合されます。会話の全文を検索するには、全文検索を有効にしてください（ローカルのトランスクリプトをマスキングせずにインデックス化します）。ペアリングされたデバイスからも検索できます。",
+      "noMatchesToShow": "表示できる一致するセッションはありません。"
     }
   },
   "sessionHistory": {
@@ -24373,7 +24378,6 @@
     "waitForImageUploads": "画像のアップロードが完了するまで待ってから、もう一度 [PR を作成] を実行してください。"
   },
   "agentPicker": {
-    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
     "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
     "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
@@ -24390,11 +24394,9 @@
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",
-    "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "moreModelsWithCount": "その他のモデル ({{total}})",
-    "use": "使用",
     "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル",

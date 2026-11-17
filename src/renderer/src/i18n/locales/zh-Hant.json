@@ -87,6 +87,10 @@
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",
+      "sectionTitle": "已移至 WSL 主機 ({{count}})",
+      "hide": "從此清單隱藏",
+      "hiddenToast": "已從此清單隱藏 {{name}}",
+      "hiddenToastDescription": "「重新在這台電腦上使用」仍在 {{distro}} 主機下的選單中。",
       "useHere": "重新在這台電腦上使用",
       "useHereTitle": "要重新在這台電腦上使用 {{name}} 嗎？",
       "useHereDescription": "Orca 會依照移動前的狀態在這裡開啟此專案。你的程式碼不受影響：它從未移動。移動後在 {{distro}} 主機上所做的變更（例如新分頁和聊天）會留在主機上，不會帶回來。與它一起移動的專案也會一起回來。在你於 {{distro}} 主機上將其移除之前，專案也會一直保留在那裡。此視窗將重新載入。",
@@ -143,7 +147,9 @@
         "restartGaveUp_other": "嘗試 {{count}} 次後仍無法重新啟動 {{distro}} 中的 Orca 伺服器",
         "serviceUnconfirmed": "WSL 服務未確認此發行版是否正在執行。",
         "peerCheckFailed": "Orca 無法向 WSL 主機詢問此電腦上的另一個 Orca 是否仍在使用該主機：{{detail}}",
-        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}"
+        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}",
+        "installLockWait_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後接手。",
+        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。"
       }
     },
     "agentSummary": {
@@ -198,6 +204,7 @@
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
       "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "savedUnderAnotherPath": "此資料夾已作為專案 {{path}} 存在，暫時無法移到 {{distro}} 主機。請移除該專案，然後重新新增此資料夾以移動它。",
       "existingTitle": "新增到 {{distro}} 主機（建議）",
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"
@@ -863,7 +870,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
-      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
       "modelListFallback": "內建清單。Orca 無法從此主機取得模型清單。",
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
@@ -891,9 +897,6 @@
         "extraArgs": "額外的 CLI 參數",
         "launchOptions": "模型與權限",
         "savedLaunchOptions": "已儲存的選項：{{value0}}。舊版伺服器使用自身的權限設定。"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "與 {{agent}} 相同"
       }
     },
     "mcp": {
@@ -4838,7 +4841,9 @@
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
             "footerDetailAria": "用量頁尾詳細資訊",
             "notChecked": "未檢查",
-            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}"
+            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}",
+            "resetsIn": "{{duration}}後重設",
+            "resetsNow": "現在重設"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -11790,7 +11795,7 @@
             "terminalRun": "在您的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用你已儲存的登入資訊和 SSH 金鑰、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
           "uiWarning": "在 Orca 中執行發佈者的程式碼來繪製其檢視畫面。Orca 會顯示它能存取什麼，並在啟用前徵求您的同意。"
         },
         "PluginConsentProvenance": {
@@ -14774,8 +14779,8 @@
             "databaseCount_other": "{{value0}} 個資料庫",
             "scanning": "正在掃描 {{value0}}",
             "checking": "正在檢查 {{value0}}",
-            "scanned": "已掃描 {{value0}}",
-            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄"
+            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄",
+            "historyRefreshed": "歷史記錄已重新整理"
           },
           "run": {
             "source": {
@@ -21225,7 +21230,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已建立索引的歷史記錄中沒有符合的工作階段。請改用其他查詢或範圍。",
       "loadMore": "載入更多符合項目",
       "indexedHistory": "已建立索引的歷史記錄",
       "hostsSkipped": "未搜尋：{{value0}}",
@@ -21258,7 +21262,9 @@
         "unreachable": "無法連線",
         "scopeNotFound": "該主機上找不到搜尋範圍",
         "agentNotSupported": "不支援此代理程式"
-      }
+      },
+      "consentTranscriptIndex": "搜尋會比對工作階段詳細資料和訊息預覽。若要搜尋完整對話，請啟用全文搜尋（為本機記錄建立索引，不遮蔽內容）。配對裝置也可以搜尋這些內容。",
+      "noMatchesToShow": "沒有可顯示的符合工作階段。"
     }
   },
   "sessionHistory": {
@@ -23254,7 +23260,6 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "agentPicker": {
-    "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
@@ -23264,7 +23269,6 @@
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
-    "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
     "moreModelsWithCount": "更多模型 ({{total}})",
@@ -23274,7 +23278,6 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
-    "use": "使用",
     "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",

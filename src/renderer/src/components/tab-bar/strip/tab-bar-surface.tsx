@@ -246,6 +246,12 @@ export function renderTabBarSurface(
                 terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
+                excludedTabId={
+                  activeClientHostedBrowserRowId === null
+                    ? (orderedItems.find((item) => item.id === itemProjection.activeVisibleTabId)
+                        ?.unifiedTabId ?? null)
+                    : null
+                }
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
