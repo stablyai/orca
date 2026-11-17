@@ -9,6 +9,8 @@ const ZSH = '/bin/zsh'
 const describeZsh = process.platform !== 'win32' && existsSync(ZSH) ? describe : describe.skip
 const SESSION_ID = 'startup-type-ahead'
 const COMMAND = `bash -c 'read -r line; printf "AGENT_GOT:[%s]\\n" "$line"'`
+// Past the typed-line budget, so the launch is staged as a short script invocation.
+const LONG_COMMAND = `${COMMAND} # ${'x'.repeat(2_000)}`
 
 describeZsh('typing while an agent tab starts', () => {
   let cleanup: (() => Promise<void>) | null = null
@@ -17,7 +19,7 @@ describeZsh('typing while an agent tab starts', () => {
     cleanup = null
   })
 
-  async function start(zshrc: string, shellReadyTimeoutMs?: number) {
+  async function start(zshrc: string, command = COMMAND, shellReadyTimeoutMs?: number) {
     const home = mkdtempSync(join(tmpdir(), 'orca-type-ahead-'))
     writeFileSync(join(home, '.zshrc'), zshrc)
     const host = new TerminalHost({ spawnSubprocess: createPtySubprocess })
@@ -27,7 +29,7 @@ describeZsh('typing while an agent tab starts', () => {
       cols: 100,
       rows: 30,
       cwd: home,
-      command: COMMAND,
+      command,
       shellOverride: ZSH,
       shellReadySupported: true,
       ...(shellReadyTimeoutMs ? { shellReadyTimeoutMs } : {}),
@@ -48,21 +50,39 @@ describeZsh('typing while an agent tab starts', () => {
   }
 
   // A real login shell runs a slow rc before the agent command starts.
-  it('delivers keystrokes typed during shell startup to the agent, not the shell', async () => {
-    const tab = await start('sleep 0.6\n')
-    tab.host.write(SESSION_ID, 'ademarkqz\r')
-    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[ademarkqz]'), {
-      timeout: 8_000
-    })
-    expect(tab.output()).not.toContain('command not found')
-  }, 15_000)
+  it.each([
+    ['a short launch line', COMMAND],
+    ['a staged long launch line', LONG_COMMAND]
+  ])(
+    'delivers keystrokes typed during shell startup to %s, not the shell',
+    async (_label, command) => {
+      const tab = await start('sleep 0.6\n', command)
+      tab.host.write(SESSION_ID, 'ademarkqz\r')
+      await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[ademarkqz]'), {
+        timeout: 8_000
+      })
+      expect(tab.output()).not.toContain('command not found')
+      expect(tab.output()).not.toContain('x'.repeat(100))
+    },
+    15_000
+  )
 
-  // The no-line-editor fallback waits out the readiness timeout in a real shell.
-  it('still starts the agent once when the shell never reaches a line editor', async () => {
-    const tab = await start('unsetopt zle\n', 1_500)
-    await vi.waitFor(() => expect(tab.output()).toContain(COMMAND), { timeout: 8_000 })
-    tab.host.write(SESSION_ID, 'late\r')
-    await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[late]'), { timeout: 5_000 })
-    expect(tab.output().split('AGENT_GOT:[late]').length - 1).toBe(1)
-  }, 15_000)
+  // Real shells; the late-marker case outlasts a shortened readiness timeout.
+  it.each([
+    ['the shell never reaches a line editor', 'unsetopt zle\n', undefined],
+    ['shell startup outlasts the readiness timeout', 'sleep 1.5\n', 500]
+  ])(
+    'starts the agent exactly once when %s',
+    async (_label, zshrc, shellReadyTimeoutMs) => {
+      const tab = await start(zshrc, COMMAND, shellReadyTimeoutMs)
+      await vi.waitFor(() => expect(tab.output()).toContain(COMMAND), { timeout: 8_000 })
+      tab.host.write(SESSION_ID, 'late\r')
+      await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[late]'), {
+        timeout: 5_000
+      })
+      expect(tab.output().split(COMMAND).length - 1).toBe(1)
+      expect(tab.output()).not.toContain('command not found')
+    },
+    15_000
+  )
 })

@@ -33,6 +33,11 @@ import {
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  type StartupCommandStaging
+} from '../../../shared/shell/launch/startup-command-staging'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
@@ -56,8 +61,8 @@ export type PtyShellLaunchPlan = {
   spawnCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
-  /** The zsh wrapper runs the command from its first prompt, so nothing is typed ahead of the user. */
-  startupCommandDeliveredByShellWrapper: boolean
+  /** Set when the zsh wrapper runs the command from its first prompt, so nothing is typed ahead of the user. */
+  shellWrapperStartupStaging: StartupCommandStaging | null
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
 }
@@ -70,7 +75,7 @@ export function createPtyShellLaunchPlan(
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
-  let startupCommandDeliveredByShellWrapper = false
+  let shellWrapperStartupStaging: StartupCommandStaging | null = null
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
@@ -229,10 +234,21 @@ export function createPtyShellLaunchPlan(
     if (
       opts.command &&
       opts.shellReadySupported === true &&
-      canDeliverStartupCommandFromZshWrapper(shellPath, shellLaunch, opts.command)
+      zshWrapperCanRunStartupCommand(shellPath, shellLaunch)
     ) {
-      env[POSIX_SHELL_STARTUP_COMMAND_ENV] = opts.command.replace(/(\r\n|\r|\n)$/, '')
-      startupCommandDeliveredByShellWrapper = true
+      // Long or multiline lines run from a staged script so the prompt stays out of scrollback and history.
+      const staging = stageStartupCommand({
+        command: opts.command,
+        shellPath,
+        orcaBuiltLine: opts.launchAgent !== undefined
+      })
+      const line = staging.command.replace(/(\r\n|\r|\n)$/, '')
+      if (Buffer.byteLength(line) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES) {
+        env[POSIX_SHELL_STARTUP_COMMAND_ENV] = line
+        shellWrapperStartupStaging = staging
+      } else {
+        discardStagedStartupCommand(staging)
+      }
     }
   }
 
@@ -252,24 +268,22 @@ export function createPtyShellLaunchPlan(
     spawnCwd,
     validationCwd,
     startupCommandDeliveredInShellArgs,
-    startupCommandDeliveredByShellWrapper,
+    shellWrapperStartupStaging,
     windowsFallbackAttempts,
     startupAgentRecognition
   }
 }
 
-// Linux caps one env string at 128 KiB; longer commands keep the typed, staged path.
+// Linux caps one env string at 128 KiB; only an unstaged (stage-failed) line can come near it.
 const MAX_WRAPPER_STARTUP_COMMAND_BYTES = 32 * 1024
 
-function canDeliverStartupCommandFromZshWrapper(
+function zshWrapperCanRunStartupCommand(
   shellPath: string,
-  launch: ReturnType<typeof getShellLaunchConfig>,
-  command: string
+  launch: ReturnType<typeof getShellLaunchConfig>
 ): boolean {
   return (
     pathWin32.basename(shellPath).toLowerCase() === 'zsh' &&
     launch.supportsReadyMarker &&
-    launch.env.ZDOTDIR !== undefined &&
-    Buffer.byteLength(command) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES
+    launch.env.ZDOTDIR !== undefined
   )
 }

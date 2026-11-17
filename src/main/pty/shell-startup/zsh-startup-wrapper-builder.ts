@@ -18,6 +18,7 @@ import {
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
 import { ZSH_CWD_REPORT_BLOCK } from './shell-cwd-report'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './posix-shell-startup-command'
 
 export type ZshWrapperRestoreSpec = {
   /** Local-only PATH restore; inert outside WSL. */
@@ -158,9 +159,19 @@ ${
     : ''
 }  builtin unset _orca_shell_features _orca_histfile
 ${ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK}
-  builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
+  builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init${
+    spec.startupCommandDelivery ? `\n${ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK}` : ''
+  }
 }`
 }
+
+// Without zle, no line-init fires; run the command from this first precmd instead.
+const ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK = `  if [[ ! -o zle ]] && (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
+    builtin typeset __orca_command="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
+    builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
+    builtin print -r -- "$__orca_command"
+    builtin eval "$__orca_command"
+  fi`
 
 export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
   return `${joinBlocks([

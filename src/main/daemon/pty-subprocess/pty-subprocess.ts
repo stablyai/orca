@@ -4,7 +4,8 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import { normalizePtySize } from '../protocol/daemon-pty-size'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { createDaemonPtyEnvironment } from './spawn-environment'
-import { createPtyShellLaunchPlan } from './shell-launch-plan'
+import { createPtyShellLaunchPlan, type PtyShellLaunchPlan } from './shell-launch-plan'
+import { discardStagedStartupCommand } from '../../../shared/shell/launch/startup-command-staging'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -68,10 +69,11 @@ export async function checkPtySpawnHealth(): Promise<void> {
 /** Plan first so validation uses the host or WSL cwd that spawn will actually use. */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const work = new TerminalCreationWork()
+  let launch: PtyShellLaunchPlan | undefined
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
-    const launch = createPtyShellLaunchPlan(opts, env)
+    launch = createPtyShellLaunchPlan(opts, env)
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,
@@ -120,7 +122,9 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-      startupCommandDeliveredByShellWrapper: launch.startupCommandDeliveredByShellWrapper,
+      ...(launch.shellWrapperStartupStaging
+        ? { shellWrapperStartupStaging: launch.shellWrapperStartupStaging }
+        : {}),
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -128,6 +132,10 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       // Claimed here, synchronously with the handle's own subscription, so no event falls between.
       ...(spawned.claimStartupEvents ? { startupEvents: spawned.claimStartupEvents() } : {})
     })
+  } catch (error) {
+    // No shell will source a staged launch script whose spawn failed.
+    discardStagedStartupCommand(launch?.shellWrapperStartupStaging ?? undefined)
+    throw error
   } finally {
     await work.finish()
     opts.onCreationDisposition?.(await work.completion)

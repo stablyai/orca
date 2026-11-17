@@ -184,9 +184,11 @@ export async function spawnAndPublishSession(
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
 
-  // The wrapper runs the command at the first prompt, so early keystrokes queue for the agent, not the shell.
-  const startupCommandByWrapper =
-    Boolean(opts.command) && subprocess.startupCommandDeliveredByShellWrapper === true
+  // The wrapper runs the command at its first prompt (or first precmd without zle), so nothing is typed
+  // ahead of the user and early keystrokes queue for the agent.
+  const startupCommandByWrapper = Boolean(opts.command && subprocess.shellWrapperStartupStaging)
+  // Exit before the wrapper sources a staged script still unlinks it.
+  staging.current = subprocess.shellWrapperStartupStaging
   const startupCommandWritten =
     Boolean(opts.command) &&
     !subprocess.startupCommandDeliveredInShellArgs &&
@@ -205,9 +207,9 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  const buildSubmission = (command: string): string => {
+  if (startupCommandWritten && opts.command) {
     staging.current = stageStartupCommand({
-      command,
+      command: opts.command,
       shellPath: subprocess.shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
@@ -224,16 +226,11 @@ export async function spawnAndPublishSession(
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    return buildStartupCommandSubmission(staging.current.command, {
-      bracketedPasteSafe: shellReadySupported
-    })
-  }
-  const command = opts.command
-  if (command && startupCommandByWrapper) {
-    // Typed only if the shell never reaches a prompt (zle disabled, or rc exec'd another program).
-    session.holdStartupCommandFallback(() => buildSubmission(command))
-  } else if (command && startupCommandWritten) {
-    session.writeStartupCommand(buildSubmission(command))
+    session.writeStartupCommand(
+      buildStartupCommandSubmission(staging.current.command, {
+        bracketedPasteSafe: shellReadySupported
+      })
+    )
   }
 
   return {

@@ -1,3 +1,4 @@
+import type { StartupCommandStaging } from '../../../shared/shell/launch/startup-command-staging'
 import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -22,8 +23,8 @@ export type SubprocessHandle = {
   confirmShellForeground?(): Promise<boolean>
   /** Skip stdin command delivery when shell arguments already delivered it. */
   startupCommandDeliveredInShellArgs?: boolean
-  /** The shell wrapper runs the command at its first prompt; stdin delivery is only the no-prompt fallback. */
-  startupCommandDeliveredByShellWrapper?: boolean
+  /** Present when the shell wrapper runs the command at its first prompt instead of stdin delivery. */
+  shellWrapperStartupStaging?: StartupCommandStaging
   /** Report the actual fallback shell so unsupported readiness markers cannot stall startup. */
   shellPath?: string
   shellCwd?: string
