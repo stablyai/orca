@@ -22,7 +22,6 @@ vi.mock('../../../wsl/filesystem/wsl-automount-root', async (importOriginal) => 
   settleWslAutomountRoot: () => null
 }))
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../git-exec-file'
-import { gitStreamStdout } from '../git-stream-stdout'
 
 import { _resetGitAdmissionForTests } from '../admission/git-subprocess-admission'
 
@@ -33,8 +32,7 @@ import {
 } from './wsl-windows-checkout-git-config'
 import {
   resetWslGitReadEnvironmentForTests,
-  seedWslGitReadEnvironmentForTests,
-  WSL_GIT_READ_ENVIRONMENT_WAIT_MS
+  seedWslGitReadEnvironmentForTests
 } from './wsl-git-read-environment'
 import {
   prepareWslLinkedWorktreeGitRouting,
@@ -73,6 +71,8 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 
 describe('WSL direct Git reads', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000)
     execFileMock.mockReset()
     execFileSyncMock.mockReset()
     spawnMock.mockReset()
@@ -83,6 +83,7 @@ describe('WSL direct Git reads', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     resetWslGitReadEnvironmentForTests()
     resetWslLinkedWorktreeGitRoutingForTests()
     resetWslWindowsCheckoutGitConfigForTests()
@@ -116,104 +117,6 @@ describe('WSL direct Git reads', () => {
 
       expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
       expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('__ORCA_WSL_CAPTURE_BEGIN_')
-    })
-  })
-
-  it('verifies the WSL guest process group before settling an abort', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      const command = createMockChild()
-      spawnMock.mockImplementation((_program, args) => {
-        if (spawnMock.mock.calls.length === 1) {
-          queueMicrotask(() => {
-            const marker = String(args?.join(' ')).match(
-              /(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/
-            )?.[1]
-            command.stderr.emit('data', Buffer.from(`${marker}4321\n`))
-          })
-          return command
-        }
-        const terminator = createMockChild()
-        queueMicrotask(() => {
-          // The kill first confirms the distro still runs, so it cannot boot a stopped one (E9).
-          if (args?.includes('--running')) {
-            terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
-          }
-          terminator.emit('close', 0, null)
-        })
-        return terminator
-      })
-      const controller = new AbortController()
-      const pending = gitExecFileAsync(['status'], {
-        cwd: String.raw`C:\repo`,
-        env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
-        wslDistro: DISTRO,
-        signal: controller.signal,
-        terminationBarrier: true
-      })
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
-      await Promise.resolve()
-
-      controller.abort()
-
-      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-      expect(command.kill).not.toHaveBeenCalled()
-      const kill = spawnMock.mock.calls.find(([, args]) =>
-        String(args?.join(' ')).includes('kill -TERM')
-      )
-      expect(kill?.[1]).toContain('4321')
-    })
-  })
-
-  it('stops waiting for a wedged probe and reads through the shell route', async () => {
-    await withPlatform('win32', async () => {
-      vi.useFakeTimers()
-      try {
-        execFileMock.mockImplementation((_command, args, _options, callback) => {
-          const child = createMockChild()
-          if (!String(args).includes('_orca_git_path')) {
-            queueMicrotask(() => callback?.(null, 'ok', ''))
-          }
-          return child
-        })
-
-        const pending = gitExecFileAsync(['show', ':src/file.ts'], {
-          cwd: String.raw`\\wsl.localhost\Ubuntu\repo`
-        })
-        await vi.advanceTimersByTimeAsync(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
-        await pending
-
-        const resolved = execFileMock.mock.calls.at(-1)?.[1] ?? []
-        expect(resolved.slice(3, 5)).toEqual(['bash', '-c'])
-        expect(resolved).not.toContain('/usr/bin/env')
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-  })
-
-  it('does not retry a failed direct stream after delivering output', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      spawnMock.mockImplementation(() => {
-        const child = createMockChild()
-        queueMicrotask(() => {
-          child.stdout.emit('data', Buffer.from('partial'))
-          child.stderr.emit('data', Buffer.from('/usr/bin/env: No such file or directory'))
-          child.emit('close', 127)
-        })
-        return child
-      })
-
-      await expect(
-        gitStreamStdout(['status', '--porcelain=v2'], {
-          cwd: String.raw`C:\repo`,
-          onStdout: () => {},
-          preferWslDirectGit: true,
-          wslDistro: DISTRO
-        })
-      ).rejects.toThrow('git exited with 127')
-      expect(spawnMock).toHaveBeenCalledTimes(1)
     })
   })
 

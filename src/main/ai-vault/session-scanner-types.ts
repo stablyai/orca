@@ -12,6 +12,7 @@ import type {
 } from './transcripts/session-transcript-consumers'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import type { SessionDiscoveryStatCache } from './discovery/session-discovery-stat-cache'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
@@ -64,6 +65,8 @@ export type AiVaultScanOptions = {
   scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  /** Search indexing reuses stats of quiet files between complete sweeps. */
+  statCache?: SessionDiscoveryStatCache
   signal?: AbortSignal
 }
 

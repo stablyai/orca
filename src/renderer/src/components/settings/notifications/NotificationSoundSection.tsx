@@ -13,7 +13,7 @@ import {
   SelectValue
 } from '../../ui/select'
 import { FileAudio, Upload, Volume2 } from 'lucide-react'
-import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { getNotificationSoundOptions } from '@/components/notifications/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 

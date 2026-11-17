@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'

@@ -1,4 +1,4 @@
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { createTerminalTabOwnerIndex } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { SnapshotCapabilityBindingState } from './terminal-provider-snapshot-capability'
 

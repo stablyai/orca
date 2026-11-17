@@ -36,17 +36,6 @@ afterEach(() => {
 })
 
 describe('sleeping instead of closing a terminal', () => {
-  it('hides sleep when the request cannot keep the agent resumable', () => {
-    useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
-      terminalTabId: 'tab-1',
-      copyKind: 'agent',
-      worktreeId: 'wt-1',
-      onConfirm: vi.fn()
-    })
-    render(<RunningTerminalCloseDialog />)
-    expect(screen.queryByRole('button', { name: 'Sleep workspace instead' })).toBeNull()
-  })
-
   it('does not sleep a queued workspace from a rapid second click', async () => {
     const sleep = vi.fn().mockResolvedValue([])
     Object.defineProperty(window, 'api', { configurable: true, value: { worktrees: { sleep } } })

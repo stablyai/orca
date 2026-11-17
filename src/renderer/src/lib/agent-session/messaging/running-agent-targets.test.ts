@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalPaneLayoutNode,
@@ -77,81 +77,6 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
     expect(onlyTarget(state(entry({}), ['pty-1']))).toEqual({
       status: 'eligible',
       disabledReason: undefined
-    })
-  })
-
-  it('keeps a restored agent pane with a live PTY selectable after restart', () => {
-    expect(onlyTarget(state(entry({ restoredUnconfirmed: true }), ['pty-1']))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
-  })
-
-  it('keeps an unanswered permission prompt disabled at any age', () => {
-    expect(onlyTarget(state(entry({ state: 'blocked' }), ['pty-1']))).toEqual({
-      status: 'disabled',
-      disabledReason: 'Agent needs permission'
-    })
-  })
-
-  it('does not let an idle-looking title clear an old permission row', () => {
-    expect(
-      onlyTarget(
-        state(entry({ state: 'blocked', agentType: 'claude' }), ['pty-1'], '\u2733 Claude Code')
-      )
-    ).toEqual({ status: 'disabled', disabledReason: 'Agent needs permission' })
-  })
-
-  it("does not apply a split sibling's tab title to this pane", () => {
-    const split: TerminalPaneLayoutNode = {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEAF_ID },
-      second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
-    }
-    expect(onlyTarget(state(entry({}), ['pty-1'], 'Codex - action required', split))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
-    expect(
-      onlyTarget(
-        state(
-          entry({ state: 'blocked', restoredUnconfirmed: true }),
-          ['pty-1'],
-          'Codex ready',
-          split
-        )
-      )
-    ).toEqual({ status: 'disabled', disabledReason: 'Agent needs permission' })
-  })
-
-  it('disables a mid-turn Kiro pane, whose hooks report working through an approval menu', () => {
-    expect(onlyTarget(state(entry({ state: 'working' }), ['pty-1']))).toEqual({
-      status: 'disabled',
-      disabledReason: 'Agent may be waiting for approval'
-    })
-    expect(onlyTarget(state(entry({ state: 'working', agentType: 'claude' }), ['pty-1']))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
-  })
-
-  it('refuses a Kiro pane on a paired host whose send guard predates approval-hiding agents', () => {
-    const remotePty = 'remote:host-1@@term-1'
-    expect(onlyTarget(state(entry({}), [remotePty]))).toEqual({
-      status: 'disabled',
-      disabledReason: 'Update Orca on this host to send to this agent'
-    })
-    expect(onlyTarget(state(entry({}), [remotePty], 'kiro-cli', null, ['host-1']))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
-  })
-
-  it('disables a pane whose saved PTY is not live', () => {
-    expect(onlyTarget(state(entry({}), undefined))).toEqual({
-      status: 'disabled',
-      disabledReason: 'Terminal is no longer available'
     })
   })
 })

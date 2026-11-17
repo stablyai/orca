@@ -71,6 +71,10 @@ function nativeChatLaunchNotice(
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
   const details = failure?.details
+  // No retry continues a conversation saved in another folder.
+  const retryable = !(
+    failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder
+  )
   const signInContent = nativeChatAntigravitySignInContent(
     details?.reason,
     agentLabel,
@@ -85,7 +89,7 @@ function nativeChatLaunchNotice(
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
       nativeChatSetupAction(failure?.details?.reason, setup, t) ??
-      (signInContent
+      (signInContent || !retryable
         ? undefined
         : {
             label: t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry'),

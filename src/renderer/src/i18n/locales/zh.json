@@ -19646,6 +19646,7 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
         "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 保存",
@@ -21496,7 +21497,6 @@
         "previewFailed": "无法检查此更改会匹配哪些工作区",
         "pinFailed": "无法保留 {{name}}",
         "rules": {
-          "title": "规则",
           "branchNote": "已合并的分支会随工作区一起删除，未合并的分支会保留",
           "recommended": "推荐",
           "inactiveDescription": "{{count}} 天没有活动",
@@ -21523,13 +21523,15 @@
           "orchestrationWorkersDescription": "编排工作者使用过的工作区，在协调者释放它之后删除",
           "inactiveDescription_other": "{{count}} 天没有活动",
           "matchesCount_other": "当前匹配 {{count}} 个工作区",
-          "checking": "正在检查匹配的工作区…"
+          "checking": "正在检查匹配的工作区…",
+          "checkFailed": "无法检查匹配的工作区"
         },
         "protection": {
           "title": "保护",
-          "alwaysKept": "始终保留：已固定的工作区、正在运行的智能体或终端、编辑器中未保存的更改、未提交的更改、未推送的提交",
           "keepIgnoredFiles": "保留含有被忽略文件的工作区",
-          "keepIgnoredFilesDescription": ".env 和本地配置这类文件无法恢复，node_modules 和构建产物不算在内"
+          "keepIgnoredFilesDescription": ".env 和本地配置这类文件无法恢复，node_modules 和构建产物不算在内",
+          "alwaysKeptLabel": "始终保留",
+          "alwaysKeptList": "已固定的工作区、正在运行的智能体或终端、编辑器中未保存的更改、未提交的更改、未推送的提交"
         },
         "activity": {
           "loadFailed": "无法加载活动记录：{{error}}",
@@ -21592,15 +21594,13 @@
           "startup": "启动时",
           "hourly": "每小时",
           "settings": "规则更改后",
-          "runNow": "立即清理",
+          "runNow": "立即运行规则",
           "cli": "通过 CLI"
         },
         "search": {
           "cleanup": "清理",
           "cleanUp": "清理",
           "delete": "删除",
-          "statusDescription": "立即运行清理规则，或自行检查工作区",
-          "reviewWorkspaces": "检查工作区",
           "automatic": "自动",
           "pullRequest": "PR",
           "inactiveDescription": "若干天没有活动",
@@ -21612,21 +21612,19 @@
           "activityDescription": "每次清理移除和保留了哪些工作区",
           "history": "历史记录",
           "runs": "运行记录",
-          "envFile": ".env"
+          "envFile": ".env",
+          "manual": "手动",
+          "automaticDescription": "自动清理是否已开启、下次运行时间，以及立即运行规则",
+          "runRulesNow": "立即运行规则",
+          "cleanUpNow": "立即清理",
+          "schedule": "计划"
         },
-        "cleanUpNow": "立即清理",
         "status": {
           "lastRunFailed": "上次运行（{{when}}）未能完成：{{error}}",
           "lastRunNothing": "上次运行（{{when}}）没有移除任何工作区",
           "lastRunFreed_other": "上次运行（{{when}}）移除了 {{count}} 个工作区，释放了 {{size}}",
           "lastRunRemoved_other": "上次运行（{{when}}）移除了 {{count}} 个工作区",
-          "offDetail": "开启规则之前不会移除任何内容",
-          "running": "正在清理…",
           "nextRun": "下次运行：{{when}}",
-          "on": "自动清理已开启",
-          "off": "自动清理已关闭",
-          "review": "检查工作区",
-          "turnOnHint": "开启一条规则后即可使用",
           "justNow": "刚刚",
           "inUnderAMinute": "不到一分钟后"
         },
@@ -21657,6 +21655,21 @@
           "description": "确认后会固定所选工作区，已固定的工作区在取消固定前不会被自动清理",
           "named": "固定并保留 {{name}}",
           "label": "固定并保留"
+        },
+        "manual": {
+          "title": "手动清理",
+          "label": "删除你选择的工作区",
+          "review": "检查工作区",
+          "description": "查看所有工作区，并选择要删除哪些"
+        },
+        "automatic": {
+          "title": "自动清理",
+          "on": "已开启",
+          "off": "已关闭",
+          "offDetail": "开启一条规则，即可按计划移除工作区",
+          "running": "正在移除规则匹配的工作区…",
+          "runningButton": "正在运行…",
+          "runNow": "立即运行规则"
         }
       },
       "repository": {
@@ -22547,7 +22560,8 @@
         "peerCheckFailed": "Orca 无法向 WSL 主机询问此电脑上的另一个 Orca 是否仍在使用该主机：{{detail}}",
         "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}",
         "installLockWait_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后接管。",
-        "installLockWaitGivesUp_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后停止等待。"
+        "installLockWaitGivesUp_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后停止等待。",
+        "installLockWaitHolderGone": "此发行版中的另一个 Orca 安装已停止。Orca 将在几秒内接管。"
       }
     },
     "agentSummary": {
@@ -24808,10 +24822,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
-    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
-    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
-    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
-    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
     "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索，例如 Opus 5.5…",
     "configure": "配置 {{agent}}",

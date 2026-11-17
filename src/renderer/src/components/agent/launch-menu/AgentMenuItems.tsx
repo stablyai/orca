@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent-picker-inventory-source'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
@@ -40,7 +40,7 @@ import { cn } from '@/lib/class-names'
 import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './agent-menu-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {

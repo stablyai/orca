@@ -11,7 +11,9 @@ const NAVIGATION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End'])
 export function useSetupModelHighlight(
   root: RefObject<HTMLDivElement | null>,
   start: string | undefined,
-  query: string
+  query: string,
+  /** Models in the catalog; rows that arrive late can push the start out of view. */
+  catalogSize: number
 ) {
   const [reassert, setReassert] = useState(false)
   const [returnTo, setReturnTo] = useState<string>()
@@ -31,7 +33,7 @@ export function useSetupModelHighlight(
         ?.querySelector(`[cmdk-item][data-value="${CSS.escape(value)}"]`)
         ?.scrollIntoView({ block: 'nearest' })
     }
-  }, [reassert, returnTo, value, root])
+  }, [reassert, returnTo, value, root, catalogSize])
   return {
     // The flag spans one event: set before cmdk handles it, cleared once it bubbles past the list.
     command: {

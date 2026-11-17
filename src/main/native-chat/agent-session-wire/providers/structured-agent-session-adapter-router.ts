@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
+import { createStructuredAgentAtRestCommandRouter } from '../options/structured-agent-session-at-rest-command-router'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -56,6 +56,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     mode: AgentChatPermissionChoice
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
+
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
 
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
@@ -184,24 +191,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   readCommands: NonNullable<Adapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
 
-  atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
-    snapshot: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.snapshot?.(record) ?? {
-        commandsPending: false
-      },
-    settled: async (record, budgetMs, independent) => {
-      const source = this.agents.registration(record.provider)?.adapter.atRestCommands
-      return source?.settled ? source.settled(record, budgetMs, independent) : source?.read(record)
-    },
-    onChange: (listener) => {
-      const stops = this.adapters().flatMap((adapter) =>
-        adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
-      )
-      return () => stops.forEach((stop) => stop())
-    }
-  }
+  atRestCommands = createStructuredAgentAtRestCommandRouter(
+    (provider) => this.agents.registration(provider)?.adapter.atRestCommands,
+    () =>
+      this.adapters().flatMap((adapter) => (adapter.atRestCommands ? [adapter.atRestCommands] : []))
+  )
 
   answerPrompt: Adapter['answerPrompt'] = (input) => this.owner(input.sessionId).answerPrompt(input)
 
