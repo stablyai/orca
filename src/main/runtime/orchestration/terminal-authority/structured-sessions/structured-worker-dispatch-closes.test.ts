@@ -26,7 +26,7 @@ function dispatchTo(orchestration: OrchestrationDb, runId: string, incarnation: 
   return dispatch.id
 }
 
-it('names a structured worker once when its Dispatch ends, and nothing for other changes', () => {
+it('names a structured worker once when its Dispatch ends, moves or is removed, and nothing for other changes', () => {
   db = new OrchestrationDb(':memory:')
   const run = db.createRun({
     objective: 'workers',
@@ -36,7 +36,11 @@ it('names a structured worker once when its Dispatch ends, and nothing for other
   const completed = dispatchTo(db, run.id, 'structured:worker-a')
   const failed = dispatchTo(db, run.id, 'structured:worker-b')
   const terminal = dispatchTo(db, run.id, 'pty:terminal-worker:1')
+  const moved = dispatchTo(db, run.id, 'structured:worker-c')
+  const removed = dispatchTo(db, run.id, 'structured:worker-d')
+  db.completeDispatch(dispatchTo(db, run.id, 'structured:before-watching'))
   watchStructuredWorkerDispatchEnds(db)
+  expect(takeStructuredWorkerDispatchEnds(db)).toEqual([])
 
   db.createTask({ runId: run.id, spec: 'unrelated' })
   db.completeDispatch(terminal)
@@ -48,4 +52,13 @@ it('names a structured worker once when its Dispatch ends, and nothing for other
 
   db.failDispatch(failed, 'worker exited')
   expect(takeStructuredWorkerDispatchEnds(db)).toEqual(['structured:worker-b'])
+
+  db.db
+    .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
+    .run('structured:worker-e', moved)
+  db.db.prepare('DELETE FROM dispatch_contexts WHERE id = ?').run(removed)
+  expect(takeStructuredWorkerDispatchEnds(db)).toEqual([
+    'structured:worker-c',
+    'structured:worker-d'
+  ])
 })

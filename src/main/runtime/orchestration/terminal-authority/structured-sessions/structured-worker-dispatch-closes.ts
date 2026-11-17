@@ -14,6 +14,11 @@ CREATE TEMP TRIGGER IF NOT EXISTS structured_worker_dispatch_closed
   AFTER UPDATE OF status ON main.dispatch_contexts
   WHEN OLD.status IN ${OPEN} AND NEW.status NOT IN ${OPEN} AND OLD.process_incarnation ${WORKER}
   BEGIN INSERT INTO structured_worker_dispatch_ends VALUES (OLD.process_incarnation); END;
+CREATE TEMP TRIGGER IF NOT EXISTS structured_worker_dispatch_reassigned
+  AFTER UPDATE OF process_incarnation ON main.dispatch_contexts
+  WHEN OLD.status IN ${OPEN} AND OLD.process_incarnation ${WORKER}
+    AND NEW.process_incarnation IS NOT OLD.process_incarnation
+  BEGIN INSERT INTO structured_worker_dispatch_ends VALUES (OLD.process_incarnation); END;
 CREATE TEMP TRIGGER IF NOT EXISTS structured_worker_dispatch_removed
   AFTER DELETE ON main.dispatch_contexts
   WHEN OLD.status IN ${OPEN} AND OLD.process_incarnation ${WORKER}

@@ -57,6 +57,8 @@ export class AccountMoveHolds {
       wakes: () => StructuredAgentSessionHostDeps['accountMoveWakes']
       /** Which of these chats' own Dispatches are still open, read together. */
       dispatchKey: (sessionId: string) => string | undefined
+      /** Whether the chat's own Dispatch is still open. */
+      dispatchOpen: (sessionId: string) => boolean
       now: () => number
       sessions: Pick<ReadonlyMap<string, HeldSession>, 'get' | 'has'>
     }
@@ -189,6 +191,12 @@ export class AccountMoveHolds {
     }
     this.subscribe()
     this.publishPerson(session, sessionId, hold)
+    // Its end may have been reported after the read, before it was listed: look once more.
+    if (dispatchKey !== undefined && !this.deps.dispatchOpen(sessionId)) {
+      this.leaveDispatch(sessionId)
+      this.stale(sessionId, 'work')
+      this.wakeOrRelease(sessionId)
+    }
   }
 
   /** `reader` no longer waits; the hold goes once nobody does. */

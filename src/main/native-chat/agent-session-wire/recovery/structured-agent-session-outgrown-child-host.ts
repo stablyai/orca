@@ -75,6 +75,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
     wake: input.wake,
     wakes: () => deps.accountMoveWakes,
     dispatchKey: (sessionId) => deps.accountMoveWakes?.dispatchKey?.(sessionId),
+    dispatchOpen: (sessionId) => retainedWork(sessionId).hasOpenDispatch(),
     now,
     sessions
   })

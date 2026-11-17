@@ -6,7 +6,7 @@ let holds: AccountMoveHolds | undefined
 afterEach(() => holds?.dispose())
 
 /** `count` chats held on their own open Dispatch, and the edge listener their holds subscribed. */
-function heldOnDispatch(count: number) {
+function heldOnDispatch(count: number, open = true) {
   const sessions = new Map<string, { child: { fence: number } }>(
     Array.from({ length: count }, (_, index) => [`chat-${index}`, { child: { fence: 1 } }])
   )
@@ -27,6 +27,7 @@ function heldOnDispatch(count: number) {
       selection: () => []
     }),
     dispatchKey: (sessionId) => (reads.keys++, `structured:${sessionId}`),
+    dispatchOpen: () => open,
     now: () => 0,
     sessions: counted
   })
@@ -41,7 +42,12 @@ function heldOnDispatch(count: number) {
   wake.mockClear()
   reads.sessions = 0
   reads.keys = 0
-  return { wake, reads, fire: (ended: string[]) => edge!({ kind: 'dispatch', ended }) }
+  return {
+    wake,
+    reads,
+    fire: (ended: string[]) => edge!({ kind: 'dispatch', ended }),
+    held: (id: string) => holds!.heldForPerson(sessions.get(id), id)
+  }
 }
 
 it.each([10, 100])(
@@ -63,3 +69,10 @@ it.each([10, 100])(
     expect(chats.wake.mock.calls).toEqual([['chat-3']])
   }
 )
+
+it('keeps no hold on a Dispatch that ended before the hold was listed', () => {
+  expect(heldOnDispatch(1).held('chat-0')).toBe(true)
+  holds!.dispose()
+  // Its end was reported between the read and the listing, so no edge will come for it.
+  expect(heldOnDispatch(1, false).held('chat-0')).toBe(false)
+})
