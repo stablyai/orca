@@ -1,3 +1,4 @@
+// @protected-copy: rule names here are reused in delete confirmations and must not be reworded by a language pack.
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_ARCHIVE_SUPPORTED } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
