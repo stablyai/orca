@@ -26,7 +26,7 @@ export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean }
   const darwin = options.reuseOnToolEvents
     ? [
         '    orca_agent_cache= orca_agent_cached= orca_agent_header= orca_agent_key="$orca_agent_pid ${#ORCA_AGENT_LAUNCH_TOKEN}:${ORCA_AGENT_LAUNCH_TOKEN:-}"',
-        // The pane's header cache file holds the record as its second line, so it adds no file.
+        // The pane's header cache file holds the record as its second line.
         '    if orca_hook_cache_file; then',
         '      orca_agent_cache=$orca_hook_cache_path',
         '      orca_hook_cache_read',
@@ -35,8 +35,11 @@ export function buildHookProcessCapture(options: { reuseOnToolEvents?: boolean }
         `    case "\${orca_hook_tool_event:-}:$orca_agent_cached" in "1:$orca_agent_key {\\"pid\\":$orca_agent_pid,\\"platform\\":\\"darwin\\",\\"startTime\\":\\""?*'"}') orca_agent_process=\${orca_agent_cached#"$orca_agent_key "} ;; esac`,
         '    if [ -z "$orca_agent_process" ]; then',
         ...DARWIN_PS_CAPTURE.map((line) => `  ${line}`),
-        // Only the hook's own caller: an unwrapped shell's PID is new on every run.
-        '      [ -z "$orca_agent_process" ] || [ -z "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_key $orca_agent_process" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_header" "$orca_agent_key $orca_agent_process"',
+        // Only the hook's own caller (an unwrapped shell's PID is new on every run), only into a file the header
+        // cache made, and never over another live agent sharing the pane, which would evict it on every switch.
+        '      orca_agent_owner=${orca_agent_cached%% *}',
+        '      case "$orca_agent_owner" in ""|*[!0-9]*|"$orca_agent_pid") ;; *) ! kill -0 "$orca_agent_owner" 2>/dev/null || orca_agent_cache= ;; esac',
+        '      [ -z "$orca_agent_process" ] || [ ! -f "$orca_agent_cache" ] || [ "$orca_agent_pid" != "${ORCA_HOOK_AGENT_PID:-}" ] || [ "$orca_agent_cached" = "$orca_agent_key $orca_agent_process" ] || orca_hook_cache_write "$orca_agent_cache" "$orca_agent_header" "$orca_agent_key $orca_agent_process"',
         '    fi'
       ]
     : DARWIN_PS_CAPTURE

@@ -137,16 +137,28 @@ describe('Claude outer hook process capture', () => {
         await seed('launch-0')
         expect(await run(toolEvent)).toBe(fresh)
 
-        // A refresh that cannot replace the record must not leave the old one reusable.
+        // A refresh that cannot replace the record must not leave the old one reusable, or end the hook.
+        const prompt = '{"hook_event_name":"UserPromptSubmit","prompt":"hi"}'
         await seed('launch-1')
         await chmod(join(home, 'hook-metadata'), 0o500)
-        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
+        expect(await run(prompt)).toBe(fresh)
         expect(await run(toolEvent)).toBe(fresh)
+        await seed('launch-1')
+        await chmod(cacheFile, 0o400)
+        expect(await run(prompt)).toBe(fresh)
+        await chmod(cacheFile, 0o600)
         await chmod(join(home, 'hook-metadata'), 0o700)
+
+        // Another live agent sharing the pane keeps its record instead of trading it on every event.
+        const other = `${process.ppid} 8:launch-1 {"pid":${process.ppid},"platform":"darwin","startTime":"other"}`
+        await writeFile(cacheFile, `header\n${other}\n`)
+        expect(await run(prompt)).toBe(fresh)
+        expect((await readFile(cacheFile, 'utf8')).split('\n')[1]).toBe(other)
+
+        // Only the header cache creates the file.
         await rm(cacheFile)
-        await chmod(join(home, 'hook-metadata'), 0o500)
-        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
-        await chmod(join(home, 'hook-metadata'), 0o700)
+        expect(await run(prompt)).toBe(fresh)
+        await expect(readFile(cacheFile)).rejects.toThrow()
       } finally {
         await rm(home, { recursive: true, force: true })
       }
