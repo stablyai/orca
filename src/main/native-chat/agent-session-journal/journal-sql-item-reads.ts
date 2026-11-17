@@ -7,7 +7,7 @@ import {
   type JournalHistoryPrompt
 } from './journal-history-items'
 import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
-import { budgetItemsByKindPage } from './journal-items-by-kind-page'
+import { budgetItemsByKindPage, itemsByKindPayloads } from './journal-items-by-kind-page'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -187,11 +187,7 @@ export function readJournalDomainItems(
         )
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
-      const page = db
-        .prepare(`SELECT item.payload_json,item.ordinal FROM json_each(?) chosen
-        CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=?
-          AND item.item_id=chosen.value ORDER BY CAST(chosen.key AS INTEGER)`)
-        .iterate(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
+      const page = itemsByKindPayloads(db, prefix, chosen)
       const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       return { kind: 'items-by-kind', ...budgetItemsByKindPage(page, next) }
     }

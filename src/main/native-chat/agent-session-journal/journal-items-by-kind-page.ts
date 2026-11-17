@@ -1,3 +1,5 @@
+import type Database from '../../sqlite/sync-database'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 /**
@@ -26,4 +28,20 @@ export function budgetItemsByKindPage(
     items.push(JSON.parse(json))
   }
   return { items, nextOrdinal }
+}
+
+/** One primary-key lookup per chosen item, in order, so a page cut by the budget reads no further. */
+export function* itemsByKindPayloads(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  chosen: readonly SqliteRow[]
+): Generator<SqliteRow> {
+  const payload = db.prepare(`SELECT payload_json,ordinal FROM journal_items
+    WHERE session_id=? AND epoch=? AND item_id=?`)
+  for (const header of chosen) {
+    const row = payload.get(...prefix, header.item_id)
+    if (row) {
+      yield row
+    }
+  }
 }

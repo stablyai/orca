@@ -4,7 +4,8 @@ import {
   isMainThread,
   parentPort,
   setEnvironmentData,
-  threadId
+  threadId,
+  threadName
 } from 'node:worker_threads'
 import { appendWorkerLargeSend } from './worker-large-send-log'
 import {
@@ -117,7 +118,8 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
     return
   }
   const view = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES)
-  writeText(view, ROLE, role)
+  const sender = spawnedRole(role)
+  writeText(view, ROLE, sender)
   const largeSendLog = getEnvironmentData(LARGE_SEND_LOG_KEY)
   const post = port.postMessage
   Object.defineProperty(port, 'postMessage', {
@@ -128,7 +130,7 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
         const shape = describeWorkerMessage(args[0])
         recordSend(view, shape)
         if (typeof largeSendLog === 'string' && isLargeWorkerMessage(shape)) {
-          logLargeSend(largeSendLog, role, shape)
+          logLargeSend(largeSendLog, sender, shape)
         }
       } catch {
         // Diagnostics only.
@@ -136,6 +138,11 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
       post.call(port, ...args)
     }
   })
+}
+
+/** A shared entry (the foreign SQLite reader) serves several roles; the spawn's own name is exact. */
+function spawnedRole(entryRole: WorkerThreadRole): string {
+  return typeof threadName === 'string' && threadName.startsWith('orca') ? threadName : entryRole
 }
 
 function recordSend(view: DataView, shape: WorkerMessageShape): void {

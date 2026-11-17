@@ -62,7 +62,8 @@ describe('installFatalSignalListenerGuard', () => {
     expect(target.listenerCount('SIGINT')).toBe(1)
   })
 
-  it.each(['guard-first', 'lockfile-first'] as const)(
+  // Windows has no SIGTRAP to raise; the listener guard itself is covered above.
+  it.skipIf(process.platform === 'win32').each(['guard-first', 'lockfile-first'] as const)(
     'proper-lockfile leaves no SIGTRAP listener, keeps its SIGTERM cleanup, and SIGTRAP kills (%s)',
     (order) => {
       const { signal, listeners } = trapWithShippedLockfile(order)

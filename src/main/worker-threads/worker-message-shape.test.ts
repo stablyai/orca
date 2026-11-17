@@ -24,6 +24,16 @@ describe('describeWorkerMessage', () => {
     }
     describeWorkerMessage(message)
     expect(reads).toBe(0)
+
+    const rows = new Map([['x'.repeat(1000), 'y']])
+    Object.defineProperty(rows, 'size', {
+      get() {
+        rows.clear()
+        return 0
+      }
+    })
+    expect(describeWorkerMessage(rows)).toMatchObject({ items: 1, bytes: 1001 })
+    expect(Map.prototype.entries.call(rows).next().done).toBe(false)
   })
 
   it('stays bounded on cyclic, deep and huge payloads', () => {

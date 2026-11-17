@@ -20,6 +20,19 @@ const LARGE_ITEMS = 50_000
 const LARGE_DEPTH = 100
 const TRUNCATED_LARGE_BYTES = 4 * 2 ** 20
 const TRUNCATED_LARGE_ITEMS = 10_000
+const KIND_MAX_LENGTH = 64
+
+/** Built-in accessors: a payload's own `size` or `byteLength` getter could change what is sent. */
+const MAP_SIZE = Object.getOwnPropertyDescriptor(Map.prototype, 'size')?.get
+const SET_SIZE = Object.getOwnPropertyDescriptor(Set.prototype, 'size')?.get
+const ARRAY_BUFFER_BYTES = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get
+const TYPED_ARRAY_BYTES = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype),
+  'byteLength'
+)?.get
+const DATA_VIEW_BYTES = Object.getOwnPropertyDescriptor(DataView.prototype, 'byteLength')?.get
+const mapEntries = Map.prototype.entries
+const setValues = Set.prototype.values
 
 /**
  * Bounded and iterative, visiting each object once, so a huge, wide, deep or cyclic payload costs
@@ -62,13 +75,28 @@ export function describeWorkerMessage(message: unknown): WorkerMessageShape {
       continue
     }
     seen.add(value)
-    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
-      bytes += value.byteLength
+    if (value instanceof ArrayBuffer) {
+      bytes += Number(ARRAY_BUFFER_BYTES?.call(value) ?? 0)
       continue
     }
-    if (value instanceof Map || value instanceof Set) {
-      items += value.size
-      for (const child of value.values()) {
+    if (ArrayBuffer.isView(value)) {
+      bytes += Number(
+        (value instanceof DataView ? DATA_VIEW_BYTES : TYPED_ARRAY_BYTES)?.call(value) ?? 0
+      )
+      continue
+    }
+    if (value instanceof Map) {
+      items += Number(MAP_SIZE?.call(value) ?? 0)
+      for (const [key, child] of mapEntries.call(value)) {
+        if (!push(key, level + 1) || !push(child, level + 1)) {
+          break
+        }
+      }
+      continue
+    }
+    if (value instanceof Set) {
+      items += Number(SET_SIZE?.call(value) ?? 0)
+      for (const child of setValues.call(value)) {
         if (!push(child, level + 1)) {
           break
         }
@@ -124,7 +152,7 @@ function messageKind(message: unknown): string {
   for (const field of ['type', 'kind', 'command', 'op']) {
     const value = Object.getOwnPropertyDescriptor(message, field)?.value
     if (typeof value === 'string') {
-      return value
+      return value.slice(0, KIND_MAX_LENGTH)
     }
   }
   return 'object'
