@@ -147,12 +147,12 @@ export function useMobileNewTabAgentOptions(args: {
     saveNewAgentSurface
   )
   const { refresh, setValue, persist } = picked
-  const reading = open || args.prefetch
+  // Every sheet open re-reads it: another mounted session may have saved a newer pick.
   useEffect(() => {
-    if (reading) {
+    if (open || args.prefetch) {
       refresh()
     }
-  }, [reading, refresh])
+  }, [open, args.prefetch, refresh])
   const hostDefaults = useMemo(() => nativeChatDefaultsOf(settings.data?.settings), [settings.data])
   const surfaces = useMemo(
     () =>
