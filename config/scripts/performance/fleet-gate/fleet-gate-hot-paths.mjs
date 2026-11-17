@@ -42,8 +42,16 @@ export function changedFiles(base, head, cwd) {
   return output.split('\n').filter(Boolean)
 }
 
+/** Fails open: a diff that can't be resolved counts as touching every hot path, so the gate runs. */
 export function hotPathChanges(base, head, cwd) {
-  return changedFiles(base, head, cwd).filter(isHotPath)
+  try {
+    return changedFiles(base, head, cwd).filter(isHotPath)
+  } catch (error) {
+    console.log(
+      `hot-path filter couldn't diff ${base}...${head} (${String(error?.message ?? error).split('\n')[0]}); running the gate`
+    )
+    return ['<unresolved diff>']
+  }
 }
 
 function main() {
