@@ -12,7 +12,7 @@ import {
   runningPane,
   type Proc,
   type RootTestServer
-} from '../presence/server-hook-root.test-fixtures'
+} from './server-tmux-hook-root.test-fixtures'
 import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
