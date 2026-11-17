@@ -104,7 +104,7 @@ export function getListIssueConnectionLoader(
   options?: LinearIssueListOptions
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
-  const variables = { orderBy }
+  const variables = { orderBy, detail: options?.summaryOnly !== true }
   // Filter before pagination so hasMore describes matching issues.
   const filterInput = buildLinearListIssueFilter({
     filter,

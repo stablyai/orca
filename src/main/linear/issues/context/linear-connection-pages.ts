@@ -32,8 +32,16 @@ export function linearConnectionHasNextPage(
 export async function readConnectionPages<T>(
   limit: number,
   loadConnection: (page: LinearPageVariables) => Promise<LinearConnection<T> | undefined>,
-  pageSize = LINEAR_ISSUE_API_PAGE_SIZE_MAX,
-  deadline = Number.POSITIVE_INFINITY
+  {
+    pageSize = LINEAR_ISSUE_API_PAGE_SIZE_MAX,
+    deadline = Number.POSITIVE_INFINITY,
+    beforeNextPage
+  }: {
+    pageSize?: number
+    deadline?: number
+    // Runs between pages (e.g. requeueing for a request slot); the deadline is rechecked after it.
+    beforeNextPage?: () => Promise<void>
+  } = {}
 ): Promise<{ nodes: T[]; hasMore: boolean }> {
   const nodes: T[] = []
   let after: string | undefined
@@ -55,6 +63,10 @@ export async function readConnectionPages<T>(
       pageNodes.length === 0 ||
       Date.now() >= deadline
     ) {
+      break
+    }
+    await beforeNextPage?.()
+    if (Date.now() >= deadline) {
       break
     }
     after = nextCursor

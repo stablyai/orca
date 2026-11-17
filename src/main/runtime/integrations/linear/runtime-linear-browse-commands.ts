@@ -33,16 +33,11 @@ export class RuntimeLinearBrowseCommands {
 
   linearListProjects(
     query?: string,
-    limit: number | null = 20,
+    limit = 20,
     workspaceId?: LinearWorkspaceSelection,
     force?: boolean
   ): ReturnType<typeof listProjects> {
-    return listProjects(
-      query,
-      limit === null ? null : Math.min(Math.max(1, limit), 50),
-      workspaceId,
-      force
-    )
+    return listProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearCreateProject(

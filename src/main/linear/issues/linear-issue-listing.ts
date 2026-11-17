@@ -92,14 +92,23 @@ async function readIssueConnectionPage(
   }
 }
 
+type LinearIssueReadBudget = { deadline: number; signal?: AbortSignal }
+
 async function readListIssuesPageForState(
   state: LinearIssueWorkspacePageState,
   first: number,
-  workspaceId: LinearWorkspaceSelection | null | undefined
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  { deadline, signal }: LinearIssueReadBudget
 ): Promise<void> {
   const previousCursor = state.after
-  await acquire()
+  await acquire(signal)
   try {
+    // A page admitted after the budget ran out stays unread; hasMore keeps the result truncated.
+    if (Date.now() >= deadline) {
+      state.hasMore = true
+      state.canPage = false
+      return
+    }
     const page = await readIssueConnectionPage(
       state.entry,
       state.loadConnection,
@@ -170,7 +179,7 @@ async function readListIssuePages(
   filter: LinearListFilter,
   limit: number,
   workspaceId: LinearWorkspaceSelection | null | undefined,
-  deadline: number,
+  budget: LinearIssueReadBudget,
   options?: LinearIssueListOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const states: LinearIssueWorkspacePageState[] = entries.map((entry) => ({
@@ -183,9 +192,11 @@ async function readListIssuePages(
   const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit)
 
   // Seed every workspace, then fetch only where unseen issues could alter the global updatedAt cutoff.
-  await Promise.all(states.map((state) => readListIssuesPageForState(state, first, workspaceId)))
+  await Promise.all(
+    states.map((state) => readListIssuesPageForState(state, first, workspaceId, budget))
+  )
 
-  while (Date.now() < deadline) {
+  while (Date.now() < budget.deadline) {
     const nextState = findWorkspaceToPageForLimit(states, limit)
     if (!nextState) {
       break
@@ -198,7 +209,7 @@ async function readListIssuePages(
             LINEAR_ISSUE_API_PAGE_SIZE_MAX,
             Math.max(1, countSelectedIssuesOlderThanWorkspaceBoundary(states, nextState, limit))
           )
-    await readListIssuesPageForState(nextState, pageSize, workspaceId)
+    await readListIssuesPageForState(nextState, pageSize, workspaceId, budget)
   }
 
   // A budget-stopped walk keeps only the span every unfinished workspace has covered.
@@ -242,10 +253,17 @@ export async function listIssues(
       'Linear attribute filters require a concrete workspace; "all" workspaces is not supported.'
     )
   }
-  const entries = getClients(workspaceId)
+  const entries = getClients(workspaceId, options?.signal)
   if (entries.length === 0) {
     return { items: [] }
   }
 
-  return readListIssuePages(entries, filter, effectiveLimit, workspaceId, deadline, options)
+  return readListIssuePages(
+    entries,
+    filter,
+    effectiveLimit,
+    workspaceId,
+    { deadline, signal: options?.signal },
+    options
+  )
 }

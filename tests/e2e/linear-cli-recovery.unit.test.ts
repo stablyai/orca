@@ -266,6 +266,11 @@ it('lists every page when --limit is omitted and reports the search total', asyn
   expect(projects).toMatchObject({ truncated: false, meta: { limit: null, hasMore: false } })
   expect(search.issues).toHaveLength(5)
   expect(search).toMatchObject({ truncated: true, meta: { returned: 5, total: 349 } })
+  const listReads = server.receipts.filter((receipt) =>
+    /query (OrcaLinearIssues|OrcaLinearProjects)\b/.test(receipt.query)
+  )
+  expect(listReads.length).toBeGreaterThan(2)
+  expect(listReads.every((receipt) => receipt.variables?.detail === false)).toBe(true)
 })
 
 it('parses and dispatches issue, search, list and project commands through real recovering read handlers', async () => {

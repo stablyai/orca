@@ -43,13 +43,14 @@ export async function listProjects(
   limit: number | null = 20,
   workspaceId?: LinearWorkspaceSelection | null,
   force = false,
-  signal?: AbortSignal
+  { signal, summaryOnly = false }: { signal?: AbortSignal; summaryOnly?: boolean } = {}
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   // A null limit reads every page, bounded by the uncapped read budget.
   const cap = limit === null ? Number.POSITIVE_INFINITY : clampLimit(limit)
   const deadline = limit === null ? linearUncappedReadDeadline() : undefined
   const trimmed = query?.trim()
-  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${cap}`
+  const detail = !summaryOnly
+  const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${cap}:${detail}`
   return readCollection(
     key,
     workspaceId,
@@ -57,20 +58,16 @@ export async function listProjects(
       const { nodes, hasMore } = await readConnectionPages(
         cap,
         async (page) => {
-          if (page.after) {
-            await yieldSlot()
-          }
           const result = await entry.client.client.rawRequest<
             ProjectConnectionResponse,
             LinearRawVariables
           >(
             trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY,
-            trimmed ? { term: trimmed, ...page } : { ...page, orderBy: 'updatedAt' }
+            trimmed ? { term: trimmed, ...page, detail } : { ...page, orderBy: 'updatedAt', detail }
           )
           return trimmed ? result.data?.searchProjects : result.data?.projects
         },
-        LINEAR_PROJECT_API_PAGE_SIZE_MAX,
-        deadline
+        { pageSize: LINEAR_PROJECT_API_PAGE_SIZE_MAX, deadline, beforeNextPage: yieldSlot }
       )
       return {
         items: nodes.map((project) => mapProjectForWorkspace(entry, project)),
