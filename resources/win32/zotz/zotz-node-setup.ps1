@@ -189,15 +189,23 @@ Invoke-Step 'firewall' {
             -Profile Any -Enabled True | Out-Null
     }
     if ($AppPath) {
-        # Same cleanup as Orca's mobile firewall repair: only exact-app Block rules covering this port.
-        $blocking = @(Get-NetFirewallApplicationFilter -Program $AppPath -ErrorAction SilentlyContinue |
-            Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
-        foreach ($rule in $blocking) {
+        # Exact-app rules covering this port: Block rules go (as in Orca's mobile firewall repair), and
+        # Allow rules from Windows' first-listen prompt are narrowed to the tailnet so LAN stays out.
+        $appRules = @(Get-NetFirewallApplicationFilter -Program $AppPath -ErrorAction SilentlyContinue |
+            Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
+        foreach ($rule in $appRules) {
             $portFilter = $rule | Get-NetFirewallPortFilter
             $ports = @($portFilter.LocalPort | ForEach-Object { [string]$_ })
-            if (($ports -contains 'Any') -or ($ports -contains [string]$Port)) {
+            if (-not (($ports -contains 'Any') -or ($ports -contains [string]$Port))) { continue }
+            if ($rule.Action -eq 'Block') {
                 Write-Step "removing blocking rule '$($rule.DisplayName)'"
                 $rule | Remove-NetFirewallRule
+                continue
+            }
+            $addressFilter = $rule | Get-NetFirewallAddressFilter
+            if (@($addressFilter.RemoteAddress) -contains 'Any') {
+                Write-Step "limiting allow rule '$($rule.DisplayName)' to $TailnetRange"
+                $addressFilter | Set-NetFirewallAddressFilter -RemoteAddress $TailnetRange
             }
         }
     }

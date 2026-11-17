@@ -185,10 +185,10 @@ Verificación en hardware real (pendiente; nada de esto se pudo probar desde la 
 
 ## Fase 6 — Acceso remoto por Tailscale
 
-- [ ] `zotz serve` escucha **solo** en la IP de Tailscale de la MSI (`--bind`, ver `src/cli/runtime/commands/serve-bind-flag.ts`), nunca en `0.0.0.0`.
-- [ ] Pairing directo por la tailnet, sin relay: `zotz serve pair` (ver `src/cli/server/pair.ts`).
+- [x] ~~`zotz serve` escucha **solo** en la IP de Tailscale de la MSI (`--bind`)~~ Reemplazado: en modo servidor Zotz escucha en todas las interfaces pero **solo admite** loopback y tailnet (`zotz-tailnet-source-guard.ts`), y el firewall de Windows limita el puerto a `100.64.0.0/10` (ver `docs/zotz/REMOTE.md`).
+- [x] Pairing directo por la tailnet, sin relay: enlaces/QR del asistente con la IP de Tailscale, o `orca pair --address <IP-100.x>` (ver `src/cli/server/pair.ts`).
 - [ ] Probar el pairing desde: (1) la laptop de Hugo con Zotz u Orca, (2) la app móvil oficial de Orca. Si la app móvil oficial no puede parear sin relay, anotarlo en _Decisiones abiertas_.
-- [ ] Documentar en `docs/zotz/REMOTE.md` cómo conectarse: Tailscale, pairing, SSH de respaldo.
+- [x] Documentar en `docs/zotz/REMOTE.md` cómo conectarse: Tailscale, pairing, SSH de respaldo.
 
 ---
 
@@ -441,3 +441,16 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Un perfil guardado con `agentYoloDefaultsMigrated: true` pero sin `agentPermissionDefault` cae en `'own'` (sin flags). No pasa con perfiles nuevos de Zotz.
 - Antigravity, aun en `yolo`, a veces hace preguntas o pide revisiones administrativas (lo dice su propio spec en `antigravity-acp-launch-spec.ts`).
 - La MSI (Katana 15, 16 GB) solo tiene `claude` en el PATH. Falta instalar `codex` y `agy` para cerrar el "Listo cuando".
+
+### 2026-11-17 — Fase 6 (`zotz/fase-6-tailscale`)
+
+- Solo tailnet: `src/main/zotz/zotz-tailnet-source-guard.ts` (`ZotzTailnetOnlySourceGuard`) admite loopback y Tailscale (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) y rechaza LAN y públicas al aceptar el TCP. Se activa con `zotzTailnetOnly` en las opciones que devuelve `zotzServerNetworkSources` (modo servidor) y se engancha con 3 líneas en `createServeNetworkSourceGuard`, así cubre el arranque y la adopción en caliente del asistente. Antes el modo servidor usaba la política de `--refuse-public`, que también acepta la LAN.
+- Firewall (`zotz-node-setup.ps1`): las reglas **Allow** de `Zotz.exe` que Windows crea en el primer "Permitir acceso" (remoto `Any`) dejaban pasar la LAN por encima de la regla de tailnet; ahora se limitan a `100.64.0.0/10` en vez de borrarse (borrarlas haría que Windows vuelva a preguntar).
+- Pairing: no hizo falta código. Relay apagado desde Fase 2 y los enlaces/QR del asistente ya usan la IP de Tailscale leída en vivo. Por SSH: `orca pair --address <IP-100.x>` / `orca pair --mobile --address <IP-100.x>`.
+- Docs: `docs/zotz/REMOTE.md` (requisitos, vincular laptop/móvil, qué orígenes entran, SSH de respaldo, diagnóstico).
+
+**Sorpresas / pendientes**
+
+- No se usa `--bind <IP-de-Tailscale>` (decisión de Fase 5): la IP cambia y upstream rechaza abrir la red con una IP fija. El filtro por origen + firewall da el mismo resultado.
+- `orca serve` sin ventana mantiene la política de upstream (acepta LAN); el nodo no lo usa. Documentado cómo restringirlo.
+- Falta la prueba manual: vincular desde la laptop y desde la app móvil oficial por la tailnet, y confirmar que desde la LAN (`192.168…`) se rechaza.
