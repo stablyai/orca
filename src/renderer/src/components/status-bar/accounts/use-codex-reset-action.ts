@@ -14,6 +14,14 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { getCodexResetProjection } from './codex-switcher-projection'
 
+async function redeemLoggingFailure(run: () => Promise<void>): Promise<void> {
+  try {
+    await run()
+  } catch (error) {
+    console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
+  }
+}
+
 /** The status bar's Codex reset: this desktop's login locally, the owning host's account remotely. */
 export function useCodexResetAction(
   codex: ProviderRateLimits,
@@ -73,16 +81,13 @@ export function useCodexResetAction(
       return
     }
     setIsRedeemingReset(true)
-    try {
-      await (hostEnvironmentId
+    await redeemLoggingFailure(() =>
+      hostEnvironmentId
         ? consumeHostCodexResetCredit(hostEnvironmentId, scope)
-        : consumeLocalResetCredit())
-    } catch (error) {
-      console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
-    } finally {
-      if (mountedRef.current) {
-        setIsRedeemingReset(false)
-      }
+        : consumeLocalResetCredit()
+    )
+    if (mountedRef.current) {
+      setIsRedeemingReset(false)
     }
   }
 
