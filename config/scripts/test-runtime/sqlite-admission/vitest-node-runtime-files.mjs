@@ -57,7 +57,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
   'src/main/daemon/shell-readiness/testing/shell-ready.test.ts',
-  'src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
   'src/**/*-native.test.ts',
   'src/**/*retention*.test.ts',
