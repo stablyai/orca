@@ -24,12 +24,14 @@ import {
   type RuntimeEnvironmentSubscriptionHandle
 } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
+import { runtimeEnvironmentsCloudApi } from './runtime-environments-cloud-bridge'
 import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from '../wsl/wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
   desktopCreatedChatIds: (): Promise<string[]> =>
     ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
+  ...runtimeEnvironmentsCloudApi,
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {

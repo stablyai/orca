@@ -88,7 +88,7 @@ export type UiCommandEventApi = {
   setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
-  onOpenSettings: (callback: () => void) => () => void
+  onOpenSettings: (callback: (target?: { pane: 'orca-account' }) => void) => () => void
   consumePendingOpenSettings: () => Promise<boolean>
   /** Main confirmed Quit Completely; consume the request before acting. */
   onQuitAndStopAllSessions: (callback: () => void) => () => void

@@ -9,8 +9,9 @@ import type {
 } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import type { PendingVmCheckout } from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
+import type { EphemeralVmCloudApi } from './ephemeral-vm-cloud-api'
 
-export type EphemeralVmApi = {
+export type EphemeralVmApi = EphemeralVmCloudApi<{
   listRecipes: (args: { repoId: string }) => Promise<{
     status: 'ok' | 'error'
     repoPath: string | null
@@ -93,4 +94,4 @@ export type EphemeralVmApi = {
   listPendingCheckouts: () => Promise<PendingVmCheckout[]>
   /** Every window's pending VM checkouts, whenever any window's set changes. */
   onPendingCheckoutsChanged: (callback: (checkouts: PendingVmCheckout[]) => void) => () => void
-}
+}>

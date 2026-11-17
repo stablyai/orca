@@ -1,0 +1,96 @@
+import type {
+  CloudWorkspace,
+  CloudWorkspaceGrant,
+  CloudWorkspaceLinkTarget,
+  CloudWorkspaceListQuery,
+  CloudWorkspacePatch,
+  CloudWorkspacePrefs,
+  CloudWorkspacePrefsDocument,
+  CloudWorkspaceRoutineRuns,
+  OrgPrompts
+} from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type {
+  OwnerChange,
+  OwnerChangeNotice
+} from '../../shared/cloud-workspaces/owner-change-wire'
+import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
+
+export type CloudWorkspacesResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string; reason?: string; status?: number; orgId?: string }
+
+/** A list read, plus what Home's Routine runs switch hides (absent from older control planes). */
+export type CloudWorkspaceListResult =
+  | { ok: true; value: CloudWorkspace[]; routineRuns?: CloudWorkspaceRoutineRuns }
+  | { ok: false; error: string; reason?: string; status?: number }
+
+export type LocalCloudWorkspace = {
+  sandboxId: string
+  worktreeId: string | null
+  runtimeEnvironmentId: string | null
+}
+
+/** The runtime environment a granted workspace was added as, and the grant that paired it. */
+export type CloudWorkspaceBinding = { environmentId: string; grantId: string | null }
+
+export type CloudWorkspacesApi = {
+  /** False when this build has no Orca Cloud control plane configured. */
+  available: () => Promise<boolean>
+  list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspaceListResult>
+  get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
+  patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
+  /** Resolves either link form; a slug link for another org fails with reason `other_org` and its `orgId`. */
+  resolveLink: (
+    target: CloudWorkspaceLinkTarget,
+    chatId?: string | null
+  ) => Promise<CloudWorkspacesResult<{ workspace: CloudWorkspace; chatId: string | null }>>
+  /** A fresh per-device pairing link for a workspace this device didn't create (E2EE grant, opened in main). */
+  openGrant: (
+    id: string
+  ) => Promise<CloudWorkspacesResult<{ grantId: string; pairingCode: string }>>
+  /** A sleeping workspace's sealed read snapshot, opened in main with this device's reader key. Never wakes it. */
+  readSnapshot: (id: string) => Promise<CloudWorkspacesResult<CloudReadSnapshotState>>
+  listGrants: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspaceGrant[]>>
+  revokeGrant: (id: string, grantId: string) => Promise<CloudWorkspacesResult<void>>
+  localWorkspaces: () => Promise<LocalCloudWorkspace[]>
+  /** Owner or team admin, from the team list: sleep or delete a workspace this desktop doesn't run. */
+  sleep: (id: string) => Promise<CloudWorkspacesResult<void>>
+  /** A paired workspace's wake (this desktop has no VM record to resume); billing refusals come back as errors. */
+  wake: (id: string) => Promise<CloudWorkspacesResult<void>>
+  destroy: (id: string) => Promise<CloudWorkspacesResult<void>>
+  /** Remembers which local runtime environment a granted workspace was added as. */
+  bindEnvironment: (
+    sandboxId: string,
+    runtimeEnvironmentId: string,
+    grantId?: string | null
+  ) => Promise<void>
+  environmentBindings: () => Promise<Record<string, CloudWorkspaceBinding>>
+  /** Which cloud workspace is in front (null when none); `leased`: a paired one whose lease this desktop renews. */
+  setActive: (args: { sandboxId: string | null; leased?: boolean }) => Promise<void>
+  getOrgPrompts: () => Promise<CloudWorkspacesResult<OrgPrompts>>
+  putOrgPrompts: (
+    document: OrgPrompts['document'],
+    revision: number
+  ) => Promise<CloudWorkspacesResult<OrgPrompts>>
+  /** This member's synced sidebar arrangement of cloud workspaces (pins, order, sections). */
+  getPrefs: () => Promise<CloudWorkspacesResult<CloudWorkspacePrefs>>
+  /** Compare-and-set on `revision`; a stale write fails with `conflict`. */
+  putPrefs: (
+    document: CloudWorkspacePrefsDocument,
+    revision: number
+  ) => Promise<CloudWorkspacesResult<CloudWorkspacePrefs>>
+  /** The workspace goes to sleep first, so this can take a while. */
+  changeOwner: (id: string, ownerUserId: string) => Promise<CloudWorkspacesResult<OwnerChange>>
+  /** Notices for you as a previous owner, in the team you are signed in to. */
+  ownerNotices: () => Promise<CloudWorkspacesResult<OwnerChangeNotice[]>>
+  dismissOwnerNotice: (id: string) => Promise<CloudWorkspacesResult<void>>
+  onOpenLink: (callback: (link: string) => void) => () => void
+  /**
+   * A cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
+   * account can no longer open it).
+   */
+  onAccessLost: (
+    callback: (lost: { environmentId: string; sandboxId: string }) => void
+  ) => () => void
+  consumePendingLink: () => Promise<string | null>
+}

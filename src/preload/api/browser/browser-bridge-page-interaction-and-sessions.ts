@@ -1,3 +1,4 @@
+import type { RemoteDesktopPageState } from '../../../shared/hosted-sandbox/cloud-remote-desktop'
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
 import {
@@ -167,6 +168,18 @@ export const browserPageInteractionAndSessionsApi = {
       callback(data)
     ipcRenderer.on('browser:guestEscape', listener)
     return () => ipcRenderer.removeListener('browser:guestEscape', listener)
+  },
+  onRemoteDesktopState: (callback: (args: RemoteDesktopPageState) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RemoteDesktopPageState) =>
+      callback(data)
+    ipcRenderer.on('browser:remoteDesktopState', listener)
+    return () => ipcRenderer.removeListener('browser:remoteDesktopState', listener)
+  },
+  onRemoteDesktopRelease: (callback: (args: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
+      callback(data)
+    ipcRenderer.on('browser:remoteDesktopRelease', listener)
+    return () => ipcRenderer.removeListener('browser:remoteDesktopRelease', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {

@@ -1,3 +1,4 @@
+import type { RuntimeEnvironmentsCloudApi } from './runtime-environments-cloud-api'
 import type {
   RendererStatusPublication,
   RendererStatusAck
@@ -93,7 +94,7 @@ export type RuntimeApi = {
     ) => () => void
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
-  runtimeEnvironments: {
+  runtimeEnvironments: RuntimeEnvironmentsCloudApi & {
     desktopCreatedChatIds?: () => Promise<string[]>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void

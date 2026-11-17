@@ -1,3 +1,9 @@
+import type { AgentApiKeysApi } from './api/agent-api-keys-bridge'
+import type { CloudApiBridge } from './api/cloud-api-bridge'
+import type { CloudSecretsApi } from './api/cloud-secrets-bridge'
+import type { LocalCommandsApi } from './api/local-commands-bridge'
+import type { OrcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
+import type { SshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -21,6 +27,7 @@ import type { AiVaultApi } from './api/ai-vault/ai-vault-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automations/automation-api'
 import type { BrowserApi } from './api/browser/browser-api'
+import type { RemoteDesktopBrowserApi } from './api/browser/remote-desktop-browser-api'
 import type { CliApi } from './api/cli-install/cli-install-api'
 import type { OrcaUninstallApi } from './api/orca-uninstall/orca-uninstall-api'
 import type { CrashReportsApi, FeedbackApi } from './api/diagnostics/crash-report-api'
@@ -28,6 +35,10 @@ import type { DashboardApi, TerminalPreviewApi } from './api/window-ui/dashboard
 import type { DocPreviewApi } from './api/document-preview/doc-preview-api'
 import type { EmulatorApi } from './api/emulator/emulator-api'
 import type { EphemeralVmApi } from './api/cloud-workspaces/ephemeral-vm-api'
+import type { OrcaCloudWorkspaceApi } from '../shared/hosted-sandbox/cloud-workspace-api'
+import type { OrcaCloudTransferApi } from '../shared/hosted-sandbox/cloud-transfer-api'
+import type { CloudWorkspaceOfflineApi } from '../shared/hosted-sandbox/cloud-workspace-offline-api'
+import type { CloudSharesApi } from './api/cloud-shares-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem/filesystem-api'
 import type { GitInspectionApi } from './api/source-control/git-inspection-api'
 import type { GitOperationApi } from './api/source-control/git-operation-api'
@@ -42,6 +53,7 @@ import type { MobileApi } from './api/mobile/mobile-api'
 import type { NativeChatApi } from './api/native-chat/native-chat-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding/onboarding-api'
 import type { OrcaProfileApi } from './api/profiles/orca-profile-api'
+import type { OrcaCloudEnvironmentsApi } from '../shared/hosted-sandbox/hosted-environment-api'
 import type {
   ComputerUsePermissionsApi,
   DeveloperPermissionsApi,
@@ -64,6 +76,8 @@ import type { ShellApi } from './api/terminal/shell-api'
 import type { SpeechApi } from './api/speech/speech-api'
 import type { SshApi } from './api/ssh/ssh-api'
 import type { PlainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
+import type { RuntimeDownloadsApi } from './api/runtime-downloads-bridge'
+import type { CloudSyncApi } from '../shared/cloud-sync/cloud-sync-contract'
 import type { LegacyRelayBridgeApi } from './api/mobile/legacy-relay-bridge-api'
 import type {
   DiagnosticsApi,
@@ -80,6 +94,7 @@ import type {
   WorkspacePortsApi
 } from './api/workspaces/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview/link-preview-api'
+import type { CloudWorkspacesApi } from './api/cloud-workspaces-api'
 import type { WorkspaceSessionApi } from './api/workspaces/workspace-session-api'
 import type {
   FolderWorkspacesApi,
@@ -93,6 +108,7 @@ type Merged<T> = { [K in keyof T]: T[K] }
 export type PreloadApi = {
   app: AppApi
   orcaProfiles: OrcaProfileApi
+  orcaCloudEnvironments: OrcaCloudEnvironmentsApi
   platform: PlatformApi
   e2e: E2EApi
   repos: RepositoryApi
@@ -105,6 +121,7 @@ export type PreloadApi = {
   workspaceSpace: WorkspaceSpaceApi
   workspacePorts: WorkspacePortsApi
   linkPreview: LinkPreviewApi
+  cloudWorkspaces: CloudWorkspacesApi
   pty: PtyApi
   feedback: FeedbackApi
   crashReports: CrashReportsApi
@@ -143,11 +160,16 @@ export type PreloadApi = {
   skills: SkillsApi
   pet: PetApi
   appIcon: AppIconApi
-  browser: BrowserApi
+  browser: BrowserApi & RemoteDesktopBrowserApi
   browserPasswords: BrowserPasswordsApi
   emulator: EmulatorApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi
+  /** Orca Cloud workspace lifecycle (status panel, Restart, archive); absent in builds without Orca Cloud. */
+  orcaCloudWorkspace: OrcaCloudWorkspaceApi & OrcaCloudTransferApi
+  /** Orca Cloud: browse a sleeping workspace from the client cache; prompts queued to wake it. */
+  orcaCloudOffline: CloudWorkspaceOfflineApi
+  cloudShares: CloudSharesApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
   updater: UpdaterApi
@@ -179,6 +201,21 @@ export type PreloadApi = {
   ssh: SshApi
   /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */
   plainSsh?: PlainSshTerminalApi
+  /** Desktop only: streams files and folders from a paired runtime host to this machine. */
+  runtimeDownloads?: RuntimeDownloadsApi
+  /** Desktop only: an Orca Cloud workspace's `.context` folder synced to this computer. */
+  cloudSync?: CloudSyncApi
+  /** Desktop only: the API keys Orca hands to agent launches. */
+  agentApiKeys?: AgentApiKeysApi
+  /** Desktop only: Orca Cloud API keys, org settings and routines (hosted builds). */
+  cloudApi?: CloudApiBridge
+  /** Desktop only: Orca Cloud secrets (personal, team, repo) injected into cloud workspaces. */
+  cloudSecrets?: CloudSecretsApi
+  /** Desktop only: commands agents in cloud workspaces ask to run on this computer. */
+  localCommands?: LocalCommandsApi
+  /** Orca Cloud agent accounts: desktop only, states and codes only. */
+  orcaCloudAgents?: OrcaCloudAgentsApi
+  sshAgentSignIn?: SshAgentSignInApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
   legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi

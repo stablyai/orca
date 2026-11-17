@@ -1,0 +1,51 @@
+import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
+
+export const cloudWorkspacesApi = {
+  available: () => ipcRenderer.invoke('cloudWorkspaces:available'),
+  list: (query) => ipcRenderer.invoke('cloudWorkspaces:list', query),
+  get: (id) => ipcRenderer.invoke('cloudWorkspaces:get', { id }),
+  patch: (id, patch) => ipcRenderer.invoke('cloudWorkspaces:patch', { id, patch }),
+  resolveLink: (target, chatId) =>
+    ipcRenderer.invoke('cloudWorkspaces:resolveLink', { target, chatId }),
+  openGrant: (id) => ipcRenderer.invoke('cloudWorkspaces:openGrant', { id }),
+  readSnapshot: (id) => ipcRenderer.invoke('cloudWorkspaces:readSnapshot', { id }),
+  listGrants: (id) => ipcRenderer.invoke('cloudWorkspaces:listGrants', { id }),
+  revokeGrant: (id, grantId) => ipcRenderer.invoke('cloudWorkspaces:revokeGrant', { id, grantId }),
+  sleep: (id) => ipcRenderer.invoke('cloudWorkspaces:sleep', { id }),
+  wake: (id) => ipcRenderer.invoke('cloudWorkspaces:wake', { id }),
+  destroy: (id) => ipcRenderer.invoke('cloudWorkspaces:destroy', { id }),
+  localWorkspaces: () => ipcRenderer.invoke('cloudWorkspaces:localWorkspaces'),
+  bindEnvironment: (sandboxId, runtimeEnvironmentId, grantId) =>
+    ipcRenderer.invoke('cloudWorkspaces:bindEnvironment', {
+      sandboxId,
+      runtimeEnvironmentId,
+      grantId
+    }),
+  environmentBindings: () => ipcRenderer.invoke('cloudWorkspaces:environmentBindings'),
+  setActive: (args) => ipcRenderer.invoke('cloudWorkspaces:setActive', args),
+  getOrgPrompts: () => ipcRenderer.invoke('cloudWorkspaces:getOrgPrompts'),
+  putOrgPrompts: (document, revision) =>
+    ipcRenderer.invoke('cloudWorkspaces:putOrgPrompts', { document, revision }),
+  getPrefs: () => ipcRenderer.invoke('cloudWorkspaces:getPrefs'),
+  putPrefs: (document, revision) =>
+    ipcRenderer.invoke('cloudWorkspaces:putPrefs', { document, revision }),
+  changeOwner: (id, ownerUserId) =>
+    ipcRenderer.invoke('cloudWorkspaces:changeOwner', { id, ownerUserId }),
+  ownerNotices: () => ipcRenderer.invoke('cloudWorkspaces:ownerNotices'),
+  dismissOwnerNotice: (id) => ipcRenderer.invoke('cloudWorkspaces:dismissOwnerNotice', { id }),
+  onOpenLink: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: string): void => callback(link)
+    ipcRenderer.on('ui:openCloudWorkspaceLink', listener)
+    return () => ipcRenderer.removeListener('ui:openCloudWorkspaceLink', listener)
+  },
+  consumePendingLink: () => ipcRenderer.invoke('ui:consumePendingCloudWorkspaceLink'),
+  onAccessLost: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      lost: { environmentId: string; sandboxId: string }
+    ): void => callback(lost)
+    ipcRenderer.on('cloudWorkspaces:accessLost', listener)
+    return () => ipcRenderer.removeListener('cloudWorkspaces:accessLost', listener)
+  }
+} satisfies PreloadApi['cloudWorkspaces']

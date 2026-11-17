@@ -9,11 +9,6 @@ import type {
   FindOrcaProfileProjectsByPathResult,
   OrcaProfileAuthStatus,
   OrcaProfileListResult,
-  OrcaProfileOrgInviteRevokeArgs,
-  OrcaProfileOrgMemberChangeRoleArgs,
-  OrcaProfileOrgMemberInviteArgs,
-  OrcaProfileOrgMemberMutationResult,
-  OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult,
   RefreshCurrentOrcaProfileAuthResult,
@@ -25,8 +20,9 @@ import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
 } from '../../../shared/orca-profiles/orca-profiles'
+import type { OrcaProfileCloudApi } from './orca-profile-cloud-api'
 
-export type OrcaProfileApi = {
+export type OrcaProfileApi = OrcaProfileCloudApi<{
   list: () => Promise<OrcaProfileListResult>
   authStatus: () => Promise<OrcaProfileAuthStatus>
   /** Fires when main changed the stored auth status on its own (e.g. a revoked session). */
@@ -52,16 +48,4 @@ export type OrcaProfileApi = {
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
-  orgMemberInvite: (
-    args: OrcaProfileOrgMemberInviteArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgInviteRevoke: (
-    args: OrcaProfileOrgInviteRevokeArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgMemberChangeRole: (
-    args: OrcaProfileOrgMemberChangeRoleArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgMemberRemove: (
-    args: OrcaProfileOrgMemberRemoveArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-}
+}>

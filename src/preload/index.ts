@@ -5,6 +5,7 @@ import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './renderer/renderer-runtime'
 import { appApi } from './api/app-bridge'
 import { orcaProfilesApi } from './api/profiles/orca-profiles-bridge'
+import { orcaCloudEnvironmentsApi } from './api/orca-cloud-environments-bridge'
 import { platformApi } from './api/platform-bridge'
 import { wslApi } from './api/wsl/wsl-bridge'
 import { wslMoveApi } from './api/wsl/wsl-move-bridge'
@@ -23,6 +24,7 @@ import { workspaceCleanupApi } from './api/workspaces/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspaces/workspace-space-bridge'
 import { workspacePortsApi } from './api/workspaces/workspace-ports-bridge'
 import { linkPreviewApi } from './api/link-preview/link-preview-bridge'
+import { cloudWorkspacesApi } from './api/cloud-workspaces-bridge'
 import { ptyApi } from './api/terminal/pty-bridge'
 import { feedbackApi } from './api/diagnostics/feedback-bridge'
 import { crashReportsApi } from './api/diagnostics/crash-reports-bridge'
@@ -61,6 +63,9 @@ import { browserApi } from './api/browser/browser-bridge'
 import { emulatorApi } from './api/emulator/emulator-bridge'
 import { hooksApi } from './api/agent-hooks/hooks-bridge'
 import { ephemeralVmApi } from './api/cloud-workspaces/ephemeral-vm-bridge'
+import { orcaCloudWorkspaceApi } from './api/orca-cloud-workspace-bridge'
+import { orcaCloudOfflineApi } from './api/orca-cloud-offline-bridge'
+import { cloudSharesApi } from './api/cloud-shares-bridge'
 import { cacheApi } from './api/github/cache-bridge'
 import { sessionApi } from './api/workspaces/session-bridge'
 import { updaterApi } from './api/updater/updater-bridge'
@@ -87,6 +92,14 @@ import { grokAccountsApi } from './api/agent-accounts/grok-accounts-bridge'
 import { cursorAccountsApi } from './api/agent-accounts/cursor-accounts-bridge'
 import { sshApi } from './api/ssh/ssh-bridge'
 import { plainSshTerminalApi } from './api/terminal/plain-ssh-terminal-bridge'
+import { runtimeDownloadsApi } from './api/runtime-downloads-bridge'
+import { cloudSyncApi } from './api/cloud-sync-bridge'
+import { agentApiKeysApi } from './api/agent-api-keys-bridge'
+import { cloudApiBridge } from './api/cloud-api-bridge'
+import { cloudSecretsApi } from './api/cloud-secrets-bridge'
+import { localCommandsApi } from './api/local-commands-bridge'
+import { orcaCloudAgentsApi } from './api/orca-cloud-agents-bridge'
+import { sshAgentSignInApi } from './api/ssh-agent-sign-in-bridge'
 import { legacyRelayBridgeApi } from './api/mobile/legacy-relay-bridge-api'
 import { automationsApi } from './api/automations/automations-bridge'
 import { e2eApi } from './api/diagnostics/e2e-bridge'
@@ -110,6 +123,7 @@ const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =
 const api = {
   app: appApi,
   orcaProfiles: orcaProfilesApi,
+  orcaCloudEnvironments: orcaCloudEnvironmentsApi,
   platform: platformApi,
   wsl: wslApi,
   wslMove: wslMoveApi,
@@ -128,6 +142,7 @@ const api = {
   workspaceSpace: workspaceSpaceApi,
   workspacePorts: workspacePortsApi,
   linkPreview: linkPreviewApi,
+  cloudWorkspaces: cloudWorkspacesApi,
   pty: ptyApi,
   feedback: feedbackApi,
   crashReports: crashReportsApi,
@@ -171,6 +186,9 @@ const api = {
   emulator: emulatorApi,
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,
+  orcaCloudWorkspace: orcaCloudWorkspaceApi,
+  orcaCloudOffline: orcaCloudOfflineApi,
+  cloudShares: cloudSharesApi,
   cache: cacheApi,
   session: sessionApi,
   updater: updaterApi,
@@ -197,6 +215,14 @@ const api = {
   cursorAccounts: cursorAccountsApi,
   ssh: sshApi,
   plainSsh: plainSshTerminalApi,
+  runtimeDownloads: runtimeDownloadsApi,
+  cloudSync: cloudSyncApi,
+  agentApiKeys: agentApiKeysApi,
+  cloudApi: cloudApiBridge,
+  cloudSecrets: cloudSecretsApi,
+  localCommands: localCommandsApi,
+  orcaCloudAgents: orcaCloudAgentsApi,
+  sshAgentSignIn: sshAgentSignInApi,
   legacyRelayBridge: legacyRelayBridgeApi,
   automations: automationsApi,
   e2e: e2eApi,

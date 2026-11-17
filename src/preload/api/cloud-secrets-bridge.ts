@@ -1,0 +1,59 @@
+import { ipcRenderer } from 'electron'
+import type {
+  CloudSecretBatchResult,
+  CloudSecretTarget,
+  CloudSecretView,
+  CloudSecretWorkspaceMode,
+  CloudSecretsEffective,
+  CloudSecretsResult,
+  CloudSecretsStatus,
+  CloudWorkspaceSharing
+} from '../../shared/cloud-secrets/cloud-secrets-wire'
+
+/** Desktop only. Values go in; only names, scopes and last-4 hints come back. */
+export type CloudSecretsApi = {
+  status: () => Promise<CloudSecretsStatus>
+  list: (target: CloudSecretTarget) => Promise<CloudSecretsResult<CloudSecretView[]>>
+  put: (request: {
+    target: CloudSecretTarget
+    name: string
+    value: string
+  }) => Promise<CloudSecretsResult<CloudSecretView>>
+  remove: (request: {
+    target: CloudSecretTarget
+    name: string
+  }) => Promise<CloudSecretsResult<true>>
+  batch: (request: {
+    target: CloudSecretTarget
+    set?: Record<string, string>
+    delete?: string[]
+  }) => Promise<CloudSecretsResult<CloudSecretBatchResult>>
+  /** `workspace: 'shared'`: what a workspace shared with the team gets (no personal secrets). */
+  effective: (request: {
+    repo?: string
+    workspace?: CloudSecretWorkspaceMode
+  }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
+  /** Best-effort nudge so a running workspace picks up new values now; the server also does it on write. */
+  refreshEnv: (request: { runtimeEnvironmentId: string }) => Promise<CloudSecretsResult<boolean>>
+  /** Who owns an Orca Cloud workspace and whether teammates share it (control plane only). */
+  workspaceSharing: (request: {
+    runtimeEnvironmentId: string
+  }) => Promise<CloudSecretsResult<CloudWorkspaceSharing>>
+  /** Saves one of this computer's Agent API Keys as a personal Cloud secret (the value never leaves main). */
+  saveDesktopKey: (request: {
+    agent: string
+    envName: string
+  }) => Promise<CloudSecretsResult<CloudSecretView>>
+}
+
+export const cloudSecretsApi: CloudSecretsApi = {
+  status: () => ipcRenderer.invoke('cloudSecrets:status'),
+  list: (target) => ipcRenderer.invoke('cloudSecrets:list', target),
+  put: (request) => ipcRenderer.invoke('cloudSecrets:put', request),
+  remove: (request) => ipcRenderer.invoke('cloudSecrets:remove', request),
+  batch: (request) => ipcRenderer.invoke('cloudSecrets:batch', request),
+  effective: (request) => ipcRenderer.invoke('cloudSecrets:effective', request),
+  refreshEnv: (request) => ipcRenderer.invoke('cloudSecrets:refreshEnv', request),
+  saveDesktopKey: (request) => ipcRenderer.invoke('cloudSecrets:saveDesktopKey', request),
+  workspaceSharing: (request) => ipcRenderer.invoke('cloudSecrets:workspaceSharing', request)
+}
