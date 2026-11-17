@@ -52,7 +52,10 @@ function manualWindow() {
   }
 }
 
-function notification(method: string, params: unknown): CodexStructuredSessionEvent {
+function notification(
+  method: string,
+  params: unknown
+): Extract<CodexStructuredSessionEvent, { type: 'notification' }> {
   return { type: 'notification', sessionId: SESSION_ID, threadId: THREAD_ID, method, params }
 }
 
