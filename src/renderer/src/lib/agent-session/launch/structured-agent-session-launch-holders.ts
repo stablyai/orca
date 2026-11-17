@@ -16,8 +16,8 @@ function holdsLaunchIdentity(state: StructuredLaunchState, requestId?: string): 
   }
   const { attempt } = state.callers
   return (
-    (lifecycle !== 'visibility-unknown' ||
-      (!!state.intent.params.firstMessage && requestId !== undefined)) &&
+    // A re-delivered action reconciles its own unconfirmed chat rather than opening a second.
+    (lifecycle !== 'visibility-unknown' || requestId !== undefined) &&
     (requestId === undefined ? attempt.kind === 'first' : attempt.requestId === requestId)
   )
 }

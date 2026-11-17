@@ -45,6 +45,7 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
+  state.intent.awaiting = 'the chat list'
   const snapshots = await readStructuredSessionTabInventory(state.intent.target)
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
@@ -63,6 +64,7 @@ export async function recoverPublishedSessionReceipt(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
+  state.intent.awaiting = 'agentSession.history'
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
     state.intent.target,
     'agentSession.history',

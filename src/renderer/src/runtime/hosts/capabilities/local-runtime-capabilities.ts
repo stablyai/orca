@@ -5,6 +5,7 @@ type LocalRuntimeCapabilityObservation =
   | { state: 'known'; capabilities: readonly RuntimeCapability[] }
 let observation: LocalRuntimeCapabilityObservation = { state: 'unlearned' }
 let refreshPromise: Promise<readonly RuntimeCapability[]> | null = null
+const LOCAL_RUNTIME_CAPABILITY_PROBE_TIMEOUT_MS = 15_000
 const knownListeners = new Set<(capabilities: readonly RuntimeCapability[]) => void>()
 const listeners = new Set<() => void>()
 
@@ -82,11 +83,21 @@ export function awaitLocalRuntimeCapabilities(): {
 /** `refreshLocalRuntimeCapabilities` is not `async`, so a missing or broken preload bridge would
  *  throw synchronously out of it instead of settling into the unknown state its catch owns. */
 function startLocalRuntimeCapabilityProbe(): ReturnType<typeof window.api.runtime.getStatus> {
+  let probe: ReturnType<typeof window.api.runtime.getStatus>
   try {
-    return window.api.runtime.getStatus()
+    probe = window.api.runtime.getStatus()
   } catch (error) {
     return Promise.reject(error)
   }
+  // An unanswered probe settles as failed so it never holds every later read that shares it.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const unanswered = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Local runtime status did not answer.')),
+      LOCAL_RUNTIME_CAPABILITY_PROBE_TIMEOUT_MS
+    )
+  })
+  return Promise.race([probe, unanswered]).finally(() => clearTimeout(timer))
 }
 
 export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapability[]> {

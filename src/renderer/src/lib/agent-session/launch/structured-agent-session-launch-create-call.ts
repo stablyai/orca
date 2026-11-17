@@ -132,6 +132,7 @@ export async function launchStructuredAgentSession(
 ): Promise<StructuredAgentLaunchReceipt> {
   // Gates only the intent it was set on, once; a user Retry builds a new intent without it.
   if (intent.createAfter) {
+    intent.awaiting = 'the conversation source'
     const go = await intent.createAfter
     if (go instanceof StructuredAgentSessionCreateRefusalError) {
       throw go
@@ -144,18 +145,22 @@ export async function launchStructuredAgentSession(
   }
   let forkOptions: Awaited<ReturnType<typeof inheritedForkCreateOptions>>
   if (intent.params.forkFrom) {
+    intent.awaiting = 'fork options'
     try {
       forkOptions = await inheritedForkCreateOptions(intent)
     } catch (error) {
       refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown, error)
     }
   }
+  intent.awaiting = 'agentSession.createSupport'
   await requireHostForkSupport(intent)
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
   }
+  intent.awaiting = 'host permission'
   await requireHostPermission(intent)
+  intent.awaiting = 'host capabilities'
   if (!intent.createPrepared) {
     let supported = false
     let takesExplicitOptions = false
@@ -193,6 +198,7 @@ export async function launchStructuredAgentSession(
     )
   }
   delete intent.beforeCreate
+  intent.awaiting = 'agentSession.create'
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
