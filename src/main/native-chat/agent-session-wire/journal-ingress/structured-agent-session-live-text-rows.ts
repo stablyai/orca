@@ -20,10 +20,10 @@ export class StructuredAgentSessionLiveTextRows {
       StructuredAgentSessionEventSink,
       'bindLiveText' | 'publishLiveText'
     >,
-    private readonly body: (key: string) => AgentJournalItemBody | null,
-    flush: () => void
+    private readonly body: (key: string) => AgentJournalItemBody | null
   ) {
-    this.release = sink.bindLiveText?.({ read: (epoch) => this.read(epoch), flush })
+    // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
+    this.release = sink.bindLiveText?.({ read: (epoch) => this.read(epoch), flush: () => {} })
   }
 
   /** Pass to the save; a late commit for a forgotten row is ignored. */

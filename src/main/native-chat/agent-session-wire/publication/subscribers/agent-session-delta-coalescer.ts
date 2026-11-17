@@ -25,7 +25,9 @@ export type AgentSessionDeltaCoalescerDeps = {
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
   /** Runs once a stream has received no text for `ms`; false retries after another quiet period. */
-  idle?: { ms: number; run: (key: string, text: string) => boolean }
+  /** Runs once a stream has had no text for `ms`; each later quiet save of that stream needs twice
+   *  the quiet, up to 16x, so a sparse stream cannot rewrite its whole text per delta. */
+  idle?: { ms: number; run: (key: string, text: string) => void }
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -75,6 +77,7 @@ export function createAgentSessionDeltaCoalescer(
       truncated: boolean
       dirty: boolean
       appendedAt: number
+      quietMs: number
       cancelIdle: (() => void) | null
     }
   >()
@@ -91,7 +94,7 @@ export function createAgentSessionDeltaCoalescer(
       stream.dirty = false
       return true
     }
-    const text = stream.chunks.join('')
+    const text = joined(stream)
     const emitted = deps.emit(key, text, {
       text,
       observedBytes: stream.observedBytes,
@@ -112,6 +115,13 @@ export function createAgentSessionDeltaCoalescer(
   }
 
   type Stream = NonNullable<ReturnType<typeof streams.get>>
+  // Keep the joined text so rereading an unchanged stream copies nothing.
+  const joined = (stream: Stream): string => {
+    const text = stream.chunks.length === 1 ? stream.chunks[0] : stream.chunks.join('')
+    stream.chunks = text ? [text] : []
+    return text
+  }
+
   // Measured from the last delta, never the last save, so continuous streaming saves nothing extra.
   const armIdle = (key: string, stream: Stream, ms: number): void => {
     const idle = deps.idle
@@ -124,11 +134,12 @@ export function createAgentSessionDeltaCoalescer(
         return
       }
       const quiet = performance.now() - stream.appendedAt
-      if (quiet < idle.ms) {
-        armIdle(key, stream, idle.ms - quiet)
-      } else if (!idle.run(key, stream.chunks.join(''))) {
-        armIdle(key, stream, idle.ms)
+      if (quiet < stream.quietMs) {
+        armIdle(key, stream, stream.quietMs - quiet)
+        return
       }
+      stream.quietMs = Math.min(stream.quietMs * 2, idle.ms * 16)
+      idle.run(key, joined(stream))
     }, ms)
   }
 
@@ -182,6 +193,7 @@ export function createAgentSessionDeltaCoalescer(
           truncated: false,
           dirty: false,
           appendedAt: 0,
+          quietMs: deps.idle?.ms ?? 0,
           cancelIdle: null
         }
         if (!deps.isProtected?.(key)) {
@@ -214,7 +226,7 @@ export function createAgentSessionDeltaCoalescer(
       streams.set(key, stream)
       stream.appendedAt = performance.now()
       if (!stream.cancelIdle) {
-        armIdle(key, stream, deps.idle?.ms ?? 0)
+        armIdle(key, stream, stream.quietMs)
       }
       // Share one timer across streams to bound wakeups per window.
       scheduleFlush()
@@ -245,7 +257,7 @@ export function createAgentSessionDeltaCoalescer(
       const stream = streams.get(key)
       return stream
         ? {
-            text: stream.chunks.join(''),
+            text: joined(stream),
             observedBytes: stream.observedBytes,
             truncated: stream.truncated
           }
@@ -258,7 +270,7 @@ export function createAgentSessionDeltaCoalescer(
               {
                 key,
                 snapshot: {
-                  text: stream.chunks.join(''),
+                  text: joined(stream),
                   observedBytes: stream.observedBytes,
                   truncated: stream.truncated
                 }

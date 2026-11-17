@@ -132,9 +132,10 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     fence: number,
-    items: readonly AgentJournalRenderItem[],
+    read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
     targets = this.subscribers(sessionId)
   ): void => {
+    const items = targets.length === 0 ? [] : typeof read === 'function' ? read() : read
     const hostNow = this.now()
     for (const subscriber of targets) {
       this.enqueue(subscriber, () =>

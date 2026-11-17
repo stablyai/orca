@@ -159,7 +159,8 @@ export type StructuredAgentSessionEventTarget = {
   journal: SqlAgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
-  publishLiveText?: (items: readonly AgentJournalRenderItem[]) => void
+  /** `read` runs only when someone is subscribed. */
+  publishLiveText?: (read: () => readonly AgentJournalRenderItem[]) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }

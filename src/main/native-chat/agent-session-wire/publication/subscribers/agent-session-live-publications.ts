@@ -4,12 +4,15 @@ import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
+import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 
 /** A durable frame takes newer live text for rows at the revision that text was placed on, so a
  *  save or a fresh view never shows less than the stream already did. */
 export function withSubscriberLiveText(
   items: AgentJournalRenderItem[],
-  readLive: () => readonly AgentJournalRenderItem[]
+  readLive: () => readonly AgentJournalRenderItem[],
+  form: HistoryReader['form']
 ): AgentJournalRenderItem[] {
   const live = items.length > 0 ? readLive() : []
   if (live.length === 0) {
@@ -23,7 +26,7 @@ export function withSubscriberLiveText(
       return item
     }
     changed = true
-    return { ...item, body: shown.body }
+    return form({ ...item, body: shown.body }).item
   })
   return changed ? next : items
 }
@@ -52,6 +55,8 @@ export async function publishSubscriberLiveText(
     ) {
       continue
     }
+    // Live rows get the same per-row bounds a durable read gives this subscriber.
+    const { form } = subscriberHistoryReader(subscriber)
     await port.emit(
       subscriber,
       {
@@ -59,7 +64,7 @@ export async function publishSubscriberLiveText(
         sessionId,
         fence,
         hostNow,
-        batch: { ...emptyAgentSessionBatch(cursor), items: [...items] }
+        batch: { ...emptyAgentSessionBatch(cursor), items: items.map((item) => form(item).item) }
       },
       { journal, queuePublication: { value: subscriber.queuePublication } }
     )

@@ -139,22 +139,20 @@ export function createCodexStructuredItemStreams(
     emit: (key, text) => persist(key, text, false),
     idle: {
       ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
-      run: (key, text) =>
-        !isText(key) || checkpointLengths.get(key) === text.length || persist(key, text, true)
+      // A refused save stays pending for the next barrier; quiet never retries on its own.
+      run: (key, text) => {
+        if (isText(key) && checkpointLengths.get(key) !== text.length) {
+          persist(key, text, true)
+        }
+      }
     }
   })
 
-  const live = new StructuredAgentSessionLiveTextRows(
-    deps.sink,
-    (key) => {
-      const state = states.get(key)
-      const text = coalescer.snapshot(key)?.text
-      return state && text !== undefined && isText(key)
-        ? codexRunningStreamBody(state.item, text)
-        : null
-    },
-    () => flush()
-  )
+  const live = new StructuredAgentSessionLiveTextRows(deps.sink, (key) => {
+    const state = states.get(key)
+    const text = state && isText(key) ? coalescer.snapshot(key)?.text : undefined
+    return state && text !== undefined ? codexRunningStreamBody(state.item, text) : null
+  })
 
   const ensureState = (
     threadId: string,

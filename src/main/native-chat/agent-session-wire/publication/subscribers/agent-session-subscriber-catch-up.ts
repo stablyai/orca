@@ -138,7 +138,7 @@ async function deliver(
     if (!result.ok) {
       const page = {
         ...result.page,
-        items: withSubscriberLiveText(result.page.items, live),
+        items: withSubscriberLiveText(result.page.items, live, reader.form),
         fence: subscriber.fence
       }
       await delivery.emit(subscriber, {
@@ -174,7 +174,7 @@ async function deliver(
         sessionId: subscriber.sessionId,
         batch: {
           cursor: page.window.nextCursor,
-          items: withSubscriberLiveText(page.items, live),
+          items: withSubscriberLiveText(page.items, live, reader.form),
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
@@ -295,7 +295,8 @@ async function publishSnapshotFrame(
     ...durable,
     items: withSubscriberLiveText(
       durable.items,
-      () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+      () => port.hooks.readLiveText?.(subscriber.sessionId) ?? [],
+      reader.form
     )
   }
   await delivery.emit(subscriber, {

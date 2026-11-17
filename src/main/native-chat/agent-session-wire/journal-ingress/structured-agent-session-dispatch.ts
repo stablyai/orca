@@ -37,7 +37,7 @@ export function createLiveTextPublication(
       publicationKey: 'live-text',
       run: (bound) => {
         if (current(bound)) {
-          bound.publishLiveText?.(read())
+          bound.publishLiveText?.(read)
         }
       }
     })

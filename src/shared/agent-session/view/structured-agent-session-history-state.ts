@@ -93,15 +93,14 @@ export function mergeLiveItems(
     : { items: mergeItems(current, incoming, removedIds), rescan: true }
 }
 
-/** Revisions of loaded rows at their own positions, found from the tail where streaming rows are;
- *  null when any row is new, moved or changes owner, so retention may need a fresh scan. */
+/** Revisions of loaded rows at their own positions; null when any row is new, moved or changes owner, so retention may need a fresh scan. */
 function replaceItemsInPlace(
   current: AgentJournalRenderItem[],
   incoming: readonly AgentJournalRenderItem[]
 ): AgentJournalRenderItem[] | null {
   let next: AgentJournalRenderItem[] | null = null
   for (const item of incoming) {
-    const index = rowIndexFromTail(current, item)
+    const index = rowIndexAt(current, item)
     const prior = current[index]
     if (!prior || isRootAgentJournalItem(prior) !== isRootAgentJournalItem(item)) {
       return null
@@ -114,11 +113,20 @@ function replaceItemsInPlace(
   return next ?? current
 }
 
-function rowIndexFromTail(rows: readonly AgentJournalRenderItem[], item: AgentJournalRenderItem) {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    const order = compareAgentJournalItems(rows[index], item)
-    if (order <= 0) {
-      return order === 0 && rows[index].itemId === item.itemId ? index : -1
+/** Rows are in position order, so each lookup is a binary search. */
+function rowIndexAt(rows: readonly AgentJournalRenderItem[], item: AgentJournalRenderItem): number {
+  let low = 0
+  let high = rows.length - 1
+  while (low <= high) {
+    const middle = (low + high) >>> 1
+    const order = compareAgentJournalItems(rows[middle], item)
+    if (order === 0) {
+      return rows[middle].itemId === item.itemId ? middle : -1
+    }
+    if (order < 0) {
+      low = middle + 1
+    } else {
+      high = middle - 1
     }
   }
   return -1
