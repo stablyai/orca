@@ -39,6 +39,28 @@ export function withoutErasedRequiredWorktreeFields(
   return next
 }
 
+/** One row with meta updates applied; returns the same row when every resulting field is unchanged. */
+export function applyWorktreeRowUpdates<T extends Worktree>(
+  worktree: T,
+  updates: Partial<WorktreeMeta>
+): T {
+  const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
+  if (updates.displayNameIsPinned !== undefined) {
+    next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+    if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
+      const automaticName = branchName(next.branch)
+      // A detached worktree has no branch-derived label; keep the old text until the host
+      // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
+      next.displayName = automaticName || worktree.displayName
+    }
+  }
+  const keys = Object.keys(next) as (keyof T)[]
+  const unchanged =
+    keys.length === Object.keys(worktree).length &&
+    keys.every((key) => Object.hasOwn(worktree, key) && next[key] === worktree[key])
+  return unchanged ? worktree : next
+}
+
 export function applyWorktreeUpdates(
   worktreesByRepo: Record<string, Worktree[]>,
   worktreeId: string,
@@ -57,18 +79,8 @@ export function applyWorktreeUpdates(
     if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
       return worktree
     }
-
-    changed = true
-    const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
-    if (updates.displayNameIsPinned !== undefined) {
-      next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
-      if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
-        const automaticName = branchName(next.branch)
-        // A detached worktree has no branch-derived label; keep the old text until the host
-        // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
-        next.displayName = automaticName || worktree.displayName
-      }
-    }
+    const next = applyWorktreeRowUpdates(worktree, updates)
+    changed ||= next !== worktree
     return next
   })
   if (!changed) {

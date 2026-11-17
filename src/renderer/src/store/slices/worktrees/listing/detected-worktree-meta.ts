@@ -18,7 +18,11 @@ import {
 } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
-import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'
+import {
+  applyWorktreeRowUpdates,
+  withoutErasedRequiredWorktreeFields
+} from '../metadata/worktree-meta-update-application'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
@@ -36,8 +40,6 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
-import { branchName } from '@/lib/source-control/branches/branch-name'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -47,30 +49,36 @@ export function applyDetectedWorktreeUpdates(
 ): AppState['detectedWorktreesByRepo'] {
   // Why: mirrors applyWorktreeUpdates — detected rows feed the same palette.
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
-  let changed = false
-  const nextByRepo: AppState['detectedWorktreesByRepo'] = {}
-
-  for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
+  const updateRepo = (result: DetectedWorktreeListResult): DetectedWorktreeListResult => {
     let repoChanged = false
     const nextWorktrees = result.worktrees.map((worktree) => {
       if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
         return worktree
       }
-      repoChanged = true
-      changed = true
-      const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
-      if (updates.displayNameIsPinned !== undefined) {
-        next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
-        if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
-          const automaticName = branchName(next.branch)
-          next.displayName = automaticName || worktree.displayName
-        }
-      }
+      const next = applyWorktreeRowUpdates(worktree, updates)
+      repoChanged ||= next !== worktree
       return next
     })
-    nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
+    return repoChanged ? { ...result, worktrees: nextWorktrees } : result
   }
 
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  if (repoId !== worktreeId) {
+    // Listings bucket rows under the repo their id names, so other repos never hold this row.
+    const result = detectedWorktreesByRepo[repoId]
+    const next = result && updateRepo(result)
+    return next && next !== result
+      ? { ...detectedWorktreesByRepo, [repoId]: next }
+      : detectedWorktreesByRepo
+  }
+
+  let changed = false
+  const nextByRepo: AppState['detectedWorktreesByRepo'] = {}
+  for (const [bucketRepoId, result] of Object.entries(detectedWorktreesByRepo)) {
+    const next = updateRepo(result)
+    changed ||= next !== result
+    nextByRepo[bucketRepoId] = next
+  }
   return changed ? nextByRepo : detectedWorktreesByRepo
 }
 
