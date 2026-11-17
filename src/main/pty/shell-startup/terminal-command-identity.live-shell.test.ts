@@ -1,3 +1,4 @@
+import type * as Crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +13,7 @@ import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './posix-shell-startup-command'
 import { hasZsh, runZshPty } from './zsh-startup-hook-pty-harness'
 
 vi.mock('node:crypto', async (original) => ({
-  ...(await original<typeof import('node:crypto')>()),
+  ...(await original<typeof Crypto>()),
   randomUUID: () => '01234567-89ab-cdef-0123-456789abcdef'
 }))
 
@@ -21,7 +22,9 @@ const expectedId = '0123456789abcdef0123456789abcdef'
 function finishes(output: string) {
   const outcomes: { id: string; status: number | null }[] = []
   createOsc133CommandFinishedScanner((status, id) => {
-    if (id) outcomes.push({ id, status })
+    if (id) {
+      outcomes.push({ id, status })
+    }
   }).scan(output)
   return outcomes
 }
@@ -44,7 +47,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
           `set -T\ntrap 'builtin printf "%s\\n" "$BASH_COMMAND" >> "$HOME/debug.log"' DEBUG\nPROMPT_COMMAND="printf user-prompt"\n`
         )
         const result = spawnSync('bash', ['--noprofile', '--rcfile', rcfile, '-i'], {
-          input: ': > "$HOME/debug.log"\n' + 'true\n'.repeat(count) + 'exit 0\n',
+          input: `: > "$HOME/debug.log"\n${'true\n'.repeat(count)}exit 0\n`,
           encoding: 'utf8',
           timeout: 10_000,
           env: { ...process.env, HOME: root, ORCA_SHELL_FEATURES: 'markers', TERM: 'xterm' }

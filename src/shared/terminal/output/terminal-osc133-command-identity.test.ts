@@ -35,7 +35,7 @@ describe('attributed shell completion', () => {
     'bounds delimiter work while recovering from %i incomplete markers',
     (count) => {
       const input =
-        '\x1b]133;'.repeat(count) + '\x1b]133;D;3;orca_command=0123456789abcdef0123456789abcdef\x07'
+        `${'\x1b]133;'.repeat(count)}\x1b]133;D;3;orca_command=0123456789abcdef0123456789abcdef\x07`
       const indexOf = String.prototype.indexOf
       const charCodeAt = String.prototype.charCodeAt
       let visited = 0

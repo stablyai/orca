@@ -13,10 +13,14 @@ const MAX_OSC_CARRY_LENGTH = 4096
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
   for (let index = startIndex; index < data.length; index += 1) {
     const code = data.charCodeAt(index)
-    if (code === 7) return { index, length: 1 }
+    if (code === 7) {
+      return { index, length: 1 }
+    }
     if (code === 27) {
       // A trailing ESC may become ST in the next transport chunk.
-      if (index + 1 === data.length) return null
+      if (index + 1 === data.length) {
+        return null
+      }
       return { index, length: data.charCodeAt(index + 1) === 92 ? 2 : 0 }
     }
   }

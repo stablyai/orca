@@ -1,3 +1,4 @@
+import type * as Crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -16,7 +17,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 vi.mock('node:crypto', async (original) => {
-  const actual = await original<typeof import('node:crypto')>()
+  const actual = await original<typeof Crypto>()
   return { ...actual, randomUUID: vi.fn(actual.randomUUID) }
 })
 
@@ -80,7 +81,7 @@ it.skipIf(process.platform === 'win32')(
       )
       expect(sent.accepted).toBe(true)
       const output = spawnSync('bash', ['--noprofile', '--rcfile', rcfile, '-i'], {
-        input: writes.join('').replaceAll('\r', '\n') + 'true\nexit 0\n',
+        input: `${writes.join('').replaceAll('\r', '\n')}true\nexit 0\n`,
         encoding: 'utf8',
         timeout: 10_000,
         env: { ...process.env, HOME: root, TERM: 'xterm', ORCA_SHELL_FEATURES: 'markers' }

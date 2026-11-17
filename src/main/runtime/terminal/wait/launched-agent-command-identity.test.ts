@@ -33,7 +33,9 @@ function watch(replay = '', alreadySubmitted = true, agent: 'claude' | null = 'c
     signal: () => signal,
     emit(data: string) {
       recent += data
-      for (const listener of listeners) listener(data)
+      for (const listener of listeners) {
+        listener(data)
+      }
     }
   }
 }
@@ -53,7 +55,7 @@ it.each([1_000, 10_000])(
     vi.useFakeTimers()
     const launch = watch()
     vi.mocked(launch.runtime.readLaunchedAgentForeground).mockResolvedValue('shell')
-    launch.emit('\x1b]133;C\x07' + '\x1b]133;D;1\x07'.repeat(count))
+    launch.emit(`\x1b]133;C\x07${'\x1b]133;D;1\x07'.repeat(count)}`)
     await Promise.resolve()
     expect(vi.getTimerCount()).toBe(1)
     await vi.advanceTimersByTimeAsync(350)
@@ -92,7 +94,7 @@ it('accepts completed replay without a retained start and never begins dependent
 })
 
 it('joins contiguous replay and live bytes when completion is split at attachment', async () => {
-  const launch = watch(start + '\x1b]133;D;130;orca_command=0123456789abcdef')
+  const launch = watch(`${start}\x1b]133;D;130;orca_command=0123456789abcdef`)
   launch.emit('0123456789abcdef\x07\x1b]133;C\x07successor')
   expect(await launch.result).toMatchObject({ commandId, exitCode: 130 })
   expect(launch.signal()?.aborted).toBe(true)

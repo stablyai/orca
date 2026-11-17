@@ -98,7 +98,9 @@ export function failOnLaunchedAgentExit<T>(
     let latestFinish = -1
     let checking = false
     const checkForExit = async (): Promise<void> => {
-      if (!agent) return
+      if (!agent) {
+        return
+      }
       checking = true
       try {
         while (!stop.signal.aborted && !identified && latestFinish === marks) {
@@ -111,15 +113,21 @@ export function failOnLaunchedAgentExit<T>(
                 next()
               }
             })
-            if (stop.signal.aborted || identified || mark !== marks) break
+            if (stop.signal.aborted || identified || mark !== marks) {
+              break
+            }
             const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
-            if (stop.signal.aborted || identified || mark !== marks) break
+            if (stop.signal.aborted || identified || mark !== marks) {
+              break
+            }
             if (foreground === 'shell') {
               reject(launchedAgentExitError(runtime.readRecentTerminalOutput(ptyId)))
               return
             }
           }
-          if (mark === marks) return
+          if (mark === marks) {
+            return
+          }
         }
       } finally {
         checking = false
@@ -127,32 +135,44 @@ export function failOnLaunchedAgentExit<T>(
     }
     const scanner = createOsc133CommandFinishedScanner(
       (exitCode, commandId) => {
-        if (stop.signal.aborted) return
+        if (stop.signal.aborted) {
+          return
+        }
         if (commandId && commandId === command?.commandId) {
           cleanup()
           reject(new TerminalCommandFinishedError(commandId, exitCode))
           return
         }
-        if (identified) return
+        if (identified) {
+          return
+        }
         // Prompt hooks can report a finish before any command began.
         if (commandStarted && agent) {
           marks += 1
           latestFinish = marks
           cancelDelay()
           // A failed read proves nothing; the wait goes on.
-          if (!checking) void checkForExit().catch(() => {})
+          if (!checking) {
+            void checkForExit().catch(() => {})
+          }
         }
       },
       (_end, commandId) => {
-        if (stop.signal.aborted) return
-        if (commandId && commandId === command?.commandId) identified = true
+        if (stop.signal.aborted) {
+          return
+        }
+        if (commandId && commandId === command?.commandId) {
+          identified = true
+        }
         commandStarted = true
         marks += 1
         cancelDelay()
       }
     )
     unsubscribe = runtime.subscribeToTerminalData(ptyId, scanner.scan)
-    if (stop.signal.aborted) cleanup()
+    if (stop.signal.aborted) {
+      cleanup()
+    }
     // The launch can have ended before this wait began.
     const replay =
       command?.alreadySubmitted === false ? undefined : runtime.readRecentTerminalOutput(ptyId)
