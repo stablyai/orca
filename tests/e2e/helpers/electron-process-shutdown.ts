@@ -1,8 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import path from 'node:path'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
+import { readDaemonPidFiles } from './e2e-daemon-pid-files'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 
@@ -157,6 +156,15 @@ async function forceKillPidTree(pid: number): Promise<void> {
   }
 }
 
+// Playwright drops an app's process handle once the app closes, and then process() throws.
+function launchedProcess(app: ElectronApplication): ChildProcess | null {
+  try {
+    return app.process()
+  } catch {
+    return null
+  }
+}
+
 async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   const pid = proc.pid
   if (!pid || hasExited(proc)) {
@@ -208,7 +216,10 @@ export async function forceQuitElectronAppForE2E(
 
 // Stop serve like a supervisor so its detached PTYs survive; macOS vetoes unmarked app.quit and ordinary close may kill the daemon (#15537).
 export async function stopServeElectronAppForE2E(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
+  const proc = launchedProcess(app)
+  if (!proc) {
+    return
+  }
   // Why: Windows has no catchable SIGTERM, and its serve has no native-quit veto to bypass.
   if (process.platform === 'win32' || !proc.pid) {
     await closeElectronAppForE2E(app)
@@ -233,7 +244,13 @@ export async function closeElectronAppForE2E(
   app: ElectronApplication,
   options: { cleanupDaemonsForUserDataDir?: string } = {}
 ): Promise<void> {
-  const proc = app.process()
+  const proc = launchedProcess(app)
+  if (!proc) {
+    if (options.cleanupDaemonsForUserDataDir) {
+      await cleanupE2EDaemons(options.cleanupDaemonsForUserDataDir)
+    }
+    return
+  }
   const started = performance.now()
   let rootExitMs: number | null = hasExited(proc) ? 0 : null
   let pipesClosedMs: number | null = null
@@ -285,39 +302,6 @@ export async function closeElectronAppForE2E(
   }
   startDaemonCleanup()
   await daemonCleanup
-}
-
-function readDaemonPidFiles(userDataDir: string): number[] {
-  const daemonDir = path.join(userDataDir, 'daemon')
-  if (!existsSync(daemonDir)) {
-    return []
-  }
-
-  const pids: number[] = []
-  for (const entry of readdirSync(daemonDir)) {
-    if (!entry.endsWith('.pid')) {
-      continue
-    }
-    let raw: string
-    try {
-      raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
-    } catch {
-      // Why: an exiting daemon removes its pid file between readdir and read.
-      continue
-    }
-    try {
-      const parsed = JSON.parse(raw) as { pid?: unknown }
-      if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
-        pids.push(parsed.pid)
-      }
-    } catch {
-      const pid = Number(raw)
-      if (Number.isInteger(pid)) {
-        pids.push(pid)
-      }
-    }
-  }
-  return pids
 }
 
 export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {

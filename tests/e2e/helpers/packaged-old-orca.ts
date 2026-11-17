@@ -1,6 +1,5 @@
 // Use the pinned packaged build named by ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE; skip when it is unavailable.
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -20,6 +19,7 @@ import {
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 import type { OrcaCliResult } from './compiled-orca-cli'
 import { isolatedServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serve-cli-host'
+import { pickPinnedPort } from './pinned-port'
 import {
   isHeadlessPairedRuntimeServeReadyLine,
   parseHeadlessPairedRuntimePairingOffer
@@ -211,18 +211,6 @@ export type PackagedServeHost = {
   dispose: () => Promise<void>
 }
 
-async function reserveLoopbackPort(): Promise<number> {
-  const probe = createServer()
-  await new Promise<void>((resolve, reject) => {
-    probe.once('error', reject)
-    probe.listen(0, '127.0.0.1', () => resolve())
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a TCP listen on a host address reports an AddressInfo.
-  const { port } = probe.address() as AddressInfo
-  await new Promise<void>((resolve) => probe.close(() => resolve()))
-  return port
-}
-
 // Spawn directly to capture readiness from process creation; Playwright can consume it before launch resolves.
 export async function launchPackagedServeHost(executablePath: string): Promise<PackagedServeHost> {
   // Why /tmp on macOS: the released helper has a 103-byte Unix socket ceiling.
@@ -233,7 +221,7 @@ export async function launchPackagedServeHost(executablePath: string): Promise<P
     ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
     ORCA_E2E_HEADLESS: '1'
   })
-  const port = await reserveLoopbackPort()
+  const port = await pickPinnedPort()
   const launch = <T>(parseLine: (line: string) => T | null): Promise<ReadyProcess<T>> =>
     spawnUntilReady({
       label: 'packaged orca serve',

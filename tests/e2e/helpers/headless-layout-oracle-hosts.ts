@@ -1,7 +1,6 @@
 // Keep profile and pairing port stable across Node-orcad/Electron-serve restarts so existing client streams reconnect.
 
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
@@ -11,6 +10,7 @@ import { NODE_RUNTIME_PIN } from '../../../src/shared/node-runtime/node-runtime-
 import { cleanupE2EDaemons } from './electron-process-shutdown'
 import { launchHeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
 import { cliServeProfile, spawnUntilReady, type ReadyProcess } from './orca-serve-cli-host'
+import { pickPinnedPort } from './pinned-port'
 
 export type HeadlessHostKind = 'orcad' | 'electron'
 
@@ -52,18 +52,6 @@ export function orcadNodeExecutable(): string | null {
   return existsSync(bin) ? bin : null
 }
 
-async function reserveLoopbackPort(): Promise<number> {
-  const probe = createServer()
-  await new Promise<void>((resolve, reject) => {
-    probe.once('error', reject)
-    probe.listen(0, '127.0.0.1', () => resolve())
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a TCP listen on a host address reports an AddressInfo.
-  const { port } = probe.address() as AddressInfo
-  await new Promise<void>((resolve) => probe.close(() => resolve()))
-  return port
-}
-
 function parseOrcadReadiness(stdout: string): { pairingUrl: string; daemon: string } | null {
   const newline = stdout.indexOf('\n')
   if (newline === -1) {
@@ -84,7 +72,7 @@ type StartedHost = Omit<HeadlessOracleHost, 'cleanups'>
 
 async function startOrcadHost(scratch: string, node: string): Promise<StartedHost> {
   const profile = cliServeProfile(scratch)
-  const port = await reserveLoopbackPort()
+  const port = await pickPinnedPort()
   const env = { ...profile.env, ORCA_USER_DATA: profile.userDataDir }
   const launch = (): Promise<ReadyProcess<{ pairingUrl: string; daemon: string }>> =>
     spawnUntilReady({
