@@ -102,13 +102,19 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     ],
     [clientHostedBrowserRows, itemProjection.sortableIds]
   )
+  // Why memoized: the key spans every tab, and a windowed strip re-renders as it scrolls.
+  const stripLayoutKey = useMemo(
+    () =>
+      [
+        itemProjection.tabStripLayoutKey,
+        ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+      ].join('|'),
+    [clientHostedBrowserRows, itemProjection.tabStripLayoutKey]
+  )
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
-    layoutKey: [
-      itemProjection.tabStripLayoutKey,
-      ...(props.clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
-    ].join('|'),
+    layoutKey: stripLayoutKey,
     slotIds,
     worktreeId
   })
