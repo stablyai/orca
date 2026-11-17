@@ -63,7 +63,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/text/own-retained-string.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
   // Worker TypeScript loads through node:module registerHooks, which Bun lacks.

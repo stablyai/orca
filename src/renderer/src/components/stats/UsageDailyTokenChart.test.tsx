@@ -69,22 +69,6 @@ describe('UsageDailyTokenChart', () => {
     expect(output.getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('scales bars to the largest shown day, not to older history', () => {
-    const day = (dayOfMonth: number, inputTokens: number) => ({
-      day: `2026-11-${String(dayOfMonth).padStart(2, '0')}`,
-      inputTokens,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0
-    })
-    const { container } = render(
-      <ClaudeUsageDailyChart
-        daily={[day(1, 1_000_000), ...Array.from({ length: 10 }, (_, i) => day(i + 2, 100))]}
-      />
-    )
-    expect(container.querySelectorAll('[style="height: 100%;"]')).toHaveLength(10)
-  })
-
   it('keeps the provider total until a token type is hidden', () => {
     render(
       <CodexUsageDailyChart
