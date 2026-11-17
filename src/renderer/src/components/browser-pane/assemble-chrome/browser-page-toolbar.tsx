@@ -18,7 +18,7 @@ import {
   BrowserPageStateChips
 } from './address-bar/browser-address-chips'
 import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
-import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
+import { useBrowserExtensionsTour } from './extensions/use-browser-extensions-tour'
 import { SshEgressIndicator } from './feedback/browser-egress-indicator'
 import {
   getShareableBrowserArtifactFile,
@@ -40,7 +40,7 @@ import {
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
-import type { BrowserChromeNoteActions } from './toolbar/browser-annotate-split-button'
+import type { BrowserChromeNoteActions } from './toolbar/browser-annotate-tool-button'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -129,9 +129,6 @@ export function BrowserPageToolbar({
   externalUrl: string | null
 }): React.JSX.Element {
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
-  const browserTourStep = useAppStore((state) =>
-    state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
-  )
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
   const canOpenSourceFile = useAppStore(
@@ -156,7 +153,6 @@ export function BrowserPageToolbar({
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
-      pinAnnotateLabel={browserTourStep === 0}
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),

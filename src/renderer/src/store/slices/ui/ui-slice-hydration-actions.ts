@@ -5,34 +5,32 @@ import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
-} from '../../../../../shared/manual-repo-order'
+} from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
-import {
-  DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeAgentActivityDisplayMode
-} from '../../../../../shared/constants'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
+import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
 } from '../../../../../shared/workspace/status/workspace-statuses'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
@@ -62,14 +60,19 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeExplorerPreferences,
+  sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   sanitizeActivityBarPosition,
   hydratedUIPartialMatchesState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import {
+  hydrateAgentReadState,
+  hydrateOneShotNoticesSeen,
+  sanitizeTaskResumeState
+} from './ui-slice-hydration-values'
+import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -151,7 +154,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          ...sanitizeExplorerPreferences(ui),
+          ...sanitizePerWorktreePreferences(ui),
           gitGraphFiltersByWorktree: ui.gitGraphFiltersByWorktree ?? {},
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:
@@ -262,14 +265,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           usagePercentageDisplayChangeNoticeDismissed:
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
-          // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
-          usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
-          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
-          codexTerminalServerIsolationNoticeSeen:
-            ui.codexTerminalServerIsolationNoticeSeen === true,
-          codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
-          worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
-          claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true,
+          ...hydrateOneShotNoticesSeen(ui),
+          ...hydrateWslMovedSection(ui),
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

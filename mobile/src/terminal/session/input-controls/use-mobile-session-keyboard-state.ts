@@ -47,6 +47,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'terminalRefs'
   | 'terminals'
   | 'terminalTextScale'
+  | 'terminalFontStyle'
   | 'unsubscribeTerminal'
   | 'viewportMeasuredRef'
   | 'viewportRef'
@@ -64,6 +65,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     connState,
     terminals,
     terminalTextScale,
+    terminalFontStyle,
     activeSessionTabId,
     tabStripRef,
     tabStripOffsetRef,
@@ -103,7 +105,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     deviceTokenRef,
     connState,
     tabStripVisible: terminals.length > 1,
-    textScale: terminalTextScale,
+    fontMetricsKey: `${terminalTextScale}/${terminalFontStyle.font}/${terminalFontStyle.lineHeight}/${terminalFontStyle.weight}`,
     unsubscribeTerminal,
     subscribeToTerminal
   })

@@ -10,7 +10,7 @@ import {
 } from './terminal-surface-index'
 // Read pane copies only in the window-owned branch; main-owned builds use layout alone. Delete these copies with the legacy branch (L80).
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'

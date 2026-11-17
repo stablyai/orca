@@ -3,7 +3,7 @@ import type {
   AgentSkillShareRequest
 } from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
 import type { DiscoveredSkill } from '../../../../shared/skills/discovery/skills'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   SkillBundleInstallPreview,
   SkillBundleInstallPreviewRequest,

@@ -1,6 +1,6 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import { retryAcpRequest } from '../../protocol/acp-request-retry'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
-import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the agent
@@ -27,6 +27,7 @@ import type { AcpStructuredLane } from '../../journal/acp-structured-lane'
 import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-resolution'
 import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
+import { acpSessionStartMeta } from '../../launch/acp-session-meta'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -105,33 +106,41 @@ export async function initializeAcpStructuredSession(
     options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
   }
   if (resume) {
-    const reopenIn = async (cwd: string, attaching: AcpStructuredLane) => {
-      const opened = await connection.start(
-        { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
-        acceptSession
+    const reopenIn = (cwd: string) =>
+      retryAcpRequest(
+        async () => {
+          liveLane?.dispose()
+          input.lanes.clear()
+          const attaching = input.lanes.create(resume.sessionId, true)
+          liveLane = attaching
+          const opened = await connection.start(
+            { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
+            acceptSession
+          )
+          assertStarting()
+          const frames = input.lanes.finishLoad()
+          attaching.translator.finishLoad()
+          return { opened, frames, lane: attaching }
+        },
+        { signal: input.signal, assertCurrent: assertStarting }
       )
-      assertStarting()
-      const frames = input.lanes.finishLoad()
-      attaching.translator.finishLoad()
-      return { opened, frames }
-    }
-    liveLane = input.lanes.create(resume.sessionId, true)
     try {
-      ;({ opened: started, frames: replayed } = await reopenIn(launch.cwd, liveLane))
+      ;({ opened: started, frames: replayed, lane: liveLane } = await reopenIn(launch.cwd))
     } catch (refused) {
       let error: unknown = refused
       try {
-        const movedTo = await acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
-          dialect: spec.dialect,
-          initialized,
-          connection,
-          assertStarting
-        })
+        const movedTo = await retryAcpRequest(
+          () =>
+            acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
+              dialect: spec.dialect,
+              initialized,
+              connection,
+              assertStarting
+            }),
+          { signal: input.signal, assertCurrent: assertStarting }
+        )
         if (movedTo) {
-          liveLane.dispose()
-          input.lanes.clear()
-          liveLane = input.lanes.create(resume.sessionId, true)
-          ;({ opened: started, frames: replayed } = await reopenIn(movedTo, liveLane))
+          ;({ opened: started, frames: replayed, lane: liveLane } = await reopenIn(movedTo))
         }
       } catch (followFailed) {
         // A failed lookup or reopen gets the same takeover policy as the first refusal.

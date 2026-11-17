@@ -1,7 +1,7 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useEffect } from 'react'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {

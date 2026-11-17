@@ -114,11 +114,7 @@
       "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
     },
     "terminalSettings": {
-      "defaultText": "기본 (100%)",
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "largeText": "크게 (125%)",
-      "largerText": "더 크게 (150%)",
-      "largestText": "가장 크게 (200%)",
       "leaveAppDescription": "휴대폰에서 터미널을 사용하는 동안 Orca는 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 대화형 CLI 도구의 화면 배치가 바뀌지 않도록 휴대폰 크기를 유지할지 데스크톱 크기로 되돌릴지 설정합니다. 데스크톱 배너의 '복원'을 눌러 언제든 직접 크기를 조정할 수 있습니다.",
       "leaveAppHeading": "앱을 벗어날 때",
       "noPairedDesktops": "아직 페어링된 데스크톱이 없습니다. 터미널 동작을 설정하려면 데스크톱을 페어링하세요.",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}}초 후",
       "restoreAfterSeconds_other": "{{count}}초 후",
       "restoreHost": "{{name}} 복원",
-      "smallerText": "작게 (75%)",
-      "smallestText": "가장 작게 (50%)",
-      "textSize": "텍스트 크기",
-      "textSizeDescription": "터미널 텍스트 크기를 조절합니다. 크기를 줄이면 좌우 여백을 두고 더 많은 열이 표시되고, 크기를 키우면 표시되는 열이 줄어듭니다. 옆으로 드래그하면 가로로 이동할 수 있습니다. 터미널에서 두 손가락을 오므리거나 벌려 확대·축소해도 이 설정이 바뀝니다. 기기별 화면 표시에만 적용되며 데스크톱 터미널은 바뀌지 않습니다.",
-      "textSizeHeading": "텍스트 크기",
-      "textSizePickerTitle": "터미널 텍스트 크기",
       "title": "터미널"
     }
   },
@@ -908,7 +898,8 @@
       "copyCode": "코드 복사",
       "openImage": "이미지 열기",
       "wrapLines": "줄 바꿈",
-      "disableLineWrap": "줄 바꿈 끄기"
+      "disableLineWrap": "줄 바꿈 끄기",
+      "codeLabel": "코드"
     },
     "markdownCallout": {
       "note": "참고",
@@ -1011,7 +1002,6 @@
       "clearSearch": "검색 지우기"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "항상 신뢰하고 실행",
       "description": "워크스페이스가 시작되기 전에 이 저장소의 orca.yaml이 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요.",
       "dontRun": "실행 안 함",
       "newScriptLabel": "새 설정 스크립트",
@@ -3911,27 +3901,19 @@
       "reconnecting": "다시 연결 중"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "항상 신뢰하고 실행",
       "creating": "만드는 중…",
       "directoriesLabel": "디렉터리",
       "directories_one": "디렉터리 {{count}}개",
       "directories_other": "디렉터리 {{count}}개",
-      "dontRun": "실행 안 함",
       "editSparsePreset": "스파스 프리셋 편집",
       "nameLabel": "이름",
       "namePlaceholder": "렌더러 UI",
-      "newSetupScript": "새 설정 스크립트",
       "newSparsePreset": "새 스파스 프리셋",
-      "runHooks": "후크 실행",
       "runSetupAndCreate": "설정 실행 후 만들기",
-      "runSetupTitle": "{{name}}의 설정 스크립트를 실행하시겠습니까?",
-      "setupChangedTitle": "{{name}}의 설정 스크립트가 변경되었습니다",
-      "setupScript": "설정 스크립트",
       "setupSubtitle": "{{name}}의 워크스페이스를 만들려면 먼저 설정 스크립트 실행 여부를 선택해야 합니다.",
       "setupTitle": "설정 스크립트를 실행하시겠습니까?",
       "skipSetupAndCreate": "설정 건너뛰고 만들기",
-      "trustFailed": "설정 스크립트 신뢰 설정에 실패했습니다.",
-      "trustSubtitle": "워크스페이스가 시작되기 전에 이 저장소의 orca.yaml이 컴퓨터에서 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요."
+      "trustFailed": "설정 스크립트 신뢰 설정에 실패했습니다."
     },
     "worktreeCreateRetry": {
       "createFailed": "워크스페이스를 생성하지 못했습니다."

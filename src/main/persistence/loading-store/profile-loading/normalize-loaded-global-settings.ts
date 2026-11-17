@@ -1,9 +1,10 @@
-import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../shared/editor/launch/open-in-applications'
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
@@ -12,10 +13,10 @@ import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabil
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../../shared/shell/launch/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
-import { normalizeNativeChatShellEnvironmentVariables } from '../../../../shared/native-chat/native-chat-shell-environment'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   normalizeLoadedWorkspaceDirSetting,
@@ -25,7 +26,7 @@ import { readLegacySidekickFlag } from '../../applying-settings/onboarding-norma
 import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import { dictationShortcutModeSettings } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
@@ -151,6 +152,10 @@ export function normalizeLoadedGlobalSettings(
     terminalScrollbackRows: migratedTerminalScrollback.rows,
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
+    newTabMenuLayout: normalizeNewTabMenuLayout(parsed.settings?.newTabMenuLayout),
+    floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+      parsed.settings?.floatingTerminalNewTabMenuLayout
+    ),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
     ...pluginOwnedSettings,
     ...syncLegacyMatchTerminalSidebar(

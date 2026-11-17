@@ -13,20 +13,20 @@ import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catal
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
-import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { normalizePRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
@@ -42,6 +42,7 @@ import type {
   RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
+import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -104,12 +105,19 @@ export class RuntimeClientSettingsController {
       sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
       prAutoRefresh: normalizePRAutoRefreshCadence(settings.prAutoRefresh),
       diffShowWhitespace: settings.diffShowWhitespace === true,
+      // Paired clients render the same + menu customization they can edit.
+      newTabMenuLayout: normalizeNewTabMenuLayout(settings.newTabMenuLayout),
+      floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+        settings.floatingTerminalNewTabMenuLayout
+      ),
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
         ? {}
         : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       workspaceCleanupPolicy: settings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules(),
+      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      deleteChatHistoryWithWorkspace: settings.deleteChatHistoryWithWorkspace === true,
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),

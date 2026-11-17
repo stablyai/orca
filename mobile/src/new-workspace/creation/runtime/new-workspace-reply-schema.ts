@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { SetupRunPolicy } from '../../../../../src/shared/orca-yaml-hook-types'
+import type { SetupRunPolicy } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   hostUnionArms,
   salvagedOptional,

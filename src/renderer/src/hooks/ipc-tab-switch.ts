@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
+import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import {
   getActiveEntityIdForTabType,
   getNextTerminalCycleTab,
@@ -8,7 +8,7 @@ import {
   getNextTabWithinActiveType,
   getPreviousRecentTab,
   type TypeCyclableTab
-} from '@/components/terminal/tab-type-cycle'
+} from '@/lib/workspace/tabs/tab-type-cycle'
 import { activateCycledTabOnOwner } from '@/lib/workspace/tabs/cycled-tab-owner-activation'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>

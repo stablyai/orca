@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

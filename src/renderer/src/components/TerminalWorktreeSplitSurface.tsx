@@ -1,6 +1,6 @@
 import React from 'react'
-import type { TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
+import type { TabGroupLayoutNode } from '../../../shared/workspace-layout/tab-groups/tab-types'
+import type { ActivityTerminalPortalTarget } from './activity/terminal-portal/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
   useWorktreeBrowserPageIds
@@ -11,7 +11,7 @@ import {
 } from './browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
-import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'
+import type { TerminalPrewarmStage } from './terminal/worktree-prewarm/terminal-worktree-prewarm'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,

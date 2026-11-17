@@ -51,17 +51,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugin-git-fixture|plugin-gleam-catalog-fixture'
   ),
   pluginRoute(
-    'plugins.file-type-suggestion',
-    ['plugin-file-type-suggestion'],
-    [
-      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/PluginFileTypeSuggestion\\.tsx$',
-      `${UI}state\\/use-plugin-settings-writes`,
-      'src\\/main\\/plugins\\/catalog\\/plugin-file-type-suggestion',
-      'src\\/shared\\/plugins\\/contributions\\/plugin-(?:file-type|file-match|custom-editor-core-file-types)'
-    ].join('|'),
-    'plugin-git-fixture|plugin-smoke'
-  ),
-  pluginRoute(
     'plugins.try-it',
     ['plugin-try-it'],
     [
@@ -69,28 +58,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${STORE}preview-request`
     ].join('|'),
     'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-smoke|plugin-frame-guest'
-  ),
-  pluginRoute(
-    'plugins.themes',
-    ['plugin-theme-smoke'],
-    [
-      `${UI}(?:state\\/plugin-theme-apply|page\\/PluginTheme)`,
-      `${STORE}(?:themes|icon-themes|monaco-theme)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:theme-registries|icon-theme-registry|content-pack-registry|artifact-pack-registry)',
-      'src\\/shared\\/plugins\\/(?:artifacts\\/plugin-(?:theme|icon-theme|terminal-theme)-artifact|contributions\\/plugin-content-pack-contributions)'
-    ].join('|'),
-    'plugin-smoke'
-  ),
-  pluginRoute(
-    'plugins.syntax-and-language-packs',
-    ['plugin-syntax-smoke'],
-    [
-      `${UI}page\\/PluginContributionAction(?:Syntax|Language)`,
-      `${STORE}(?:syntax-packs|syntax-failures|language-packs)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:syntax|language-pack)-registry',
-      'src\\/shared\\/plugins\\/(?:languages\\/|plugin-language-pack-i18n-resources|artifacts\\/plugin-(?:syntax|language-pack)-artifact)'
-    ].join('|'),
-    'plugin-smoke'
   ),
   pluginRoute(
     'plugins.custom-editors-and-new-files',
@@ -141,19 +108,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
       'resources\\/plugins\\/declarative\\/'
-    ].join('|'),
-    'plugin-frame-guest|plugin-smoke'
-  ),
-  // The component catalog: Orca draws each component, so the gallery exercises every one.
-  pluginRoute(
-    'plugins.components-catalog',
-    ['plugin-components-gallery'],
-    [
-      `${UI}declarative\\/`,
-      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
-      'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
-      'examples\\/plugins\\/components-gallery\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),

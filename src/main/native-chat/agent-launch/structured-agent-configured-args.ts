@@ -1,6 +1,6 @@
 import { projectAgentLaunchProfile } from '../../../shared/agent-launch/choices/agent-launch-profile'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import {
   resolveTuiAgentLaunchArgs,
   type AgentLaunchProfileSettings

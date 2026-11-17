@@ -12,8 +12,11 @@ import '../../../../native-chat/agent-session-wire/providers/structured-agent-se
 import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
-import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import {
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady
+} from '../../../agent-session/launch/structured-agent-launch-support'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 
@@ -27,7 +30,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   const dataDirectory = getProfileUserDataPath()
   const releases = spec.managedRuntime.root(dataDirectory)
   // Use the launch's own lookup to find external runtimes.
-  const findExternal = async (): Promise<boolean> => {
+  const findExternalCommand = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     const env = {
       ...(await resolveHostStructuredAgentLaunchEnvironment(agent, settings)),
@@ -47,6 +50,9 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       throw error
     }
   }
+  // New chats start on a ready host program (e.g. the user's agy) instead, so it needs no install.
+  const findExternal = async (): Promise<boolean> =>
+    (await findExternalCommand()) || (await structuredAgentHostAlternativeReady(agent, runtime))
   const { launchGate } = spec
   const managedRuntime = spec.managedRuntime
   // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.

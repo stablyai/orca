@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
@@ -36,7 +37,9 @@ vi.mock('../../store', () => ({
 vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
-vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
+vi.mock('@/components/terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: vi.fn()
+}))
 vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
   runSleepWorktree: vi.fn()
 }))

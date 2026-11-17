@@ -9,7 +9,7 @@ import {
 import { getLocalWorktreeCatalogVersion } from '../../../../workspaces/catalog/local-worktree-scan-generation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../../shared/worktree/id'
-import { buildCliWorkspaceProvenance } from '../../../../../shared/cli-workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../../shared/worktree/creation/cli-workspace-provenance'
 import { createWorktreeWithStartupAgent } from '../../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'

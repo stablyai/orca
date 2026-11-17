@@ -1,7 +1,7 @@
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
 import { setProjectHidden } from '@/components/sidebar/hidden-projects/set-project-hidden'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'

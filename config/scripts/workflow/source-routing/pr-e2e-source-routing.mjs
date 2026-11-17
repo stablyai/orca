@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
@@ -28,7 +30,7 @@ const NATIVE_IME_HARNESS =
   /^(?:config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?focus-nested-wayland-terminal\.sh$|config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?(?:run-terminal-ibus-hangul-e2e|terminal-ime-engagement-receipt)\.mjs$|tests\/e2e\/terminal-ime-(?:boundary-probe|byte-reader|engagement-receipt)\.ts$|tests\/e2e\/terminal-(?:ibus-hangul|hangul-terminating-digit|macos-2set-korean)-native\.spec\.ts$)/
 
 // This spec requires ORCA_SIDEBAR_INPUTS=main; ordinary PR builds can only skip it.
-export const MANUAL_ONLY_E2E_SPECS = ['tests/e2e/ssh-orcad-phone-feed-list.spec.ts']
+export const MANUAL_ONLY_E2E_SPECS = []
 
 // Shared fixtures and workflow changes must exercise every managed-SSH consumer.
 const MANAGED_SSH_HARNESS =
@@ -98,33 +100,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       )
   },
-  {
-    id: 'ssh.orcad-explorer-selected-host',
-    specs: ['tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      (file ===
-        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx' ||
-        file === 'src/renderer/src/hooks/editor-external-watch-targets.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/tree/useFileExplorerTree.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/tree/use-file-explorer-tree-load-effects.ts')
-  },
-  {
-    // A paired client refuses project setup on its server's SSH host with a clear reason (#33124).
-    id: 'paired.ssh-host-project-setup',
-    specs: ['tests/e2e/headless-paired-ssh-host-project-setup.spec.ts'],
-    matches: (file) =>
-      file === 'tests/e2e/helpers/headless-paired-runtime-host.ts' ||
-      (isProductSource(file) &&
-        /^src\/(?:renderer\/src\/store\/projects\/project-host-setup-actions|main\/runtime\/runtime-project-host-setup-controller|shared\/project-host-setup-target)\.ts$/.test(
-          file
-        ))
-  },
+
   {
     id: 'serve.orcad-mode-switch',
     specs: ['tests/e2e/orcad-serve-mode-switch.spec.ts'],
@@ -193,22 +169,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   // COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
-  {
-    id: 'ssh.orcad-legacy-relay-bridge',
-    specs: [
-      'tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts',
-      'tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts'
-    ],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/(?:helpers\/(?:legacy-relay-docker-host|build-released-relay-bundle)|cross-version-wire\/released-relay-(?:daemon|transport))\.m?ts$/.test(
-        file
-      ) ||
-      (isProductSource(file) &&
-        /(?:legacy-relay(?:-bridge|\/)|orcad-migration-terminal-gate|ssh-host-relay-terminals-on-connect|orcad-source-dependency-census)/.test(
-          file
-        ))
-  },
+
   {
     id: 'browser.orcad-service-status',
     specs: ['tests/e2e/ssh-orcad-browser-service-status.spec.ts'],
@@ -218,15 +179,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       )
   },
-  {
-    id: 'ssh.orcad-browser-routing',
-    specs: ['tests/e2e/ssh-orcad-browser-routing.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/(?:main\/browser\/routing\/local-host-partitions\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/tabs\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
-        file
-      )
-  },
+
   {
     id: 'ssh.orcad-terminal-browser-link',
     specs: ['tests/e2e/ssh-orcad-terminal-browser-link.spec.ts'],
@@ -245,27 +198,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       )
   },
-  {
-    id: 'ssh.orcad-browser-drop-owner',
-    specs: ['tests/e2e/ssh-orcad-browser-drop-owner.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/helpers\/browser-split-(?:guest-probes|page-server)\.ts$/.test(file) ||
-      (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:browser\/documents\/file-preview|workspace-file-drag|worktree-runtime-owner)\.ts|lib\/workspace\/ownership\/connection-context\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-open-in-owner',
-    specs: ['tests/e2e/ssh-orcad-open-in-owner.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/workspace-actions\/(?:open\/WorktreeOpenInMenu|context-menu\/WorktreeContextMenuView)\.tsx|right-sidebar\/(?:file-explorer\/panel\/FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
-          file
-        ))
-  },
+
   {
     id: 'ssh.orcad-terminal-root-owner',
     specs: ['tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'],
@@ -364,7 +297,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     // Why: hand-kept routes missed #30130 and #30120; scoped to managed-host code to bound lane cost.
     id: 'ssh.orcad-remote-sources',
     specs: [
-      'tests/e2e/ssh-orcad-paired-phone-projects.spec.ts',
       'tests/e2e/ssh-orcad-pairing-repair.spec.ts',
       'tests/e2e/ssh-orcad-shared-home-machines.spec.ts',
       'tests/e2e/ssh-orcad-shared-login-migration.spec.ts',
@@ -565,7 +497,29 @@ export function hasWslSourceChange(changedPaths) {
   return changedPaths.some(route.matches)
 }
 
+/** A route naming a deleted spec fails every later PR that touches its sources, so refuse it here. */
+function missingRouteSpecs() {
+  const specs = [...new Set(PR_E2E_SOURCE_ROUTES.flatMap((route) => route.specs))]
+  // CI's sparse checkout omits tests/e2e/, so ask the index rather than the disk.
+  const tracked = new Set(
+    execFileSync('git', ['ls-files', '-z', '--', ...specs], {
+      cwd: resolve(import.meta.dirname, '../../../..'),
+      encoding: 'utf8'
+    }).split('\0')
+  )
+  return PR_E2E_SOURCE_ROUTES.flatMap((route) =>
+    route.specs.filter((spec) => !tracked.has(spec)).map((spec) => `${route.id}: ${spec}`)
+  )
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const missing = missingRouteSpecs()
+  if (missing.length > 0) {
+    console.error(
+      `E2E source routes name specs that are not tracked; remove each from its route along with the spec:\n${missing.join('\n')}`
+    )
+    process.exit(1)
+  }
   let input = ''
   process.stdin.setEncoding('utf8')
   for await (const chunk of process.stdin) {

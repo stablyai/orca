@@ -78,6 +78,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
+      'src/renderer/src/components/task-page/jira/boards/task-page-jira-board-column-order.ts',
       'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
       'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
@@ -86,16 +87,16 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
       'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
       'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
-      'src/renderer/src/web/preload-api/web-keybindings-api.ts',
-      'src/renderer/src/web/preload-api/web-onboarding-api.ts',
-      'src/renderer/src/web/preload-api/web-preferences-store.ts',
-      'src/renderer/src/web/preload-api/web-settings-api.ts',
+      'src/renderer/src/web/preload-api/keybindings/web-keybindings-api.ts',
+      'src/renderer/src/web/preload-api/app/web-onboarding-api.ts',
+      'src/renderer/src/web/preload-api/preferences/web-preferences-store.ts',
+      'src/renderer/src/web/preload-api/preferences/web-settings-api.ts',
       'src/renderer/src/web/preload-api/web-storage.ts',
-      'src/renderer/src/web/preload-api/web-workspace-session-api.ts',
-      'src/renderer/src/web/web-preload-api-test-harness.ts',
-      'src/renderer/src/web/web-runtime-credential-source.ts',
-      'src/renderer/src/web/web-runtime-environment.ts',
-      'src/shared/default-global-settings.ts'
+      'src/renderer/src/web/preload-api/workspaces/web-workspace-session-api.ts',
+      'src/renderer/src/web/testing/web-preload-api-test-harness.ts',
+      'src/renderer/src/web/runtime/security/web-runtime-credential-source.ts',
+      'src/renderer/src/web/pairing/web-runtime-environment.ts',
+      'src/shared/settings/default-global-settings.ts'
     ].map((path) => [
       path,
       notApplicableDisposition(62, 'Global preference or web-client storage.')
@@ -236,11 +237,12 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_mail_receipts',
         'legacy_operation_receipts',
         'removed_orchestration_work',
-        'removed_orchestration_work_coverage'
+        'removed_orchestration_work_coverage',
+        'orchestration_maintenance'
       ],
       notApplicableDisposition(
         53,
-        'Idempotency receipts: a replay returns the bytes first answered.'
+        'Idempotency receipts (a replay returns the bytes first answered) and when maintenance last ran.'
       )
     ),
     ...tables(

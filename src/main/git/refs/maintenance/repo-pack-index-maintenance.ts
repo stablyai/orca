@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
 import { BoundedMap } from '../../../../shared/collections/bounded-map'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type { PackIndexMaintenanceOutcome } from '../../../../shared/git/maintenance/repo-pack-index-maintenance-policy'
 import type { RefMaintenanceSpan } from '../../../../shared/git/maintenance/repo-ref-maintenance-policy'
 import { probeRepoPackIndexDirectory, readRepoPackDirectoryStamp } from './repo-pack-index-state'

@@ -9,7 +9,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   listEnvironments,
   resolveEnvironment

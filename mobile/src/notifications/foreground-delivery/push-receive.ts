@@ -11,7 +11,7 @@ import {
   loadNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from '../delivery-policy/notification-delivery-preferences'
-import { allowsMobilePushAlertKind } from '../../../../src/shared/mobile-push-alert'
+import { allowsMobilePushAlertKind } from '../../../../src/shared/notifications/mobile-push-alert'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()

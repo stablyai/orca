@@ -5,18 +5,18 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   DEFAULT_NATIVE_CHAT_FONT_SIZE,
   resolveNativeChatAppearanceSettings
-} from '../../../../../shared/native-chat/native-chat-appearance-settings'
-import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
+} from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
 import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-themes/terminal-theme-selection'
-import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugin-theme-settings'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugins/appearance/plugin-theme-settings'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
 import { resolveEditorFontStack } from '../../../../../shared/editor/editor-typography'
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import { useSystemPrefersDark } from '../../../hooks/theme/use-system-prefers-dark'
 import { terminalChatSelectionMix } from '@/app-shell/appearance/chat-selection-mix'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // One fixed bottom gap: the last row never hangs its controls; rail padding covers its 34px macOS overlay.

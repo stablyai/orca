@@ -16,7 +16,7 @@ import {
 import { getRateLimit } from '../../../github/api/rate-limit'
 import { resolveGhAccountRequiredHost } from '../../../github/accounts/account-binding-required-host'
 import { getWorkItemDetails } from '../../../github/work-items/work-item-details'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 

@@ -2,7 +2,7 @@ import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../shared/cross-platform-path'
+} from '../../../shared/file-access/cross-platform-path'
 import {
   TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE,
   WATCHER_REMOVAL_IN_PROGRESS_MESSAGE

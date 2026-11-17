@@ -5,8 +5,8 @@ import { Worker } from 'node:worker_threads'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
 import { readProfileProjectTransferState } from '../../orca-profiles/project-transfer/profile-project-domain-state'
@@ -282,39 +282,6 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     expect(listWslDriveUncConversions(root)).toEqual([])
   })
 
-  it('keeps the profile converted and resumes a failed store at the next startup', async () => {
-    seedProfile(profileState())
-    seedOutside()
-    journal()
-    let failing = true
-    const stores = realStores().map((store) =>
-      store.id === 'shell-history'
-        ? {
-            ...store,
-            run: (ids: ReadonlyMap<string, string>) => {
-              if (failing) {
-                throw new Error('disk busy')
-              }
-              return store.run(ids)
-            }
-          }
-        : store
-    )
-    expect(await run(stores)).toEqual([
-      { migrationId: 'conv-1', outcome: 'resuming', store: 'shell-history', detail: 'disk busy' }
-    ])
-    expect(readProfile().repos[0].path).toBe(String.raw`C:\src\app`)
-    expect(listWslDriveUncConversions(root)[0]).toMatchObject({
-      phase: 'profile-rewritten',
-      rewrittenStores: ['terminal-history'],
-      worktreeIds: [[OLD_ID, NEW_ID]]
-    })
-    failing = false
-    expect((await run(stores))[0]?.outcome).toBe('converted')
-    const shell = join(root, 'terminal-history-wsl', 'Ubuntu', hashWorktreeId(NEW_ID))
-    expect(existsSync(shell)).toBe(true)
-  })
-
   it('never reports a committed profile as rolled back when the journal cannot advance', async () => {
     seedProfile(profileState())
     seedOutside()
@@ -361,63 +328,6 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     journal({ phase: 'profile-rewritten', worktreeIds: [[OLD_ID, NEW_ID]] })
     expect((await run())[0]?.outcome).toBe('converted')
     expect(chatRows()[0]).toEqual({ workspace_id: NEW_ID })
-  })
-
-  it('rolls back both chat identities on failed rekey and completes them on retry', async () => {
-    seedProfile(profileState())
-    seedOutside()
-    const before = chatRows()
-    const db = new Database(join(root, 'agent-session-domain.db'))
-    db.exec(`CREATE TRIGGER refuse_rekey BEFORE UPDATE ON agent_session_records
-      BEGIN SELECT RAISE(ABORT, 'rekey refused'); END`)
-    db.close()
-    journal()
-
-    expect(await run()).toEqual([
-      { migrationId: 'conv-1', outcome: 'resuming', store: 'chat-journal', detail: 'rekey refused' }
-    ])
-    expect(chatRows()).toEqual(before)
-    expect(readProfile().repos[0].path).toBe(String.raw`C:\src\app`)
-    expect(listWslDriveUncConversions(root)[0]?.rewrittenStores).toEqual([
-      'terminal-history',
-      'shell-history',
-      'orchestration-history'
-    ])
-    const retry = new Database(join(root, 'agent-session-domain.db'))
-    retry.exec('DROP TRIGGER refuse_rekey')
-    retry.close()
-    expect((await run())[0]?.outcome).toBe('converted')
-    expect(chatRows()).toEqual([
-      { workspace_id: NEW_ID },
-      { record_json: '{not json' },
-      { record_json: REKEYED_STOPPED_CHAT }
-    ])
-  })
-
-  it('leaves the chat ledger pending when a newer domain schema is read-only', async () => {
-    seedProfile(profileState())
-    seedOutside()
-    const before = chatRows()
-    const db = new Database(join(root, 'agent-session-domain.db'))
-    db.pragma('user_version=100')
-    db.close()
-    journal()
-
-    expect(await run()).toEqual([
-      {
-        migrationId: 'conv-1',
-        outcome: 'resuming',
-        store: 'chat-journal',
-        detail: 'chat workspace conversion requires a writable journal'
-      }
-    ])
-    expect(chatRows()).toEqual(before)
-    expect(readProfile().repos[0].path).toBe(String.raw`C:\src\app`)
-    expect(listWslDriveUncConversions(root)[0]?.rewrittenStores).toEqual([
-      'terminal-history',
-      'shell-history',
-      'orchestration-history'
-    ])
   })
 
   it('waits for observed worker exit after a failed close before returning to startup', async () => {

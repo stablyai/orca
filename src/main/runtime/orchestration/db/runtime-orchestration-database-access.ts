@@ -1,11 +1,18 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
+import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
+import { structuredWorkerSession } from '../terminal-authority/structured-sessions/structured-worker-authority'
+import { structuredWorkerIdentityFromRow } from '../terminal-authority/structured-sessions/structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
+import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
+  private orchestrationDbMaintenance: OrchestrationDbMaintenance | undefined
+
   abstract ensureOrchestrationFederationRelay(
     runId?: string,
     options?: { keepAwake?: boolean }
@@ -13,13 +20,25 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
 
   protected abstract scheduleRestoredMessageRepoints(): void
 
+  abstract hasLiveTerminalForPaneKey(paneKey: string): boolean
+
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
 
   // Defer until userData is final; tests can inject an in-memory DB.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
-      this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
+      const db = new OrchestrationDb(this.orchestrationDbPath())
+      this._orchestrationDb = db
+      this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(
+        db,
+        (dispatchId) => isReleasedChatReadable(db, dispatchId),
+        {
+          isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
+          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey)
+        }
+      )
+      this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
       this.bindCrewChanges(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
@@ -42,6 +61,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    this.orchestrationDbMaintenance?.stop()
+    this.orchestrationDbMaintenance = undefined
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
@@ -50,6 +71,15 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
+  }
+
+  /** Whether anyone can still read this mailbox: a waiter, an open terminal or a reachable chat. */
+  private isLiveOrchestrationHandle(handle: string): boolean {
+    return (
+      (this.messageWaiters.get(handle)?.size ?? 0) > 0 ||
+      this.orchestrationMailboxDeliveryTarget.reachesOpenTerminal(handle) ||
+      structuredMailboxCustody(handle, this._orchestrationDb) !== 'elsewhere'
+    )
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
@@ -76,4 +106,16 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       this.mailPointerRepointScheduler.schedule(handBack.mailbox)
     }
   }
+}
+
+/** Whether a released chat worker's reference read would find its chat on this host. */
+function isReleasedChatReadable(db: OrchestrationDb, dispatchId: string): boolean {
+  const handle =
+    db.getWorkerDispatch(dispatchId)?.agent_terminal_handle ??
+    db.getDispatchContextById(dispatchId)?.assignee_handle
+  const row =
+    handle && isStructuredWorkerHandle(handle) ? db.getWorkerTerminalResourceByHandle(handle) : null
+  // From the row, not the identity registry: released workers must stay unregistered.
+  const identity = row ? structuredWorkerIdentityFromRow(row) : null
+  return identity !== null && structuredWorkerSession(identity).kind === 'here'
 }

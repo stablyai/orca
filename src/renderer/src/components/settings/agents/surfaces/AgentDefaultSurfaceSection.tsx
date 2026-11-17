@@ -2,16 +2,14 @@ import { cancelSettingsListReveal } from '../../section-layout/settings-list-scr
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
-import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-providers'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/settings/native-chat-providers'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
-import { translate } from '@/i18n/i18n'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { trackAgentDefaultSurfaceChanged } from '../../../feature-tips/feature-tip-telemetry'
@@ -23,27 +21,15 @@ import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '.
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
+import { saveAgentDefaultSurface } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import {
-  agentsKeepingOwnSurface,
-  followAgentDefaultSurface,
-  saveAgentDefaultSurface
-} from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+  agentSettingsSaveFailed,
+  showKeptSurfaceNotice,
+  type KeptSurfaceWriter
+} from './kept-surface-notice'
 
-function saveFailed(): void {
-  toast.error(
-    translate('settings.agents.localSaveFailed', 'Agent settings could not be saved. Try again.')
-  )
-}
-
-type Writer = {
-  fallbackSettings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-}
-
-/** After the default changes, names the agents set for themselves to the other surface. */
-function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) => void {
-  const intlLocale = useIntlLocale()
-  const t = useTranslate()
+/** Settings-owned notice: only while mounted, and dismissed when Settings unmounts. */
+function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: KeptSurfaceWriter) => void {
   const id = useId()
   const mounted = useMountedRef()
   useEffect(
@@ -53,53 +39,9 @@ function useKeptSurfaceNotice(): (surface: AgentDefaultSurface, writer: Writer) 
     [id]
   )
   return (surface, writer) => {
-    const latest = useAppStore.getState().settings ?? writer.fallbackSettings
-    // A failed or superseded write leaves nothing to report.
-    if (!mounted.current || normalizeAgentDefaultSurface(latest.agentDefaultSurface) !== surface) {
-      return
+    if (mounted.current) {
+      showKeptSurfaceNotice({ id, surface, writer })
     }
-    const kept = agentsKeepingOwnSurface(latest, surface)
-    if (kept.length === 0) {
-      toast.dismiss(id)
-      return
-    }
-    const values = {
-      agents: new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(
-        kept.map((agent) => getAgentLabel(agent))
-      ),
-      count: kept.length
-    }
-    const chat = surface === 'chat'
-    toast.success(
-      chat
-        ? t('settings.agents.defaultSurfaceNowChat', 'Agents now open as chats')
-        : t('settings.agents.defaultSurfaceNowTerminal', 'Agents now open in the terminal'),
-      {
-        id,
-        description: chat
-          ? t(
-              'settings.agents.defaultSurfaceKeptTerminal',
-              '{{agents}} stay in the terminal, as you set.',
-              {
-                ...values,
-                count: values.count,
-                defaultValue_one: '{{agents}} stays in the terminal, as you set.'
-              }
-            )
-          : t('settings.agents.defaultSurfaceKeptChat', '{{agents}} stay as chats, as you set.', {
-              ...values,
-              count: values.count,
-              defaultValue_one: '{{agents}} stays as a chat, as you set.'
-            }),
-        action: {
-          label: chat
-            ? t('settings.agents.defaultSurfaceSetAllChat', 'Set all to Chat')
-            : t('settings.agents.defaultSurfaceSetAllTerminal', 'Set all to Terminal'),
-          onClick: () =>
-            void followAgentDefaultSurface({ agents: kept, surface, ...writer }).catch(saveFailed)
-        }
-      }
-    )
   }
 }
 
@@ -193,7 +135,7 @@ export function AgentDefaultSurfaceSection({
         })
         notify(next, writer)
       },
-      onError: saveFailed
+      onError: agentSettingsSaveFailed
     })
   }
   const showInstalledList = (): void => {

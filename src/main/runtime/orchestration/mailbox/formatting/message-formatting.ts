@@ -1,7 +1,7 @@
 import type { MessageRow } from '../../db/orchestration-records'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
-import type { OrchestrationMailContent } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   formatReportFollowUpLine,
   type ReportFollowUpAction

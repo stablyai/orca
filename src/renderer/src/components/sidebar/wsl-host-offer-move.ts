@@ -5,35 +5,91 @@ import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-rec
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
+import { wslMoveDistroOfPath } from '../wsl-move/wsl-move-scope-rows'
 import type { WslHostOffer } from './wsl-host-offer-actions'
 
-/** The project the offer just added, by its path; null when the add did not create one. */
-export function wslHostOfferProjectRef(path: string): WslMoveRowRef | null {
+/** The local project saved at exactly `path`, in either catalog; null when none is. */
+function savedProjectRef(path: string): WslMoveRowRef | null {
   const state = useAppStore.getState()
   const wanted = normalizeRuntimePathForComparison(path)
-  const repo = state.repos.find((entry) => normalizeRuntimePathForComparison(entry.path) === wanted)
+  const repo = state.repos.find(
+    (entry) =>
+      getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID &&
+      normalizeRuntimePathForComparison(entry.path) === wanted
+  )
   if (repo) {
     return { kind: 'repo', id: repo.id }
   }
   const folder = selectFolderWorkspaces(state).find(
-    (entry) => normalizeRuntimePathForComparison(entry.folderPath) === wanted
+    (entry) =>
+      (entry.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
+      !entry.connectionId &&
+      normalizeRuntimePathForComparison(entry.folderPath) === wanted
   )
-  if (folder) {
-    return { kind: 'folder', id: folder.id }
+  return folder ? { kind: 'folder', id: folder.id } : null
+}
+
+/** The local project an add of `path` lands in (just added, or already saved); else null. */
+export function wslHostOfferProjectRef(path: string): WslMoveRowRef | null {
+  const saved = savedProjectRef(path)
+  if (saved) {
+    return saved
   }
+  const state = useAppStore.getState()
   // A subfolder add is stored as its git toplevel; the innermost enclosing repo is the one added.
   const enclosing = state.repos
-    .filter((entry) => isPathInsideOrEqual(entry.path, path))
+    .filter(
+      (entry) =>
+        getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID &&
+        isPathInsideOrEqual(entry.path, path)
+    )
     .sort((a, b) => b.path.length - a.path.length)[0]
   return enclosing ? { kind: 'repo', id: enclosing.id } : null
 }
 
-/** Opens the move with only the offered project checked; the user's Move is what moves it. */
-export function moveWslHostOfferProject(offer: WslHostOffer): void {
-  const only = wslHostOfferProjectRef(offer.path)
+/** The repo a local add answered with (new or already saved); null for any other outcome. */
+function addedRepoOf(added: unknown): { id: string; path: string } | null {
+  if (typeof added !== 'object' || added === null || !('repo' in added)) {
+    return null
+  }
+  const repo = added.repo
+  return typeof repo === 'object' &&
+    repo !== null &&
+    'id' in repo &&
+    typeof repo.id === 'string' &&
+    'path' in repo &&
+    typeof repo.path === 'string'
+    ? { id: repo.id, path: repo.path }
+    : null
+}
+
+/**
+ * Opens the move with only the offered project checked; the user's Move is what moves it.
+ * `added` is the add's answer, which names an already-saved project the path resolved to.
+ */
+export function moveWslHostOfferProject(offer: WslHostOffer, added?: unknown): void {
+  const repo = addedRepoOf(added)
+  // The same folder was already saved under another spelling (`W:\…`), which the move can't take.
+  if (repo && wslMoveDistroOfPath(repo.path)?.toLowerCase() !== offer.distro.toLowerCase()) {
+    toast.error(
+      translate(
+        'sidebar.wslHostOffer.savedUnderAnotherPath',
+        "This folder is already a project here as {{path}}, which can't move to the {{distro}} host yet. Remove that project, then add the folder again to move it.",
+        { path: repo.path, distro: offer.distro }
+      )
+    )
+    return
+  }
+  const only = repo
+    ? ({ kind: 'repo', id: repo.id } as const)
+    : wslHostOfferProjectRef(offer.sharePath ?? offer.path)
   if (only) {
     openWslMoveDialogFor(offer.distro, only)
     return

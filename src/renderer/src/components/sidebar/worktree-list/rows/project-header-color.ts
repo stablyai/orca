@@ -1,5 +1,8 @@
-import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../../../shared/constants'
-import { normalizeRepoBadgeColor } from '../../../../../../shared/repository/appearance/repo-badge-color'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  REPO_COLORS,
+  normalizeRepoBadgeColor
+} from '../../../../../../shared/repository/appearance/repo-badge-color'
 
 const PROJECT_GROUP_HEADER_KEY_PREFIX = 'repo:'
 const PROVIDER_PROJECT_HEADER_KEY_PREFIX = 'project:'

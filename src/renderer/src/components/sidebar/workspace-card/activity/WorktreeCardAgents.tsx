@@ -12,7 +12,7 @@ import {
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
 import { KeyedSummary } from './worktree-card-agent-keyed-summary'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -27,7 +27,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
-import type { AgentChildren } from '@/store/slices/agent-status/agent-row-display-index'
+import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()

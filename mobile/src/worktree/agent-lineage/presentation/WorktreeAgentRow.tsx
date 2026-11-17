@@ -4,7 +4,7 @@ import { mobileForkAccessibleName } from '../../../session/fork/mobile-fork-mark
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import {
   reconcileWorktreeAgentRowWithSessionDone,
   resolveHostAgentRowDotState,

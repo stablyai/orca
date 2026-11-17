@@ -1,4 +1,4 @@
-import type { ConnectorSource } from '../../shared/external-conversation-link'
+import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
 
 export type ConversationKey = { source: ConnectorSource; externalId: string }
 

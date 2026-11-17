@@ -24,7 +24,7 @@ import { formatPreviewByteLength } from '../../../../files/preview/mobile-file-p
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { useMobileNativeChatOpenFile } from '../../links/mobile-native-chat-open-file-context'
-import { chatTextAttachmentName } from '../../../../../../src/shared/native-chat-text-attachment-references'
+import { chatTextAttachmentName } from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 
 const THUMB_SIZE = 58
 // Items sit 12pt in from the composer box's edge (box padding plus strip padding).

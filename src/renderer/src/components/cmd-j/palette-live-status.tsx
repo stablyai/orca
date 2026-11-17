@@ -1,8 +1,8 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
@@ -28,7 +28,7 @@ import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
-} from '@/components/tab-bar/terminal-tab-activity-status'
+} from '@/components/tab-bar/terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
