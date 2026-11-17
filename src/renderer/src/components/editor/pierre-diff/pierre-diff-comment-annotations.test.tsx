@@ -1,3 +1,4 @@
+import { isValidElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { DecoratedDiffComment } from '../../diff-comments/decorated-diff-comment'
 import {
@@ -57,11 +58,16 @@ describe('Pierre review annotations', () => {
       clearDeliveredDiffComments: vi.fn(),
       onCancelDraft: vi.fn(),
       onSubmitDraft
-    }) as React.ReactElement<{
-      lineNumber: number
-      startLine?: number
-      onSubmit: (body: string) => Promise<boolean>
-    }>
+    })
+    if (
+      !isValidElement<{
+        lineNumber: number
+        startLine?: number
+        onSubmit: (body: string) => Promise<boolean>
+      }>(element)
+    ) {
+      throw new Error('expected a draft card element')
+    }
     expect(element.props.lineNumber).toBe(20)
     expect(element.props.startLine).toBeUndefined()
     await element.props.onSubmit('body')

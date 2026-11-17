@@ -120,6 +120,7 @@ export function createPierreDiffParseScheduler(
         signal.addEventListener('abort', abort, { once: true })
         pending.set(request.id, {
           request,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker answers a lines request with lineChanges and a file request with diff, matching T.
           resolve: resolve as Task['resolve'],
           reject,
           removeAbortListener: () => signal.removeEventListener('abort', abort)

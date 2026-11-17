@@ -5,7 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { PluginSyntaxMetadata } from '../../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import { usePierreDiffLanguage, usePierreRenderedLanguage } from './pierre-diff-language'
 
-const syntaxes = vi.hoisted(() => ({ current: [] as PluginSyntaxMetadata[] }))
+const syntaxes = vi.hoisted(() => {
+  const current: PluginSyntaxMetadata[] = []
+  return { current }
+})
 vi.mock('@/store/plugins/syntax/plugin-syntax-packs', () => ({
   usePluginSyntaxes: () => syntaxes.current,
   resolvePluginSyntaxForFile: (entries: PluginSyntaxMetadata[]) => entries[0] ?? null
@@ -21,13 +24,14 @@ const revision = (value: string): PluginSyntaxMetadata => ({
 afterEach(cleanup)
 
 function renderSurface() {
+  const initialProps: { rendered?: string } = {}
   return renderHook(
     ({ rendered }: { rendered?: string }) => {
       const lang = usePierreDiffLanguage('file.demo', 'plaintext')
       usePierreRenderedLanguage(rendered)
       return lang
     },
-    { initialProps: {} as { rendered?: string } }
+    { initialProps }
   )
 }
 
