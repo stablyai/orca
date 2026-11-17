@@ -38,12 +38,6 @@ export type ExternalConversationLinkStore = WorkspaceRecordStore<
   getFolderWorkspaces?: () => readonly (LinkRecord & { id: string })[]
   /** Real stores report every mutation's domains, which lets lookups reuse one link index. */
   onStateWritten?: (listener: (dirtyDomains: readonly string[] | undefined) => void) => unknown
-  onWorktreeMetaWritten?: (
-    listener: (write: {
-      previous: (LinkRecord & { hostId?: unknown }) | undefined
-      next: LinkRecord & { hostId?: unknown }
-    }) => void
-  ) => unknown
 }
 
 export type LinkedConversation = { workspace: AgentPaneWorkspace; link: ExternalConversationLink }
@@ -127,14 +121,10 @@ type LinkIndex = {
   byConversation: Map<string, LinkedConversation>
   /** Each folder's id and links as indexed, so a folder write that kept them reuses the index. */
   folderLinks: readonly (readonly [string, unknown])[]
-  /** A metadata write first stamps an unstamped legacy row's host, moving its links off other hosts. */
-  unstampedLinkedRows: boolean
 }
 
 type LinkIndexSlot = {
   current: LinkIndex | null
-  /** The index a worktree-metadata write set aside until its row shows whether links moved. */
-  held: LinkIndex | null
   /** The index a folder-only write set aside until a lookup shows whether folder links moved. */
   folderHeld: LinkIndex | null
 }
@@ -151,10 +141,7 @@ function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
   const index: LinkIndex = {
     byPane: new Map(),
     byConversation: new Map(),
-    folderLinks: folderLinkRefs(store),
-    unstampedLinkedRows: Object.values(store.getAllWorktreeMeta()).some(
-      (meta) => !meta.hostId && linksOf(meta.externalConversations).length > 0
-    )
+    folderLinks: folderLinkRefs(store)
   }
   // First in scan order wins, as the scans this replaces returned.
   for (const linked of allLinks(store)) {
@@ -199,31 +186,20 @@ function watchLinkWrites(
   store: ExternalConversationLinkStore &
     Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>>
 ): LinkIndexSlot {
-  const slot: LinkIndexSlot = { current: null, held: null, folderHeld: null }
-  // Both listeners run synchronously with the write, so no lookup can see a removed or moved link.
+  const slot: LinkIndexSlot = { current: null, folderHeld: null }
+  // Synchronous with the write, so no lookup can see a removed or moved link.
   store.onStateWritten((dirtyDomains) => {
     if (dirtyDomains?.length && dirtyDomains.every((domain) => domain === 'folderWorkspaces')) {
       // Folder sort stamps and unread flags save under this domain on every agent phase change.
       slot.folderHeld = slot.current ?? slot.folderHeld
-      slot.current = slot.held = null
-    } else if (savedWorkspaceCatalog(dirtyDomains)) {
-      slot.current = slot.held = slot.folderHeld = null
-    } else if (dirtyDomains?.some((domain) => LINK_DOMAINS.includes(domain))) {
-      slot.held = slot.current
+      slot.current = null
+    } else if (
+      savedWorkspaceCatalog(dirtyDomains) ||
+      dirtyDomains?.some((domain) => LINK_DOMAINS.includes(domain))
+    ) {
+      // One metadata row's write can change which row other locators and hosts resolve to.
       slot.current = slot.folderHeld = null
     }
-  })
-  // Sort stamps and unread flags rewrite a row on every agent phase change without touching its links.
-  store.onWorktreeMetaWritten?.(({ previous, next }) => {
-    if (
-      slot.held &&
-      !slot.held.unstampedLinkedRows &&
-      previous?.hostId === next.hostId &&
-      previous?.externalConversations === next.externalConversations
-    ) {
-      slot.current = slot.held
-    }
-    slot.held = null
   })
   return slot
 }
