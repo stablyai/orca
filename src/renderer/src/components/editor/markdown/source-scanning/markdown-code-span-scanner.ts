@@ -1,7 +1,7 @@
 import {
   createMarkdownBacktickRunLookup,
   type MarkdownCodeSpanScanner
-} from '../../../../../../shared/markdown-code-span-runs'
+} from '../../../../../../shared/markdown/markdown-code-span-runs'
 
 import {
   createMarkdownFenceTracker,

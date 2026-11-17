@@ -45,10 +45,13 @@ async function createGeneratorSandbox() {
   )
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
-  await mkdir(path.join(root, 'src', 'shared'), { recursive: true })
+  await mkdir(path.join(root, 'src', 'shared', 'skills', 'bundled'), { recursive: true })
   await copyFile(
-    path.resolve(import.meta.dirname, '../../../../src/shared/bundled-skill-renames.json'),
-    path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
+    path.resolve(
+      import.meta.dirname,
+      '../../../../src/shared/skills/bundled/bundled-skill-renames.json'
+    ),
+    path.join(root, 'src', 'shared', 'skills', 'bundled', 'bundled-skill-renames.json')
   )
   for (const relative of [
     'config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.mjs',

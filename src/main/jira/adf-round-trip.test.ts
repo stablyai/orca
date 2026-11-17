@@ -40,6 +40,11 @@ describe('adfRoundTripsThroughMarkdown', () => {
     await expect(adfRoundTripsThroughMarkdown(adf)).resolves.toBe(true)
   })
 
+  it('accepts plain text that reads as Markdown, since read-back escapes it', async () => {
+    const adf = doc(paragraph(text('1. not a list')))
+    await expect(adfRoundTripsThroughMarkdown(adf)).resolves.toBe(true)
+  })
+
   it.each([
     ['media', doc({ type: 'mediaSingle', content: [{ type: 'media', attrs: { id: '1' } }] })],
     ['mentions', doc(paragraph({ type: 'mention', attrs: { id: 'a', text: '@Ada' } }))],
@@ -48,9 +53,7 @@ describe('adfRoundTripsThroughMarkdown', () => {
       doc({ type: 'panel', attrs: { panelType: 'info' }, content: [paragraph(text('x'))] })
     ],
     ['text colors', doc(paragraph(text('red', [{ type: 'textColor', attrs: { color: '#f00' } }])))],
-    ['underline', doc(paragraph(text('u', [{ type: 'underline' }])))],
-    // Unescaped list markers re-parse as a list, which would change the document.
-    ['plain text that reads as Markdown', doc(paragraph(text('1. not a list')))]
+    ['underline', doc(paragraph(text('u', [{ type: 'underline' }])))]
   ])('rejects %s', async (_label, adf) => {
     await expect(adfRoundTripsThroughMarkdown(adf)).resolves.toBe(false)
   })

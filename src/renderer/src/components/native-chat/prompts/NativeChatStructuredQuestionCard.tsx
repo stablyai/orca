@@ -1,10 +1,10 @@
 import type { RefObject } from 'react'
 import type { AgentJournalQuestion } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import {
   structuredQuestionAnswers,
   structuredQuestionCard
-} from '../../../../../shared/structured-agent-question-card'
+} from '../../../../../shared/native-chat/input/questions/structured-agent-question-card'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
 export function NativeChatStructuredQuestionCard({

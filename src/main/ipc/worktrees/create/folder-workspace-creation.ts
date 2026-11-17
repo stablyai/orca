@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../../shared/repo-types'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
+import { resolveWorktreeCreateDisplayNameRequest } from '../creation/worktree-display-name'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import {
   isPreparedFolderSetup,

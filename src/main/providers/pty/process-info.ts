@@ -1,7 +1,7 @@
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import type { ForegroundProcessEvidence } from '../../../shared/foreground-process-evidence'
-import type { WslGuestRoot } from '../../../shared/wsl-guest-root-marker'
+import type { ForegroundProcessEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
 export type PtyProcessInfo = {
   id: string

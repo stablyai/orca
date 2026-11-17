@@ -1,4 +1,4 @@
-import { storageCapacityErrorCode } from '../../../../shared/storage-capacity-error'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import {
   ProfileStateDocumentCorruptionError,
   ProfileStateRevisionConflictError

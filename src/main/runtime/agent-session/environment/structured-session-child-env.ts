@@ -4,17 +4,20 @@
  * Empty remote selectors to mask the parent env; explicit flags still work, and login profiles can re-export selectors.
  * Omit pane identity: hooks and mobile status assume a live PTY leaf. Resolve worker identity at every spawn, including recovery and clear. */
 
-import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-environment'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../shared/app-lifecycle/app-environment'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
-} from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
+} from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
@@ -109,4 +112,18 @@ function applyThisAppCli(env: Record<string, string>): Record<string, string> {
     )
   }
   return set
+}
+
+const CALLER_IDENTITY_ENV = [ORCA_AGENT_SESSION_ID_ENV, 'ORCA_TERMINAL_HANDLE']
+
+/** A sealed child's environment without its caller identity; the structured marker stays, so
+ *  Orca's CLI refuses to guess a caller rather than name another chat. */
+export function withoutCallerIdentity(
+  env: Readonly<Record<string, string>>,
+  envToDelete: readonly string[]
+): { env: Record<string, string>; envToDelete: string[] } {
+  const kept = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !CALLER_IDENTITY_ENV.includes(key))
+  )
+  return { env: kept, envToDelete: [...new Set([...envToDelete, ...CALLER_IDENTITY_ENV])] }
 }

@@ -11,7 +11,7 @@ import {
   agentRowTimeAt,
   agentStateLabel,
   type AgentDotState
-} from '../../worktree/agent-row-display'
+} from '../../worktree/agent-lineage/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 export type MobileSessionTabGroup = 'needs-you' | 'working' | 'other'
@@ -31,6 +31,11 @@ export type MobileSessionTabRow = MobileSessionTabSummary & {
   /** The second line: the state, then what the tab is doing or showing. */
   detail: string
   timeAt: number | null
+}
+
+/** A chat tab the host marked as a fork; its title is drawn after the fork mark. */
+export function isForkedChatTab(tab: MobileSessionTab): boolean {
+  return tab.type === 'agent-session' && tab.forked === true
 }
 
 export function mobileSessionTabDotState(

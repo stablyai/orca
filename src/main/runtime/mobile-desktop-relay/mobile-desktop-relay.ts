@@ -1,17 +1,17 @@
+import { openRelayedPhoneSocket } from './relayed-phone-socket'
 import { PHONE_RELAY_CONNECT_BUDGET_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { verifyRelayedGitHubAuthority } from './relay-github-authority'
 import { createRelayedBrowserTab } from './relayed-browser-tab-create'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-items/work-item-target'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import { openRemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import type { DelegatedMobileDeviceSyncParams } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
+import type { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   failure,
   linkKey,
   RelayLink,
+  relayError,
   unavailable,
   type OpenedRelayLink,
   type RelayedPhone
@@ -22,7 +22,6 @@ import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-d
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
 import {
   declareRelayedPhoneCapabilities,
-  relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
   withRelayedLaunchChatDefault
 } from './relayed-phone-frames'
@@ -66,12 +65,12 @@ export class MobileDesktopRelay {
     return localHostedBrowserPageRequest(request, environmentId, hostsBrowserPage)
   }
 
-  forward(
+  async forward(
     phone: RelayedPhone,
     environmentId: string,
     request: { id: string; method: string },
     frame: string
-  ): void {
+  ): Promise<void> {
     if (RELAYED_STREAM_CARRIERS.get(request.method) === 'phone-binary-frames') {
       phone.reply(
         failure(
@@ -82,7 +81,17 @@ export class MobileDesktopRelay {
       )
       return
     }
-    const link = this.linkFor(phone, environmentId, request.method)
+    let link: RelayLink
+    try {
+      link = await this.linkFor(phone, environmentId, request.method)
+      if (!this.isCurrent(link)) {
+        throw unavailable('The server connection was reset.')
+      }
+    } catch (error) {
+      const refusal = relayError(error, 'The server connection was reset.')
+      phone.reply(failure(request.id, refusal.code, refusal.message))
+      return
+    }
     link.replies.noteForwarded(request.id, {
       browserScreencast:
         request.method === 'status.get'
@@ -222,22 +231,40 @@ export class MobileDesktopRelay {
   }
 
   // The request that opens a link decides whether it may wake a recipe VM behind the server.
-  private linkFor(phone: RelayedPhone, environmentId: string, method: string): RelayLink {
-    const existing = this.links.get(linkKey(phone.connectionId, environmentId))
-    if (
-      existing?.carries(method, this.options.hosts, (refusal) => this.endLink(existing, refusal))
-    ) {
-      return existing
+  private async linkFor(
+    phone: RelayedPhone,
+    environmentId: string,
+    method: string
+  ): Promise<RelayLink> {
+    const key = linkKey(phone.connectionId, environmentId)
+    for (;;) {
+      const existing = this.links.get(key)
+      if (!existing) {
+        break
+      }
+      let endedHere = false
+      const carries = await existing.carries(method, this.options.hosts, (refusal) => {
+        if (this.links.get(key) === existing) {
+          endedHere = true
+          this.endLink(existing, refusal)
+        }
+      })
+      const current = this.links.get(key)
+      if (current !== existing && !(endedHere && !current)) {
+        if (!current) {
+          throw unavailable('The server connection was reset.')
+        }
+        continue
+      }
+      if (carries) {
+        return existing
+      }
+      break
     }
     const link = new RelayLink(environmentId, phone, this.options.allocateStreamId, (opening) =>
       this.open(opening, method)
     )
-    link.opened.catch((error: unknown) => {
-      this.endLink(
-        link,
-        error instanceof RemoteRuntimeClientError ? error : unavailable(String(error))
-      )
-    })
+    link.opened.catch((error: unknown) => this.endLink(link, relayError(error, String(error))))
     this.links.set(linkKey(phone.connectionId, environmentId), link)
     return link
   }
@@ -261,44 +288,14 @@ export class MobileDesktopRelay {
     if (!grant || grants.refused.has(phone.deviceId)) {
       throw unavailable('The server does not accept this phone.')
     }
-    try {
-      const socket = await openRemoteRuntimePassthroughSocket(
-        {
-          ...pairedRuntimeConnectionFromOffer(host.pairing),
-          credential: { kind: 'token', deviceToken: grant.token },
-          pairedDeviceId: grant.deviceId
-        },
-        relayedPhoneCapabilities(phone.clientCapabilities()),
-        {
-          onText: (plaintext) => {
-            const frame = link.replies.text(plaintext)
-            if (frame !== null) {
-              phone.reply(frame)
-            }
-          },
-          onBinary: (bytes) => {
-            const frame = link.replies.binary(bytes)
-            if (frame) {
-              phone.sendBinary(frame)
-            }
-          },
-          onClose: (error) => this.endLink(link, error)
-        },
-        { timeoutMs: link.setup.remaining() }
-      )
-      if (!this.isCurrent(link)) {
-        socket.close()
-        throw unavailable('The relayed request was cancelled.')
-      }
-      return { socket, hostToken: grant.token, host }
-    } catch (error) {
-      if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {
-        // Retrying revoked tokens would repeatedly raise the host unpaired-device prompt.
-        grants.refused.add(phone.deviceId)
-        throw unavailable('The server revoked this phone.')
-      }
-      throw error
-    }
+    return openRelayedPhoneSocket(
+      link,
+      host,
+      grant,
+      grants,
+      () => this.isCurrent(link),
+      (error) => this.endLink(link, error)
+    )
   }
 
   private isCurrent(link: RelayLink): boolean {

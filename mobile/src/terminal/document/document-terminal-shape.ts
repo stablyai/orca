@@ -56,6 +56,10 @@ export type TerminalDocumentTerminalOptions = {
   theme: TerminalDocumentTheme
   minimumContrastRatio: number
   fontSize: number
+  fontFamily: string
+  fontWeight: string
+  fontWeightBold: string
+  lineHeight: number
 }
 
 export type TerminalDocumentTerminal = {

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { markRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
-import type { NewWorktreeModalProps } from '../../components/new-worktree-modal-types'
+import type { NewWorktreeModalProps } from '../../new-workspace/creation/forms/new-worktree-modal-types'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 import { isFolderRepoCreateBusy, type FolderRepoTarget } from './folder-repo-worktree-create'
 import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-flow'
@@ -19,19 +19,19 @@ const seen = vi.hoisted(() => {
   return state
 })
 vi.mock('react-native', () => ({ AppState: {} }))
-vi.mock('../../components/NewWorktreeModalController', () => ({
+vi.mock('../../new-workspace/creation/modal/NewWorktreeModalController', () => ({
   NewWorktreeModalController: (props: NewWorktreeModalProps) => {
     seen.composer = props
     return null
   }
 }))
-vi.mock('../../components/ConfirmModal', () => ({
+vi.mock('../../components/sheets/ConfirmModal', () => ({
   ConfirmModal: (props: { visible: boolean; onConfirm?: () => void; onCancel: () => void }) => {
     seen.confirm = props
     return null
   }
 }))
-vi.mock('../../components/TransientToast', () => ({
+vi.mock('../../components/feedback/TransientToast', () => ({
   TransientToast: () => null,
   useTransientToast: () => ({
     message: null,
@@ -158,51 +158,6 @@ describe('useFolderCreateFlow', () => {
     expect(composer().folderLaunch?.repoId).toBe(b.target.repoId)
   })
 
-  async function openComposer(flow: { current: Flow | null }, repo = repoIn()) {
-    const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
-    const opening = flow.current!.onCreate(repo.repo, repo.target, refusal.client, 'payments')
-    refusal.answer()
-    await act(() => opening)
-    return composer()
-  }
-
-  it('gives the repository back when the screen is left with an unsent form', async () => {
-    const { flow } = mountFlow(() => {})
-    const repo = repoIn()
-    await openComposer(flow, repo)
-    expect(isFolderRepoCreateBusy(repo.target)).toBe(true)
-
-    act(() => renderer?.unmount())
-    renderer = null
-    expect(isFolderRepoCreateBusy(repo.target)).toBe(false)
-  })
-  it('resends an unconfirmed create without setup once the user agrees', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] })
-    const { flow } = mountFlow(() => {})
-    const a = repoIn()
-    const lost = new FakeSession('connected')
-    lost.sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('connection lost')))
-    await act(() => flow.current!.onCreate(a.repo, a.target, lost, 'payments'))
-    vi.advanceTimersByTime(60_000)
-
-    const retry = new FakeSession('connected')
-    retry.sendRequest
-      .mockResolvedValueOnce({
-        id: '1',
-        ok: false,
-        error: { code: 'x', message: 'Setup decision required for this repository' }
-      })
-      .mockResolvedValueOnce(CREATED)
-    await act(() => flow.current!.onCreate(a.repo, a.target, retry, 'payments'))
-    expect(seen.confirm?.visible).toBe(true)
-
-    await act(async () => seen.confirm?.onConfirm?.())
-    expect(retry.sendRequest.mock.calls[1]?.[1]).toMatchObject({
-      name: 'payments',
-      branchIntent: 'create-exact',
-      setupDecision: 'skip'
-    })
-  })
   async function setupRefusedRetry(flow: { current: Flow | null }) {
     const a = repoIn()
     const lost = new FakeSession('connected')

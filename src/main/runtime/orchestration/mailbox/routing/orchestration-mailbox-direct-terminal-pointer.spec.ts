@@ -1,3 +1,4 @@
+import { CheckMailReconciliation } from '../../../rpc/methods/orchestration/messaging/check-mail-reconciliation'
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { checkDirectMailbox } from '../../../rpc/methods/orchestration/messaging/check-direct'
@@ -26,7 +27,7 @@ describe('orchestration direct terminal mailbox pointer', () => {
   it('points and checks an unbound pane at its own direct mail but leaves Run-owned rows for routing', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-direct-terminal-pointer-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const formerRun = createBoundRun(db, 'Former coordinator Run')
     const runOwned = insertDirectRunMessage(db, formerRun.id, 'Former Run completion')
     db.bindRun({
@@ -73,7 +74,9 @@ describe('orchestration direct terminal mailbox pointer', () => {
         db,
         handle: TERMINAL_HANDLE,
         typeFilter: undefined,
-        signal: undefined
+        signal: undefined,
+        reconciliation: new CheckMailReconciliation(harness.runtime, db),
+        revalidateConsumer: () => {}
       })
     ).resolves.toMatchObject({ count: 2 })
     expect(db.getMessageById(runOwned.id)?.read).toBe(0)

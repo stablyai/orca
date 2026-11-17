@@ -3,13 +3,14 @@ import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { OrchestrationError } from '../../orchestration-error'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
+import { workerLaunchAgent } from '../../workers/launch/worker-launch-observation'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
@@ -61,6 +62,7 @@ const StartedOnServer = z.object({
   dispatchId: z.string().min(1),
   run: z.object({ id: z.string().min(1) }).optional(),
   agent: z.string().nullable().optional(),
+  launch: z.unknown().optional(),
   state: z.string().optional()
 })
 
@@ -87,7 +89,7 @@ export async function startRemoteOwnedWorker(
     ctx
   )
   const db = runtime.getOrchestrationDb()
-  const server = runtime.resolveOrchestrationWorkerServer(params.on!)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -154,13 +156,15 @@ export async function startRemoteOwnedWorker(
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {
+    // The server's receipt names the agent in its launch, as a local start's does.
+    const agent = started.data.agent ?? workerLaunchAgent(started.data.launch)
     const recorded = recordRemoteStart(db, {
       conversationId: link.conversation_id,
       taskId,
       dispatchId: started.data.dispatchId,
       requestKey: forward.key,
       peerRunId: started.data.run?.id,
-      agent: started.data.agent ?? null
+      agent
     })
     if (!recorded) {
       // A reset already removed the reservation; a re-made pairing keeps it, so a later start of the Task there is refused here.
@@ -179,7 +183,7 @@ export async function startRemoteOwnedWorker(
         dispatchId: started.data.dispatchId,
         workerAddress: `dispatch:${started.data.dispatchId}`,
         task: task.spec,
-        agent: started.data.agent ?? null
+        agent
       })
     }
   }

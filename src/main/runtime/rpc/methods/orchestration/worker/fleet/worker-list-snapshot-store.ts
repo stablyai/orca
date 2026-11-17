@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { BoundedMap } from '../../../../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../../../../shared/collections/bounded-map'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import type { WorkerTerminalListState } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'

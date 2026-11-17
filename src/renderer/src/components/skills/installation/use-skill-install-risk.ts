@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { SkillCloudVersion } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudVersion } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
 import { isSkillBundleVersion } from '../sharing/skill-share-version-summary'

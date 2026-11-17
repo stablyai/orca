@@ -49,7 +49,7 @@ import {
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { isReadinessRead } from '../activation/orcad-activation-host-test-harness'
 import { isSnapshotCaptureCommand } from '../activation/testing/orcad-snapshot-capture-command'
-import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
+import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime/node-runtime-pin'
 import { serializeOrcadActivationTransaction } from '../activation/orcad-activation-transaction'
 import { createOrcadActivationTransaction } from '../activation/orcad-activation-transaction-transitions'
 
@@ -271,7 +271,7 @@ describe('deployOrcad', () => {
     'restores uploaded executable modes with optional browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
-      const binaries = ['ripgrep/linux-x64/rg']
+      const binaries = ['ripgrep/linux-x64/rg', 'bin/orca-provider-exec']
       if (browserTarget) {
         binaries.push(`agent-browser-${browserTarget}`)
       }

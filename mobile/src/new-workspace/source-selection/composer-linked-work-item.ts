@@ -1,4 +1,4 @@
-import { getLinearIssueWorkspaceName } from '../../../../src/shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../src/shared/workspace/naming/workspace-name'
 import type { JiraIssue } from '../../../../src/shared/jira/jira-types'
 import {
   buildGitHubWorkspaceSource,
@@ -11,7 +11,7 @@ import {
 } from '../../../../src/shared/new-workspace/workspace-source'
 
 type JiraIssueSource = Pick<JiraIssue, 'key' | 'title' | 'url'>
-import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../../src/shared/composer-branch-selection'
+import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../../src/shared/new-workspace/composer-branch-selection'
 import type {
   MobileComposerCreateSelection,
   SmartNameSelection

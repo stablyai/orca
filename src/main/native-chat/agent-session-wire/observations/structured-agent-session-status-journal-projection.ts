@@ -1,29 +1,29 @@
-import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
-  hostUsageLimitCut,
-  type HostUsageLimitCut
-} from '../recovery/structured-agent-session-usage-limit-chain'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
-
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { projectStructuredAgentSessionStatusState } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-
-import type { StructuredAgentSessionWorkEvidence } from './structured-agent-session-work-evidence'
-import { newestAcceptedSendKey } from './structured-agent-session-status-child-work'
-import { structuredAgentSessionStopping } from '../termination/structured-agent-session-stopping'
-
-export type StructuredAgentSessionStatusState = ReturnType<
-  typeof projectStructuredAgentSessionStatusState
->
+  copyJournalWorkAuthority,
+  copyJournalCurrentWorkAuthority
+} from '../../agent-session-journal/journal-observer-read'
+import {
+  journalSqlWorkAnswerIsCurrent,
+  readJournalSqlWorkFrame
+} from '../../agent-session-journal/journal-sql-work-answer'
+import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
+import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type {
+  JournalWorkAuthority,
+  JournalObserverResult
+} from '../../agent-session-journal/journal-observer-read'
+import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
+import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
 export type StructuredAgentSessionJournalProjection = {
   epoch: string
   contextId: string | null
   sequence: number
+  lastActivityAt: number
   fence: number | undefined
   /** Live authority may change without a journal row. */
   liveFence: number | null
@@ -37,138 +37,262 @@ export type StructuredAgentSessionJournalProjection = {
   firstInputSubmissionKey: string | null
   submissionCount: number
   stopping: boolean
+  authority?: JournalWorkAuthority
+  work?: JournalObserverResult['work']
 }
+
+type ProjectionEntry =
+  | {
+      kind: 'full'
+      projection: StructuredAgentSessionJournalProjection
+      physicalCursor: AgentJournalCursor
+      savedStop: JournalLatestStop | null
+    }
+  | { kind: 'work-only'; answer: JournalSqlWorkResult; contextId: string | null }
+
+type PendingObservation = { key: string; result: Promise<JournalObserverResult> }
+type CapturedWork = { authority: JournalWorkAuthority; contextId: string | null }
 
 export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
-  private readonly byJournal = new WeakMap<
-    AgentSessionJournal,
-    StructuredAgentSessionJournalProjection
-  >()
+  private readonly byJournal = new WeakMap<SqlAgentSessionJournal, ProjectionEntry>()
+  private readonly pending = new WeakMap<SqlAgentSessionJournal, PendingObservation>()
 
-  constructor(
-    private readonly replacedRuntime?: (
-      sessionId: string
-    ) => StructuredAgentSessionWorkEvidence['replaced']
-  ) {}
+  savedStop(
+    journal: SqlAgentSessionJournal,
+    contextId: string | null
+  ): { value: JournalLatestStop | null } | undefined {
+    const entry = this.currentEntry(journal)
+    return entry?.kind === 'full' && entry.projection.contextId === contextId
+      ? { value: entry.savedStop }
+      : undefined
+  }
 
-  read(
-    journal: AgentSessionJournal,
-    record: AgentSessionConversationView | null,
-    seen?: {
-      lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
-      operationalRevision?: number
-      child?: StructuredAgentSessionWorkEvidence['child']
-    }
-  ): StructuredAgentSessionJournalProjection {
-    const cursor = journal.cursor()
-    const contextId = record?.providerContextBoundary?.operationId ?? null
-    const fence = record?.currentFence
-    const ended = seen?.lastEndedChild
-    const work = structuredAgentSessionCurrentWork(journal, {
-      record,
-      replaced: record ? this.replacedRuntime?.(record.sessionId) : undefined,
-      child: seen?.child ?? null,
-      ...(ended ? { ended } : {}),
-      revision: seen?.operationalRevision ?? 0
-    })
-    const stopRevision = journal.stopMarks.revision()
-    let projection = this.byJournal.get(journal)
-    if (
-      !projection ||
-      projection.epoch !== cursor.epoch ||
-      projection.contextId !== contextId ||
-      projection.sequence !== cursor.sequence ||
-      projection.fence !== fence ||
-      projection.liveFence !== work.liveFence ||
-      projection.workRevision !== work.revision ||
-      projection.stopRevision !== stopRevision
-    ) {
-      // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
-      const snapshot = journal.statusRead()
-      const sameContext =
-        projection?.epoch === cursor.epoch && projection.contextId === contextId
-          ? projection
+  private currentEntry(journal: SqlAgentSessionJournal): ProjectionEntry | undefined {
+    const entry = this.byJournal.get(journal)
+    const projection = entry?.kind === 'full' ? entry.projection : entry?.answer.cursor
+    const authority = entry?.kind === 'full' ? entry.projection.authority : entry?.answer.authority
+    const physicalCursor =
+      entry?.kind === 'full' ? entry.physicalCursor : entry?.answer.physicalCursor
+    return entry &&
+      authority &&
+      projection &&
+      physicalCursor &&
+      !journal.isClosed &&
+      sameJournalCursor(projection, journal.cursor()) &&
+      sameJournalCursor(physicalCursor, journal.physicalCursor()) &&
+      authority.handle === journal.observationHandle() &&
+      sameJournalCursor(authority.openedThrough, journal.openingCursor())
+      ? entry
+      : undefined
+  }
+
+  currentSql(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork | null
+  ): StructuredAgentSessionJournalProjection | null {
+    const entry = this.currentEntry(journal)
+    const prior = entry?.kind === 'full' ? entry.projection : undefined
+    return captured &&
+      prior?.authority &&
+      prior.contextId === captured.contextId &&
+      JSON.stringify(prior.authority) ===
+        JSON.stringify(copyJournalWorkAuthority(captured.authority))
+      ? prior
+      : null
+  }
+
+  private currentWorkSql(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork
+  ): JournalSqlWorkResult | undefined {
+    const authority = copyJournalCurrentWorkAuthority(captured.authority)
+    const entry = this.currentEntry(journal)
+    const answer: JournalSqlWorkResult | undefined =
+      entry?.kind === 'work-only'
+        ? entry.contextId === captured.contextId
+          ? entry.answer
           : undefined
-      let firstInputSubmissionKey = sameContext?.firstInputSubmissionKey ?? null
-      const floor = sameContext ? 0 : (journal.context.floor()?.sequence ?? 0)
-      const start = sameContext?.submissionCount ?? 0
-      const submissions = firstInputSubmissionKey
-        ? []
-        : snapshot.submissions
-            .filter((entry) => journal.inputOrder.inputOrdinal(entry.clientMessageId) >= start)
-            .sort(
-              (a, b) =>
-                journal.inputOrder.inputOrdinal(a.clientMessageId) -
-                journal.inputOrder.inputOrdinal(b.clientMessageId)
-            )
-      for (const submission of submissions) {
-        if (firstInputSubmissionKey) {
-          break
-        }
-        const item =
-          journal.item(agentJournalSubmissionKey(submission.clientMessageId)) ??
-          (submission.providerItemId ? journal.item(submission.providerItemId) : null)
-        if (
-          item &&
-          item.sequence > floor &&
-          item.body.kind === 'message' &&
-          item.body.role === 'user' &&
-          isRootAgentJournalItem(item) &&
-          !isStructuredAgentSessionCommandEntry(item.body)
-        ) {
-          firstInputSubmissionKey = JSON.stringify([cursor.epoch, submission.clientMessageId])
-        }
+        : entry?.projection.work &&
+            entry.projection.contextId === captured.contextId &&
+            entry.projection.authority
+          ? {
+              cursor: { epoch: entry.projection.epoch, sequence: entry.projection.sequence },
+              physicalCursor: entry.physicalCursor,
+              authority: copyJournalCurrentWorkAuthority(entry.projection.authority),
+              result: { kind: 'state', state: entry.projection.work }
+            }
+          : undefined
+    return answer &&
+      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, answer)
+      ? answer
+      : undefined
+  }
+
+  /** Narrow work and full status occupy the same validated per-journal entry. */
+  async readWorkSql(journal: SqlAgentSessionJournal, capture: () => CapturedWork | null) {
+    for (;;) {
+      const captured = capture()
+      if (!captured) {
+        this.byJournal.delete(journal)
+        return null
       }
-      projection = {
-        ...cursor,
-        contextId,
-        usageLimitCut: hostUsageLimitCut(
-          snapshot,
-          latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, journal.itemBody),
-          journal.itemFence
-        ),
-        firstInputSubmissionKey,
-        submissionCount: journal.inputOrder.inputCount(),
-        fence,
-        liveFence: work.liveFence,
-        workRevision: work.revision,
-        stopRevision,
-        state: withDiedTurnVerdict(
-          projectStructuredAgentSessionStatusState(
-            snapshot.items,
-            snapshot.submissions,
-            fence,
-            work.scope,
-            snapshot.item
-          ),
-          work.diedTurn()
-        ),
-        acceptedSendKey: newestAcceptedSendKey(cursor.epoch, snapshot.submissions),
-        stopping: structuredAgentSessionStopping(
-          journal,
-          snapshot.items,
-          snapshot.submissions,
-          work.scope
-        )
+      const answer = this.currentWorkSql(journal, captured)
+      if (answer) {
+        return answer
       }
-      this.byJournal.set(journal, projection)
+      const authority = copyJournalCurrentWorkAuthority(captured.authority)
+      const result = await journal.reads.work({ authority, operation: { kind: 'state' } })
+      const recaptured = capture()
+      if (!recaptured) {
+        this.byJournal.delete(journal)
+        return null
+      }
+      if (
+        recaptured.contextId !== captured.contextId ||
+        !journalSqlWorkAnswerIsCurrent(journal, () => recaptured.authority, authority, result)
+      ) {
+        continue
+      }
+      this.remember(journal, recaptured, result, captured.contextId)
+      return result
     }
+  }
+
+  /** One attempt: the caller's rows and work from one reader snapshot, validated against live
+   *  authority; a cached answer is reused only at that same snapshot. Null when authority changed
+   *  during the read; the change's own publication schedules the replacement. */
+  async captureWorkFrame<T>(
+    journal: SqlAgentSessionJournal,
+    capture: () => CapturedWork | null,
+    read: (work: JournalDomainHistoryWork | undefined) => Promise<{
+      value: T
+      work?: JournalSqlWorkResult
+    }>
+  ): Promise<{ answer: JournalSqlWorkResult | null; value: T; current: () => boolean } | null> {
+    const captured = capture()
+    if (!captured) {
+      this.byJournal.delete(journal)
+      return { answer: null, value: (await read(undefined)).value, current: () => !capture() }
+    }
+    const cached = this.currentWorkSql(journal, captured)
+    const frame = await readJournalSqlWorkFrame(
+      journal,
+      () => {
+        const live = capture()
+        return live && live.contextId === captured.contextId ? live.authority : null
+      },
+      read,
+      cached
+    )
+    if (frame && frame.answer !== cached) {
+      this.remember(journal, captured, frame.answer, captured.contextId)
+    }
+    return frame
+  }
+
+  private remember(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork,
+    answer: JournalSqlWorkResult,
+    contextId: string | null
+  ) {
+    if (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, captured)) {
+      this.byJournal.set(journal, { kind: 'work-only', answer, contextId })
+    }
+  }
+
+  /** Discard an invalidated asynchronous answer before touching the existing publication cache. */
+  async readSql(
+    journal: SqlAgentSessionJournal,
+    capture: () => CapturedWork | null,
+    invalidated: () => void,
+    observed?: (projection: StructuredAgentSessionJournalProjection) => void
+  ): Promise<StructuredAgentSessionJournalProjection | null> {
+    const captured = capture()
+    if (!captured) {
+      if (!journal.isClosed) {
+        invalidated()
+      }
+      return null
+    }
+    const currentProjection = this.currentSql(journal, captured)
+    if (currentProjection) {
+      observed?.(currentProjection)
+      return currentProjection
+    }
+    const contextId = captured.contextId
+    const authority = copyJournalWorkAuthority(captured.authority)
+    const signature = JSON.stringify(authority)
+    const cursor = journal.cursor()
+    const priorEntry = this.byJournal.get(journal)
+    const prior = priorEntry?.kind === 'full' ? priorEntry.projection : undefined
+    const sameContext =
+      prior?.epoch === cursor.epoch && prior.contextId === contextId ? prior : undefined
+    const input = {
+      authority,
+      start: sameContext?.submissionCount ?? 0,
+      floor: sameContext ? 0 : undefined,
+      firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null
+    }
+    const key = JSON.stringify({
+      cursor,
+      physicalCursor: journal.physicalCursor(),
+      contextId,
+      input
+    })
+    let pending = this.pending.get(journal)
+    if (pending?.key !== key) {
+      const next: PendingObservation = {
+        key,
+        result: journal.reads.observer(input).finally(() => {
+          if (this.pending.get(journal) === next) {
+            this.pending.delete(journal)
+          }
+        })
+      }
+      this.pending.set(journal, next)
+      pending = next
+    }
+    const result = await pending.result
+    const current = capture()
+    if (
+      !current ||
+      journal.isClosed ||
+      !sameJournalCursor(result.cursor, journal.cursor()) ||
+      !sameJournalCursor(result.physicalCursor, journal.physicalCursor()) ||
+      authority.handle !== journal.observationHandle() ||
+      !sameJournalCursor(authority.openedThrough, journal.openingCursor()) ||
+      current.contextId !== contextId ||
+      JSON.stringify(copyJournalWorkAuthority(current.authority)) !== signature ||
+      JSON.stringify(result.authority) !== signature
+    ) {
+      invalidated()
+      return null
+    }
+    const projection: StructuredAgentSessionJournalProjection = {
+      ...result.cursor,
+      lastActivityAt: result.lastActivityAt,
+      contextId,
+      fence: authority.record?.currentFence,
+      liveFence: result.work.liveFence,
+      workRevision: authority.operationalRevision,
+      stopRevision: authority.stopRevision,
+      usageLimitCut: result.usageLimitCut,
+      state: result.state,
+      ...result.indicators,
+      authority,
+      work: result.work
+    }
+    const stop = authority.stop
+    const savedStop = stop && { sequence: stop.sequence, event: stop.event }
+    this.byJournal.set(journal, {
+      kind: 'full',
+      projection,
+      physicalCursor: result.physicalCursor,
+      savedStop
+    })
+    observed?.(projection)
     return projection
   }
-}
-
-/** Project proven child death immediately, before durable settlement can land. */
-function withDiedTurnVerdict(
-  state: StructuredAgentSessionStatusState,
-  died: { turnId: string } | null
-): StructuredAgentSessionStatusState {
-  const request = state.latestRequest
-  return died &&
-    state.summary.status === 'idle' &&
-    request?.kind === 'turn' &&
-    request.id === died.turnId &&
-    request.turnState === 'running'
-    ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
-    : state
 }

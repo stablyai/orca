@@ -1,16 +1,16 @@
-import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
+import { getRepoRegistrationHostIds } from '../../../shared/repository/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
 import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
-import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/workspace-view/sleeping-workspace-visibility'
 import {
   getConnectionExecutionHostId,
   isLocalExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
 import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
 import {
@@ -21,10 +21,10 @@ import type { AgentStatusStoreView } from './workspace-facts/workspace-activity-
 import { SortStampsProducer } from './temporal/sort-stamps-producer'
 import { writeUnreadFlag } from '../workspaces/metadata/workspace-activity-records'
 import { WorkspaceViewers } from './temporal/workspace-viewers'
-import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import { clientRaisesUnreadFlagItself } from '../../../shared/worktree/metadata/workspace-unread-raise-capability'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
 import { TerminalUseProducer } from './temporal/terminal-use-producer'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
   getWorktreeIdFromHostIdentity,

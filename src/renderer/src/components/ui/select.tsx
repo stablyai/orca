@@ -5,6 +5,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import * as SelectPrimitive from 'radix-ui/select'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
@@ -82,7 +83,7 @@ function SelectContent({
 }) {
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
-    <SelectPrimitive.Portal container={portalContainer ?? undefined}>
+    <SelectPrimitive.Portal container={usePortalContainer(portalContainer) ?? undefined}>
       <OverlayFocusScope value={scope}>
         <SelectPrimitive.Content
           data-slot="select-content"

@@ -1,11 +1,11 @@
-import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import type { FeatureInteractionState } from '../../../../shared/feature-education/interactions/feature-interactions'
 import {
   FEATURE_TIPS,
   isFeatureTipId,
   type FeatureTip,
   type FeatureTipSeenId
-} from '../../../../shared/feature-tips'
-import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+} from '../../../../shared/feature-education/feature-tips'
+import type { ChatUiLaunchTipVariant } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import { getPendingFeatureTips, type FeatureTipSettings } from './feature-tip-startup-gate'
 
 export function getFeatureTipForModal(args: {

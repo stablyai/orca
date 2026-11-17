@@ -15,24 +15,31 @@ type MdNode = {
   alt?: string | null
   identifier?: string
   label?: string | null
+  position?: { start: { offset?: number; column?: number }; end: { offset?: number } }
 }
 
 type MarkdownParser = (markdown: string) => MdNode
-type ConversionContext = { definitions: Map<string, string> }
+type ConversionContext = {
+  definitions: Map<string, string>
+  source: string
+  retainedDefinitions: Set<string>
+}
 
 // ADF only allows these block types inside list items and blockquotes.
-const LIST_ITEM_BLOCKS = new Set(['paragraph', 'bulletList', 'orderedList', 'codeBlock'])
-const BLOCKQUOTE_BLOCKS = new Set(['paragraph', 'bulletList', 'orderedList', 'codeBlock'])
+const CONTAINER_BLOCKS = new Set(['paragraph', 'list', 'code'])
 
 let parserLoad: Promise<MarkdownParser> | null = null
 
-// Why: remark is ESM-only and only needed when Orca writes Jira Cloud text, so
-// it loads on first use like the other ESM-only packages in main.
+// Load the grammar only when a Cloud submission needs an ADF document.
 function loadMarkdownParser(): Promise<MarkdownParser> {
-  parserLoad ??= Promise.all([import('unified'), import('remark-parse'), import('remark-gfm')])
-    .then(([{ unified }, { default: remarkParse }, { default: remarkGfm }]) => {
-      const processor = unified().use(remarkParse).use(remarkGfm)
-      return (markdown: string): MdNode => processor.parse(markdown)
+  parserLoad ??= Promise.all([
+    import('unified'),
+    import('remark-parse'),
+    import('../../shared/comment-markdown-parse-plugins')
+  ])
+    .then(([{ unified }, { default: remarkParse }, { commentMarkdownParsePlugins }]) => {
+      const processor = unified().use(remarkParse).use(commentMarkdownParsePlugins)
+      return (markdown: string): MdNode => processor.runSync(processor.parse(markdown))
     })
     .catch((error: unknown) => {
       parserLoad = null
@@ -41,8 +48,44 @@ function loadMarkdownParser(): Promise<MarkdownParser> {
   return parserLoad
 }
 
+function sourceText(node: MdNode, context: ConversionContext): string {
+  retainReferenceDefinitions(node, context)
+  const start = node.position?.start.offset
+  const end = node.position?.end.offset
+  if (start === undefined || end === undefined) {
+    return node.value ?? ''
+  }
+  const indent = (node.position?.start.column ?? 1) - 1
+  return context.source
+    .slice(start, end)
+    .split('\n')
+    .map((line, index) =>
+      index > 0 && /^[ >]*$/.test(line.slice(0, indent)) ? line.slice(indent) : line
+    )
+    .join('\n')
+}
+
+function retainReferenceDefinitions(node: MdNode, context: ConversionContext): void {
+  if ((node.type === 'linkReference' || node.type === 'imageReference') && node.identifier) {
+    context.retainedDefinitions.add(node.identifier)
+  }
+  node.children?.forEach((child) => retainReferenceDefinitions(child, context))
+}
+
+function retainedDefinitionBlocks(node: MdNode, context: ConversionContext): AdfNode[] {
+  if (node.type === 'definition' && context.retainedDefinitions.has(node.identifier ?? '')) {
+    return [paragraph(textNodes(sourceText(node, context), []))]
+  }
+  return (node.children ?? []).flatMap((child) => retainedDefinitionBlocks(child, context))
+}
+
 function collectDefinitions(node: MdNode, definitions: Map<string, string>): void {
-  if (node.type === 'definition' && node.identifier && node.url) {
+  if (
+    node.type === 'definition' &&
+    node.identifier &&
+    node.url &&
+    !definitions.has(node.identifier)
+  ) {
     definitions.set(node.identifier, node.url)
   }
   for (const child of node.children ?? []) {
@@ -82,8 +125,11 @@ function inlineNodes(
 function inlineNode(node: MdNode, marks: AdfMark[], context: ConversionContext): AdfNode[] {
   switch (node.type) {
     case 'text':
-    case 'html':
       return textNodes(node.value ?? '', marks)
+    case 'html':
+      return /^<br\s*\/?>$/i.test(node.value ?? '')
+        ? [{ type: 'hardBreak' }]
+        : textNodes(sourceText(node, context), marks)
     case 'inlineCode':
       // ADF lets `code` combine only with `link`.
       return textNodes((node.value ?? '').replace(/\n/g, ' '), [
@@ -99,20 +145,24 @@ function inlineNode(node: MdNode, marks: AdfMark[], context: ConversionContext):
     case 'delete':
       return inlineNodes(node.children, withMark(marks, { type: 'strike' }), context)
     case 'link':
-      return inlineNodes(node.children, linkMarks(marks, node.url), context)
-    case 'linkReference':
-      return inlineNodes(
-        node.children,
-        linkMarks(marks, context.definitions.get(node.identifier ?? '')),
-        context
-      )
+      return node.url && SAFE_LINK_PATTERN.test(node.url)
+        ? inlineNodes(node.children, linkMarks(marks, node.url), context)
+        : textNodes(sourceText(node, context), marks)
+    case 'linkReference': {
+      const url = context.definitions.get(node.identifier ?? '')
+      return url && SAFE_LINK_PATTERN.test(url)
+        ? inlineNodes(node.children, linkMarks(marks, url), context)
+        : textNodes(sourceText(node, context), marks)
+    }
     case 'image':
     case 'imageReference': {
       const url = node.url ?? context.definitions.get(node.identifier ?? '')
-      return textNodes(node.alt || url || '', linkMarks(marks, url))
+      return url && SAFE_LINK_PATTERN.test(url)
+        ? textNodes(node.alt || url, linkMarks(marks, url))
+        : textNodes(sourceText(node, context), marks)
     }
     case 'footnoteReference':
-      return textNodes(`[^${node.label ?? node.identifier ?? ''}]`, marks)
+      return textNodes(sourceText(node, context), marks)
     default:
       return node.children
         ? inlineNodes(node.children, marks, context)
@@ -133,23 +183,17 @@ function paragraph(content: AdfNode[]): AdfNode {
   return { type: 'paragraph', content }
 }
 
-/** Rewrites blocks a container cannot hold into ones it can, keeping their text. */
-function fitBlocks(blocks: AdfNode[], allowed: ReadonlySet<string>): AdfNode[] {
-  return blocks.flatMap((block) => {
-    const type = typeof block.type === 'string' ? block.type : ''
-    if (allowed.has(type)) {
-      return [block]
-    }
-    const content = Array.isArray(block.content) ? block.content : []
-    if (type === 'heading') {
-      return [paragraph(content)]
-    }
-    return fitBlocks(content, allowed)
-  })
+function containerBlocks(nodes: MdNode[] | undefined, context: ConversionContext): AdfNode[] {
+  const blocks = (nodes ?? []).flatMap((node) =>
+    CONTAINER_BLOCKS.has(node.type)
+      ? blockNode(node, context)
+      : [paragraph(textNodes(sourceText(node, context), []))]
+  )
+  return blocks.length ? blocks : [paragraph([])]
 }
 
 function listItemNode(node: MdNode, context: ConversionContext): AdfNode {
-  const content = fitBlocks(blockNodes(node.children, context), LIST_ITEM_BLOCKS)
+  const content = containerBlocks(node.children, context)
   if (content[0]?.type !== 'paragraph') {
     content.unshift(paragraph([]))
   }
@@ -168,7 +212,7 @@ function listNode(node: MdNode, context: ConversionContext): AdfNode {
   if (!node.ordered) {
     return { type: 'bulletList', content: items }
   }
-  const start = typeof node.start === 'number' && node.start > 0 ? node.start : 1
+  const start = typeof node.start === 'number' && node.start >= 0 ? node.start : 1
   return {
     type: 'orderedList',
     ...(start === 1 ? {} : { attrs: { order: start } }),
@@ -183,6 +227,7 @@ function tableNode(node: MdNode, context: ConversionContext): AdfNode {
       type: 'tableRow',
       content: (row.children ?? []).map((cell) => ({
         type: rowIndex === 0 ? 'tableHeader' : 'tableCell',
+        attrs: {},
         content: [paragraph(inlineNodes(cell.children, [], context))]
       }))
     }))
@@ -207,11 +252,13 @@ function blockNode(node: MdNode, context: ConversionContext): AdfNode[] {
       ]
     case 'thematicBreak':
       return [{ type: 'rule' }]
-    case 'blockquote': {
-      const content = fitBlocks(blockNodes(node.children, context), BLOCKQUOTE_BLOCKS)
-      // ADF requires a block in every quote; `>` alone or a quoted rule leaves none.
-      return [{ type: 'blockquote', content: content.length > 0 ? content : [paragraph([])] }]
-    }
+    case 'blockquote':
+      return [
+        {
+          type: 'blockquote',
+          content: containerBlocks(node.children, context)
+        }
+      ]
     case 'list':
       return [listNode(node, context)]
     case 'code':
@@ -227,7 +274,8 @@ function blockNode(node: MdNode, context: ConversionContext): AdfNode[] {
     case 'definition':
       return []
     case 'html':
-      return node.value?.trim() ? [paragraph(textNodes(node.value, []))] : []
+    case 'footnoteDefinition':
+      return [paragraph(textNodes(sourceText(node, context), []))]
     default:
       return node.children
         ? blockNodes(node.children, context)
@@ -241,7 +289,16 @@ function blockNode(node: MdNode, context: ConversionContext): AdfNode[] {
 export async function markdownToAdf(markdown: string): Promise<AdfNode> {
   const parse = await loadMarkdownParser()
   const root = parse(markdown)
-  const context: ConversionContext = { definitions: new Map() }
+  const context: ConversionContext = {
+    definitions: new Map(),
+    source: markdown,
+    retainedDefinitions: new Set()
+  }
   collectDefinitions(root, context.definitions)
-  return { type: 'doc', version: 1, content: blockNodes(root.children, context) }
+  const content = blockNodes(root.children, context)
+  return {
+    type: 'doc',
+    version: 1,
+    content: [...content, ...retainedDefinitionBlocks(root, context)]
+  }
 }

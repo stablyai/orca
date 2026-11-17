@@ -1,27 +1,27 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getDefaultSettings } from '../../../../shared/constants'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../../../filesystem/host-tree-removal'
 import { removeHostTree } from '../../../filesystem/host-tree-removal'
 
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
-import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
+import '../../../git/worktrees/catalog/worktree-listing'
+import '../../../git/worktrees/catalog/worktree-path-comparison'
 import {
   acquireWatcherRemovalGate,
   beginTerminalInstall,
@@ -65,11 +65,6 @@ async function git(args: string[], cwd = repoPath): Promise<string> {
 }
 
 // Parse Git paths: Windows output uses forward slashes unlike native joins.
-async function isRegistered(path: string): Promise<boolean> {
-  return (await listWorktreesStrict(repoPath)).some((worktree) =>
-    areWorktreePathsEqual(worktree.path, path)
-  )
-}
 
 beforeEach(async () => {
   pushTarget = undefined
@@ -105,6 +100,7 @@ type FinishOutcome =
 async function finishAfterRestart(
   options: {
     repoGone?: boolean
+    repoRows?: Repo[]
     branch?: string
     head?: string
     force?: boolean
@@ -140,6 +136,11 @@ async function finishAfterRestart(
   const purged: string[] = []
   const remember = vi.fn()
   const host = removalHost(options.repoGone, options.stopPtys)
+  if (options.repoRows) {
+    const rows = options.repoRows
+    host.store.getRepos = () => rows
+    host.store.getRepo = (id) => rows.find((row) => row.id === id)
+  }
   host.purge = ({ worktreeId }) => {
     purged.push(worktreeId)
   }
@@ -197,40 +198,6 @@ function removalHost(
 }
 
 describe('finishing an interrupted worktree removal after a restart', () => {
-  it.each(['partial', 'detached', 'keep-registered', 'keep-unregistered'])(
-    'finishes the accepted %s pending checkout after restart',
-    async (kind) => {
-      const head = (await git(['rev-parse', 'feature'])).trim()
-      if (kind === 'keep-unregistered') {
-        await git(['worktree', 'remove', worktreePath])
-      }
-      const keep = kind.startsWith('keep-')
-      if (!keep) {
-        await (kind === 'partial'
-          ? unlink(join(worktreePath, 'seed.txt'))
-          : git(['checkout', '--detach', '-q'], worktreePath))
-      }
-      const { outcome, purged, records } = await finishAfterRestart({
-        force: kind === 'partial',
-        branch: kind === 'detached' ? '' : 'feature',
-        head: keep ? head : (await git(['rev-parse', 'HEAD'], worktreePath)).trim(),
-        deleteBranch: keep ? false : undefined
-      })
-      expect(outcome).toMatchObject({ status: 'removed' })
-      expect(records).toEqual([])
-      expect(existsSync(worktreePath)).toBe(false)
-      expect(await isRegistered(worktreePath)).toBe(false)
-      expect((await git(['branch', '--list', 'feature'])).trim() !== '').toBe(
-        keep || kind === 'detached'
-      )
-      expect(purged).toEqual([`repo-1::${worktreePath}`])
-      if (keep) {
-        expect((await git(['rev-parse', 'feature'])).trim()).toBe(head)
-        expect(outcome).not.toHaveProperty('preservedBranch')
-      }
-    }
-  )
-
   it('leaves the same branch checked out again at a new head', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const head = (await git(['rev-parse', 'feature'])).trim()

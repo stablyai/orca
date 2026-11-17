@@ -1,4 +1,4 @@
-import { readLinkedTaskIssuesWithLimit } from '../../../read-linked-task-issues'
+import { readLinkedTaskIssuesWithLimit } from '../../linked-issues/read-linked-task-issues'
 import type {
   LinearIssueRead,
   LinearIssueLease,

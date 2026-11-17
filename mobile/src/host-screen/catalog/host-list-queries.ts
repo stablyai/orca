@@ -3,8 +3,8 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
-import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+} from '../../../../src/shared/execution-host/execution-host'
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../../query/host-query'
@@ -16,12 +16,12 @@ import {
   NO_SERVER_WORKSPACES,
   ServerRowSnapshots,
   type ServerWorkspaces
-} from '../../worktree/server-workspaces'
+} from '../../worktree/execution-hosts/server-workspaces'
 import {
   readWorktreeCatalogSnapshot,
   type WorktreeCatalogSnapshot
-} from '../../worktree/worktree-catalog-snapshot-client'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/catalog/worktree-catalog-snapshot-client'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   hostRepoCatalogRepos,
   hostSshTargetSummarySchema,

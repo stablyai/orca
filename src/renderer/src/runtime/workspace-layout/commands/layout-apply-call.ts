@@ -4,7 +4,7 @@ import {
   afterLayoutFrame,
   layoutFramePositionKey
 } from '@/runtime/workspace-layout/frames/layout-frame-position'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { LayoutApplyReply } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './layout-apply-send'
 

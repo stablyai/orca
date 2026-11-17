@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../src/shared/github/repositories/repository-identity'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -127,16 +127,6 @@ export type GitPushTarget = {
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
-
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
 
 export type LinearProject = {
   id: string

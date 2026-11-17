@@ -1,7 +1,10 @@
 import type { Automation } from '../automation-definition'
 import type { AutomationRun } from '../history/automation-run'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
-import type { Repo } from '../../repo-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../execution-host/execution-host'
+import type { Repo } from '../../repository/repo-types'
 import type {
   AutomationWorkspaceProvenance,
   ClientAutomationWorkspaceProvenance

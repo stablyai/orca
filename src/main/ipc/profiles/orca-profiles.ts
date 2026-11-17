@@ -21,7 +21,7 @@ import type {
   SelectOrcaProfileOrgArgs,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import {
   createLocalOrcaProfile,
   getOrcaProfileListState,
@@ -37,7 +37,7 @@ import {
   flushActiveProfileBeforeFileMutation,
   flushActiveProfileBeforeRelaunch
 } from '../../orca-profiles/storage/profile-persistence-deadline'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   createCloudLinkedOrcaProfile,
   connectCurrentOrcaProfile,

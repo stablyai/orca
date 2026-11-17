@@ -1,5 +1,6 @@
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
-import { applyAdfTextMarks, joinAdfInlineMarkdown } from './adf-text-marks'
+import { renderAdfInline } from './adf-text-marks'
+import { markdownTable } from 'markdown-table'
 
 type JiraAdfRecord = Record<string, unknown>
 
@@ -106,43 +107,18 @@ function renderMediaMarkdown(
   return unresolvedMediaPlaceholder(attrs)
 }
 
-function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
-  if (!node) {
-    return ''
-  }
-  if (typeof node === 'string') {
-    return node
-  }
-  if (Array.isArray(node)) {
-    return joinAdfInlineMarkdown(
-      node.map((child) => ({
-        markdown: renderInline(child, options),
-        marks: asRecord(child).marks
-      }))
-    )
-  }
-  if (typeof node !== 'object') {
-    return ''
-  }
-
-  const record = node as JiraAdfRecord
-  if (typeof record.text === 'string') {
-    return applyAdfTextMarks(record.text, record.marks)
-  }
-  if (record.type === 'hardBreak') {
-    return '\n'
-  }
-  if (record.type === 'media' || record.type === 'mediaInline') {
-    return renderMediaMarkdown(record, options)
-  }
-
-  const attrs = asRecord(record.attrs)
-  const fallbackText = asString(attrs.text) || asString(attrs.shortName) || asString(attrs.url)
-  if (fallbackText) {
-    return fallbackText
-  }
-
-  return renderInline(record.content, options)
+function renderInline(
+  value: unknown,
+  options?: AdfToMarkdownOptions,
+  inTable = false,
+  heading = false
+): string {
+  return renderAdfInline(
+    asArray(value),
+    (node) => renderMediaMarkdown(node, options),
+    inTable,
+    heading
+  )
 }
 
 function joinBlocks(blocks: MarkdownBlock[]): string {
@@ -169,18 +145,18 @@ function renderListItem(node: unknown, prefix: string, options?: AdfToMarkdownOp
   blocks.forEach((block, blockIndex) => {
     const blockLines = block.text.split('\n')
     if (blockIndex === 0) {
-      lines.push(`${prefix}${blockLines[0] ?? ''}`.trimEnd())
+      lines.push(`${prefix}${blockLines[0] ?? ''}`)
       blockLines.slice(1).forEach((line) => {
-        lines.push(`${continuationIndent}${line}`.trimEnd())
+        lines.push(line ? `${continuationIndent}${line}` : '')
       })
       return
     }
 
-    if (block.kind !== 'list') {
+    if (block.kind !== 'list' && !block.text.startsWith('```')) {
       lines.push('')
     }
     blockLines.forEach((line) => {
-      lines.push(`${continuationIndent}${line}`.trimEnd())
+      lines.push(line ? `${continuationIndent}${line}` : '')
     })
   })
 
@@ -192,21 +168,64 @@ function renderList(
   ordered: boolean,
   options?: AdfToMarkdownOptions
 ): string {
-  const start = ordered ? positiveInteger(asRecord(record.attrs).order, 1) : 1
+  const order = asRecord(record.attrs).order
+  const start =
+    ordered && typeof order === 'number' && Number.isInteger(order) && order >= 0 ? order : 1
   return asArray(record.content)
     .map((item, index) => renderListItem(item, ordered ? `${start + index}. ` : '- ', options))
     .join('\n')
 }
 
-function renderCodeBlock(record: JiraAdfRecord, options?: AdfToMarkdownOptions): MarkdownBlock {
-  const text = renderInline(record.content, options).replace(/\n$/, '')
-  const language = asString(asRecord(record.attrs).language)
-  // Keep the language so Markdown edits can write the same code block back.
-  const info = /^[\w#+.-]+$/.test(language) ? language : ''
-  // A fence longer than any backtick run in the code keeps a ``` line from closing it.
-  const longestRun = (text.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0)
-  const fence = '`'.repeat(Math.max(3, longestRun + 1))
-  return { kind: 'block', text: [`${fence}${info}`, text, fence].join('\n') }
+function renderCodeBlock(record: JiraAdfRecord): MarkdownBlock {
+  const text = asArray(record.content)
+    .map((child) => asString(asRecord(child).text))
+    .join('')
+  let longest = 2
+  for (const match of text.matchAll(/`+/g)) {
+    longest = Math.max(longest, match[0].length)
+  }
+  const fence = '`'.repeat(longest + 1)
+  const language = asString(asRecord(record.attrs).language).replace(/[\r\n`]/g, '')
+  return { kind: 'block', text: `${fence}${language}\n${text}\n${fence}` }
+}
+
+function escapeTablePipes(value: string): string {
+  const result: string[] = []
+  let slashes = 0
+  for (const char of value) {
+    if (char === '|' && slashes % 2 === 0) {
+      result.push('\\')
+    }
+    result.push(char)
+    slashes = char === '\\' ? slashes + 1 : 0
+  }
+  return result.join('')
+}
+
+function renderTable(record: JiraAdfRecord, options?: AdfToMarkdownOptions): string | null {
+  const rows: string[][] = []
+  for (const rawRow of asArray(record.content)) {
+    const cells: string[] = []
+    for (const rawCell of asArray(asRecord(rawRow).content)) {
+      const cell = asRecord(rawCell)
+      const attrs = asRecord(cell.attrs)
+      const blocks = asArray(cell.content)
+      if (
+        positiveInteger(attrs.colspan, 1) !== 1 ||
+        positiveInteger(attrs.rowspan, 1) !== 1 ||
+        blocks.length !== 1 ||
+        asRecord(blocks[0]).type !== 'paragraph'
+      ) {
+        return null
+      }
+      const text = renderInline(asRecord(blocks[0]).content, options, true)
+      cells.push(escapeTablePipes(text))
+    }
+    if (cells.length) {
+      rows.push(cells)
+    }
+  }
+  return rows.length ? markdownTable(rows, { alignDelimiters: false }) : ''
 }
 
 function renderBlockquote(record: JiraAdfRecord, options?: AdfToMarkdownOptions): MarkdownBlock {
@@ -215,7 +234,7 @@ function renderBlockquote(record: JiraAdfRecord, options?: AdfToMarkdownOptions)
     kind: 'block',
     text: text
       .split('\n')
-      .map((line) => `> ${line}`.trimEnd())
+      .map((line) => (line ? `> ${line}` : '>'))
       .join('\n')
   }
 }
@@ -243,7 +262,7 @@ function renderBlock(node: unknown, options?: AdfToMarkdownOptions): MarkdownBlo
     const prefix = '#'.repeat(headingLevel(asRecord(record.attrs).level))
     return {
       kind: 'block',
-      text: `${prefix} ${renderInline(record.content, options).trim()}`.trim()
+      text: `${prefix} ${renderInline(record.content, options, false, true).trim()}`.trim()
     }
   }
   if (type === 'bulletList') {
@@ -256,10 +275,16 @@ function renderBlock(node: unknown, options?: AdfToMarkdownOptions): MarkdownBlo
     return { kind: 'list', text: renderListItem(record, '- ', options) }
   }
   if (type === 'codeBlock') {
-    return renderCodeBlock(record, options)
+    return renderCodeBlock(record)
   }
   if (type === 'blockquote') {
     return renderBlockquote(record, options)
+  }
+  if (type === 'table') {
+    const table = renderTable(record, options)
+    if (table !== null) {
+      return { kind: 'block', text: table }
+    }
   }
   if (type === 'rule') {
     return { kind: 'block', text: '---' }
@@ -274,13 +299,16 @@ function renderBlock(node: unknown, options?: AdfToMarkdownOptions): MarkdownBlo
 
   return {
     kind: 'block',
-    text: joinBlocks(renderBlocks(record.content, options)) || renderInline(record, options)
+    text: joinBlocks(renderBlocks(record.content, options)) || renderInline([record], options)
   }
 }
 
 export function adfToMarkdownText(value: unknown, options?: AdfToMarkdownOptions): string {
-  return renderBlock(value, options)
-    .text.replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  if (typeof value === 'string') {
+    return value
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+  return renderBlock(value, options).text
 }

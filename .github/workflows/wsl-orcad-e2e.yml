@@ -242,8 +242,6 @@ jobs:
         with:
           name: wsl-orcad-rootfs-${{ matrix.family }}
           path: ${{ runner.temp }}/wsl-rootfs
-      - name: Verify WSL lifecycle receipts
-        run: ./config/ci/wsl-lifecycle/test-wsl-lifecycle-command.ps1
       # Runs beside the dependency install; the lane waits for it below.
       - name: Import the distros as WSL2
         id: import

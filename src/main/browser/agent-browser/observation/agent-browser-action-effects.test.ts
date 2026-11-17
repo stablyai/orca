@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import { runWithActionEffects, type ActionEffectsHost } from './agent-browser-action-effects'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'
-import { readBrowserActionEffects } from '../../../../shared/browser-action-effects'
+import { readBrowserActionEffects } from '../../../../shared/browser/automation/browser-action-effects'
 
 vi.mock('../../routing/input-ownership/remote-cli-page-admission', () => ({
   readRemoteCliAdmittedPage: (_id: number, read: () => Promise<unknown>) => read()

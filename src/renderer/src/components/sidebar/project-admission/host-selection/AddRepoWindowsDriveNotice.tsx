@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/wsl-host-windows-drive-refusal'
+import type { WslHostWindowsDriveRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import {
   addOnThisComputerLabel,
   wslHostWindowsDriveRefusalCopy

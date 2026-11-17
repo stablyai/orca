@@ -1,4 +1,4 @@
-import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   readAgentLaunchModeSettings,
   decideAgentLaunchMode
@@ -156,7 +156,7 @@ it.each(['chat', 'terminal'] as const)(
       const frame = JSON.stringify({
         id: agent,
         method: 'agent.launch',
-        params: { agent, nativeChatDefault: false }
+        params: { agent }
       })
       const stamped = JSON.parse(
         withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
@@ -188,3 +188,13 @@ it.each(['chat', 'terminal'] as const)(
     }
   }
 )
+
+it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
+  const frame = JSON.stringify({
+    id: 'pi',
+    method: 'agent.launchReplay',
+    params: { agent: 'pi', nativeChatDefault: true }
+  })
+  const stamped = JSON.parse(withRelayedLaunchChatDefault(frame, 'agent.launchReplay', () => false))
+  expect(stamped.params.nativeChatDefault).toBe(true)
+})

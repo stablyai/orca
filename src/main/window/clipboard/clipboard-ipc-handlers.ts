@@ -5,7 +5,7 @@ import { runProcess } from '@orca/process-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../../ipc/filesystem/access/local-file-access-resolution'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
   assertTrustedClipboardTextSender
@@ -14,8 +14,8 @@ import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
-} from '../../../shared/clipboard-text'
-import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard-link-html'
+} from '../../../shared/clipboard/clipboard-text'
+import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -25,7 +25,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
   type ClipboardImageThumbnail
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 import {
   writeFileToClipboard,
   type ClipboardFileDeps,
@@ -37,7 +37,7 @@ import {
   scheduleLegacyRemoteClipboardFileCleanup
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
-import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-session-attachment-upload'
+import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'

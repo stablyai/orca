@@ -26,8 +26,6 @@ vi.mock('node:os', async () => {
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { scanCodexUsageFiles } from './scanner'
 
-/** Mirrors the checkpoint window in jsonl-file-checkpoint.ts. */
-
 /** Clear the resumable-prefix floor so tests actually exercise incremental parsing. */
 const RESUMABLE_RECORDS = 40
 
@@ -82,16 +80,12 @@ function usageRecordRange(from: number, to: number): string {
   return out
 }
 
-/** The iterator marks parse reads to distinguish them from bounded digest reads. */
-
 function recordedResumeOffset(
   files: { path: string; parseResumeState?: { parsedBytes: number } | null }[],
   filePath: string
 ): number {
   return files.find((file) => file.path === filePath)?.parseResumeState?.parsedBytes ?? 0
 }
-
-/** Session attribution catches context corruption that token totals alone can miss. */
 
 function totalTokens(aggregates: { totalTokens: number }[]): number {
   return aggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
@@ -149,9 +143,24 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(totalTokens(second.dailyAggregates)).toBe(5)
   })
 
-  // Truncate after checkpoint validation to exercise the parse-time race.
+  it('reparses a grown rollout whose cached record lost its sessions instead of failing the scan', async () => {
+    const rolloutPath = join(sessionsDir, 'rollout-damaged.jsonl')
+    writeFileSync(
+      rolloutPath,
+      `${sessionMeta('session-damaged')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
+    )
+    const first = await scanCodexUsageFiles([], [])
+    expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
+    const damaged = first.processedFiles.map((file) => ({ ...file }))
+    for (const file of damaged) {
+      Reflect.deleteProperty(file, 'sessions')
+    }
 
-  // Token totals can match despite a stale session context; compare attribution with a cold scan.
-
-  /** Preserve the boundary window while changing leading records at the same file length. */
+    writeFileSync(
+      rolloutPath,
+      `${sessionMeta('session-damaged')}${usageRecordRange(0, RESUMABLE_RECORDS + 5)}`
+    )
+    const second = await scanCodexUsageFiles([], damaged)
+    expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 5)
+  })
 })

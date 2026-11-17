@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

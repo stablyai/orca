@@ -3,7 +3,7 @@ import {
   normalizeHostPart,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 import type { Worktree } from './types'
 
 /** Use a printable separator: HTML replaces NUL in DOM attributes. Host IDs encode | as %7C, so host-first splitting stays exact even when workspace IDs contain |. */

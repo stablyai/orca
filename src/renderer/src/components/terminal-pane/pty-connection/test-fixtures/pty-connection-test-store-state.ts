@@ -1,8 +1,8 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { vi } from 'vitest'
-import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveWindowsShiftEnterEncodingForPane } from '../../input/keyboard/terminal-windows-shift-enter'
-import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 import type { AppState } from '@/store/types'
 
 export type StoreState = {
@@ -105,8 +105,7 @@ export type StoreState = {
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   consumeTabStartupCommand?: ReturnType<typeof vi.fn>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  agentStatusByPaneKey: Record<string, unknown>
-  retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   suppressedPtyExitIds: Record<string, true>
@@ -125,6 +124,7 @@ export type StoreState = {
   recordTerminalInput: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
+  retireAgentStatusProcess: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
   retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   restoreAgentPaneAuthority: ReturnType<typeof vi.fn>

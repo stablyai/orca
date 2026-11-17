@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
-} from '../../../../shared/managed-runtime-install'
+} from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import { megabytes, type ManagedRuntimeInstallAction } from './managed-runtime-install-view'
 
 /** Hero fills an empty chat pane; strip sits above the composer. Both render the same host snapshot. */
