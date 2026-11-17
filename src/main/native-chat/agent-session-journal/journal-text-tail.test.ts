@@ -170,14 +170,16 @@ it('a crash keeps every save; the next open folds it, even with writes off, and 
   // A build without tails rewrites the payload from the folded text; its trigger drops the tail.
   opened.db
     .prepare(
-      `INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text) VALUES(?,?,?,99,'stale')`
+      `INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text,saved_chars,folded_chars,saved_hash,skeleton)
+        VALUES(?,?,?,99,'stale',0,0,'','')`
     )
     .run(target.sessionId, target.epoch, ITEM)
   opened.db.prepare(`UPDATE journal_items SET payload_json=payload_json WHERE item_id=?`).run(ITEM)
   expect(tailRows(opened.db)).toBe(0)
   opened.db
     .prepare(
-      `INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text) VALUES(?,?,?,99,'stale')`
+      `INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text,saved_chars,folded_chars,saved_hash,skeleton)
+        VALUES(?,?,?,99,'stale',0,0,'','')`
     )
     .run(target.sessionId, target.epoch, ITEM)
   opened.db.prepare(`DELETE FROM journal_items WHERE item_id=?`).run(ITEM)

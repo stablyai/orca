@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS journal_text_tail (
   item_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
   text TEXT NOT NULL,
+  -- What is saved through this row, so the next save reads this row alone.
+  saved_chars INTEGER NOT NULL,
+  folded_chars INTEGER NOT NULL,
+  saved_hash TEXT NOT NULL,
+  skeleton TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, item_id, seq)
 ) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS journal_text_tail_rewritten AFTER UPDATE OF payload_json ON journal_items

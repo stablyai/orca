@@ -10,6 +10,9 @@ import {
   readJournalDomainItemDetail
 } from './journal-domain-item-presentation'
 import { hydrateJournalTextTail } from './journal-text-tail'
+import { runJournalTransaction } from './database/journal-database'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const switches = vi.hoisted(() => ({ writes: true }))
 vi.mock('./journal-text-tail-writes', () => ({
@@ -72,6 +75,109 @@ it(
     expect(longTail.walMB).toBeLessThan(tail.walMB * 5)
   }
 )
+
+/** Rows and saved text each statement over the tail table or the folded text hands back. */
+function countTailReads(db: Database.Database) {
+  const reads = { statements: 0, tailRows: 0, foldedChars: 0 }
+  const wrapped = new WeakSet<object>()
+  const prepare = db.prepare.bind(db)
+  db.prepare = (sql: string) => {
+    const statement = prepare(sql)
+    const tail = sql.includes('FROM journal_text_tail')
+    const folded = sql.includes('AS folded')
+    if ((tail || folded) && !wrapped.has(statement)) {
+      wrapped.add(statement)
+      const count = (rows: Record<string, unknown>[]) => {
+        reads.statements++
+        if (tail) {
+          reads.tailRows += rows.length
+        }
+        for (const row of rows) {
+          reads.foldedChars += typeof row.folded === 'string' ? row.folded.length : 0
+        }
+      }
+      const get = statement.get.bind(statement)
+      const all = statement.all.bind(statement)
+      statement.get = (...args: Parameters<typeof get>) => {
+        const row = get(...args)
+        count(row ? [row] : [])
+        return row
+      }
+      statement.all = (...args: Parameters<typeof all>) => {
+        const rows = all(...args)
+        count(rows)
+        return rows
+      }
+    }
+    return statement
+  }
+  return reads
+}
+
+async function streamReads(saves: number) {
+  const db = new Database(':memory:')
+  const { commit } = messageFixture(db)
+  const reads = countTailReads(db)
+  let text = ''
+  for (let save = 1; save <= saves; save++) {
+    text += 'word '.repeat(20)
+    await commit(message(text))
+  }
+  db.close()
+  return { saves, chars: text.length, ...reads }
+}
+
+it('each save reads one tail row, and folded text once per fold', async () => {
+  const short = await streamReads(100)
+  const long = await streamReads(1000)
+  console.log(JSON.stringify([short, long]))
+  for (const run of [short, long]) {
+    // The newest row only (empty at the first save after a fold), never every earlier row.
+    expect(run.tailRows).toBeLessThanOrEqual(run.saves)
+    // Folds double the folded text, so the folded reads sum to under twice the final text.
+    expect(run.foldedChars).toBeLessThan(2 * run.chars)
+  }
+})
+
+it('a finished turn with no tails probes the tail table once, however many items it has', () => {
+  const visits = (width: number) => {
+    const db = new Database(':memory:')
+    const { seedItem } = messageFixture(db)
+    for (let index = 0; index < width; index++) {
+      seedItem({
+        itemId: `orca:tool-${index}`,
+        revision: 1,
+        sequence: 20 + index,
+        observedAt: 1,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'done' }] },
+        turnScope: { kind: 'turn', turnItemId: 'turn' }
+      })
+    }
+    const turn = (state: 'running' | 'completed', revision: number): AgentJournalRenderItem => ({
+      itemId: 'turn',
+      revision,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'turn', turnId: 'turn', state }
+    })
+    const write = (item: AgentJournalRenderItem, previous?: AgentJournalRenderItem) =>
+      runJournalTransaction(db, () =>
+        writeJournalDomainCurrentItem(db, target, {
+          item,
+          hidden: false,
+          ownerFence: 1,
+          ...(previous ? { previous: { item: previous, ordinal: 1, hidden: false } } : {})
+        })
+      )
+    write(turn('running', 1))
+    const reads = countTailReads(db)
+    write(turn('completed', 2), turn('running', 1))
+    db.close()
+    return reads.statements
+  }
+  expect(visits(100)).toBe(visits(1000))
+  expect(visits(1000)).toBe(1)
+})
 
 // Timeout: the opt-in fleet bench writes about 3 GB of WAL across 47,000 commits.
 it.runIf(process.env.ORCA_TEXT_TAIL_WAL_BENCH === '1')(

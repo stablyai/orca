@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import type {
   AgentJournalMessageItem,
@@ -84,10 +85,60 @@ function joinTail<T extends AgentJournalRenderItem>(
   }
 }
 
+/** Everything but the text and revision, which a save may not change while it appends. */
+function tailSkeleton(item: AgentJournalRenderItem, block: { text: string }): string {
+  return JSON.stringify(item, function (this: unknown, key, value: unknown) {
+    return (this === item && key === 'revision') || (this === block && key === 'text')
+      ? undefined
+      : value
+  })
+}
+
+function textHash(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('base64')
+}
+
+type SavedText = { chars: number; foldedChars: number; hash: string; skeleton: string }
+
+/** The newest tail row states what is saved; only the first append after a fold reads the payload. */
+function readSavedText(
+  db: Database.Database,
+  prefix: Prefix,
+  itemId: string
+): SavedText | undefined {
+  const last = db
+    .prepare(`SELECT saved_chars,folded_chars,saved_hash,skeleton FROM journal_text_tail
+      WHERE session_id=? AND epoch=? AND item_id=? ORDER BY seq DESC LIMIT 1`)
+    .get(...prefix, itemId)
+  if (last) {
+    return {
+      chars: Number(last.saved_chars),
+      foldedChars: Number(last.folded_chars),
+      hash: String(last.saved_hash),
+      skeleton: String(last.skeleton)
+    }
+  }
+  const stored = db
+    .prepare(`SELECT json_remove(payload_json,'$.revision','$.body.blocks[0].text') AS skeleton,
+      json_extract(payload_json,'$.body.blocks[0].text') AS folded
+      FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
+    .get(...prefix, itemId)
+  if (!stored || typeof stored.folded !== 'string' || typeof stored.skeleton !== 'string') {
+    return undefined
+  }
+  return {
+    chars: stored.folded.length,
+    foldedChars: stored.folded.length,
+    hash: textHash(stored.folded),
+    skeleton: stored.skeleton
+  }
+}
+
 /**
  * Saves only the text added since the last save. False sends the caller to the full rewrite,
  * which folds the tail: any change but appended text, derived columns that would move, a page-
- * sized message, or a tail as large as the folded text (so total writes stay linear).
+ * sized message, or a tail as large as the folded text (so total writes stay linear). Each save
+ * reads only the newest tail row, so its cost does not grow with the saves before it.
  */
 export function appendJournalTextTail(
   db: Database.Database,
@@ -99,50 +150,51 @@ export function appendJournalTextTail(
   }
   const block = item.body.blocks[0]
   const prefix = [target.sessionId, target.epoch] as const
-  const stored = db
-    .prepare(`SELECT json_remove(payload_json,'$.revision','$.body.blocks[0].text') AS skeleton,
-      json_extract(payload_json,'$.body.blocks[0].text') AS folded,
-      json_extract(payload_json,'$.revision') AS folded_revision,
-      wire_version,wire_json IS NULL AND detail_json IS NULL AS plain,outline_source_json
-      FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
+  const columns = db
+    .prepare(`SELECT wire_version,wire_json IS NULL AND detail_json IS NULL AS plain,
+      outline_source_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, item.itemId)
-  if (!stored || !stored.plain || typeof stored.folded !== 'string') {
+  if (!columns?.plain || !block.text.isWellFormed()) {
     return false
   }
-  const skeleton = JSON.stringify(item, function (this: unknown, key, value: unknown) {
-    return (this === item && key === 'revision') || (this === block && key === 'text')
-      ? undefined
-      : value
-  })
-  if (skeleton !== stored.skeleton) {
-    return false
-  }
-  const tail = readTail(db, prefix, item.itemId, -1)
-  const saved = stored.folded + tail.map((row) => row.text).join('')
-  const added = block.text.slice(saved.length)
+  const saved = readSavedText(db, prefix, item.itemId)
+  const skeleton = tailSkeleton(item, block)
   if (
-    !block.text.startsWith(saved) ||
-    !added.isWellFormed() ||
-    !block.text.isWellFormed() ||
-    saved.length - stored.folded.length + added.length >= stored.folded.length
+    !saved ||
+    skeleton !== saved.skeleton ||
+    block.text.length < saved.chars ||
+    // Never split a surrogate pair between the saved text and the new row.
+    !block.text.slice(saved.chars - 1, saved.chars + 1).isWellFormed() ||
+    block.text.length - saved.foldedChars >= saved.foldedChars ||
+    textHash(block.text.slice(0, saved.chars)) !== saved.hash
   ) {
     return false
   }
   const payload = JSON.stringify(item)
   const wire = journalDomainItemWire(item, payload)
+  const outline: { item?: { revision?: number } } | null =
+    typeof columns.outline_source_json === 'string' ? JSON.parse(columns.outline_source_json) : null
   if (
     wire.wireJson !== null ||
     wire.detailJson !== null ||
-    wire.wireVersion !== stored.wire_version ||
+    wire.wireVersion !== columns.wire_version ||
     // The outline never reads the revision it embeds, so the folded one stands until the fold.
-    journalDomainOutlineSource({ ...item, revision: Number(stored.folded_revision) }) !==
-      stored.outline_source_json
+    journalDomainOutlineSource({ ...item, revision: outline?.item?.revision ?? item.revision }) !==
+      columns.outline_source_json
   ) {
     return false
   }
-  db.prepare(
-    'INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text) VALUES(?,?,?,?,?)'
-  ).run(...prefix, item.itemId, item.revision, added)
+  db.prepare(`INSERT INTO journal_text_tail(session_id,epoch,item_id,seq,text,saved_chars,folded_chars,
+    saved_hash,skeleton) VALUES(?,?,?,?,?,?,?,?,?)`).run(
+    ...prefix,
+    item.itemId,
+    item.revision,
+    block.text.slice(saved.chars),
+    block.text.length,
+    saved.foldedChars,
+    textHash(block.text),
+    skeleton
+  )
   // The client size is the whole text's, as the stored payload no longer is.
   db.prepare(
     'UPDATE journal_items SET revision=?,wire_bytes=? WHERE session_id=? AND epoch=? AND item_id=?'
@@ -173,6 +225,31 @@ export function writeJournalTextPayload(
   )
 }
 
+/**
+ * The chat's items with a tail, one key lookup each (an empty table costs one probe), kept when
+ * the item belongs to the finished turn; tails that outlive other turns are never read.
+ */
+function turnTailItems(
+  db: Database.Database,
+  turn: { sessionId: string; epoch: string; turnItemId: string }
+): { session_id: string; epoch: string; item_id: string }[] {
+  const next = db.prepare(`SELECT item_id FROM journal_text_tail
+    WHERE session_id=? AND epoch=? AND item_id>? ORDER BY item_id LIMIT 1`)
+  const owner = db.prepare(
+    'SELECT turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
+  )
+  const items: { session_id: string; epoch: string; item_id: string }[] = []
+  let after = ''
+  for (let row = next.get(turn.sessionId, turn.epoch, after); row;) {
+    after = String(row.item_id)
+    if (owner.get(turn.sessionId, turn.epoch, after)?.turn_item_id === turn.turnItemId) {
+      items.push({ session_id: turn.sessionId, epoch: turn.epoch, item_id: after })
+    }
+    row = next.get(turn.sessionId, turn.epoch, after)
+  }
+  return items
+}
+
 /** Folds every tail in the store, or only those of one finished turn's items. */
 function foldJournalTextTails(
   db: Database.Database,
@@ -180,14 +257,7 @@ function foldJournalTextTails(
 ): void {
   const items = (
     turn
-      ? // Through the turn's own items, so tails that outlive other turns are never visited.
-        db
-          .prepare(`SELECT item.session_id,item.epoch,item.item_id FROM journal_items item
-            INDEXED BY journal_items_stop_turn
-            WHERE item.session_id=? AND item.epoch=? AND item.turn_item_id=? AND item.hidden=0
-              AND EXISTS(SELECT 1 FROM journal_text_tail tail WHERE tail.session_id=item.session_id
-                AND tail.epoch=item.epoch AND tail.item_id=item.item_id)`)
-          .all(turn.sessionId, turn.epoch, turn.turnItemId)
+      ? turnTailItems(db, turn)
       : db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
   ).map((row) => ({
     prefix: [String(row.session_id), String(row.epoch)] as const,
