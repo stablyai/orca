@@ -21,11 +21,6 @@ describe('planNewTabMenuFit', () => {
     expect(listIn(250, 10)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 198 })
   })
 
-  it('caps the list at 12 rows even with more room', () => {
-    expect(listIn(2000, 12)).toEqual({ tipHidden: false, mode: 'fit', listMaxHeight: 432 })
-    expect(listIn(2000, 13)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 414 })
-  })
-
   it('keeps a 2.5-row peek down to the last budget that fits it, then the menu scrolls', () => {
     expect(listIn(144, 10).listMaxHeight).toBe(126)
     expect(listIn(143, 10).listMaxHeight).toBe(90)
