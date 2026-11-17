@@ -1,5 +1,6 @@
 import type Database from '../../../sqlite/sync-database'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 
 /** The original's tabs (null when it never recorded them) and this file's tabs, read once per pass. */
@@ -42,11 +43,18 @@ export function showAdoptedChat(
   )
 }
 
-/** Chat history lists a chat by the head of its provider chain. */
+/** Chat history lists a local chat by the head of its provider chain. */
 function hasHistoryRow(record: string): boolean {
   try {
-    const chain = (JSON.parse(record) as { providerHandleChain?: unknown }).providerHandleChain
-    return Array.isArray(chain) && chain.length > 0
+    const { providerHandleChain: chain, location } = JSON.parse(record) as {
+      providerHandleChain?: unknown
+      location?: { executionHostId?: unknown }
+    }
+    return (
+      Array.isArray(chain) &&
+      chain.length > 0 &&
+      location?.executionHostId === LOCAL_EXECUTION_HOST_ID
+    )
   } catch {
     return false
   }

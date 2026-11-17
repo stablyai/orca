@@ -292,6 +292,8 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'idle', rows)
   olderOrcaChat(original, 'converted', rows)
   olderOrcaChat(original, 'cleared', rows)
+  olderOrcaChat(original, 'reopened', rows)
+  olderOrcaChat(original, 'remote', rows)
   original
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
@@ -309,7 +311,16 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
   const later = await upgrade(root)
   cleanup.push(later.close)
-  const known = ['cleared', 'closed', 'converted', 'idle', 'open', 'started-older']
+  const known = [
+    'cleared',
+    'closed',
+    'converted',
+    'idle',
+    'open',
+    'remote',
+    'reopened',
+    'started-older'
+  ]
   const [copy] = later.db
     .prepare(
       `SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
@@ -325,30 +336,50 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   })
 
   // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
-  // A chat held here and closed in both builds stays closed when its history row reaches it. One it
-  // started and closed there, or one with no provider conversation, still opens.
+  // A local chat held here and closed in both builds stays closed when its history row reaches it.
+  // Any other kept chat opens: one reopened there, one started there, one on another host, one
+  // with no provider conversation, and every copy.
   const withConversation = original.prepare(`UPDATE agent_session_records SET
-    record_json=json_set(record_json,'$.providerHandleChain',json('[{"linkId":"link"}]'))
-    WHERE session_id=?`)
-  insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
-  insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
-  withConversation.run('closed')
+    record_json=json_set(record_json,'$.providerHandleChain',json('[{"linkId":"link"}]'),
+      '$.location',json_object('executionHostId',?2)) WHERE session_id=?1`)
+  const continueChat = (id: string, seq: number, host = 'local') => {
+    insertJournalRow(original, id, turn(`older-${id}-turn-${seq}`, seq))
+    withConversation.run(id, host)
+  }
+  continueChat('idle', tip + 1)
+  continueChat('closed', tip + 1)
+  continueChat('reopened', tip + 1)
+  original
+    .prepare('INSERT INTO agent_session_tabs VALUES(?,?,?)')
+    .run('tab-reopened', 'reopened', 1)
+  continueChat('remote', tip + 1, 'ssh-host')
   insertJournalRow(original, 'cleared', turn('older-cleared-turn', tip + 1))
   olderOrcaChat(original, 'started-closed', [rows[0], turn('started-closed-turn', 2)])
-  withConversation.run('started-closed')
+  withConversation.run('started-closed', 'local')
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id='started-closed'").run()
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  expect(tabbedChats(again.db)).toHaveLength(6)
-  expect(tabbedChats(again.db)).toEqual(expect.arrayContaining(['started-closed', 'cleared']))
+  expect(tabbedChats(again.db)).toHaveLength(8)
+  expect(tabbedChats(again.db)).toEqual(
+    expect.arrayContaining(['started-closed', 'cleared', 'reopened', 'remote'])
+  )
   expect(tabbedChats(again.db)).not.toContain('closed')
   expect(await again.convert('closed')).toBe('epoch')
-  expect(items(again.db, 'closed')).toContain('older-closed-turn')
+  expect(items(again.db, 'closed')).toContain(`older-closed-turn-${tip + 1}`)
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 3
   })
+
+  // An older Orca that never recorded its tabs can't say a chat was closed, so it opens.
+  original.prepare("DELETE FROM agent_session_store_meta WHERE key='session_tabs_recorded'").run()
+  continueChat('closed', tip + 2)
+  await again.close()
+  cleanup.pop()
+  const unrecorded = await upgrade(root)
+  cleanup.push(unrecorded.close)
+  expect(tabbedChats(unrecorded.db)).toContain('closed')
 })
 
 // Perf contract: an unchanged original only needs baselines, so it skips adoption at any fleet size.
