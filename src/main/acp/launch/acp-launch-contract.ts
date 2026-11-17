@@ -48,6 +48,8 @@ export type AcpLaunchSpec = {
   account: AcpAccountBinding
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
+  /** Arguments before `--version` when the bare flag is slow or not the chat server's version. */
+  versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
   /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
@@ -57,6 +59,8 @@ export type AcpLaunchSpec = {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
     /** `args` grants full access; its session mode can equal another mode's. */
     fullAccessAtLaunch?: true
+    /** The modes govern only some requests; under full access Orca answers the rest itself. */
+    fullAccessAnswersRequests?: true
   }
   /** Enables /compact as a prompt command. */
   compaction?: true
@@ -71,6 +75,9 @@ export type AcpLaunchSpec = {
   visualsSkill?: AcpVisualsSkillLoader
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
+  /** Tools run in a process other chats share, which keeps the environment of the chat that
+   *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
+  sharedToolProcess?: true
   /** Isolate processes whose agent temp files collide. */
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
