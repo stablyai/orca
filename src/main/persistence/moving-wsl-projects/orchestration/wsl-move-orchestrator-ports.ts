@@ -3,6 +3,7 @@ import type {
   WslMovePreview,
   WslMoveResult
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import type { WslMoveUseLocallyResult } from '../../../../shared/wsl-move/wsl-moved-project'
 import type {
   WslMoveOrchestratorRecord,
@@ -42,7 +43,12 @@ export type WslMoveOrchestratorPorts = {
    * Runs the move. `stillWanted` turns false once the user released or snoozed the distro; the
    * port checks it after its own waits (the window's panes) and refuses rather than start.
    */
-  start: (distro: string, stillWanted: () => boolean) => Promise<WslMoveResult>
+  start: (
+    distro: string,
+    stillWanted: () => boolean,
+    /** The preview's mapped drives; the start refuses if they map elsewhere by now. */
+    mappedDrives: readonly WslMappedDrive[]
+  ) => Promise<WslMoveResult>
   finishedMove: (distro: string) => WslMoveFinishedMove | null
   /** R38: reads the registry and, when ready, the host's catalog; never boots the distro. */
   checkMovedDistro: (distro: string, move: WslMoveFinishedMove) => Promise<WslMovedDistroVerdict>

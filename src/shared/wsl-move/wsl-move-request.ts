@@ -1,6 +1,7 @@
 /** The move dialog's request as main accepts it from the renderer: anything else is refused. */
 import { z } from 'zod'
 import type { WslMoveRequest } from './wsl-move-driver-types'
+import { WslMappedDrivesSchema } from './wsl-mapped-drive-paths'
 
 const Ids = z.array(z.string().min(1).max(1_024)).max(10_000)
 
@@ -18,7 +19,8 @@ const WslMoveRequestSchema = z.object({
       z.object({ paneKey: z.string().min(1).max(1_024), sessionId: z.string().min(1).max(1_024) })
     )
     .max(10_000)
-    .optional()
+    .optional(),
+  mappedDrives: WslMappedDrivesSchema.optional()
 })
 
 export function parseWslMoveRequest(value: unknown): WslMoveRequest | null {

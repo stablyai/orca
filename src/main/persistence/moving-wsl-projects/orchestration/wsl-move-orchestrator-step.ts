@@ -147,7 +147,8 @@ export async function runWslMoveOrchestratorStep(
   }
   const started = record
   // The port re-checks this once it has the window's panes, just before the driver claims the run.
-  const result = await settle(() => ports.start(distro, () => !changedUnder(started)))
+  const mappedDrives = preview.outcome === 'ready' ? (preview.mappedDrives ?? []) : []
+  const result = await settle(() => ports.start(distro, () => !changedUnder(started), mappedDrives))
   if (!changedUnder(record)) {
     commit(apply(record, result), result)
   }
