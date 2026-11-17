@@ -21279,7 +21279,11 @@
         "ciResultLinesTitle": "CI 结果提示",
         "ciResultLinesCopy": "当智能体创建或推送过的拉取请求上的 CI 运行完成时，在聊天中显示一行提示",
         "ciResultLinesSearchChecks": "检查",
-        "ciResultLinesSearchPr": "PR"
+        "ciResultLinesSearchPr": "PR",
+        "promptSuggestionsTitle": "建议的提示词",
+        "promptSuggestionsCopy": "Claude 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入你的 Claude 用量。",
+        "promptSuggestionsSearchNext": "下一条提示词",
+        "promptSuggestionsSearchGhost": "幽灵文本"
       },
       "voice": {
         "dictationLanguage": {

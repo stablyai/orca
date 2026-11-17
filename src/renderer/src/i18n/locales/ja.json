@@ -21092,7 +21092,11 @@
         "turnDiffsTitle": "ターンの差分",
         "turnDiffsCopy": "各ターンで変更したファイルを行数とともに応答の下に表示します。",
         "turnDiffsSearchChangedFiles": "変更されたファイル",
-        "turnDiffsSearchEdits": "編集"
+        "turnDiffsSearchEdits": "編集",
+        "promptSuggestionsTitle": "プロンプトの提案",
+        "promptSuggestionsCopy": "Claude が返信すると、次のメッセージの候補が空のメッセージ欄に表示されます。Tab キーで入力できます。候補ごとに追加のリクエストが発生し、Claude の使用量に含まれます。",
+        "promptSuggestionsSearchNext": "次のプロンプト",
+        "promptSuggestionsSearchGhost": "ゴーストテキスト"
       },
       "voice": {
         "dictationLanguage": {

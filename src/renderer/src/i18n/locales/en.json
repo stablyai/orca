@@ -22296,7 +22296,11 @@
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
-        "turnDiffsSearchEdits": "edits"
+        "turnDiffsSearchEdits": "edits",
+        "promptSuggestionsTitle": "Suggested prompts",
+        "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
+        "promptSuggestionsSearchNext": "next prompt",
+        "promptSuggestionsSearchGhost": "ghost text"
       },
       "voice": {
         "dictationLanguage": {
