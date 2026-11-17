@@ -335,3 +335,31 @@ it('weighs drafts and queued text from content, keeping only what only the origi
   expect(companions(draft.filename)).toEqual([])
   expect(original(draft.db, 'draft').record).toContain('Draft renamed in the older Orca')
 })
+
+it('finds queue cards by key, never by reading every card a chat has', async () => {
+  const { root, filename, db, launch, convert } = await profile()
+  await convert('unopened')
+  queue(filename, 'unopened', 'still waiting')
+  await initializeJournalDomainDatabase(root)
+  const statements = new Set<string>()
+  const prepare = db.prepare.bind(db)
+  vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+    statements.add(sql)
+    return prepare(sql)
+  })
+  await launch().run()
+  vi.mocked(db.prepare).mockRestore()
+  const cardReads = [...statements].filter((sql) => sql.includes('FROM journal_queue_cards'))
+  expect(cardReads.length).toBeGreaterThan(0)
+  for (const sql of cardReads) {
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => 'x'))
+      .map((row) => String(row.detail))
+      .join('\n')
+    // A seek on the key, on (session, epoch), or one covering-index entry; never a read of every
+    // card the chat has, payloads included.
+    const firstEntry = /LIMIT 1/.test(sql) && plan.includes('COVERING INDEX')
+    expect(firstEntry || /PRIMARY KEY|session_id=\? AND epoch[>=]\?/.test(plan)).toBe(true)
+  }
+})
