@@ -781,6 +781,24 @@ diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
  	}
  	setHydratedState(files) {
  		this.deletionFile = files.oldFile;
+diff --git a/dist/react/utils/renderDiffChildren.js b/dist/react/utils/renderDiffChildren.js
+--- a/dist/react/utils/renderDiffChildren.js
++++ b/dist/react/utils/renderDiffChildren.js
+@@ -28,10 +28,10 @@
+ 				children: metadata
+ 			})
+ 		] }),
+-		renderAnnotation != null && lineAnnotations?.map((annotation, index) => /* @__PURE__ */ jsx("div", {
+-			slot: getAnnotationSlotName(annotation),
+-			children: renderAnnotation(annotation, fileDiff)
+-		}, index)),
++		renderAnnotation != null && lineAnnotations?.map((annotation, index) => {
++            const child = renderAnnotation(annotation, fileDiff);
++            return jsx("div", { slot: getAnnotationSlotName(annotation), children: child }, child?.key ?? index);
++        }),
+ 		actions != null && renderMergeConflictUtility != null && getInstance != null && actions.map((action) => {
+ 			if (action == null) return;
+ 			const slot = getSlotName(action, fileDiff);
 diff --git a/dist/utils/editSessionHunks.js b/dist/utils/editSessionHunks.js
 --- a/dist/utils/editSessionHunks.js
 +++ b/dist/utils/editSessionHunks.js

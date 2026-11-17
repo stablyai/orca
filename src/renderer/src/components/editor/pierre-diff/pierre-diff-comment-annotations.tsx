@@ -38,8 +38,12 @@ export function buildPierreDiffCommentAnnotations(
   if (draft) {
     annotations.push({
       side: 'additions',
-      lineNumber: draft.lineNumber,
-      metadata: { kind: 'draft', lineNumber: draft.lineNumber, startLine: draft.startLine }
+      lineNumber: Math.max(1, Math.min(draft.lineNumber, lineCount)),
+      metadata: {
+        kind: 'draft',
+        lineNumber: Math.max(1, Math.min(draft.lineNumber, lineCount)),
+        startLine: draft.startLine
+      }
     })
   }
   return annotations
@@ -87,15 +91,13 @@ export function renderPierreDiffCommentAnnotation(
   if (data.kind === 'draft') {
     return onSubmitDraft && onCancelDraft ? (
       <DiffCommentDraftCard
+        key="draft"
         lineNumber={data.lineNumber}
         startLine={data.startLine}
         placeholder={draftPlaceholder}
         submitLabel={draftSubmitLabel}
         imageUploadAddress={imageUploadAddress}
-        retainKey={
-          retainKey &&
-          `${retainKey}:compose:${data.startLine ?? data.lineNumber}-${data.lineNumber}`
-        }
+        retainKey={retainKey && `${retainKey}:compose`}
         onCancel={onCancelDraft}
         onSubmit={onSubmitDraft}
       />
@@ -105,6 +107,7 @@ export function renderPierreDiffCommentAnnotation(
 
   return (
     <DiffCommentCard
+      key={comment.id}
       commentId={comment.id}
       lineNumber={comment.lineNumber}
       startLine={comment.startLine}

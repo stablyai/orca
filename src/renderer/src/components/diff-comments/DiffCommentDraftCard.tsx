@@ -65,6 +65,7 @@ export function DiffCommentDraftCard({
     body,
     (next) => {
       setBody(next)
+      retained.setBody(next)
       onBodyChange?.(next)
     },
     {
@@ -76,9 +77,10 @@ export function DiffCommentDraftCard({
   const cardRef = useRef<HTMLDivElement | null>(null)
   const onContentResizeRef = useRef(onContentResize)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     bodyRef.current = body
-  }, [body])
+    retained.setBody(body)
+  }, [body, retained])
 
   useEffect(() => {
     onContentResizeRef.current = onContentResize

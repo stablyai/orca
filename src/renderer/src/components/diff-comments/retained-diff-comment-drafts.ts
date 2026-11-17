@@ -64,6 +64,7 @@ export function useRetainedDiffCommentField(key: string | undefined) {
   useLayoutEffect(() => {
     keyRef.current = key
   }, [key])
+  const canonicalBody = useRef<string | undefined>(undefined)
   const restoredRef = useRef(false)
   const observerRef = useRef<ResizeObserver | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -75,7 +76,7 @@ export function useRetainedDiffCommentField(key: string | undefined) {
       return
     }
     remember(retainedFields, current, {
-      body: textarea.value,
+      body: canonicalBody.current ?? textarea.value,
       selectionStart: textarea.selectionStart,
       selectionEnd: textarea.selectionEnd,
       selectionDirection: textarea.selectionDirection,
@@ -120,6 +121,10 @@ export function useRetainedDiffCommentField(key: string | undefined) {
       restored: initial !== undefined,
       initialBody: initial?.body,
       bind,
+      setBody: (body: string) => {
+        canonicalBody.current = body
+        snapshot()
+      },
       onChange: () => snapshot(),
       onFocus: () => snapshot(true),
       onBlur: () => {

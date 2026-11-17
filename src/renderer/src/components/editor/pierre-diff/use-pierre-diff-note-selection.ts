@@ -83,6 +83,7 @@ export function usePierreDiffNoteSelection({
     })
     const start = (event: PointerEvent) => {
       if (
+        event.button === 0 &&
         event
           .composedPath()
           .some((node) => node instanceof Element && node.hasAttribute('data-column-number'))
@@ -104,11 +105,24 @@ export function usePierreDiffNoteSelection({
         event.stopPropagation()
       }
     }
+    const finish = () => {
+      const ended = pointer.current
+      // Pierre finishes gutter selection in a later listener on the same event.
+      queueMicrotask(() => {
+        if (pointer.current === ended) {
+          pointer.current = null
+        }
+      })
+    }
     container.addEventListener('pointerdown', start, true)
+    document.addEventListener('pointerup', finish)
+    document.addEventListener('pointercancel', finish)
     document.addEventListener('keydown', cancel, true)
     return () => {
       stopShortcut()
       container.removeEventListener('pointerdown', start, true)
+      document.removeEventListener('pointerup', finish)
+      document.removeEventListener('pointercancel', finish)
       document.removeEventListener('keydown', cancel, true)
     }
   }, [containerRef, editorRef, onAddComment, addComment, pendingComment])

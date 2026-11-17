@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useLayoutEffect } from 'react'
+import { useRetainedDiffCommentField } from './retained-diff-comment-drafts'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 
@@ -44,4 +46,28 @@ describe('retained note drafts', () => {
 
     expect(renderDraft().value).toBe('')
   })
+})
+
+it('retains the canonical body instead of an in-flight image display placeholder', () => {
+  let restored: string | undefined
+  function Field({ uploading }: { uploading: boolean }) {
+    const retained = useRetainedDiffCommentField('upload-retention')
+    restored = retained.initialBody
+    useLayoutEffect(() => {
+      retained.setBody('my note')
+    }, [retained])
+    return (
+      <textarea
+        ref={retained.bind}
+        defaultValue={uploading ? 'my note ![Uploading image.png…]()' : retained.initialBody}
+        onFocus={retained.onFocus}
+      />
+    )
+  }
+  const view = render(<Field uploading />)
+  fireEvent.focus(screen.getByRole('textbox'))
+  view.unmount()
+  render(<Field uploading={false} />)
+  expect(restored).toBe('my note')
+  expect(screen.getByRole('textbox').textContent).toBe('my note')
 })
