@@ -19669,6 +19669,7 @@
         "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
         "optionUpdateFailed": "Seçenek güncellenemedi",
         "optionValue": {
+          "none": "Yok",
           "fast": "Hızlı",
           "minimal": "Minimal",
           "low": "Düşük",
