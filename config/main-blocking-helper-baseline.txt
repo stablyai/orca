@@ -489,7 +489,7 @@
 4 src/main/git/command-runner/host-routing/git-command-resolution.ts
 1 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
 5 src/main/git/command-runner/host-routing/wsl-command-resolution.ts
-1 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
+2 src/main/git/command-runner/host-routing/wsl-drive-checkout-git-routing.ts
 2 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
 9 src/main/git/command-runner/host-routing/wsl-windows-checkout-git-probe.ts
 1 src/main/git/command-runner/hosted-cli/default-wsl-cli-fallback.ts
@@ -1514,12 +1514,13 @@
 2 src/main/wsl/execution/wsl-node-runtime-prefetch.ts
 4 src/main/wsl/execution/wsl-runner.ts
 2 src/main/wsl/filesystem/unc-path-access.ts
-3 src/main/wsl/filesystem/wsl-automount-root.ts
+4 src/main/wsl/filesystem/wsl-automount-root.ts
 1 src/main/wsl/filesystem/wsl-drive-project-new-default.ts
 1 src/main/wsl/filesystem/wsl-drive-unc-conversion-journal.ts
 5 src/main/wsl/filesystem/wsl-drive-unc-conversion-startup.ts
 7 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-drive-unc-mounts.ts
+1 src/main/wsl/filesystem/wsl-guest-drive-path.ts
 8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
