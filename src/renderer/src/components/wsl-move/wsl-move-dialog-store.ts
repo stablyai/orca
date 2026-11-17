@@ -17,6 +17,7 @@ import type {
 import type { LazyChunkRecoveryReloadOutcome } from '@/app-shell/startup/lazy-chunk-recovery-reload'
 import { useAppStore } from '@/store/index'
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
+import { wslMoveStartFieldsOf } from '../../../../shared/wsl-move/wsl-move-request'
 
 /** Projects listed with a checkbox; from main's whole-distro preview, or the catalog fallback. */
 export type WslMoveCandidates = { repoIds: string[]; folderWorkspaceIds: string[] }
@@ -242,8 +243,7 @@ export async function startWslMove(): Promise<void> {
   }
   const { distro, selected } = dialog
   // Main moves only if the drives still map where this preview read them.
-  const previewed = dialog.preview?.outcome === 'ready' ? dialog.preview : null
-  const mappedDrives = previewed?.mappedDrives ?? []
+  const fromPreview = wslMoveStartFieldsOf(dialog.preview)
   ++previewToken
   setDialog({ stage: 'running', distro, selected, progress: null, cancel: 'idle' })
   const unsubscribe = window.api.wslMove.onProgress((progress) => {
@@ -257,7 +257,7 @@ export async function startWslMove(): Promise<void> {
     result = await window.api.wslMove.start({
       ...requestOf(distro, selected),
       sleptPanes: collectWslMoveSleptPaneBindings(useAppStore.getState()),
-      mappedDrives
+      ...fromPreview
     })
   } catch (error) {
     // The IPC itself failed; main's own failures arrive as results.

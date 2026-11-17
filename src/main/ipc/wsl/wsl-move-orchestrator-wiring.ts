@@ -153,14 +153,14 @@ function createOrchestrator(
         { distro, sleptPanes: await requestSleptPanes() },
         { settleInterrupted: userAsked ? 'finish-now' : 'finish-at-restart' }
       ),
-    start: async (distro, stillWanted, mappedDrives) => {
+    start: async (distro, stillWanted, fromPreview) => {
       const sleptPanes = await requestSleptPanes()
       // The user may have released or snoozed the distro while the window answered.
       if (!stillWanted()) {
         return { outcome: 'refused', code: 'wsl_move_cancelled' }
       }
       return runTrackedWslMove(driverDeps(), (deps) =>
-        moveProjectsToWslHost(deps, { distro, sleptPanes, mappedDrives: [...mappedDrives] })
+        moveProjectsToWslHost(deps, { distro, sleptPanes, ...fromPreview })
       )
     },
     finishedMove: (distro) => finishedWslMove(userDataPath, distro),

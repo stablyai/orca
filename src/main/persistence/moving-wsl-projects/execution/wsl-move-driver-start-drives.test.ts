@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import type { WslMoveRequest } from '../../../../shared/wsl-move/wsl-move-driver-types'
+import { wslMoveStartFieldsOf } from '../../../../shared/wsl-move/wsl-move-request'
 import type { WslMappedDriveRead } from '../../../wsl/filesystem/wsl-mapped-drive-share'
 import { testState } from '../../persistence-test-harness'
 import {
@@ -69,7 +70,7 @@ async function previewThenStart(ids: 'none' | 'shown'): Promise<unknown> {
   }
   const request: WslMoveRequest = {
     distro: 'Ubuntu',
-    mappedDrives: preview.mappedDrives ?? [],
+    ...wslMoveStartFieldsOf(preview),
     ...(ids === 'shown'
       ? { repoIds: preview.repoIds, folderWorkspaceIds: preview.folderWorkspaceIds }
       : {})
@@ -117,7 +118,7 @@ describe('a whole-distro start whose previewed drive now points elsewhere', () =
     expect(
       await moveProjectsToWslHost(rig.world.deps, {
         distro: 'Ubuntu',
-        mappedDrives: preview.outcome === 'ready' ? (preview.mappedDrives ?? []) : []
+        ...wslMoveStartFieldsOf(preview)
       })
     ).toMatchObject({
       outcome: 'moved',
@@ -151,11 +152,29 @@ describe('a repo the Git-for-Windows check refuses', () => {
     shares = { W: { share: '\\\\wsl.localhost\\Debian' } }
     const result = await moveProjectsToWslHost(rig.world.deps, {
       distro: 'Ubuntu',
-      mappedDrives: preview.outcome === 'ready' ? (preview.mappedDrives ?? []) : []
+      ...wslMoveStartFieldsOf(preview)
     })
     expect(result).toMatchObject({
       outcome: 'moved',
       droppedForMappedDrives: [{ kind: 'repo', id: 'repo-w2', name: 'movable' }]
+    })
+  })
+
+  it('is named as left behind when the preview showed it moving and Git refuses it only at start', async () => {
+    rig.world.deps.windowsGitVerdict = async () => 'ok'
+    const preview = await previewWslMove(rig.world.deps, { distro: 'Ubuntu' })
+    expect(preview).toMatchObject({ outcome: 'ready', repoIds: ['repo-1', 'repo-w'], refused: [] })
+    // W: is remapped and Git for Windows adds a worktree to repo-w before the start.
+    shares = { W: { share: '\\\\wsl.localhost\\Debian' } }
+    rig.world.deps.windowsGitVerdict = async (path) =>
+      path.endsWith('other') ? 'windows-git-worktrees' : 'ok'
+    const result = await moveProjectsToWslHost(rig.world.deps, {
+      distro: 'Ubuntu',
+      ...wslMoveStartFieldsOf(preview)
+    })
+    expect(result).toMatchObject({
+      outcome: 'moved',
+      droppedForMappedDrives: [{ kind: 'repo', id: 'repo-w' }]
     })
   })
 })

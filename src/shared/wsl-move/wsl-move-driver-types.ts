@@ -16,6 +16,8 @@ export type WslMoveRequest = {
   sleptPanes?: { paneKey: string; sessionId: string }[]
   /** At start: the preview's `mappedDrives`; main refuses if the drives map elsewhere now. */
   mappedDrives?: WslMappedDrive[]
+  /** At start: the repos the preview listed as refused, which a start that leaves them need not report. */
+  previewRefusedRepoIds?: string[]
 }
 
 export type WslMoveRowRef = { kind: 'repo' | 'folder'; id: string }

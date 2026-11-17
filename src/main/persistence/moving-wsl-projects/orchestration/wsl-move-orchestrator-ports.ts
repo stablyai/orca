@@ -1,9 +1,9 @@
 /** What the move orchestrator (D3a) reads and drives, so tests and production share one shape. */
 import type {
   WslMovePreview,
+  WslMoveRequest,
   WslMoveResult
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
-import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import type { WslMoveUseLocallyResult } from '../../../../shared/wsl-move/wsl-moved-project'
 import type {
   WslMoveOrchestratorRecord,
@@ -46,8 +46,8 @@ export type WslMoveOrchestratorPorts = {
   start: (
     distro: string,
     stillWanted: () => boolean,
-    /** The preview's mapped drives; the start refuses if they map elsewhere by now. */
-    mappedDrives: readonly WslMappedDrive[]
+    /** The preview's mapped drives (refused if they map elsewhere by now) and refused repos. */
+    fromPreview: Required<Pick<WslMoveRequest, 'mappedDrives' | 'previewRefusedRepoIds'>>
   ) => Promise<WslMoveResult>
   finishedMove: (distro: string) => WslMoveFinishedMove | null
   /** R38: reads the registry and, when ready, the host's catalog; never boots the distro. */
