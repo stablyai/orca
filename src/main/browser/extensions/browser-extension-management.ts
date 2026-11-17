@@ -28,7 +28,10 @@ import {
   forgetHeldBrowserExtensionUpdate,
   getHeldBrowserExtensionUpdate
 } from './web-store/browser-extension-held-updates'
-import { browserExtensionIdForUnpackedFolder } from './installation/browser-extension-load-directory'
+import {
+  browserExtensionIdForUnpackedFolder,
+  forgetPreparedBrowserExtensionDirectory
+} from './installation/browser-extension-load-directory'
 import {
   forgetBrowserExtensionLoadFailures,
   getBrowserExtensionLoadFailure
@@ -152,7 +155,10 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       ])
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
-      await getBrowserExtensionInstallStore().remove(extensionId)
+      const removed = await getBrowserExtensionInstallStore().remove(extensionId)
+      if (removed) {
+        forgetPreparedBrowserExtensionDirectory(removed.path)
+      }
       notifyChromeWebStoreUninstalled(extensionId)
       notifyBrowserExtensionListChanged()
     })

@@ -17,8 +17,8 @@ import {
 const IDLE_PROFILE_UNLOAD_DELAY_MS = 60_000
 
 const idleChecks = new Map<string, NodeJS.Timeout>()
-/** Live pages the browser page registry doesn't own: serve's offscreen pages and extension windows. */
-const otherPages = new WeakMap<Electron.Session, number>()
+/** Live pages per session; the browser page registry adds tabs whose page Memory Saver freed. */
+const livePages = new WeakMap<Electron.Session, number>()
 let observePage: (contents: Electron.WebContents) => void = () => {}
 
 /** Tabs (webview guests and serve's offscreen pages) and extension windows. */
@@ -48,16 +48,13 @@ export function installIdleBrowserExtensionProfiles(
   })
 }
 
-/** Counts an observed page the browser page registry doesn't own toward its profile. */
+/** Counts an observed live page toward its profile. */
 export function trackBrowserExtensionPage(profileId: string, contents: Electron.WebContents): void {
-  if (contents.getType() === 'webview') {
-    return
-  }
   const sess = contents.session
-  otherPages.set(sess, (otherPages.get(sess) ?? 0) + 1)
+  livePages.set(sess, (livePages.get(sess) ?? 0) + 1)
   contents.once('destroyed', () => {
-    const left = (otherPages.get(sess) ?? 1) - 1
-    otherPages.set(sess, left)
+    const left = (livePages.get(sess) ?? 1) - 1
+    livePages.set(sess, left)
     if (left === 0) {
       scheduleIdleCheck(profileId, sess)
     }
@@ -66,7 +63,7 @@ export function trackBrowserExtensionPage(profileId: string, contents: Electron.
 
 function hasPages(profileId: string, sess: Electron.Session): boolean {
   const partition = getBrowserExtensionProfile(profileId)?.partition ?? null
-  return (otherPages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
+  return (livePages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
 }
 
 function scheduleIdleCheck(profileId: string, sess: Electron.Session): void {
@@ -79,7 +76,7 @@ function scheduleIdleCheck(profileId: string, sess: Electron.Session): void {
     }
     void unloadBrowserExtensionsFromIdleProfile(profileId, (reattachRequested) => {
       const reopened =
-        (otherPages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
+        (livePages.get(sess) ?? 0) > 0 || (partition !== null && hasOpenBrowserPages(partition))
       if (!reattachRequested && !reopened) {
         return
       }

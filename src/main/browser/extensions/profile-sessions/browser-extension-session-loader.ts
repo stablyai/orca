@@ -64,6 +64,8 @@ export function setBrowserExtensionSessionHooks(hooks: BrowserExtensionSessionHo
 }
 
 const stateByProfileId = new Map<string, ProfileSessionState>()
+/** Attached profiles by partition, so a page's partition finds its profile without a scan. */
+const profileIdByPartition = new Map<string, string>()
 /** Profiles whose last page closed and whose extensions are unloading; done once reattach settles. */
 const unloadingByProfileId = new Map<string, Promise<void>>()
 const reattachRequestedProfileIds = new Set<string>()
@@ -145,6 +147,7 @@ export function attachBrowserExtensionsToProfileSession(
       state.loadingExtensions = false
     })
   stateByProfileId.set(profile.id, state)
+  profileIdByPartition.set(profile.partition, profile.id)
 }
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
@@ -169,6 +172,7 @@ export async function detachBrowserExtensionsFromProfileSession(
   const sess = state?.session ?? session.fromPartition(profile.partition)
   if (state) {
     stateByProfileId.delete(profile.id)
+    profileIdByPartition.delete(profile.partition)
     forgetBrowserExtensionContexts(sess)
     await Promise.all([state.loading.catch(() => {}), state.loads.close()])
   }
@@ -193,6 +197,7 @@ export async function detachBrowserExtensionsFromProfileSession(
 export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<void> {
   const states = [...stateByProfileId.values()]
   stateByProfileId.clear()
+  profileIdByPartition.clear()
   await Promise.all(states.map(unloadProfileSession))
 }
 
@@ -210,16 +215,17 @@ export async function unloadBrowserExtensionsFromIdleProfile(
     return
   }
   stateByProfileId.delete(profileId)
+  profileIdByPartition.delete(state.profile.partition)
   const unloading = unloadProfileSession(state)
     .catch((error: unknown) => {
-      console.warn('[browser-extensions] Could not stop an idle profile\'s extensions:', error)
+      console.warn("[browser-extensions] Could not stop an idle profile's extensions:", error)
     })
     .then(() => {
       unloadingByProfileId.delete(profileId)
       try {
         afterUnload(reattachRequestedProfileIds.delete(profileId))
       } catch (error) {
-        console.warn('[browser-extensions] Could not restart a profile\'s extensions:', error)
+        console.warn("[browser-extensions] Could not restart a profile's extensions:", error)
       }
     })
   unloadingByProfileId.set(profileId, unloading)
@@ -264,12 +270,8 @@ export function getBrowserExtensionProfile(profileId: string): BrowserSessionPro
 export function getBrowserExtensionProfileForPartition(
   partition: string
 ): BrowserSessionProfile | null {
-  for (const state of stateByProfileId.values()) {
-    if (state.profile.partition === partition) {
-      return state.profile
-    }
-  }
-  return null
+  const profileId = profileIdByPartition.get(partition)
+  return profileId ? (stateByProfileId.get(profileId)?.profile ?? null) : null
 }
 
 export async function loadBrowserExtensionIntoProfile(

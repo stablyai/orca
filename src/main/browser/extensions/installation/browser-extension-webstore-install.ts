@@ -181,6 +181,7 @@ export async function commitStagedWebStoreExtension(
     throw error
   }
   if (replaced && isOwnedVersionFolder(extensionId, replaced.path)) {
+    forgetPreparedBrowserExtensionDirectory(replaced.path)
     await rm(replaced.path, { recursive: true, force: true, maxRetries: 3 })
   }
   if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {

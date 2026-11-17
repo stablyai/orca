@@ -86,12 +86,37 @@ export function loadBrowserSessionMeta(
   }
 }
 
+/** Enabled extensions per metadata file as last read; every write goes through persistBrowserSessionMeta. */
+const enabledExtensionIdsByPath = new Map<
+  string,
+  BrowserSessionMeta['enabledExtensionIdsByProfileId']
+>()
+
+// Why cached: a profile reattaching after it went idle shouldn't reread every profile's metadata.
+export function loadBrowserExtensionEnabledIds(
+  resolveMetadataPath: () => string,
+  defaultPartition: string,
+  profileId: string
+): string[] {
+  const path = resolveMetadataPath()
+  let byProfileId = enabledExtensionIdsByPath.get(path)
+  if (!byProfileId) {
+    byProfileId = loadBrowserSessionMeta(
+      () => path,
+      defaultPartition
+    ).enabledExtensionIdsByProfileId
+    enabledExtensionIdsByPath.set(path, byProfileId)
+  }
+  return [...(byProfileId[profileId] ?? [])]
+}
+
 // Write to a temporary file so an interrupted write leaves the existing metadata intact.
 export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string,
   updates: Partial<BrowserSessionMeta>
 ): void {
+  enabledExtensionIdsByPath.delete(resolveMetadataPath())
   try {
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
