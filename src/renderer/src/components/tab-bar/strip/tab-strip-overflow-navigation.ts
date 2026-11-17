@@ -25,7 +25,10 @@ import {
 } from './tab-strip-slot-geometry'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
-import { revealFirstUnmountedTabStripSlot } from './tab-strip-window'
+import {
+  revealFirstUnmountedTabStripSlot,
+  useNotifyTabStripScrollAfterCommit
+} from './tab-strip-window'
 
 const TAB_STRIP_SCROLL_FRACTION = 0.75
 const TAB_STRIP_MIN_SCROLL_STEP_PX = 120
@@ -311,6 +314,8 @@ export function useTabStripOverflowNavigation({
   useLayoutEffect(() => {
     tabClosedThisCommitRef.current = false
   })
+  // Why last: it must follow every effect above that scrolls the strip.
+  useNotifyTabStripScrollAfterCommit(tabStripRef, stripResizeListenersRef)
 
   // Why share these observers: each one watches every tab, so a second set doubles that work.
   const subscribeToStripResize = useCallback((listener: () => void): (() => void) => {

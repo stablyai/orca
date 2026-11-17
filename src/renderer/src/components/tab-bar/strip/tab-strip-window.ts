@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { findTabStripSlot } from './tab-strip-slot-geometry'
 
 /** Overflowing tabs sit at their 144px minimum (tab-width-rules.ts), so unmounted runs need no measuring. */
@@ -142,6 +142,23 @@ export function useTabStripWindowState(
     }
   }, [count, stripRef, subscribeToStripResize])
   return state
+}
+
+/** Re-notify strip listeners after this commit scrolled the strip: child listeners ran their layout effects before it did. */
+export function useNotifyTabStripScrollAfterCommit(
+  stripRef: RefObject<HTMLElement | null>,
+  listenersRef: RefObject<Set<() => void>>
+): void {
+  const notifiedScrollLeftRef = useRef(0)
+  useLayoutEffect(() => {
+    const strip = stripRef.current
+    if (strip && strip.scrollLeft !== notifiedScrollLeftRef.current) {
+      notifiedScrollLeftRef.current = strip.scrollLeft
+      for (const listener of listenersRef.current) {
+        listener()
+      }
+    }
+  })
 }
 
 /** Scroll-space left of an unmounted tab, measured from its spacer so wider mounted tabs (a rename) count. */
