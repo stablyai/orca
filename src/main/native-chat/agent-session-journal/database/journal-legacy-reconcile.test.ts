@@ -291,6 +291,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'closed', rows)
   olderOrcaChat(original, 'idle', rows)
   olderOrcaChat(original, 'converted', rows)
+  olderOrcaChat(original, 'cleared', rows)
   original
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
@@ -308,7 +309,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
   const later = await upgrade(root)
   cleanup.push(later.close)
-  const known = ['closed', 'converted', 'idle', 'open', 'started-older']
+  const known = ['cleared', 'closed', 'converted', 'idle', 'open', 'started-older']
   const [copy] = later.db
     .prepare(
       `SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
@@ -324,22 +325,24 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   })
 
   // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
-  // A chat it continued while closed there stays closed when its history row reaches it; one it
-  // started and closed with no provider conversation yet still opens, as nothing else reaches it.
+  // A chat held here and closed in both builds stays closed when its history row reaches it. One it
+  // started and closed there, or one with no provider conversation, still opens.
+  const withConversation = original.prepare(`UPDATE agent_session_records SET
+    record_json=json_set(record_json,'$.providerHandleChain',json('[{"linkId":"link"}]'))
+    WHERE session_id=?`)
   insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
   insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
-  original
-    .prepare(`UPDATE agent_session_records SET record_json=json_set(record_json,
-      '$.providerHandleChain',json('[{"linkId":"closed-link"}]')) WHERE session_id='closed'`)
-    .run()
+  withConversation.run('closed')
+  insertJournalRow(original, 'cleared', turn('older-cleared-turn', tip + 1))
   olderOrcaChat(original, 'started-closed', [rows[0], turn('started-closed-turn', 2)])
+  withConversation.run('started-closed')
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id='started-closed'").run()
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  expect(tabbedChats(again.db)).toHaveLength(5)
-  expect(tabbedChats(again.db)).toContain('started-closed')
+  expect(tabbedChats(again.db)).toHaveLength(6)
+  expect(tabbedChats(again.db)).toEqual(expect.arrayContaining(['started-closed', 'cleared']))
   expect(tabbedChats(again.db)).not.toContain('closed')
   expect(await again.convert('closed')).toBe('epoch')
   expect(items(again.db, 'closed')).toContain('older-closed-turn')

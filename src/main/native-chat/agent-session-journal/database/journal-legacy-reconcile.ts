@@ -148,12 +148,16 @@ function readAdoption(source: Database.Database, db: Database.Database): Adoptio
   const tabs = db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
   const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
   return {
-    savedTabs: new Map(
-      source
-        .prepare('SELECT tab_id,session_id FROM agent_session_tabs')
-        .all()
-        .map((row) => [String(row.session_id), String(row.tab_id)])
-    ),
+    // An older Orca that never recorded its tabs showed chats by ids this file can't see.
+    savedTabs:
+      readMeta(source, AGENT_SESSION_TABS_RECORDED) === undefined
+        ? null
+        : new Map(
+            source
+              .prepare('SELECT tab_id,session_id FROM agent_session_tabs')
+              .all()
+              .map((row) => [String(row.session_id), String(row.tab_id)])
+          ),
     claims,
     tabbed: new Set(tabs.map((row) => String(row.session_id))),
     takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
@@ -212,12 +216,15 @@ function adoptChat(
     source.prepare('SELECT record_json FROM agent_session_records WHERE session_id=?').get(id)!
       .record_json
   )
+  const here =
+    as === id &&
+    db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id) !== undefined
   // A copy takes its own id and leaves the original's /clear successor to the original.
   db.prepare(`INSERT INTO agent_session_records(session_id,record_json) VALUES(?1,
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  showAdoptedChat(db, adoption, id, as, record)
+  showAdoptedChat(db, adoption, id, as, record, here)
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
     .get(id)

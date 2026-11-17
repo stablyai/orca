@@ -2,9 +2,9 @@ import type Database from '../../../sqlite/sync-database'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 
-/** The original's tabs and this file's tabs, read once per pass. */
+/** The original's tabs (null when it never recorded them) and this file's tabs, read once per pass. */
 export type AdoptedTabs = {
-  savedTabs: Map<string, string>
+  savedTabs: Map<string, string> | null
   tabbed: Set<string>
   takenTabs: Set<string>
   nextPosition: number
@@ -12,19 +12,21 @@ export type AdoptedTabs = {
 }
 
 /**
- * A chat joining as itself with a provider conversation keeps its own history row, so it opens only
- * if the older build had it open. A copy shares its original's history row, and a chat with no
- * conversation (before a reply, after /clear) has none, so only a tab reaches them.
+ * Only a chat this file already held, closed here and in the older build, stays closed: its tab
+ * and history row are as before the pass. A chat new here, a copy (which shares its original's
+ * history row) and a chat with no conversation (before a reply, after /clear) open, as nothing
+ * else is sure to reach them.
  */
 export function showAdoptedChat(
   db: Database.Database,
   tabs: AdoptedTabs,
   id: string,
   as: string,
-  record: string
+  record: string,
+  here: boolean
 ): void {
-  const saved = tabs.savedTabs.get(id)
-  if (as === id && saved === undefined && hasHistoryRow(record)) {
+  const saved = tabs.savedTabs?.get(id)
+  if (here && tabs.savedTabs !== null && saved === undefined && hasHistoryRow(record)) {
     return
   }
   if (!tabs.tabsRecorded) {
