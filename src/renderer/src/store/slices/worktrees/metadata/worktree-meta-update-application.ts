@@ -44,22 +44,24 @@ export function applyWorktreeRowUpdates<T extends Worktree>(
   worktree: T,
   updates: Partial<WorktreeMeta>
 ): T {
-  const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
-  if (updates.displayNameIsPinned !== undefined) {
-    next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
-    if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
+  // Rows store the pin as displayNameMode, so the meta flag itself never lands on the row.
+  const { displayNameIsPinned, ...rowUpdates } = updates
+  const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, rowUpdates) }
+  if (displayNameIsPinned !== undefined) {
+    next.displayNameMode = displayNameIsPinned ? 'fixed' : 'automatic'
+    if (displayNameIsPinned === false && !updates.displayName?.trim()) {
       const automaticName = branchName(next.branch)
       // A detached worktree has no branch-derived label; keep the old text until the host
       // projection supplies its repo/path fallback instead of flashing an empty sidebar row.
       next.displayName = automaticName || worktree.displayName
     }
   }
+  const before = new Map(Object.entries(worktree))
   const fields = Object.entries(next)
+  // A key on only one row changes the key count or misses in `before`.
   const unchanged =
-    fields.length === Object.keys(worktree).length &&
-    fields.every(
-      ([key, value]) => Object.hasOwn(worktree, key) && Reflect.get(worktree, key) === value
-    )
+    fields.length === before.size &&
+    fields.every(([key, value]) => before.has(key) && before.get(key) === value)
   return unchanged ? worktree : next
 }
 
