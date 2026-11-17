@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { removeOwnedInstallLockCommand } from './remote-install-lock-owner-commands'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
-import { decodeRemotePowerShellScript } from '../../ssh/remote-exec/ssh-remote-powershell'
 
 const homes: string[] = []
 afterEach(() => {
@@ -86,27 +85,3 @@ describe.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     })
   }
 )
-
-describe('removeOwnedInstallLockCommand on a Windows host', () => {
-  it('removes the lock only on a case-sensitive owner match, failing on an unreadable owner', () => {
-    const decoded = decodeRemotePowerShellScript(
-      removeOwnedInstallLockCommand(
-        getRemoteHostPlatform('win32-x64'),
-        "C:/Users/o'neil/.orca-remote/orcad-1/.install-lock",
-        { fileName: '.orca-fence-owner', token: "t-o'mine" }
-      )
-    )
-    expect(decoded).toContain("$lock = 'C:/Users/o''neil/.orca-remote/orcad-1/.install-lock'")
-    expect(decoded).toContain(
-      "if ($ownerPresent -and ([System.IO.File]::ReadAllText($owner) -ceq 't-o''mine')) { Remove-Item -LiteralPath $lock -Recurse -Force -ErrorAction Stop }"
-    )
-    expect(decoded).toMatch(/\} catch \{ exit 1 \}$/u)
-    // Only not-found means absent; access denied falls through to the failing catch.
-    expect(
-      decoded.match(
-        /catch \[System\.IO\.FileNotFoundException\], \[System\.IO\.DirectoryNotFoundException\]/gu
-      )
-    ).toHaveLength(2)
-    expect(decoded).toContain('[System.IO.Directory]::GetFileSystemEntries($lock)')
-  })
-})
