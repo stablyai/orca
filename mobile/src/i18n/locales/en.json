@@ -3599,6 +3599,7 @@
     },
     "remoteControl": {
       "changeFailed": "couldn't change it",
+      "onByDefault": "on by default",
       "openOnClaudeAi": "Open on claude.ai",
       "retry": "Retry",
       "disconnect": "Disconnect",
