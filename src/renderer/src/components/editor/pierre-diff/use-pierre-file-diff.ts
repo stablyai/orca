@@ -3,6 +3,7 @@ import type { FileDiffMetadata } from '@pierre/diffs'
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
 import { preparePierreDiffHighlight } from './pierre-diff-highlight'
+import { usePierreRenderedLanguage } from './pierre-diff-language'
 
 // staleDiff: diff was kept from an earlier input after this input's parse failed.
 type DiffSnapshot = {
@@ -29,6 +30,7 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const currentContent = sameDiffContent(snapshot?.input, input) && !snapshot?.staleDiff
   const fileDiff =
     input && sameFile && (editable || currentContent) ? (snapshot?.diff ?? null) : null
+  usePierreRenderedLanguage(fileDiff?.lang)
   const renderedScopeRef = useRef<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
   const localEdit = useRef<{ input: PierreDiffInput; contents: string } | null>(null)

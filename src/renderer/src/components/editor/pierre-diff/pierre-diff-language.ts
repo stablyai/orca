@@ -81,48 +81,93 @@ function registerLegacySyntax(name: 'redis' | 'qsharp'): void {
   })
 }
 
-const pluginLanguages = new Map<string, { name: string; refs: number }>()
+type PluginLanguage = { key: string; syntaxId: string; name: string; refs: number }
+// Insertion order is least-recently-acquired first, for evicting unused revisions at the cap.
+const pluginLanguages = new Map<string, PluginLanguage>()
+const pluginLanguageNames = new Map<string, PluginLanguage>()
 let nextPluginLanguage = 0
+
+function retirePluginLanguage(registration: PluginLanguage): void {
+  pluginLanguages.delete(registration.key)
+  pluginLanguageNames.delete(registration.name)
+  unregisterCustomLanguage(registration.name)
+  retirePierreHighlightLanguage(registration.name)
+}
+
+function holdPluginLanguage(registration: PluginLanguage): () => void {
+  registration.refs++
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    // An unused current revision stays registered, so scrolling a row back needs no reload.
+    if (--registration.refs === 0 && isSupersededPluginLanguage(registration)) {
+      retirePluginLanguage(registration)
+    }
+  }
+}
+
+function isSupersededPluginLanguage(registration: PluginLanguage): boolean {
+  let latest: PluginLanguage | undefined
+  for (const entry of pluginLanguages.values()) {
+    if (entry.syntaxId === registration.syntaxId) {
+      latest = entry
+    }
+  }
+  return latest !== registration
+}
 
 function acquirePluginSyntax(
   syntax: PluginSyntaxMetadata
 ): { name: string; release: () => void } | null {
   const key = pluginSyntaxRevisionKey(syntax)
-  const registered = pluginLanguages.get(key)
-  if (registered) {
-    registered.refs++
-    return { name: registered.name, release: () => releasePluginSyntax(key, registered) }
-  }
-  if (pluginLanguages.size >= PLUGIN_SYNTAX_SLOT_LIMIT) {
-    return null
-  }
-  // Each revision gets its own name so an updated grammar is not served from Shiki's cache.
-  const name = `orca-plugin-syntax-${nextPluginLanguage++}`
-  const registration = { name, refs: 1 }
-  pluginLanguages.set(key, registration)
-  registerCustomLanguage(name, async () => {
-    const payload = parsePluginSyntaxPayload(await window.api.plugins.loadSyntax(syntax.id))
-    if (!payload) {
-      throw new Error('Plugin syntax is unavailable. Retry this file.')
+  let registration = pluginLanguages.get(key)
+  if (registration) {
+    pluginLanguages.delete(key)
+    pluginLanguages.set(key, registration)
+  } else {
+    if (pluginLanguages.size >= PLUGIN_SYNTAX_SLOT_LIMIT) {
+      const idle = [...pluginLanguages.values()].find((entry) => entry.refs === 0)
+      if (!idle) {
+        return null
+      }
+      retirePluginLanguage(idle)
     }
-    const grammars: LanguageRegistration[] = payload.grammars.map((grammar, index) => ({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main validated each grammar's shape; TextMate reads applyEndPatternLast 0/1 like a boolean.
-      ...(grammar as Omit<LanguageRegistration, 'name'>),
-      name: grammar.scopeName === payload.scopeName ? name : `${name}-${index}`,
-      workerOnly: true
-    }))
-    return { default: grammars }
-  })
-  return { name, release: () => releasePluginSyntax(key, registration) }
+    // Each revision gets its own name so an updated grammar is not served from Shiki's cache.
+    const name = `orca-plugin-syntax-${nextPluginLanguage++}`
+    registration = { key, syntaxId: syntax.id, name, refs: 0 }
+    pluginLanguages.set(key, registration)
+    pluginLanguageNames.set(name, registration)
+    registerCustomLanguage(name, async () => {
+      const payload = parsePluginSyntaxPayload(await window.api.plugins.loadSyntax(syntax.id))
+      if (!payload) {
+        throw new Error('Plugin syntax is unavailable. Retry this file.')
+      }
+      const grammars: LanguageRegistration[] = payload.grammars.map((grammar, index) => ({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main validated each grammar's shape; TextMate reads applyEndPatternLast 0/1 like a boolean.
+        ...(grammar as Omit<LanguageRegistration, 'name'>),
+        name: grammar.scopeName === payload.scopeName ? name : `${name}-${index}`,
+        workerOnly: true
+      }))
+      return { default: grammars }
+    })
+  }
+  for (const entry of [...pluginLanguages.values()]) {
+    if (entry.refs === 0 && isSupersededPluginLanguage(entry)) {
+      retirePluginLanguage(entry)
+    }
+  }
+  return { name: registration.name, release: holdPluginLanguage(registration) }
 }
 
-function releasePluginSyntax(key: string, registration: { name: string; refs: number }): void {
-  if (--registration.refs > 0) {
-    return
-  }
-  pluginLanguages.delete(key)
-  unregisterCustomLanguage(registration.name)
-  retirePierreHighlightLanguage(registration.name)
+/** Keeps the plugin grammar a rendered diff was parsed with until that diff stops rendering. */
+export function usePierreRenderedLanguage(lang: string | undefined): void {
+  useLayoutEffect(() => {
+    const registration = lang ? pluginLanguageNames.get(lang) : undefined
+    return registration ? holdPluginLanguage(registration) : undefined
+  }, [lang])
 }
 
 /** Plugin grammars are worker-only; the renderer's registered fallback has no patterns. */
