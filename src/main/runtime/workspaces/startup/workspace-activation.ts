@@ -216,7 +216,6 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     pasteStartupDraftInCustody(
       {
         readiness: this.getWorktreeStartupReadinessHost(),
-        guard: this,
         waiters: this.terminalWaiters,
         readPty: (ptyId) => this.ptysById.get(ptyId),
         lifecycleSignal: (ptyId) => this.getPtyLifecycleSignal(ptyId),

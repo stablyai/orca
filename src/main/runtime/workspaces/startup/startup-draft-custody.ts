@@ -1,10 +1,6 @@
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeTerminalWaiterRegistry } from '../../terminal/wait/terminal-waiter-registry'
 import { holdTerminalInputCustody } from '../../terminal/wait/terminal-input-custody'
-import {
-  createLaunchedAgentWriteGuard,
-  type LaunchedAgentWriteGuardRuntime
-} from '../../terminal/wait/launched-agent-write-guard'
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import {
   waitForWorktreeStartupDraft,
@@ -13,7 +9,6 @@ import {
 
 export type StartupDraftCustodyHost = {
   readiness: WorktreeStartupReadinessHost
-  guard: LaunchedAgentWriteGuardRuntime
   waiters: RuntimeTerminalWaiterRegistry
   readPty: (ptyId: string) => RuntimePtyWorktreeRecord | undefined
   lifecycleSignal: (ptyId: string) => AbortSignal
@@ -32,9 +27,6 @@ export function pasteStartupDraftInCustody(
     console.warn('[worktree-create] agent did not become ready for draft paste')
     return
   }
-  const guard = createLaunchedAgentWriteGuard(host.guard, draft.agent, {
-    unprovableHost: 'write-unless-shell'
-  })
   void holdTerminalInputCustody(
     {
       handle,
@@ -56,14 +48,11 @@ export function pasteStartupDraftInCustody(
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      await guard.beforeWrite(target.ptyId)
       assertOriginal()
       if (host.isStopRequested(target.ptyId)) {
         throw new Error('terminal_not_writable')
       }
       host.readiness.write(target.ptyId, `\x1b[200~${draft.content}\x1b[201~`, 'launch')
     }
-  )
-    .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
-    .finally(() => guard.dispose())
+  ).catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
