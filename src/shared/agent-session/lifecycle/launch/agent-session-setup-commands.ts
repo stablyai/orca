@@ -1,5 +1,5 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../agent-launch/catalog/tui-agent-display-names'
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../../failures/agent-session-availability'
 import {
   quoteStartupArg,
   type AgentStartupShell

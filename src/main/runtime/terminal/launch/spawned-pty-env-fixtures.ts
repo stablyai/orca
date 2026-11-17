@@ -1,4 +1,4 @@
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../../../ipc/pty/spawn-pane-env'
+import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../../../ipc/pty/host-env/spawn-pane-env'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY

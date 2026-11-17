@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../../src/shared/agent-session/agent-session-mcp'
-import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
+import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import type { AgentSessionMcpRequest } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'

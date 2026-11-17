@@ -52,6 +52,7 @@ export class JournalSqlOwner {
     )
   ) {
     this.worker = spawnWorkerThread(workerPath, {
+      name: 'orca-journal-sql-writer',
       workerData: { filename, stateDirectory },
       execArgv: []
     })

@@ -4,7 +4,7 @@ import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AcpSessionModelDiscovery } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type { AcpSessionStarted, AcpSessionStartOptions } from '../protocol/acp-session-setup'

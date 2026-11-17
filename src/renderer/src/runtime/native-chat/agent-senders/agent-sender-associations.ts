@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readAgentSender, type LocatedAgentSender } from './agent-sender-index'
 
 /** Where a card's sender runs on its host now, before the saved-kind check the card layer adds. */

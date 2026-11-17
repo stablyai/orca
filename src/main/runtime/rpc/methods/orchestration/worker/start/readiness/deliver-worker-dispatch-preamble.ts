@@ -18,7 +18,7 @@ import { chatAssigneeOf } from '../../../chat-assignee-admission'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
-import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 

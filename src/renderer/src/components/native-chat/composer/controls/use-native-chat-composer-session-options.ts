@@ -3,7 +3,7 @@ import { useNativeChatSessionOptions } from '../../session/options/terminal/use-
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
-import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { useCallback } from 'react'
 import type {
   SessionOptionDescriptor,

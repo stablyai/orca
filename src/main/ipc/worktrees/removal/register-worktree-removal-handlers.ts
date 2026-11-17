@@ -4,7 +4,7 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
-import { parseWorktreeId } from '../../worktree-logic'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { executeWorktreeRemoval } from './execute-worktree-removal'

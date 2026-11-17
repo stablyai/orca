@@ -22,7 +22,7 @@ import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,

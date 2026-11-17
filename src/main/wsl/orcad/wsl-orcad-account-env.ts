@@ -9,7 +9,7 @@ import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-confi
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   wslOrcadHostDistro,
   type WslOrcadHostCapabilityVerdict

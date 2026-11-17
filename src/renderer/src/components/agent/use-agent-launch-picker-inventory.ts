@@ -36,7 +36,7 @@ import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
   currentAgentPickerAcquisition,

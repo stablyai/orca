@@ -163,6 +163,77 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
   })
 })
 
+describe('mobile session tabs: a permission report after its hook', () => {
+  const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'ls' } })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function blockAfterApprovalHook(blockedAt: number): Promise<OrcaRuntimeService> {
+    vi.setSystemTime(T0)
+    const rows: AgentStatusIpcPayload[] = []
+    const runtime = await createRuntime(rows)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07\x1b]7501;state=working\x1b\\', T0)
+    vi.setSystemTime(T0 + 1_000)
+    rows.push({
+      paneKey: PANE_KEY,
+      state: 'waiting',
+      prompt: 'list files',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: T0 + 1_000,
+      stateStartedAt: T0 + 1_000,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      toolName: 'Bash',
+      toolInput: 'ls',
+      interactivePrompt: approval
+    })
+    vi.setSystemTime(blockedAt)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', blockedAt)
+    return runtime
+  }
+
+  it('keeps the approval the PermissionRequest hook published', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+
+    expect(await projectAgentStatus(runtime)).toEqual(
+      expect.objectContaining({
+        state: 'waiting',
+        toolName: 'Bash',
+        interactivePrompt: approval,
+        stateStartedAt: T0 + 1_000
+      })
+    )
+  })
+
+  it('does not offer that approval for a later block with no hook of its own', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+    await projectAgentStatus(runtime)
+    vi.setSystemTime(T0 + 2_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=working\x1b\\', T0 + 2_000)
+    vi.setSystemTime(T0 + 5_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', T0 + 5_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 5_000 }))
+  })
+
+  it('does not offer a wait hook from long before a hookless block in the same working interval', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 30_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 30_000 }))
+  })
+})
+
 describe('mobile session tabs: identity-only fallback freshness', () => {
   beforeEach(() => {
     vi.useFakeTimers()
