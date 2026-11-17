@@ -18,6 +18,7 @@ import {
 } from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 import {
   getIndexedAllWorktrees,
+  getIndexedReplacedRows,
   getIndexedWorktreesById,
   getWorktreeLineageKey
 } from '../listing/worktree-catalog-index'
@@ -26,7 +27,6 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../../types'
-import { replacedWorktreeRows } from '../listing/worktree-catalog-membership'
 
 type CrossStoreLineageInputs = Pick<
   AppState,
@@ -219,8 +219,8 @@ export function selectCrossStoreFolderChildrenById(
     if (previous.catalog === worktreesByRepo) {
       return previous.result
     }
-    // Only the replaced rows are read; a write that touches no child keeps the returned children.
-    const replaced = replacedWorktreeRows(worktreesByRepo, previous.catalog)
+    // The index already listed this write's replaced rows; a write that touches no child keeps the children.
+    const replaced = getIndexedReplacedRows(worktreesByRepo, previous.catalog)
     const childIdentities = childIdentitiesOfRefs.get(refs)
     if (
       replaced &&

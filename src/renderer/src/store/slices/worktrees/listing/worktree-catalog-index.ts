@@ -43,6 +43,8 @@ type WorktreeSnapshot = WorktreeOverlay & {
   allWorktrees: Worktree[] | null
   /** Same object while no replacement could change lineage resolution; selectors key caches on it. */
   lineageKey: WorktreeLineageKey
+  /** This write's replaced rows and the catalog they replaced; absent after a rebuild or compaction. */
+  replacement?: { from: WeakRef<AppState['worktreesByRepo']>; rows: readonly ReplacedWorktreeRow[] }
 }
 
 const EMPTY_OVERLAY: WorktreeOverlay = {
@@ -73,7 +75,7 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const snapshot =
     previousSnapshot && replaced
-      ? overlayWorktreeSnapshot(previousSnapshot, replaced, worktreesByRepo)
+      ? overlayWorktreeSnapshot(previousSnapshot, replaced, worktreesByRepo, previousRows)
       : viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, null)
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
   lastIndexedRows = new WeakRef(worktreesByRepo)
@@ -105,7 +107,8 @@ function viewOf(
 function overlayWorktreeSnapshot(
   previous: WorktreeSnapshot,
   replaced: readonly ReplacedWorktreeRow[],
-  worktreesByRepo: AppState['worktreesByRepo']
+  worktreesByRepo: AppState['worktreesByRepo'],
+  previousRows: AppState['worktreesByRepo']
 ): WorktreeSnapshot {
   if (replaced.length === 0) {
     return previous
@@ -155,9 +158,14 @@ function overlayWorktreeSnapshot(
     ? previous.lineageKey
     : null
   // Compaction rebuilds the title catalog; with no structure moved, surfaces keep the same topology.
-  return rows.size > MAX_OVERLAY_ROWS
-    ? viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, topology, lineageKey)
-    : viewOf(base, { rows, slots, firstById, byId, structureById }, topology, lineageKey)
+  if (rows.size > MAX_OVERLAY_ROWS) {
+    return viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, topology, lineageKey)
+  }
+  return {
+    ...viewOf(base, { rows, slots, firstById, byId, structureById }, topology, lineageKey),
+    // Weak so this catalog never keeps the one it replaced alive.
+    replacement: { from: new WeakRef(previousRows), rows: replaced }
+  }
 }
 
 function rowsOf(snapshot: WorktreeSnapshot): Worktree[] {
@@ -209,6 +217,18 @@ export function getWorktreeLineageKey(
   worktreesByRepo: AppState['worktreesByRepo']
 ): WorktreeLineageKey {
   return getWorktreeSnapshot(worktreesByRepo).lineageKey
+}
+
+/** The rows `next` replaced in `previous`, when `next` was indexed as an overlay of exactly that catalog; null asks the caller to refresh. */
+export function getIndexedReplacedRows(
+  next: AppState['worktreesByRepo'],
+  previous: AppState['worktreesByRepo']
+): readonly ReplacedWorktreeRow[] | null {
+  const snapshot = getWorktreeSnapshot(next)
+  if (worktreeSnapshotCache.get(previous) === snapshot) {
+    return []
+  }
+  return snapshot.replacement?.from.deref() === previous ? snapshot.replacement.rows : null
 }
 
 /** Structural id map for paths, lineage, and cycles; a title write keeps its identity, so its rows may carry an older title. */
