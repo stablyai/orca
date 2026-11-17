@@ -49,17 +49,24 @@ async function probeHostedCwd(
   }
 }
 
+const HOST_IMAGE_REUSE_MS = 10_000
 let lastHostImage: {
   identity: DaemonEndpointIdentity
+  readAt: number
   image: ReturnType<typeof inspectMacProcessCodeIdentity>
 } | null = null
 
-/** One code-signature read per host process, not per launch. */
+/** A burst of launches shares one signature read; a host's bundle can still vanish later. */
 function hostCodeIdentity(
   identity: DaemonEndpointIdentity
 ): ReturnType<typeof inspectMacProcessCodeIdentity> {
-  if (!lastHostImage || !sameDaemonIdentity(lastHostImage.identity, identity)) {
-    lastHostImage = { identity, image: inspectMacProcessCodeIdentity(identity.pid) }
+  const now = performance.now()
+  if (
+    !lastHostImage ||
+    !sameDaemonIdentity(lastHostImage.identity, identity) ||
+    now - lastHostImage.readAt > HOST_IMAGE_REUSE_MS
+  ) {
+    lastHostImage = { identity, readAt: now, image: inspectMacProcessCodeIdentity(identity.pid) }
   }
   return lastHostImage.image
 }

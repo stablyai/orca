@@ -91,28 +91,18 @@ export class DaemonProcessGrowthMonitor {
       return
     }
     const rootPid = this.options.rootPid ?? process.pid
-    const live = new Set(rows?.map((row) => row.pid))
-    const excluded = [...(this.options.excludedRoots?.() ?? hostedProviderOwners)].filter((pid) =>
-      live.has(pid)
-    )
     const counts = rows
-      ? countDescendantsByRoot(rows, [
-          rootPid,
-          ...excluded,
-          ...sessions.map((session) => session.pid ?? 0)
-        ])
-      : null
-    const hostDescendants = counts
-      ? excluded.reduce(
-          (count, pid) => count - 1 - (counts.get(pid) ?? 0),
-          counts.get(rootPid) ?? 0
+      ? countDescendantsByRoot(
+          rows,
+          [rootPid, ...sessions.map((session) => session.pid ?? 0)],
+          this.options.excludedRoots?.() ?? hostedProviderOwners
         )
       : null
     const verdict = evaluateProcessGrowth(
       this.state,
       {
         atMs: this.now(),
-        hostDescendants,
+        hostDescendants: counts?.get(rootPid) ?? null,
         scopes: new Map(
           counts
             ? sessions.map((session) => [session.sessionId, counts.get(session.pid ?? 0) ?? 0])
