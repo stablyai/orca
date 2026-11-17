@@ -6,11 +6,9 @@ import { cn } from '@/lib/class-names'
 import type { AgentConfigSyncRow } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsSegmentedControl'
 import {
-  cloudSkillsDisplayName,
   cloudSkillsEntryCount,
   cloudSkillsEntryKeys,
   cloudSkillsEntryKindLabel,
-  cloudSkillsKindLabel,
   cloudSkillsRowIncluded,
   cloudSkillsRowNote,
   cloudSkillsRowStateLabel,
@@ -18,6 +16,7 @@ import {
   type CloudSkillsEntry,
   type CloudSkillsGroups
 } from './cloud-skills-sync-copy'
+import { cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
 import {
   cloudSkillsFilterCounts,
   cloudSkillsFilterGroups,

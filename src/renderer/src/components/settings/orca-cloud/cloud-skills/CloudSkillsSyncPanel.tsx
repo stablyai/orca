@@ -18,7 +18,7 @@ import {
 import { CloudSkillsList } from './CloudSkillsList'
 import type { CloudSkillsFilter } from './cloud-skills-filter'
 
-export type CloudSkillsSyncPanelProps = {
+type CloudSkillsSyncPanelProps = {
   status: AgentConfigSyncStatus
   excluded: ReadonlySet<string>
   /** Off: nothing syncs on its own, and the panel says Sync now is a one-time copy. */

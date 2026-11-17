@@ -60,9 +60,9 @@ export function cloudChatSignInContent(
 }
 
 /** What a "not signed in" chat says when its agent signs in inside the workspace, and its button. */
-export type CloudChatSignInInside = { text: string; actionLabel: string }
+type CloudChatSignInInside = { text: string; actionLabel: string }
 
-export function cloudChatSignInInsideWords(
+function cloudChatSignInInsideWords(
   agent: 'claude' | 'codex',
   t: Translate = translate
 ): CloudChatSignInInside {

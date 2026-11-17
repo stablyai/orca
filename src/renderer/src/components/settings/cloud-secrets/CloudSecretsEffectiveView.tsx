@@ -28,7 +28,7 @@ function chain(scopes: readonly CloudSecretScope[], t: Translate): Record<string
 }
 
 /** How a name set in several scopes resolves, one sentence per kind. */
-export function CloudSecretsPrecedence({
+function CloudSecretsPrecedence({
   precedence = DEFAULT_PRECEDENCE
 }: {
   precedence?: CloudSecretsEffective['precedence']

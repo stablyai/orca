@@ -27,14 +27,8 @@ import { useAppStore } from '@/store'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { runArchiveCloudWorkspace } from './cloud-workspace-actions'
 import { returnFocusToWorkspace } from './cloud-focus-return'
-import {
-  CloudMoveToComputerView,
-  cloudMoveStepLabel,
-  cloudMoveTitle,
-  type CloudMoveConflicts
-} from './CloudMoveToComputerView'
-
-export type { CloudMoveConflicts } from './CloudMoveToComputerView'
+import { CloudMoveToComputerView, type CloudMoveConflicts } from './CloudMoveToComputerView'
+import { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
 
 /** "Apply changes again" for a failed apply or a partial result on an existing local worktree. */
 function reapplyFor(state: CloudMoveState): (() => void) | undefined {

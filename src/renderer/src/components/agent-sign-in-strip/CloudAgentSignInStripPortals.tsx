@@ -43,8 +43,6 @@ function isTabOpen(tabId: string): boolean {
   return Object.values(tabsByWorktree).some((tabs) => tabs?.some((tab) => tab.id === tabId))
 }
 
-export { isOrcaCloudEnvironmentId }
-
 /** Pane keys whose #40228 gate is on an Orca Cloud host; those panes show the strip instead. */
 export function useCloudGatePaneKeys(controller: TerminalPaneController): ReadonlySet<string> {
   const joined = useSyncExternalStore(subscribeAgentSignInGates, () =>

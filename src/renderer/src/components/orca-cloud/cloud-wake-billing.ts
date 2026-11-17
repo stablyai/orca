@@ -15,7 +15,7 @@ export type CloudWakeBillingFix =
   | 'turnOnOverage'
   | 'raiseSpendCap'
   | 'updatePayment'
-export type CloudWakeBillingCopy = { body: string; fix: CloudWakeBillingFix | null }
+type CloudWakeBillingCopy = { body: string; fix: CloudWakeBillingFix | null }
 
 const BLOCK_KIND: Partial<Record<ReturnType<typeof classifyEntitlementDenial>, BillingBlockKind>> =
   { plan: 'plan', hours: 'hoursUsed', spendCap: 'spendCap', payment: 'payment' }

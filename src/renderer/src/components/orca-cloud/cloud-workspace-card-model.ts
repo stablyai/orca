@@ -136,7 +136,7 @@ export function cloudCardOnComputerStatus(view: CloudSyncView | null, t: Transla
   return t('orcaCloudWorkspace.card.contextSynced', '.context synced')
 }
 
-export type CloudCardPrimary = 'sleep' | 'wake' | 'restart' | 'unarchive' | null
+type CloudCardPrimary = 'sleep' | 'wake' | 'restart' | 'unarchive' | null
 
 /** The footer's one visible action for the state; everything else lives under ⋯. */
 export function cloudCardPrimary(state: CloudDotState, restarting: boolean): CloudCardPrimary {

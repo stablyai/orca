@@ -22,7 +22,7 @@ export type {
   OrcaCloudAccountsViewProps
 } from './orca-cloud-accounts-types'
 
-export const ORCA_CLOUD_ACCOUNTS_SECTION_ID = 'orca-cloud'
+const ORCA_CLOUD_ACCOUNTS_SECTION_ID = 'orca-cloud'
 
 function setupAnnouncement(
   rows: Record<OrcaCloudAccountAgent, OrcaCloudAccountRow>,

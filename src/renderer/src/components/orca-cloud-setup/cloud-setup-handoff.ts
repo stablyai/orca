@@ -5,7 +5,7 @@
 
 type HandoffState = { activePendingCreationId: string | null; activeModal: string }
 
-export type HandoffDeps<Timer> = {
+type HandoffDeps<Timer> = {
   getState: () => HandoffState
   subscribe: (listener: (state: HandoffState) => void) => () => void
   /** True once the start screen is in the DOM (its lazy chunk may land a few frames later). */

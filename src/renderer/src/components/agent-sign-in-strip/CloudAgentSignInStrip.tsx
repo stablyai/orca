@@ -35,7 +35,7 @@ import type {
   CloudStripStatus
 } from './cloud-agent-strip-model'
 
-export type CloudStripWidth = 'wide' | 'narrow' | 'tiny' | 'compact'
+type CloudStripWidth = 'wide' | 'narrow' | 'tiny' | 'compact'
 
 export function cloudStripWidth(paneWidth: number): CloudStripWidth {
   return paneWidth < 360
@@ -109,7 +109,7 @@ export type CloudStripActions = {
 }
 
 /** The strip's severity look; anything that isn't a warning or an error reads as info. */
-export function stripSeverity(status: CloudStripStatus): BannerSeverity {
+function stripSeverity(status: CloudStripStatus): BannerSeverity {
   return status === 'warning' ? 'warning' : status === 'error' ? 'error' : 'info'
 }
 

@@ -17,7 +17,7 @@ import { apiKeyOverridesDetail, overviewCellText } from './overview-copy'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { agentName } from '../orca-cloud-accounts-copy'
 
-export type AgentAccountsOverviewProps = {
+type AgentAccountsOverviewProps = {
   rows: readonly OverviewRow[]
   /** True until the host list is known (first render only). */
   loading?: boolean

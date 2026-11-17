@@ -4,7 +4,7 @@ import { formatDate } from '../orca-cloud-account-row-shell'
 import { keyOptionLabel, productName } from '../orca-cloud-accounts-copy'
 import type { OverviewCell } from './agent-accounts-overview-model'
 
-export type OverviewCellTone = 'plain' | 'muted' | 'warning'
+type OverviewCellTone = 'plain' | 'muted' | 'warning'
 
 export function overviewCellText(
   cell: OverviewCell,

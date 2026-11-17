@@ -5,7 +5,7 @@ export function maskedHint(hint: string | null): string {
   return hint ? `••••${hint}` : '••••'
 }
 
-export type CloudSecretHintGap = 'admins_only' | 'too_short'
+type CloudSecretHintGap = 'admins_only' | 'too_short'
 
 /**
  * Why a row has no ending. The server keeps one only for values of 16+ characters, and sends it
@@ -22,7 +22,7 @@ export function cloudSecretHintGap(
   return canSeeHints ? 'too_short' : 'admins_only'
 }
 
-export function cloudSecretHintGapCopy(gap: CloudSecretHintGap, t: Translate): string {
+function cloudSecretHintGapCopy(gap: CloudSecretHintGap, t: Translate): string {
   return gap === 'admins_only'
     ? t('cloudSecrets.hint.adminsOnly', 'Only owners and admins see the last characters')
     : t('cloudSecrets.hint.tooShort', 'Short values are fully hidden')

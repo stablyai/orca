@@ -20,7 +20,7 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
 export const WAKE_SLOW_S = 10
-export const WAKE_STUCK_S = 60
+const WAKE_STUCK_S = 60
 
 /**
  * A wake that failed on the server for no known reason (an HTTP 5xx or internal_error from Orca

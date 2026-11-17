@@ -78,7 +78,7 @@ export function describeArchiveHookFailure(result: HostedArchiveHookFailure): st
   })
 }
 
-export type CloudArchiveHookOutcome =
+type CloudArchiveHookOutcome =
   | { kind: 'proceed' }
   | { kind: 'failed'; result: HostedArchiveHookFailure }
 

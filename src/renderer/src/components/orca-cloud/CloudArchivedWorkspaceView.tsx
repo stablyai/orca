@@ -13,7 +13,8 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useNow } from '@/hooks/use-now'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
+import { prStateLabel } from './read-snapshot/cloud-read-snapshot-format'
 import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import {
@@ -38,19 +39,6 @@ const PR_TONE: Record<HostedArchivePullRequest['state'], string> = {
   draft: 'text-muted-foreground',
   merged: 'text-[var(--callout-important)]',
   closed: 'text-destructive'
-}
-
-function prStateLabel(state: HostedArchivePullRequest['state'], t: Translate): string {
-  switch (state) {
-    case 'open':
-      return t('orcaCloudWorkspace.archived.prOpen', 'Open')
-    case 'draft':
-      return t('orcaCloudWorkspace.archived.prDraft', 'Draft')
-    case 'merged':
-      return t('orcaCloudWorkspace.archived.prMerged', 'Merged')
-    case 'closed':
-      return t('orcaCloudWorkspace.archived.prClosed', 'Closed')
-  }
 }
 
 function Section({

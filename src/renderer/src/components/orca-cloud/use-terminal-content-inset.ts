@@ -3,7 +3,7 @@ import { useLayoutEffect, useState, type RefObject } from 'react'
 /** Gap between the waking pill and the edges of the terminal it sits over. */
 export const TERMINAL_CONTENT_INSET_PX = 8
 
-export type TerminalContentInset = { top: number; right: number }
+type TerminalContentInset = { top: number; right: number }
 
 /** The terminal the person is in (it holds focus), else the first one showing. */
 function frontTerminal(scope: HTMLElement): HTMLElement | null {

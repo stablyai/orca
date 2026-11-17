@@ -7,7 +7,7 @@ import { useArchiveTtlDays } from '@/lib/orca-cloud/archive-ttl'
 import { archiveSnapshotDefinition } from './archive-snapshot-copy'
 
 /** The tooltip sentence, with the control plane's retention once it has loaded. */
-export function useArchiveSnapshotDefinition(): string {
+function useArchiveSnapshotDefinition(): string {
   const t = useTranslate()
   const ttlDays = useArchiveTtlDays()
   return archiveSnapshotDefinition(t, { ttlDays })

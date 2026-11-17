@@ -37,7 +37,7 @@ export type CloudSetupNoticeLine = {
   } | null
 }
 
-export type CloudSetupNoticeHandlers = {
+type CloudSetupNoticeHandlers = {
   push: CloudPushLineHandlers
   runSetup: () => void
   recheckFetch?: () => void

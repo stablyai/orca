@@ -22,7 +22,7 @@ import { currentStepCopy, doneStepCopy, stepLabel, type StepCopy } from './cloud
 import type { CloudSetupFlow } from './use-cloud-setup-flow'
 import { CloudCapabilityOffActions } from './CloudCapabilityOffActions'
 
-export type CloudSetupPageProps = {
+type CloudSetupPageProps = {
   flow: CloudSetupFlow
   projectName: string | null
   prompt: string
