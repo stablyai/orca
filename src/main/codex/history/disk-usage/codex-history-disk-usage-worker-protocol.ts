@@ -3,7 +3,7 @@ import type { CodexHistoryDiskUsageBudget } from './codex-history-disk-usage-wal
 
 export type CodexHistoryDiskUsageWorkerRequest = {
   id: number
-  roots: string[]
+  homes: string[]
   budget: CodexHistoryDiskUsageBudget
 }
 

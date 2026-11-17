@@ -19,7 +19,7 @@ port.on('message', (request: CodexHistoryDiskUsageWorkerRequest) => {
     response = {
       id: request.id,
       ok: true,
-      usage: measureCodexHistoryDiskUsage(request.roots, request.budget)
+      usage: measureCodexHistoryDiskUsage(request.homes, request.budget)
     }
   } catch (error) {
     response = {

@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Worker } from 'node:worker_threads'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup/codex-history-disk-usage'
@@ -10,7 +9,6 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
 import { listHostCodexRolloutHomes } from '../cleanup/codex-host-rollout-homes'
-import { SET_ASIDE_ROLLOUTS_DIR } from '../shared-store/codex-account-history-cleanup-manifest'
 import type {
   CodexHistoryDiskUsageWorkerRequest,
   CodexHistoryDiskUsageWorkerResponse
@@ -26,15 +24,6 @@ const WORKER_TIMEOUT_MS = WALK_BUDGET_MS + 30_000
 const IDLE_TEARDOWN_MS = 30_000
 // Each walk stats every rollout name; reopening the page within this window reuses the last one.
 const REUSE_MS = 5 * 60_000
-
-/** Every folder a rollout can sit in: live, archived, and copies set aside when history was shared. */
-export function codexHistoryFolders(homes: readonly string[]): string[] {
-  return homes.flatMap((home) => [
-    join(home, 'sessions'),
-    join(home, 'archived_sessions'),
-    join(home, SET_ASIDE_ROLLOUTS_DIR)
-  ])
-}
 
 function createWorker(): Worker {
   const path = resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME)
@@ -68,11 +57,11 @@ function getQueue(): NonNullable<typeof queue> {
 async function measure(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<CodexHistoryDiskUsage> {
-  const roots = codexHistoryFolders(await listHostCodexRolloutHomes(settings))
+  const homes = await listHostCodexRolloutHomes(settings)
   const response = await getQueue().dispatch(
     (id) => ({
       id,
-      roots,
+      homes,
       budget: { maxEntries: MAX_ENTRIES, deadline: Date.now() + WALK_BUDGET_MS }
     }),
     WORKER_TIMEOUT_MS
