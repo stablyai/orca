@@ -4243,7 +4243,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC"
+        "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC",
+        "jiraTextMatchesNotice": "Metin eşleşmeleri gösteriliyor. Jira bu aramayı JQL olarak çalıştıramadı."
       },
       "editor": {
         "CheckRunDetailsPanel": {

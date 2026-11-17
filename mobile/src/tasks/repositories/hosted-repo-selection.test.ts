@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listTaskSourceRepos, reconcileRepoSelection } from './hosted-repo-selection'
+import { listTaskSourceRepos } from './hosted-repo-selection'
 
 const upstream = { owner: 'acme', repo: 'web' }
 const desktopRepo = { id: 'desktop-web', executionHostId: 'local' as const, upstream, addedAt: 2 }
@@ -18,8 +18,8 @@ describe('task source repos', () => {
     expect(listTaskSourceRepos(repos, new Set(['server-web'])).map((repo) => repo.id)).toEqual([
       'server-web'
     ])
-    expect([...reconcileRepoSelection(repos, ['server-web', 'desktop-web'])]).toEqual([
-      'desktop-web'
-    ])
+    expect(
+      listTaskSourceRepos(repos, new Set(['server-web', 'desktop-web'])).map((repo) => repo.id)
+    ).toEqual(['desktop-web'])
   })
 })

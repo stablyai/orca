@@ -55,11 +55,14 @@ describe('mobile Jira task requests', () => {
       }
       return { id: 'jira-test', ok: true as const, result: jql.startsWith('text') ? [issue] : [] }
     })
-    for (const query of ['proj-12', 'login bug', 'status = Doen']) {
-      await expect(
-        fetchJiraTaskIssues({ sendRequest }, { query, filter: 'assigned', siteId: null })
-      ).resolves.toEqual([issue])
-    }
+    const search = (query: string) =>
+      fetchJiraTaskIssues({ sendRequest }, { query, filter: 'assigned', siteId: null })
+    await expect(search('proj-12')).resolves.toEqual({ issues: [issue], jqlRejection: null })
+    await expect(search('login bug')).resolves.toEqual({ issues: [issue], jqlRejection: null })
+    await expect(search('status = Doen')).resolves.toEqual({
+      issues: [issue],
+      jqlRejection: { reason: "The value 'Doen' does not exist", likelyTypo: true }
+    })
     expect(sentJql).toEqual([
       'key = "PROJ-12"',
       'text ~ "proj 12*"',

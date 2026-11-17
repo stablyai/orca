@@ -4239,7 +4239,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC"
+        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC",
+        "jiraTextMatchesNotice": "正在顯示文字比對結果。Jira 無法將此搜尋作為 JQL 執行。"
       },
       "editor": {
         "CheckRunDetailsPanel": {

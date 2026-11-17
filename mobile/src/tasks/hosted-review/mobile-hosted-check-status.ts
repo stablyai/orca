@@ -172,7 +172,6 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
         tone: 'warning'
       }
     case 'checking':
-    case 'unreported':
       return {
         label: translate(
           'auto.components.right.sidebar.gitlab.mr.merge.state.195917574e',
@@ -188,7 +187,6 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
         ),
         tone: 'danger'
       }
-    case 'unreported_checks_failed':
     case 'mergeable_checks_failed':
       return {
         label: translate(
@@ -205,6 +203,9 @@ function gitlabMergeChip(kind: GitLabMRMergeStateKind): HostedMergeChip | null {
         ),
         tone: 'success'
       }
+    // List reads carry no detailed merge status, so GitLab never reported why the MR can't merge yet.
+    case 'unreported':
+    case 'unreported_checks_failed':
     case 'draft':
       return null
   }

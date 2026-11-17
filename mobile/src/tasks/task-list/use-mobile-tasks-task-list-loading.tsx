@@ -83,11 +83,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         const repoListRequest = repoListEnsureLoaded()
         void repoListRequest.catch(() => {})
         const hosted = provider === 'github' || provider === 'gitlab'
-        const repos = hosted
-          ? listTaskSourceRepos(await repoListRequest, effectiveRepoIds).filter(
-              (repo) => effectiveRepoIds.size === 0 || effectiveRepoIds.has(repo.id)
-            )
-          : []
+        const repos = hosted ? listTaskSourceRepos(await repoListRequest, effectiveRepoIds) : []
         if (!isCurrent()) {
           return
         }

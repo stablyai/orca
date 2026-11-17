@@ -4343,7 +4343,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC"
+        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
+        "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
       },
       "editor": {
         "CheckRunDetailsPanel": {

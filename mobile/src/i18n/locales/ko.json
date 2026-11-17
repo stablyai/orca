@@ -4239,7 +4239,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC"
+        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC",
+        "jiraTextMatchesNotice": "텍스트 일치 결과를 표시합니다. Jira에서 이 검색을 JQL로 실행할 수 없습니다."
       },
       "editor": {
         "CheckRunDetailsPanel": {

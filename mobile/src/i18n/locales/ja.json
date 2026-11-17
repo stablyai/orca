@@ -4239,7 +4239,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC"
+        "99c2755218": "Issue を検索するか JQL を入力、例: project = ABC",
+        "jiraTextMatchesNotice": "テキスト一致を表示しています。Jira はこの検索を JQL として実行できませんでした。"
       },
       "editor": {
         "CheckRunDetailsPanel": {

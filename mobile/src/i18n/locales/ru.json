@@ -4443,7 +4443,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Найдите задачи или введите JQL, например project = ABC"
+        "99c2755218": "Найдите задачи или введите JQL, например project = ABC",
+        "jiraTextMatchesNotice": "Показаны текстовые совпадения. Jira не удалось выполнить этот поиск как JQL."
       },
       "editor": {
         "CheckRunDetailsPanel": {

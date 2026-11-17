@@ -4930,7 +4930,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done"
+        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
+        "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
       },
       "editor": {
         "CheckRunDetailsPanel": {

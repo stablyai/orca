@@ -7,14 +7,15 @@ export function isHostedTaskRepo(repo: Pick<TaskRepo, 'kind'>): boolean {
   return repo.kind !== 'folder'
 }
 
-/** One hosted repo per project, as desktop lists them, so a repo's twin on another host doesn't list every item twice. */
+/** The hosted repos a list reads: one per project, as desktop reads them, so a twin on another host doesn't list every item twice. Empty selection means all. */
 export function listTaskSourceRepos<T extends TaskRepo>(
   repos: readonly T[],
   selection: ReadonlySet<string>
 ): T[] {
-  return getTaskProjectPickerGroups(repos.filter(isHostedTaskRepo), selection).map(
-    (group) => group.repo
+  const selected = repos.filter(
+    (repo) => isHostedTaskRepo(repo) && (selection.size === 0 || selection.has(repo.id))
   )
+  return getTaskProjectPickerGroups(selected).map((group) => group.repo)
 }
 
 // Empty selection means all repos; removing all stale selections must widen the filter rather than hide every row.
@@ -25,8 +26,6 @@ export function reconcileRepoSelection(
   if (!persisted || persisted.length === 0) {
     return new Set()
   }
-  const availableIds = new Set(
-    listTaskSourceRepos(repos, new Set(persisted)).map((repo) => repo.id)
-  )
+  const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
   return new Set(persisted.filter((id) => availableIds.has(id)))
 }

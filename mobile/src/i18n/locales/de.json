@@ -4243,7 +4243,8 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC"
+        "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC",
+        "jiraTextMatchesNotice": "Texttreffer werden angezeigt. Jira konnte diese Suche nicht als JQL ausführen."
       },
       "editor": {
         "CheckRunDetailsPanel": {
