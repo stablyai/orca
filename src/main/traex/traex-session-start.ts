@@ -29,6 +29,8 @@ export async function openTraexSession(
   check()
   await run(session.connection.initialize())
   check()
+  await run(session.extras.prepareWindowsSandbox(session.launch.cwd, session.launch.permissionMode))
+  check()
   const config = Object.fromEntries(
     Object.entries(session.launch.commandEnv ?? {}).map(([key, value]) => [
       `shell_environment_policy.set.${key}`,

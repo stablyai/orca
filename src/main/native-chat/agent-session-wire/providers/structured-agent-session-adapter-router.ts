@@ -217,6 +217,12 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return reader(input)
   }
 
+  generateConversationName: NonNullable<Adapter['generateConversationName']> = (input) =>
+    this.capabilityOwner(
+      input.record.sessionId,
+      input.record.provider
+    )?.adapter.generateConversationName?.(input) ?? Promise.resolve(null)
+
   generateText: NonNullable<Adapter['generateText']> = (input) => {
     const { adapter } = this.requireAgent(input)
     if (!adapter.generateText) {

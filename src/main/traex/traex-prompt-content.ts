@@ -6,6 +6,8 @@ import {
 } from '../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import { boundJournalPromptText } from '../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
+import { traexRecord, traexText } from './traex-protocol'
 
 const questionsSchema = z
   .array(
@@ -104,4 +106,43 @@ export function traexPromptReply(
       })
     )
   }
+}
+
+/** One approval card for the network/file permissions a request needs. */
+export function traexPermissionsApprovalBody(
+  params: Record<string, unknown>
+): Extract<ProviderTimelineRequestBody, { kind: 'approval' }> {
+  return {
+    kind: 'approval',
+    title: 'Grant permissions',
+    description:
+      traexText(params.reason) ?? 'This request needs additional network or file permissions.',
+    detail: traexPermissionsDetail(params.permissions),
+    options: [
+      { id: 'accept', label: 'Grant for this turn' },
+      { id: 'acceptStrict', label: 'Grant with strict auto review' },
+      { id: 'acceptForSession', label: 'Grant for this session' },
+      { id: 'decline', label: 'Continue without permissions' }
+    ],
+    resolution: pendingTraexPromptResolution
+  }
+}
+
+/** Requested network/file permissions as the bounded detail line of an approval card. */
+export function traexPermissionsDetail(value: unknown): string | null {
+  const permissions = traexRecord(value)
+  const network = traexRecord(permissions.network)
+  const fileSystem = traexRecord(permissions.fileSystem)
+  const paths = (key: 'read' | 'write'): string | null => {
+    const entries = fileSystem[key]
+    return Array.isArray(entries)
+      ? entries.filter((entry): entry is string => typeof entry === 'string').join(', ') || null
+      : null
+  }
+  const lines = [
+    network.enabled === true ? 'Network: enabled' : null,
+    paths('read') ? `Read: ${paths('read')}` : null,
+    paths('write') ? `Write: ${paths('write')}` : null
+  ].filter((line): line is string => Boolean(line))
+  return lines.length ? boundJournalPromptText(lines.join('\n')) : null
 }

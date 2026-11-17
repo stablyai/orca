@@ -51,6 +51,8 @@ createInterface({ input: process.stdin })
       })
     } else if (method === 'model/internalUsage/read') {
       reply(id, { usage: null, dailyUsage: null })
+    } else if (method === 'account/rateLimits/read') {
+      reply(id, { rateLimits: { primary: null, secondary: null }, rateLimitsByLimitId: null })
     } else if (method === 'collaborationMode/list') {
       reply(id, {
         data: [

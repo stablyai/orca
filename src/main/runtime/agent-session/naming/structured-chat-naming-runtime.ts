@@ -81,6 +81,17 @@ export function structuredChatNamingDeps(
           record.provider === 'antigravity' ||
           record.provider === 'trae')
       ) {
+        if (record.provider === 'trae') {
+          const generateName =
+            getStructuredAgentSessionHost()?.deps.adapter.generateConversationName
+          const name =
+            generateName && shouldExecute?.() !== false
+              ? await generateName({ record }).catch(() => null)
+              : null
+          if (name) {
+            return { name }
+          }
+        }
         const generateText = getStructuredAgentSessionHost()?.deps.adapter.generateText
         try {
           if (!generateText) {

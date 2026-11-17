@@ -42,6 +42,9 @@ export function observeTraexSessionNotification(
     session.timeline?.observeGoal(method, params)
     return
   }
+  if (session.extras.observe(method, params)) {
+    return
+  }
   session.childWork?.observe(method, params)
   const childId = traexText(params.threadId)
   if (childId && session.childWork?.agents.has(childId)) {
@@ -200,7 +203,13 @@ function observeTraexChildNotification(
     })
     stream = {
       timeline,
-      prompts: new TraexPromptRegistry(session.connection, timeline, id),
+      prompts: new TraexPromptRegistry(
+        session.connection,
+        timeline,
+        id,
+        undefined,
+        (message, fields) => session.extras.warn(message, fields)
+      ),
       turnId: null
     }
     session.childThreads.set(id, stream)

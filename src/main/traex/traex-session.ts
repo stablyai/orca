@@ -13,7 +13,7 @@ import type { TraexLaunch } from './traex-launch-resolution'
 import { TraexTimeline } from './traex-timeline'
 import { TraexPromptRegistry } from './traex-prompt-registry'
 import type { TraexModel } from './traex-model-catalog'
-import { traexRecord, traexText, traexTimestampMs, traexNonnegativeNumber } from './traex-protocol'
+import { traexRecord, traexText } from './traex-protocol'
 import type {
   AgentSessionModelOption,
   AgentSessionSlashCommand
@@ -23,10 +23,13 @@ import { openTraexSession } from './traex-session-start'
 import { readTraexSessionCommands } from './traex-session-commands'
 import { TraexChildWork } from './traex-child-work'
 import { observeTraexSessionNotification } from './traex-session-notifications'
+import { TraexSessionExtras } from './traex-session-extras'
+import { finishTraexCompaction } from './traex-session-compaction'
 
 export class TraexSession {
   readonly generation = randomUUID()
   readonly connection: TraexAppServerConnection
+  readonly extras: TraexSessionExtras
   readonly pending = new Map<string, TraexPendingSend>()
   readonly options: Record<string, string>
   nativeModels: TraexModel[] = []
@@ -79,6 +82,12 @@ export class TraexSession {
     }
     this.connection =
       deps.connect?.(launch, handlers) ?? new TraexAppServerConnection(launch, handlers)
+    this.extras = new TraexSessionExtras(
+      this,
+      this.connection,
+      this.input.identity.sessionId,
+      deps.logger
+    )
   }
 
   open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
@@ -111,8 +120,13 @@ export class TraexSession {
       fail: (error) => this.fail(error)
     })
     this.childWork = new TraexChildWork(threadId)
-    this.prompts = new TraexPromptRegistry(this.connection, this.timeline, threadId, (mode) =>
-      this.updateMode(mode)
+    this.extras.bindThread(threadId)
+    this.prompts = new TraexPromptRegistry(
+      this.connection,
+      this.timeline,
+      threadId,
+      (mode) => this.updateMode(mode),
+      (message, fields) => this.extras.warn(message, fields)
     )
     this.unbindReading = sink.bindReadingControl?.({
       pauseReading: () => this.connection.pauseReading(),
@@ -222,20 +236,7 @@ export class TraexSession {
   }
 
   finishCompaction(failed = false, turn?: Record<string, unknown>): void {
-    this.timeline?.apply(
-      {
-        type: 'turn.end',
-        at: traexTimestampMs(turn?.completedAt) ?? Date.now(),
-        durationMs: traexNonnegativeNumber(turn?.durationMs),
-        state: turn?.status === 'interrupted' ? 'interrupted' : 'completed',
-        outcome: failed ? 'failure' : turn?.status === 'interrupted' ? undefined : 'success',
-        ...(this.activeTurn ? { providerTurnId: this.activeTurn } : {})
-      },
-      () => {
-        this.compacting = false
-        this.activeTurn = null
-      }
-    )
+    finishTraexCompaction(this, failed, turn)
   }
 
   private request(request: TraexServerRequest): void {
@@ -260,6 +261,7 @@ export class TraexSession {
 
   private exited(error: Error): void {
     this.ended = true
+    this.extras.dispose()
     this.queuedModelTurn = null
     this.failure ??= error
     if (!this.requestedClose) {
@@ -302,6 +304,7 @@ export class TraexSession {
 
   async retire(): Promise<void> {
     await this.exitWork
+    this.extras.dispose()
     this.unbindReading?.()
     this.timeline?.dispose()
     this.childThreads.forEach((child) => child.timeline.dispose())

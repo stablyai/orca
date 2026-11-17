@@ -4,10 +4,12 @@ import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-t
 import { AgentSessionPromptUnavailableError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { TraexAppServerConnection, TraexServerRequest } from './traex-app-server-connection'
 import type { TraexTimeline } from './traex-timeline'
+import type { StructuredAgentSessionLogFields } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { traexRecord, traexText } from './traex-protocol'
 import {
   pendingTraexPromptResolution,
   TRAEX_APPROVAL_LABELS,
+  traexPermissionsApprovalBody,
   traexQuestionBody,
   traexPromptReply
 } from './traex-prompt-content'
@@ -31,7 +33,8 @@ export class TraexPromptRegistry {
     private readonly connection: TraexAppServerConnection,
     private readonly timeline: TraexTimeline,
     private readonly threadId: string,
-    private readonly onModeApproved?: (mode: 'plan' | 'default') => Promise<void>
+    private readonly onModeApproved?: (mode: 'plan' | 'default') => Promise<void>,
+    private readonly warn?: (message: string, fields: StructuredAgentSessionLogFields) => void
   ) {}
 
   handle(request: TraexServerRequest, turn: string | null): void {
@@ -134,6 +137,8 @@ export class TraexPromptRegistry {
         ],
         resolution: pendingTraexPromptResolution
       }
+    } else if (request.method === 'item/permissions/requestApproval') {
+      body = traexPermissionsApprovalBody(params)
     } else if (
       request.method === 'item/commandExecution/requestApproval' ||
       request.method === 'item/fileChange/requestApproval'
@@ -168,6 +173,11 @@ export class TraexPromptRegistry {
         resolution: pendingTraexPromptResolution
       }
     } else {
+      this.warn?.('TRAE CLI requested a prompt Orca did not negotiate', {
+        scope: 'traex-prompt',
+        sessionId: this.threadId,
+        method: request.method
+      })
       this.connection.reject(request.id, `Orca did not negotiate ${request.method}`)
       return
     }
@@ -197,6 +207,20 @@ export class TraexPromptRegistry {
           action: accepted ? 'accept' : 'cancel',
           content: accepted ? {} : null,
           _meta: reply.decision === 'acceptForSession' ? { persist: 'session' } : null
+        })
+      }
+    } else if (request.method === 'item/permissions/requestApproval') {
+      const requested = traexRecord(params.permissions)
+      const granted = {
+        ...(requested.network != null ? { network: requested.network } : {}),
+        ...(requested.fileSystem != null ? { fileSystem: requested.fileSystem } : {})
+      }
+      prompt.respond = async (reply) => {
+        const denied = reply.decision === 'decline'
+        this.connection.respond(request.id, {
+          permissions: denied ? {} : granted,
+          scope: reply.decision === 'acceptForSession' ? 'session' : 'turn',
+          ...(reply.decision === 'acceptStrict' ? { strictAutoReview: true } : {})
         })
       }
     }

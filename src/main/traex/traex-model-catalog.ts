@@ -51,12 +51,24 @@ function quotaDescription(name: 'Daily' | 'Weekly', value: unknown): string | nu
   return `${name} quota: ${100 - percent}% left (${percent}% used)${resets}.`
 }
 
+function accountWeeklyQuota(value: unknown): Record<string, unknown> | null {
+  const window = traexRecord(traexRecord(traexRecord(value).rateLimits).secondary)
+  return typeof window.usedPercent === 'number'
+    ? {
+        usagePercent: window.usedPercent,
+        ...(typeof window.resetsAt === 'number' ? { resetTime: window.resetsAt } : {})
+      }
+    : null
+}
+
 export function traexModelOptions(
   models: readonly TraexModel[],
-  usage?: unknown
+  usage?: unknown,
+  rateLimits?: unknown
 ): AgentSessionModelOption[] {
   const quotas = traexRecord(usage)
   const daily = Array.isArray(quotas.dailyUsage) ? quotas.dailyUsage.map(traexRecord) : []
+  const accountWeekly = accountWeeklyQuota(rateLimits)
   return models
     .filter((model) => !model.hidden)
     .map((model) => {
@@ -66,7 +78,7 @@ export function traexModelOptions(
         metadata?.internal_daily_usage
       const weeklyQuota = metadata?.is_internal_usage_limit
         ? (quotas.usage ?? metadata.internal_usage)
-        : null
+        : accountWeekly
       const description = [
         metadata?.load ? `Model load: ${metadata.load.load_percent}%.` : null,
         quotaDescription('Daily', dailyQuota),
@@ -91,7 +103,11 @@ export function traexModelOptions(
 }
 
 export async function readTraexModelCatalog(connection: {
-  request(method: string, params?: Record<string, unknown>): Promise<unknown>
+  request(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number | null }
+  ): Promise<unknown>
 }): Promise<{ native: TraexModel[]; models: AgentSessionModelOption[] }> {
   const native: TraexModel[] = []
   const cursors = new Set<string>()
@@ -112,6 +128,9 @@ export async function readTraexModelCatalog(connection: {
       cursors.add(cursor)
     }
   } while (cursor)
-  const usage = await connection.request('model/internalUsage/read').catch(() => undefined)
-  return { native, models: traexModelOptions(native, usage) }
+  const [usage, rateLimits] = await Promise.all([
+    connection.request('model/internalUsage/read').catch(() => undefined),
+    connection.request('account/rateLimits/read', {}, { timeoutMs: 5_000 }).catch(() => undefined)
+  ])
+  return { native, models: traexModelOptions(native, usage, rateLimits) }
 }

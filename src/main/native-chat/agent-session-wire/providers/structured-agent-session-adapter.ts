@@ -331,6 +331,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
+  /** A provider-generated title for this chat's conversation, when the agent can name it. */
+  generateConversationName?(input: { record: AgentSessionRecord }): Promise<string | null>
   /** A fresh independent text task; never acquires or writes a turn in the chat. */
   generateText?(input: {
     agent: string
