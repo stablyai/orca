@@ -1373,6 +1373,11 @@ html.native-shell .app-layout {
   -webkit-app-region: drag;
 }
 
+/* Hidden workspaces stay laid out at opacity 0; Chromium skips only visibility:hidden app-regions, so their strips would steal visible tab clicks. */
+[inert] [data-terminal-focus-release-surface='true'] {
+  visibility: hidden;
+}
+
 /* Temporarily disable Electron drag regions while xterm owns focus so chrome clicks can release terminal zoom. */
 :root[data-regular-terminal-input-focused] .titlebar,
 :root[data-regular-terminal-input-focused] .titlebar-left,
