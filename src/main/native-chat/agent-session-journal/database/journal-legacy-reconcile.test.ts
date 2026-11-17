@@ -294,6 +294,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'cleared', rows)
   olderOrcaChat(original, 'reopened', rows)
   olderOrcaChat(original, 'remote', rows)
+  olderOrcaChat(original, 'hidden', rows)
   original
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
@@ -315,6 +316,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     'cleared',
     'closed',
     'converted',
+    'hidden',
     'idle',
     'open',
     'remote',
@@ -374,12 +376,12 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
 
   // An older Orca that never recorded its tabs can't say a chat was closed, so it opens.
   original.prepare("DELETE FROM agent_session_store_meta WHERE key='session_tabs_recorded'").run()
-  continueChat('closed', tip + 2)
+  continueChat('hidden', tip + 1)
   await again.close()
   cleanup.pop()
   const unrecorded = await upgrade(root)
   cleanup.push(unrecorded.close)
-  expect(tabbedChats(unrecorded.db)).toContain('closed')
+  expect(tabbedChats(unrecorded.db)).toContain('hidden')
 })
 
 // Perf contract: an unchanged original only needs baselines, so it skips adoption at any fleet size.
