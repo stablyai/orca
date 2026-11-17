@@ -201,9 +201,11 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
       ptyIds.add(ptyId)
       byTab.set(tabId, ptyIds)
     }
+    // One captured lookup: per-PTY `paneOfPty` would scan every main leaf for each PTY.
+    const paneOf = this.captureTerminalPaneReader()
     for (const pty of this.ptysById.values()) {
       if (pty.connected && pty.worktreeId === worktreeId) {
-        add(this.paneOfPty(pty).tabId, pty.ptyId)
+        add(paneOf(pty).tabId, pty.ptyId)
       }
     }
     for (const leaf of this.leaves.values()) {
