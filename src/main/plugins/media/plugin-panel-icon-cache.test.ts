@@ -8,7 +8,7 @@ import { createPluginFromTemplate } from '../../../cli/plugins/authoring/plugin-
 import { pluginInstalledImageUrl } from '../../../shared/plugins/images/plugin-image-url'
 import { discoverPlugins, isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { createPluginImageRequestHandler } from './plugin-image-protocol'
-import type { PluginImageCache } from './plugin-image-cache'
+import { PluginImageCache } from './plugin-image-cache'
 
 vi.mock('electron', () => ({ protocol: {} }))
 
@@ -35,7 +35,7 @@ it('serves the discovered icon until the next discovery and falls back after a c
     }
     let plugin = await discover()
     const handler = createPluginImageRequestHandler({
-      cache: {} as PluginImageCache,
+      cache: new PluginImageCache(join(root, 'cache')),
       findValidPlugin: () => plugin,
       findApprovedPlugin: () => null
     })
