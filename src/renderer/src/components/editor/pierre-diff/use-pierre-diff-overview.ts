@@ -1,8 +1,12 @@
 import { useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
-import type { FileDiffMetadata, PostRenderPhase } from '@pierre/diffs'
+import type { FileContents, FileDiffMetadata, PostRenderPhase } from '@pierre/diffs'
 import type { Editor } from '@pierre/diffs/edit'
 import type { PierreDiffInstance } from './PierreDiffSurface'
-import { getDiffOverviewGeometry, PierreDiffOverviewContext } from './pierre-diff-overview'
+import {
+  getDiffOverviewGeometry,
+  PierreDiffOverviewContext,
+  type DiffOverviewGeometry
+} from './pierre-diff-overview'
 import type { PierreDiffAnnotationData } from './pierre-diff-comment-annotations'
 
 export function usePierreDiffOverview(
@@ -18,6 +22,12 @@ export function usePierreDiffOverview(
   const version = useRef<number | undefined>(undefined)
   const original = useMemo(() => fileDiff.deletionLines.join(''), [fileDiff])
   const addition = useMemo(() => fileDiff.additionLines.join(''), [fileDiff])
+  const geometry = useRef<{
+    version: number | undefined
+    height: number
+    layout: string
+    value: DiffOverviewGeometry
+  } | null>(null)
   const text = useRef<{ document: object; version: number; value: string } | null>(null)
   const refresh = useCallback(() => {
     const current = active.current
@@ -38,10 +48,25 @@ export function usePierreDiffOverview(
       ? current.node.getBoundingClientRect().top - row.getBoundingClientRect().top
       : current.node.offsetTop
     version.current = current.instance.layoutVersion
+    const height = current.node.scrollHeight
+    if (
+      dirty.current ||
+      geometry.current?.version !== version.current ||
+      geometry.current?.height !== height ||
+      geometry.current?.layout !== layout
+    ) {
+      geometry.current = {
+        version: version.current,
+        height,
+        layout,
+        value: getDiffOverviewGeometry(diff, current.instance, height)
+      }
+    }
+    dirty.current = false
     overview.publish(key, {
       inset,
       layout,
-      ...getDiffOverviewGeometry(diff, current.instance, current.node.scrollHeight),
+      ...geometry.current!.value,
       original,
       modified: document ? text.current!.value : addition
     })
@@ -67,14 +92,20 @@ export function usePierreDiffOverview(
         observer.current.observe(node)
         refreshRef.current()
       } else if (dirty.current || version.current !== instance.layoutVersion) {
-        dirty.current = false
         refreshRef.current()
       }
     },
     [overview]
   )
-  const onEditChange = useCallback(() => {
-    dirty.current = true
-  }, [])
+  const onEditChange = useCallback(
+    (file: FileContents) => {
+      dirty.current = true
+      const document = editorRef.current?.getEditState()?.document
+      if (document) {
+        text.current = { document, version: document.version, value: file.contents }
+      }
+    },
+    [editorRef]
+  )
   return { onPostRender, onEditChange }
 }

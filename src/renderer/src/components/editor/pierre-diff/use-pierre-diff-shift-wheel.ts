@@ -40,7 +40,28 @@ export function usePierreDiffShiftWheel() {
     )
     let cursorFrame: number | null = null
     const revealCursor = (event: KeyboardEvent): void => {
-      if (event.isComposing || cursorFrame !== null) {
+      if (
+        event.isComposing ||
+        cursorFrame !== null ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        (![
+          'ArrowLeft',
+          'ArrowRight',
+          'ArrowUp',
+          'ArrowDown',
+          'Home',
+          'End',
+          'PageUp',
+          'PageDown',
+          'Backspace',
+          'Delete',
+          'Enter',
+          'Tab'
+        ].includes(event.key) &&
+          event.key.length !== 1)
+      ) {
         return
       }
       cursorFrame = requestAnimationFrame(() => {

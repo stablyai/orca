@@ -21,9 +21,28 @@ export const PierreDiffOverviewContext = createContext<{
 
 export function getDiffOverviewGeometry(
   diff: FileDiffMetadata,
-  instance: Pick<PierreDiffInstance, 'getLinePosition'>,
+  instance: Pick<PierreDiffInstance, 'getLinePosition' | 'getRenderedLinePositions'>,
   height: number
 ): DiffOverviewGeometry {
+  const targets: { lineNumber: number; side: SelectionSide }[] = []
+  for (const hunk of diff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type !== 'change') {
+        continue
+      }
+      for (const side of ['deletions', 'additions'] as const) {
+        if (!content[side]) {
+          continue
+        }
+        const start =
+          (side === 'additions' ? content.additionLineIndex : content.deletionLineIndex) + 1
+        targets.push({ lineNumber: start, side }, { lineNumber: start + content[side] - 1, side })
+      }
+    }
+  }
+  const positions = instance.getRenderedLinePositions?.(targets)
+  const position = (line: number, side: SelectionSide) =>
+    positions ? positions.get(`${side}:${line}`) : instance.getLinePosition?.(line, side)
   const markers: DiffOverviewMarker[] = []
   for (const hunk of diff.hunks) {
     for (const content of hunk.hunkContent) {
@@ -37,8 +56,8 @@ export function getDiffOverviewGeometry(
         }
         const start =
           (side === 'additions' ? content.additionLineIndex : content.deletionLineIndex) + 1
-        const first = instance.getLinePosition?.(start, side)
-        const last = instance.getLinePosition?.(start + count - 1, side)
+        const first = position(start, side)
+        const last = position(start + count - 1, side)
         if (first && last) {
           markers.push({ top: first.top, height: last.top + last.height - first.top, side })
         }

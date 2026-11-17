@@ -7,19 +7,18 @@ import {
 
 export function getLiveDiffSectionRenderLimit({
   section,
-  modifiedContent
+  modifiedContent,
+  modifiedLineCount
 }: {
   section: DiffSection
   modifiedContent: string
+  modifiedLineCount?: number
 }): LargeDiffRenderLimit {
-  // Why: the renderer no longer owns a text model, so count lines from the draft itself.
-  const modifiedLineCount = countLinesEmptyAsZero(modifiedContent)
-
   return getLargeDiffRenderLimitFromCounts({
     originalLineCount:
       section.largeDiffRenderLimit?.lineCounts?.original ??
       countLinesEmptyAsZero(section.originalContent),
-    modifiedLineCount,
+    modifiedLineCount: modifiedLineCount ?? countLinesEmptyAsZero(modifiedContent),
     originalCharacterCount: section.originalContent.length,
     modifiedCharacterCount: modifiedContent.length
   })

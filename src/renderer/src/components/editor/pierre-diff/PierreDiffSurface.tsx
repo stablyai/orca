@@ -1,4 +1,4 @@
-import { countLinesEmptyAsZero } from '../../../../../shared/source-control/diff/large-diff-render-limit'
+import { usePierreDiffLineCount } from './use-pierre-diff-line-count'
 import { buildPierreDiffSelectionStyle, resolvePierreDiffTheme } from './pierre-diff-theme'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
@@ -49,7 +49,9 @@ import { usePierreDiffEditState } from './pierre-diff-edit-state'
 import { shouldAutoFocusPierreDiffHost, shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
 
 export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
-  Partial<Pick<VirtualizedFileDiff, 'getLinePosition' | 'layoutVersion'>>
+  Partial<
+    Pick<VirtualizedFileDiff, 'getLinePosition' | 'getRenderedLinePositions' | 'layoutVersion'>
+  >
 
 export type PierreDiffSurfaceProps = {
   fileDiff: FileDiffMetadata
@@ -73,7 +75,7 @@ export type PierreDiffSurfaceProps = {
   onDeleteComment: (commentId: string) => void
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
   /** Live document stream while an edit session is active. */
-  onEditChange?: (file: FileContents) => void
+  onEditChange?: (file: FileContents & { lineCount?: number }) => void
   /** Language id for copy-with-context; omit to disable that shortcut. */
   language?: string
   /** Fires on Pierre's DOM lifecycle; used for height measurement. */
@@ -97,7 +99,6 @@ export type PierreDiffSurfaceProps = {
 export function PierreDiffSurface({
   fileDiff,
   overviewKey,
-  modifiedContent,
   sideBySide,
   settings,
   isEditable,
@@ -139,6 +140,7 @@ export function PierreDiffSurface({
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const { lineCount: annotationLineCount, rememberLineCount } = usePierreDiffLineCount(fileDiff)
   const editorRef = useRef<Editor<'file-diff', PierreDiffAnnotationData, undefined> | null>(null)
   // Why layout, not render: the auto-focus effect re-runs when isEditable flips, so this must
   // track the current group. A render-phase write is impure -- React can discard it.
@@ -187,11 +189,14 @@ export function PierreDiffSurface({
   } = usePierreDiffFind({ isEditable, containerRef, editorRef, fileDiff })
   useLayoutEffect(() => {
     onEditChangeRef.current = (file) => {
-      onEditChange?.(file)
+      const document = editorRef.current?.getEditState()?.document
+      const lineCount = file.contents ? document?.lineCount : 0
+      rememberLineCount(lineCount)
+      onEditChange?.({ ...file, lineCount })
       searchEditChange()
-      overviewEditChange()
+      overviewEditChange(file)
     }
-  }, [onEditChange, searchEditChange, overviewEditChange])
+  }, [onEditChange, searchEditChange, overviewEditChange, rememberLineCount])
   const shiftWheelPostRender = usePierreDiffShiftWheel()
   const nativeViewPostRender = usePierreDiffNativeView(
     editStateKey,
@@ -298,15 +303,8 @@ export function PierreDiffSurface({
   )
   const lineAnnotations = useMemo(
     () =>
-      buildPierreDiffCommentAnnotations(
-        comments,
-        filePath,
-        pendingComment,
-        modifiedContent === undefined
-          ? fileDiff.additionLines.length
-          : countLinesEmptyAsZero(modifiedContent)
-      ),
-    [comments, filePath, pendingComment, fileDiff.additionLines.length, modifiedContent]
+      buildPierreDiffCommentAnnotations(comments, filePath, pendingComment, annotationLineCount),
+    [comments, filePath, pendingComment, annotationLineCount]
   )
   const createTokenizer = usePierrePluginTokenizer(filePath, language ?? 'plaintext')
   const editorCallbacks = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
@@ -317,7 +315,7 @@ export function PierreDiffSurface({
         const host = containerRef.current
         // Host focus lands in layout before Pierre queues onAttach. If we still
         // own it, move to the editor so Changes-mode typing works without a click.
-        if (autoFocusHost && host && document.activeElement === host) {
+        if (host && document.activeElement === host) {
           editor.focus({ preventScroll: true })
         }
       },
@@ -326,7 +324,7 @@ export function PierreDiffSurface({
       },
       onChange: isEditable ? (event) => onEditChangeRef.current?.(event.file) : undefined
     }),
-    [autoFocusHost, isEditable, createTokenizer]
+    [isEditable, createTokenizer]
   )
   const editorOptions = usePierreDiffEditState(
     editorCallbacks,

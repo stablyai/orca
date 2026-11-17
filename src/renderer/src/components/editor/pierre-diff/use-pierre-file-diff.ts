@@ -12,10 +12,28 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
   const sameFile =
     snapshot?.input.cacheKey === input?.cacheKey && snapshot?.input.path === input?.path
-  const fileDiff = input && sameFile ? (snapshot?.diff ?? null) : null
+  const currentContent =
+    snapshot?.input.originalContent === input?.originalContent &&
+    snapshot?.input.modifiedContent === input?.modifiedContent &&
+    snapshot?.input.lang === input?.lang
+  const fileDiff =
+    input && sameFile && (editable || currentContent) ? (snapshot?.diff ?? null) : null
   const renderedScopeRef = useRef<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
-  const markEdited = useCallback(() => pendingRequest.current?.abort(), [])
+  const localEdit = useRef<{ input: PierreDiffInput; contents: string } | null>(null)
+  const markEdited = useCallback(
+    (contents?: string) => {
+      pendingRequest.current?.abort()
+      if (input && contents !== undefined) {
+        localEdit.current = { input, contents }
+      }
+      // A resolved request can already be queued ahead of this edit's parent update.
+      setSnapshot((previous) =>
+        previous && previous.diff !== fileDiff ? { ...previous, diff: fileDiff } : previous
+      )
+    },
+    [input, fileDiff]
+  )
   const scope = input ? JSON.stringify([input.cacheKey, input.path]) : null
   const [primedScope, setPrimedScope] = useState<string | null>(null)
 
@@ -23,9 +41,23 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     if (!input) {
       return
     }
+    const echo = localEdit.current
+    if (
+      echo &&
+      echo.contents === input.modifiedContent &&
+      echo.input.path === input.path &&
+      echo.input.cacheKey === input.cacheKey &&
+      echo.input.originalContent === input.originalContent &&
+      echo.input.lang === input.lang &&
+      echo.input.status === input.status &&
+      echo.input.oldPath === input.oldPath &&
+      JSON.stringify(echo.input.parseDiffOptions) === JSON.stringify(input.parseDiffOptions)
+    ) {
+      return
+    }
     const controller = new AbortController()
     pendingRequest.current = controller
-    // Edits already paint through Pierre; coalesce parent echoes before recomputing.
+    // Coalesce external updates; local edit echoes keep the live session authoritative.
     const timer = setTimeout(
       () => {
         // Why: an already-rejected highlight enqueues onHighlightError before this then
@@ -40,7 +72,9 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
           (diff) => {
             if (!controller.signal.aborted) {
               renderedScopeRef.current = JSON.stringify([input.cacheKey, input.path])
-              setSnapshot({ input, diff, error: highlightError })
+              setSnapshot((previous) =>
+                controller.signal.aborted ? previous : { input, diff, error: highlightError }
+              )
             }
           },
           (error: unknown) => {

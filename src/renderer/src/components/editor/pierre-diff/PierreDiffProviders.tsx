@@ -39,7 +39,13 @@ export function PierreDiffProviders({
           existing.height === source.height &&
           existing.inset === source.inset &&
           existing.layout === source.layout &&
-          JSON.stringify(existing.markers) === JSON.stringify(source.markers)
+          existing.markers.length === source.markers.length &&
+          existing.markers.every((marker, index) => {
+            const next = source.markers[index]
+            return (
+              marker.top === next.top && marker.height === next.height && marker.side === next.side
+            )
+          })
         ) {
           return previous
         }

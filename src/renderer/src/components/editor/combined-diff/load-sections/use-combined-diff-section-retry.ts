@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { removeDiffSectionMeasuredHeight } from '../../diff/sections/diff-section-height-cache'
@@ -42,6 +42,8 @@ export function useCombinedDiffSectionRetry({
     sectionLoadTokensRef,
     sectionsRef
   } = registry
+
+  const deferredIndices = useRef(new Map<string, number>())
 
   const retrySection = useCallback(
     (index: number) => {
@@ -105,9 +107,11 @@ export function useCombinedDiffSectionRetry({
         // Why: the git-status signature does not change for an edit inside an already-modified
         // line, so without this record nothing would ever re-drive the refused reload.
         deferredReloadKeysRef.current.add(section.key)
+        deferredIndices.current.set(section.key, index)
         return
       }
       deferredReloadKeysRef.current.delete(section.key)
+      deferredIndices.current.delete(section.key)
       loadedIndicesRef.current.delete(index)
       invalidateViewStateCache()
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
@@ -180,9 +184,10 @@ export function useCombinedDiffSectionRetry({
     if (deferred.size === 0) {
       return
     }
-    for (let index = 0; index < sections.length; index += 1) {
-      const section = sections[index]
-      if (section && !section.dirty && deferred.has(section.key)) {
+    for (const [key, index] of deferredIndices.current) {
+      if (!deferred.has(key) || sections[index]?.key !== key) {
+        deferredIndices.current.delete(key)
+      } else if (!sections[index].dirty) {
         retryDeferredSectionReload(index)
       }
     }

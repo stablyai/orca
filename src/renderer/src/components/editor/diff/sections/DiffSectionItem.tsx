@@ -32,7 +32,6 @@ export function DiffSectionItem({
   section,
   index,
   editStateKey,
-  renderKey,
   isBranchMode,
   sideBySide,
   sectionHeight,
@@ -116,8 +115,8 @@ export function DiffSectionItem({
             status: section.status,
             originalContent: section.originalContent,
             modifiedContent: section.modifiedContent,
-            // Why: keyed by content generation so the worker AST cache survives virtualization remounts.
-            cacheKey: `${worktreeId}:${section.key}:${section.contentGeneration ?? 0}`,
+            // Content identity is derived by the parse cache; reloads retain the mounted scope.
+            cacheKey: `${worktreeId}:${section.key}`,
             lang,
             parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace)
           },
@@ -129,7 +128,6 @@ export function DiffSectionItem({
       section.originalContent,
       section.modifiedContent,
       section.key,
-      section.contentGeneration,
       section.collapsed,
       section.loading,
       section.loadOnDemand,
@@ -152,8 +150,8 @@ export function DiffSectionItem({
   // Why: virtualized rows unmount when scrolled away, so the draft must live in
   // section state rather than only inside the mounted editor.
   const handleEditChange = useCallback(
-    (file: { contents: string }) => {
-      markEdited()
+    (file: { contents: string; lineCount?: number }) => {
+      markEdited(file.contents)
       const current = file.contents
       setSections((prev) => {
         let changed = false
@@ -174,7 +172,8 @@ export function DiffSectionItem({
             dirty,
             largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
               section: s,
-              modifiedContent: current
+              modifiedContent: current,
+              modifiedLineCount: file.lineCount
             })
           }
         })
@@ -271,7 +270,7 @@ export function DiffSectionItem({
             <PierreDiffLoading error={parseError} onRetry={retryParse} overlay />
           ) : null}
           <PierreDiffSurface
-            key={renderKey ?? editStateKey}
+            key={editStateKey}
             fileDiff={fileDiff}
             overviewKey={section.key}
             modifiedContent={section.modifiedContent}
@@ -323,7 +322,6 @@ export function DiffSectionItem({
       isEditable,
       editReady,
       editStateKey,
-      renderKey,
       pendingComment,
       language,
       section.path,

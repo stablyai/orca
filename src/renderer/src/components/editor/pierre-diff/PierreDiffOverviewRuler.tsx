@@ -2,32 +2,17 @@ import {
   DIFF_SECTION_HEADER_HEIGHT,
   DIFF_SECTION_PADDING_HEIGHT
 } from '../diff/sections/diff-section-layout'
-import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useEffect, useMemo, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { DiffSection } from '../diff/sections/diff-section-types'
-import { requestPierreDiffMetadata } from './pierre-diff-parse-client'
-import {
-  estimateDiffOverview,
-  type DiffOverviewGeometry,
-  type DiffOverviewMarker,
-  type DiffOverviewSource
-} from './pierre-diff-overview'
-import { buildPierreParseDiffOptions } from './pierre-diff-options'
-import { useAppStore } from '@/store'
+import type { DiffOverviewMarker, DiffOverviewSource } from './pierre-diff-overview'
 
 export type CombinedDiffOverview = {
   sections: DiffSection[]
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sideBySide: boolean
 }
-type ParsedSection = {
-  layout: string
-  original: string
-  modified: string
-  geometry: DiffOverviewGeometry
-}
-
 const OverviewMarkers = memo(function OverviewMarkers({
   markers,
   offset,
@@ -76,9 +61,6 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
   sources: ReadonlyMap<string, DiffOverviewSource>
   combined?: CombinedDiffOverview
 }): React.JSX.Element | null {
-  const whitespace = useAppStore((state) => state.settings?.diffShowWhitespace)
-  const [parsed, setParsed] = useState<ReadonlyMap<string, ParsedSection>>(new Map())
-  const parsedCache = useRef<ReadonlyMap<string, ParsedSection>>(new Map())
   const [viewport, setViewport] = useState<{
     parent: HTMLElement
     height: number
@@ -86,64 +68,6 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
   } | null>(null)
   const sections = combined?.sections
   const sideBySide = combined?.sideBySide ?? false
-  const layout = JSON.stringify([sideBySide, whitespace])
-  useEffect(() => {
-    const controller = new AbortController()
-    // Keep metadata work out of the highlight pool and its viewport admission budget.
-    void (async () => {
-      const next = new Map<string, ParsedSection>()
-      for (const section of sections ?? []) {
-        if (controller.signal.aborted) {
-          return
-        }
-        if (
-          section.loading ||
-          section.loadOnDemand ||
-          section.diffResult?.kind !== 'text' ||
-          section.largeDiffRenderLimit?.limited
-        ) {
-          continue
-        }
-        const original = section.originalContent
-        const modified = section.modifiedContent
-        const previous = parsedCache.current.get(section.key)
-        if (
-          previous?.original === original &&
-          previous.modified === modified &&
-          previous.layout === layout
-        ) {
-          next.set(section.key, previous)
-          continue
-        }
-        try {
-          const diff = await requestPierreDiffMetadata(
-            {
-              path: section.path,
-              oldPath: section.oldPath,
-              status: section.status,
-              originalContent: original,
-              modifiedContent: modified,
-              parseDiffOptions: buildPierreParseDiffOptions(whitespace)
-            },
-            controller.signal
-          )
-          next.set(section.key, {
-            layout,
-            original,
-            modified,
-            geometry: estimateDiffOverview(diff, sideBySide)
-          })
-        } catch {
-          // The section-level change counts remain available if parsing fails.
-        }
-      }
-      if (!controller.signal.aborted) {
-        parsedCache.current = next
-        setParsed(next)
-      }
-    })()
-    return () => controller.abort()
-  }, [sections, sideBySide, whitespace, layout])
   const totalSize = combined?.virtualizer.getTotalSize()
   const measurements = combined?.virtualizer.measurementsCache
   useEffect(() => {
@@ -191,13 +115,7 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
         JSON.parse(source.layout)[0] === sideBySide
           ? source
           : undefined
-      const snapshot = parsed.get(section.key)
-      const geometry =
-        current ??
-        (snapshot?.original === section.originalContent &&
-        snapshot.modified === section.modifiedContent
-          ? snapshot.geometry
-          : undefined)
+      const geometry = current
       if (geometry && !section.collapsed) {
         const inset = current?.inset ?? DIFF_SECTION_HEADER_HEIGHT
         const scale = current
@@ -227,7 +145,7 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
       }
     }
     return result
-  }, [sections, measurements, parsed, sources, sideBySide])
+  }, [sections, measurements, sources, sideBySide])
   if (!viewport || viewport.scrollHeight <= viewport.height || !groups.length) {
     return null
   }

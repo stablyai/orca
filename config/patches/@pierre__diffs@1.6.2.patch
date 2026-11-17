@@ -781,6 +781,151 @@ diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
  	}
  	setHydratedState(files) {
  		this.deletionFile = files.oldFile;
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -57,6 +57,7 @@
+ 	delete editSessionDiff.cacheKey;
+ 	return editSessionDiff;
+ }
++const comparedOldLines = new WeakMap();
+ function shouldResetUndoState(prevDiff, nextDiff) {
+ 	if (prevDiff.isPartial || nextDiff.isPartial) throw new Error("FileDiff.shouldResetEditorForExternalDiff: diffs must be fully hydrated");
+ 	const prevLanguage = prevDiff.lang ?? getFiletypeFromFileName(prevDiff.name);
+@@ -64,7 +65,12 @@
+ 	const prevHasOldFile = prevDiff.type !== "new";
+ 	const nextHasOldFile = nextDiff.type !== "new";
+ 	if (prevDiff.name !== nextDiff.name || prevLanguage !== nextLanguage || prevHasOldFile !== nextHasOldFile || prevDiff.deletionLines.length !== nextDiff.deletionLines.length) return true;
+-	return prevDiff.deletionLines.some((line, index) => line !== nextDiff.deletionLines[index]);
++	if (prevDiff.deletionLines === nextDiff.deletionLines) return false;
++    let compared = comparedOldLines.get(prevDiff.deletionLines);
++    if (compared?.lines === nextDiff.deletionLines) return compared.changed;
++    const changed = prevDiff.deletionLines.some((line, index) => line !== nextDiff.deletionLines[index]);
++    comparedOldLines.set(prevDiff.deletionLines, { lines: nextDiff.deletionLines, changed });
++    return changed;
+ }
+ function areLinesEqual(first, second) {
+ 	return first.length === second.length && first.every((line, index) => line === second[index]);
+diff --git a/dist/components/VirtualizedFileDiff.d.ts b/dist/components/VirtualizedFileDiff.d.ts
+--- a/dist/components/VirtualizedFileDiff.d.ts
++++ b/dist/components/VirtualizedFileDiff.d.ts
+@@ -42,6 +42,7 @@
+   onRender: (dirty: boolean) => boolean;
+   flushManagers(): void;
+   updateCodeViewLayout(fileDiff: FileDiffMetadata, top: number, reset?: PendingCodeViewLayoutReset, lineAnnotations?: DiffLineAnnotation<LAnnotation>[]): number;
++  getRenderedLinePositions(targets: { lineNumber: number; side: SelectionSide }[]): Map<string, { top: number; height: number }>;
+   getLinePosition(lineNumber: number, side?: SelectionSide): {
+     top: number;
+     height: number;
+diff --git a/dist/components/VirtualizedFileDiff.js b/dist/components/VirtualizedFileDiff.js
+--- a/dist/components/VirtualizedFileDiff.js
++++ b/dist/components/VirtualizedFileDiff.js
+@@ -266,6 +266,39 @@
+ 		this.computeApproximateSize(false, pendingRenderDiff);
+ 		return this.height;
+ 	}
++    getRenderedLinePositions(targets) {
++        const diff = this.getLayoutDiff();
++        const positions = new Map();
++        if (diff == null || this.options.collapsed) return positions;
++        const wanted = new Set(targets.map(({ lineNumber, side }) => `${side}:${lineNumber}`));
++        const { disableFileHeader = false, expandUnchanged = false, collapsedContextThreshold = 1 } = this.options;
++        const diffStyle = this.getDiffStyle();
++        const hunkSeparators = this.getHunkSeparatorType();
++        let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader) + this.cache.fileAnnotationHeight;
++        iterateOverDiff({
++            diff, diffStyle,
++            expandedHunks: expandUnchanged ? true : this.hunksRenderer.getExpandedHunksMap(),
++            collapsedContextThreshold,
++            callback: ({ hunkIndex, hunk, collapsedBefore, collapsedAfter, deletionLine, additionLine }) => {
++                if (collapsedBefore > 0) {
++                    const separator = getLeadingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics, hunkIndex, hunkSpecs: hunk?.hunkSpecs });
++                    if (separator != null) top += separator.gapBefore + separator.height + separator.gapAfter;
++                }
++                const lineIndex = diffStyle === "split" ? additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex : additionLine?.unifiedLineIndex ?? deletionLine?.unifiedLineIndex;
++                const height = this.getLineHeight(lineIndex, (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false));
++                for (const [side, line] of [["additions", additionLine], ["deletions", deletionLine]]) {
++                    const key = `${side}:${line?.lineNumber}`;
++                    if (wanted.has(key)) positions.set(key, { top, height });
++                }
++                top += height;
++                if (collapsedAfter > 0) {
++                    const separator = getTrailingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics });
++                    if (separator != null) top += separator.totalHeight;
++                }
++            }
++        });
++        return positions;
++    }
+ 	getLinePosition(lineNumber, side = "additions") {
+ 		const fileDiff = this.getLayoutDiff();
+ 		if (fileDiff == null || lineNumber < 1) return;
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -566,6 +566,11 @@
+ 			this.#publishChange = void 0;
+ 		}
+ 	}
++    #checkpointDocument;
++    #checkpointVersion;
++    #checkpointHunks;
++    #checkpointDeletions;
++    #checkpointType;
+ 	#checkpointEditSessionState(captureView = true) {
+ 		const fileInstance = this.#fileInstance;
+ 		const editSession = this.#editSession;
+@@ -580,7 +585,17 @@
+ 		const hasEditorState = editorState.selections != null || hasNonDefaultView;
+ 		editSession.editor = cloneEditorViewState(editorState);
+ 		if (editSession.type === "file") return false;
+-		const capturedDiffSession = fileInstance.__captureDocumentSessionState();
++		const current = fileInstance.__captureDocumentSessionState(false);
++        const documentVersion = editSession.document?.version;
++        const sameSession = this.#checkpointDocument === editSession.document &&
++            this.#checkpointVersion === documentVersion && this.#checkpointHunks === current?.diffSession.hunks &&
++            this.#checkpointDeletions === current?.diffSession.oldFile?.lines && this.#checkpointType === current?.diffSession.type;
++        const capturedDiffSession = sameSession ? { diffSession: editSession.diffSession, hasChanges: current?.hasChanges } : fileInstance.__captureDocumentSessionState();
++        this.#checkpointDocument = editSession.document;
++        this.#checkpointVersion = documentVersion;
++        this.#checkpointHunks = current?.diffSession.hunks;
++        this.#checkpointDeletions = current?.diffSession.oldFile?.lines;
++        this.#checkpointType = current?.diffSession.type;
+ 		if (capturedDiffSession == null) {
+ 			editSession.diffSession = void 0;
+ 			return false;
+@@ -690,10 +705,11 @@
+ 			if (this.#spriteElement !== void 0) shadowRoot.prepend(this.#spriteElement);
+ 		}
+ 		const languageId = fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name);
+-		const contents = "contents" in fileOrDiff ? fileOrDiff.contents : fileOrDiff.additionLines.join("");
++		let contents;
++        const getContents = () => contents ??= "contents" in fileOrDiff ? fileOrDiff.contents : fileOrDiff.additionLines.join("");
+ 		const previousTextDocument = editSession.document;
+ 		const resetHistory = props.resetHistory ?? (previousTextDocument != null && editSession.fileInfo != null && (editSession.fileInfo.name !== fileOrDiff.name || previousTextDocument.languageId !== languageId));
+-		const documentChanges = externalDocument && previousTextDocument !== void 0 && previousTextDocument.getText() !== contents ? [createFullDocumentChange(previousTextDocument.getText(), contents)] : void 0;
++		const documentChanges = externalDocument && previousTextDocument !== void 0 && previousTextDocument.getText() !== getContents() ? [createFullDocumentChange(previousTextDocument.getText(), getContents())] : void 0;
+ 		const resetForExternalDocument = externalDocument && resetHistory;
+ 		if (editSession.document == null || editSession.fileInfo == null || editStateKey == null && (editSession.fileInfo.name !== fileOrDiff.name || editSession.document.languageId !== languageId) || resetForExternalDocument) {
+ 			this.#cancelEditPrediction(true);
+@@ -704,7 +720,7 @@
+ 			if (previousTextDocument != null && textDocument == null) editSession.editor = void 0;
+ 			if (textDocument == null) {
+ 				const editStack = new EditStack({ maxEntries: this.#options.historyMaxEntries });
+-				textDocument = new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
++				textDocument = new TextDocument(fileOrDiff.name, getContents(), languageId, 0, editStack);
+ 			}
+ 			editSession.fileInfo = {
+ 				name,
+@@ -720,7 +736,7 @@
+ 			if (this.#options.__debug === true) console.log("[diffs/editor] text document initialized from", fileOrDiff.name);
+ 		}
+ 		if (externalDocument && !resetForExternalDocument) {
+-			this.#applyExternalDocumentReplacement(editSession, contents, lineAnnotations);
++			this.#applyExternalDocumentReplacement(editSession, getContents(), lineAnnotations);
+ 			const { name, lang } = fileOrDiff;
+ 			editSession.fileInfo = {
+ 				name,
 diff --git a/dist/react/utils/renderDiffChildren.js b/dist/react/utils/renderDiffChildren.js
 --- a/dist/react/utils/renderDiffChildren.js
 +++ b/dist/react/utils/renderDiffChildren.js

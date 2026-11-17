@@ -211,7 +211,7 @@ export default function DiffViewer({
 
   const handleEditChange = useCallback(
     (file: { contents: string }) => {
-      markEdited()
+      markEdited(file.contents)
       modifiedContentRef.current = file.contents
       onContentChange?.(file.contents)
     },

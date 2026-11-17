@@ -18,7 +18,10 @@ const input: PierreDiffInput = {
   parseDiffOptions: {}
 }
 const diff = parseDiffFromFile({ name: 'file', contents: 'old' }, { name: 'file', contents: 'new' })
-beforeEach(() => vi.useFakeTimers())
+beforeEach(() => {
+  vi.useFakeTimers()
+  prepareHighlight.mockResolvedValue(undefined)
+})
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -44,19 +47,15 @@ it('cancels outdated computations and never installs their result', async () => 
   expect(result.current.fileDiff).toBe(diff)
 })
 
-it('keeps the mounted editor during a same-file update and coalesces rapid echoes', async () => {
+it('hides the previous head while replacement content is being parsed', async () => {
   vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
   const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value), {
     initialProps: { value: input }
   })
   await act(async () => vi.runOnlyPendingTimers())
   expect(result.current.fileDiff).toBe(diff)
-  rerender({ value: { ...input, modifiedContent: 'a' } })
-  rerender({ value: { ...input, modifiedContent: 'ab' } })
-  expect(result.current.fileDiff).toBe(diff)
-  await act(async () => vi.advanceTimersByTime(120))
-  expect(requestPierreFileDiff).toHaveBeenCalledTimes(2)
-  expect(vi.mocked(requestPierreFileDiff).mock.calls[1][0].modifiedContent).toBe('ab')
+  rerender({ value: { ...input, modifiedContent: 'new head' } })
+  expect(result.current.fileDiff).toBeNull()
 })
 
 it('never shows the preceding file under another file name', async () => {
@@ -100,7 +99,7 @@ it('invalidates a pending result as soon as typing arrives, before the parent ec
 
 it('keeps the last good diff when a later recompute fails', async () => {
   vi.mocked(requestPierreFileDiff).mockResolvedValueOnce(diff)
-  const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value), {
+  const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value, true), {
     initialProps: { value: input }
   })
   await act(async () => vi.runOnlyPendingTimers())
@@ -224,4 +223,31 @@ it('re-primes on retry after a prime-on-flip highlight failure', async () => {
   await act(async () => finishPrime())
   expect(result.current.editReady).toBe(true)
   expect(result.current.error).toBeNull()
+})
+
+it('keeps local input authoritative when a completed parse is queued before the next keystroke', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValueOnce(diff)
+  let complete: (value: FileDiffMetadata) => void = () => {}
+  const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value, true), {
+    initialProps: { value: input }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  vi.mocked(requestPierreFileDiff).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve
+      })
+  )
+  rerender({ value: { ...input, modifiedContent: 'external' } })
+  await act(async () => vi.runOnlyPendingTimers())
+  const replacement = { ...diff, additionLines: ['external'] }
+  await act(async () => {
+    complete(replacement)
+    await Promise.resolve()
+    result.current.markEdited('new keystroke')
+    rerender({ value: { ...input, modifiedContent: 'new keystroke' } })
+  })
+  expect(result.current.fileDiff).toBe(diff)
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.fileDiff).toBe(diff)
 })
