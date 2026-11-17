@@ -19,7 +19,7 @@ import {
 import {
   guestNativePathEnv,
   resolveGuestNativeProgram
-} from '../../ipc/wsl-guest-windows-drive-path'
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number

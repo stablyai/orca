@@ -47,8 +47,7 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { structuredAgentSettingGates } from '../../agent-session/launch/structured-agent-setting-gates'
 import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -272,9 +271,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      resolveAgentFullAccess: (agent) =>
-        isTuiAgent(agent) &&
-        preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
+      ...structuredAgentSettingGates(() => this.requireStore().getSettings()),
       launchAccountHome: (record, purpose) =>
         this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       prepareLaunchAccountHome: (record, launchDirectory) =>

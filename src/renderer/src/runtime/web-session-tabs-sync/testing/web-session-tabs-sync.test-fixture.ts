@@ -6,7 +6,7 @@ import { resetWebSessionCloseIntentForTests } from '../closing/web-session-close
 import { resetWebSessionReorderIntentForTests } from '../navigation/web-session-reorder-intent'
 import { resetWebAgentSessionHandoffsForTests } from '../../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from '../initial-terminal/web-runtime-initial-terminal-bootstrap'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from '../state'
 import '../../browser/creation/web-runtime-browser-creation'
 

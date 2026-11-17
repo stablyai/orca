@@ -7,7 +7,7 @@ import {
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
 import { getProvider } from '../provider/registry'
-import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
+import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'

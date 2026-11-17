@@ -64,6 +64,7 @@ export function AddWslHostFormPanel({
   selectedDistro,
   error,
   adding,
+  addingDetail = null,
   serverFilesMissing,
   onSelectDistro,
   onRefresh,
@@ -76,6 +77,8 @@ export function AddWslHostFormPanel({
   selectedDistro: string
   error: string | null
   adding: boolean
+  /** What the Add waits for, in place of the generic setup hint. */
+  addingDetail?: string | null
   /** This build cannot run WSL hosts; nothing here may be chosen or submitted. */
   serverFilesMissing: boolean
   onSelectDistro: (name: string) => void
@@ -204,10 +207,11 @@ export function AddWslHostFormPanel({
         ) : null}
         {adding ? (
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {t(
-              'auto.components.sidebar.AddWslHostFormPanel.addingHint',
-              'Installing and starting the Orca server in the distro. The first time can take a minute.'
-            )}
+            {addingDetail ??
+              t(
+                'auto.components.sidebar.AddWslHostFormPanel.addingHint',
+                'Installing and starting the Orca server in the distro. The first time can take a minute.'
+              )}
           </p>
         ) : null}
         {error ? (

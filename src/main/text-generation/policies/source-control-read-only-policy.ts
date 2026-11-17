@@ -15,9 +15,10 @@ import {
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { isNamingOnlyTextAgent } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { parseWslUncPath, wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
+import { guestUncPath, wslGuestShellPaths } from '../../wsl/filesystem/wsl-guest-drive-path'
 import { TEXT_TASK_DIRECTORY } from '../prompts/source-control-prompt-files'
 import { runSourceControlPolicyProbe } from './source-control-policy-probe'
 import type {
@@ -50,17 +51,15 @@ async function recipeFile(
   const distro =
     process.platform === 'win32' ? wslDistroForCommand(target.cwd, target.wslDistro) : null
   if (distro) {
-    const cwd = parseWslUncPath(target.cwd)?.linuxPath ?? target.cwd
+    // The workspace and a drive recipe path resolve under the distro's own drive mount.
+    const { prelude, words } = wslGuestShellPaths([target.cwd, file].map(guestUncPath), 1)
     const home =
       commandEnv?.HOME ?? (target.env?.HOME !== process.env.HOME ? target.env?.HOME : undefined)
     const result = await runWslProcess({
       distro,
-      cwd,
       loginPath: 'preferred',
       ...(home !== undefined ? { env: { ORCA_TEXT_TASK_HOME: home } } : {}),
-      script:
-        'if [ "${ORCA_TEXT_TASK_HOME+x}" ]; then HOME=$ORCA_TEXT_TASK_HOME; fi; case "$1" in "~/"*) file=$HOME/${1#??} ;; *) file=$1 ;; esac; cat -- "$file"',
-      args: [file],
+      script: `${prelude}cd ${words[0]} || exit 1; set -- ${words[1]}; if [ "\${ORCA_TEXT_TASK_HOME+x}" ]; then HOME=$ORCA_TEXT_TASK_HOME; fi; case "$1" in "~/"*) file=$HOME/\${1#??} ;; *) file=$1 ;; esac; cat -- "$file"`,
       timeoutMs: 10_000,
       maxOutputBytes: 1024 * 1024
     })

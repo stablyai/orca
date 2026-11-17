@@ -13,7 +13,7 @@ import type { RuntimeStore as Store } from '../../../runtime/construction/runtim
 import { resolveAuthorizedPath } from '../access/filesystem-auth'
 import { toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveBundledRipgrepWslRouting } from '../../../ripgrep/bundled-ripgrep-wsl-routing'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import {
   buildExcludePathPrefixes,
   buildRgArgsForQuickOpen,

@@ -97,6 +97,7 @@ export class ReaderSlot {
 
   constructor(filename: string, originalFilename: string, workerPath: string) {
     this.worker = spawnWorkerThread(workerPath, {
+      name: 'orca-journal-sql-reader',
       workerData: { filename, originalFilename },
       execArgv: []
     })

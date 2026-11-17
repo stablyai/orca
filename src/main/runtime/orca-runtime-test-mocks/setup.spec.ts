@@ -48,7 +48,7 @@ const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() =>
 const findExistingWorktreeSymlinkPathsMock: TestMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock: TestMock = vi.hoisted(() => vi.fn(async () => ''))
 
-vi.mock('../../ipc/worktree-symlinks', () => ({
+vi.mock('../../ipc/worktrees/linked-paths/worktree-symlinks', () => ({
   createWorktreeCopiedPaths: vi.fn(),
   createWorktreeLinkedPaths: vi.fn(),
   createWorktreeSharedPaths: vi.fn(),
@@ -329,7 +329,7 @@ vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveSetupRunPolicy: vi.fn().mockReturnValue('auto')
 }))
 
-vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
+vi.mock('../../ipc/worktrees/paths/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,

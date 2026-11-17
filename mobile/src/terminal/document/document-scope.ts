@@ -69,6 +69,8 @@ export type TerminalDocumentState = {
   // The family xterm draws with; a bundled font joins it only once loaded, so cells are never measured on a fallback.
   terminalFontFamily: string
   terminalFontStyle: TerminalFontStyle
+  // Settles once the picked bundled face is drawn with; the first fit waits for it.
+  terminalFontLoad: Promise<void> | null
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
   activeAltScreenSnapshot: boolean
@@ -196,6 +198,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     currentTextScale: 1,
     terminalFontFamily: '',
     terminalFontStyle: DEFAULT_TERMINAL_FONT_STYLE,
+    terminalFontLoad: null,
     firstDataPending: false,
     reportedCellBox: null,
     activeAltScreenSnapshot: false,

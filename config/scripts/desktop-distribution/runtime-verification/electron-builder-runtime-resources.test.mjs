@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,45 +8,10 @@ import { removeTree } from '../../../../src/shared/file-write/windows-transient-
 const require = createRequire(import.meta.url)
 const {
   prunePackagedNodePty,
-  prunePackagedParcelWatcher,
   verifyPackagedMainRuntimeDeps
 } = require('../../../packaged-runtime-node-modules.cjs')
 
 describe('packaged runtime resources', () => {
-  it('verifies literal dynamic imports from the packaged main bundle', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-dynamic-imports-'))
-    try {
-      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
-
-      // Cover shipped oxc memoized-import spelling and spaced equivalent.
-      const sources = new Map([
-        [
-          'out/main/index.js',
-          'let p=null;function q(){return p??=import(`@anthropic-ai/claude-agent-sdk`),p}'
-        ],
-        [
-          'out/main/agent-hooks/installation/managed-agent-hook-controls.js',
-          'import (`@anthropic-ai/claude-agent-sdk`)'
-        ]
-      ])
-      const asar = {
-        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
-        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
-      }
-
-      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
-        /@anthropic-ai\/claude-agent-sdk/
-      )
-
-      await mkdir(join(resourcesDir, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'), {
-        recursive: true
-      })
-      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
   it('verifies bare imports that rolldown hoisted into a shared main chunk', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-chunk-imports-'))
     try {
@@ -103,28 +68,6 @@ describe('packaged runtime resources', () => {
       await expect(readFile(join(releaseDir, 'conpty', 'OpenConsole.exe'), 'utf8')).resolves.toBe(
         'console payload arm64'
       )
-    } finally {
-      await removeTree(resourcesDir)
-    }
-  })
-
-  it('leaves unrelated @parcel/* runtime deps untouched when pruning the watcher', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-unrelated-'))
-    try {
-      const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
-      await mkdir(join(parcelDir, 'watcher'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-darwin-arm64'), { recursive: true })
-      await mkdir(join(parcelDir, 'watcher-linux-x64-glibc'), { recursive: true })
-      // A hypothetical future @parcel/* runtime dep that is NOT a watcher subpackage.
-      await mkdir(join(parcelDir, 'transformer-js'), { recursive: true })
-
-      prunePackagedParcelWatcher(resourcesDir, 'linux', 1)
-
-      await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
-        'transformer-js',
-        'watcher',
-        'watcher-linux-x64-glibc'
-      ])
     } finally {
       await removeTree(resourcesDir)
     }

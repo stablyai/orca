@@ -135,6 +135,11 @@ it.skipIf(process.platform === 'win32').each([
       { mode: 0o700 }
     )
     writeFileSync(
+      join(directory, 'wslpath'),
+      `#!/bin/sh\n[ "$1" = -u ] && [ "$2" = 'C:\\' ] && echo /mnt/c/ && exit 0\nexit 1\n`,
+      { mode: 0o700 }
+    )
+    writeFileSync(
       profile,
       `review_agent() { ${quotePosixShell(process.execPath)} ${quotePosixShell(reader)} "$@"; }\n`
     )
