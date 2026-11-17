@@ -36,12 +36,16 @@ function toError(payload: WorkerThreadChildErrorPayload): Error {
 export const WORKER_CHILD_ABANDONED_CODE = 'ERR_ORCA_WORKER_CHILD_ABANDONED'
 
 export function isAbandonedWorkerChildError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === WORKER_CHILD_ABANDONED_CODE
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? error.code === WORKER_CHILD_ABANDONED_CODE
+    : false
 }
 
 /** The worker forwards stdin pipe failures as child errors; a capture leaves those to the exit status, as main's stdin end does. */
 export function isWorkerChildStdinWriteError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.syscall === 'write'
+  return typeof error === 'object' && error !== null && 'syscall' in error
+    ? error.syscall === 'write'
+    : false
 }
 
 // Never emits: the worker reports stdin failures as child 'error' events.

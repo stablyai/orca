@@ -1,9 +1,9 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
 import {
   isWorkerChildStdinWriteError,
+  spawnProcessOnWorkerThread,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 

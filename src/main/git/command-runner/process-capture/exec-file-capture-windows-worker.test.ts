@@ -101,7 +101,10 @@ describe('Windows process creation off the calling loop', () => {
     child.receive({
       type: 'error',
       id: 1,
-      error: { message: 'Child process worker exited with code 1', code: WORKER_CHILD_ABANDONED_CODE }
+      error: {
+        message: 'Child process worker exited with code 1',
+        code: WORKER_CHILD_ABANDONED_CODE
+      }
     })
     await expect(pending).rejects.toThrow('Child process worker exited with code 1')
     expect(terminated).toHaveBeenCalledOnce()
@@ -109,11 +112,9 @@ describe('Windows process creation off the calling loop', () => {
 
   it('runs on the calling loop when the worker cannot start', async () => {
     worker.available = false
-    const result = await execFileCapture(
-      process.execPath,
-      ['-e', 'process.stdout.write("ran")'],
-      { encoding: 'utf8' }
-    )
+    const result = await execFileCapture(process.execPath, ['-e', 'process.stdout.write("ran")'], {
+      encoding: 'utf8'
+    })
     expect(result.stdout).toBe('ran')
     expect(worker.spawn).not.toHaveBeenCalled()
   })

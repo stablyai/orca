@@ -1,9 +1,7 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
-import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
+import type { SpawnOptions } from 'node:child_process'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
-import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { createAbortError } from './process-capture/abort-error'
 import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
@@ -24,14 +22,9 @@ import {
   resolveGitCommandWithoutProbe
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { gitSpawn } from './git-spawn'
-import {
-  canSpawnOnWorkerThread,
-  isAbandonedWorkerChildError,
-  spawnProcessOnWorkerThread,
-  type WorkerThreadChildProcess
-} from '../../worker-thread-child-process/worker-thread-child-process'
+import { nonInteractiveGitEnv } from './git-environment/git-process-env'
+import { spawnGitStreamChild } from './git-stream-child-spawn'
+import { isAbandonedWorkerChildError } from '../../worker-thread-child-process/worker-thread-child-process'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -111,47 +104,7 @@ function streamInSpan(
           wslDistro: options.wslDistro,
           windowsHide: true
         }
-        const ownedPosixGroup = process.platform !== 'win32' && !command.wsl
-        let child: ChildProcess | WorkerThreadChildProcess
-        let ownedGroupChild: ChildProcess | null = null
-        if (ownedPosixGroup) {
-          child = ownedGroupChild = spawnNativeProcess(
-            command.binary,
-            command.args,
-            {
-              cwd: command.cwd,
-              env: untranslatedGitOutputEnv(spawnOptions.env),
-              stdio,
-              windowsHide: true,
-              detached: true
-            },
-            undefined,
-            recordSubprocessSpawn
-          )
-        } else if (command.wslMode === 'direct-git') {
-          const spawnStartedAt = performance.now()
-          child = spawn(command.binary, command.args, {
-            cwd: command.cwd,
-            env: untranslatedGitOutputEnv(spawnOptions.env),
-            stdio: spawnOptions.stdio,
-            windowsHide: true
-          })
-          recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-        } else if (process.platform === 'win32' && !command.wsl && canSpawnOnWorkerThread()) {
-          // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
-          const spawnStartedAt = performance.now()
-          const workerChild = spawnProcessOnWorkerThread({
-            program: command.binary,
-            args: command.args,
-            cwd: command.cwd,
-            env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env)
-          })
-          workerChild.stdin.end()
-          child = workerChild
-          recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-        } else {
-          child = gitSpawn(args, spawnOptions)
-        }
+        const { child, ownedGroupChild } = spawnGitStreamChild(command, args, spawnOptions)
         let stopping = false
         let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
         let terminationReported = false

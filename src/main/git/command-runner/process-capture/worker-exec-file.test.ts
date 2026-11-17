@@ -114,7 +114,10 @@ describe('worker-owned Git capture', () => {
       workerExecFile('/orca/nonexistent-git', [], { maxBuffer: 32 }, (error) => resolve(error))
     )
     // Callers classify a missing binary by its spawn syscall (isMissingCommandBinaryError).
-    await expect(result).resolves.toMatchObject({ code: 'ENOENT', syscall: 'spawn /orca/nonexistent-git' })
+    await expect(result).resolves.toMatchObject({
+      code: 'ENOENT',
+      syscall: 'spawn /orca/nonexistent-git'
+    })
   })
 })
 

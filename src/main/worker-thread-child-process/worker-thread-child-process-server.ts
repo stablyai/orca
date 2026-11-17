@@ -19,7 +19,7 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
   if (!(error instanceof Error)) {
     return { message: String(error) }
   }
-  const { code, errno, syscall, path } = error as NodeJS.ErrnoException
+  const { code, errno, syscall, path }: NodeJS.ErrnoException = error
   return {
     message: error.message,
     ...(typeof code === 'string' ? { code } : {}),
