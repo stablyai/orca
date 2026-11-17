@@ -27,7 +27,7 @@ if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
 applyBackgroundActivationPolicy()
 app.commandLine.appendSwitch(
   'proxy-server',
-  'http=baseline.invalid:8999,backup.invalid:8998,direct://'
+  'http=baseline.invalid:8999,backup.invalid:8998,direct://;https=socks://127.0.0.1:1080;socks=127.0.0.1:1081'
 )
 const baselineResolution = 'PROXY baseline.invalid:8999;PROXY backup.invalid:8998;DIRECT'
 app.commandLine.appendSwitch('host-resolver-rules', 'MAP direct.orca.test 127.0.0.1')
@@ -110,10 +110,16 @@ async function run(): Promise<void> {
     (await sess.fetch(url, { cache: 'no-store' })).text()
   await whenBrowserExtensionProxyReady(sess)
   assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
+  assert.equal(await sess.resolveProxy('https://proxied.orca.test/'), 'SOCKS5 127.0.0.1:1080')
+  assert.equal(await sess.resolveProxy('ftp://proxied.orca.test/'), 'SOCKS 127.0.0.1:1081')
   assert.deepEqual(await invoke(first, 'get', {}), {
     value: {
       mode: 'fixed_servers',
-      rules: { proxyForHttp: { scheme: 'http', host: 'baseline.invalid', port: 8999 } }
+      rules: {
+        proxyForHttp: { scheme: 'http', host: 'baseline.invalid', port: 8999 },
+        proxyForHttps: { scheme: 'socks5', host: '127.0.0.1', port: 1080 },
+        fallbackProxy: { scheme: 'socks4', host: '127.0.0.1', port: 1081 }
+      }
     },
     levelOfControl: 'controllable_by_this_extension'
   })
@@ -278,15 +284,6 @@ async function run(): Promise<void> {
   )
   assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
   getBrowserExtensionProfileStateStore().flush()
-  console.log(
-    JSON.stringify({
-      routing: 'passed',
-      pac: 'passed',
-      lifecycle: 'passed',
-      isolation: 'passed',
-      baseline: 'passed'
-    })
-  )
 }
 
 void run().then(

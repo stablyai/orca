@@ -107,7 +107,7 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
     const scheme = url.protocol.slice(0, -1)
     return proxyServerSchema.parse({
       host: url.hostname,
-      scheme: scheme === 'socks' ? 'socks4' : scheme,
+      scheme: scheme === 'socks' ? 'socks5' : scheme,
       ...(url.port ? { port: Number(url.port) } : {})
     })
   }
