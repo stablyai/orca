@@ -34,12 +34,22 @@ async function verifyToken(baseUrl: string, accessToken: string): Promise<Verify
   } catch {
     return { ok: false, rejected: false }
   }
-  await cancelUnreadResponseBody(response)
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     return { ok: false, rejected: response.status === 401 || response.status === 403 }
   }
-  // A proxy or SSO login page can answer 200 with HTML; only the REST JSON proves the token.
-  if (!response.headers.get('Content-Type')?.toLowerCase().includes('application/json')) {
+  // A proxy or SSO login page can answer 200; only the paged users response proves the token.
+  try {
+    const body: unknown = await response.json()
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !('values' in body) ||
+      !Array.isArray(body.values)
+    ) {
+      return { ok: false, rejected: false }
+    }
+  } catch {
     return { ok: false, rejected: false }
   }
   return { ok: true, account: response.headers.get('X-AUSERNAME') }

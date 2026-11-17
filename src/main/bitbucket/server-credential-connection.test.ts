@@ -101,14 +101,14 @@ describe('Bitbucket Server credential connection', () => {
     expect((await conn.getBitbucketServerConnectionStatus()).configured).toBe(false)
   })
 
-  it('does not store a token answered by an HTML login page', async () => {
+  it.each([
+    ['an HTML login page', '<html>Log in</html>', 'text/html'],
+    ['a JSON body that is not the users response', '{"error":"login required"}', 'application/json']
+  ])('does not store a token answered by %s', async (_label, body, contentType) => {
     const conn = await loadModule()
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response('<html>Log in</html>', { headers: { 'Content-Type': 'text/html' } })
-      )
+      vi.fn(async () => new Response(body, { headers: { 'Content-Type': contentType } }))
     )
 
     await expect(
