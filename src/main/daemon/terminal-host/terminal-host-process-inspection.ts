@@ -18,7 +18,10 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation
@@ -41,7 +44,7 @@ export async function inspectTerminalHostProcess(args: {
   foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
-  /** A steady poll whose caller ignores child evidence; Windows skips the Store-shell table read. */
+  /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
   jobMembershipOnly?: boolean
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
@@ -124,7 +127,7 @@ export async function inspectTerminalHostProcess(args: {
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
       args.ignoreDetached === true,
-      args.steadyState === true && args.jobMembershipOnly === true
+      steadyPollJudgesByJobMembership(args, foregroundProcess)
     )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')

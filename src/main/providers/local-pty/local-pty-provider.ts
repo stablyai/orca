@@ -17,7 +17,10 @@ import {
   inspectLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtyProcessInspectionOptions } from '../pty/process-inspection'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../pty/process-inspection'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
@@ -186,7 +189,7 @@ export class LocalPtyProvider implements IPtyProvider {
       id,
       options?.steadyState !== true,
       options?.ignoreDetached === true,
-      options?.steadyState === true && options.jobMembershipOnly === true
+      steadyPollJudgesByJobMembership(options, foregroundProcess)
     )
     // Neither asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
