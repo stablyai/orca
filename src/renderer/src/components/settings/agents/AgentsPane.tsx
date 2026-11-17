@@ -10,6 +10,7 @@ import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './runtime/CodexTerminalServerIsolationSetting'
 import { CodexHistorySharingSetting } from './behavior/CodexHistorySharingSetting'
+import { DeleteAgentHistoryWithWorkspaceSetting } from './behavior/DeleteAgentHistoryWithWorkspaceSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -64,6 +65,11 @@ export function AgentsPane({
       />
       <SettingsGroup>
         <CodexHistorySharingSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
+        <DeleteAgentHistoryWithWorkspaceSetting
           settings={settings}
           updateSettings={updateSettings}
           hostScope={hostScope}

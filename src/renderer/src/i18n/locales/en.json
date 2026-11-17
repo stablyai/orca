@@ -22668,9 +22668,6 @@
           "history": "history",
           "runs": "runs",
           "envFile": ".env",
-          "chat": "chat",
-          "transcripts": "transcripts",
-          "diskSpace": "disk space",
           "manual": "manual",
           "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now.",
           "runRulesNow": "run rules now",
@@ -22721,13 +22718,7 @@
           "label": "Pin and keep"
         },
         "chatHistory": {
-          "title": "Chat history",
-          "updateFailed": "Couldn't update the setting on {{host}}.",
-          "unsupported": "Update Orca on {{host}} to use this setting there.",
-          "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
-          "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "title": "Chat history"
         },
         "manual": {
           "title": "Manual cleanup",
@@ -22783,6 +22774,23 @@
         "confirmCheckHomeFolder": "No other machine sharing this home folder is running Orca",
         "details": "Details",
         "clearing": "Clearing…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "Couldn't update the setting on {{host}}.",
+          "recommended": "Recommended",
+          "unsupported": "Update Orca on {{host}} to use this setting there.",
+          "confirmTitle": "Delete chat history from deleted workspaces?",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "cancel": "Cancel",
+          "turnOn": "Turn on",
+          "title": "Delete agent history when a workspace is deleted",
+          "description": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "chat": "chat",
+          "transcripts": "transcripts",
+          "diskSpace": "disk space",
+          "cleanup": "cleanup"
+        }
       }
     },
     "agentChildRow": {

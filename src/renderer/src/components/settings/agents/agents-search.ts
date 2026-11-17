@@ -36,6 +36,7 @@ import {
   getCodexHistorySharingSearchKeywords,
   getCodexHistorySharingTitle
 } from './behavior/codex-history-sharing-copy'
+import { getDeleteAgentHistorySearchEntry } from './behavior/delete-agent-history-search'
 import { translate } from '@/i18n/i18n'
 import {
   searchKeywords,
@@ -203,6 +204,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     description: getCodexHistorySharingDescription(),
     keywords: getCodexHistorySharingSearchKeywords()
   },
+  getDeleteAgentHistorySearchEntry(),
   {
     title: getCodexTerminalServerIsolationTitle(),
     id: CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID,
