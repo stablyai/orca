@@ -64,6 +64,23 @@ afterEach(() => {
 })
 
 describe('buffered Windows processes on the shared worker', () => {
+  it('starts the deadline when the worker creates the process, not while the launch is queued', async () => {
+    vi.useFakeTimers()
+    const child = new WorkerThreadChildProcess(1, () => true)
+    worker.spawn.mockReturnValue(child)
+    const pending = runProcess({ program: 'gh.exe', args: ['--version'], timeoutMs: 2_500 })
+    await vi.advanceTimersByTimeAsync(4_000)
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('gh version 2.80.0') })
+    child.receive({ type: 'exit', id: 1, code: 0, signal: null })
+    child.receive({ type: 'close', id: 1, code: 0, signal: null })
+    await expect(pending).resolves.toMatchObject({
+      code: 0,
+      timedOut: false,
+      stdout: 'gh version 2.80.0'
+    })
+  })
+
   it.each(['hello λ', new Uint8Array([104, 101, 108, 108, 111, 32, 206, 187])])(
     'delivers stdin before EOF and captures both streams and a nonzero exit',
     async (input) => {
