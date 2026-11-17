@@ -3,35 +3,19 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type RefObject,
   type SyntheticEvent
 } from 'react'
 import { useSonner } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
+import { useModalOverlayOpen } from '@/lib/overlay-interaction/body-overlay-attributes'
 
-// Mirrored by installBodyOverlayAttributes; only Dialog/Sheet overlays set it, not menus.
-const MODAL_OPEN_ATTRIBUTE = 'data-modal-overlay-open'
 const MODAL_OVERLAY_SELECTOR = "[data-slot='dialog-overlay'], [data-slot='sheet-overlay']"
 // Raised toasts sit at this tier (main.css); overlays at or above it would still cover them.
 const RAISED_TOASTER_Z_INDEX = 60
 const STATIC_TOAST_ID = /^[a-z][a-z-]{0,63}$/
 
 type RaisedBy = 'click' | 'new_toast'
-
-function subscribeModalOpen(onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange)
-  observer.observe(document.body, { attributes: true, attributeFilter: [MODAL_OPEN_ATTRIBUTE] })
-  return () => observer.disconnect()
-}
-
-function isModalOpen(): boolean {
-  return document.body.hasAttribute(MODAL_OPEN_ATTRIBUTE)
-}
-
-function isServerModalOpen(): boolean {
-  return false
-}
 
 function liveToastAt(wrapper: HTMLElement, x: number, y: number): boolean {
   for (const toast of wrapper.querySelectorAll(
@@ -54,7 +38,7 @@ export function useToasterModalLayer(wrapperRef: RefObject<HTMLDivElement | null
   raised: boolean
   trackActionOverModal: (event: SyntheticEvent) => void
 } {
-  const modalOpen = useSyncExternalStore(subscribeModalOpen, isModalOpen, isServerModalOpen)
+  const modalOpen = useModalOverlayOpen()
   const [raisedBy, setRaisedBy] = useState<RaisedBy | null>(null)
   const [layerModalOpen, setLayerModalOpen] = useState(modalOpen)
   if (layerModalOpen !== modalOpen) {

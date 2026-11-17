@@ -9,6 +9,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorktreeCardsIntroChoice } from '@/store/slices/ui/ui-slice-contract-contextual'
+import { useModalOverlayOpen } from '@/lib/overlay-interaction/body-overlay-attributes'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { trackWorktreeCardsIntroAction } from './worktree-card-style-telemetry'
 import { keepNewWorktreeCards, useWorktreeCardsKeepPending } from './worktree-cards-intro-keep'
@@ -67,7 +68,9 @@ export function WorktreeCardsIntroNotice(): React.JSX.Element | null {
   const t = useTranslate()
   const choice = useWorktreeCardsIntroNotice()
   const saving = useWorktreeCardsKeepPending()
-  if (choice === null) {
+  // Why hide, not reorder: under a backdrop it is dimmed and inert; the unanswered note returns on close.
+  const modalOpen = useModalOverlayOpen()
+  if (choice === null || modalOpen) {
     return null
   }
   const store = useAppStore.getState

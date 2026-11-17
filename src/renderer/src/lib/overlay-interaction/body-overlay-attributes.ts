@@ -1,8 +1,12 @@
+import { useSyncExternalStore } from 'react'
+
 const MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR =
   ":scope > :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay'])"
 // Radix keeps a closing overlay mounted through its fade; it must not hold the blur past the dim.
 export const MODAL_OVERLAY_CHILD_SELECTOR = `${MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR}:not([data-state='closed'])`
 const ONBOARDING_OVERLAY_CHILD_SELECTOR = ':scope > [data-onboarding-overlay]'
+
+const MODAL_OPEN_ATTRIBUTE = 'data-modal-overlay-open'
 
 let disposeInstalledObserver: (() => void) | null = null
 
@@ -20,7 +24,7 @@ export function installBodyOverlayAttributes(): () => void {
     }
     // toggleAttribute is a no-op when the state is unchanged, so unrelated portals cost no restyle.
     body.toggleAttribute(
-      'data-modal-overlay-open',
+      MODAL_OPEN_ATTRIBUTE,
       body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null
     )
     body.toggleAttribute(
@@ -37,4 +41,19 @@ export function installBodyOverlayAttributes(): () => void {
     disposeInstalledObserver = null
   }
   return disposeInstalledObserver
+}
+
+function subscribeModalOverlayOpen(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.body, { attributes: true, attributeFilter: [MODAL_OPEN_ATTRIBUTE] })
+  return () => observer.disconnect()
+}
+
+function isModalOverlayOpen(): boolean {
+  return document.body.hasAttribute(MODAL_OPEN_ATTRIBUTE)
+}
+
+/** Whether a Dialog/Sheet backdrop is up; menus and popovers don't count. */
+export function useModalOverlayOpen(): boolean {
+  return useSyncExternalStore(subscribeModalOverlayOpen, isModalOverlayOpen, () => false)
 }
