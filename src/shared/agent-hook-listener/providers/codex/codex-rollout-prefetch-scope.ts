@@ -66,7 +66,9 @@ export async function prefetchJsonlCursor(
 ): Promise<void> {
   const { filePath, offset, carry } = cursor
   if (filePath && !reads.closed) {
-    const read = await prefetchOnce(filePath, () => readJsonlCursorBytes(cursor))
+    const read = await prefetchOnce(filePath, () =>
+      readJsonlCursorBytes(cursor, () => !reads.closed)
+    )
     if (read !== SKIPPED) {
       reads.cursors.push({ filePath, offset, carry, read })
     }
@@ -82,13 +84,17 @@ export async function prefetchRolloutHead(
   if (reads.closed) {
     return
   }
-  const size = await prefetchOnce(filePath, () => rolloutFileSizeAsync(filePath))
+  const size = await prefetchOnce(filePath, () =>
+    rolloutFileSizeAsync(filePath, () => !reads.closed)
+  )
   if (size === SKIPPED) {
     return
   }
   reads.sizes.set(filePath, size)
   if (wantsHead(size) && !reads.closed) {
-    const head = await prefetchOnce(filePath, () => readJsonlFirstRecordAsync(filePath))
+    const head = await prefetchOnce(filePath, () =>
+      readJsonlFirstRecordAsync(filePath, () => !reads.closed)
+    )
     if (head !== SKIPPED) {
       reads.firstRecords.set(filePath, head)
     }

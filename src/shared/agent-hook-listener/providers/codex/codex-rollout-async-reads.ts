@@ -16,7 +16,12 @@ const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
 const rolloutReadQueue: (() => void)[] = []
 
-async function withRolloutReadSlot<T>(run: () => Promise<T>): Promise<T> {
+/** `wanted` is rechecked once a slot is granted, so work its caller abandoned while queued never touches the disk. */
+async function withRolloutReadSlot<T>(
+  run: () => Promise<T>,
+  wanted: () => boolean,
+  unwanted: T
+): Promise<T> {
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
@@ -24,7 +29,7 @@ async function withRolloutReadSlot<T>(run: () => Promise<T>): Promise<T> {
     await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
   }
   try {
-    return await run()
+    return wanted() ? await run() : unwanted
   } finally {
     const next = rolloutReadQueue.shift()
     if (next) {
@@ -35,8 +40,13 @@ async function withRolloutReadSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-export function rolloutFileSizeAsync(filePath: string): Promise<number | null> {
-  return withRolloutReadSlot(() => rolloutFileSizeAsyncUnslotted(filePath))
+const always = (): boolean => true
+
+export function rolloutFileSizeAsync(
+  filePath: string,
+  wanted: () => boolean = always
+): Promise<number | null> {
+  return withRolloutReadSlot(() => rolloutFileSizeAsyncUnslotted(filePath), wanted, null)
 }
 
 async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number | null> {
@@ -48,8 +58,15 @@ async function rolloutFileSizeAsyncUnslotted(filePath: string): Promise<number |
 }
 
 /** Off-thread twin of readJsonlFirstRecord for main-process polls. */
-export function readJsonlFirstRecordAsync(filePath: string): Promise<JsonlFirstRecord> {
-  return withRolloutReadSlot(() => readJsonlFirstRecordAsyncUnslotted(filePath))
+export function readJsonlFirstRecordAsync(
+  filePath: string,
+  wanted: () => boolean = always
+): Promise<JsonlFirstRecord> {
+  return withRolloutReadSlot(
+    () => readJsonlFirstRecordAsyncUnslotted(filePath),
+    wanted,
+    'unreadable'
+  )
 }
 
 async function readJsonlFirstRecordAsyncUnslotted(filePath: string): Promise<JsonlFirstRecord> {
@@ -70,8 +87,11 @@ async function readJsonlFirstRecordAsyncUnslotted(filePath: string): Promise<Jso
 }
 
 /** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished. */
-export function readJsonlCursorBytes(cursor: JsonlCursor): Promise<JsonlCursorBytes | undefined> {
-  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor))
+export function readJsonlCursorBytes(
+  cursor: JsonlCursor,
+  wanted: () => boolean = always
+): Promise<JsonlCursorBytes | undefined> {
+  return withRolloutReadSlot(() => readJsonlCursorBytesUnslotted(cursor), wanted, undefined)
 }
 
 async function readJsonlCursorBytesUnslotted(
@@ -109,8 +129,11 @@ async function readJsonlCursorBytesUnslotted(
   }
 }
 
-export function readTranscriptDirectoryAsync(directory: string): Promise<string[]> {
-  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory))
+export function readTranscriptDirectoryAsync(
+  directory: string,
+  wanted: () => boolean = always
+): Promise<string[]> {
+  return withRolloutReadSlot(() => readTranscriptDirectoryAsyncUnslotted(directory), wanted, [])
 }
 
 async function readTranscriptDirectoryAsyncUnslotted(directory: string): Promise<string[]> {

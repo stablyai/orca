@@ -54,14 +54,17 @@ export async function readPendingCodexSubagentIdentities(
     if (!child || !transcriptPath) {
       continue
     }
-    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath)}`
+    const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath, current)}`
     if (!current()) {
       break
     }
     if (child.identityMissKey === missKey) {
       continue
     }
-    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim())
+    const identity = await readCodexSubagentIdentityAsync(transcriptPath, id.trim(), current)
+    if (!current()) {
+      break
+    }
     reads.push({ id, child, transcriptPath, missKey, identity })
   }
   return reads

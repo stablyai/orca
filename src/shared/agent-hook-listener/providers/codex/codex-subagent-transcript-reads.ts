@@ -30,6 +30,7 @@ async function visitCodexTranscriptCursors(
 ): Promise<void> {
   const parent = state.parent
   const parentPath = parent.filePath
+  const wanted = (): boolean => state.parent === parent && current()
   await visit(parent)
   if (!parentPath) {
     return
@@ -44,8 +45,11 @@ async function visitCodexTranscriptCursors(
     if (!tracked.filePath) {
       for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
         if (!entriesByDirectory.has(directory)) {
-          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory))
+          entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory, wanted))
         }
+      }
+      if (!wanted()) {
+        return
       }
       tracked.filePath ??= resolveChildTranscript(parentPath, id, tracked.startedAt, (directory) =>
         entriesByDirectory.get(directory)
@@ -67,7 +71,7 @@ export async function readCodexSubagentTranscript(
   await visitCodexTranscriptCursors(
     state,
     async (cursor, child) => {
-      const bytes = await readJsonlCursorBytes(cursor)
+      const bytes = await readJsonlCursorBytes(cursor, current)
       if (child) {
         reads.childBytes.set(child, bytes)
       } else {

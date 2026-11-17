@@ -46,9 +46,10 @@ export function readCodexSubagentIdentity(
 
 export async function readCodexSubagentIdentityAsync(
   transcriptPath: string,
-  agentId: string
+  agentId: string,
+  wanted: () => boolean
 ): Promise<CodexSubagentIdentity> {
   return readsIdentity(transcriptPath)
-    ? identityFromHead(await readJsonlFirstRecordAsync(transcriptPath), agentId)
+    ? identityFromHead(await readJsonlFirstRecordAsync(transcriptPath, wanted), agentId)
     : undefined
 }
