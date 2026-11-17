@@ -15,7 +15,7 @@ import { useWorktreeJumpPaletteCreateAction } from './workspaces/use-worktree-ju
 import { useWorktreeJumpPaletteTaskSearch } from './tasks/use-worktree-jump-palette-task-search'
 import { useWorktreeJumpPaletteTaskUrl } from './tasks/use-worktree-jump-palette-task-url'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
-import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
+import { usePaletteSearchEvaluationContext } from '@/lib/workspace/search/palette/use-palette-search-evaluation-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useMemo } from 'react'
 

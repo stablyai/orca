@@ -19,7 +19,7 @@ import type { ProjectHostSetup } from '../../../../../shared/project/project-typ
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import {
   dedupeReadySetupRows,
   type SelectedProjectHostSetup

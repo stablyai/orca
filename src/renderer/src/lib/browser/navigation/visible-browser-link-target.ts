@@ -3,7 +3,7 @@ import type {
   TabGroup,
   TabGroupLayoutNode
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { getEffectiveLayoutForWorktree } from '@/components/terminal/split-group-mount'
+import { getEffectiveLayoutForWorktree } from '@/components/terminal/workspace-mounting/split-group-mount'
 import { collectTabGroupLayoutGroupIds } from '../../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 
 type LinkTab = Pick<Tab, 'id'> &

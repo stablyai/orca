@@ -43,6 +43,7 @@ import type {
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
+import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -60,7 +61,8 @@ export class RuntimeClientSettingsController {
       'getSettings' | 'updateSettings' | 'runDurableMutation'
     > | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined,
-    private readonly sharingServices: RuntimeSharingServicePresence | undefined = undefined
+    private readonly sharingServices: RuntimeSharingServicePresence | undefined = undefined,
+    private readonly isHeadless: () => boolean = () => false
   ) {}
 
   get(): RuntimeClientSettings {
@@ -137,6 +139,7 @@ export class RuntimeClientSettingsController {
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
+      nativeChatDefaults: hostNativeChatDefaults(settings, this.isHeadless()),
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })

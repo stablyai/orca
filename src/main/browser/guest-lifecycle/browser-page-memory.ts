@@ -292,7 +292,7 @@ export async function waitForBrowserPageReady(
       'browser_navigation_failed',
       'The browser page could not be restored. Try reloading it.'
     )
-  } else if (guest.isLoading()) {
+  } else if (guest.isLoadingMainFrame()) {
     await waitForBrowserGuestLoad(guest)
   }
 }

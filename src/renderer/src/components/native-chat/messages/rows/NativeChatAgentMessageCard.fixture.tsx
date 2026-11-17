@@ -1,7 +1,7 @@
 import {
   acceptedAgentStatuses,
   type AcceptedAgentStatuses
-} from '@/store/slices/agent-status/accepted-agent-statuses'
+} from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
