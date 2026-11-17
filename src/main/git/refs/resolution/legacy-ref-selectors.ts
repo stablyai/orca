@@ -24,10 +24,14 @@ export async function toGitShortRefSelectors(
     signal?.throwIfAborted()
     try {
       // Same shortening as %(refname:short), but by exact lookups; for-each-ref reads whole loose-ref directories.
-      const { stdout } = await gitExecFileAsync(['rev-parse', '--abbrev-ref', ...chunk], {
-        ...gitExecOptions(path),
-        signal
-      })
+      // --revs-only makes a ref deleted since the snapshot end the output instead of failing (and retrying via WSL).
+      const { stdout } = await gitExecFileAsync(
+        ['rev-parse', '--revs-only', '--abbrev-ref', ...chunk],
+        {
+          ...gitExecOptions(path),
+          signal
+        }
+      )
       const shorts = stdout.split(/\r?\n/).filter(Boolean)
       // Output is positional and Git may drop a line for a ref it can't resolve, so a short count trusts none of it.
       if (shorts.length === chunk.length) {
