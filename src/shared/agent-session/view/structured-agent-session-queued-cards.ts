@@ -83,16 +83,16 @@ type QueuedMessageCardSession = {
   steersInTranscript?: true
 }
 
-/** A person's steer the running turn will take in: never a card where the transcript draws it. */
+/** A person's steer on its way in: never a card where the transcript draws it. Working state is
+ *  not consulted, since a turn ending under the steer must not flash it as a card. */
 export function queuedMessageSteersIn(
   message: AgentSessionQueuedMessage,
-  session: Pick<QueuedMessageCardSession, 'queuePaused' | 'agentWorking'>
+  session: Pick<QueuedMessageCardSession, 'queuePaused'>
 ): boolean {
   return (
     message.steers === true &&
     message.state === 'waiting' &&
     !message.paused &&
-    session.agentWorking === true &&
     !session.queuePaused
   )
 }

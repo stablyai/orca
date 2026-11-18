@@ -29,6 +29,15 @@ it('draws a steer the running turn has yet to take in as a sent message, not a q
     }
   ])
 
+  // A frame where the turn ends under the steer must not flash it as a card.
+  expect(
+    projectQueuedMessageCards(queued, [], {
+      agentWorking: false,
+      queuePaused: false,
+      steersInTranscript: true
+    }).map((card) => card.messageId)
+  ).toEqual(['queued'])
+
   // After a Stop the steer waits like any card, where Send can still reach it.
   const paused = { agentWorking: true, queuePaused: true }
   expect(
