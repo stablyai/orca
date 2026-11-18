@@ -32,8 +32,9 @@ export async function cancelTraexTurn(
   await pause()
   let cancelled = false
   let turnMayOpen = false
-  const current = journalTurn === session.timeline?.openTurnId && native === session.activeTurn
-  if (native && current) {
+  const isCurrentTurn = () =>
+    journalTurn === session.timeline?.openTurnId && native === session.activeTurn
+  if (native && isCurrentTurn()) {
     try {
       await session.connection.request(
         'turn/interrupt',
@@ -47,7 +48,7 @@ export async function cancelTraexTurn(
       facts.interrupt = 'unconfirmed'
       facts.errors.push(error)
     }
-  } else if (!native && current && session.pending.size > 0) {
+  } else if (!native && isCurrentTurn() && session.pending.size > 0) {
     // The provider turn may still open; closing the session would end unrelated work.
     facts.interrupt = 'unconfirmed'
     turnMayOpen = true
@@ -56,7 +57,7 @@ export async function cancelTraexTurn(
     await pause()
   }
   return {
-    cancelled: cancelled || (paused && facts.interrupt === 'not-needed'),
+    cancelled: cancelled || (paused && facts.interrupt === 'not-needed' && isCurrentTurn()),
     ...(journalTurn ? { turnId: journalTurn } : {}),
     stop: facts,
     ...(turnMayOpen ? { refusal: { turnMayOpen: true as const } } : {})

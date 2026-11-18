@@ -165,7 +165,11 @@ createInterface({ input: process.stdin })
         complete('Model switch accepted')
       } else if (text === 'effort-switch') {
         complete(JSON.stringify({ effort: params.effort ?? null }))
-      } else if (text === 'cancel-next-turn-race') {
+      } else if (['cancel-next-turn-race', 'goal-next-turn-race'].includes(text)) {
+        if (text === 'goal-next-turn-race') {
+          goal = { objective: 'Keep working', status: 'active' }
+          goalPauseFailed = true
+        }
         replaceTurnOnGoalRead = true
       } else if (text === 'goal-pause-retry') {
         goal = { objective: 'Keep working', status: 'active' }

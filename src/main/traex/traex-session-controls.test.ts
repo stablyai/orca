@@ -237,32 +237,42 @@ it('keeps compatible efforts and drops an effort after switching to a fixed mode
   expect(await send('small-id')).toEqual({ effort: null })
 })
 
-it('keeps the replacement turn running while cancellation waits for goal state', async () => {
-  session = createSession()
-  await session.open(new AbortController().signal)
-  await dispatchTraexMessage(session, {
-    sessionId: 'trae-controls',
-    fence: 1,
-    clientMessageId: 'cancel-target',
-    body: {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'cancel-next-turn-race' }]
-    }
-  })
-  expect(
-    await cancelTraexTurn(session, {
+it.each(['cancel-next-turn-race', 'goal-next-turn-race'])(
+  'keeps the replacement turn running while cancellation waits for %s',
+  async (text) => {
+    session = createSession()
+    await session.open(new AbortController().signal)
+    await dispatchTraexMessage(session, {
       sessionId: 'trae-controls',
       fence: 1,
-      turnId: 'p:thread-trae-contract:turn-1'
+      clientMessageId: text,
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text }]
+      }
     })
-  ).toMatchObject({ cancelled: false })
-  await drained()
-  expect(await journal.reads.newestTurn()).toMatchObject({
-    turnId: 'p:thread-trae-contract:turn-2',
-    state: 'running'
-  })
-})
+    expect(
+      await cancelTraexTurn(session, {
+        sessionId: 'trae-controls',
+        fence: 1,
+        turnId: 'p:thread-trae-contract:turn-1'
+      })
+    ).toMatchObject({ cancelled: false })
+    await drained()
+    expect(await journal.reads.newestTurn()).toMatchObject({
+      turnId: 'p:thread-trae-contract:turn-2',
+      state: 'running'
+    })
+    if (text === 'goal-next-turn-race') {
+      expect(
+        await session.connection.request('thread/goal/get', { threadId: session.threadId })
+      ).toMatchObject({
+        goal: { status: 'paused' }
+      })
+    }
+  }
+)
 
 it('reports cancellation when a goal-only pause succeeds after a rejected attempt', async () => {
   session = createSession()
