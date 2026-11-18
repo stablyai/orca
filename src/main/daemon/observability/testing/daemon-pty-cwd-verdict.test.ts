@@ -17,12 +17,14 @@ const HELPER: DaemonEndpointIdentity = { pid: 1530, startedAtMs: 1_700_000, laun
 const FOLDER = '/work/orca-cwd-verdict/repo'
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
-function verdict(cwdReadableByDaemon: boolean, cwd = FOLDER): Promise<void> {
+const NEXT_HELPER: DaemonEndpointIdentity = { pid: 1531, startedAtMs: 1_700_500, launchNonce: 'n2' }
+
+function verdict(cwdReadableByDaemon: boolean, cwd = FOLDER, helper = HELPER): Promise<void> {
   return reportDaemonPtyCwdVerdict({
     cwd,
     cwdReadableByDaemon,
     pidPath: null,
-    daemonIdentity: HELPER
+    daemonIdentity: helper
   })
 }
 
@@ -57,5 +59,19 @@ describe('helper folder verdicts', () => {
     finishRecheck('ok')
     await denial
     expect(getDaemonFolderAccessMismatch(HELPER)).not.toBeNull()
+  })
+
+  it('keeps the next helper notice when a replaced helper finishes its re-allowed denial', async () => {
+    let finishRecheck: (outcome: string) => void = () => {}
+    enumerateMock
+      .mockReturnValueOnce(new Promise((resolve) => (finishRecheck = resolve)))
+      .mockResolvedValueOnce('ok')
+    const denial = verdict(false)
+    await verdict(true)
+    await verdict(true, '/work/orca-cwd-verdict/next', NEXT_HELPER)
+    await verdict(false, '/work/orca-cwd-verdict/next', NEXT_HELPER)
+    finishRecheck('ok')
+    await denial
+    expect(getDaemonFolderAccessMismatch(NEXT_HELPER)).not.toBeNull()
   })
 })

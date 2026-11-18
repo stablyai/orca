@@ -7,7 +7,6 @@ import {
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
   isMacTccFolderClass,
-  type DaemonPtyCwdClass,
   type DaemonSpawnerPathClass
 } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import { bucketDaemonLiveSessionCount } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
@@ -117,9 +116,19 @@ export async function trackDaemonPtyCwdVerdict(
   }
 }
 
-// An older denial's app-side read can finish after the same helper read that folder class again;
-// one entry per class keeps this bounded.
-const latestReadable = new Map<DaemonPtyCwdClass, { helper: string }>()
+// An older denial's app-side read can finish after the same helper read that folder class again.
+// Recent helper/class pairs only: an evicted pair reads as re-allowed, dropping a stale denial.
+const MAX_READABLE_MARKS = 32
+const readableMarks = new Map<string, number>()
+let readableCount = 0
+
+function markReadable(key: string): void {
+  readableMarks.delete(key)
+  readableMarks.set(key, ++readableCount)
+  if (readableMarks.size > MAX_READABLE_MARKS) {
+    readableMarks.delete(readableMarks.keys().next().value!)
+  }
+}
 
 /** Do not await: the app-side directory read can wait indefinitely on a macOS permission prompt. */
 export async function reportDaemonPtyCwdVerdict(args: {
@@ -137,10 +146,10 @@ export async function reportDaemonPtyCwdVerdict(args: {
     const cwdClass = classifyDaemonPtyCwd(cwd, homedir())
     const tccFolderClass =
       process.platform === 'darwin' && isMacTccFolderClass(cwdClass) ? cwdClass : null
-    const helper = `${args.daemonIdentity?.pid}:${args.daemonIdentity?.launchNonce}`
-    const readableBefore = latestReadable.get(cwdClass)
+    const markKey = `${args.daemonIdentity?.pid}:${args.daemonIdentity?.launchNonce}:${cwdClass}`
+    const readableBefore = readableMarks.get(markKey)
     if (args.cwdReadableByDaemon === true) {
-      latestReadable.set(cwdClass, { helper })
+      markReadable(markKey)
       clearDaemonFolderAccessMismatch(args.daemonIdentity, cwd)
       // TCC-gated folders only: elsewhere a readable cwd says nothing about the theory.
       if (tccFolderClass) {
@@ -155,9 +164,7 @@ export async function reportDaemonPtyCwdVerdict(args: {
         ? await prepareTccDenialCapture(args.daemonIdentity, tccFolderClass, deniedAtMs)
         : null
     const diverged = await hasDaemonPtyCwdDenialDiverged(cwd, args.cwdReadableByDaemon)
-    const readableAfter = latestReadable.get(cwdClass)
-    const reallowed = readableAfter !== readableBefore && readableAfter?.helper === helper
-    if (!diverged || reallowed) {
+    if (!diverged || readableMarks.get(markKey) !== readableBefore) {
       if (capture) {
         releaseTccDenialCapture(capture)
       }
