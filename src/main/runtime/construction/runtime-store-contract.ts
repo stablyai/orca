@@ -84,6 +84,7 @@ export type RuntimeStore = {
   peekOrcadMigrationTerminalRestoreHint?: Store['peekOrcadMigrationTerminalRestoreHint']
   consumeOrcadMigrationTerminalRestoreHint?: Store['consumeOrcadMigrationTerminalRestoreHint']
   persistPtyBinding?: Store['persistPtyBinding']
+  retirePtyBinding?: Store['retirePtyBinding']
   getPtyBindingGeneration?: Store['getPtyBindingGeneration']
   getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
@@ -203,6 +204,7 @@ export type RuntimeStore = {
     machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
+    claudeAccountSwitchRunningSessions?: GlobalSettings['claudeAccountSwitchRunningSessions']
     // Read query-responder kill switches per ingested chunk to capture reply ownership.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']

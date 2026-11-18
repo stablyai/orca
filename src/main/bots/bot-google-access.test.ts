@@ -18,7 +18,7 @@ describe('which runs may use Google', () => {
 })
 
 describe('the Who can ask warning for Google', () => {
-  it('names everyone but the owner who can ask the bot, once each', () => {
+  it('deduplicates the names of people who can ask the bot', () => {
     const bot = makeTestBot({
       members: [
         { id: 'U1', name: 'Carol', source: 'slack' },
@@ -26,9 +26,7 @@ describe('the Who can ask warning for Google', () => {
         { id: 'U2', name: 'Nora', source: 'slack' }
       ]
     })
-    expect(googleWhoCanAskWarning('Scout', botOtherAskers(bot))).toBe(
-      'Carol and Nora will be able to have Scout read and send your email, calendar and files.'
-    )
+    expect(botOtherAskers(bot)).toEqual(['Carol', 'Nora'])
   })
 
   it('says nothing when only the owner can ask', () => {

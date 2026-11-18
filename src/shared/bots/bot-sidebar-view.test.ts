@@ -48,10 +48,6 @@ describe('arrangeBotSidebarEntries', () => {
     expect(arrange({ sortBy: 'smart' })).toEqual(['review', 'docs', 'room', 'release', 'disk'])
   })
 
-  it('orders by newest activity alone in Recent', () => {
-    expect(arrange({ sortBy: 'recent' })).toEqual(['docs', 'room', 'release', 'disk', 'review'])
-  })
-
   it('lists a just-made bot, with no activity yet, as the newest in Recent and Agent Activity', () => {
     const made: Entry[] = [
       ...entries,

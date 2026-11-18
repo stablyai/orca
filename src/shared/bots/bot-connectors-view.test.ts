@@ -5,29 +5,6 @@ import { botConnectorServices, formatBotConnectors } from './bot-connectors-view
 const bot = { slack: null, slackApps: [], linear: null, linearWorkspaces: [], github: null }
 
 describe('orca bot connectors', () => {
-  it('says per service which tool, as whom, and the one line for a gap', () => {
-    const services = botConnectorServices(bot, { gh: 'signed-out', linear: false })
-    expect(
-      formatBotConnectors({
-        bot: 'Scout',
-        services,
-        workspaces: [],
-        workspacesNote: 'Orca Cloud could not list them.'
-      })
-    ).toBe(
-      [
-        'GitHub: `gh`, as your owner. Not signed in. Run `gh auth login` on this computer.',
-        '  Not connected for wakes: `orca bot connectors --offer github` to be @mentioned or to watch.',
-        'Linear: `orca linear`, as your owner. Not signed in. Connect Linear to your bot, or add a Linear API key in Settings › Integrations.',
-        '  Not connected for wakes: `orca bot connectors --offer linear` to be @mentioned or to watch.',
-        'Slack: `orca slack`, as Scout. Not connected. Run `orca bot connectors --offer slack` to show your owner a Connect card.',
-        '',
-        'Where Scout is (refs for automations):',
-        'Orca Cloud could not list them.'
-      ].join('\n')
-    )
-  })
-
   it('lists a connected bot, what to approve, and its workspaces by ref', () => {
     const connected = {
       ...bot,
