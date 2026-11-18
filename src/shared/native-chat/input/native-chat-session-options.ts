@@ -111,6 +111,8 @@ export type NativeChatSessionOptionSettingsMutation =
         value: SessionOptionValue
         adoptModelAsLaunchDefault?: boolean
       }[]
+      /** The chat the picks were made in; picks in a bot's conversation are kept on that bot. */
+      sessionId?: string
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 

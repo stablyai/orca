@@ -9,6 +9,8 @@ import {
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
+import { MobileNativeChatItemNoteJoinContext } from '../messages/MobileNativeChatBotItemNoteRow'
+import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
   resolveMobileNativeChatRowProps,
   type MobileNativeChatRowLookups
@@ -29,6 +31,8 @@ type Recovery = MobileNativeChatVisualSource & {
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
   turnDiff?: NativeChatTurnDiff
+  /** The sides where this item-note row touches another. */
+  itemNoteJoin?: BotItemNoteJoin
   source: Recovery | null
 }
 
@@ -43,6 +47,7 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   source,
   scope: _scope,
   turnDiff,
+  itemNoteJoin,
   ...props
 }: MobileNativeChatRowContentProps) {
   const value = useMemo(() => {
@@ -62,7 +67,9 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   }, [source])
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      <MobileNativeChatMessage {...props} />
+      <MobileNativeChatItemNoteJoinContext.Provider value={itemNoteJoin}>
+        <MobileNativeChatMessage {...props} />
+      </MobileNativeChatItemNoteJoinContext.Provider>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )

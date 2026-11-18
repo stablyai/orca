@@ -50,6 +50,7 @@ import {
   publishClipboardOperation,
   publishClipboardText
 } from './clipboard-text-publisher'
+import { clearSecretFromClipboard } from './clipboard-secret-clear'
 import { restoreNativeChatPastes } from '../../native-chat/paste-files/native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../../shared/agent-session/agent-session-attachments'
@@ -109,6 +110,7 @@ export function registerClipboardHandlers(
   ipcMain.removeHandler('clipboard:readLinkHtml')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeTerminalText')
+  ipcMain.removeHandler('clipboard:writeSecretText')
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
@@ -238,6 +240,12 @@ export function registerClipboardHandlers(
       console.error('[clipboard] writeText failed', error)
       throw error
     }
+  })
+  ipcMain.handle('clipboard:writeSecretText', async (event, text: string) => {
+    assertTrustedClipboardTextSender(event)
+    await publishClipboardText(text, 'ordinary')
+    clearSecretFromClipboard(text)
+    return { clearsLater: true }
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)

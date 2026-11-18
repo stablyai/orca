@@ -139,9 +139,17 @@ export function useTabGroupActivationCommands({
 
   const activateAgentSession = useCallback(
     (tabId: string) => {
-      activateStructuredAgentSessionTab({ worktreeId, tabId })
+      const room = groupTabs.find((item) => item.id === tabId && item.contentType === 'room')
+      if (!room) {
+        activateStructuredAgentSessionTab({ worktreeId, tabId })
+        return
+      }
+      // A room has no host session to select; it is in front once its tab is.
+      focusGroup(worktreeId, groupId)
+      activateTab(room.id)
+      setActiveTabType('agent-session', worktreeId)
     },
-    [worktreeId]
+    [activateTab, focusGroup, groupId, groupTabs, setActiveTabType, worktreeId]
   )
 
   return {

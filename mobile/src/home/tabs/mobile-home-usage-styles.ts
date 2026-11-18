@@ -43,7 +43,7 @@ export const mobileHomeUsageStyles = themedStyleSheet(() => ({
   },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radii.pill },
   meterValue: {
-    width: 40,
+    minWidth: 40,
     fontSize: 13,
     color: colors.textPrimary,
     textAlign: 'right',
