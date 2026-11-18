@@ -7,22 +7,14 @@ import {
   writeArtifactFileWhileCurrent
 } from './artifact-guarded-secure-write'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
+import {
+  isArtifactShareRecord,
+  pruneRecords,
+  type ArtifactShareRecord,
+  type ArtifactShareScope
+} from './artifact-share-record-retention'
 
-export type ArtifactShareScope = {
-  cloudUserId: string
-  cloudProfileId: string
-  cloudOrganizationId: string
-  apiOrigin: string
-}
-
-type ArtifactShareRecord = Omit<ArtifactShareScope, 'cloudOrganizationId'> & {
-  cloudOrganizationId?: string
-  slug: string
-  editToken: string
-  shareUrl: string
-  expiresAt?: string
-  savedAt?: number
-}
+export type { ArtifactShareScope } from './artifact-share-record-retention'
 
 type ArtifactShareRecordFile = {
   version: 2
@@ -38,69 +30,8 @@ type ParsedArtifactShareRecordFile = {
   shares?: unknown
 }
 
-const MAX_ARTIFACT_SHARE_RECORDS = 10_000
-
 function recordPath(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-shares.json')
-}
-
-function isRecord(value: unknown): value is ArtifactShareRecord {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const record = value as Partial<ArtifactShareRecord>
-  const requiredFieldsValid = [
-    record.slug,
-    record.editToken,
-    record.shareUrl,
-    record.cloudUserId,
-    record.cloudProfileId,
-    record.apiOrigin
-  ].every((field) => typeof field === 'string' && field.length > 0)
-  const expiresAtValid =
-    record.expiresAt === undefined ||
-    (typeof record.expiresAt === 'string' && Number.isFinite(Date.parse(record.expiresAt)))
-  const savedAtValid =
-    record.savedAt === undefined ||
-    (typeof record.savedAt === 'number' &&
-      Number.isSafeInteger(record.savedAt) &&
-      record.savedAt >= 0)
-  return requiredFieldsValid && expiresAtValid && savedAtValid
-}
-
-function compareRecordsNewestFirst(
-  [sourceKeyA, recordA]: [string, ArtifactShareRecord],
-  [sourceKeyB, recordB]: [string, ArtifactShareRecord]
-): number {
-  const savedAtDifference = (recordB.savedAt ?? -1) - (recordA.savedAt ?? -1)
-  if (savedAtDifference !== 0) {
-    return savedAtDifference
-  }
-  return sourceKeyA < sourceKeyB ? -1 : sourceKeyA > sourceKeyB ? 1 : 0
-}
-
-function pruneRecords(
-  shares: Record<string, ArtifactShareRecord>,
-  now: number,
-  preserveExpired?: { sourceKey: string; slug: string; editToken: string }
-): { shares: Record<string, ArtifactShareRecord>; changed: boolean } {
-  const currentEntries = Object.entries(shares)
-  const unexpired = currentEntries.filter(
-    ([sourceKey, record]) =>
-      (preserveExpired?.sourceKey === sourceKey &&
-        preserveExpired.slug === record.slug &&
-        preserveExpired.editToken === record.editToken) ||
-      record.expiresAt === undefined ||
-      Date.parse(record.expiresAt) > now
-  )
-  const retained =
-    unexpired.length > MAX_ARTIFACT_SHARE_RECORDS
-      ? unexpired.sort(compareRecordsNewestFirst).slice(0, MAX_ARTIFACT_SHARE_RECORDS)
-      : unexpired
-  return {
-    shares: retained.length === currentEntries.length ? shares : Object.fromEntries(retained),
-    changed: retained.length !== currentEntries.length
-  }
 }
 
 function readRecords(
@@ -132,7 +63,9 @@ function readRecords(
   }
   const shareEntries = Object.entries(parsed.shares as Record<string, unknown>)
   const validShares = Object.fromEntries(
-    shareEntries.filter((entry): entry is [string, ArtifactShareRecord] => isRecord(entry[1]))
+    shareEntries.filter((entry): entry is [string, ArtifactShareRecord] =>
+      isArtifactShareRecord(entry[1])
+    )
   )
   const pruned = pruneExpired
     ? pruneRecords(validShares, Date.now(), preserveExpired)
@@ -146,8 +79,34 @@ function readRecords(
     lifecycleNonce: typeof parsed.lifecycleNonce === 'string' ? parsed.lifecycleNonce : '',
     shares: pruned.shares
   }
-  // Readers never write: a change persists the pruned rows in its own serialized write.
+  if (pruned.changed || shareEntries.length !== Object.keys(validShares).length) {
+    prunedOnRead.add(records)
+  }
   return records
+}
+
+// Reads that dropped rows (expired or invalid) the file still holds.
+const prunedOnRead = new WeakSet<ArtifactShareRecordFile>()
+const prunesQueued = new Set<string>()
+
+/** Lookups never write: the rows one dropped are written by a single queued change, held to the
+ *  lifecycle it saw so a sign-out's clear is never undone. */
+function persistPrune(profileId: string, userDataPath: string): void {
+  const path = recordPath(profileId, userDataPath)
+  if (prunesQueued.has(path)) {
+    return
+  }
+  prunesQueued.add(path)
+  const lifecycle = captureArtifactShareLifecycle(profileId, userDataPath)
+  const assertCurrent = (): void => {
+    if (!isArtifactShareLifecycleCurrent(profileId, userDataPath, lifecycle)) {
+      throw new Error('Artifact share records were cleared before the prune was written.')
+    }
+  }
+  void changeRecords(profileId, userDataPath, assertCurrent, { durable: false }, () => false)
+    // A later read or change prunes again.
+    .catch(() => undefined)
+    .finally(() => prunesQueued.delete(path))
 }
 
 function matchesScope(record: ArtifactShareRecord, scope: ArtifactShareScope): boolean {
@@ -172,7 +131,11 @@ export function getArtifactShareRecord(
   sourceKey: string,
   scope: ArtifactShareScope
 ): ArtifactShareRecord | null {
-  const record = readRecords(profileId, userDataPath).shares[sourceKey]
+  const records = readRecords(profileId, userDataPath)
+  if (prunedOnRead.has(records)) {
+    persistPrune(profileId, userDataPath)
+  }
+  const record = records.shares[sourceKey]
   return record && matchesScope(record, scope) ? record : null
 }
 
@@ -193,7 +156,7 @@ function changeRecords(
   return serializeArtifactFileChange(path, async () => {
     assertCurrent()
     const records = readRecords(profileId, userDataPath, options.preserveExpired)
-    if (change(records)) {
+    if (change(records) || prunedOnRead.has(records)) {
       const contents = JSON.stringify(records, null, 2)
       await writeArtifactFileWhileCurrent(path, contents, options.durable, assertCurrent, false)
     }

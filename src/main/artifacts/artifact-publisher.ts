@@ -229,6 +229,10 @@ export class ArtifactPublisher {
         artifactWriteBody(request),
         auth.assertCanSend
       ))
+    if (replaying) {
+      // A replay skips the guarded intent write, so it checks the sign-out fence here.
+      auth.assertCanSend()
+    }
     let response: ArtifactCreateResponse
     try {
       response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
