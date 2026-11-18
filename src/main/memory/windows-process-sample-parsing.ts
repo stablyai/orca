@@ -1,19 +1,9 @@
-/**
- * Text parsers for the two Windows process-table formats the memory collector
- * reads: tab-delimited `Get-CimInstance Win32_Process` rows and one Typeperf
- * CSV sample. Kept apart from the backend/CPU-delta orchestration so each side
- * stays readable on its own.
- */
-
+import { executableBasename } from './process-index'
 import {
   iterateProcessOutputLines,
   PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS
-} from '../../shared/process-output-field-scanner'
+} from '../../shared/process-observation/process-output-field-scanner'
 
-/**
- * Counter paths typeperf is asked for, kept beside the decoder that reads their
- * names back out of the PDH header.
- */
 export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\ID Process',
   '\\Process(*)\\Creating Process ID',
@@ -22,21 +12,21 @@ export const TYPEPERF_COUNTERS = [
 ] as const
 
 const TYPEPERF_MAX_INSTANCES = 4_096
-// Why derived: PDH emits one field per counter per instance plus a timestamp, so
-// a fixed cap silently shrinks the parsable process count each time a counter is
-// added. The 1 MB line cap bounds memory independently.
+// Derive fields from counter count so adding counters cannot silently reduce supported processes.
 const TYPEPERF_MAX_FIELDS = 1 + TYPEPERF_COUNTERS.length * TYPEPERF_MAX_INSTANCES
 const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
 
 export type WindowsProcessResourceRow = {
   pid: number
   ppid: number
-  /** Percent of one core (may exceed 100 on multi-core). */
+  /** Percent of one core; may exceed 100 across cores. */
   cpu: number
   /** Resident memory in bytes. */
   memory: number
-  /** Committed private bytes, resident or paged out. Absent when the host did not report it. */
+  /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
+  name?: string
+  startTicks?: bigint
 }
 
 export type WindowsCpuTimes = {
@@ -50,6 +40,7 @@ export type ParsedWindowsProcessSample = {
 }
 
 type TypeperfProcessFields = {
+  name?: string
   pid?: number
   ppid?: number
   memory?: number
@@ -71,12 +62,16 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
       continue
     }
     const privateMemory = parseCimPageFileBytes(fields[6])
+    const name = executableBasename(fields[7])
+    const startTicks = parseUnsignedBigInt(fields[5])
     rows.push({
       pid,
       ppid,
       cpu: 0,
       memory: Number.isFinite(memory) && memory > 0 ? memory : 0,
-      ...(privateMemory === null ? {} : { privateMemory })
+      ...(privateMemory === null ? {} : { privateMemory }),
+      ...(name ? { name } : {}),
+      ...(startTicks ? { startTicks } : {})
     })
 
     const kernelTicks = parseUnsignedBigInt(fields[3])
@@ -95,19 +90,14 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
 }
 
 function parseCimTabFields(line: string): string[] {
-  // Why: CIM serializes null properties as empty tab fields; collapsing
-  // whitespace would shift CPU counters into the working-set column.
+  // CIM nulls are empty tab fields; collapsing whitespace would shift resource columns.
   if (line.length > PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS) {
     return []
   }
-  return line.split('\t', 7).map((field) => field.trim())
+  return line.split('\t', 8).map((field) => field.trim())
 }
 
-/**
- * Win32_Process.PageFileUsage is a UInt32 of KILOBYTES. null (not 0) when the
- * property is missing, because a host that cannot report commit must not be
- * indistinguishable from a process holding none.
- */
+/** PageFileUsage reports KiB; missing values must remain distinct from measured zero. */
 function parseCimPageFileBytes(field: string | undefined): number | null {
   if (!field) {
     return null
@@ -116,13 +106,14 @@ function parseCimPageFileBytes(field: string | undefined): number | null {
   return Number.isSafeInteger(kb) && kb >= 0 ? kb * 1024 : null
 }
 
-/** Parse tab-delimited PowerShell CIM process rows without deriving CPU deltas. */
 export function parseWindowsProcessOutput(stdout: string): WindowsProcessResourceRow[] {
   return parseWindowsProcessSample(stdout).rows
 }
 
-/** Parse one CSV sample from Windows Typeperf. */
-export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResourceRow[] {
+export function parseTypeperfProcessOutput(
+  stdout: string,
+  withNames = false
+): WindowsProcessResourceRow[] {
   let headers: string[] | null = null
   let values: string[] | null = null
 
@@ -155,7 +146,10 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
     if (!Number.isFinite(value)) {
       continue
     }
-    const row = byInstance.get(path.instance) ?? {}
+    // Instances are `<exe without .exe>#<n>` when names repeat.
+    const row =
+      byInstance.get(path.instance) ??
+      (withNames ? { name: executableBasename(path.instance.replace(/#\d+$/, '')) } : {})
     if (path.counter === 'ID Process') {
       row.pid = Math.trunc(value)
     } else if (path.counter === 'Creating Process ID') {
@@ -180,7 +174,8 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
       memory: row.memory !== undefined && row.memory > 0 ? row.memory : 0,
       ...(row.privateMemory !== undefined && row.privateMemory >= 0
         ? { privateMemory: row.privateMemory }
-        : {})
+        : {}),
+      ...(row.name ? { name: row.name } : {})
     })
   }
   return rows

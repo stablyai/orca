@@ -1,5 +1,5 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 export type PetAnimationName =
   | 'idle'
@@ -12,8 +12,7 @@ export type PetAnimationName =
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 
-// Why: direction tracks horizontal travel only; `accepted` (advance the baseline)
-// fires only on a >=4px horizontal move so slow diagonal drags still accumulate.
+// Advance horizontal hysteresis only after accepted travel so slow diagonal drags accumulate.
 export function nextPetDragAnimation(
   current: PetDragAnimation,
   deltaX: number
@@ -29,7 +28,6 @@ export function nextPetDragAnimation(
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
-  retainedCount: number
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
@@ -39,7 +37,6 @@ export type PetAnimationInput = {
 
 function agentStateAnimation(
   entries: AgentStatusEntry[],
-  retainedCount: number,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -47,7 +44,7 @@ function agentStateAnimation(
   let hasDone = false
 
   for (const entry of entries) {
-    if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
+    if (!isAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
     if (entry.state === 'blocked' || entry.state === 'waiting') {
@@ -63,7 +60,7 @@ function agentStateAnimation(
   if (hasWorking) {
     return 'running'
   }
-  if (hasDone || retainedCount > 0) {
+  if (hasDone) {
     return 'review'
   }
   return 'idle'
@@ -71,16 +68,14 @@ function agentStateAnimation(
 
 export function selectPetAnimationName({
   entries,
-  retainedCount,
   dragging,
   dragAnimation,
   hovering,
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
-  // Why: aligned with Codex. A horizontal drag runs toward the pointer,
-  // grab-and-hold keeps the live agent state, and only a plain hover jumps.
+  const base = agentStateAnimation(entries, now, staleAfterMs)
+  // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base
   }

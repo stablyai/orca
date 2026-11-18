@@ -22,7 +22,7 @@ export type ComposerSourceState = {
     ComposerModel,
     'handleRepoChange' | 'handleFolderSourceRepoChange' | 'handleProjectHostSetupChange'
   >
-  projectTargetActions: Pick<ComposerModel, 'handleProjectChange'>
+  projectTargetActions: Pick<ComposerModel, 'handleProjectChange' | 'selectAddedProjectGroup'>
   branchStartPointActions: Pick<
     ComposerModel,
     | 'showProjectRequiredError'

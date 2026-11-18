@@ -1,16 +1,21 @@
 import type { MuseUsagePersistedFile } from './types'
 
-/** Fills fields older Muse caches never wrote. Electron-free: the scan worker runs it too. */
+/** Backfill old caches in both the main process and scan worker. */
 export function normalizeMuseUsagePersistedFiles(
   files: MuseUsagePersistedFile[] | undefined
 ): MuseUsagePersistedFile[] {
-  return (files ?? []).map((file) => ({
-    ...file,
-    sessions: file.sessions ?? [],
-    dailyAggregates: file.dailyAggregates ?? [],
-    ownedEventKeys: file.ownedEventKeys ?? [],
-    hasDeferredClaims: file.hasDeferredClaims ?? true,
-    sessionCwd: file.sessionCwd ?? null,
-    inheritedCwd: file.inheritedCwd ?? null
-  }))
+  // A record missing a projection would be reused as zero usage; drop it so the scanner rereads the file.
+  return (files ?? []).flatMap((file) =>
+    Array.isArray(file.sessions) && Array.isArray(file.dailyAggregates)
+      ? [
+          {
+            ...file,
+            ownedEventKeys: file.ownedEventKeys ?? [],
+            hasDeferredClaims: file.hasDeferredClaims ?? true,
+            sessionCwd: file.sessionCwd ?? null,
+            inheritedCwd: file.inheritedCwd ?? null
+          }
+        ]
+      : []
+  )
 }

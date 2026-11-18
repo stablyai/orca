@@ -1,21 +1,21 @@
 import { useMemo } from 'react'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
-import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-creator-visibility'
+import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
+import { withoutBotListedFolderWorkspaces } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 
-// Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits.
+// Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId
@@ -23,6 +23,8 @@ export function useSidebarHostVisibleScope(args: {
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   pairedDeviceIdsByEnvironment: Parameters<typeof filterFolderWorkspacesFromOtherDevices>[1]
+  /** Listed under their bot instead (compute-visible-worktrees.ts). */
+  botListedWorktreeIdentities?: ReadonlySet<string>
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
   const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
@@ -47,7 +49,7 @@ export function useSidebarHostVisibleScope(args: {
   )
   const visibleFolderWorkspacesForRows = useMemo(() => {
     const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
-      folderWorkspaces,
+      withoutBotListedFolderWorkspaces(folderWorkspaces, args.botListedWorktreeIdentities),
       projectGroups,
       visibleHostIdSet,
       defaultHostId
@@ -60,6 +62,7 @@ export function useSidebarHostVisibleScope(args: {
       args.pairedDeviceIdsByEnvironment
     )
   }, [
+    args.botListedWorktreeIdentities,
     args.pairedDeviceIdsByEnvironment,
     defaultHostId,
     folderWorkspaces,

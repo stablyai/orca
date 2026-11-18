@@ -58,8 +58,7 @@ export function launchDevApp({ cdpPort, userDataDir }) {
     ELECTRON_ENABLE_LOGGING: '1',
     ELECTRON_ENABLE_STACK_DUMPING: '1',
     NODE_ENV: 'development',
-    // Why: this disposable repro profile must not add real-home Codex work to
-    // app-hang measurements or expose the developer's Codex state.
+    // Keep disposable app-hang measurements free of real-home Codex work and developer state exposure.
     ORCA_DEV_USER_DATA_PATH: userDataDir,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
@@ -70,7 +69,7 @@ export function launchDevApp({ cdpPort, userDataDir }) {
   })
   const child = spawn(
     process.execPath,
-    [path.join('config', 'scripts', 'run-electron-vite-dev.mjs')],
+    [path.join('config', 'scripts', 'development', 'launch', 'run-electron-vite-dev.mjs')],
     {
       cwd: rootDir,
       env,

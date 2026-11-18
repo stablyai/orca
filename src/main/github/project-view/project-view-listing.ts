@@ -1,13 +1,11 @@
-import type { ListProjectViewsArgs } from '../../../shared/github/project-request-types'
-import type { ListProjectViewsResult } from '../../../shared/github/project-result-types'
+import type { ListProjectViewsArgs } from '../../../shared/github/projects/project-request-types'
+import type { ListProjectViewsResult } from '../../../shared/github/projects/project-result-types'
 import type {
   GitHubProjectViewLayout,
   GitHubProjectViewSummary
-} from '../../../shared/github/project-types'
-import { assertPositiveInt, assertSlug } from './internals'
+} from '../../../shared/github/projects/project-types'
+import { assertPositiveInt, assertSlug } from './project-argument-validation'
 import { fetchProjectViewsPage } from './project-view-config'
-
-// ─── listProjectViews ──────────────────────────────────────────────────
 
 export async function listProjectViews(
   args: ListProjectViewsArgs
@@ -21,7 +19,14 @@ export async function listProjectViews(
     return { ok: false, error: numCheck.error }
   }
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
-    return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Invalid ownerType.',
+        reason: 'invalid_owner_type'
+      }
+    }
   }
   const summaries: GitHubProjectViewSummary[] = []
   let cursor: string | null = null

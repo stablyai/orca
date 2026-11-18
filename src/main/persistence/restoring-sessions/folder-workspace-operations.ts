@@ -1,22 +1,28 @@
+import { FOLDER_WORKSPACE_REMOVAL_DOMAINS, type ProfileSaveDomains } from '../profile-save-domains'
 import { randomUUID } from 'node:crypto'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces'
-import { getNextProjectGroupOrder } from '../../../shared/project-groups'
-import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
-import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces/folder-workspaces'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
+import { normalizeStoredTaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachments/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
-import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
+import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { findFolderWorkspace } from './folder-workspace-index'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
-  scheduleSave: () => void
-  removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
+  removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
   hydrateRepo: (repo: Repo) => Repo
 }
@@ -28,12 +34,12 @@ export class FolderWorkspacePersistenceOperations {
     return this.operations.state
   }
 
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
+  private scheduleSave(domains: ProfileSaveDomains): void {
+    this.operations.scheduleSave(domains)
   }
 
-  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForFolderParent(folderWorkspaceId)
+  private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
+    this.operations.removeWorkspaceLineageForRemovedFolder(folderWorkspaceId)
   }
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
@@ -50,8 +56,9 @@ export class FolderWorkspacePersistenceOperations {
     )
   }
 
+  /** Keyed, not a scan (`findFolderWorkspace`). */
   getFolderWorkspace(id: string): FolderWorkspace | undefined {
-    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+    return findFolderWorkspace(this.state.folderWorkspaces ?? [], id)
   }
 
   createFolderWorkspace(input: {
@@ -69,7 +76,7 @@ export class FolderWorkspacePersistenceOperations {
     const group = (this.state.projectGroups ?? []).find(
       (entry) => entry.id === input.projectGroupId
     )
-    // Why trim: the guard below accepts a padded path, so persist the same value it validated.
+    // Use the group path only when the supplied path is absent or blank.
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
@@ -111,13 +118,13 @@ export class FolderWorkspacePersistenceOperations {
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
-      // Switch point: creation is the workspace's first Recent stamp.
+      // Workspace creation establishes its first Recent stamp.
       lastActivityAt: ORCA_SIDEBAR_INPUTS_IS_MAIN ? now : 0,
       createdAt: now,
       updatedAt: now
     }
     this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
-    this.scheduleSave()
+    this.scheduleSave(['folderWorkspaces'])
     return workspace
   }
 
@@ -144,7 +151,9 @@ export class FolderWorkspacePersistenceOperations {
         | 'lastActivityAt'
         | 'smartTier'
         | 'smartAt'
+        | 'lastTerminalUseAt'
         | 'diffComments'
+        | 'externalConversations'
       >
     > &
       WorkspaceAttachmentMutation
@@ -179,7 +188,11 @@ export class FolderWorkspacePersistenceOperations {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
+      const previous = workspace.folderPath
       workspace.folderPath = updates.folderPath
+      if (previous !== workspace.folderPath) {
+        retireAtRestCommandContext(folderWorkspaceKey(workspace.id))
+      }
     }
     if (updates.linkedTask !== undefined) {
       workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)
@@ -241,16 +254,22 @@ export class FolderWorkspacePersistenceOperations {
     if (updates.lastActivityAt !== undefined && Number.isFinite(updates.lastActivityAt)) {
       workspace.lastActivityAt = updates.lastActivityAt
     }
-    // Written as a pair; an absent tier is Rest, so its presence as a key is what clears it.
+    // Presence clears an absent tier to Rest; update its timestamp as a pair.
     if ('smartTier' in updates) {
       workspace.smartTier = updates.smartTier
       workspace.smartAt = updates.smartAt
     }
+    if (updates.lastTerminalUseAt !== undefined && Number.isFinite(updates.lastTerminalUseAt)) {
+      workspace.lastTerminalUseAt = updates.lastTerminalUseAt
+    }
     if (updates.diffComments !== undefined) {
       workspace.diffComments = updates.diffComments
     }
+    if (updates.externalConversations !== undefined) {
+      workspace.externalConversations = updates.externalConversations
+    }
     workspace.updatedAt = Date.now()
-    this.scheduleSave()
+    this.scheduleSave(['folderWorkspaces'])
     return workspace
   }
 
@@ -263,14 +282,18 @@ export class FolderWorkspacePersistenceOperations {
       return false
     }
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
-    this.removeWorkspaceLineageForFolderParent(id)
+    this.removeWorkspaceLineageForRemovedFolder(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
-    this.scheduleSave()
+    this.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    const repo = findRepoRowForHostScopedWrite(
+      this.state.repos,
+      target.id,
+      getRepoExecutionHostId(target)
+    )
     if (!repo) {
       return null
     }
@@ -278,13 +301,13 @@ export class FolderWorkspacePersistenceOperations {
       groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
+    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)
         ? order
         : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave()
+    this.scheduleSave(['repos'])
     return this.hydrateRepo(repo)
   }
 }

@@ -1,13 +1,19 @@
+import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-workspaces/folder-workspace-execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { stat as statLocalPath } from 'node:fs/promises'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../shared/folder-workspace-path-status'
-import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+} from '../../shared/folder-workspaces/folder-workspace-path-status'
+import { getProjectGroupSubtreeIds } from '../../shared/project/groups/project-groups'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -111,6 +117,11 @@ async function statFolderPath(
     return { path, exists: false, reason: 'unavailable' }
   }
 
+  // A stat of a stopped distro's \\wsl.localhost folder boots it (E9): unknown, never missing.
+  // A user act on the distro (runAsWslUserAct) passes and may start it.
+  if (await blockedWslDistroForPath(path)) {
+    return { path, exists: false, reason: 'unavailable' }
+  }
   try {
     const stats = await statLocalPath(path)
     return stats.isDirectory()
@@ -119,6 +130,20 @@ async function statFolderPath(
   } catch (error) {
     return { path, exists: false, reason: pathStatErrorReason(error) }
   }
+}
+
+export function getResolvedFolderWorkspacePathStatus(
+  workspace: Pick<FolderWorkspace, 'folderPath'>,
+  hostId: ExecutionHostId
+): Promise<FolderWorkspacePathStatus> {
+  const host = parseExecutionHostId(hostId)
+  if (host?.kind === 'runtime') {
+    return Promise.resolve({ path: workspace.folderPath, exists: false, reason: 'unavailable' })
+  }
+  return statFolderPath(
+    workspace.folderPath,
+    host?.kind === 'ssh' ? { kind: 'ssh', connectionId: host.targetId } : { kind: 'local' }
+  )
 }
 
 export async function getFolderWorkspacePathStatusForPath(args: {
@@ -179,6 +204,33 @@ export async function getFolderWorkspacePathStatus(
   store: FolderWorkspacePathStatusStore,
   request: FolderWorkspacePathStatusRequest
 ): Promise<FolderWorkspacePathStatus> {
+  if (request.scope === 'folder-workspace') {
+    const result = resolveQualifiedFolderWorkspaceResult(
+      {
+        folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+        projectGroups: store.getProjectGroups?.() ?? [],
+        repos: store.getRepos()
+      },
+      request.folderWorkspaceId
+    )
+    if (result.kind === 'missing') {
+      throw new Error('folder_workspace_path_scope_not_found')
+    }
+    if (result.kind === 'ambiguous') {
+      const paths = new Set(
+        store
+          .getFolderWorkspaces?.()
+          .filter((row) => row.id === request.folderWorkspaceId)
+          .map((row) => row.folderPath)
+      )
+      return {
+        path: paths.size === 1 ? [...paths][0] : request.folderWorkspaceId,
+        exists: false,
+        reason: 'ambiguous-connection'
+      }
+    }
+    return getResolvedFolderWorkspacePathStatus(result.value.workspace, result.value.hostId)
+  }
   const scope = resolveFolderWorkspaceStatusPath({ store, request })
   return getFolderWorkspacePathStatusForPath({
     folderPath: scope.folderPath,
@@ -189,7 +241,6 @@ export async function getFolderWorkspacePathStatus(
   })
 }
 
-/** The code a folder workspace refuses this path with, or null when the path is usable. */
 export function folderWorkspacePathRefusal(status: FolderWorkspacePathStatus): string | null {
   if (status.exists) {
     return null

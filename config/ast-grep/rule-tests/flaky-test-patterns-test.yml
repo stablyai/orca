@@ -1,0 +1,59 @@
+id: test-no-wall-clock
+valid:
+  - 'const dir = join(tmpdir(), `run-${Date.now()}`)'
+  - |
+    vi.useFakeTimers()
+    const now = Date.now()
+invalid:
+  - const started = Date.now()
+---
+id: test-no-real-time-wait
+valid:
+  - await new Promise((resolve) => setTimeout(resolve, 0))
+  - "await new Promise((resolve, reject) => { setTimeout(() => reject(new Error('timeout')), 5_000); emitter.once('ready', resolve) })"
+invalid:
+  - await new Promise<void>((r) => setTimeout(r, 50))
+  - await new Promise((resolve) => setTimeout(() => resolve(), DELAY_MS))
+  - 'await new Promise((resolve) => { setTimeout(resolve, 20) })'
+---
+id: test-no-polling-loop
+valid:
+  - 'for (const item of items) { await sleep(10) }'
+invalid:
+  - 'while (!ready()) { await new Promise((resolve) => setTimeout(resolve, 20)) }'
+  - 'while (!ready()) { await sleep(0); await sleep(25) }'
+---
+id: test-skip-needs-quarantine
+valid:
+  - |
+    // quarantine: #1234 flakes under load
+    // Re-enable once the PTY fixture is deterministic.
+    describe.skip('pty fixture', () => {})
+  - test.skip(process.platform === 'win32', 'POSIX shell only')
+invalid:
+  - test.describe.skip('layout', () => {})
+  - |
+    // TODO: re-enable
+    it.skip('restores the session', async () => {})
+---
+id: test-timeout-needs-reason
+valid:
+  - |
+    // Spawns a real shell, which is slow on Windows runners.
+    it('spawns', async () => {}, 20_000)
+  - |
+    it('spawns', async () => {},
+      // Spawns a real shell.
+      20_000)
+  - 'await expect(locator).toBeVisible({ timeout: 10_000 })'
+invalid:
+  - "it('spawns', async () => {}, 20_000)"
+  - "it('spawns', { timeout: 20_000 }, async () => {})"
+---
+id: test-no-in-test-import-actual
+valid:
+  - "vi.mock('./git', async () => ({ ...(await vi.importActual<typeof Git>('./git')), run: vi.fn() }))"
+  - "const actual = await vi.importActual<typeof Git>('./git')"
+invalid:
+  - "vi.doMock('./git', async () => ({ ...(await vi.importActual<typeof Git>('./git')) }))"
+  - "it('creates', async () => { const actual = await vi.importActual<typeof Git>('./git') })"

@@ -2,10 +2,8 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 
-// The OpenCode schemas as the app itself creates them, written out in full
-// rather than trimmed to the columns a reader names: every read probes for its
-// columns, so a trimmed fixture would pass a probe the real database fails.
-// Foreign keys are dropped so a generation can be built without its siblings.
+// Use complete upstream schemas so column probes match real databases; omit foreign keys
+// to construct generations independently.
 
 const PROJECT_TABLE = `
   CREATE TABLE project (
@@ -15,7 +13,7 @@ const PROJECT_TABLE = `
   );
 `
 
-// OpenCode 1.17.x — and still present, frozen, after an OpenCode 2 migration.
+// OpenCode 1.17.x; frozen after OpenCode 2 migration.
 const LEGACY_SESSION_TABLE = `
   CREATE TABLE session (
     id TEXT PRIMARY KEY, project_id TEXT NOT NULL, parent_id TEXT, slug TEXT NOT NULL,
@@ -39,7 +37,6 @@ const LEGACY_SESSION_TABLE = `
   );
 `
 
-// OpenCode 2.0.x — session rows move to `session_v2`, messages to `session_message`.
 const V2_SESSION_TABLE = `
   CREATE TABLE session_v2 (
     id TEXT PRIMARY KEY, project_id TEXT NOT NULL, workspace_id TEXT, parent_id TEXT,
@@ -57,8 +54,7 @@ const V2_SESSION_TABLE = `
   );
 `
 
-// A `session_v2` that never grew the token/cost columns. Reachable on databases
-// whose v2 lineage predates them, and the shape that must not erase a legacy row.
+// Older v2 schemas lack totals and must not erase legacy usage.
 const V2_SESSION_TABLE_WITHOUT_TOKENS = `
   CREATE TABLE session_v2 (
     id TEXT PRIMARY KEY, project_id TEXT NOT NULL, workspace_id TEXT, parent_id TEXT,
@@ -82,7 +78,7 @@ export type OpenCodeUsageFixtureSession = {
   id: string
   directory: string
   title?: string
-  /** `null` writes a NULL `model`, the shape a v1 row has before the import derives one. */
+  /** NULL matches v1 rows before migration derives a model. */
   model?: string | null
   cost?: number
   tokensInput?: number
@@ -94,25 +90,17 @@ export type OpenCodeUsageFixtureSession = {
   timeUpdated?: number
 }
 
-/**
- * Which session tables the database carries.
- *
- * - `v1`: OpenCode 1 only.
- * - `migrated`: what an OpenCode 2 upgrade leaves behind — both tables, with the
- *   pre-upgrade sessions copied into `session_v2` and `session` frozen.
- * - `v2-only`: `session_v2` without the legacy table at all.
- */
+/** Migrated databases retain frozen v1 rows alongside their live v2 copies. */
 export type OpenCodeUsageFixtureGeneration = 'v1' | 'migrated' | 'v2-only'
 
 export type OpenCodeUsageFixtureSpec = {
   generation: OpenCodeUsageFixtureGeneration
-  /** Rows in the legacy `session` table; ignored for `v2-only`. */
+  /** Ignored for v2-only. */
   legacySessions?: readonly OpenCodeUsageFixtureSession[]
-  /** Rows in `session_v2`; ignored for `v1`. */
+  /** Ignored for v1. */
   v2Sessions?: readonly OpenCodeUsageFixtureSession[]
-  /** Build `session_v2` without the token/cost columns; ignored for `v1`. */
+  /** Omit v2 totals; ignored for v1. */
   v2WithoutTokenColumns?: boolean
-  /** `project.worktree`, the repo root OpenCode recorded for the project. */
   worktree?: string
 }
 
@@ -158,11 +146,6 @@ function insertSession(
   ).run(...identity, ...usage)
 }
 
-/**
- * Create an OpenCode usage database at `dbPath` for one schema generation.
- * @param dbPath - Where to create the database; parent directories are created.
- * @param spec - The generation to build and the session rows to write.
- */
 export function writeOpenCodeUsageDatabase(dbPath: string, spec: OpenCodeUsageFixtureSpec): void {
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new SyncDatabase(dbPath)

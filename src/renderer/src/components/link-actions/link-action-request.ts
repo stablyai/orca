@@ -1,4 +1,4 @@
-import type { HttpLinkAction } from '@/lib/http-link-destinations'
+import type { HttpLinkAction } from '@/lib/browser/navigation/http-link-destinations'
 
 export type LinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task'
 
@@ -9,6 +9,8 @@ export type LinkActionRequest = {
   anchorX: number
   anchorY: number
   destination: string
+  /** Copied instead of destination when the shown target differs from the resolved path. */
+  copyValue?: string
   kind: LinkActionKind
   primary: LinkAction
   alternate?: LinkAction

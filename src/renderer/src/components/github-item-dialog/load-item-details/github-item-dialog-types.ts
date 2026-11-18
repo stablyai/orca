@@ -1,13 +1,26 @@
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubWorkItemProjectOrigin,
   ItemDialogTab
 } from '@/components/github/github-work-item-identity'
 
-/** Re-exported so Project-view callers keep a stable import path. */
 export type GitHubItemDialogProjectOrigin = GitHubWorkItemProjectOrigin
+
+export type GitHubWorkItemDetailsArgs = {
+  workItem: GitHubWorkItem | null
+  repoPath: string | null
+  effectiveRepoId: string | null
+  sourceContext?: TaskSourceContext | null
+  initialTab?: ItemDialogTab
+  projectOrigin?: GitHubItemDialogProjectOrigin
+  onRefreshAccepted?: (item: GitHubWorkItem) => void
+  onReviewRequestsChange?: (
+    itemKey: { id: string; repoId: string },
+    reviewRequests: GitHubAssignableUser[]
+  ) => void
+}
 
 export type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
@@ -16,7 +29,6 @@ export type GitHubItemDialogProps = {
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
-  /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
@@ -37,9 +49,11 @@ export type GitHubItemDialogEditSectionProps = {
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Why: lets the parent invalidate its details cache after a mutation, else a reopen within FRESH_MS paints pre-mutation data. */
+  /** Invalidate the parent’s detail cache after mutation so reopening cannot show stale data during FRESH_MS. */
   onMutated: () => void
-  assignees: string[]
+  acceptedRefresh?: number
+  /** Undefined while the item's assignees are still unknown. */
+  assignees?: string[]
   onUse: (item: GitHubWorkItem) => void
   onOpenOrUse?: (item: GitHubWorkItem) => void
   attachedWorkspaceLabel?: string | null

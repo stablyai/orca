@@ -1,5 +1,6 @@
 import {
   deriveAzureDevOpsStatus,
+  summarizeAzureDevOpsStatuses,
   mapAzureDevOpsPullRequest,
   mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
@@ -73,32 +74,37 @@ async function getPullRequestStatuses(
   repo: AzureDevOpsRepoRef,
   repoIdOrName: string,
   pr: RawAzureDevOpsPullRequest
-): Promise<RawAzureDevOpsStatus[]> {
-  const raw = await requestAzureDevOpsJson<
-    RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
-  >(
-    repo,
-    `/_apis/git/repositories/${encodePathSegment(repoIdOrName)}/pullRequests/${encodePathSegment(
-      String(pr.pullRequestId)
-    )}/statuses`
+): Promise<{ statuses: RawAzureDevOpsStatus[]; complete: boolean }> {
+  const read = async (path: string) => {
+    let hasMore = false
+    const raw = await requestAzureDevOpsJson<
+      RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
+    >(repo, path, {
+      onResponse: (response) => {
+        hasMore = Boolean(response.headers.get('x-ms-continuationtoken'))
+      }
+    })
+    return {
+      statuses: readStatusList(raw),
+      complete: raw !== null && !hasMore && (Array.isArray(raw) || Array.isArray(raw.value))
+    }
+  }
+  const root = `/_apis/git/repositories/${encodePathSegment(repoIdOrName)}`
+  const prStatuses = await read(
+    `${root}/pullRequests/${encodePathSegment(String(pr.pullRequestId))}/statuses`
   )
-  const prStatuses = readStatusList(raw)
-  if (prStatuses.length > 0) {
+  if (prStatuses.statuses.length > 0) {
     return prStatuses
   }
   const commitId = pr.lastMergeSourceCommit?.commitId?.trim()
   if (!commitId) {
-    return pr.statuses ?? []
+    return { statuses: pr.statuses ?? [], complete: false }
   }
-  const commitStatuses = await requestAzureDevOpsJson<
-    RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
-  >(
-    repo,
-    `/_apis/git/repositories/${encodePathSegment(repoIdOrName)}/commits/${encodePathSegment(
-      commitId
-    )}/statuses`
-  )
-  return readStatusList(commitStatuses)
+  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`)
+  return {
+    statuses: commitStatuses.statuses,
+    complete: prStatuses.complete && commitStatuses.complete
+  }
 }
 
 async function normalizePullRequest(
@@ -107,8 +113,13 @@ async function normalizePullRequest(
   webBaseUrl: string,
   raw: RawAzureDevOpsPullRequest
 ): Promise<AzureDevOpsPullRequestInfo | null> {
-  const statuses = await getPullRequestStatuses(repo, repoIdOrName, raw)
-  return mapAzureDevOpsPullRequest(raw, deriveAzureDevOpsStatus(statuses), webBaseUrl)
+  const { statuses, complete } = await getPullRequestStatuses(repo, repoIdOrName, raw)
+  return mapAzureDevOpsPullRequest(
+    raw,
+    deriveAzureDevOpsStatus(statuses),
+    webBaseUrl,
+    complete ? summarizeAzureDevOpsStatuses(statuses) : undefined
+  )
 }
 
 function sortPullRequestsForBranch(
@@ -118,7 +129,7 @@ function sortPullRequestsForBranch(
   const leftStatus = left.status?.trim().toLowerCase()
   const rightStatus = right.status?.trim().toLowerCase()
   const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
+  // Newer abandoned PRs must not hide usable branch reviews.
   if (abandonedOrder !== 0) {
     return abandonedOrder
   }
@@ -232,8 +243,6 @@ export async function getAzureDevOpsPullRequestForBranch(
     )
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state: mapAzureDevOpsPullRequestState(raw),
         reviewNumber: raw.pullRequestId ?? null,
@@ -263,11 +272,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 
-/**
- * Existing-review lookup that surfaces transport/auth failures instead of
- * collapsing them to null, so a failed lookup becomes
- * `reviewLookupOutcome: 'unavailable'` rather than a false "No pull request found".
- */
+/** Preserve lookup failures so creation preflight can report review state as unavailable. */
 export function getAzureDevOpsPullRequestForBranchOrThrow(
   repoPath: string,
   branch: string,

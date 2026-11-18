@@ -1,15 +1,7 @@
 import { z } from 'zod'
 
-/**
- * The load state the native shell view reports, and the parser that rebuilds the union from the
- * flat dictionary a native event carries.
- *
- * Recovery is the caller's, never the view's: the view retries nothing and reloads nothing.
- * `generation-unreadable` and `document-load-failed` mean the cached generation is suspect, so the
- * caller deletes that host's cache and downloads once. `render-process-gone` remounts once and
- * never deletes, because renderer memory pressure and a WebView provider update are
- * indistinguishable here from a bad bundle.
- */
+// Parse native load events; caller owns recovery, view never reloads/retries.
+// generation-unreadable: delete host cache and download once. document-load-failed: remount once without deletion; Try again downloads fresh. render-process-gone: remount once without deletion (reclaimed losses do not spend it); memory pressure/provider updates look like bad bundles.
 export const MOBILE_WEB_SHELL_FAILURE_REASONS = [
   /** The generation directory has no readable manifest, or declares an asset we refuse to map. */
   'generation-unreadable',
@@ -26,16 +18,15 @@ export type MobileWebShellFailureReason = (typeof MOBILE_WEB_SHELL_FAILURE_REASO
 export type MobileWebShellLoadState =
   | { state: 'loading' }
   | { state: 'ready' }
-  | { state: 'failed'; reason: MobileWebShellFailureReason }
+  // reclaimed: the OS took the renderer while Orca was off screen or for memory (Android didCrash false), not the page failing.
+  | { state: 'failed'; reason: MobileWebShellFailureReason; reclaimed?: true }
 
-/**
- * What the native event body actually is; the union above is derived from it, never asserted.
- * Own-property parse: zod reads a shape key straight off the value, so an inherited `reason` would
- * otherwise count as one the shell sent.
- */
+// Check own properties: Zod shape reads would otherwise accept inherited reason as a native event.
 const loadStatePayloadSchema = z.object({
   state: z.string(),
-  reason: z.string().optional()
+  reason: z.string().optional(),
+  background: z.boolean().optional(),
+  crashed: z.boolean().optional()
 })
 
 export type MobileWebShellLoadStatePayload = z.infer<typeof loadStatePayloadSchema>
@@ -61,12 +52,17 @@ export function parseMobileWebShellLoadState(payload: unknown): MobileWebShellLo
   if (!parsed.success) {
     return null
   }
-  const { state, reason } = parsed.data
+  const { state, reason, background, crashed } = parsed.data
   if (state === 'loading' || state === 'ready') {
     return { state }
   }
   if (state !== 'failed') {
     return null
   }
-  return isFailureReason(reason) ? { state: 'failed', reason } : null
+  if (!isFailureReason(reason)) {
+    return null
+  }
+  return reason === 'render-process-gone' && (background === true || crashed === false)
+    ? { state: 'failed', reason, reclaimed: true }
+    : { state: 'failed', reason }
 }

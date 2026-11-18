@@ -3,10 +3,7 @@ import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import AboutScreen from '../src/settings/about-screen'
 
-// Why: read version + native build identifier from expo-constants at
-// runtime so the About screen never drifts out of sync with app.json.
-// nativeBuildVersion is iOS buildNumber on iOS and versionCode on
-// Android — different concepts, same role (monotonic native build id).
+// Read version and native build id from expo-constants to match app.json: iOS buildNumber and Android versionCode.
 function getVersionLabel(): string {
   const version = Constants.expoConfig?.version ?? '?.?.?'
   const build =

@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 const store = vi.hoisted(() => ({
   state: {
     settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-    repos: [{ id: 'tracked', connectionId: null, executionHostId: 'runtime:owner-runtime' }]
+    repos: [
+      { id: 'tracked', connectionId: null, executionHostId: 'runtime:owner-runtime' },
+      { id: 'twin', connectionId: null, executionHostId: 'runtime:focused-runtime' },
+      { id: 'twin', connectionId: null, executionHostId: 'runtime:other-runtime' }
+    ]
   }
 }))
 
@@ -36,7 +40,11 @@ describe('getGitHubMutationTarget', () => {
     })
   })
 
-  it("uses this computer's credentials for other slug edits with no known repo", () => {
-    expect(getGitHubMutationTarget(null, undefined)).toEqual({ kind: 'local' })
+  it('refuses a twin rather than taking the focused copy or this computer', () => {
+    expect(() => getGitHubMutationTarget('twin', undefined)).toThrow('No single host owns project')
+    expect(getGitHubMutationTarget('twin', projectOrigin)).toEqual({
+      kind: 'environment',
+      environmentId: 'board-runtime'
+    })
   })
 })

@@ -1,16 +1,16 @@
-// The Antigravity ACP server Orca installs for chats when the person asks: Google ships it only as a
-// registry download (no installer, no published checksums), so each archive and both of its
-// executables are pinned by the hashes and sizes Orca verified.
+// Pin the official registry archives and each executable verified inside them.
 
 import { join } from 'node:path'
 import type { ManagedRuntime, ManagedRuntimePin } from '../node-runtime/managed-runtime-release'
 import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 
-const VERSION = '1.3.0'
+// 1.4.2 and later write skills/system/run-workflow/SKILL.md into the chat's workspace unless the
+// session disables run_workflow; check a newer release in an empty folder before moving this pin.
+const VERSION = '1.5.0'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
-const COMMAND = 'agy_acp_server.par'
+const COMMAND = process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'
 // The server finds its harness beside itself.
-const HARNESS = 'localharness_external'
+const HARNESS = process.platform === 'win32' ? 'localharness_external.exe' : 'localharness_external'
 
 type Pinned = {
   path: string
@@ -23,44 +23,61 @@ type Pinned = {
 }
 const PINNED: Record<string, Pinned> = {
   'darwin-arm64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-arm64.zip',
-    archive: '7cd97045f7b4fe81175a107cdf16f9c51484e3c78a5162cae415338bb6aa5b88',
-    archiveBytes: 111456962,
-    server: 'cb1f0725183ed922079ed6cd1d2422b4d8be44c5fb60be3e9a43d8d04f99a18e',
-    serverBytes: 278535456,
-    harness: 'b04b00662c1821b953a409d43626b86d1229130eeb2078b4e1304c06199aa481',
-    harnessBytes: 118611392
+    path: 'macos/agy-acp-server-1.5.0-darwin-arm64.zip',
+    archive: 'c82ecb4ef476bfc35cbe5b2745cdddef873b99c9f5bd7fd11e5ca1fc1667a3fc',
+    archiveBytes: 100401185,
+    server: 'bbb138a7ff32982e231af325e3176b252174f4c59e4fee7159c0e364ad5f9613',
+    serverBytes: 179756208,
+    harness: '4eddc5c77a0bb275372fb548a9011a1acc70828a4a72412f2da0733c90db30fe',
+    harnessBytes: 129572384
   },
   'darwin-x64': {
-    path: 'macos/agy-acp-server-1.3.0-darwin-x86_64.zip',
-    archive: 'bb23956b89984bf5d354af2c3725e6c57f0cc1b7228e77a0e91c9c2bc1d47646',
-    archiveBytes: 117245544,
-    server: 'f31bd5797eeb225a5efa12e24573f1f4eb157ec00698dd6a2cda6f0d924705cf',
-    serverBytes: 282840688,
-    harness: 'd724f49b2c9e440c5d37925b1da203fc204c17dd9c662df45094c641f9806bc6',
-    harnessBytes: 124175392
+    path: 'macos/agy-acp-server-1.5.0-darwin-x86_64.zip',
+    archive: '86a94e33b25d4a38ff30526ad844546860aa9ed98698498d9e87d30eb794426e',
+    archiveBytes: 106461356,
+    server: 'b60b713917ce0db322cae7a8d9fcdcd93f1515e7242880592fc23297bc652357',
+    serverBytes: 184151792,
+    harness: '30e1cfdcd0349e8cb642c90bd847825ec762f9c1cf2d52e1093535f368003c32',
+    harnessBytes: 134730544
   },
   'linux-x64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-x86_64.zip',
-    archive: '9fb60956af0a9d76220a4db91ca9ac88e2a2372ad68f985ab5fceace6b825b96',
-    archiveBytes: 333727150,
-    server: 'cf6feaebdacfc2255dcfc8883db99b15de8554698554e2a1e78e5ccec1c68a20',
-    serverBytes: 926533965,
-    harness: '63042ca43fc7a69600683920f7706689b82cf8aecefe21dc18cf35e99c9dde4d',
-    harnessBytes: 130388040
+    path: 'linux/agy-acp-server-1.5.0-linux-x86_64.zip',
+    archive: '36f373e8948edf1727b39c7d62b5722d6a4474bdfd72b04ad3d6def571808c9f',
+    archiveBytes: 274069093,
+    server: '8a35f63dd2284e3790a1d97dd0cb2236057c55a0c598b26f3bde022b843d5c04',
+    serverBytes: 714224576,
+    harness: '13dca92307524722a3434cd50baba3f33502d71a24f804f03ee2efbd18b6017d',
+    harnessBytes: 139570072
   },
   'linux-arm64': {
-    path: 'linux/agy-acp-server-1.3.0-linux-arm64.zip',
-    archive: '500b0bc0fb858e88f4df404d4cedf80bf9298c178291e39e383d6c50b111cbdf',
-    archiveBytes: 321690363,
-    server: '03ea51ff7a60cb1b44e65da40fdb35f1f457db7950d1651d9e86945c8aa584c6',
-    serverBytes: 930848992,
-    harness: '7fe676f1234889900800bad3ca50fb9b55f1e16ee4cb82b789f84ae5145fd582',
-    harnessBytes: 123224968
+    path: 'linux/agy-acp-server-1.5.0-linux-arm64.zip',
+    archive: '1e184f439477b54138e94440056b26a78c0a8075a8fd2ffda637ec31267c6459',
+    archiveBytes: 264366319,
+    server: '4437a73922a11a67c0185f4b709cb685cf67ae6d56e2ffe9cc29062a99befb20',
+    serverBytes: 721489411,
+    harness: '485cb7d96d06ce732d841713e5166d07f4053e8c4aaf31a31f6204ee8d024eb2',
+    harnessBytes: 132951888
+  },
+  'win32-x64': {
+    path: 'windows/agy-acp-server-1.5.0-windows-x86_64.zip',
+    archive: '6163f6b59b381bae419652dbae167bc8cda0ef29d665c0ba8af3d8c7fddd8867',
+    archiveBytes: 105513364,
+    server: '209a30dee3f67fbb62710263d38323dc0d66b71b5121eb37ea80b63383dd178a',
+    serverBytes: 58314376,
+    harness: '4e3644c05a601fd8da1cc9e72639e857d3a7c78f3d2cdf48ea7805ce4a3263ab',
+    harnessBytes: 155782808
+  },
+  'win32-arm64': {
+    path: 'windows/agy-acp-server-1.5.0-windows-arm64.zip',
+    archive: '340092b8af6dafc71eb15f4a8ec54b4d1f0bce16d1fa4d163b562c50b905f8f4',
+    archiveBytes: 108145235,
+    server: '2acaf9e80de0e979c214fc7c00427dd2791469e1a446fe8c545bcb5d8745a7f4',
+    serverBytes: 65077040,
+    harness: '4ca67a6d4472c06a09aec01dece2f6001ba6c88002e7a3a14ee7520f25d1a951',
+    harnessBytes: 147104920
   }
 }
 
-/** This host's pinned server; none where Google publishes no build Orca verified (Windows). */
 function pin(): ManagedRuntimePin | null {
   const pinned = PINNED[`${process.platform}-${process.arch}`]
   return pinned
@@ -78,7 +95,6 @@ function pin(): ManagedRuntimePin | null {
 }
 
 export const ANTIGRAVITY_ACP_COMMAND = COMMAND
-
 export const ANTIGRAVITY_ACP_RUNTIME: ManagedRuntime = {
   label: 'Antigravity',
   root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', 'antigravity'),

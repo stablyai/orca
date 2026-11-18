@@ -1,23 +1,23 @@
-import { profileStateDatabaseFiles } from '../profile-state-storage-classification'
+import { profileStateDatabaseFiles } from '../database/profile-state-storage-classification'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { parseProfileStateRoot } from '../profile-state-document-validation'
-import { durableWriteTempPath, writeFileDurableSync } from '../../../durable-file-write'
-import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-file'
+import { parseProfileStateRoot } from '../documents/profile-state-document-validation'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
+import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-storage/secure-file'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
-} from '../profile-state-database-quarantine'
+} from '../recovery/profile-state-database-quarantine'
 import { profileStateJsonExportPaths } from './profile-state-export-path'
-import { profileStateDatabaseBackupFiles } from '../profile-state-backup-path'
+import { profileStateDatabaseBackupFiles } from '../backup/profile-state-backup-path'
 import {
   hasProfileStateAuthorityMarker,
   profileStateAuthorityMarkerPath
-} from '../profile-state-authority-marker'
+} from '../database/profile-state-authority-marker'
 import {
   assertProfileStateMaintenance,
   type ProfileStateMaintenance
-} from '../profile-state-access'
+} from '../access/profile-state-access'
 
 export type ProfileStateJsonRecoveryOptions = {
   maintenance: ProfileStateMaintenance
@@ -35,7 +35,7 @@ export type ProfileStateJsonRecovery = {
   removedDatabaseFiles: readonly string[]
 }
 
-/** Restore an explicitly selected JSON export after preserving a failed SQLite authority. */
+/** Preserve failed SQLite authority before restoring the explicitly selected JSON export. */
 export function restoreProfileStateJsonExport(
   options: ProfileStateJsonRecoveryOptions
 ): ProfileStateJsonRecovery {
@@ -60,7 +60,7 @@ export function restoreProfileStateJsonExport(
     recoveryFiles
   )
 
-  // Invalidate authority-dependent caches while the database and recovery exports still exist.
+  // Invalidate caches before removing database/export evidence.
   options.beforeRestore?.()
   mkdirSync(dirname(options.dataFile), { recursive: true })
   writeFileDurableSync(durableWriteTempPath(options.dataFile), options.dataFile, rawJson)
@@ -71,8 +71,7 @@ export function restoreProfileStateJsonExport(
   for (const path of removedDatabaseFiles) {
     rmSync(path)
   }
-  // Removing the reserved exports completes the authority transition back to JSON. Keeping one
-  // would make established startup correctly reject the restored legacy state as a stale mirror.
+  // Reserved exports must go or startup would reject restored JSON as a stale mirror.
   const retainedArtifacts = [...retainedBackups, ...retainedExports]
   for (const path of retainedArtifacts) {
     if (path !== options.exportPath) {

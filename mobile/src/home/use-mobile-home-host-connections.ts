@@ -1,77 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { decodeAccountsSnapshot } from '../components/AccountUsage'
-import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
-import { usePrimeHosts } from '../transport/client-context'
-import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
-import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
-import { useAllHostClients } from '../transport/use-all-host-clients'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
-  fetchHomeHostWorktreeInfo,
-  type HostWorktreeInfoSetter
-} from '../worktree/home-host-worktree-fetch'
+  accountsSnapshotKey,
+  subscribeAccountsSnapshots
+} from '../accounts/accounts-snapshot-stream'
+import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
+import { retainHostConnectionInvalidation } from '../query/host-connection-invalidation'
+import { retainHostEventRouter } from '../query/host-event-router'
+import { keepNativeHostQueries } from '../query/native-query-persistence'
+import { usePrimeHosts } from '../transport/connection/host-client-hooks'
+import { selectHomeAutoConnectHostIds } from '../transport/hosts/home-host-auto-connect'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { HostCatalogEntry, HostProfile } from '../host-catalog/host-profile'
+import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import {
   readMobileHomeLastConnected,
   readMobileHomeReconnectAttempts,
   reconcileMobileHomeHostStates
 } from './mobile-home-connection-state'
-import {
-  fetchMobileHomeStats,
-  fetchMobileHomeTaskProviders,
-  type HomeAccountsSetter,
-  type HomeStatsSetter,
-  type HomeTaskProvidersSetter
-} from './mobile-home-host-requests'
 
-type Setters = {
-  setStats: HomeStatsSetter
-  setWorktreeInfo: HostWorktreeInfoSetter
-  setAccounts: HomeAccountsSetter
-  setTaskProviders: HomeTaskProvidersSetter
-}
-
+// Home's per-desktop reads (counts, stats) are queries; this wires what a connection carries besides them.
 function wireMobileHomeHostSubscriptions(
-  entry: { hostId: string; client: RpcClient; state: ConnectionState },
-  setters: Setters
+  entry: { hostId: string; client: RpcClient },
+  queryClient: QueryClient
 ): () => void {
+  const { hostId, client } = entry
+  keepNativeHostQueries(queryClient, hostId)
+  // Reads Home's queries again on each reconnect, and on the desktop's change notices.
+  const stopInvalidation = retainHostConnectionInvalidation(queryClient, hostId, client)
+  const router = retainHostEventRouter(queryClient, hostId, client)
   let unsubscribeNotifications: (() => void) | null = null
   let unsubscribeAccounts: (() => void) | null = null
-  const refetchGate = createHostConnectRefetchGate()
   const wireState = (state: ConnectionState): void => {
-    const reconnected = refetchGate.observe(state)
     if (state === 'connected') {
-      unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
-      unsubscribeAccounts ??= entry.client.subscribe('accounts.subscribe', null, (payload) => {
-        if (!payload || typeof payload !== 'object') {
-          return
-        }
-        const event = payload as { type?: string; snapshot?: unknown }
-        if (event.type !== 'ready' && event.type !== 'snapshot') {
-          return
-        }
-        try {
-          const snapshot = decodeAccountsSnapshot(event.snapshot)
-          setters.setAccounts((previous) => ({ ...previous, [entry.hostId]: snapshot }))
-        } catch {
-          // Keep the last proven snapshot when a mixed-version host publishes malformed data.
-        }
+      unsubscribeNotifications ??= subscribeToDesktopNotifications(client, hostId)
+      // One stream per connection: each subscribe makes the desktop check usage, so focus must not resubscribe.
+      unsubscribeAccounts ??= subscribeAccountsSnapshots(client, {
+        onSnapshot: (snapshot) => queryClient.setQueryData(accountsSnapshotKey(hostId), snapshot),
+        onInvalidSnapshot: () => queryClient.setQueryData(accountsSnapshotKey(hostId), null),
+        onStreamError: () => {}
       })
-      if (reconnected) {
-        fetchMobileHomeStats(entry.client, entry.hostId, setters.setStats, () => false)
-        void fetchHomeHostWorktreeInfo(
-          entry.client,
-          entry.hostId,
-          setters.setWorktreeInfo,
-          () => false
-        )
-        fetchMobileHomeTaskProviders(
-          entry.client,
-          entry.hostId,
-          setters.setTaskProviders,
-          () => false
-        )
-      }
       return
     }
     unsubscribeNotifications?.()
@@ -79,20 +48,23 @@ function wireMobileHomeHostSubscriptions(
     unsubscribeAccounts?.()
     unsubscribeAccounts = null
   }
-  wireState(entry.state)
-  const unsubscribeState = entry.client.onStateChange(wireState)
+  // The live state: the client may have connected since the render that listed it.
+  wireState(client.getState())
+  const unsubscribeState = client.onStateChange(wireState)
   return () => {
     unsubscribeState()
     unsubscribeNotifications?.()
     unsubscribeAccounts?.()
+    router.release()
+    stopInvalidation()
   }
 }
 
 export function useMobileHomeHostConnections(
   hosts: HostProfile[],
-  hostCatalog: HostCatalogEntry[],
-  setters: Setters
+  hostCatalog: HostCatalogEntry[]
 ) {
+  const queryClient = useQueryClient()
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
@@ -104,7 +76,6 @@ export function useMobileHomeHostConnections(
   })
   const primeHosts = usePrimeHosts()
   const subscriptionsRef = useRef(new Map<string, { client: RpcClient; cleanup: () => void }>())
-  const { setAccounts, setStats, setTaskProviders, setWorktreeInfo } = setters
 
   useEffect(() => {
     if (hosts.length > 0) {
@@ -112,11 +83,17 @@ export function useMobileHomeHostConnections(
     }
   }, [hosts, primeHosts])
 
-  useEffect(() => {
+  // Reconcile during render: allClients rebuilds per host tick, and an effect would commit Home twice.
+  const [reconciledFrom, setReconciledFrom] = useState<{
+    allClients: typeof allClients
+    hostCatalog: HostCatalogEntry[]
+  } | null>(null)
+  if (reconciledFrom?.allClients !== allClients || reconciledFrom.hostCatalog !== hostCatalog) {
+    setReconciledFrom({ allClients, hostCatalog })
     setHostAttempts((previous) => readMobileHomeReconnectAttempts(previous, allClients))
     setHostLastConnected((previous) => readMobileHomeLastConnected(previous, allClients))
     setHostStates((previous) => reconcileMobileHomeHostStates(previous, allClients, hostCatalog))
-  }, [allClients, hostCatalog])
+  }
 
   useEffect(() => {
     const clientsByHostId = new Map(allClients.map((entry) => [entry.hostId, entry.client]))
@@ -126,16 +103,15 @@ export function useMobileHomeHostConnections(
         subscriptionsRef.current.delete(hostId)
       }
     }
-    const activeSetters = { setAccounts, setStats, setTaskProviders, setWorktreeInfo }
     for (const entry of allClients) {
       if (!subscriptionsRef.current.has(entry.hostId)) {
         subscriptionsRef.current.set(entry.hostId, {
           client: entry.client,
-          cleanup: wireMobileHomeHostSubscriptions(entry, activeSetters)
+          cleanup: wireMobileHomeHostSubscriptions(entry, queryClient)
         })
       }
     }
-  }, [allClients, setAccounts, setStats, setTaskProviders, setWorktreeInfo])
+  }, [allClients, queryClient])
 
   useEffect(() => {
     const subscriptions = subscriptionsRef.current

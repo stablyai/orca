@@ -1,0 +1,22 @@
+{
+  "sdk": "0.3.284",
+  "probe": "actual CLI invalid startup flag before initialize",
+  "records": [
+    {
+      "initializationError": {
+        "name": "Error",
+        "message": "Claude Code process exited with code 1",
+        "errorClass": "process_exited_nonzero",
+        "exitCode": 1
+      }
+    },
+    {
+      "iteratorError": {
+        "name": "Error",
+        "message": "Claude Code process exited with code 1",
+        "errorClass": "process_exited_nonzero",
+        "exitCode": 1
+      }
+    }
+  ]
+}

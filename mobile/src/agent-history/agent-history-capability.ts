@@ -1,4 +1,2 @@
-// Why: mobile's protocol-version.ts is a separate copy without the capability
-// constants (mirrors MOBILE_TASKS_CAPABILITY in tasks.tsx). Keep this string in
-// lockstep with src/shared/protocol-version.ts AI_VAULT_RUNTIME_CAPABILITY.
+// Keep string aligned with shared AI_VAULT_RUNTIME_CAPABILITY; mobile protocol-version copy lacks capability constants (as with MOBILE_TASKS_CAPABILITY).
 export const MOBILE_AI_VAULT_CAPABILITY = 'aiVault.v1'

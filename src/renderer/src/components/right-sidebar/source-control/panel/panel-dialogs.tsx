@@ -1,4 +1,4 @@
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
@@ -32,8 +32,10 @@ export function SourceControlPanelDialogs({
     pickerBaseRef,
     pullRequestGenerationDialogOpen,
     refreshBranchCompare,
+    resolveConflictsEditor,
     resolveConflictsComposerOpen,
     resolveConflictsPrompt,
+    resolveConflictsRecoveryContext,
     resolvedPendingDiffCommentsClear,
     saveLaunchActionDefault,
     setBaseRefDialogOpen,
@@ -62,6 +64,7 @@ export function SourceControlPanelDialogs({
       baseRefDialogOpen={baseRefDialogOpen}
       onBaseRefDialogOpenChange={setBaseRefDialogOpen}
       baseRefRepoId={activeRepo.id}
+      baseRefHostId={model.scope?.executionHostId ?? undefined}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
         if (baseRefOwnedByWorktree && activeWorktreeId) {
@@ -82,7 +85,9 @@ export function SourceControlPanelDialogs({
         window.setTimeout(() => void refreshBranchCompare(), 0)
       }}
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+      resolveConflictsEditor={resolveConflictsEditor}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
+      recoveryContext={resolveConflictsRecoveryContext}
       onResolveConflictsComposerOpenChange={setResolveConflictsComposerOpen}
       resolveConflictsPrompt={resolveConflictsPrompt}
       worktreeId={activeWorktreeId}

@@ -1,5 +1,4 @@
-// Replays the desktop's region selection (relay-region-preference.ts) with the same probe,
-// sample count, spread rule, and Node fetch, and prints why each region passed or failed.
+// Replay desktop region probes/sample/spread rules with Node fetch; report each region’s acceptance.
 import { pathToFileURL } from 'node:url'
 import {
   classifyPublicHttpsOrigin,
@@ -32,9 +31,7 @@ const probe = async (origin) => {
   }
 }
 
-// The catalog names the destinations, so a compromised or spoofed director would otherwise get to
-// aim this harness at the operator's loopback and private networks. redirect: 'error' above only
-// constrains where a probe may go next, never where the first request goes.
+// Vet catalog-supplied initial destinations against private/loopback access; redirect:error constrains only later hops.
 export async function vetProbeOrigins(entry, deps) {
   const allowed = []
   const refused = []
@@ -85,8 +82,7 @@ export async function sampleRegion(entry, deps) {
     median: Math.round(median),
     spread: Math.round(spread),
     ...(refused.length ? { refusedOrigins: refused } : {}),
-    // The shipped rule: a wide spread means the samples are untrustworthy, not that the
-    // region is far, so the region is dropped rather than ranked.
+    // Drop wide-spread samples as untrustworthy rather than rank them as distant.
     verdict: spread > Math.max(20, median * 0.5) ? 'REJECTED (spread)' : 'ok'
   }
 }

@@ -1,0 +1,132 @@
+[
+  {
+    "workspace": ".",
+    "package": "picomatch",
+    "version": "4.0.4",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "config/patches/picomatch@4.0.4.patch",
+      "sha256": "76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8"
+    }
+  },
+  {
+    "workspace": ".",
+    "package": "picomatch",
+    "version": "4.0.7",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "config/patches/picomatch@4.0.7.patch",
+      "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
+    }
+  },
+  {
+    "workspace": "mobile",
+    "package": "picomatch",
+    "version": "2.3.2",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "patches/picomatch@2.3.2.patch",
+      "sha256": "1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254"
+    }
+  },
+  {
+    "workspace": "mobile",
+    "package": "picomatch",
+    "version": "4.0.7",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "patches/picomatch@4.0.7.patch",
+      "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
+    }
+  },
+  {
+    "workspace": "cloud",
+    "package": "picomatch",
+    "version": "4.0.7",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "patches/picomatch@4.0.7.patch",
+      "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
+    }
+  },
+  {
+    "workspace": "docs/site",
+    "package": "zod",
+    "version": "3.25.76",
+    "advisory": "GHSA-mrhx-c7xc-m3w5",
+    "owner": "Orca maintainers",
+    "reason": "Vercel requires Zod 3, which has no fixed upstream release. Backport the upper collection-size gate from colinhacks/zod#6652 for the v3 and bundled v4 entrypoints; installed-dependency regression tests cover sync and async parsing. Remove when a fixed Zod 3 release or compatible consumer upgrade is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "../../config/patches/zod@3.25.76.patch",
+      "sha256": "8f57d8e7910df51ec3c40c412b4f8fb3d01fd65e1889c057aae0e4a15483bcec"
+    }
+  },
+  {
+    "workspace": "docs/site",
+    "package": "picomatch",
+    "version": "2.3.2",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "../../config/patches/picomatch@2.3.2.patch",
+      "sha256": "1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254"
+    }
+  },
+  {
+    "workspace": "docs/site",
+    "package": "picomatch",
+    "version": "4.0.5",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "../../config/patches/picomatch@4.0.5.patch",
+      "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
+    }
+  },
+  {
+    "workspace": "config/audit-tools",
+    "package": "picomatch",
+    "version": "2.3.2",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "../patches/picomatch@2.3.2.patch",
+      "sha256": "1b0c918c7e8adbecf3de8436239bca899127fd7f80fdfa49dfbe76b352a0e254"
+    }
+  },
+  {
+    "workspace": "config/audit-tools",
+    "package": "picomatch",
+    "version": "4.0.7",
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "owner": "Orca maintainers",
+    "reason": "picomatch has no fixed upstream release (covers <= 4.0.7). Backport repeated-wildcard extglob analysis and single-star quantifier collapse so +(*) and +(*a) cannot emit nested unbounded regex quantifiers. Remove when a fixed upstream release is available.",
+    "expires": "2026-12-20",
+    "patch": {
+      "path": "../patches/picomatch@4.0.7.patch",
+      "sha256": "7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c"
+    }
+  }
+]
