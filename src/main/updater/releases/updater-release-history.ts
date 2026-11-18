@@ -14,6 +14,8 @@ const MAX_PAGES = 3
 // Bound the status payload, which also reaches paired clients.
 const MAX_RELEASES = 25
 const MAX_NOTES_LENGTH = 12_000
+// The available status waits on this, and the check's 45s stall timer must not fire first.
+const RESULT_DEADLINE_MS = 10_000
 
 type GitHubRelease = {
   tag_name?: unknown
@@ -86,30 +88,46 @@ async function loadReleaseHistory(
   }
 }
 
-let cached: { key: string; history: Promise<UpdateReleaseHistory | null> } | null = null
+type CachedHistory = { key: string; history: Promise<UpdateReleaseHistory | null> }
 
-/** Stable releases in (installed, available], newest first; null when they cannot be listed. */
-export function fetchReleaseHistory(
-  availableVersion: string,
-  installedVersion: string
-): Promise<UpdateReleaseHistory | null> {
-  if (!isValidVersion(availableVersion) || !isValidVersion(installedVersion)) {
-    return Promise.resolve(null)
-  }
-  const key = `${installedVersion}->${availableVersion}`
-  if (cached?.key === key) {
-    return cached.history
-  }
-  const entry = {
+let cached: CachedHistory | null = null
+
+function startLoad(key: string, availableVersion: string, installedVersion: string): CachedHistory {
+  const entry: CachedHistory = {
     key,
     history: loadReleaseHistory(availableVersion, installedVersion).catch(() => null)
   }
-  cached = entry
   // Retry a failed listing on the next check instead of pinning the fallback.
   void entry.history.then((history) => {
     if (history === null && cached === entry) {
       cached = null
     }
   })
-  return entry.history
+  return entry
+}
+
+function withDeadline(
+  history: Promise<UpdateReleaseHistory | null>
+): Promise<UpdateReleaseHistory | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), RESULT_DEADLINE_MS)
+  })
+  return Promise.race([history, deadline]).finally(() => clearTimeout(timer))
+}
+
+/** Stable releases in (installed, available], newest first; null when they cannot be listed. */
+export function fetchReleaseHistory(
+  availableVersion: string,
+  installedVersion: string
+): Promise<UpdateReleaseHistory | null> {
+  if (getVersionChannel(availableVersion) !== 'stable' || !isValidVersion(installedVersion)) {
+    return Promise.resolve(null)
+  }
+  const key = `${installedVersion}->${availableVersion}`
+  if (cached?.key !== key) {
+    cached = startLoad(key, availableVersion, installedVersion)
+  }
+  // A slow listing falls back now and stays cached for the next check.
+  return withDeadline(cached.history)
 }

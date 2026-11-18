@@ -39,6 +39,9 @@ vi.mock('../cli/appimage/appimage-copy-pre-extraction', () => ({
   preExtractDownloadedAppImageUpdate: preExtractUpdateMock
 }))
 vi.mock('./releases/updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
+vi.mock('./releases/updater-release-history', () => ({
+  fetchReleaseHistory: vi.fn().mockResolvedValue(null)
+}))
 vi.mock('./updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
 
 const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
