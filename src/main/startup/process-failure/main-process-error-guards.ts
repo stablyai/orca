@@ -104,7 +104,7 @@ export function installStdioWriteErrorSink(): void {
     ['stderr', process.stderr]
   ] as const) {
     let recorded = false
-    // Node reports a failed sync write as an async 'error' event, so console's own swallow misses it.
+    // Node re-emits a failed sync write as an async 'error' event; console swallows only the first.
     stream?.on('error', (error: unknown) => {
       if (recorded) {
         return
