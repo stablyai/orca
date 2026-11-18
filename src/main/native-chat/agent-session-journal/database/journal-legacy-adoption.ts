@@ -39,7 +39,10 @@ export function readAdoption(
     claims.set(id, list)
   }
   const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
-  const tabs = only ? [] : db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
+  const tabsRecorded = readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
+  // Recording the tab index adds one tab per record, so it takes this file's tabs as a set.
+  const pointed = only !== null && tabsRecorded
+  const tabs = pointed ? [] : db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
   return {
     savedTabs: new Map(
       only
@@ -50,10 +53,12 @@ export function readAdoption(
             .map((row) => [String(row.session_id), String(row.tab_id)])
     ),
     claims,
-    tabbed: only ? tabLookup(db, 'session_id') : new Set(tabs.map((row) => String(row.session_id))),
-    takenTabs: only ? tabLookup(db, 'tab_id') : new Set(tabs.map((row) => String(row.tab_id))),
+    tabbed: pointed
+      ? tabLookup(db, 'session_id')
+      : new Set(tabs.map((row) => String(row.session_id))),
+    takenTabs: pointed ? tabLookup(db, 'tab_id') : new Set(tabs.map((row) => String(row.tab_id))),
     nextPosition: Number(tail?.tail ?? -1) + 1,
-    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined,
+    tabsRecorded,
     added: []
   }
 }
