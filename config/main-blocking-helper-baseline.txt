@@ -21,7 +21,6 @@
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/agent-hooks/server/server-runtime-env.ts
 1 src/main/agent-hooks/server/server-status-hook-lifecycle.ts
-1 src/main/agent-hooks/server/server-status-retries.ts
 2 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 2 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
@@ -1567,9 +1566,8 @@
 7 src/shared/agent-hook-listener/providers/codex/codex-events.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-identity.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-reviewer.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
-4 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
-3 src/shared/agent-hook-listener/providers/codex/codex-transcript-poll.ts
+2 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
+3 src/shared/agent-hook-listener/providers/codex/codex-subagent-transcript.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-session-paths.ts
 1 src/shared/agent-hook-listener/providers/grok/grok-tool-fields.ts
 3 src/shared/agent-hook-listener/providers/jcode/jcode-session-files.ts

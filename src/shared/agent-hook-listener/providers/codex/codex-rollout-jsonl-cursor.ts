@@ -45,47 +45,45 @@ export function readJsonlFirstRecord(filePath: string): JsonlFirstRecord {
   }
 }
 
-function readJsonlCursorBytesSync(cursor: JsonlCursor): JsonlCursorBytes | undefined {
-  if (!cursor.filePath) {
-    return undefined
-  }
-  const prefetchedRead = takePrefetchedCursorRead(cursor)
-  if (prefetchedRead) {
-    return prefetchedRead.read
-  }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  const plan = planJsonlRead({ ...cursor, filePath: cursor.filePath }, stats.size)
-  if (plan.length === 0) {
-    return plan
-  }
-  const buffer = Buffer.allocUnsafe(plan.length)
-  let fd: number | undefined
-  try {
-    fd = openSync(plan.filePath, 'r')
-    return { ...plan, bytes: buffer.subarray(0, readSync(fd, buffer, 0, plan.length, plan.start)) }
-  } catch {
-    return { ...plan, failed: true }
-  } finally {
-    if (fd !== undefined) {
-      closeSync(fd)
-    }
-  }
-}
-
 /** Undefined distinguishes unreadable/vanished files from no new lines; lineFilter rejects raw substrings before JSON.parse. */
 export function readJsonlCursor(
   cursor: JsonlCursor,
   lineFilter?: (line: string) => boolean
 ): JsonRecord[] | undefined {
-  const records = applyJsonlCursorBytes(cursor, readJsonlCursorBytesSync(cursor), lineFilter)
+  let read: JsonlCursorBytes | undefined
+  const prefetchedRead = cursor.filePath ? takePrefetchedCursorRead(cursor) : undefined
+  if (prefetchedRead) {
+    read = prefetchedRead.read
+  } else if (cursor.filePath) {
+    let stats: Stats | undefined
+    try {
+      stats = statSync(cursor.filePath)
+    } catch {
+      stats = undefined
+    }
+    if (stats?.isFile()) {
+      const plan = planJsonlRead({ ...cursor, filePath: cursor.filePath }, stats.size)
+      read = plan
+      if (plan.length > 0) {
+        const buffer = Buffer.allocUnsafe(plan.length)
+        let fd: number | undefined
+        try {
+          fd = openSync(plan.filePath, 'r')
+          read = {
+            ...plan,
+            bytes: buffer.subarray(0, readSync(fd, buffer, 0, plan.length, plan.start))
+          }
+        } catch {
+          read = { ...plan, failed: true }
+        } finally {
+          if (fd !== undefined) {
+            closeSync(fd)
+          }
+        }
+      }
+    }
+  }
+  const records = applyJsonlCursorBytes(cursor, read, lineFilter)
   return records === 'stale' ? [] : records
 }
 
