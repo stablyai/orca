@@ -205,7 +205,7 @@ export function workspaceUnreadTargetsOutsideAgentRows(
   ).filter((candidate) => candidate.paneKey === null)
 }
 
-/** Open the target the way its own row would, after unfolding its card's agent list. */
+/** Open the target the way its own row would, after unfolding its card's agent list; the card is on screen, so no reveal. */
 export function openSlotTarget(target: SlotTarget): void {
   if (target.tabId !== undefined) {
     activateUnreadTab(
@@ -223,11 +223,16 @@ export function openSlotTarget(target: SlotTarget): void {
     : undefined
   const tabId = representedTab?.id ?? (target.paneKey ? parsePaneKey(target.paneKey)?.tabId : null)
   if (!target.paneKey || !tabId) {
-    activateAndRevealWorkspace(target.worktreeId, { executionHostId: target.executionHostId })
+    activateAndRevealWorkspace(target.worktreeId, {
+      executionHostId: target.executionHostId,
+      revealInSidebar: false
+    })
     return
   }
   expandWorktreeAgentList(target.worktreeId, target.executionHostId)
-  activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId)
+  activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId, {
+    revealInSidebar: false
+  })
 }
 
 /** Open the tab holding a marker the way Activity opens a thread's tab; arriving reads it. */
@@ -237,7 +242,9 @@ function activateUnreadTab(
   executionHostId: ExecutionHostId | undefined,
   unreadPaneKeys: readonly string[] | undefined
 ): void {
-  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+  if (
+    activateAndRevealWorkspace(worktreeId, { executionHostId, revealInSidebar: false }) === false
+  ) {
     return
   }
   if (activateStructuredAgentSessionTab({ worktreeId, tabId })) {

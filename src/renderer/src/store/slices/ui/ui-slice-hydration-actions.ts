@@ -63,7 +63,7 @@ import {
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   sanitizeActivityBarPosition,
-  hydratedUIPartialMatchesState,
+  hydratedUIPartialChanges,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import {
@@ -305,7 +305,9 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedUIPartialMatchesState(s, hydrated as Partial<UISlice>)) {
+        // Every write echoes the whole UI back; unchanged fields keep identity so their readers don't wake.
+        const changes = hydratedUIPartialChanges(s, hydrated as Partial<UISlice>)
+        if (Object.keys(changes).length === 0) {
           if (!writeBaselineMoved) {
             return s
           }
@@ -315,7 +317,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           }
         }
         return {
-          ...hydrated,
+          ...changes,
           persistedUIWriteBaseline: nextWriteBaseline,
           persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
         } as Partial<AppState>

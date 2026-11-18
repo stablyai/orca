@@ -185,13 +185,18 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   return value
 }
 
-export function hydratedUIPartialMatchesState(
+/** Only the hydrated fields whose value differs from state, so unchanged fields keep their identity. */
+export function hydratedUIPartialChanges(
   state: AppState,
   hydrated: Partial<UISlice>
-): boolean {
-  return Object.entries(hydrated).every(([key, value]) =>
-    persistedUIValuesEqual(state[key as keyof AppState], value)
-  )
+): Partial<UISlice> {
+  const changes: Partial<UISlice> = {}
+  for (const [key, value] of Object.entries(hydrated)) {
+    if (!persistedUIValuesEqual(state[key as keyof AppState], value)) {
+      ;(changes as Record<string, unknown>)[key] = value
+    }
+  }
+  return changes
 }
 
 export function normalizeHydratedVisibleWorkspaceHostIds(
