@@ -180,8 +180,8 @@ export function buildDefaultSettings(args: {
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
     showTitlebarAppName: true,
-    showTasksButton: false,
-    showAutomationsButton: false,
+    showTasksButton: true,
+    showAutomationsButton: true,
     artifactsEnabled: true,
     // New profiles only; stored profiles without the key load as false (normalizeLoadedGlobalSettings).
     artifactSharingEnabled: true,
@@ -192,7 +192,7 @@ export function buildDefaultSettings(args: {
     orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
-    showMobileButton: false,
+    showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.
@@ -303,7 +303,7 @@ export function buildDefaultSettings(args: {
     experimentalEphemeralVms: false,
     experimentalWslHosts: false,
     experimentalOrchestrationPanel: false,
-    compactWorktreeCards: true,
+    compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
