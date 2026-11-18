@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalHostSettings, TerminalWebViewCommand } from './terminal-webview-messages'
 
@@ -15,8 +15,12 @@ export function useTerminalDocumentSettingsSync(
     postMessage({ type: 'set-theme', terminalTheme })
   }, [postMessage, terminalThemeKey, terminalTheme])
 
-  useEffect(() => {
+  // Written during commit so an init sent right after reads the settings this render committed.
+  useLayoutEffect(() => {
     hostSettingsRef.current = hostSettings
+  }, [hostSettings])
+
+  useEffect(() => {
     if (hostSettings) {
       postMessage({ type: 'set-host-settings', ...hostSettings })
     }
