@@ -1,4 +1,5 @@
 import { withFreshOmpLaunch, isFreshOmpLaunchCommand } from './omp-fresh-launch'
+import { ompVibeLaunchPrompt } from './omp-vibe-launch-prompt'
 import { withOmpDraftCleanup } from './omp-draft-launch'
 import '../../agent-status/process/shell-process-detection'
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
@@ -105,7 +106,10 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
+  const quotedPrompt = quoteStartupArg(
+    agent === 'omp' ? ompVibeLaunchPrompt(trimmedPrompt) : trimmedPrompt,
+    shell
+  )
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
