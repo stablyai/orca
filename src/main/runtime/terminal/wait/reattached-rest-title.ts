@@ -1,0 +1,67 @@
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
+import {
+  isCurrentCommandStatus,
+  type TerminalCommandPaintRecord
+} from '../input/terminal-command-paint'
+import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+
+/** A read that proved nothing (a slow or failed owner) is tried again after this, while quiet. */
+const READ_RETRY_MS = 30_000
+
+type RestTitlePty = TerminalCommandPaintRecord & {
+  ptyId: string
+  lastOscTitle?: string | null
+  lastOscTitleEpochMs?: number | null
+}
+
+/** The agent whose rest title a reattached pane still shows and the fence still masks: the only
+ *  ready evidence a quiet agent that reads no screen leaves across a restart. That title can outlive
+ *  its agent (a Claude that exited leaves `✳` over the shell, whose prompt redraw is paint), so it
+ *  counts only when a fresh foreground read names this agent; null once any command boundary,
+ *  current title or admitted report decides instead. */
+export function reattachedRestTitleAgent(pty: Omit<RestTitlePty, 'ptyId'>): TuiAgent | null {
+  const title = pty.lastOscTitle
+  if (
+    !title ||
+    !pty.commandPaint?.awaitsReattachedCommand() ||
+    isCurrentCommandStatus(pty, pty.lastOscTitleEpochMs) ||
+    detectExplicitIdleStatusFromTitle(title) !== 'idle'
+  ) {
+    return null
+  }
+  const agent = resolveTerminalTitlePolicyAgentType(title)
+  return isTuiAgent(agent) ? agent : null
+}
+
+/** One foreground read per pane per quiet stretch (or retry interval), for pending waits only, so a
+ *  restart pays no fleet-wide process reads. */
+export class ReattachedRestTitleReads {
+  private readonly lastReadByPtyId = new Map<string, { outputClockAt: number | null; at: number }>()
+
+  constructor(
+    private readonly outputClockOf: (pty: RestTitlePty) => number | null,
+    private readonly confirmRestTitle?: (ptyId: string, agent: TuiAgent) => Promise<boolean>
+  ) {}
+
+  /** Null when there is nothing to ask now; else whether the rest title's own agent was confirmed
+   *  in front, with the pane unchanged, and its idle admitted. */
+  confirm(pty: RestTitlePty): Promise<boolean> | null {
+    const agent = reattachedRestTitleAgent(pty)
+    if (!agent || !this.confirmRestTitle) {
+      return null
+    }
+    const outputClockAt = this.outputClockOf(pty)
+    const last = this.lastReadByPtyId.get(pty.ptyId)
+    if (last?.outputClockAt === outputClockAt && Date.now() - last.at < READ_RETRY_MS) {
+      return null
+    }
+    this.lastReadByPtyId.set(pty.ptyId, { outputClockAt, at: Date.now() })
+    return this.confirmRestTitle(pty.ptyId, agent).catch(() => false)
+  }
+
+  forget(ptyId: string): void {
+    this.lastReadByPtyId.delete(ptyId)
+  }
+}

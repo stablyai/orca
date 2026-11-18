@@ -39,11 +39,11 @@ describe.skipIf(process.platform === 'win32')('DaemonPtyAdapter.requestRepaint',
   it('has the session resize its PTY one row smaller and back', async () => {
     const adapter = await start()
     const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-    subprocess.resize.mockClear()
+    vi.mocked(subprocess.resize).mockClear()
     await adapter.requestRepaint(id)
     await vi.waitFor(
       () =>
-        expect(subprocess.resize.mock.calls).toEqual([
+        expect(vi.mocked(subprocess.resize).mock.calls).toEqual([
           [80, 23],
           [80, 24]
         ]),

@@ -2,10 +2,12 @@ import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operat
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   describeLaunchedAgentHost,
+  readExactAgentForeground,
   readLaunchedAgentForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
+import { reattachedRestTitleAgent } from '../../terminal/wait/reattached-rest-title'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
   launchedAgentTerminalIdentity(ptyId: string): unknown {
@@ -30,6 +32,25 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
       ? result
       : 'unknown'
+  }
+
+  /** The rest title's own agent is in front of a pane unchanged since the read began: its idle counts
+   *  for the process now running. */
+  protected async confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean> {
+    const pty = this.ptysById.get(ptyId)
+    const outputClockAt = this.readOutputClockAt(ptyId)
+    const foreground = await readExactAgentForeground(this, this.ptyController, ptyId, agent)
+    if (
+      foreground !== 'agent' ||
+      !pty ||
+      this.ptysById.get(ptyId) !== pty ||
+      this.readOutputClockAt(ptyId) !== outputClockAt ||
+      reattachedRestTitleAgent(pty) !== agent
+    ) {
+      return false
+    }
+    this.applyReattachedAgentStatus(ptyId, 'idle')
+    return true
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

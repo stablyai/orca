@@ -116,6 +116,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
   protected abstract requestReattachedRepaint(ptyId: string): void
+  protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string

@@ -94,9 +94,10 @@ export class TerminalCommandPaint {
     }
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
-      // Why a finish before it too: then this C starts the next command, not the agent's own.
+      // Why a finish before it too: then this C starts the next command, not the agent's own. Why
+      // after the read then: a report earlier in it, stamped no sooner, is the finished command's.
       if (!this.startSeen || finishEnd !== -1) {
-        this.startedAt = at
+        this.startedAt = finishEnd === -1 ? at : at + 1
         this.startSeen = true
       }
       this.betweenCommands = false
@@ -160,6 +161,26 @@ export class TerminalCommandPaint {
       this.repaintRequestable = false
     }
     this.reattach = 'vouched'
+  }
+
+  /** Output was lost: paint and boundaries since are unknown. A reattach fence still awaiting its
+   *  command keeps holding; otherwise every report and any paint count, as with no markers. */
+  noteGap(): void {
+    if (this.reattach === 'armed' && !this.startSeen) {
+      return
+    }
+    this.startedAt = null
+    this.startSeen = false
+    this.betweenCommands = false
+    this.awaitingPaint = false
+    this.composers = null
+    this.repaintRequestable = false
+    this.restoredReportAt = null
+  }
+
+  /** A reattach fence with no command boundary since: the program it hid is still the one running. */
+  awaitsReattachedCommand(): boolean {
+    return this.reattach === 'armed' && !this.startSeen && !this.betweenCommands
   }
 
   admitRestoredReport(at: number): void {

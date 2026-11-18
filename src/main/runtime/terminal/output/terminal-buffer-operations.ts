@@ -16,7 +16,6 @@ import {
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
-import { readExactAgentForeground } from '../wait/launched-agent-foreground'
 import {
   admitRestoredTerminalReport,
   hasTerminalCommandPainted,
@@ -285,9 +284,6 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
           hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
           requestRepaint: () => this.requestReattachedRepaint(ptyId),
-          readRestTitle: () => pty.lastOscTitle ?? null,
-          confirmForeground: () => readExactAgentForeground(this, this.ptyController, ptyId, agent),
-          owner: pty,
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })
@@ -303,7 +299,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   }
 
   /** The restored report speaks for the process now running, so it counts as current. */
-  private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
+  protected applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
     const pty = this.ptysById.get(ptyId)
     const title = pty?.lastOscTitle ?? ''
     this.applyTrackedPtyTitle(ptyId, title, title, undefined, { statusOnly: true, status })

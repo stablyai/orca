@@ -34,6 +34,8 @@ function isQuietForQuiescence(
   }
   return Date.now() - lastOutputAt >= quiescenceMs
 }
+import { ReattachedRestTitleReads } from './reattached-rest-title'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
@@ -47,6 +49,8 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
   /** Asks a reattached pane's program to repaint, once per reattach and only before it painted. */
   requestReattachedRepaint?(ptyId: string): void
+  /** True once a fresh read put the rest title's own agent in front and its idle was admitted. */
+  confirmRestTitle?(ptyId: string, agent: TuiAgent): Promise<boolean>
 }
 
 type IdlePollEntry = {
@@ -79,6 +83,7 @@ export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly quietForegroundByPtyId = new Map<string, QuietForegroundRead>()
+  private readonly restTitleReads: ReattachedRestTitleReads
   /** The evidence source the polls evaluate with: the shared one plus this poll's own foreground reads. */
   private readonly evidenceSource: TuiIdleEvidenceSource
 
@@ -87,6 +92,10 @@ export class RuntimeTerminalIdlePolls {
       ...deps,
       getQuietForegroundProcess: (ptyId) => this.quietForegroundProcessOf(ptyId)
     }
+    this.restTitleReads = new ReattachedRestTitleReads(
+      (pty) => outputClockOf(deps, pty),
+      deps.confirmRestTitle
+    )
   }
 
   private quietForegroundProcessOf(ptyId: string | null | undefined): string | null {
@@ -201,6 +210,9 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.ready())
         return
       }
+      if (await this.readRestTitleForeground(entry, sample)) {
+        return
+      }
       const lane = verdict.quietForeground
       if (lane === 'closed') {
         await this.readTitleOnlyQuietForeground(entry, sample)
@@ -278,6 +290,30 @@ export class RuntimeTerminalIdlePolls {
     }
   }
 
+  /** A reattached quiet agent's masked rest title, asked about only for a pending wait. */
+  private async readRestTitleForeground(
+    entry: IdlePollEntry,
+    sample: IdlePollSample
+  ): Promise<boolean> {
+    if (entry.foregroundPollInFlight || !sample.isQuiet('closed')) {
+      return false
+    }
+    entry.foregroundPollInFlight = true
+    try {
+      const read = this.restTitleReads.confirm(entry.pty)
+      if (!read) {
+        return false
+      }
+      const resample = (await read) && this.entries.has(entry) ? this.sample(entry) : null
+      if (resample?.verdict.kind === 'ready-strong') {
+        this.settle(entry, resample.ready())
+      }
+      return true
+    } finally {
+      entry.foregroundPollInFlight = false
+    }
+  }
+
   /** Why the screen too: a dialog that parks the cursor above its own options (Claude's
    *  workspace trust) loses those rows from the line tail; the rendered screen still has them. */
   private readScreenBlockedReason(
@@ -306,6 +342,7 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     this.quietForegroundByPtyId.delete(entry.pty.ptyId)
+    this.restTitleReads.forget(entry.pty.ptyId)
     entry.waiter.cancelIdlePoll = null
     clearTimeout(entry.recheckTimer)
     if (this.entries.size === 0 && this.sweepTimer) {

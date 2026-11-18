@@ -45,6 +45,14 @@ describe('terminal command paint after a reattach', () => {
     expect(isCurrentCommandReport(record, null)).toBe(true)
     expect(takeReattachedRepaintRequest(record)).toBe(false)
   })
+
+  it('remembers a process this run saw start across lost output', () => {
+    const record: TerminalCommandPaintRecord = {}
+    vouchTerminalSpawn(record)
+    record.commandPaint?.noteGap()
+    awaitReattachedTerminalPaint(record, 3_000)
+    expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
+  })
 })
 
 describe('the command an agent report speaks for', () => {
@@ -79,6 +87,8 @@ describe('the command an agent report speaks for', () => {
     const handoff = `${FINISH}~/repo % codex\r\n${START}`
     observeTerminalCommandPaint(record, handoff, handoff, 5_000)
     expect(isCurrentCommandReport(record, 2_000)).toBe(false)
-    expect(isCurrentCommandReport(record, 5_000)).toBe(true)
+    // A report stamped while that read was handled may precede its finish.
+    expect(isCurrentCommandReport(record, 5_000)).toBe(false)
+    expect(isCurrentCommandReport(record, 5_001)).toBe(true)
   })
 })

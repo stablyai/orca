@@ -371,7 +371,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
           )
         : null,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
-    requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId)
+    requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId),
+    confirmRestTitle: (ptyId, agent) => this.confirmReattachedRestTitle(ptyId, agent)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(
