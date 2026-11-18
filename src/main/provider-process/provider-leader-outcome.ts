@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import type { ChildProcess } from 'node:child_process'
+import type { ProviderOwnerProcess } from './provider-child'
 import { constants } from 'node:os'
 
 export type ProviderLeaderOutcome = { code: number | null; signal: NodeJS.Signals | null }
@@ -54,7 +54,7 @@ export function readProviderLeaderOutcome(stream: Readable): Promise<ProviderLea
 }
 
 export function observeProviderLeaderOutcome(
-  raw: ChildProcess
+  raw: ProviderOwnerProcess
 ): Promise<ProviderLeaderOutcome | null> {
   const pipe = raw.stdio?.at(6)
   const result = pipe instanceof Readable ? readProviderLeaderOutcome(pipe) : Promise.resolve(null)
@@ -63,8 +63,10 @@ export function observeProviderLeaderOutcome(
     return result
   }
   return new Promise((resolve) => {
+    // A hosted launch reports its PID later; until then it may still prove processless.
+    raw.once('spawn', () => resolve(result))
     // A processless spawn has no CLI frame; preserve its actual spawn-failure close status.
-    raw.once('close', (code, signal) => {
+    raw.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
       resolve({ code, signal })
     })
   })

@@ -1,7 +1,6 @@
 import { runProcess } from '@orca/process-host'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { build } from 'vite'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
@@ -16,15 +15,23 @@ export async function runElectronFixture(
   entry: string,
   env: NodeJS.ProcessEnv = {}
 ): Promise<ElectronFixtureRun> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-electron-fixture-'))
+  // Inside the repo, so a package the bundle leaves external resolves from its node_modules.
+  const cache = join(import.meta.dirname, '../../../../node_modules/.cache')
+  await mkdir(cache, { recursive: true })
+  const root = await mkdtemp(join(cache, 'orca-electron-fixture-'))
   try {
     await build({
       configFile: false,
       logLevel: 'silent',
+      // A Node build: builtins stay external and packages resolve their Node entries, not browser stubs.
+      ssr: { noExternal: true },
       build: {
         outDir: root,
-        lib: { entry, formats: ['cjs'], fileName: () => 'main.cjs' },
-        rollupOptions: { external: ['electron', /^node:/] },
+        ssr: entry,
+        rollupOptions: {
+          external: ['electron'],
+          output: { format: 'cjs', entryFileNames: 'main.cjs' }
+        },
         target: 'node24'
       }
     })

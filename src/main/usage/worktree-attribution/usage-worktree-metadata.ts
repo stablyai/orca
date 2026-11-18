@@ -9,6 +9,7 @@ import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path-comparison'
+import type { UsageWorktreeCatalog } from '../usage-store-host'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -96,4 +97,16 @@ export function loadKnownUsageWorktreesByRepo(
   }
 
   return worktreesByRepo
+}
+
+/** The repo/worktree catalog a usage service attributes sessions against, read from its host's store. */
+export async function readUsageWorktreeCatalog(
+  source: UsageWorktreeSource
+): Promise<UsageWorktreeCatalog> {
+  await source.whenLoaded()
+  const repos = source.getRepos()
+  return {
+    repoIds: repos.map((repo) => repo.id),
+    worktreesByRepo: [...loadKnownUsageWorktreesByRepo(source, repos)]
+  }
 }

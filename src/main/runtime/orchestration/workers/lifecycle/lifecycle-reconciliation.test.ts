@@ -341,6 +341,56 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.result).toBe(result)
   })
 
+  it('keeps a federated worker report the relay import settled when mail delivery rereads it', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'remote work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {},
+      federation: {
+        environmentId: 'environment-worker',
+        environmentName: 'worker',
+        peerFingerprint: 'peer-worker',
+        protocolVersion: 3
+      }
+    })
+    const dispatchId = started.dispatch.id
+    db.reconcileFederatedWorkerStart({
+      dispatchId,
+      state: 'ready',
+      stage: 'remote_input_accepted',
+      worktreeId: 'repo::remote',
+      terminalHandle: 'term_remote'
+    })
+    const payload = JSON.stringify({ taskId: task.id, dispatchId, outcome: 'succeeded' })
+    const imported = db.importFederatedRelayItem({
+      dispatchId,
+      sequence: 1,
+      message: {
+        id: 'msg_relayed_done',
+        runId: 'run_legacy_local',
+        from: `dispatch:${dispatchId}`,
+        to: 'run:run_legacy_local',
+        subject: 'Done on the worker host',
+        body: '',
+        type: 'worker_done',
+        priority: 'normal',
+        payload
+      },
+      lifecycle: { kind: 'worker_report', taskId: task.id, outcome: 'succeeded', result: '{}' }
+    })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+
+    expect(reconcileLifecycleMessage(db, imported.message)).toEqual({ action: 'ignored' })
+    expect(db.getMessageById('msg_relayed_done')).toMatchObject({
+      type: 'worker_done',
+      subject: 'Done on the worker host',
+      payload
+    })
+  })
+
   it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })

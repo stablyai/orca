@@ -74,7 +74,12 @@ describe('native chat skill editor', () => {
       input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
     )
     const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
-    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    // What each shows; a screen reader hears "File: …" from hidden text.
+    expect(pills.map((pill) => pill.querySelector('.truncate')?.textContent)).toEqual([
+      'test (1).csv',
+      'letter.pdf'
+    ])
+    expect(pills[0].querySelector('.sr-only')?.textContent).toBe('File: test (1).csv')
     expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
     const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
     expect(input.value).toBe(`See ${references} please`)

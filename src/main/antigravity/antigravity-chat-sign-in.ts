@@ -180,7 +180,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
   const serverLaunch = {
     ...launch,
-    args: launch.spec.args({ fullAccess: false, pluginDir: null }),
+    args: launch.spec.args({ fullAccess: false, pluginDirs: [] }),
     cwd
   }
   const liveServers = new Set<AcpAgentConnection>()

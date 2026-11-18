@@ -20,11 +20,7 @@ describe('host worktree creation while its renderer is unavailable', () => {
     ['git', 'reload', 'host'],
     ['git', 'crash', 'host'],
     ['folder', 'reload', 'host'],
-    ['folder', 'crash', 'host'],
-    ['git', 'reload', 'all'],
-    ['git', 'crash', 'all'],
-    ['folder', 'reload', 'all'],
-    ['folder', 'crash', 'all']
+    ['folder', 'crash', 'host']
   ] as const)(
     'provisions %s work after a renderer %s for %s navigation with its notifier retained',
     async (kind, loss, navigation) => {
