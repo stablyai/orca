@@ -5,6 +5,7 @@ import {
   SETUP_WAIT_MESSAGE,
   SETUP_WAIT_TIMEOUT_MESSAGE
 } from './setup-agent-sequencing'
+import { copyUtf16SuffixToOwnedString } from '../../text/owned-utf16-suffix'
 
 /** The wrapper itself gives up then, so no agent can start after it. */
 export const SETUP_WAIT_GATE_MAX_MS = SETUP_AGENT_WAIT_TIMEOUT_SECONDS * 1000
@@ -38,7 +39,7 @@ export function createSetupWaitGate(): SetupWaitGate {
       if (state === 'before') {
         const at = window.indexOf(SETUP_WAIT_MESSAGE)
         if (at === -1) {
-          carry = window.slice(-(SETUP_WAIT_MESSAGE.length - 1))
+          carry = copyUtf16SuffixToOwnedString(window, SETUP_WAIT_MESSAGE.length - 1)
           return { output: chunk, phase: null }
         }
         state = phase = 'waiting'
@@ -52,7 +53,7 @@ export function createSetupWaitGate(): SetupWaitGate {
         }
       }
       if (!end) {
-        carry = window.slice(-END_CARRY)
+        carry = copyUtf16SuffixToOwnedString(window, END_CARRY)
         return { output: '', phase }
       }
       state = 'ended'
