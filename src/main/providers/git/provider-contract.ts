@@ -38,7 +38,8 @@ export type IGitProvider = {
   getSubmoduleStatus(
     worktreePath: string,
     submodulePath: string,
-    area?: GitStagingArea
+    area?: GitStagingArea,
+    options?: { workingTreeOnly?: boolean }
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistoryRefs(worktreePath: string, query?: string): Promise<GitHistoryItemRef[]>

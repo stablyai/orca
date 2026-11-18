@@ -28,12 +28,16 @@ export const GITLAB_MR_INVOLVEMENT_UPDATE_REQUIRED_MESSAGE =
 // Commit-message generation: the host plans Antigravity with the model the user configured.
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
+// Older servers strip `workingTreeOnly` from git.submoduleStatus and return committed gitlink ranges.
+export const GIT_SUBMODULE_WORKING_STATUS_RUNTIME_CAPABILITY =
+  'git.submodule-status.working-tree-only.v1' as const
 
 export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
   GIT_HISTORY_REFS_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
   GIT_COMMIT_ACTIONS_CAPABILITY,
   GIT_BLAME_CAPABILITY,
+  GIT_SUBMODULE_WORKING_STATUS_RUNTIME_CAPABILITY,
   GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY,
   GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,

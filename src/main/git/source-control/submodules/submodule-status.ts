@@ -1,3 +1,6 @@
+import { lstat } from 'node:fs/promises'
+import * as path from 'node:path'
+
 import type {
   GitStatusEntry,
   GitStatusResult
@@ -7,6 +10,7 @@ import {
   resolveGitStatusLimit
 } from '../../../../shared/git/status/git-status-limit'
 import { gitChangeListArgs, parseGitChangeList } from '../../../../shared/git/diff/git-change-list'
+import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 
 import {
   type GitRuntimeOptions,
@@ -23,13 +27,42 @@ import {
   readWorkingSubmoduleHead
 } from './submodule-gitlink-oid'
 
+export type GetSubmoduleStatusOptions = GetStatusOptions & {
+  staged?: boolean
+  /** Read only the submodule's working tree (line stats off), without committed gitlink range rows. */
+  workingTreeOnly?: boolean
+}
+
+/** An uninitialized submodule directory has no `.git`; running Git there would walk up to the parent repo. */
+async function isSubmoduleCheckedOut(
+  submoduleWorktreePath: string,
+  options: GitRuntimeOptions
+): Promise<boolean> {
+  const hostPath = resolveWorktreeHostPath(submoduleWorktreePath, options) ?? submoduleWorktreePath
+  try {
+    await lstat(path.join(hostPath, '.git'))
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Return submodule-relative entries; the renderer supplies the parent prefix. */
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
-  options: GetStatusOptions & { staged?: boolean } = {}
+  options: GetSubmoduleStatusOptions = {}
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
+  if (!(await isSubmoduleCheckedOut(submoduleWorktreePath, options))) {
+    return { entries: [], conflictOperation: 'unknown' }
+  }
+  if (options.workingTreeOnly && !options.staged) {
+    return getStatus(submoduleWorktreePath, {
+      ...options,
+      includeLineStats: false
+    })
+  }
   const limit = resolveGitStatusLimit(options.limit)
   // Read independent inputs concurrently; staged expansion needs HEAD/index only, not inner status.
   const [workingResult, fromOid, toOid] = await Promise.all([
