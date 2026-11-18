@@ -91,6 +91,7 @@ export function WorktreeCardHeader({
 
         <WorktreeTitleInlineRename
           displayName={visibleCardTitle}
+          titlePrefix={card.titlePrefix}
           disabled={isDeleting || affiliateListMode}
           showUnreadEmphasis={showUnreadEmphasis}
           dimReadTitle={newCardStyle && !isActiveSurface}

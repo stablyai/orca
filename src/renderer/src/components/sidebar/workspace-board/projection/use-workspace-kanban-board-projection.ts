@@ -1,5 +1,9 @@
 import { useLayoutEffect, useMemo } from 'react'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { getVisibleSidebarHostIdSet } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
+import { projectWorkspaceBoardFolders } from './workspace-board-folder-cards'
 import { useVisibleWorkspaceKanbanWorktreeIds } from '../surface/use-visible-workspace-kanban-worktree-ids'
 import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
 import { buildWorkspaceKanbanLaneViews } from '../search/workspace-kanban-search'
@@ -24,29 +28,53 @@ export function useWorkspaceKanbanBoardProjection(args: {
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }) {
-  const visibleWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
+  const folders = useAppStore(selectFolderWorkspaces)
+  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
+  const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const visibleGitIdentities = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees: args.allWorktrees,
     repoMap: args.repoMap
   })
+  const folderProjection = useMemo(
+    () =>
+      projectWorkspaceBoardFolders({
+        folders,
+        childrenByParentIdentity,
+        visibleHostIds: getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
+        visibleGitIdentities
+      }),
+    [
+      folders,
+      childrenByParentIdentity,
+      visibleWorkspaceHostIds,
+      workspaceHostScope,
+      visibleGitIdentities
+    ]
+  )
+  const allBoardCandidates = useMemo(
+    () => [...args.allWorktrees, ...folderProjection.folders],
+    [args.allWorktrees, folderProjection.folders]
+  )
   const worktreesByStatus = useMemo(
     () =>
       groupWorkspaceKanbanWorktrees({
-        worktrees: args.allWorktrees,
-        visibleWorktreeIds,
+        worktrees: allBoardCandidates,
+        visibleWorktreeIds: folderProjection.visibleIdentities,
         workspaceStatuses: args.workspaceStatuses,
         sortBy: args.sortBy
       }),
-    [args.allWorktrees, args.sortBy, args.workspaceStatuses, visibleWorktreeIds]
+    [allBoardCandidates, args.sortBy, args.workspaceStatuses, folderProjection.visibleIdentities]
   )
   const worktreeById = useMemo(
-    () => buildUnambiguousWorktreeIdIndex(args.allWorktrees),
-    [args.allWorktrees]
+    () => buildUnambiguousWorktreeIdIndex(allBoardCandidates),
+    [allBoardCandidates]
   )
   // Drops carry each card's host identity, so same-id copies on two hosts stay separate cards.
   const worktreeByKey = useMemo(
     () =>
-      new Map(args.allWorktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
-    [args.allWorktrees]
+      new Map(allBoardCandidates.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
+    [allBoardCandidates]
   )
   const boardWorktrees = useMemo(
     () => args.workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),

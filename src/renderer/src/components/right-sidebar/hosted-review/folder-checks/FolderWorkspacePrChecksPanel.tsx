@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -258,6 +260,23 @@ export default function FolderWorkspacePrChecksPanel({
                 row={row}
                 expanded={expandedRowIds.has(row.id)}
                 onToggle={() => toggleRowExpanded(row.id)}
+                onOpen={() => {
+                  if (
+                    !activateAndRevealWorktree(row.worktree.id, {
+                      executionHostId: getWorktreeExecutionHostId(
+                        row.worktree,
+                        row.repo ?? undefined
+                      ),
+                      navigationIntent: 'user-open'
+                    })
+                  ) {
+                    return
+                  }
+                  // Activation restores the target's sidebar tab before we select Checks.
+                  const state = useAppStore.getState()
+                  state.setRightSidebarTab('checks')
+                  state.setRightSidebarOpen(true)
+                }}
                 onLoadCheckDetails={(check) => loadCheckDetails(row, check)}
               />
             ))}

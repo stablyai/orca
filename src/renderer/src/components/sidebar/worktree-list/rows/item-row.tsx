@@ -1,5 +1,6 @@
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -71,6 +72,11 @@ export function renderWorktreeItemRow(
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
   })
+  const parentId = itemRow.occurrence?.parent?.row.id
+  const repoTitlePrefix =
+    parentId && parseWorkspaceKey(parentId)?.type === 'folder' && itemRow.repo?.displayName
+      ? `${itemRow.repo.displayName}/`
+      : undefined
   return (
     <div
       key={itemRow.rowKey}
@@ -131,10 +137,11 @@ export function renderWorktreeItemRow(
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
-        hideRepoBadge={ctx.groupBy === 'repo' && !itemRow.showProjectName}
+        hideRepoBadge={!!repoTitlePrefix || (ctx.groupBy === 'repo' && !itemRow.showProjectName)}
+        titlePrefix={repoTitlePrefix}
         // Why: pinned worktrees mix repos; cross-repo children opt into the existing project-name badge.
         hostContextLabel={itemRow.hostContextLabel}
-        showProjectName={itemRow.showProjectName}
+        showProjectName={!!repoTitlePrefix || itemRow.showProjectName}
         inPinnedSection={itemRow.sectionKey === PINNED_GROUP_KEY}
         renameRowKey={itemRow.rowKey}
         lineageChildCount={itemRow.lineageChildCount}

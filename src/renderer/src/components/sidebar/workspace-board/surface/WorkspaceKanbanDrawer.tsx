@@ -23,6 +23,7 @@ import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render
 import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
 import { buildWorktreeManualOrderCatalog } from '../../worktree-list/drag/worktree-manual-order-catalog'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   useAllOfferedWorkspaceStatuses,
   useWorkspaceBoardStatuses
@@ -82,6 +83,15 @@ function WorkspaceKanbanDrawerContent({
   const laneScrollerRef = useRef<HTMLDivElement>(null)
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const { createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
+  const statusWorktrees = useMemo(
+    () => [
+      ...allWorktrees,
+      ...folderWorkspaces
+        .filter((folder) => !folder.isArchived)
+        .map((folder) => getFolderWorkspaceWorktree(folder))
+    ],
+    [allWorktrees, folderWorkspaces]
+  )
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
@@ -210,7 +220,7 @@ function WorkspaceKanbanDrawerContent({
     handleAddStatus,
     handleRemoveStatus
   } = useWorkspaceKanbanStatusActions({
-    allWorktrees,
+    allWorktrees: statusWorktrees,
     workspaceStatuses: localWorkspaceStatuses,
     boardStatuses,
     setWorkspaceStatuses,

@@ -31,6 +31,7 @@ export type WorktreeCardProps = {
   hostContextLabel?: string
   /** Reuse the normal project badge for a nested child owned by another repo. */
   showProjectName?: boolean
+  titlePrefix?: string
   /** One Compact line whatever the card setting, the project as muted text at its end. */
   compactLine?: boolean
   /** A line under a bot: the bot's computer. A line on another paired server names that server. */
