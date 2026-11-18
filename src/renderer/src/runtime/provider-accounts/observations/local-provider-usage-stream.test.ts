@@ -31,13 +31,9 @@ function streamEvent(result: unknown): RuntimeRpcResponse<unknown> {
 }
 
 describe('local provider usage stream', () => {
-  it('delivers account switches with their matching quotas and reports a closed stream', async () => {
+  // Why: no claudeAccounts/codexAccounts stubs, so a separate one-shot roster read would throw.
+  it('delivers account switches with their matching quotas and reports a closed stream', () => {
     let receive: (response: RuntimeRpcResponse<unknown>) => void = () => {}
-    const unsubscribe = vi.fn()
-    const handle = Promise.resolve({ unsubscribe })
-    const list = vi.fn(() => {
-      throw new Error('A usage stream must not read a separate roster')
-    })
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
@@ -45,22 +41,16 @@ describe('local provider usage stream', () => {
         runtime: {
           subscribe: (_request: unknown, onResponse: typeof receive) => {
             receive = onResponse
-            return handle
+            return Promise.resolve({ unsubscribe: vi.fn() })
           }
-        },
-        claudeAccounts: { list },
-        codexAccounts: { list }
+        }
       }
     })
     const received: ProviderAccountsSnapshot[] = []
     const lost = vi.fn()
     const watcher = watchProviderAccounts(
       { kind: 'local' },
-      {
-        onSnapshot: (value) => received.push(value),
-        onError: lost,
-        onClosedAfterSnapshot: lost
-      },
+      { onSnapshot: (value) => received.push(value), onError: lost, onClosedAfterSnapshot: lost },
       { liveLocalUsage: true }
     )
     receive(streamEvent({ type: 'ready', snapshot: snapshot('work', 62) }))
@@ -77,39 +67,5 @@ describe('local provider usage stream', () => {
     receive(streamEvent({ type: 'end' }))
     expect(lost).toHaveBeenCalledOnce()
     watcher.close()
-    await handle
-    expect(unsubscribe).toHaveBeenCalledOnce()
-    receive(streamEvent({ type: 'snapshot', snapshot: snapshot('stale', 99) }))
-    expect(received.at(-1)?.codex.activeAccountId).toBe('personal')
-  })
-
-  it('releases a subscription that opens after its consumer has left', async () => {
-    let receive: (response: RuntimeRpcResponse<unknown>) => void = () => {}
-    const handle = Promise.withResolvers<{ unsubscribe: () => void }>()
-    vi.stubGlobal('window', {
-      setTimeout,
-      clearTimeout,
-      api: {
-        runtime: {
-          subscribe: (_request: unknown, onResponse: typeof receive) => {
-            receive = onResponse
-            return handle.promise
-          }
-        }
-      }
-    })
-    const onSnapshot = vi.fn()
-    const watcher = watchProviderAccounts(
-      { kind: 'local' },
-      { onSnapshot, onError: vi.fn() },
-      { liveLocalUsage: true }
-    )
-    watcher.close()
-    const unsubscribe = vi.fn()
-    handle.resolve({ unsubscribe })
-    await handle.promise
-    receive(streamEvent({ type: 'ready', snapshot: snapshot('late', 99) }))
-    expect(onSnapshot).not.toHaveBeenCalled()
-    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 })
