@@ -1,3 +1,7 @@
+import {
+  registerSleepingMailAvailability,
+  resumeSleepingAgentsInWindow
+} from './renderer-relays/sleeping-mail-window-relay'
 import { randomUUID } from 'node:crypto'
 
 import { ipcMain, type BrowserWindow } from 'electron'
@@ -229,7 +233,10 @@ export function registerRuntimeWindowLifecycle(
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
-    resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
+    sleepingMailChanged: (worktreeIds, settledMailWakeIds) =>
+      send('ui:sleepingMailChanged', { worktreeIds, settledMailWakeIds }),
+    resumeSleepingAgents: (worktreeId, paneKey, prepareOnly) =>
+      resumeSleepingAgentsInWindow(mainWindow, send, { worktreeId, paneKey, prepareOnly }),
     applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
@@ -265,6 +272,7 @@ export function registerRuntimeWindowLifecycle(
       }
     }
   )
+  const releaseSleepingMailAvailability = registerSleepingMailAvailability(mainWindow, runtime)
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const agentListBeforeReload = runtime.readAgentListPublication()
@@ -290,6 +298,7 @@ export function registerRuntimeWindowLifecycle(
   mainWindow.on('closed', () => {
     detachClientNotices()
     releaseAgentListVerdicts()
+    releaseSleepingMailAvailability()
     runtime.setAgentListPublication(null)
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)

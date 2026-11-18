@@ -1,3 +1,4 @@
+import { trackAgentPaneSleep } from '@/store/terminals/agent-pane-sleep-in-flight'
 import { useAppStore } from '@/store/index'
 import {
   getEffectiveAgentHibernationIdleMs,
@@ -145,15 +146,17 @@ async function hibernatePaneIfStillEligible(
   try {
     const state = useAppStore.getState()
     const owner = resolveAgentHibernationRuntimeOwner(state, worktreeId)
-    await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
-      paneKey: confirmedCandidate.paneKey,
-      tabId: confirmedCandidate.tabId,
-      leafId: confirmedCandidate.leafId,
-      ptyId: confirmedCandidate.targetPtyIds[0],
-      ...(owner.kind === 'runtime'
-        ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
-        : {})
-    })
+    await trackAgentPaneSleep(confirmedCandidate.paneKey, () =>
+      state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
+        paneKey: confirmedCandidate.paneKey,
+        tabId: confirmedCandidate.tabId,
+        leafId: confirmedCandidate.leafId,
+        ptyId: confirmedCandidate.targetPtyIds[0],
+        ...(owner.kind === 'runtime'
+          ? { expectedRuntimePtyId: confirmedCandidate.expectedRuntimePtyIds[0] }
+          : {})
+      })
+    )
   } catch (err) {
     console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
   } finally {

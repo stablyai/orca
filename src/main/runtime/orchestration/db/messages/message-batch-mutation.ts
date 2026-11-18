@@ -1,3 +1,4 @@
+import { captureMessageMutation } from './message-mutation-invalidation'
 import type { OrchestrationDb } from '../orchestration-db'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
@@ -31,6 +32,7 @@ export function runBatchedMessageMutation(
       }
     }
   }
+  const changed = captureMessageMutation(db, ids)
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
@@ -44,6 +46,7 @@ export function runBatchedMessageMutation(
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
   }
+  changed()
   if (consuming && (owners.mailboxes.size || owners.ptyIds.size)) {
     try {
       db.mailReadListener?.({ mailboxes: [...owners.mailboxes], ptyIds: [...owners.ptyIds] })

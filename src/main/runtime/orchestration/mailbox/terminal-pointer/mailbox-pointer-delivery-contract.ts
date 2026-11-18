@@ -30,6 +30,7 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
     OrchestrationMailboxDeliveryTarget,
     'resolveTerminal' | 'deferForAbsenceProbe'
   >
+  wakeSleepingRecipient?: (mailbox: string, reservedTypes?: ReadonlySet<string>) => void
   getDb: () => OrchestrationDb | null
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */

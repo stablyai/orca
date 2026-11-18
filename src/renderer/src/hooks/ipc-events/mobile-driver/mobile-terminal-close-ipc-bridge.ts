@@ -80,7 +80,11 @@ function showOnceWorkspaceDraws({ worktreeId }: RuntimeEditorTabReveal, show: ()
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
-  requestSleepingAgentWake: (worktreeId: string) => void
+  requestSleepingAgentWake: (
+    worktreeId: string,
+    paneKey?: string,
+    prepareOnly?: boolean
+  ) => void | Promise<boolean>
 ): void {
   const positionFile = createRuntimeFilePositionQueue(unsubs)
   unsubs.push(
@@ -220,9 +224,15 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   unsubs.push(
-    window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {
+    window.api.ui.onResumeSleepingAgents(({ worktreeId, paneKey, prepareOnly, requestId }) => {
       // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
-      requestSleepingAgentWake(worktreeId)
+      const result = requestSleepingAgentWake(worktreeId, paneKey, prepareOnly)
+      if (requestId) {
+        void Promise.resolve(result).then(
+          (woke) => window.api.ui.replySleepingAgentWake({ requestId, woke: woke === true }),
+          () => window.api.ui.replySleepingAgentWake({ requestId, woke: false })
+        )
+      }
     })
   )
 }

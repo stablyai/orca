@@ -21,7 +21,10 @@ export type PanePtyBinding = IDisposable & {
   noteVisibilityResume: () => void
   reassertPtySizeAfterWindowWake: () => void
   /** Mobile wake resumes hidden panes without reveal’s size/process reads; return the provider-session claim for started or latched wakes to prevent generic duplicate resume. */
-  wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
+  wakeHibernatedAgentIfArmed: (
+    claimedProviderSessions?: Set<string>,
+    paneKey?: string
+  ) => string | null
   /** Focus changes resample active-leaf identity because a live agent with stale shell state may emit no correcting command boundary. */
   sampleForegroundAgentOnFocus: () => void
   /** Pane focus or tab activity changed; remote panes retune the host's output cadence. */
@@ -114,7 +117,10 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.ptySizeReassertion.request({ fit: false })
     },
     // Why: mobile wake reaches this pane while it's hidden on the desktop, so consume only the armed hibernation wake — no size/foreground reads.
-    wakeHibernatedAgentIfArmed(claimedProviderSessions) {
+    wakeHibernatedAgentIfArmed(claimedProviderSessions, paneKey) {
+      if (paneKey && paneKey !== session.cacheKey) {
+        return null
+      }
       if (session.hibernatedWakeInFlightClaimKey) {
         if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
           return null
