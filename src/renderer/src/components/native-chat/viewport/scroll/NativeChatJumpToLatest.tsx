@@ -25,7 +25,7 @@ export function NativeChatJumpToLatest({
       aria-hidden={!visible || undefined}
       onMouseDown={keepFocus}
       onClick={onJump}
-      className="absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-popover-foreground/25 bg-popover px-3 text-xs font-medium text-popover-foreground shadow-floating transition-[opacity,translate] duration-150 ease-out hover:border-popover-foreground/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0 dark:border-popover-foreground/22 dark:bg-secondary dark:text-secondary-foreground dark:hover:border-popover-foreground/22 dark:hover:bg-accent dark:hover:text-accent-foreground"
+      className="absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-popover-foreground/25 bg-popover px-3 text-xs font-medium text-popover-foreground shadow-floating transition-[opacity,translate] duration-150 ease-out hover:border-popover-foreground/40 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none data-[shown=false]:pointer-events-none data-[shown=false]:translate-y-1 data-[shown=false]:opacity-0"
     >
       <ArrowDown className="size-3.5" />
       <span>{label}</span>
