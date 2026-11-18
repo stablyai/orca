@@ -70,6 +70,10 @@ export class CodexAccountHistoryPasses {
     }
     const previous = this.latest.get(key)
     if (previous?.shared === shared) {
+      if (options.fromRetry) {
+        // That pass isn't the retry's, so a launch keeps waiting for it as before.
+        this.queuedRetries.delete(key)
+      }
       return previous.pass
     }
     const pass = this.tail.then(async () => {

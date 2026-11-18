@@ -106,12 +106,22 @@ async function sweepCodexThreadLocks(locksDir: string): Promise<boolean> {
 // after a crash, and whenever releasing it finds coordination contended, so its mere presence
 // proves nothing. A home with no lock folder never had a Codex writer.
 export async function hasThreadWriter(home: string): Promise<boolean> {
-  const locks = join(home, WRITER_LOCKS)
+  return holdsThreadLock(join(home, WRITER_LOCKS))
+}
+
+/** Sweeps one lock folder (a link counts as none: its target is swept on its own). */
+export async function holdsThreadLock(locks: string): Promise<boolean> {
   const folder = await lstatIfPresent(locks)
   if (!folder || folder.isSymbolicLink()) {
     return false
   }
   return sweepCodexThreadLocks(locks)
+}
+
+/** Any thread lock file at all, held or not (the merge kept it, so it was taken during the move). */
+export async function keepsThreadLock(locks: string): Promise<boolean> {
+  const names = await readdir(locks).catch(() => [])
+  return names.some((name) => name.endsWith('.lock') && name !== COORDINATION_LOCK)
 }
 
 // A thread lock in both folders as different files can't merge: the account's may have been taken

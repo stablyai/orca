@@ -18,6 +18,8 @@ import {
   COORDINATION_LOCK,
   hasThreadLockConflict,
   hasThreadWriter,
+  holdsThreadLock,
+  keepsThreadLock,
   WRITER_LOCKS
 } from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
@@ -192,10 +194,20 @@ export async function shareCodexAccountHistory(
   if (await hasThreadWriter(args.accountHome)) {
     return (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome)) ? 'shared' : 'busy'
   }
-  // Also clears the store's free locks, so a lock taken in the account from now on has no twin.
-  await hasThreadWriter(args.storeHome)
-  if (await hasThreadLockConflict(args.accountHome, args.storeHome)) {
+  // A thread lock a merge kept apart guards that thread beside the store's own lock.
+  const keptLocks = join(args.accountHome, `${WRITER_LOCKS}${MERGE_PENDING_SUFFIX}`)
+  if ((await keepsThreadLock(keptLocks)) && (await holdsThreadLock(keptLocks))) {
     return 'busy'
+  }
+  const accountLocks = join(args.accountHome, WRITER_LOCKS)
+  const storeLocks = join(args.storeHome, WRITER_LOCKS)
+  // Once linked, both names are one folder, already swept above through the account's link.
+  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
+    // Also clears the store's free locks, so a lock taken in the account from now on has no twin.
+    await hasThreadWriter(args.storeHome)
+    if (await hasThreadLockConflict(args.accountHome, args.storeHome)) {
+      return 'busy'
+    }
   }
   await Promise.all(
     [WRITER_LOCKS, ...STORE_DIRECTORIES].map((name) =>
@@ -244,13 +256,12 @@ export async function shareCodexAccountHistory(
     return 'private'
   }
   // A user's own link elsewhere would split the lock namespace from the history's.
-  if (
-    !(await isLinkedDirectory(
-      join(args.accountHome, WRITER_LOCKS),
-      join(args.storeHome, WRITER_LOCKS)
-    ))
-  ) {
+  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
     return 'private'
+  }
+  // A thread locked in both homes since the check: history stays apart until that lock is free.
+  if (await keepsThreadLock(keptLocks)) {
+    return 'busy'
   }
   for (const name of await sharedDirectoryNames(args.storeHome, args.accountHome)) {
     try {
