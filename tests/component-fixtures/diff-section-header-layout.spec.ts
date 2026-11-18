@@ -32,7 +32,7 @@ async function measure(page: Page, width: number): Promise<HeaderLayout> {
       nameWidth: name.getBoundingClientRect().width,
       countsShown: shown(root.querySelector('.diff-section-header-counts')),
       dirtyShown: shown(dirty ?? null),
-      chevronShown: shown(root.querySelector('svg.lucide-chevron-down')),
+      chevronShown: shown(root.querySelector('button[aria-expanded]')),
       actionsShown: [...root.querySelectorAll('button')].filter((button) => shown(button)).length
     }
   })
@@ -89,7 +89,7 @@ test('a narrow header drops counts first but keeps the unsaved mark, chevron and
     countsShown: false,
     dirtyShown: true,
     chevronShown: true,
-    actionsShown: 2
+    actionsShown: 3
   })
 })
 
@@ -101,6 +101,30 @@ test('the narrowest header gives the name all the room and ellipsizes it', async
     nameClipped: true,
     dirtyShown: true,
     chevronShown: true,
-    actionsShown: 2
+    actionsShown: 3
   })
+})
+
+test('the section toggle is a named, focusable button that Enter and Space each flip once', async ({
+  page
+}) => {
+  const header = page.getByTestId('diff-header-120')
+  const collapse = header.getByRole('button', { name: 'Collapse release-checklist.md' })
+  await expect(collapse).toBeVisible()
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true')
+
+  // Reach it by keyboard, as a keyboard user would, so focus-visible styling applies.
+  await header.getByRole('button', { name: 'Open in editor' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(collapse).toBeFocused()
+  await expect(collapse).toHaveCSS('box-shadow', /rgb/)
+
+  // One press is one toggle: the header row's own click handler must not toggle it back.
+  await page.keyboard.press('Enter')
+  const expand = header.getByRole('button', { name: 'Expand release-checklist.md' })
+  await expect(expand).toHaveAttribute('aria-expanded', 'false')
+  await expect(expand).toBeFocused()
+
+  await page.keyboard.press('Space')
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true')
 })

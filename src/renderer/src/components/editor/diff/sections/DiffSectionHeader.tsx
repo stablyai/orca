@@ -35,6 +35,13 @@ export function DiffSectionHeader({
 }): ReactElement {
   const t = useTranslate()
   const displayPath = splitPathForDisplay(path)
+  const sectionToggleLabel = collapsed
+    ? t('auto.components.editor.DiffSectionHeader.expandSection', 'Expand {{name}}', {
+        name: displayPath.fileName
+      })
+    : t('auto.components.editor.DiffSectionHeader.collapseSection', 'Collapse {{name}}', {
+        name: displayPath.fileName
+      })
   return (
     <div
       {...combinedDiffHeaderAttributes}
@@ -114,11 +121,24 @@ export function DiffSectionHeader({
         >
           <ExternalLink className="size-3.5" />
         </button>
-        {collapsed ? (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
+        <button
+          // The header row toggles on click too; this is the control keyboard and screen-reader users reach.
+          type="button"
+          className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={!collapsed}
+          aria-label={sectionToggleLabel}
+          title={sectionToggleLabel}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+        >
+          {collapsed ? (
+            <ChevronRight aria-hidden className="size-3.5 shrink-0" />
+          ) : (
+            <ChevronDown aria-hidden className="size-3.5 shrink-0" />
+          )}
+        </button>
       </div>
     </div>
   )

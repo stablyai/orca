@@ -17315,7 +17315,9 @@
           "593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
         },
         "DiffSectionHeader": {
-          "8915726e93": "Copy path"
+          "8915726e93": "Copy path",
+          "expandSection": "Expand {{name}}",
+          "collapseSection": "Collapse {{name}}"
         },
         "EditorContent": {
           "56dba34e1a": "(edit in source mode)",
