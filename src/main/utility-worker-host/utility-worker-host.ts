@@ -235,7 +235,8 @@ export class UtilityWorkerHost {
 
   /** The host outlives a worker's own OOM, so no exit breadcrumb would name what it was doing. */
   private recordWorkerOutOfMemory(host: Host, worker: HostedWorker, code?: string): void {
-    if (!quitting) {
+    // A lost host's exit breadcrumb already names its workers' reads.
+    if (!quitting && !host.lossCounted) {
       recordDurableCrashBreadcrumb('worker_thread_failed', {
         serviceName: this.serviceName,
         role: worker.spawn.name,
