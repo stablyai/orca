@@ -1,5 +1,6 @@
 import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
 import {
+  isNativeChatFailureRowResolved,
   isNativeChatSetupFailureKind,
   nativeChatSetupAction,
   useNativeChatHostSetupView
@@ -28,11 +29,9 @@ function EligibleNativeChatSetupButton({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const setup = useNativeChatHostSetupView()
-  const resolved =
-    rowId !== undefined &&
-    setup?.unresolvedFailureRows !== undefined &&
-    !setup.unresolvedFailureRows.has(rowId)
-  const action = resolved ? undefined : nativeChatSetupAction(failureKind, setup, t)
+  const action = isNativeChatFailureRowResolved(setup, rowId)
+    ? undefined
+    : nativeChatSetupAction(failureKind, setup, t)
   return action ? (
     <NativeChatActionButton primary disabled={action.disabled} onClick={action.onClick}>
       {action.label}

@@ -44,6 +44,11 @@ import {
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
+import {
+  isNativeChatFailureRowResolved,
+  isNativeChatSetupFailureKind,
+  useNativeChatHostSetupView
+} from '../../host-access/native-chat-host-setup'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -314,12 +319,12 @@ export function NativeChatNoticeRow({
         : tone === 'notice'
           ? Info
           : null
-  return (
+  const row = (resolved: boolean): React.JSX.Element => (
     <div
       className={cn(
         'space-y-2 text-sm text-chat-foreground',
-        Icon && 'rounded-md border border-border bg-muted/20 p-3',
-        tone && toneClass(tone)
+        Icon && !resolved && 'rounded-md border border-border bg-muted/20 p-3',
+        tone && toneClass(resolved ? 'notice' : tone)
       )}
     >
       <div className="flex items-start gap-2">
@@ -341,4 +346,21 @@ export function NativeChatNoticeRow({
       ) : null}
     </div>
   )
+  // Only setup failures read the setup context, so other rows skip its changes.
+  return isNativeChatSetupFailureKind(block.failure?.kind) ? (
+    <NativeChatSetupFailureRow rowId={messageId} row={row} />
+  ) : (
+    row(false)
+  )
+}
+
+/** A setup failure a later successful turn resolved reads as history: muted, with no action. */
+function NativeChatSetupFailureRow({
+  rowId,
+  row
+}: {
+  rowId: string | undefined
+  row: (resolved: boolean) => React.JSX.Element
+}): React.JSX.Element {
+  return row(isNativeChatFailureRowResolved(useNativeChatHostSetupView(), rowId))
 }

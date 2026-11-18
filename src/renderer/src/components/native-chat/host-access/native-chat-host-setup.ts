@@ -12,7 +12,10 @@ import {
   agentSessionSignInCommand
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionUnresolvedFailureRows } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
+import {
+  agentSessionUnresolvedFailureRows,
+  isAgentSessionSetupFailureKind
+} from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -42,8 +45,18 @@ function isNativeChatSignInFailureKind(
 }
 
 /** Failure kinds a host setup step can fix; rows check this before subscribing to the setup context. */
-export function isNativeChatSetupFailureKind(kind: string | undefined): boolean {
-  return kind === 'modelNotSelected' || kind === 'cliMissing' || isNativeChatSignInFailureKind(kind)
+export const isNativeChatSetupFailureKind = isAgentSessionSetupFailureKind
+
+/** Whether a later successful turn resolved the setup failure this row reports. */
+export function isNativeChatFailureRowResolved(
+  setup: NativeChatHostSetup | null,
+  rowId: string | undefined
+): boolean {
+  return (
+    rowId !== undefined &&
+    setup?.unresolvedFailureRows !== undefined &&
+    !setup.unresolvedFailureRows.has(rowId)
+  )
 }
 
 export type NativeChatSignIn = {
@@ -292,7 +305,8 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const { target, journalItems } = input
   // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
   const unresolvedKey = useMemo(
-    () => agentSessionUnresolvedFailureRows(journalItems).join('\n'),
+    // Sent messages too: a refused one's line can offer the fix.
+    () => agentSessionUnresolvedFailureRows(journalItems, { sentMessages: true }).join('\n'),
     [journalItems]
   )
   const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])

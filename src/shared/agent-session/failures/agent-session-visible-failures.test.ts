@@ -37,7 +37,7 @@ describe('agentSessionUnresolvedFailureRows', () => {
         blocks: [{ type: 'text', text: 'hello' }]
       })
     ]
-    expect(agentSessionUnresolvedFailureRows(items)).toEqual([])
+    expect(agentSessionUnresolvedFailureRows(items, { sentMessages: true })).toEqual([])
   })
 
   it('keeps failures after the latest successful turn', () => {
@@ -48,6 +48,9 @@ describe('agentSessionUnresolvedFailureRows', () => {
       turn('turn-2', 'failure'),
       signedOut('error-2')
     ]
-    expect(agentSessionUnresolvedFailureRows(items)).toEqual(['error-2', 'ask-2'])
+    expect(agentSessionUnresolvedFailureRows(items, { sentMessages: true })).toEqual([
+      'error-2',
+      'ask-2'
+    ])
   })
 })

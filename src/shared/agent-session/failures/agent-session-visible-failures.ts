@@ -27,9 +27,22 @@ export function agentSessionVisibleFailureFacts(
   return facts
 }
 
-/** Failure rows and sent messages after the latest successful turn; that turn resolved every failure before it. */
+const SETUP_FAILURE_KINDS: ReadonlySet<string> = new Set([
+  'notSignedIn',
+  'claudeAccountFolderMissing',
+  'cliMissing',
+  'modelNotSelected'
+])
+
+/** Failures a host setup step fixes: sign-in, install, or picking a model. */
+export function isAgentSessionSetupFailureKind(kind: string | undefined): boolean {
+  return kind !== undefined && SETUP_FAILURE_KINDS.has(kind)
+}
+
+/** Setup failure rows, and sent messages when asked, after the latest successful turn, which resolved every one before it. */
 export function agentSessionUnresolvedFailureRows(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  options: { sentMessages: boolean }
 ): string[] {
   const rows: string[] = []
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -45,8 +58,9 @@ export function agentSessionUnresolvedFailureRows(
       break
     }
     if (
-      (body.kind === 'status' && body.failure !== undefined) ||
-      (body.kind === 'message' && body.role === 'user')
+      (body.kind === 'status' &&
+        isAgentSessionSetupFailureKind(readWholeAgentSessionFailureFact(body.failure)?.kind)) ||
+      (options.sentMessages && body.kind === 'message' && body.role === 'user')
     ) {
       rows.push(item.itemId)
     }
