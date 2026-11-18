@@ -59,7 +59,8 @@
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
-      "resumeSession": "Reanudar sesión de agente"
+      "resumeSession": "Reanudar sesión de agente",
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",

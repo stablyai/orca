@@ -57,7 +57,8 @@
       "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
-      "resumeSession": "Ajan oturumuna devam et"
+      "resumeSession": "Ajan oturumuna devam et",
+      "continueInCli": "CLI'de Devam Et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",

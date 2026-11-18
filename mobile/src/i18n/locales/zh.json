@@ -63,6 +63,7 @@
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
       "resumeSession": "恢复智能体会话",
+      "continueInCli": "在 CLI 中继续",
       "hidePreview": "隐藏最近的消息",
       "showPreview": "显示最近的消息",
       "you": "你"

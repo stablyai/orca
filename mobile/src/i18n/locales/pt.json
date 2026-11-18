@@ -65,6 +65,7 @@
       "messages_one": "{{count}} mensagem",
       "messages_other": "{{count}} mensagens",
       "resumeSession": "Retomar sessão de agente",
+      "continueInCli": "Continuar na CLI",
       "hidePreview": "Oculta as mensagens recentes.",
       "showPreview": "Mostra as mensagens recentes.",
       "you": "Você"

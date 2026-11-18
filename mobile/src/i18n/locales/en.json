@@ -402,6 +402,7 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
+      "continueInCli": "Continue in CLI",
       "hidePreview": "Hides the recent messages.",
       "showPreview": "Shows the recent messages.",
       "you": "You"

@@ -57,7 +57,8 @@
       "currentWorktree": "Aktueller Worktree",
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
-      "resumeSession": "Agentensitzung fortsetzen"
+      "resumeSession": "Agentensitzung fortsetzen",
+      "continueInCli": "In CLI fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",

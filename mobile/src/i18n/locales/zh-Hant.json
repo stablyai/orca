@@ -57,7 +57,8 @@
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段"
+      "resumeSession": "恢復代理程式工作階段",
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
