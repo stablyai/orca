@@ -74,7 +74,8 @@ export async function startLocalWorker(args: {
       runtime,
       requestedWorktree,
       repo: params.repo,
-      callerWorktreeId
+      callerWorktreeId,
+      crossStoreParent: params.crossStoreParent
     })
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
     runtime,

@@ -163,7 +163,6 @@ export function buildDefaultSettings(args: {
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
-    nativeChatComposerSpellcheck: true,
     nativeChatOpenedPullRequests: true,
     nativeChatScrollToLatestOnSend: true,
     nativeChatTurnDiffSummary: true,

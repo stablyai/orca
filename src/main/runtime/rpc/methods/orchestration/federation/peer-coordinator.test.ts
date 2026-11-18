@@ -96,6 +96,36 @@ describe('a paired Orca coordinating its Run on this server', () => {
     }
   }
 
+  it("creates a new-child under the paired Orca's own workspace on its machine", async () => {
+    const parent = {
+      installationId: 'install_a',
+      workspaceKey: 'worktree:repo_a::/a/home',
+      instanceId: 'instance_a'
+    }
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: placement reads only the repo's kind and hooks.
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo_b', kind: 'git' } as never)
+    const create = vi
+      .spyOn(runtime, 'createManagedWorktree')
+      .mockRejectedValue(new Error('stop after placement'))
+
+    await peerCall('orchestration.workerStart', {
+      from: 'term_coord',
+      spec: 'investigate',
+      worktree: 'new-child',
+      repo: 'id:repo_b',
+      agent: 'claude',
+      crossStoreParent: parent
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'id:repo_b',
+        lineage: { crossStoreParent: parent, crossStoreParentInferredFrom: 'orchestration-context' }
+      })
+    )
+  })
+
   it("reads another Run's work here by its Run, as its pairing already can, but cannot change it", async () => {
     await peerCall('orchestration.runCurrent', {})
     const localRun = db.createRun({

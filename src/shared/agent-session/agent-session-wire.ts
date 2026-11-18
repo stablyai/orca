@@ -37,6 +37,12 @@ export type AgentSessionTurnActivity = {
   text: string
 }
 
+/** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
+export type AgentSessionPromptSuggestion = {
+  id: string
+  text: string
+}
+
 /** Newest turn across the whole journal, including off-page long-running turns. null means no turn; older hosts omit it and clients derive from loaded rows. */
 export type AgentSessionLatestTurn = {
   /** The record's journal key, which rows of the turn name as their scope. */
@@ -167,6 +173,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Sent only to subscribers that asked for suggestions; null clears, absent keeps. */
+      promptSuggestion?: AgentSessionPromptSuggestion | null
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null

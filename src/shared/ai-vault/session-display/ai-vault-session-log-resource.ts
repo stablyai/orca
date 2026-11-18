@@ -34,7 +34,7 @@ const logFileResolvers = {
   qoder: jsonlLog,
   codex: jsonlLog,
   trae: jsonlLog,
-  hermes: jsonLog,
+  hermes: () => null,
   pi: jsonlLog,
   omp: jsonlLog,
   'prime-agent': jsonlLog,

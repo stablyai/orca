@@ -2,7 +2,6 @@
 # Each tag marks code the relay retirement (2027-01-15) deletes or edits.
 # Prune: pnpm check:legacy-relay-fence-ratchet --prune
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs
-config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs
 src/main/ipc/ssh/ssh-connect-flow.ts
 src/main/ipc/ssh/ssh-host-server-connect.ts
 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
@@ -28,6 +27,6 @@ src/shared/telemetry/schemas/telemetry-ssh-host-server-event-schemas.ts
 tests/e2e/cross-version-wire/relay/legacy-relay-bridge.unit.test.ts
 tests/e2e/cross-version-wire/relay/released-relay-daemon.ts
 tests/e2e/cross-version-wire/relay/released-relay-transport.ts
-tests/e2e/helpers/build-released-relay-bundle.mts
-tests/e2e/helpers/legacy-relay-docker-host.ts
-tests/e2e/helpers/orcad-upgrade-profile.ts
+tests/e2e/remote/relay/build-released-relay-bundle.mts
+tests/e2e/remote/relay/legacy-relay-docker-host.ts
+tests/e2e/remote/managed-ssh/host-lifecycle/orcad-upgrade-profile.ts

@@ -4,9 +4,12 @@ import type { AgentSessionQueuedSendReceipt } from '../agent-session-wire'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact' | 'recap'
 
-/** What the user typed and what a text-driven agent receives. */
-export function agentSessionCompactCommandText(instructions?: string): string {
-  return instructions ? `/compact ${instructions}` : '/compact'
+/** What the user typed and what a text-driven agent receives; `command` is the agent's own name for it. */
+export function agentSessionCompactCommandText(
+  instructions?: string,
+  command = '/compact'
+): string {
+  return instructions ? `${command} ${instructions}` : command
 }
 
 export function agentSessionRecapCommandText(): string {

@@ -47,6 +47,12 @@ import {
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../../plugins/panels/guest-isolation/plugin-frame-guest-registry'
 import { attachBrowserPasswordGuest } from '../../browser-passwords/browser-password-guest-service'
+import {
+  admitBrowserExtensionSidePanelAttach,
+  isBrowserExtensionSidePanelAttachMarker,
+  startBrowserExtensionSidePanelGuest
+} from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
+import { associateBrowserExtensionSidePanelGuest } from '../../browser/extensions/side-panel/browser-extension-side-panel-guests'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -90,13 +96,15 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
   })
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
+  const mainWebContentsId = mainWindow.webContents.id
   const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
     associateBrowserPageAttach(guest)
+    associateBrowserExtensionSidePanelGuest(guest)
   }
   app.on('web-contents-created', associateCreatedGuest)
   mainWindow.webContents.on('destroyed', () => {
     app.off('web-contents-created', associateCreatedGuest)
-    closeBrowserMemoryRenderer(mainWindow.webContents.id)
+    closeBrowserMemoryRenderer(mainWebContentsId)
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
@@ -138,11 +146,25 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
     const isExtensionPageAttach = isAdmissibleExtensionPageAttach(profileId, src)
+    // Why a main-minted marker: main must know a panel guest before it loads, and picks its page.
+    let isSidePanelAttach = false
+    if (isBrowserExtensionSidePanelAttachMarker(src)) {
+      if (
+        !profileId ||
+        !isBrowserExtensionSupportEnabled() ||
+        !admitBrowserExtensionSidePanelAttach(src, mainWindow.webContents.id, partition)
+      ) {
+        event.preventDefault()
+        return
+      }
+      isSidePanelAttach = true
+    }
 
     // Require an allowlisted src/partition; renderer mistakes must not grant preload/Node authority.
     if (
       !isDocPreviewAttach &&
       !isExtensionPageAttach &&
+      !isSidePanelAttach &&
       ((!normalizedSrc && !attachArgument) ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
         (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL && !attachArgument))
@@ -158,7 +180,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
-    if (attachArgument) {
+    if (attachArgument || isSidePanelAttach) {
       delete params.src
     }
     webPreferences.nodeIntegration = false
@@ -183,6 +205,10 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (attachPluginFrameGuest(guest, mainWindow.webContents)) {
+      return
+    }
+    // Side panels keep the action popup's own link and navigation policy, not a tab's.
+    if (startBrowserExtensionSidePanelGuest(guest)) {
       return
     }
     if (isDocPreviewSession(guest.session)) {

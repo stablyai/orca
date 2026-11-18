@@ -42,7 +42,8 @@ export type AiVaultScanOptions = {
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
-  hermesSessionsDir?: string
+  /** Hermes home whose state.db and profiles/<name>/state.db are scanned. */
+  hermesHome?: string
   rovoSessionsDir?: string
   openclawStateDir?: string
   openclawLegacyStateDir?: string

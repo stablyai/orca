@@ -103,6 +103,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
   }
 
+  // Every adapter, so a session still starting hears it; only one that holds the session acts.
+  promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void => {
+    for (const adapter of this.adapters()) {
+      adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
+    }
+  }
+
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
       input.record.sessionId,

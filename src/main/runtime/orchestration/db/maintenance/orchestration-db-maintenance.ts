@@ -1,13 +1,13 @@
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { OrchestrationDb } from '../orchestration-db'
 import { pruneSettledChatOutputCopies } from './settled-chat-output-copy-prune'
+import { checkpointOffMainThread } from './orchestration-pass-checkpointer'
 import {
   deleteExpiredOrchestrationRows,
-  deleteRetiredRun,
   EXPIRED_ROW_SWEEPS,
-  listRetiredRunCandidates,
-  type RunPartyLiveness
+  listRetiredRunCandidates
 } from './settled-run-retention'
+import { retireSettledRun, type RunPartyLiveness } from './settled-run-retirement'
 
 const MINUTE = 60_000
 const PRUNE_INTERVAL_MS = 60 * MINUTE
@@ -59,31 +59,14 @@ export class OrchestrationDbMaintenance {
 
   private async pass(): Promise<void> {
     if (this.pruneIsDue()) {
-      const settledRuns = new Map<string, boolean>()
-      for (let after: string | null = ''; after !== null;) {
-        const page = await this.slice(() =>
-          pruneSettledChatOutputCopies(
-            this.orchestrationDb,
-            after!,
-            this.chatIsReadable,
-            settledRuns
-          )
-        )
-        if (!page) {
-          return
-        }
-        after = page.next
-      }
+      const restoreCheckpoints = checkpointOffMainThread(this.orchestrationDb)
       try {
-        if (!(await this.retireSettledRuns())) {
+        if (!(await this.prune())) {
           return
         }
-      } catch (error) {
-        // Recorded anyway, so a lasting failure is retried hourly, not every minute.
-        console.warn('[orchestration] settled Run retention failed', error)
+      } finally {
+        restoreCheckpoints()
       }
-      // Persisted so a restart does not rescan before the interval.
-      this.recordPrune()
     }
     // Only incremental files can return pages; others reuse them as they are freed.
     if (Number(this.orchestrationDb.db.pragma('auto_vacuum', { simple: true })) === 2) {
@@ -96,6 +79,31 @@ export class OrchestrationDbMaintenance {
   }
 
   /** False when stopped mid-way. */
+  private async prune(): Promise<boolean> {
+    const settledRuns = new Map<string, boolean>()
+    for (let after: string | null = ''; after !== null;) {
+      const page = await this.slice(() =>
+        pruneSettledChatOutputCopies(this.orchestrationDb, after!, this.chatIsReadable, settledRuns)
+      )
+      if (!page) {
+        return false
+      }
+      after = page.next
+    }
+    try {
+      if (!(await this.retireSettledRuns())) {
+        return false
+      }
+    } catch (error) {
+      // Recorded anyway, so a lasting failure is retried hourly, not every minute.
+      console.warn('[orchestration] settled Run retention failed', error)
+    }
+    // Persisted so a restart does not rescan before the interval.
+    this.recordPrune()
+    return true
+  }
+
+  /** False when stopped mid-way. */
   private async retireSettledRuns(): Promise<boolean> {
     const db = this.orchestrationDb
     for (let after: string | null = ''; after !== null;) {
@@ -104,18 +112,22 @@ export class OrchestrationDbMaintenance {
       if (!page) {
         return false
       }
-      for (const runId of page.retired) {
-        const step = await this.slice(() => {
-          try {
-            deleteRetiredRun(db, runId, this.runPartyLiveness)
-          } catch (error) {
-            // One Run that cannot go must not hold back the others; the next pass retries it.
-            console.warn('[orchestration] settled Run retention failed', { runId, error })
+      for (const runId of page.candidates) {
+        const steps = retireSettledRun(db, runId, this.runPartyLiveness)
+        for (let done = false; !done;) {
+          const step = await this.slice(() => {
+            try {
+              return steps.next().done === true
+            } catch (error) {
+              // One Run that cannot go must not hold back the others; the next pass retries it.
+              console.warn('[orchestration] settled Run retention failed', { runId, error })
+              return true
+            }
+          })
+          if (step === undefined) {
+            return false
           }
-          return true
-        })
-        if (!step) {
-          return false
+          done = step
         }
       }
       after = page.next
