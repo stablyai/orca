@@ -51,7 +51,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanProjection = useAppStore((s) => s.setWorkspacePortScanProjection)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
-  const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)
   const generationRef = useRef(0)
   const wasEnabledRef = useRef(false)
@@ -83,7 +82,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         portScanDebounceRef.current.clear()
         lastRefreshStartedAtByKeyRef.current.clear()
         setWorkspacePortScan(null)
-        setWorkspacePortScanRefreshing(false)
         return Promise.resolve()
       }
       const requestedTargets = options.targets ?? allTargets
@@ -112,7 +110,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       }
 
       const generation = generationRef.current
-      setWorkspacePortScanRefreshing(true)
       const promise = Promise.all(
         targets.map(async (target) => {
           const key = workspacePortScanKeyForTarget(target)
@@ -177,14 +174,11 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
           if (inFlightRef.current === promise) {
             inFlightRef.current = null
           }
-          if (generation === generationRef.current) {
-            setWorkspacePortScanRefreshing(false)
-          }
         })
       inFlightRef.current = promise
       return promise
     },
-    [hasWorktrees, setWorkspacePortScan, replaceWorkspacePortScans, setWorkspacePortScanRefreshing]
+    [hasWorktrees, setWorkspacePortScan, replaceWorkspacePortScans]
   )
 
   useEffect(() => {
@@ -197,7 +191,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       portScanDebounceRef.current.clear()
       lastRefreshStartedAtByKeyRef.current.clear()
       setWorkspacePortScan(null)
-      setWorkspacePortScanRefreshing(false)
       return
     }
     const wasDisabled = !wasEnabledRef.current
@@ -259,7 +252,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     return () => {
       generationRef.current += 1
       inFlightRef.current = null
-      setWorkspacePortScanRefreshing(false)
       stopVisibleInterval()
     }
   }, [
@@ -269,7 +261,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     scanTargetsSignature,
     setWorkspacePortScan,
     setWorkspacePortScanProjection,
-    setWorkspacePortScanRefreshing,
     replaceWorkspacePortScans
   ])
 

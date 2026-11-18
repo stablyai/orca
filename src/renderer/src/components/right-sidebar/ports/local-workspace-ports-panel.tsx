@@ -296,7 +296,8 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              refreshing && !displayScan
+              // The background scanner publishes silently, so a missing first result means a scan is pending.
+              !displayScan && (refreshing || Boolean(runtimeTarget))
                 ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
                 : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
             }
