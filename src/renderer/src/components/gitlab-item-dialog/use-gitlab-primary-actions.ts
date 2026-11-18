@@ -5,7 +5,7 @@ import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
-import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
+import { showGitLabMutationError } from './gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'

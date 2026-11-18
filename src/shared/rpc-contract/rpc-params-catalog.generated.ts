@@ -85,6 +85,7 @@ import {
   AgentActivityClearParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
+import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
 import {
@@ -541,6 +542,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -548,6 +550,7 @@ import {
   RepoSearchRefs,
   RepoSetBaseRef,
   RepoSetHidden,
+  RepoSparsePresetRemove,
   RepoSparsePresetSave,
   RepoUpdate
 } from './projects/repo-params'
@@ -574,6 +577,7 @@ import {
   SkillsGetInstallProgressParams
 } from './skills/skills-params'
 import {
+  GitBlame,
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
@@ -659,6 +663,7 @@ import {
 import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
+import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
@@ -866,12 +871,16 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
+  'agent.list': AgentListParams,
+  'agent.read': AgentReadParams,
+  'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
+  'agentSession.approveAutoReviewDenial': AutoReviewApprovalParams,
   'agentSession.cancel': CancelParams,
   'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,
@@ -1151,6 +1160,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.abortMerge': WorktreeSelectorOfGitParams,
   'git.abortRebase': WorktreeSelectorOfGitParams,
   'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
+  'git.blame': GitBlame,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
@@ -1519,12 +1529,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
+  'repo.defaultCreateParent': null,
   'repo.gitAvailable': null,
-  'repo.hooks': RepoSelector,
+  'repo.hooks': RepoHooksRead,
   'repo.hooksCheck': RepoHooksCheck,
   'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
   'repo.list': RepoList,
+  'repo.removeSparsePreset': RepoSparsePresetRemove,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,

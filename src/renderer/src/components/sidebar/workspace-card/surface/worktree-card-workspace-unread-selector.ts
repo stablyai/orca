@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -11,13 +11,13 @@ import {
   paneKeyTabId,
   workspaceMarkerTabs
 } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { recordChangeReaches } from '@/store/keyed-record-change-reads'
+import { recordChangeReaches } from '@/store/record-transitions/keyed-record-change-reads'
 import { markerTabPaneKey } from '@/store/slices/workspace-attention/workspace-marker-host'
 import {
   workspaceUnreadTarget,
   workspaceUnreadTargetsOutsideAgentRows,
   type SlotTarget
-} from '../../worktree-card-slot-targets'
+} from '../slots/worktree-card-slot-targets'
 
 /**
  * Exactly what `workspaceUnreadTargetsOutsideAgentRows` reads for this workspace, so an agent

@@ -42,7 +42,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       '--fast on|off requires a selected model with proven support. Claude and Codex require an existing workspace, the configured Chat UI route, and a verified workspace model catalog; Codex uses the provider-listed Fast service tier. Terminal launches use their existing launch-option catalog. Unsupported choices fail before Task/Dispatch creation. Role and Fast launches require orchestration.worker-role-routing.v1 on both the Run home and any selected execution server; no local fallback is attempted.',
       'With --spec and no bound Run, a coordinator gets a new Run bound to it, named after the Task title; the receipt names the Run it created or joined.',
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
-      'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
+      "When reusing --terminal, omit --worktree to start in that terminal's own workspace; current means the coordinator worktree.",
       "Reusing a settled worker's terminal with --terminal before its autoReleaseAt cancels that automatic release; after it, the start is refused while the release runs.",
       'A terminal the user kept open takes --terminal work and stays kept open.',
       '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',

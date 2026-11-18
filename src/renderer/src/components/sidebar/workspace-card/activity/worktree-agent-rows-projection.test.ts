@@ -3,7 +3,7 @@ import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { createWorktreeAgentRowsSelector } from './worktree-agent-rows-projection'
 
 const TIMESTAMP = 1_000

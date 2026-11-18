@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {

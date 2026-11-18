@@ -225,6 +225,7 @@ export function mapIssueForWorkspace(
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
+    branchName: issue.branchName ?? undefined,
     description: issue.description ?? undefined,
     url: issue.url,
     state: {

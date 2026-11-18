@@ -1,6 +1,6 @@
 import { MessageChannelMain } from 'electron'
 import { BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL } from '../../../../shared/browser/extensions/browser-extension-channels'
-import { abortWhenRendererGone } from '../../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../../ipc/renderer-requests/renderer-lifetime-abort'
 
 export type FrameContext = {
   extensionId: string

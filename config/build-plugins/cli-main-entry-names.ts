@@ -31,10 +31,6 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/network-compatibility/http1-compatibility-marker',
-  // `orca uninstall` runs the app's cleanup in the CLI process.
-  'uninstall/orca-install-identity',
-  'uninstall/orca-uninstall-cleanup',
-  'cli/cli-installer',
-  // The CLI's own app environment, so main-process removers can resolve profile paths.
+  // The CLI's own app environment, so main-process hook removers can resolve profile paths.
   'backend/node-service-environment'
 ] as const

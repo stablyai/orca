@@ -1,8 +1,4 @@
-import {
-  isGooglePlayInstall,
-  prefersGooglePlayUpdate,
-  useWallAppUpdate
-} from '../../app-update/use-wall-app-update'
+import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall-app-update'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
@@ -47,13 +43,12 @@ function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   }
 }
 
-// Play installs may only update through Play, and GitHub installs outside mainland China are steered
-// there too; other Android installs came from GitHub Releases.
+// Play installs may only update through Play; other Android installs came from GitHub Releases.
 function mobileUpdateChannel(): 'app-store' | 'google-play' | 'github-releases' {
   if (Platform.OS === 'ios') {
     return 'app-store'
   }
-  return isGooglePlayInstall || prefersGooglePlayUpdate ? 'google-play' : 'github-releases'
+  return isGooglePlayInstall ? 'google-play' : 'github-releases'
 }
 
 function mobileUpdateChannelTarget(t: Translate): { label: string; url: string } {
@@ -81,7 +76,7 @@ function blockTitle(remedy: BlockRemedy, t: Translate): string {
     case 'update-mobile':
       return t('components.protocolBlockScreen.updateMobileTitle', 'Update Orca Mobile')
     case 'update-desktop':
-      return t('components.protocolBlockScreen.updateDesktopTitle', 'Update Orca on your computer')
+      return t('components.protocolBlockScreen.updateDesktopTitle', 'Update Orca on this host')
     case 'refresh-bundle':
       return t(
         'components.protocolBlockScreen.refreshWorkspaceTitle',
@@ -94,7 +89,7 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
   if (remedy === 'refresh-bundle') {
     return t(
       'components.protocolBlockScreen.refreshWorkspaceBody',
-      'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+      'The workspace cached for this host is older than the host expects. Reconnect to this host to download the current one.'
     )
   }
   if (verdict.reason === 'mobile-too-old') {
@@ -102,17 +97,17 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
       case 'app-store':
         return t(
           'components.protocolBlockScreen.mobileTooOldAppStore',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
         )
       case 'google-play':
         return t(
           'components.protocolBlockScreen.mobileTooOldGooglePlay',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.'
         )
       case 'github-releases':
         return t(
           'components.protocolBlockScreen.mobileTooOldGitHubReleases',
-          'This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
+          'This host needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
         )
     }
   }
@@ -121,23 +116,23 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, t: Translate): 
       case 'app-store':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateAppStore',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
         )
       case 'google-play':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateGooglePlay',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again."
         )
       case 'github-releases':
         return t(
           'components.protocolBlockScreen.workspaceNeedsUpdateGitHubReleases',
-          "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
+          "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
         )
     }
   }
   return t(
     'components.protocolBlockScreen.desktopTooOldBody',
-    'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+    'Orca on this host is too old for your current Orca Mobile app. Update Orca there, then try this host again.'
   )
 }
 

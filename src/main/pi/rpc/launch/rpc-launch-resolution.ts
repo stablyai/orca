@@ -37,6 +37,7 @@ import {
   ensurePiBackgroundWorkBridge,
   type PiBackgroundWorkLaunch
 } from '../background-work/rpc-background-work-bridge'
+import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-extension-service'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
@@ -52,6 +53,7 @@ export type PiRpcLaunchPartDeps = {
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
   ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  managedExtensionsEnabled?: () => boolean
   logger?: StructuredAgentSessionLogger
 }
 
@@ -222,6 +224,10 @@ export function piRpcLaunchPart(
     )
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
+    }
+    // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
+    if (deps.managedExtensionsEnabled?.()) {
+      piTitlebarExtensionService.installManagedExtensions(accountHome.path, 'pi')
     }
     const backgroundWork = await (
       deps.ensureBackgroundWorkBridge ??

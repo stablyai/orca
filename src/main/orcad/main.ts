@@ -32,6 +32,10 @@ import {
 import { runWindowsBreakawayLaunchIfRequested } from './runtime-launch/windows-breakaway-launcher'
 import { parseArgs } from './serve-startup/orcad-command-arguments'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
+
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
