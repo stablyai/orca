@@ -6,4 +6,9 @@ it('lets a sleep replay carry an unseen clean completion but not its own interru
   const slept = { isReplay: true, paneSleep: { ptyId: 'pty-1' }, stateStartedAt: 2_000 } as const
   expect(isSeenHostReplay(slept, 'done', working)).toBe(false)
   expect(isSeenHostReplay({ ...slept, interrupted: true }, 'done', working)).toBe(true)
+  // Sleep cut only children short: the main agent's own completion is still unseen.
+  const finished = { state: 'done', outcome: 'success', stateStartedAt: 1_500 } as const
+  expect(
+    isSeenHostReplay({ ...slept, interrupted: true, mainAgent: finished }, 'done', working)
+  ).toBe(false)
 })
