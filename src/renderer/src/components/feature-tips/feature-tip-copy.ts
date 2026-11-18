@@ -22,11 +22,11 @@ const FEATURE_TIP_COPY: Record<
   },
   'bots-teammate': {
     eyebrow: () => translate('featureTips.eyebrowNew', 'New'),
-    title: () => translate('featureTips.botsTeammate.title', 'Your AI teammate'),
+    title: () => translate('featureTips.botsTeammate.title', 'Meet your AI teammate'),
     description: () =>
       translate(
         'featureTips.botsTeammate.description',
-        'It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.'
+        'Ask from anywhere. It runs a fleet of agents and remembers what it learns.'
       ),
     ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create your first bot')
   },

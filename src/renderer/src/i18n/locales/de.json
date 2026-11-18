@@ -17331,7 +17331,7 @@
             "734e4343ec": "Browser-Anmerkungen entfernen",
             "95af781091": "Feedback an einen Agenten senden",
             "ac39b9366b": "Senden",
-            "366bf5d62c": "Neuen Tab öffnen",
+            "366bf5d62c": "Neuer Tab",
             "781d6459ad": "Erneut versuchen",
             "2fdca7df09": "Ausblenden",
             "0f41bf80c7": "Im Standardbrowser öffnen",
@@ -19866,7 +19866,7 @@
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
         "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-        "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+        "busy": "Verfügbar, wenn der Chat inaktiv ist",
         "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
         "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
         "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",

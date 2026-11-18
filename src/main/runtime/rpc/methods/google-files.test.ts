@@ -49,6 +49,9 @@ vi.mock('./bot-write-turn', () => ({
         }
       : null
 }))
+vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
+  botToolRelay: { botOf: (token: string) => /^token-(b\d)$/.exec(token)?.[1] ?? null }
+}))
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
     bots.list().find((bot) => `chat-${bot.id}` === sessionId) ?? null
@@ -65,7 +68,12 @@ function dispatcher(bots: Bot[]) {
   return new RpcDispatcher({ runtime: service, methods: [...GOOGLE_FILES_METHODS] })
 }
 
-const replace = (params: { callerSessionId?: string; account?: string; suggest?: boolean }) => ({
+const replace = (params: {
+  botToken?: string
+  callerSessionId?: string
+  account?: string
+  suggest?: boolean
+}) => ({
   id: 'r1',
   authToken: 'tok',
   method: 'google.docs.replace',
@@ -88,10 +96,12 @@ describe('Google Drive, Docs and Sheets over RPC', () => {
       makeTestBot({ id: 'b1', name: 'Scout' }),
       makeTestBot({ id: 'b2', name: 'Ivy', google: true })
     ])
-    const refused = await rpc.dispatch(replace({ callerSessionId: 'chat-b1' }))
+    const refused = await rpc.dispatch(
+      replace({ botToken: 'token-b1', callerSessionId: 'chat-b1' })
+    )
     expect(JSON.stringify(refused)).toContain('Google is off for Scout')
     await expect(
-      rpc.dispatch(replace({ callerSessionId: 'chat-b2', suggest: true }))
+      rpc.dispatch(replace({ botToken: 'token-b2', callerSessionId: 'chat-b2', suggest: true }))
     ).resolves.toMatchObject({
       ok: true
     })
@@ -119,9 +129,15 @@ describe('Google Drive, Docs and Sheets over RPC', () => {
     const call = (method: string, params: Record<string, unknown>) =>
       rpc.dispatch({ id: 'r3', authToken: 'tok', method, params })
     const doc = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'
-    await call('google.docs.comment', { callerSessionId: 'chat-b2', ref: doc, text: 'Typo' })
+    await call('google.docs.comment', {
+      botToken: 'token-b2',
+      callerSessionId: 'chat-b2',
+      ref: doc,
+      text: 'Typo'
+    })
     await call('google.docs.comment', { ref: doc, text: 'From the owner' })
     await call('google.drive.share', {
+      botToken: 'token-b2',
       callerSessionId: 'chat-b2',
       ref: doc,
       with: ['sam@x.com'],

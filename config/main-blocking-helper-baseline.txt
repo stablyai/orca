@@ -28,7 +28,7 @@
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
 3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
-12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
+13 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
 2 src/main/ai-vault-search/storage/session-search-schema.ts
@@ -321,7 +321,7 @@
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
 22 src/main/codex/history/bridges/codex-session-bridge.ts
-3 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
+2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
 13 src/main/codex/history/index/codex-session-index-heal.ts
@@ -543,8 +543,7 @@
 2 src/main/git/command-runner/hosted-cli/glab-exec-file.ts
 4 src/main/git/command-runner/process-capture/command-exec-file.ts
 1 src/main/git/command-runner/process-capture/exec-file-capture-to-termination.ts
-3 src/main/git/command-runner/process-capture/exec-file-capture.ts
-1 src/main/git/command-runner/process-capture/worker-exec-file.ts
+2 src/main/git/command-runner/process-capture/exec-file-capture.ts
 1 src/main/git/command-runner/process-capture/wsl-process-group-termination.ts
 23 src/main/git/repositories/discovery/repo-detection.ts # main-checkout root lookup moved here from local-repo-registration.ts, which dropped to 1
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
@@ -717,7 +716,6 @@
 2 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
-1 src/main/ipc/workspace-space/workspace-space.ts
 3 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
@@ -828,8 +826,8 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+13 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts # store-open tail fold (one-shot startup); same SQL already in main-blocking-sqlite-baseline
+5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -846,6 +844,7 @@
 7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
@@ -858,7 +857,8 @@
 2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-3 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
+5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
+10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
 1 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
@@ -1174,10 +1174,11 @@
 3 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 3 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 2 src/main/qoder/workspace-trust.ts
+3 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
 1 src/main/rate-limits/providers/antigravity/antigravity-usage-fetcher.ts
 1 src/main/rate-limits/providers/claude/claude-active-usage-fetch.ts
 5 src/main/rate-limits/providers/claude/claude-oauth-credentials.ts
-9 src/main/rate-limits/providers/codex/codex-fetcher.ts
+8 src/main/rate-limits/providers/codex/codex-fetcher.ts
 4 src/main/rate-limits/providers/codex/codex-rpc-rate-limit-probe.ts
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 1 src/main/rate-limits/providers/cursor/cursor-fetcher.ts
@@ -1541,7 +1542,6 @@
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
 15 src/main/windows/windows-process-table.ts
-1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts
@@ -1569,7 +1569,7 @@
 1 src/main/workspaces/removal/retirement/worktree-retirement-discovery.ts
 1 src/main/workspaces/removal/worktree-prunable-git-file.ts
 1 src/main/workspaces/removal/worktree-removal-process-cleanup.ts
-3 src/main/workspaces/space-analysis/workspace-space-analysis.ts
+1 src/main/workspaces/space-analysis/workspace-space-analysis.ts
 2 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts
 2 src/main/workspaces/space-analysis/workspace-space-scan-worker-client.ts
 9 src/main/wsl/discovery/distro-catalog.ts

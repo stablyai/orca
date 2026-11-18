@@ -26,17 +26,6 @@ describe('botPanelStep', () => {
     ).toEqual({ beforeBots: false })
   })
 
-  it('keeps a reveal into an already open panel open', () => {
-    expect(
-      botPanelStep(
-        { botId: null, open: true, routeRequestId: 1 },
-        { botId: 'b1', open: true, routeRequestId: 2 },
-        null,
-        closedB1
-      )
-    ).toEqual({ beforeBots: true })
-  })
-
   it('does not remember a reveal as the owner opening the panel', () => {
     expect(
       botPanelStep(

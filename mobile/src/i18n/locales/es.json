@@ -169,11 +169,13 @@
       "invalidUrl": "Introduce una URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo del navegador",
       "forward": "Adelante",
       "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador"
+      "sendText": "Enviar texto al navegador",
+      "dialogTitleWithOrigin": "{{origin}} dice",
+      "dialogTitleNoOrigin": "Esta página dice",
+      "dialogAnswer": "Respuesta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -186,6 +188,9 @@
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
       "webView": "Mostrar vista de escritorio del sitio web"
+    },
+    "loadFailure": {
+      "retry": "Reintentar"
     }
   },
   "chat": {
@@ -219,7 +224,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta."
+      "estimated": "Estimado a partir de la última respuesta.",
+      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -688,7 +694,7 @@
       "confirm": "Rebobinar",
       "unsupported": "Este chat no puede volver a un mensaje anterior.",
       "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
-      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "busy": "Disponible cuando el chat esté inactivo",
       "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
       "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
       "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",

@@ -100,7 +100,10 @@ export function describeJournalReaderOperation(
     case 'database':
       return {
         operation: `database:${operation.operation.kind}`,
-        chat: 'sessionId' in operation.operation ? chatHash(operation.operation.sessionId) : null
+        chat:
+          'sessionId' in operation.operation && operation.operation.sessionId !== undefined
+            ? chatHash(operation.operation.sessionId)
+            : null
       }
     case 'fork-prepare':
       return { operation: operation.kind, chat: chatHash(operation.input.source.sessionId) }

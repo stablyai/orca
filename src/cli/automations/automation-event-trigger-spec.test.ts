@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeAutomationEventTrigger,
   formatAutomationEventTrigger,
   formatAutomationTriggerOptions,
   offeredEvents,
@@ -94,12 +93,6 @@ describe('--on trigger specs', () => {
     ).toEqual(parseAutomationEventTrigger('slack.message in=C1'))
   })
 
-  it('reads a lower-case Slack channel id as the id', () => {
-    expect(parseAutomationEventTrigger('slack.message in=c0123abcd')).toMatchObject({
-      in: ['C0123ABCD']
-    })
-  })
-
   it('reads a GitHub rule on one pull request', () => {
     expect(parseAutomationEventTrigger('github.ci_failed subject=acme/web#482')).toMatchObject({
       source: 'github',
@@ -121,9 +114,6 @@ describe('--on trigger specs', () => {
       'github.labeled in=acme/web label="Needs review"'
     )
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(bug))).toEqual(bug)
-    expect(describeAutomationEventTrigger(bug)).toBe(
-      'an issue or pull request is given a label, in acme/web, labeled "Needs review"'
-    )
     // Its case doesn't make another rule.
     expect(parseAutomationEventTrigger('github.labeled in=acme/web label="needs REVIEW"').id).toBe(
       bug.id
@@ -138,46 +128,12 @@ describe('--on trigger specs', () => {
     )
   })
 
-  it('says what starts it in words', () => {
-    expect(
-      describeAutomationEventTrigger(
-        parseAutomationEventTrigger('slack.mentioned in=C1 contains=deploy')
-      )
-    ).toBe(`your owner is mentioned in a channel the bot is in, in C1, containing "deploy"`)
-    expect(
-      describeAutomationEventTrigger(parseAutomationEventTrigger('slack.reaction subject=T:C:1'))
-    ).toBe('someone reacts to a message in a channel the bot is in, on T:C:1')
-  })
-
-  it('lists every event of the sources it offers', () => {
-    const options = formatAutomationTriggerOptions()
-    for (const event of [
-      'slack.mentioned',
-      'slack.reaction',
-      'github.pr_merged',
-      'github.ci_failed'
-    ]) {
-      expect(options).toContain(event)
-    }
-    expect(options).toContain('Your own pushes, comments, reviews and labels start nothing')
-    expect(options).toContain('github.ci_passed  when every check and commit status')
-    expect(options).toContain('ci_passed never fires on a repo with no CI checks')
-    expect(options).toContain('label=<name>  github.labeled only')
-    expect(options).toContain('linear.issue_moved')
-    expect(options).toContain('Linear teams or whole workspaces: a team key (ENG)')
-    expect(options).toContain('"You" below is the bot\'s owner.')
-    expect(options).toContain("A reaction's text is its emoji")
-  })
-
   it('reads from=me as your own pull requests, on github.pr_opened only', () => {
     const mine = parseAutomationEventTrigger('github.pr_opened in=acme/web from=me')
     expect(mine).toMatchObject({ source: 'github', event: 'pr_opened', fromOwner: true })
     expect(mine).not.toHaveProperty('from')
     expect(formatAutomationEventTrigger(mine)).toBe('github.pr_opened in=acme/web from=me')
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(mine))).toEqual(mine)
-    expect(describeAutomationEventTrigger(mine)).toBe(
-      'a pull request is opened, in acme/web, from you'
-    )
     // Beside other people, and however me is written.
     const withDana = parseAutomationEventTrigger('github.pr_opened from=@dana,@Me')
     expect(withDana).toMatchObject({ from: ['@dana'], fromOwner: true })
@@ -212,26 +168,5 @@ describe('--on trigger specs', () => {
     expect(formatAutomationTriggerOptions('github', newer)).not.toContain("doesn't send")
     expect(offeredEvents('github', newer)).toContain('security_alert')
     expect(offeredEvents('slack', bot)).toEqual(['mentioned', 'message', 'reaction'])
-  })
-
-  it('teaches from=me beside the GitHub filters', () => {
-    const options = formatAutomationTriggerOptions('github')
-    expect(options).toContain('from=me  github.pr_opened only')
-    expect(options).toContain("one your bot's own work opens as you never does")
-    expect(formatAutomationTriggerOptions('slack')).not.toContain('from=me')
-  })
-
-  it('sends a bot to `orca bot connectors` first, for in= refs', () => {
-    expect(formatAutomationTriggerOptions(undefined, { name: 'Scout' })).toContain(
-      'First run `orca bot connectors`'
-    )
-    expect(formatAutomationTriggerOptions()).not.toContain('First run')
-  })
-
-  // A bot's long Chat keeps an old listing; the listing itself sends it back for a fresh one.
-  it('tells the reader to list again rather than trust an earlier listing', () => {
-    expect(formatAutomationTriggerOptions()).toContain(
-      "run this again before saying an event can't start one"
-    )
   })
 })

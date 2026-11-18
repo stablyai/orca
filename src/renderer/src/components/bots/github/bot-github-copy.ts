@@ -69,27 +69,43 @@ export function gitHubInstallationLabel(installation: ConnectorGitHubInstallatio
     : installation.repositories.map((repository) => repository.fullName).join(', ')
 }
 
-/** A setup dialog's header: how to ask, and that the bot then works on its computer. */
-export function gitHubSetupIntro(
-  bot: Pick<Bot, 'name' | 'folder'>,
-  hostName: string | null
+/** Whose git login the bot pushes with, and from where. */
+export function gitHubPushesAs(bot: Pick<Bot, 'name'>, hostName: string | null): string {
+  return hostName
+    ? translate(
+        'bots.github.setup.pushesOnHost',
+        '{{name}} pushes code from {{host}} with its git login.',
+        {
+          name: bot.name,
+          host: hostName
+        }
+      )
+    : translate(
+        'bots.github.setup.pushesAsYou',
+        '{{name}} pushes code from this computer with your own git login.',
+        { name: bot.name }
+      )
+}
+
+/** What to type on an issue or pull request to ask the bot. */
+export function gitHubMention(bot: Pick<Bot, 'folder'>): string {
+  return `${GITHUB_BOT_MENTION} ${bot.folder}`
+}
+
+/** One line for the installs, e.g. "3 repositories in stablyai"; the full list is gitHubInstallationLabel. */
+export function gitHubInstallationsSummary(
+  installations: readonly ConnectorGitHubInstallation[]
 ): string {
-  if (hostName) {
-    return translate(
-      'bots.github.setupIntroOnHost',
-      'Mention <code>{{mention}} {{handle}} …</code> on an issue or pull request, and {{name}} starts working on {{host}}.',
-      {
-        mention: GITHUB_BOT_MENTION,
-        handle: bot.folder,
-        name: bot.name,
-        host: hostName,
-        ...HOW_TO_ASK_ESCAPED
-      }
-    )
+  const repositories = installations.flatMap((installation) => installation.repositories ?? [])
+  if (installations.length === 1 && (installations[0].repositories?.length ?? 0) <= 1) {
+    return gitHubInstallationLabel(installations[0])
   }
-  return translate(
-    'bots.github.setupIntro',
-    'Mention <code>{{mention}} {{handle}} …</code> on an issue or pull request, and {{name}} starts working on this computer.',
-    { mention: GITHUB_BOT_MENTION, handle: bot.folder, name: bot.name, ...HOW_TO_ASK_ESCAPED }
-  )
+  const accounts = installations.map((installation) => installation.accountLogin).join(', ')
+  return installations.some((installation) => installation.repositories === null)
+    ? translate('bots.github.repositoriesIn', 'Repositories in {{accounts}}', { accounts })
+    : translate('bots.github.repositoryCount', '{{count}} repositories in {{accounts}}', {
+        count: repositories.length,
+        accounts,
+        defaultValue_one: '{{count}} repository in {{accounts}}'
+      })
 }

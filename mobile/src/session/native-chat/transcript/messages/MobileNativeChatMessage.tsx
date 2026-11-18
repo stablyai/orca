@@ -47,7 +47,7 @@ import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-v
 import { useMobileNativeChatFullMessage } from '../message-content/MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { MobileNativeChatPacedProse } from '../message-content/MobileNativeChatPacedProse'
+import { MobileNativeChatAnswerProse } from '../message-content/MobileNativeChatAnswerProse'
 import { Prose, userProseText } from '../message-content/MobileNativeChatProse'
 import * as Marks from './MobileNativeChatUserMessageMarks'
 
@@ -346,14 +346,15 @@ function MobileNativeChatMessageImpl({
                   </MobileNativeChatUserMessageFold>
                 </>
               ) : (
-                <MobileNativeChatPacedProse
+                <MobileNativeChatAnswerProse
                   rowKey={message.id}
                   blocks={drawnProse}
                   growingBlock={growingBlock}
                   paced={message.role === 'assistant'}
+                  fontScale={fontScale}
                 >
                   {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
-                </MobileNativeChatPacedProse>
+                </MobileNativeChatAnswerProse>
               )}
               {isUser ? null : showFull}
             </>

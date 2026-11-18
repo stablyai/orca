@@ -3,8 +3,8 @@ import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../google/google-client-config'
 import { GOOGLE_SERVICE_CHOICES } from '../google/google-scopes'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
-/** The chat the command ran from, so the host can refuse owner-only changes made from a bot's chat. */
-const Caller = { callerSessionId: OptionalString }
+/** The bot run's token, so the host can refuse owner-only changes made from a bot; and its chat. */
+const Caller = { botToken: OptionalString, callerSessionId: OptionalString }
 
 const Email = z.string().trim().toLowerCase().email().max(320)
 
