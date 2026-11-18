@@ -27,7 +27,7 @@ const BRACKETED: TerminalModes = {
 
 async function pasteInto(accept: (text: string, index: number) => boolean): Promise<string[]> {
   const sent: string[] = []
-  const client = {} as RpcClient
+  const client = { getLastConnectedAt: () => 1 } as unknown as RpcClient
   const sendTerminalUserInput = vi.fn((_client: RpcClient, params: { text?: string }) => {
     const index = sent.push(params.text ?? '') - 1
     return Promise.resolve({

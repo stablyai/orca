@@ -6,8 +6,9 @@ import {
 } from '../../../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import {
   isTerminalInputTooLargeWithYield,
-  iterateTerminalInputChunks
+  splitTerminalInputChunks
 } from '../../../../../src/shared/terminal/input/terminal-input'
+import { epoch } from '../../input-delivery/mobile-terminal-input-owner'
 import { useCallback, useRef, type RefObject } from 'react'
 import { translate } from '../../../i18n/mobile-i18n'
 import { terminalInputSend } from '../../host-operations/mobile-terminal-operations'
@@ -77,8 +78,8 @@ export function useMobileTerminalPaste({
 }: UseMobileTerminalPasteOptions): () => Promise<void> {
   // Read images through native media handles: inline clipboard base64 can exceed the bridge reply cap.
   const clipboard = useClipboardReader()
-  // One paste's chunks finish before the next paste starts, like desktop's per-PTY paste transaction.
-  const pasteTurnRef = useRef<Promise<unknown>>(Promise.resolve())
+  // A paste spanning several sends owns the terminal's input until it ends, so another paste cannot land inside it.
+  const multiSendPasteRef = useRef(false)
   return useCallback(async () => {
     if (!client || !activeHandle || !canSend) {
       return
@@ -87,11 +88,11 @@ export function useMobileTerminalPaste({
     try {
       const text = await clipboard.readText()
       let payload: string | null = null
+      let bracketed = false
       if (text.length > 0) {
-        payload = buildMobileTerminalClipboardTextPayload(
-          text,
-          ptyModesRef.current.get(targetHandle)
-        )
+        const modes = ptyModesRef.current.get(targetHandle)
+        bracketed = modes?.bracketedPasteMode === true
+        payload = buildMobileTerminalClipboardTextPayload(text, modes)
       } else {
         const image = await clipboard.readImage()
         if (!image) {
@@ -166,24 +167,37 @@ export function useMobileTerminalPaste({
           (response) => terminalInputSend.interpret(response) === true,
           () => false
         )
-      // Send in order and stop at the first refusal, as desktop's remote paste does.
-      const sendChunks = async (): Promise<boolean> => {
-        let sentAny = false
-        for (const chunk of iterateTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)) {
+      const chunks = splitTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)
+      if (multiSendPasteRef.current) {
+        onError()
+        showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
+        return
+      }
+      multiSendPasteRef.current = chunks.length > 1
+      let delivered = true
+      try {
+        // Send in order and stop at the first refusal or reconnect, as desktop's remote paste does.
+        const pasteEpoch = epoch(currentClient)
+        for (const [index, chunk] of chunks.entries()) {
+          if (epoch(currentClient) !== pasteEpoch) {
+            delivered = false
+            break
+          }
           if (!(await sendChunk(chunk))) {
             // Close a bracketed paste whose start landed so the program leaves paste mode.
-            if (sentAny && payload.endsWith(BRACKETED_PASTE_END)) {
+            if (index > 0 && bracketed) {
               await sendChunk(BRACKETED_PASTE_END)
             }
-            return false
+            delivered = false
+            break
           }
-          sentAny = true
         }
-        return true
+      } finally {
+        if (chunks.length > 1) {
+          multiSendPasteRef.current = false
+        }
       }
-      const turn = pasteTurnRef.current.then(sendChunks)
-      pasteTurnRef.current = turn.catch(() => {})
-      if (!(await turn)) {
+      if (!delivered) {
         throw new Error('Terminal input was not accepted')
       }
       onSuccess()
@@ -191,7 +205,7 @@ export function useMobileTerminalPaste({
     } catch (e) {
       onError()
       const err = e as { name?: string; message?: string }
-      const isDisconnected = connState !== 'connected'
+      const isDisconnected = connStateRef.current !== 'connected'
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
         showToast(
