@@ -346,15 +346,14 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     }
   )
 
-  it.each<{ listed: string; projects: string[]; expected: string[] }>([
-    { listed: 'only the home folder', projects: [], expected: ['gone.jsonl'] },
-    { listed: 'a project holding the workspaces', projects: ['workspaces'], expected: [] }
-  ])('with $listed listed, deletes $expected', async ({ projects, expected }) => {
+  it('ignores the home folder as a project, while a real project still keeps its history', async () => {
     root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
     home.path = root
     const workspaces = join(root, 'workspaces')
-    mkdirSync(join(workspaces, 'app'), { recursive: true })
-    mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    for (const repo of ['app', 'api']) {
+      mkdirSync(join(workspaces, repo), { recursive: true })
+      mkdirSync(join(root, 'repos', repo), { recursive: true })
+    }
     const deleted: ChatHistoryTarget[] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
     const store = {
@@ -363,26 +362,26 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         nestWorkspaces: true,
         workspaceDirHistory: []
       }),
-      getRepos: () => [
-        {
-          id: 'app',
-          path: join(root, 'repos', 'app'),
-          displayName: 'app',
+      getRepos: () =>
+        ['app', 'api'].map((id) => ({
+          id,
+          path: join(root, 'repos', id),
+          displayName: id,
           badgeColor: '',
           addedAt: 0
-        }
-      ],
+        })),
       getAllWorktreeMeta: () => ({}),
-      getFolderWorkspaces: () =>
-        [root, ...projects.map((project) => join(root, project))].map((folderPath) => ({
-          folderPath
-        }))
+      // Fresh profiles list home as a project; `api`'s workspaces folder is a real folder project.
+      getFolderWorkspaces: () => [{ folderPath: root }, { folderPath: join(workspaces, 'api') }]
     } as unknown as RuntimeStore
 
     await sweepDeletedWorkspaceChatHistory({
       store,
       now: NOW,
-      listSessions: async () => [session('gone.jsonl', join(workspaces, 'app', 'gone'))],
+      listSessions: async () => [
+        session('app-gone.jsonl', join(workspaces, 'app', 'gone')),
+        session('api-gone.jsonl', join(workspaces, 'api', 'gone'))
+      ],
       isEnabled: () => true,
       deleteSessions: async (targets) => {
         deleted.push(...targets)
@@ -390,6 +389,6 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       }
     })
 
-    expect(deleted.map((target) => basename(target.filePath))).toEqual(expected)
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['app-gone.jsonl'])
   })
 })
