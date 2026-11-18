@@ -19,7 +19,7 @@ import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
-import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/delegated-mobile-device-contract'
+import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../methods/terminal/terminal-subscription-stream-id'
 import { isStructuredNativeChatDefaultFor } from '../methods/structured-sessions/structured-agent-session-policy'
 import {
@@ -187,6 +187,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     grants?: readonly RuntimeDeviceGrant[]
     // Desktop UI only; absent keeps headless offers valid until scanned.
     offerTtlMs?: number
+    // The paired client whose terminal asked; revoking it revokes the offer and whoever paired with it.
+    createdByDeviceId?: string
   }):
     | PairingOfferUnavailable
     | {
@@ -226,10 +228,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
-      const ttl = args.offerTtlMs
+      const options = { offerTtlMs: args.offerTtlMs, createdByDeviceId: args.createdByDeviceId }
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, ttl)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, ttl)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, options)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, options)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

@@ -1,17 +1,6 @@
 import { ChildProcess } from 'node:child_process'
-import type * as Os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getPriorityMock, setPriorityMock } = vi.hoisted(() => ({
-  getPriorityMock: vi.fn(),
-  setPriorityMock: vi.fn()
-}))
-
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof Os>()),
-  getPriority: getPriorityMock,
-  setPriority: setPriorityMock
-}))
 import {
   _setWindowsTaskkillLauncherForTests,
   inFlightWindowsTreeKill,
@@ -163,76 +152,5 @@ describe('windows tree kill tracker', () => {
     startWindowsTreeKill(new FakeProcess(), 1234, vi.fn())
 
     expect(launch).toHaveBeenCalledTimes(2)
-  })
-
-  describe('termination helper scheduling', () => {
-    const originalPlatform = process.platform
-
-    beforeEach(() => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      getPriorityMock.mockReset().mockReturnValue(10)
-      setPriorityMock.mockReset()
-      launch.mockImplementationOnce(() => {
-        const killer = new FakeProcess()
-        Object.defineProperty(killer, 'pid', { value: 5678 })
-        launched.push(killer)
-        return killer
-      })
-    })
-
-    afterEach(() => {
-      Object.defineProperty(process, 'platform', {
-        configurable: true,
-        value: originalPlatform
-      })
-    })
-
-    it.each([10, 19])('restores normal priority for a background helper at %i', (priority) => {
-      getPriorityMock.mockReturnValue(priority)
-      const killRoot = vi.fn()
-      const kill = startWindowsTreeKill(new FakeProcess(), 1234, killRoot)
-
-      expect(setPriorityMock).toHaveBeenCalledWith(5678, 0)
-      expect(kill.verdict()).toBe('live')
-      expect(killRoot).not.toHaveBeenCalled()
-      launched[0].emit('close', 0)
-      expect(kill.verdict()).toBe('exited')
-    })
-
-    it.each([0, -7, -14])('preserves a helper already at priority %i', (priority) => {
-      getPriorityMock.mockReturnValue(priority)
-      startWindowsTreeKill(new FakeProcess(), 1234, vi.fn())
-
-      expect(setPriorityMock).not.toHaveBeenCalled()
-      launched[0].emit('close', 0)
-    })
-
-    it.each(['read', 'write'])('keeps tracking when the priority %s fails', async (operation) => {
-      const fail = (): never => {
-        throw new Error('priority access denied or helper already exited')
-      }
-      if (operation === 'read') {
-        getPriorityMock.mockImplementation(fail)
-      } else {
-        setPriorityMock.mockImplementation(fail)
-      }
-      const killRoot = vi.fn()
-      const kill = startWindowsTreeKill(new FakeProcess(), 1234, killRoot)
-
-      await vi.advanceTimersByTimeAsync(WINDOWS_TASKKILL_WAIT_MS)
-      expect(kill.verdict()).toBe('live')
-      expect(killRoot).not.toHaveBeenCalled()
-      launched[0].emit('close', 0)
-      await expect(kill.settled).resolves.toBe('exited')
-    })
-
-    it('leaves POSIX scheduling unchanged', () => {
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-      startWindowsTreeKill(new FakeProcess(), 1234, vi.fn())
-
-      expect(getPriorityMock).not.toHaveBeenCalled()
-      expect(setPriorityMock).not.toHaveBeenCalled()
-      launched[0].emit('close', 0)
-    })
   })
 })

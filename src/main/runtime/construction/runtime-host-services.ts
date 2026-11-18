@@ -13,7 +13,10 @@ import {
   confirmRunTerminalShellAlone,
   readRunTerminalClientUse
 } from '../terminal/lifecycle/run-terminal-client-use'
-import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
 import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
 import type * as CompatibilityAuthority from '../orchestration/terminal-authority/orchestration-compatibility-authority'

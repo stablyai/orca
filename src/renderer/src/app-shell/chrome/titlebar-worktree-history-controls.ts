@@ -9,3 +9,12 @@ export function shouldShowWorktreeHistoryControls(activeView: UISlice['activeVie
     activeView === 'skills'
   )
 }
+
+/** Back/forward act on the view behind; not while Bot templates is open over it. */
+export function canNavigateWorktreeHistory(
+  state: Pick<UISlice, 'activeView' | 'activeModal'>
+): boolean {
+  return (
+    state.activeModal !== 'bot-templates' && shouldShowWorktreeHistoryControls(state.activeView)
+  )
+}

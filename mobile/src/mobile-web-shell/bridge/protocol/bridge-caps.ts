@@ -1,4 +1,4 @@
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../src/shared/mobile-bridge-frame-bytes'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 
 // Bound raw bytes before JSON.parse. Walk page-to-shell frames for depth/node limits, but not desktop replies: ordinary listings may contain thousands of rows.
 // Shell-to-page traffic retains frame/reply byte ceilings; share these predicates so sender and receiver bounds cannot drift.

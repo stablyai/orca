@@ -5,7 +5,7 @@ import {
   getWorktreeExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'

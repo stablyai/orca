@@ -5,7 +5,7 @@ import {
   setPRAutoRefreshCadenceForHost,
   subscribePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 
 // Why no store or RPC imports here: store slice code reads these; the reads and host-contact
 // subscriptions that feed them live in remote-host-pr-auto-refresh-cadence-sync.ts.

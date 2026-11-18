@@ -1,17 +1,17 @@
-import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../../src/main/runtime/construction/test-context/runtime-test-module-registration.spec'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setRuntimeBrowserCommandsFactory } from '../../../src/main/runtime/browser/installation/runtime-browser-commands-factory'
 import { RuntimeBrowserCommands } from '../../../src/main/runtime/browser/commands/browser-commands'
 import { withOpenedServeBrowserTab } from '../../../src/main/runtime/browser/headless/serve-browser-tab-layout'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { TEST_WORKTREE_ID as WT } from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_ID as WT } from '../../../src/main/runtime/construction/test-context/orca-runtime-test-fixtures.spec'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { electronMocks } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
-import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
+import { getDefaultWorkspaceSession } from '../../../src/shared/orca-profiles/constants'
 
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)
 
@@ -40,7 +40,8 @@ describe('legacy host navigation through inventory reconstruction', () => {
     setSession(saved)
     electronMocks.webContents.fromId.mockReturnValue({
       isDestroyed: () => false,
-      isLoading: () => false
+      isLoading: () => false,
+      isLoadingMainFrame: () => false
     })
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(async () => ({ browserPageId: 'unused' })),

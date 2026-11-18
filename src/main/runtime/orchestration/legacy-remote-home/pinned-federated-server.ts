@@ -4,7 +4,7 @@ import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { RuntimeEnvironmentStoreError } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 
 export async function resolvePinnedFederatedServer(
-  runtime: WorkerTerminalReleaseRuntime,
+  runtime: Pick<WorkerTerminalReleaseRuntime, 'resolveOrchestrationWorkerServer'>,
   federated: FederatedDispatchRow
 ) {
   let server

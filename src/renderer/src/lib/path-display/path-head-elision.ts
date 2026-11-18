@@ -1,5 +1,5 @@
 import type { MatchRange } from '../../../../shared/palette-match/normalized-text'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 
 export type PathHeadElisionSplit = {
   head: string

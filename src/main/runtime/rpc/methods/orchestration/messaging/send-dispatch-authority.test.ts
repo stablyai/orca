@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcContext } from '../../../core'
+import { RpcDispatcher } from '../../../dispatcher'
+import { ORCHESTRATION_METHODS } from '../orchestration'
+import { readMutationReplayNudge } from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -7,6 +12,7 @@ import { openDecisionGateFromMessage } from '../../../../orchestration/coordinat
 import { applyEscalationToDispatch } from '../../../../orchestration/coordinator/escalation/coordinator-escalation-triage'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 
 describe('orchestration.send Dispatch authority', () => {
   const harness = createOrchestrationRpcHarness()
@@ -30,6 +36,7 @@ describe('orchestration.send Dispatch authority', () => {
     'rejects cross-Task escalation with legacy authority=%s',
     async (legacyAuthority) => {
       setup()
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived')
       const attackerTask = db.createTask({ spec: 'attacker assignment' })
       const attacker = createRootDispatch(
         db,
@@ -61,6 +68,8 @@ describe('orchestration.send Dispatch authority', () => {
       expect(db.getTask(victimTask.id)?.status).toBe('dispatched')
       expect(db.getDispatchContextById(attacker.id)?.status).toBe('dispatched')
       expect(db.getDispatchContextById(victim.id)?.status).toBe('dispatched')
+      expect(db.getUndeliveredUnreadMailboxHandles()).toHaveLength(1)
+      expect(notify).toHaveBeenCalledOnce()
     }
   )
 
@@ -84,6 +93,83 @@ describe('orchestration.send Dispatch authority', () => {
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
   })
+
+  it("rejects a caller claiming a paired server's relayed worker_done", async () => {
+    setup()
+    const task = db.createTask({ spec: 'remote work' })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {},
+      federation: {
+        environmentId: 'environment-worker',
+        environmentName: 'worker',
+        peerFingerprint: 'peer-worker',
+        protocolVersion: 3
+      }
+    })
+
+    const result = await send({
+      from: `dispatch:${dispatch.id}`,
+      type: 'worker_done',
+      subject: 'Spoof relayed report',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'rejected', code: 'sender_not_assignee' }
+    })
+    const messageId = z.object({ message: z.object({ id: z.string() }) }).parse(result).message.id
+    const stored = db.getMessageById(messageId)
+    expect(stored).toBeDefined()
+    // Mail delivery rereads it; the refusal must outlast the relay sender's exemption there.
+    expect(stored && reconcileLifecycleMessage(db, stored)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+  })
+
+  it.each(['escalation', 'decision_gate'] as const)(
+    'keeps a refused %s and its idempotent retry out of the recipient mailbox',
+    async (type) => {
+      setup()
+      const notify = vi.spyOn(runtime, 'notifyMessageArrived')
+      const storeReceipt = vi.spyOn(db, 'completeMutationReceipt')
+      const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+      const request = {
+        id: 'rpc_refused_1',
+        authToken: 'test-token',
+        method: 'orchestration.send',
+        params: { from: 'term_outside', to: 'term_coord', type, subject: 'probe' },
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+        orchestrationRequestId: `retry_refused_${type}`
+      }
+
+      await dispatcher.dispatch(request)
+      const retried = await dispatcher.dispatch({ ...request, id: 'rpc_refused_2' })
+
+      expect(retried).toMatchObject({
+        ok: true,
+        result: {
+          lifecycle: {
+            action: 'rejected',
+            code: 'sender_not_assignee',
+            reason: expect.stringContaining('Send --type status instead')
+          },
+          mutation: { replayed: true }
+        }
+      })
+      expect(db.getInbox(100)).toEqual([expect.objectContaining({ read: 1, delivered_at: null })])
+      expect(db.getUndeliveredUnreadMailboxHandles()).toEqual([])
+      expect(notify).not.toHaveBeenCalled()
+      // Any stored receipt, including the handler's pre-commit one, must not replay a nudge to the recipient.
+      expect(storeReceipt).toHaveBeenCalled()
+      for (const [stored] of storeReceipt.mock.calls) {
+        expect(readMutationReplayNudge(JSON.parse(stored.receipt))).toBeUndefined()
+      }
+    }
+  )
 
   it.each(['escalation', 'decision_gate'] as const)(
     'accepts a matching legacy sender with a newly observed pane for %s',

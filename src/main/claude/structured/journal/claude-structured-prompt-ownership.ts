@@ -4,7 +4,7 @@ import {
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
-import { answerClaudePrompt, cancelClaudeTurn } from '../claude-structured-control-actions'
+import { answerClaudePrompt, cancelClaudeTurn } from '../turns/claude-structured-control-actions'
 import { leaveClaudePlanModeOnApproval } from '../permissions/claude-plan-approval-mode'
 import type { ClaudeLateDispatchSettlement } from '../turns/claude-replay-turn-resolution'
 import { buildClaudePromptReply, claudePromptDismissal } from './claude-structured-prompt-replies'

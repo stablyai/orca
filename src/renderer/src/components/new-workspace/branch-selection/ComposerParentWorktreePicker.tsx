@@ -14,7 +14,7 @@ import {
   getIndexedWorktreeById,
   getIndexedWorktreeMap
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '../../../../../shared/worktree/display-name-order'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '@/components/sidebar/workspace-card/identity/worktree-branch-display'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
@@ -28,14 +28,14 @@ import {
   PICKER_ROW_OVERSCAN
 } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-picker-placement'
 import {
-  getLineageChildrenByParentId,
+  getLineageChildrenByParentIdentity,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
+} from '../../../../../shared/folder-workspace-child-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
-} from '../../../../../shared/resolved-worktree-lineage'
+} from '../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorkspaceLineage,
@@ -45,7 +45,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
@@ -187,7 +187,7 @@ function getFolderWorkspaceSubtreeIds(
   }
 
   const subtreeIds = new Set(rootIds)
-  for (const children of getLineageChildrenByParentId(
+  for (const children of getLineageChildrenByParentIdentity(
     worktreeLineageById,
     worktreeById,
     rootIds

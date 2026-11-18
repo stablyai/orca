@@ -1,5 +1,5 @@
 import { HelpCircle, Loader2, Lock, LockOpen } from 'lucide-react'
-import { useNow } from '../../../../hooks/use-now'
+import { useNow } from '../../../../lib/window-activity/use-now'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'

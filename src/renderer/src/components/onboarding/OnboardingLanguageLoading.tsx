@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 export function OnboardingLanguageLoading(): React.JSX.Element {
   const t = useTranslate()

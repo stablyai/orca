@@ -4,7 +4,7 @@ import { Maximize2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
+import { readableMermaidFlowchartSvg } from '../../../../src/shared/document-preview/mermaid-flowchart-contrast'
 import {
   readSvgIntrinsicSize,
   svgMarkupDataUri

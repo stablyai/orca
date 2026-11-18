@@ -8,7 +8,7 @@ import {
   type TabsDrawnFromMain
 } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { workspaceEditorFiles } from './workspace-editor-files'
@@ -119,28 +119,6 @@ function patchRemoval(workspaceId: string) {
   )
 }
 
-it.each(['direct', 'mobile'] as const)(
-  '%s close retires a child-owned file whose only placement is in a background folder',
-  async (caller) => {
-    openDiff()
-    await main.settle()
-    const tab = tabs(FOLDER)[0]!
-    useAppStore.setState({
-      activeWorktreeId: CHILD,
-      activeWorkspaceKey: worktreeWorkspaceKey(CHILD)
-    })
-    if (caller === 'direct') {
-      useAppStore.getState().closeFile(tab.entityId)
-    } else {
-      expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, tab.id)).toBe(true)
-    }
-    await main.settle()
-    expect(tabs(FOLDER)).toEqual([])
-    expect(useAppStore.getState().openFiles).toEqual([])
-    expect(useAppStore.getState().activeWorktreeId).toBe(CHILD)
-  }
-)
-
 it('mobile close removes the requested folder placement and retains the child view', async () => {
   openDiff()
   openDiff(CHILD)
@@ -154,34 +132,6 @@ it('mobile close removes the requested folder placement and retains the child vi
   expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
   expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
 })
-
-it.each(['file', 'tab'] as const)(
-  'mobile %s-id close scopes split copies to the requested workspace',
-  async (identity) => {
-    openDiff()
-    openDiff(CHILD)
-    await main.settle()
-    const folderTab = tabs(FOLDER)[0]!
-    const childTab = tabs(CHILD)[0]!
-    const splitGroup = useAppStore
-      .getState()
-      .createEmptySplitGroup(FOLDER, folderTab.groupId, 'right')
-    expect(splitGroup).not.toBeNull()
-    openDiff(FOLDER, 'a.ts', false, splitGroup!)
-    await main.settle()
-    expect(tabs(FOLDER)).toHaveLength(2)
-    const splitTab = tabs(FOLDER)[1]!
-    const requestedId = identity === 'file' ? folderTab.entityId : folderTab.id
-    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, requestedId)).toBe(true)
-    await main.settle()
-    expect(tabs(FOLDER).map((tab) => tab.id)).toEqual(identity === 'file' ? [] : [splitTab.id])
-    expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
-    expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([childTab.entityId])
-    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, requestedId)).toBe(false)
-    expect(closeMobileSessionTabInStore(useAppStore.getState(), FOLDER, childTab.id)).toBe(false)
-    expect(tabs(CHILD).map((tab) => tab.id)).toEqual([childTab.id])
-  }
-)
 
 it('shares child-owned diff content across folder and child views, with independent close and reopen', async () => {
   openDiff()

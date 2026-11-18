@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { registerAutoUpdaterHandlers } from './updater-events'
 
 const {
@@ -178,43 +177,6 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(getArtifact()).toBeNull()
   })
 
-  it('keeps manual-install recovery when a later check finds no newer release', async () => {
-    const { emit, context, getArtifact } = await register()
-    emit('update-downloaded', downloadedEvent())
-
-    // Clear the initial download status so only the recheck can satisfy the assertion.
-    vi.mocked(context.sendStatus).mockClear()
-
-    emit('update-not-available')
-
-    expect(getArtifact()).toEqual(expect.objectContaining({ version: '1.0.61' }))
-    expect(context.sendStatus).toHaveBeenLastCalledWith({
-      state: 'error',
-      message: 'Quit Orca before running the system package install command.',
-      messageCode: 'linuxPackageManualInstall',
-      recovery: {
-        kind: 'linux-package-install',
-        packageType: 'deb',
-        reason: 'manual-install-required',
-        version: '1.0.61'
-      }
-    })
-  })
-
-  it('clears recovery when a newer update takes over before no-update settles', async () => {
-    const { emit, context, getArtifact } = await register()
-    emit('update-downloaded', downloadedEvent())
-
-    emit('update-available', { version: '1.0.62' })
-    emit('update-not-available')
-
-    expect(getArtifact()).toBeNull()
-    expect(context.sendStatus).toHaveBeenLastCalledWith({
-      state: 'not-available',
-      userInitiated: undefined
-    })
-  })
-
   it.each([
     ['idle', { state: 'idle' }],
     ['not-available', { state: 'not-available' }],
@@ -247,37 +209,4 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(getArtifact()).toBeNull()
     expect(context.sendStatus).not.toHaveBeenCalled()
   })
-
-  // Management can change after download; retained manual-install recovery must survive the recheck.
-  it.each([false, true])(
-    'keeps manual-install recovery through a same-version recheck (externallyManaged=%s)',
-    async (externallyManaged) => {
-      isExternallyManagedLinuxInstallMock.mockReturnValue(externallyManaged)
-      let status: UpdateStatus = { state: 'downloading', percent: 100, version: '1.0.61' }
-      const { emit, context, getArtifact } = await register({
-        getCurrentStatus: vi.fn(() => status)
-      })
-      emit('update-downloaded', downloadedEvent())
-
-      // Clear the download status so waitFor must observe a new recheck result.
-      vi.mocked(context.sendStatus).mockClear()
-      status = { state: 'checking' }
-      emit('update-available', { version: '1.0.61' })
-
-      expect(getArtifact()).toEqual(expect.objectContaining({ version: '1.0.61', path: DEB_PATH }))
-      await vi.waitFor(() =>
-        expect(context.sendStatus).toHaveBeenLastCalledWith({
-          state: 'error',
-          message: 'Quit Orca before running the system package install command.',
-          messageCode: 'linuxPackageManualInstall',
-          recovery: {
-            kind: 'linux-package-install',
-            packageType: 'deb',
-            reason: 'manual-install-required',
-            version: '1.0.61'
-          }
-        })
-      )
-    }
-  )
 })

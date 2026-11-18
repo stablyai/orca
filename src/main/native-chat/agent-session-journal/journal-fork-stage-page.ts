@@ -24,6 +24,7 @@ import {
 import { journalDomainStopNote } from './journal-domain-stop-notes'
 
 import type { Stage } from './journal-fork-stage-state'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export function applyJournalForkStagePage(
   db: Database.Database,
@@ -108,7 +109,8 @@ export function applyJournalForkStagePage(
       )
       .get(stage.target.sessionId, stage.epoch, itemId)
     const previous: AgentJournalRenderItem | undefined =
-      stored && JSON.parse(String(stored.payload_json))
+      stored &&
+      readJournalStoredItem(db, [stage.target.sessionId, stage.epoch], stored.payload_json)
     const scope = JournalDerivedTurnScope.restore(next.derived)
     const rendered: AgentJournalRenderItem = {
       itemId,
@@ -135,7 +137,9 @@ export function applyJournalForkStagePage(
           'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
         )
         .get(stageTarget.sessionId, stageTarget.epoch, id)
-      return saved ? JSON.parse(String(saved.payload_json)) : undefined
+      return saved
+        ? readJournalStoredItem(db, [stageTarget.sessionId, stageTarget.epoch], saved.payload_json)
+        : undefined
     })
     const names = insertJournalDomainItemRows(
       db,

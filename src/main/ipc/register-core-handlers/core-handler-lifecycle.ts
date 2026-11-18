@@ -1,3 +1,4 @@
+import type { OrcaAccountService } from '../../orca-profiles/orca-account-service'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -23,9 +24,7 @@ export type CoreHandlerLifecycleOptions = {
   deferHostInitialization?: boolean
   hostInitialization?: Promise<void>
   onBeforeRelaunch?: () => void | Promise<void>
-  onOrcaProfileAuthMutation?: () => void
-  onBeforeOrcaProfileSignOut?: () => void
-  onAfterOrcaProfileSignOut?: () => void
+  orcaAccount?: OrcaAccountService
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs

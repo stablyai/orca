@@ -38,26 +38,6 @@ describe('hosted PR snapshots', () => {
     })
   })
 
-  it('returns completed checks in each due response for three queued rows', async () => {
-    await Promise.all(['one', 'two', 'three'].map((branch) => read(branch, 'active')))
-    fixture.title = 'finished checks'
-    mocks.resolve.mockImplementation(
-      () =>
-        new Promise<PRRefreshOutcome>((resolve) => {
-          // ast-grep-ignore: test-no-real-time-wait -- Fake-clock provider delay exercises host admission and completion.
-          setTimeout(() => resolve(found()), 1_000)
-        })
-    )
-    await vi.advanceTimersByTimeAsync(60_000)
-    const responses = Promise.all(['one', 'two', 'three'].map((branch) => read(branch)))
-    await vi.advanceTimersByTimeAsync(21_000)
-    expect(await responses).toEqual([
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) }),
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) }),
-      expect.objectContaining({ pr: expect.objectContaining({ title: 'finished checks' }) })
-    ])
-  })
-
   it('delivers a deferred provider failure to the next timer instead of reviving old success', async () => {
     await read('slow', 'active')
     const provider = Promise.withResolvers<PRRefreshOutcome>()

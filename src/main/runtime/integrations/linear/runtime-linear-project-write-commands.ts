@@ -126,8 +126,9 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
   ): Promise<LinearProjectSummary[]> {
     signal?.throwIfAborted()
     try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true, signal))
-        .items
+      return (
+        await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true, { signal })
+      ).items
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }

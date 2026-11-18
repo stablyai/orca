@@ -1,7 +1,7 @@
 import {
   pruneRetiredPtyIncarnations,
   type RetiredPtyIncarnation
-} from '../../../shared/retired-pty-incarnations'
+} from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import type { Session } from '../sessions/session'
 import { sessionExitCauseLogFields } from '../observability/session-exit-log-fields'
 

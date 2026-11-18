@@ -5,15 +5,15 @@ import { resolveWorktreeExecutionHost } from '../../../../../shared/execution-ho
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import { getFolderWorkspaceConnectionId } from './folder-workspace-connection'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
@@ -21,7 +21,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 
 type ConnectionOwnerState = Pick<

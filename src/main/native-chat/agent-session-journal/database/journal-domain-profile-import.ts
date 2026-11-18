@@ -1,4 +1,5 @@
 import { JOURNAL_DOMAIN_PROFILE_TABLES } from './journal-domain-profile-columns'
+import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
 import type Database from '../../../sqlite/sync-database'
 import {
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
@@ -36,6 +37,15 @@ export function importJournalDomainProfile(
   } finally {
     destination.pragma('foreign_keys = ON')
   }
+  // The baseline later launches compare with, so only chats an older Orca writes move.
+  runJournalTransaction(destination, () => {
+    for (const { session_id: id } of source
+      .prepare('SELECT session_id FROM agent_session_records')
+      .all()) {
+      const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
+      recordJournalLegacyChatRevision(destination, String(id), revision)
+    }
+  })
   if (source.prepare("SELECT 1 FROM sqlite_schema WHERE name='sqlite_sequence'").get()) {
     const highWater = source
       .prepare("SELECT seq FROM main.sqlite_sequence WHERE name='pr_check_events'")

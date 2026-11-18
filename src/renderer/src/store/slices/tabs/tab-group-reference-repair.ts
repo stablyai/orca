@@ -1,4 +1,8 @@
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 function collectLayoutGroupIds(node: TabGroupLayoutNode, groupIds: Set<string>): void {

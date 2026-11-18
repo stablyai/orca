@@ -8,7 +8,11 @@ import {
   commitServeSupervisorParkOnQuit,
   releaseServeSupervisorPark
 } from '../../updater/lifecycle/serve-supervisor-install-park'
-import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import {
+  installedElectronCandidates,
+  resolveOrcadBrowserProvider,
+  type OrcadBrowserProvider
+} from './orcad-browser-provider'
 
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
@@ -71,5 +75,14 @@ describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', (
         expect.objectContaining({ program: executable })
       )
     )
+  })
+})
+
+describe('installed Electron lookup on Linux', () => {
+  it('includes the AppImage serve runs from', () => {
+    const appImage = '/home/me/Applications/orca-linux.AppImage'
+    expect(
+      installedElectronCandidates('linux', '/home/me', { ORCA_SERVE_APPIMAGE: appImage })
+    ).toContain(appImage)
   })
 })

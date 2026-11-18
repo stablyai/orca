@@ -182,6 +182,36 @@ describe('commands about a worker a paired server owns', () => {
     }
   }
 
+  it("sends a new-child there with this caller's workspace as its parent", async () => {
+    const parent = {
+      installationId: 'install_a',
+      workspaceKey: 'worktree:repo_a::/a/home',
+      instanceId: 'instance_a'
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only the caller terminal's workspace.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({ worktreeId: 'repo_a::/a/home' } as never)
+    const resolveParent = vi
+      .spyOn(runtime, 'resolveCallerParentForAnotherStore')
+      .mockResolvedValue({ parent, source: 'env-workspace' })
+    answers['orchestration.workerStart'] = [started()]
+
+    const response = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      spec: 'build it',
+      worktree: 'new-child',
+      repo: 'id:repo_b'
+    })
+
+    expect(response.ok).toBe(true)
+    expect(resolveParent.mock.calls[0]?.[0]).toEqual({ envParentWorkspace: 'id:repo_a::/a/home' })
+    expect(sent.find((s) => s.method === 'orchestration.workerStart')?.params).toMatchObject({
+      worktree: 'new-child',
+      repo: 'id:repo_b',
+      crossStoreParent: parent
+    })
+  })
+
   it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [
       { error: 'invalid_argument', data: { effectsApplied: false } }
@@ -278,6 +308,27 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(response.ok ? undefined : response.error.code).toBe('run_not_found')
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
+  })
+
+  it("records the agent the server's start receipt names in its launch", async () => {
+    answers['orchestration.workerStart'] = [
+      {
+        result: {
+          dispatchId: 'ctx_b1',
+          run: { id: 'run_on_b' },
+          state: 'ready',
+          launch: { requested: { agent: null }, effective: { agent: 'codex' } }
+        }
+      }
+    ]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'build it', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ agent: 'codex' })
   })
 
   it("answers a remote worker's question only from its Run's coordinator, as a local one is", async () => {

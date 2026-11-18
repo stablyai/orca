@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { BRIDGE_APP_INACTIVE_FRAME } from '../page-lifecycle/bridge-app-inactive'
 import { salvagedOptional } from '../../../../../src/shared/validation/zod-salvage'
-import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/ui-locale'
+import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/i18n/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'
 import { isRpcResponse } from '../../../transport/rpc/rpc-response-shape'
@@ -137,7 +137,8 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
     // Pages that read `connectionPath` frames say so; older pages never receive one.
     connectionPathFrames: z.literal(true).optional().catch(undefined),
     // Pages that read `appInactive` frames say so; older pages never receive one.
-    appInactiveFrames: z.literal(true).optional().catch(undefined)
+    appInactiveFrames: z.literal(true).optional().catch(undefined),
+    botItemLinks: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,

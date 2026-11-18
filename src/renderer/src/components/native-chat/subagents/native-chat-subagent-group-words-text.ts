@@ -6,7 +6,7 @@ import {
   type NativeChatSubagentGroupCopyId,
   type NativeChatSubagentGroupSay
 } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
-import type { CopyValues } from '../../../../../shared/counted-copy-english'
+import type { CopyValues } from '../../../../../shared/i18n/counted-copy-english'
 import type { NativeChatSubagentState } from '../../../../../shared/native-chat/native-chat-types'
 
 const PIECES: Record<NativeChatSubagentGroupCopyId, (values?: CopyValues) => string> = {
