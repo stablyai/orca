@@ -23,14 +23,17 @@ export function useZotzWorktreePr(
   repo: Repo | undefined
 ): ZotzWorktreePr | null {
   const t = useTranslate()
-  const settings = useAppStore((s) => s.settings)
-  const keys = worktree ? getWorktreeReviewCacheKeys(worktree, repo, settings) : null
-  const hostedReviewEntry = useAppStore((s) =>
-    keys?.hostedReviewCacheKey ? s.hostedReviewCache[keys.hostedReviewCacheKey] : undefined
-  )
-  const prCacheEntry = useAppStore((s) =>
-    keys?.prCacheKey ? s.prCache?.[keys.prCacheKey] : undefined
-  )
+  // Keys depend on host routing state, so derive them inside the subscription, not during render.
+  const hostedReviewEntry = useAppStore((s) => {
+    const key = worktree
+      ? getWorktreeReviewCacheKeys(worktree, repo, s.settings).hostedReviewCacheKey
+      : ''
+    return key ? s.hostedReviewCache[key] : undefined
+  })
+  const prCacheEntry = useAppStore((s) => {
+    const key = worktree ? getWorktreeReviewCacheKeys(worktree, repo, s.settings).prCacheKey : ''
+    return key ? s.prCache?.[key] : undefined
+  })
   if (!worktree) {
     return null
   }

@@ -9,7 +9,7 @@ import {
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -93,6 +93,28 @@ export function ZotzPrStatusStrip({
   return <StripWithPr worktreeId={worktreeId} repo={repo} found={found} />
 }
 
+/** Merges with the repo's default method and reports the result as a toast. */
+async function mergeZotzPr(repo: Repo, found: ZotzWorktreePr, t: Translate): Promise<void> {
+  const { pr, githubPR } = found
+  try {
+    const result = await mergeGitHubHostedReview({
+      repo,
+      prNumber: pr.number,
+      method: resolveGitHubPRMergeMethods(githubPR?.mergeMethodSettings).defaultMethod,
+      prRepo: githubPR?.prRepo ?? null
+    })
+    if (result.ok) {
+      toast.success(
+        t('zotz.pr.mergedToast', 'Pull request #{{number}} merged', { number: pr.number })
+      )
+    } else {
+      toast.error(t('zotz.pr.mergeFailed', 'Could not merge the pull request'))
+    }
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error))
+  }
+}
+
 /** The strip once there is a PR: live check counts, the checks list on demand, and Merge. */
 function StripWithPr({
   worktreeId,
@@ -106,7 +128,7 @@ function StripWithPr({
   const t = useTranslate()
   const [busy, setBusy] = useState(false)
   const monitor = useZotzPrChecksMonitor(worktreeId, zotzReviewRef(found))
-  const { pr, githubPR } = found
+  const { pr } = found
   const { counts } = monitor
   const status = zotzLivePrStatus(found.status, {
     loaded: monitor.checks !== null,
@@ -119,27 +141,9 @@ function StripWithPr({
   const open = openOverride ?? counts.failed > 0
   const tone = zotzPrTone(status)
   const canMerge = status === 'ready' && pr.provider === 'github'
-  const merge = async (): Promise<void> => {
+  const merge = (): void => {
     setBusy(true)
-    try {
-      const result = await mergeGitHubHostedReview({
-        repo,
-        prNumber: pr.number,
-        method: resolveGitHubPRMergeMethods(githubPR?.mergeMethodSettings).defaultMethod,
-        prRepo: githubPR?.prRepo ?? null
-      })
-      if (result.ok) {
-        toast.success(
-          t('zotz.pr.mergedToast', 'Pull request #{{number}} merged', { number: pr.number })
-        )
-      } else {
-        toast.error(t('zotz.pr.mergeFailed', 'Could not merge the pull request'))
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
+    void mergeZotzPr(repo, found, t).finally(() => setBusy(false))
   }
   return (
     <div
@@ -177,7 +181,7 @@ function StripWithPr({
           )}
         </button>
         {canMerge ? (
-          <Button type="button" size="xs" disabled={busy} onClick={() => void merge()}>
+          <Button type="button" size="xs" disabled={busy} onClick={merge}>
             {busy ? <LoadingSpinner className="size-3" /> : <GitMerge className="size-3" />}
             {t('zotz.pr.merge', 'Merge')}
           </Button>
