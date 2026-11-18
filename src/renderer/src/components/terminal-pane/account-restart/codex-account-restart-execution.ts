@@ -5,6 +5,7 @@ import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abor
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
+  ACCOUNT_RESTART_OWNER_UNVERIFIED,
   readAccountRestartReceipt,
   type AccountRestartCondition
 } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
@@ -56,7 +57,7 @@ export function continueCodexAccountRestart(
     state.updateCodexAccountRestart(token, {
       resultPtyId: result.id,
       phase: 'unresolved',
-      error: 'terminal_pane_owner_unverified'
+      error: ACCOUNT_RESTART_OWNER_UNVERIFIED
     })
     return false
   }
