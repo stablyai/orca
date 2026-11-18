@@ -103,7 +103,7 @@ describe('structured status canonical owner re-entry', () => {
     const events: AgentSessionStatusEvent[] = []
     feed.subscribe({ id: 'late', emit: (event) => events.push(event) })
 
-    expect(events.filter((event) => event.type === 'snapshot').at(-1)).toMatchObject({
+    expect(events.findLast((event) => event.type === 'snapshot')).toMatchObject({
       sessions: []
     })
     expect(feed.readPublished(SESSION)).toBeUndefined()
