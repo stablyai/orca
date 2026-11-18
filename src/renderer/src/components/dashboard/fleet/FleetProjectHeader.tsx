@@ -35,16 +35,14 @@ export function FleetProjectHeader({
           <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
             {project.repoName}
           </span>
-          {project.hostLabel ? (
-            <span className="flex min-w-0 max-w-1/3 shrink items-center gap-1 text-2xs text-muted-foreground">
-              <DashboardHostBadge
-                hostKind={project.hostKind}
-                executionHostId={project.executionHostId}
-                hostLabel={project.hostLabel}
-              />
-              <span className="truncate">{project.hostLabel}</span>
-            </span>
-          ) : null}
+          <span className="flex min-w-0 max-w-1/3 shrink items-center gap-1 text-2xs text-muted-foreground empty:hidden">
+            <DashboardHostBadge
+              hostKind={project.hostKind}
+              executionHostId={project.executionHostId}
+              hostLabel={project.hostLabel}
+            />
+            {project.hostLabel ? <span className="truncate">{project.hostLabel}</span> : null}
+          </span>
           <FleetAgentCount count={project.agents} />
           <span className="ml-auto shrink-0">
             <FleetBucketCountChips counts={project.counts} />
