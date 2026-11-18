@@ -19,6 +19,8 @@ export type ClaudePromptTurns = {
   retiredSessionIds: string[]
   /** Admitted live turn ids, oldest first. Append-only, so no late or replayed event moves a seen turn. */
   turnIds: string[]
+  /** Turns only replays after live events reported: older than the live ones, recognized but never current. */
+  replayedTurnIds: string[]
   /** A live event arrived; until then only spool replays, in recorded order, fill the turn ids. */
   live: boolean
   /** The newest turn's UserPromptSubmit arrived, so whether a person or a task wakeup started it is known. */
@@ -71,11 +73,19 @@ function orderClaudeTurn(
         ...(known.sessionId !== undefined ? [known.sessionId] : [])
       ].slice(-RETIRED_SESSIONS_PER_PANE),
       turnIds: [],
+      replayedTurnIds: [],
       live: false,
       promptArrived: false
     }
   } else if (!known) {
-    turns = { sessionId, retiredSessionIds: [], turnIds: [], live: false, promptArrived: false }
+    turns = {
+      sessionId,
+      retiredSessionIds: [],
+      turnIds: [],
+      replayedTurnIds: [],
+      live: false,
+      promptArrived: false
+    }
   }
   if (!turns) {
     return passThrough
@@ -89,7 +99,7 @@ function orderClaudeTurn(
   if (promptId === undefined) {
     return passThrough
   }
-  if (turns.turnIds.includes(promptId)) {
+  if (turns.turnIds.includes(promptId) || turns.replayedTurnIds.includes(promptId)) {
     if (isPrompt && promptId === current) {
       turns.promptArrived = true
     }
@@ -101,9 +111,7 @@ function orderClaudeTurn(
   }
   if (isReplay && turns.live) {
     // A replay after live events is older than them; it is recognized but never becomes the current turn.
-    if (turns.turnIds.length > 0 && turns.turnIds.length < TURN_IDS_PER_SESSION) {
-      turns.turnIds = [promptId, ...turns.turnIds]
-    }
+    turns.replayedTurnIds = [...turns.replayedTurnIds, promptId].slice(-TURN_IDS_PER_SESSION)
     return { eventName, opensTurn: false }
   }
   turns.turnIds = [...turns.turnIds, promptId].slice(-TURN_IDS_PER_SESSION)
