@@ -5,11 +5,13 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalObserverResult } from '../../agent-session-journal/journal-observer-read'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredChatNamingFailure,
   StructuredAgentSessionEndedChild,
-  StructuredAgentSessionProviderChild
+  StructuredAgentSessionProviderChild,
+  QuietTurnEnd
 } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
@@ -41,6 +43,10 @@ export type StructuredAgentSessionStatusFeedDeps = {
   rowRetired?: (sessionId: string) => boolean
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
+  /** See `StructuredAgentSessionHostDeps.quietTurnEnd`. */
+  quietTurnEnd?: QuietTurnEnd
+  /** See `StructuredAgentSessionHostDeps.isBotHome`. */
+  isBotHome?: (workspaceId: string) => boolean
   readUsageLimitContinue?: (
     id: string,
     cut: HostUsageLimitCut | null
@@ -77,6 +83,8 @@ export type StructuredAgentSessionStatusSubscriber = {
 export type StatusPublication = {
   summary: AgentSessionStatusSummary
   firstInputSubmissionKey: string | null
+  /** The current work the published summary was read with; absent until a live read. */
+  work?: JournalObserverResult['work']
 }
 
 /** Naming activity does not depend on any readable journal or retained summary. */

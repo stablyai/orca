@@ -57,7 +57,7 @@ export async function antigravitySignInHome(
   }
   return {
     home: selectedHome,
-    launch: { ...selected, args: selected.spec.args({ fullAccess: false, pluginDir: null }), cwd },
+    launch: { ...selected, args: selected.spec.args({ fullAccess: false, pluginDirs: [] }), cwd },
     watch: stage ? { ...watch, answered: () => {} } : watch,
     replacement: stage !== null,
     spawned: (server: AcpAgentConnection): void => {

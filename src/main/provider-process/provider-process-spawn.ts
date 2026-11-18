@@ -6,18 +6,53 @@ import { supervisedPosixLaunch, type ProviderSpawnSpec } from './provider-proces
 import { DirectProviderChild } from './direct-provider-child'
 import { LegacyProviderChild } from './legacy-provider-child'
 import { providerOwnershipBootId } from './provider-ownership-journal'
+import { DeferredProviderOwner } from './deferred-provider-owner'
+import {
+  launchProviderOwner,
+  type HostedCwdReporter,
+  type ProviderHostRoute
+} from './hosted-provider-launch'
 
 export type ProviderProcessSpawner = (spec: ProcessSpec) => ChildProcess
 
-/** Shared launch seam; ownership stays in this runtime until a compatible host contract exists. */
+let hostRoute: ProviderHostRoute | null = null
+
+/** Only desktop composition installs this route; server and remote launchers keep direct spawn. */
+export function installProviderProcessHost(
+  getClient: ProviderHostRoute['getClient'],
+  reportCwd: HostedCwdReporter = () => {}
+): void {
+  hostRoute = { getClient, reportCwd }
+}
+
+/** Shared launch seam; native owners may start under the host, but this runtime owns them. */
 export function spawnProviderProcess(
   spec: ProviderSpawnSpec,
-  spawnImpl: ProviderProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess,
+  allowHost = true
 ): ProviderChild {
   const bootId = spec.supervised ? providerOwnershipBootId() : null
-  const native = bootId !== null
+  if (bootId !== null) {
+    const spawnOwner = (): ChildProcess =>
+      spawnImpl({
+        program: spec.program,
+        args: spec.args,
+        cwd: spec.cwd,
+        env: spec.env,
+        detached: spec.detached,
+        stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+      })
+    const route = allowHost ? hostRoute : null
+    if (!route) {
+      return new DirectProviderChild(spawnOwner(), spec, bootId)
+    }
+    const owner = new DeferredProviderOwner()
+    const child = new DirectProviderChild(owner, spec, bootId)
+    void launchProviderOwner(owner, spec, route, spawnOwner)
+    return child
+  }
   const raw = spawnImpl(
-    spec.supervised && !native
+    spec.supervised
       ? createLegacyProviderSpawnSpec(spec)
       : {
           program: spec.program,
@@ -25,14 +60,9 @@ export function spawnProviderProcess(
           cwd: spec.cwd,
           env: spec.env,
           detached: spec.detached,
-          stdio: native
-            ? ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
-            : ['pipe', 'pipe', 'pipe']
+          stdio: ['pipe', 'pipe', 'pipe']
         }
   )
-  if (bootId !== null) {
-    return new DirectProviderChild(raw, spec, bootId)
-  }
   if (spec.supervised) {
     return new LegacyProviderChild(raw, spec)
   }

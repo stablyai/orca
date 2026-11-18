@@ -73,6 +73,12 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
+  if (launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)) {
+    const version = initialized.agentInfo?.version
+    throw new Error(
+      `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
+    )
+  }
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -115,7 +121,15 @@ export async function initializeAcpStructuredSession(
           const attaching = input.lanes.create(resume.sessionId, true)
           liveLane = attaching
           const opened = await connection.start(
-            { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
+            {
+              cwd,
+              mcpServers: [],
+              sessionId: resume.sessionId,
+              ...(launch.sessionMeta && launch.sessionMetaOnReopen
+                ? { _meta: launch.sessionMeta }
+                : {}),
+              ...setup
+            },
             acceptSession
           )
           assertStarting()
@@ -173,7 +187,15 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup }, acceptSession)
+    started = await connection.start(
+      {
+        cwd: launch.cwd,
+        mcpServers: [],
+        ...(launch.sessionMeta ? { _meta: launch.sessionMeta } : {}),
+        ...setup
+      },
+      acceptSession
+    )
     assertStarting()
   }
   if (!liveLane) {

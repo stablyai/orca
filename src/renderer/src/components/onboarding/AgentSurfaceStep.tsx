@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { cn } from '@/lib/class-names'
+import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -44,13 +45,14 @@ export function AgentSurfaceStep({
           value="chat"
           icon={MessagesSquare}
           label={t('components.onboarding.agentSurface.chat.label', 'Chat UI')}
+          badge={t('components.onboarding.agentSurface.chat.recommended', 'Recommended')}
           description={t(
             'components.onboarding.agentSurface.chat.description',
             'Agents reply in a chat, with rendered messages and diffs.'
           )}
           note={t(
             'components.onboarding.agentSurface.chat.terminalFallback',
-            'Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.'
+            'Agents without chat support fall back to a terminal.'
           )}
           warning={
             noChatAgentDetected
@@ -98,6 +100,7 @@ function SurfaceOption({
   value,
   icon: Icon,
   label,
+  badge,
   description,
   note,
   warning,
@@ -107,6 +110,7 @@ function SurfaceOption({
   value: AgentSurface
   icon: LucideIcon
   label: string
+  badge?: string
   description: string
   note?: string
   warning?: string
@@ -127,6 +131,7 @@ function SurfaceOption({
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Icon className="size-4 text-muted-foreground" />
           {label}
+          {badge ? <Badge variant="secondary">{badge}</Badge> : null}
           <span
             className={cn(
               'ml-auto grid size-4 shrink-0 place-items-center rounded-full border transition-colors',

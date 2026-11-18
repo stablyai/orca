@@ -1,12 +1,8 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import {
-  readJsonlCursor,
-  record,
-  type JsonlCursor,
-  type JsonRecord
-} from '../codex/codex-rollout-jsonl-cursor'
+import { readJsonlCursor } from '../codex/codex-rollout-jsonl-cursor'
+import { type JsonlCursor, type JsonRecord, record } from '../codex/codex-rollout-jsonl-format'
 
 // Muse stores local-date shards under <XDG_DATA_HOME>/muse/sessions (default ~/.local/share/muse/sessions): YYYY/MM/DD/<uuid>/session.jsonl. No upstream override exists.
 export function resolveMuseSessionsDir(override?: string): string {

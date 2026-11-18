@@ -32,8 +32,9 @@ it('keeps checking after compiler failures and reports errors in project order',
   await vi.waitFor(() => expect(children).toHaveLength(4))
   children[2].child.emit('close', 0, null)
   children[3].child.emit('close', 0, null)
+  // Two slots free at once, so later projects may start together.
   for (let index = 4; index < TYPECHECK_PROJECTS.length; index++) {
-    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
+    await vi.waitFor(() => expect(children.length).toBeGreaterThan(index))
     children[index].child.emit('close', 0, null)
   }
   expect((await result).map(({ message }) => message)).toEqual([

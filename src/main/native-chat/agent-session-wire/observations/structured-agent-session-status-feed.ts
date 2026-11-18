@@ -49,9 +49,8 @@ export class StructuredAgentSessionStatusFeed {
     this.journalProjection = createStructuredAgentSessionStatusReader(deps, this.publish.bind(this))
   }
 
-  private logFailure(scope: string, message: string, sessionId: string, error: unknown): void {
+  private logFailure = (scope: string, message: string, sessionId: string, error: unknown): void =>
     this.deps.logger.warn(message, { scope, sessionId, error })
-  }
 
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
     // Naming completion must be observable even if a held journal cannot be read.
@@ -135,6 +134,8 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   readPublished = (sessionId: string) => this.published.get(sessionId)?.summary
+  /** The current work the published summary was read with; a live chat's, as of its last publish. */
+  readPublishedWork = (sessionId: string) => this.published.get(sessionId)?.work
 
   /** Seed unopened lists and the phone sink without reactions or saved-status writes. */
   publishSavedGroup = createSavedStructuredStatusGroup(
@@ -215,6 +216,9 @@ export class StructuredAgentSessionStatusFeed {
     const inputChanged = publication?.firstInputSubmissionKey !== projection.firstInputSubmissionKey
     const reportOnly = !inputChanged && permissionReportOnly(previous, summary)
     if (!summaryChanged && !inputChanged) {
+      if (publication && projection.work) {
+        this.published.set(sessionId, { ...publication, work: projection.work })
+      }
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
         this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
@@ -222,7 +226,8 @@ export class StructuredAgentSessionStatusFeed {
     }
     this.published.set(sessionId, {
       summary,
-      firstInputSubmissionKey: projection.firstInputSubmissionKey
+      firstInputSubmissionKey: projection.firstInputSubmissionKey,
+      ...(projection.work ? { work: projection.work } : {})
     })
     if (summaryChanged) {
       if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {
