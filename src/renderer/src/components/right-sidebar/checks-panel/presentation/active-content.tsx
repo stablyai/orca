@@ -20,6 +20,7 @@ import {
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'
+import { ZotzChecksAutofixToggle } from '../../../zotz/source-control/ZotzChecksAutofixToggle'
 import { PRCommentsList } from '../comments/comments-list'
 import { openAnnotationLocation } from '@/components/editor/check-details/actions/check-annotation-open'
 import { useTranslate } from '@/i18n/use-translate'
@@ -237,6 +238,7 @@ export function ChecksPanelActiveContent({
         </>
       )}
       {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
+      {activeWorktreeId ? <ZotzChecksAutofixToggle worktreeId={activeWorktreeId} /> : null}
       {!(activeConflictReview && checks.length === 0 && !gitLabPipelineCheck && !checksLoading) && (
         <ChecksList
           checks={checks}
