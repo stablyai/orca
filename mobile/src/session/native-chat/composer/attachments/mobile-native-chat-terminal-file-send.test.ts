@@ -154,6 +154,16 @@ describe('terminal send with a stored file', () => {
     expect(pasteBody(wire.texts[0]!)).toBe('@"/tmp/orca-paste-1/lenta 1.mp4" ')
   })
 
+  it('sends a slash command without the file and keeps the chip for the next message', async () => {
+    setMobileNativeChatDraftText(SCOPE, '/clear')
+    await act(async () => {
+      await send('/clear')
+    })
+    expect(wire.texts).toHaveLength(1)
+    expect(wire.texts[0]).not.toContain('@')
+    expect(onFilesSent).not.toHaveBeenCalledWith([FILE.id], expect.anything())
+  })
+
   it('hands a rejected send back as the typed text once, keeping the chip', async () => {
     wire.outcome = 'rejected'
     await act(async () => {

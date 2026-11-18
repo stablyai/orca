@@ -5,6 +5,7 @@ import {
   type PickedMobileFile
 } from '../../../../platform/media-picking/media-picker-contract'
 import { MobileFileUploadRefusedError } from '../../../../files/attachments/mobile-chunked-file-upload'
+import { isSlashCommandDraft } from '../../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 
 export type PendingNativeChatFile = {
   readonly id: string
@@ -21,13 +22,17 @@ type StoredNativeChatFile = { readonly name: string; readonly path: string }
 /**
  * The stored files a send carries, plus the text to send. A terminal agent reads files from `@path`
  * text, while a structured chat sends them as attachments. Null while a terminal chat's file is still
- * uploading: Send holds until the host has stored it.
+ * uploading: Send holds until the host has stored it. A terminal slash command carries no files: the
+ * agent runs it as a command, so the chips stay for the next message.
  */
 export function nativeChatSendFiles(
   files: readonly PendingNativeChatFile[],
   text: string,
   structured: boolean
 ): { sentFiles: (PendingNativeChatFile & { path: string })[]; text: string } | null {
+  if (!structured && isSlashCommandDraft(text)) {
+    return { sentFiles: [], text }
+  }
   if (!structured && files.some((file) => file.path === null)) {
     return null
   }
