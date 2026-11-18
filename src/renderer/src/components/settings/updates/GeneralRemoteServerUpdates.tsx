@@ -7,6 +7,7 @@ import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
+import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
@@ -28,14 +29,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   ).length
   const manual = entries.filter((entry) => entry.phase === 'manual').length
   const offline = entries.filter((entry) => entry.phase === 'offline').length
-  // A newer server is current on its own updater, but this app is the one behind.
-  const newer = entries.filter(
-    (entry) => entry.phase === 'current' && entry.newerThanClientVersion
-  ).length
-  const current = entries.filter(
-    (entry) =>
-      (entry.phase === 'current' && !entry.newerThanClientVersion) || entry.phase === 'updated'
-  ).length
+  const settled = entries.filter((entry) => entry.phase === 'current' || entry.phase === 'updated')
+  // A newer server needs nothing from its own updater; this app is the one behind.
+  const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
+  const current = settled.length - newer
   const summary = [
     entries.length === 1
       ? t('auto.components.settings.GeneralRemoteServerUpdates.serverCountOne', '1 paired server')

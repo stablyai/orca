@@ -9,6 +9,7 @@ import type {
   RemoteServerUpdateEntry,
   RemoteServerUpdatePhase
 } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'
@@ -127,9 +128,10 @@ export function getRuntimeServerNewerThanAppText(
   entry: RemoteServerUpdateEntry | undefined,
   t: Translate = translate
 ): string | null {
-  return entry?.newerThanClientVersion
+  const clientVersion = entry ? getRemoteServerNewerThanClientVersion(entry) : null
+  return clientVersion
     ? t('auto.components.settings.serverList.newerThanApp', 'Newer than this app (v{{version}})', {
-        version: entry.newerThanClientVersion
+        version: clientVersion
       })
     : null
 }
