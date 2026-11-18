@@ -34,7 +34,7 @@ const OTHER = owner(folderWorkspaceKey('fw-other'))
 function renderAnswer(
   text: string,
   chat: ReturnType<typeof owner>,
-  inAutomationTurn = false
+  turn: { inAutomationTurn?: boolean; inActingTurn?: boolean } = {}
 ): void {
   render(
     <TooltipProvider>
@@ -48,7 +48,7 @@ function renderAnswer(
             blocks: [{ type: 'text', text }]
           }}
           expandSignal={false}
-          inAutomationTurn={inAutomationTurn}
+          {...turn}
           onScrollMessageToTop={vi.fn()}
         />
       </NativeChatVisualOwnerContext.Provider>
@@ -57,10 +57,16 @@ function renderAnswer(
 }
 
 describe('a bot’s quiet result in its home chat', () => {
-  it('keeps what came before the marker', () => {
+  it('shows what came before the marker with no caption', () => {
     renderAnswer('Checked the inbox; nothing new.\n\nNO_REPLY\n', BOT_HOME)
     expect(screen.getByText('Checked the inbox; nothing new.')).toBeInTheDocument()
-    expect(screen.getByText('Nothing to report')).toBeInTheDocument()
+    expect(screen.queryByText('Nothing to report')).toBeNull()
+    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
+  })
+
+  it('draws no caption when its turn did something others see', () => {
+    renderAnswer('NO_REPLY', BOT_HOME, { inActingTurn: true })
+    expect(screen.queryByText('Nothing to report')).toBeNull()
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })
 
@@ -71,7 +77,7 @@ describe('a bot’s quiet result in its home chat', () => {
   })
 
   it('draws no line under the automation row that opened its turn', () => {
-    renderAnswer('NO_REPLY', BOT_HOME, true)
+    renderAnswer('NO_REPLY', BOT_HOME, { inAutomationTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })

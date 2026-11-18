@@ -5,6 +5,7 @@ import type {
   NativeChatSubagentEntry
 } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatAutomationTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { nativeChatActingTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { isNativeChatOrcaCard } from '../../../../../../shared/native-chat/native-chat-orca-card'
 import { foldBotItemNotes } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
@@ -86,6 +87,8 @@ export type NativeChatMessageSlot = {
   continuesTurn?: boolean
   /** Its turn opens with an automation's row, which stands for a quiet reply. */
   inAutomationTurn?: boolean
+  /** Its turn did something others see, such as changing an item or posting. */
+  inActingTurn?: boolean
   /** In a turn: whether this row holds its response actions, even when tools or thoughts follow:
    *  the last drawn response with words, else the last with images. Absent outside a turn. */
   endsResponse?: boolean
@@ -168,6 +171,7 @@ export function buildNativeChatTranscript(
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   const quietCardAnswerRows = nativeChatQuietCardAnswerRows(input, messages, settledTurnKeys)
+  const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -242,9 +246,8 @@ export function buildNativeChatTranscript(
         folded,
         drawsMessage: drawsRow,
         turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
-        ...(turnKey !== undefined && automationTurns.has(turnKey)
-          ? { inAutomationTurn: true }
-          : {}),
+        ...(turnKey !== undefined && automationTurns.has(turnKey) && { inAutomationTurn: true }),
+        ...(turnKey !== undefined && actingTurns.has(turnKey) && { inActingTurn: true }),
         turnDiff,
         openedPullRequests,
         estimatedHeight: estimateNativeChatRowHeight(
