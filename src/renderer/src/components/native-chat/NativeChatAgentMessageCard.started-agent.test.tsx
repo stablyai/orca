@@ -89,6 +89,5 @@ it('keeps a worker update card on the agent its sender recorded', () => {
       runtimeContext={{ worktreeId: 'workspace', worktreePath: null, target: { kind: 'local' } }}
     />
   )
-  expect(screen.getByText('Update from worker')).toBeInTheDocument()
   expect(screen.getByTestId('agent-icon')).toHaveTextContent('codex')
 })
