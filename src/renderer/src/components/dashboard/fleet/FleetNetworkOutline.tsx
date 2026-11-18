@@ -18,7 +18,7 @@ export function FleetNetworkOutline({
       {flattenFleetTree(root).map((row) => (
         <div key={row.card.paneKey} className="relative flex">
           <FleetTreeGuides row={row} />
-          <div className="relative min-w-0 flex-1 py-1">
+          <div className="relative min-w-0 max-w-2xl flex-1 py-1">
             <FleetNetworkNode card={row.card} now={now} onOpenCard={onOpenCard} />
             {row.hasChildren ? (
               <span
