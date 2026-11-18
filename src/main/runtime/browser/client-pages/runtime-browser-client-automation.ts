@@ -5,6 +5,10 @@ import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/brow
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserError } from '../../../browser/browser-error'
+import {
+  browserClientPageRefusal,
+  readableBrowserClientPageRefusal
+} from './browser-client-page-refusal-copy'
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
@@ -67,34 +71,40 @@ export async function routeRuntimeBrowserClientAutomation(options: {
     }
     return { handled: true, result: { url, title: current.title } }
   }
-  const issued = options.leases.issueClientPageCommand(
-    {
-      authorityRuntimeId: options.leases.authorityRuntimeId,
-      authorityEpoch: options.leases.authorityEpoch,
-      browserPageId: page.browserPageId,
-      browserHostClientId: page.placement.browserHostClientId,
-      browserHostGeneration: page.placement.browserHostGeneration,
-      pageHostGeneration: page.placement.pageHostGeneration
-    },
-    {
-      type: 'automation',
-      method: method.data,
-      params:
-        method.data === 'browser.upload'
-          ? await toWorkspaceRelativeUploadParams(options.params, () =>
-              options.resolveWorkspacePath(page.workspaceId)
-            )
-          : options.params,
-      // A person's link or relayed input must not light the desktop page as agent-driven.
-      agent: isAgentRpcCaller(options.caller),
-      stagedResults: true
-    }
-  )
+  const params =
+    method.data === 'browser.upload'
+      ? await toWorkspaceRelativeUploadParams(options.params, () =>
+          options.resolveWorkspacePath(page.workspaceId)
+        )
+      : options.params
+  let issued: ReturnType<BrowserHostLeaseRegistry['issueClientPageCommand']>
+  try {
+    issued = options.leases.issueClientPageCommand(
+      {
+        authorityRuntimeId: options.leases.authorityRuntimeId,
+        authorityEpoch: options.leases.authorityEpoch,
+        browserPageId: page.browserPageId,
+        browserHostClientId: page.placement.browserHostClientId,
+        browserHostGeneration: page.placement.browserHostGeneration,
+        pageHostGeneration: page.placement.pageHostGeneration
+      },
+      {
+        type: 'automation',
+        method: method.data,
+        params,
+        // A person's link or relayed input must not light the desktop page as agent-driven.
+        agent: isAgentRpcCaller(options.caller),
+        stagedResults: true
+      }
+    )
+  } catch (error) {
+    throw readableBrowserClientPageRefusal(error)
+  }
   const result = await issued.result
   if (result.status === 'failed') {
     throw result.expectedUrlMismatch
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
-      : new BrowserError(result.errorCode, result.errorMessage ?? result.errorCode)
+      : browserClientPageRefusal(result.errorCode, result.errorMessage)
   }
   return { handled: true, result: result.value }
 }
