@@ -1,4 +1,4 @@
-import type { LegacyPaneKeyAliasEntry } from '../../../../shared/persisted-state-types'
+import type { LegacyPaneKeyAliasEntry } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { ProfileStateDatabaseQuarantine } from '../../profile-state/recovery/profile-state-database-quarantine'
 

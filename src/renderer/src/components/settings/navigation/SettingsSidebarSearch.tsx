@@ -1,8 +1,8 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import { Search, X } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { Button } from '../../ui/button'
@@ -116,7 +116,7 @@ export function SettingsSearchResultsList({
 }: SettingsSearchResultsListProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+    <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 pb-4 pt-2">
       {searchResults.length > 0 ? (
         <div
           id={listboxId}

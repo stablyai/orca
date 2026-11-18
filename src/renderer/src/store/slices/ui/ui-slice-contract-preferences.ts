@@ -1,5 +1,5 @@
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
@@ -15,7 +15,7 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
@@ -69,6 +69,9 @@ export type UISlicePreferences = {
   setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree: Record<string, boolean>
+  toggleWorktreeNotificationsMuted: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */
@@ -233,4 +236,6 @@ export type UISlicePersistence = {
   setBrowserKagiSessionLink: (link: string | null) => void
   browserDevToolsDock: BrowserDevToolsDockLayout
   setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
+  browserExtensionSidePanelWidth: number
+  setBrowserExtensionSidePanelWidth: (width: number) => void
 }

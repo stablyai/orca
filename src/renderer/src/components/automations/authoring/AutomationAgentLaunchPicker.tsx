@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import {
   buildAgentLaunchRouteInput,
   selectAgentLaunchRouteView,
@@ -11,16 +11,16 @@ import {
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import { automationLegacyArguments } from '../../../../../shared/automations/launch/automation-legacy-arguments'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { NewTabAgentMenuModel } from '@/components/tab-bar/new-tab-agent-menu-model'
+import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import { useAutomationAgentPickerEntries } from './use-automation-agent-picker-entries'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import { AutomationSurfaceField } from './AutomationSurfaceField'
@@ -30,7 +30,7 @@ import {
   editAutomationLegacyDraft,
   editsSupplementalArguments
 } from './automation-launch-draft'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
   return {
@@ -75,7 +75,6 @@ export function AutomationAgentLaunchPicker({
         : host?.kind === 'local'
           ? { kind: 'local', worktreeId: workspace.worktreeId }
           : undefined
-  const observation = useAgentMenuObservation({ workspace }, menuOpen, detectionTarget)
   const capabilities =
     authority?.kind === 'desktop'
       ? [AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY]
@@ -83,6 +82,8 @@ export function AutomationAgentLaunchPicker({
         ? resolveHostCapabilities(state, `runtime:${authority.environmentId}`)
         : null
   const modern = capabilities?.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY) === true
+  // Launch setup's Permissions and Arguments fields read the agents while the menu is closed.
+  const observation = useAgentMenuObservation({ workspace }, menuOpen || modern, detectionTarget)
   const supplemental = editsSupplementalArguments(draft, modern)
   const legacyDraft = supplemental
     ? {
@@ -133,7 +134,7 @@ export function AutomationAgentLaunchPicker({
   const observed = useAgentLaunchPickerInventory(
     workspace.worktreeId,
     model,
-    modern && menuOpen,
+    modern,
     catalogAgent ?? draft.agentId
   )
   const { entries, draftForEntry } = useAutomationAgentPickerEntries(
@@ -163,6 +164,7 @@ export function AutomationAgentLaunchPicker({
           visibleAgents.find((agent) => agent.id === draft.agentId)?.label ?? draft.agentId
         }
         setupDisabled={!modern}
+        launchDefaults={modern}
         draftForEntry={draftForEntry}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}

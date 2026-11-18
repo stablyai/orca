@@ -4,7 +4,7 @@ import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../shared/orca-profiles/constants'
 import { dictationShortcutModeSettings } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   getCatalogModel,

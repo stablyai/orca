@@ -15,12 +15,12 @@ import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/nati
 import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatWorkRunAside } from './MobileNativeChatWorkRunAside'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
-import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/native-chat-work-run'
+import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
 import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../src/shared/native-chat/native-chat-pull-request-event'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from '../message-content/MobileNativeChatUserMessageFold'
 import { TextAttachmentActions } from '../message-actions/MobileNativeChatTextAttachmentActions'
@@ -31,7 +31,7 @@ import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
-import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'

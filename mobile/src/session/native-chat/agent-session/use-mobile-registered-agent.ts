@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
-} from '../../../../../src/shared/agent-session/agent-session-registered-agents'
+} from '../../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
@@ -25,6 +25,14 @@ export function useMobileRegisteredAgent(
   offered: boolean,
   agent: string | null
 ): AgentSessionRegisteredAgent | undefined {
+  return useMobileRegisteredAgents(client, offered)?.find((row) => row.agent === agent)
+}
+
+/** Every agent the host can run as a chat; undefined until this connection's read answers. */
+export function useMobileRegisteredAgents(
+  client: RpcClient | null,
+  offered: boolean
+): readonly AgentSessionRegisteredAgent[] | undefined {
   const [agents, setAgents] = useState<{
     client: RpcClient
     generation: number | undefined
@@ -100,5 +108,5 @@ export function useMobileRegisteredAgent(
       }
     })
   }, [client, wanted, update])
-  return learned ? agents.rows.find((row) => row.agent === agent) : undefined
+  return learned ? agents.rows : undefined
 }

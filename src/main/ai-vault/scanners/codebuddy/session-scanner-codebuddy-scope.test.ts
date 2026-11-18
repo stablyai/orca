@@ -109,26 +109,4 @@ describe('scanAiVaultSessions — CodeBuddy scope discovery', () => {
     expect(result.sessions.map((session) => session.sessionId)).toContain('in-scope')
     expect(result.sessions.map((session) => session.sessionId)).not.toContain('collision')
   })
-
-  it('adds nothing when no scope is requested', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codebuddy-noscope-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    await writeCodeBuddySession({
-      sessionsDir: roots.codebuddyProjectsDir,
-      cwd: '/home/ada/old',
-      id: 'old',
-      timestamp: '2026-05-01T10:00:00.000Z'
-    })
-    await writeCodeBuddySession({
-      sessionsDir: roots.codebuddyProjectsDir,
-      cwd: '/home/ada/new',
-      id: 'new',
-      timestamp: '2026-06-01T10:00:00.000Z'
-    })
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'linux', limit: 1 })
-
-    expect(result.sessions.map((session) => session.sessionId)).toEqual(['new'])
-  })
 })

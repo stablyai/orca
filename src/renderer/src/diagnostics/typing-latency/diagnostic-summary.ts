@@ -3,7 +3,7 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { getRendererAppPlatform } from '../../app-shell/platform/renderer-app-platform'
 
 export type LatencyPercentiles = {

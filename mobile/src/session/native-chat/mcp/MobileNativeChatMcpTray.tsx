@@ -26,7 +26,7 @@ export function MobileNativeChatMcpTray({
 }
 
 function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
-  const state = useAgentSessionMcpPanel(panel.request, openExternalLink)
+  const state = useAgentSessionMcpPanel(panel.request, openExternalLink, panel.refreshKey)
   const window = useWindowDimensions()
   const { allocationHeight } = useMobileNativeChatLowerGeometry()
   const visibleHeight = allocationHeight ? Math.min(window.height, allocationHeight) : window.height

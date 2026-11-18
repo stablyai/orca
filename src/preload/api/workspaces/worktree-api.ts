@@ -1,3 +1,4 @@
+import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
@@ -15,7 +16,7 @@ import type {
   ProviderRequestId
 } from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
@@ -140,7 +141,7 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
-    updates: Partial<WorktreeMeta>
+    updates: Partial<WorktreeMeta> & DiffCommentBaseMutation
   }) => Promise<Worktree | null>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>

@@ -3,7 +3,7 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { resolveAnnotationPathInsideWorktree } from './check-annotation-path'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function openAnnotationLocation(params: {
   worktreeId: string

@@ -1,3 +1,4 @@
+import type { TerminalFontStyle } from '../preferences/terminal-font-style'
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links/terminal-osc-link-ranges'
 
@@ -18,11 +19,13 @@ export type TerminalWebViewCommand =
       kittyKeyboardFlags?: number
       terminalTheme?: RuntimeMobileTerminalTheme
       fontScale?: number
+      fontStyle?: TerminalFontStyle
       // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.
       preserveScroll?: boolean
       frame: TerminalFrame | null
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
+  | { type: 'set-font-style'; id?: number; fontStyle: TerminalFontStyle; fontFaceCss?: string }
   | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'reflow'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'clear'; id?: number }

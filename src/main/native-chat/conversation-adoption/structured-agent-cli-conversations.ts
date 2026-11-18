@@ -20,7 +20,7 @@ export type StructuredAgentTranscriptImport = {
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHome: AgentSessionAccountHome
-  }) => AgentSessionAccountHome[]
+  }) => AgentSessionAccountHome[] | Promise<AgentSessionAccountHome[]>
   /** Admission and lookup share one store path; null means this account has none. */
   conversationStore: (input: {
     accountHome: AgentSessionAccountHome

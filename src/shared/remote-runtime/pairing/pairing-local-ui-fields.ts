@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../../persisted-ui-state-types'
+import type { PersistedUIState } from '../../orca-profiles/persisted-ui-state-types'
 
 // Pairing-local views use each client’s host catalog/viewport; forwarding them would overwrite another client’s choices.
 // Strip on ui.set and pin local values on ui.get.
@@ -27,7 +27,10 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',
-  'manuallyUnreadTurnsByPaneKey'
+  'manuallyUnreadTurnsByPaneKey',
+  // The moved-to-WSL list belongs to the desktop that ran the move; hosts' strict ui.set rejects both.
+  'wslMovedSectionCollapsed',
+  'hiddenWslMovedProjectKeys'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

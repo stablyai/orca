@@ -75,6 +75,7 @@
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
+                { "el": "NotificationsMuted" },
                 {
                   "el": "HostBadge",
                   "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",
@@ -82,27 +83,27 @@
                 },
                 {
                   "el": "Row",
-                  "when": "vars.titleIndicators",
-                  "props": {
-                    "push": true,
-                    "keep": true,
-                    "align": "center",
-                    "gap": "sm",
-                    "inset": "end"
-                  },
-                  "children": [{ "el": "Indicators" }]
-                },
-                {
-                  "el": "Row",
-                  "when": "vars.newStyle",
-                  "props": {
-                    "push": true,
-                    "keep": true,
-                    "align": "center",
-                    "gap": "sm",
-                    "inset": "end"
-                  },
-                  "children": [{ "el": "TitleStatus" }]
+                  "when": "vars.titleIndicators || vars.newStyle",
+                  "props": { "push": true, "keep": true, "align": "center", "gap": "sm" },
+                  "children": [
+                    {
+                      "el": "Row",
+                      "when": "vars.titleIndicators",
+                      "props": {
+                        "keep": true,
+                        "align": "center",
+                        "gap": "sm",
+                        "inset": "=vars.newStyle ? 'hair' : 'end'"
+                      },
+                      "children": [{ "el": "Indicators" }]
+                    },
+                    {
+                      "el": "Row",
+                      "when": "vars.newStyle",
+                      "props": { "keep": true, "align": "center", "gap": "sm", "inset": "end" },
+                      "children": [{ "el": "TitleStatus" }]
+                    }
+                  ]
                 }
               ]
             },

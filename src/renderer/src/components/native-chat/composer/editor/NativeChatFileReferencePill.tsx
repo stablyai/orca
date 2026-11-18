@@ -11,7 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { getFileTypeIcon } from '@/lib/file-icons/file-type-icons'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import {
   nativeChatPastedTextOperations,
   nativeChatPasteNotSavedNotice,

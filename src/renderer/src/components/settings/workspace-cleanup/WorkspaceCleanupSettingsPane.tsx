@@ -4,11 +4,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
-  WORKSPACE_CLEANUP_RULE_KEYS,
   hasEnabledWorkspaceCleanupRule,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
@@ -16,75 +15,45 @@ import type {
   WorkspaceCleanupPreview,
   WorkspaceCleanupPreviewRow
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useWorkspaceCleanupHostRules } from './use-workspace-cleanup-host-rules'
 import { useWorkspaceCleanupHostActivity } from './use-workspace-cleanup-host-activity'
-import { WorkspaceCleanupSettingsStatus } from './workspace-cleanup-settings-status'
+import { WorkspaceCleanupAutomaticSection } from './workspace-cleanup-automatic-section'
+import { WorkspaceCleanupManualSection } from './workspace-cleanup-manual-section'
+import { WorkspaceCleanupActivitySection } from './workspace-cleanup-activity-section'
+import { WorkspaceCleanupProtectionSection } from './workspace-cleanup-protection-section'
+import { newRemovals, summarizeMatches } from './workspace-cleanup-preview-matches'
 import {
   WorkspaceCleanupRuleRows,
-  type WorkspaceCleanupRuleMatches
+  type WorkspaceCleanupRulePhase
 } from './workspace-cleanup-rule-rows'
 import {
-  WORKSPACE_CLEANUP_RULE_REASON,
   setWorkspaceCleanupRuleEnabled,
   type WorkspaceCleanupRuleKey
 } from './workspace-cleanup-rule-keys'
+import { WorkspaceCleanupChatHistorySetting } from './workspace-cleanup-chat-history-setting'
 import {
   WorkspaceCleanupRuleChangeDialog,
   type WorkspaceCleanupRuleChangeRequest
 } from './workspace-cleanup-rule-change-dialog'
-import { WorkspaceCleanupActivityList } from './workspace-cleanup-activity-list'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
 import { workspaceCleanupRowKey } from './workspace-cleanup-workspace-line'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-function removalsFor(
-  preview: WorkspaceCleanupPreview,
-  key: WorkspaceCleanupRuleKey
-): WorkspaceCleanupPreviewRow[] {
-  const reason = WORKSPACE_CLEANUP_RULE_REASON[key]
-  return preview.rows.filter(
-    (row) => row.evaluation.action !== 'keep' && row.evaluation.reason === reason
-  )
-}
-
-/** Workspaces `next` would remove now that `current` would not. */
-function newRemovals(
-  next: WorkspaceCleanupPreview,
-  current: WorkspaceCleanupPreview | null
-): WorkspaceCleanupPreviewRow[] {
-  const removedNow = new Set(
-    (current?.rows ?? [])
-      .filter((row) => row.evaluation.action !== 'keep')
-      .map(workspaceCleanupRowKey)
-  )
-  return next.rows.filter(
-    (row) => row.evaluation.action !== 'keep' && !removedNow.has(workspaceCleanupRowKey(row))
-  )
-}
-
-function summarizeMatches(
-  preview: WorkspaceCleanupPreview | null
-): Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>> | undefined {
-  if (!preview) {
-    return undefined
-  }
-  const matches: Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>> = {}
-  for (const key of WORKSPACE_CLEANUP_RULE_KEYS) {
-    const rows = removalsFor(preview, key)
-    matches[key] = { rows, sizeBytes: rows.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0) }
-  }
-  return matches
-}
+import {
+  useWorkspaceCleanupRuleFocus,
+  type WorkspaceCleanupChangeOutcome
+} from './use-workspace-cleanup-rule-focus'
 
 type RulesChange = (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules
 
+type ChangeRequest = Omit<WorkspaceCleanupRuleChangeRequest, 'rows'>
+
 type PendingChange = WorkspaceCleanupRuleChangeRequest & { change: RulesChange }
+
+/** A rule turn-on whose check failed; Try again runs the same change against fresh rules. */
+type FailedCheck = { key: WorkspaceCleanupRuleKey; change: RulesChange; request: ChangeRequest }
 
 export function WorkspaceCleanupSettingsPane({
   hostScope,
@@ -105,19 +74,31 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview, refreshReport } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
-  const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
+  const [pending, setPending] = useState<{
+    key: WorkspaceCleanupRuleKey
+    phase: WorkspaceCleanupRulePhase
+  } | null>(null)
+  const [failedCheck, setFailedCheck] = useState<FailedCheck | null>(null)
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null)
+  // The rule switch that gets focus back when the confirm dialog closes.
+  const [returnTargetKey, setReturnTargetKey] = useState<WorkspaceCleanupRuleKey | null>(null)
   // One change at a time: a second one built while the first previews would start from stale rules.
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   // A change still previewing when the pane unmounts must not write over what came after it.
   const mountedRef = useMountedRef()
-  // Remounts the rows after a change that was not saved, so an edited field shows the saved value.
+  const { registerSwitch, focusRule, settleFocus } = useWorkspaceCleanupRuleFocus(mountedRef)
+  // Resets the Inactive fields after a change that was not saved, so they show the saved value.
   const [unsavedChanges, setUnsavedChanges] = useState(0)
   const search = getWorkspaceCleanupSettingsSearchParts()
+  const report = hostReport.state === 'ready' ? hostReport.report : null
+  // A project's own rules can keep the runner scheduled while every global rule is off.
+  const anyRuleOn = rules
+    ? hasEnabledWorkspaceCleanupRule(rules) || Boolean(report?.nextRunAt)
+    : false
 
   if (!hostScope.available) {
     return <SettingsHostScopeUnavailableNotice />
@@ -158,7 +139,7 @@ export function WorkspaceCleanupSettingsPane({
   const finishChange = (saved: boolean): void => {
     busyRef.current = false
     setBusy(false)
-    setPendingRule(null)
+    setPending(null)
     if (!saved) {
       setUnsavedChanges((count) => count + 1)
     }
@@ -170,42 +151,57 @@ export function WorkspaceCleanupSettingsPane({
    */
   const applyRules = async (
     change: RulesChange,
-    request: Omit<WorkspaceCleanupRuleChangeRequest, 'rows'> | null,
+    request: ChangeRequest | null,
     pendingKey: WorkspaceCleanupRuleKey | null = null
-  ): Promise<void> => {
+  ): Promise<WorkspaceCleanupChangeOutcome> => {
     if (busyRef.current) {
-      return
+      return 'busy'
     }
     busyRef.current = true
     setBusy(true)
-    setPendingRule(pendingKey)
+    setFailedCheck(null)
+    // Only turning a rule on shows its check; other changes show a spinner at the saved value.
+    const enabling = request?.kind === 'enable' && pendingKey !== null
+    setPending(pendingKey ? { key: pendingKey, phase: enabling ? 'checking' : 'saving' } : null)
     // Another client may have changed the rules since this page read them.
     const latest = await readLatest()
     if (!mountedRef.current) {
-      return
+      return 'unmounted'
     }
     if (!latest) {
       finishChange(false)
-      return
+      return 'host-unavailable'
     }
     const nextRules = change(latest)
     const checked =
       request && hasEnabledWorkspaceCleanupRule(nextRules)
-        ? await previewNewRemovals(latest, nextRules)
+        ? await previewNewRemovals(latest, nextRules, !enabling)
         : { rows: [], nextPreview: null }
     if (!mountedRef.current) {
-      return
+      return 'unmounted'
     }
     if (!checked) {
+      if (enabling && request) {
+        setFailedCheck({ key: pendingKey, change, request })
+      }
       finishChange(false)
-      return
+      return 'check-failed'
     }
     if (request && (checked.rows.length > 0 || request.kind === 'disable-ignored-files')) {
-      setPendingRule(null)
+      setPending(null)
+      setReturnTargetKey(pendingKey)
       setPendingChange({ ...request, rows: checked.rows, change })
-      return
+      return 'confirming'
     }
-    finishChange(await saveRules(nextRules, checked.nextPreview))
+    if (enabling) {
+      setPending({ key: pendingKey, phase: 'enabling' })
+    }
+    const saved = await saveRules(nextRules, checked.nextPreview)
+    if (!mountedRef.current) {
+      return 'unmounted'
+    }
+    finishChange(saved)
+    return saved ? 'saved' : 'save-failed'
   }
 
   // The would-be rules' preview becomes the page's matches only once those rules are saved.
@@ -220,10 +216,11 @@ export function WorkspaceCleanupSettingsPane({
     return saved
   }
 
-  /** Null when the preview failed; the toast says so. */
+  /** Null when the preview failed; the toast says so unless the caller shows it inline. */
   const previewNewRemovals = async (
     latest: WorkspaceCleanupRules,
-    nextRules: WorkspaceCleanupRules
+    nextRules: WorkspaceCleanupRules,
+    toastOnFailure = true
   ): Promise<{
     rows: WorkspaceCleanupPreviewRow[]
     nextPreview: WorkspaceCleanupPreview
@@ -232,13 +229,15 @@ export function WorkspaceCleanupSettingsPane({
     // can delete with every global rule off, so the current rules are always read.
     const previews = await Promise.all([previewRules(nextRules), previewRules(latest)]).catch(
       (error: unknown) => {
-        toast.error(
-          t(
-            'components.settings.workspaceCleanup.previewFailed',
-            "Couldn't check which workspaces this change matches."
-          ),
-          { description: errorMessage(error) }
-        )
+        if (toastOnFailure) {
+          toast.error(
+            t(
+              'components.settings.workspaceCleanup.previewFailed',
+              "Couldn't check which workspaces this change matches."
+            ),
+            { description: errorMessage(error) }
+          )
+        }
         return null
       }
     )
@@ -253,7 +252,30 @@ export function WorkspaceCleanupSettingsPane({
       (latest) => setWorkspaceCleanupRuleEnabled(latest, key, enabled),
       enabled ? { kind: 'enable', ruleTitle: search[key].title } : null,
       key
-    )
+    ).then((outcome) => settleFocus(key, outcome))
+  }
+
+  const retryCheck = (): void => {
+    if (!failedCheck || busyRef.current) {
+      return
+    }
+    const { key, change, request } = failedCheck
+    // Try again unmounts once the retry starts; the switch holds focus through it.
+    focusRule(key)
+    void applyRules(change, request, key).then((outcome) => settleFocus(key, outcome))
+  }
+
+  const returnFocusAfterDialog = (event: Event): void => {
+    if (returnTargetKey === null) {
+      return
+    }
+    if (focusRule(returnTargetKey)) {
+      event.preventDefault()
+    }
+    // The dialog can also close because the page swapped to a host error; keep the target then.
+    if (pendingChange === null) {
+      setReturnTargetKey(null)
+    }
   }
 
   const cancelChange = (): void => {
@@ -315,8 +337,8 @@ export function WorkspaceCleanupSettingsPane({
     }
   }
 
-  const hasQuery = query.trim() !== ''
-  const showRules = matchesSettingsSearch(query, [
+  const showManual = matchesSettingsSearch(query, [search.review])
+  const showRuleRows = matchesSettingsSearch(query, [
     search.merged,
     search.unchanged,
     search.inactive,
@@ -325,107 +347,71 @@ export function WorkspaceCleanupSettingsPane({
   ])
   const showProtection = matchesSettingsSearch(query, [search.keepIgnoredFiles])
   const showActivity = matchesSettingsSearch(query, [search.activity])
-  const report = hostReport.state === 'ready' ? hostReport.report : null
 
   return (
     <>
-      <WorkspaceCleanupSettingsStatus
-        // A project's own rules can keep the runner scheduled while every global rule is off.
-        anyRuleOn={hasEnabledWorkspaceCleanupRule(currentRules) || Boolean(report?.nextRunAt)}
+      {showManual ? <WorkspaceCleanupManualSection /> : null}
+      <WorkspaceCleanupAutomaticSection
+        anyRuleOn={anyRuleOn}
         report={report}
         readAt={hostReport.state === 'ready' ? hostReport.readAt : 0}
         cleaningUp={cleaningUp}
         onCleanUpNow={() => void cleanUpNow()}
-      />
-      {showRules ? (
-        <div className="space-y-3">
-          <SettingsGroup title={t('components.settings.workspaceCleanup.rules.title', 'Rules')}>
-            <WorkspaceCleanupRuleRows
-              key={unsavedChanges}
-              rules={currentRules}
-              matches={matches}
-              pendingRule={pendingRule}
-              disabled={busy}
-              onToggle={toggleRule}
-              onChange={(change) =>
-                void applyRules(
-                  change,
-                  { kind: 'change', ruleTitle: search.inactive.title },
-                  'inactive'
-                )
-              }
-            />
-          </SettingsGroup>
-          {hasQuery ? null : (
-            <p className="px-1 text-xs text-muted-foreground">
-              {t(
-                'components.settings.workspaceCleanup.rules.branchNote',
-                'Merged branches are deleted with their workspace. Unmerged branches are kept.'
-              )}
-            </p>
-          )}
-        </div>
-      ) : null}
-      {showProtection ? (
-        <SettingsGroup
-          title={t('components.settings.workspaceCleanup.protection.title', 'Protection')}
-          description={t(
-            'components.settings.workspaceCleanup.protection.alwaysKept',
-            'Always kept: pinned workspaces, running agents or terminals, unsaved editor changes, uncommitted changes, unpushed commits.'
-          )}
-        >
-          <SearchableSetting {...search.keepIgnoredFiles}>
-            <SettingsSwitchRow
-              label={search.keepIgnoredFiles.title}
-              description={search.keepIgnoredFiles.description}
-              checked={currentRules.keepWhen === 'any-local-files'}
-              disabled={busy}
-              onChange={() => {
-                const keepIgnored = currentRules.keepWhen !== 'any-local-files'
-                void applyRules(
-                  (latest) => ({
-                    ...latest,
-                    keepWhen: keepIgnored ? 'any-local-files' : 'uncommitted'
-                  }),
-                  // Keeping more can only delete less; letting ignored files go asks first.
-                  keepIgnored
-                    ? null
-                    : { kind: 'disable-ignored-files', ruleTitle: search.keepIgnoredFiles.title }
-                )
-              }}
-            />
-          </SearchableSetting>
-        </SettingsGroup>
-      ) : null}
-      {showActivity ? (
-        <SettingsGroup
-          title={search.activity.title}
-          description={
-            hostReport.state === 'error'
-              ? t(
-                  'components.settings.workspaceCleanup.activity.loadFailed',
-                  "Couldn't load activity: {{error}}",
-                  {
-                    error: hostReport.message
-                  }
-                )
-              : report && report.runs.length === 0
-                ? t(
-                    'components.settings.workspaceCleanup.activity.empty',
-                    "Cleanup hasn't run yet."
-                  )
-                : undefined
+        showRules={showRuleRows}
+      >
+        <WorkspaceCleanupRuleRows
+          rules={currentRules}
+          matches={matches}
+          operation={{
+            pending,
+            failedKey: failedCheck?.key ?? null,
+            returnTargetKey,
+            busy,
+            onRetry: retryCheck,
+            switchRef: registerSwitch
+          }}
+          inactiveDraftKey={unsavedChanges}
+          onToggle={toggleRule}
+          onChange={(change) =>
+            void applyRules(
+              change,
+              { kind: 'change', ruleTitle: search.inactive.title },
+              'inactive'
+            )
           }
-        >
-          {report && report.runs.length > 0 ? (
-            <WorkspaceCleanupActivityList runs={report.runs} />
-          ) : null}
-        </SettingsGroup>
+        />
+      </WorkspaceCleanupAutomaticSection>
+      <WorkspaceCleanupChatHistorySetting
+        hostScope={hostScope}
+        settings={settings}
+        updateSettings={updateSettings}
+        onChanged={refreshReport}
+      />
+      {showProtection ? (
+        <WorkspaceCleanupProtectionSection
+          keepIgnoredFiles={currentRules.keepWhen === 'any-local-files'}
+          disabled={busy}
+          onToggleKeepIgnoredFiles={() => {
+            const keepIgnored = currentRules.keepWhen !== 'any-local-files'
+            void applyRules(
+              (latest) => ({
+                ...latest,
+                keepWhen: keepIgnored ? 'any-local-files' : 'uncommitted'
+              }),
+              // Keeping more can only delete less; letting ignored files go asks first.
+              keepIgnored
+                ? null
+                : { kind: 'disable-ignored-files', ruleTitle: search.keepIgnoredFiles.title }
+            )
+          }}
+        />
       ) : null}
+      {showActivity ? <WorkspaceCleanupActivitySection hostReport={hostReport} /> : null}
       <WorkspaceCleanupRuleChangeDialog
         request={pendingChange}
         onCancel={cancelChange}
         onConfirm={confirmChange}
+        onCloseAutoFocus={returnFocusAfterDialog}
       />
     </>
   )

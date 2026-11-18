@@ -1,5 +1,5 @@
 import { automationCreateIdentity } from './automation-create-identity'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { findAutomationRepoForWrite } from '../../../shared/automations/ownership/automation-repo-target'
 import {
@@ -12,7 +12,7 @@ import type {
   AutomationCreateInput
 } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automations/launch/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,

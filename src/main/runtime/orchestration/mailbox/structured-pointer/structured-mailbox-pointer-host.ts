@@ -17,7 +17,7 @@ import {
 import { subscribeForRedrive } from './structured-session-journal-redrive'
 import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {

@@ -1,11 +1,11 @@
 import React from 'react'
 
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import CacheTimer from '../activity/CacheTimer'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
-import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath,

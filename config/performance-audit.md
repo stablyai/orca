@@ -45,8 +45,7 @@ Incremental Claude scans and persisted Claude cache checkpoints are also include
 `.github/workflows/performance-contracts.yml` runs daily and manually on Linux,
 macOS and Windows, and on PRs changing this tooling or any listed contract file.
 It uploads per-OS JSON test results, plus the source inventory once from Linux
-because that scan is OS-independent. Its schedule starts after merge. Run the existing
-`test:e2e:terminal-perf:scale:report` ([guide](../docs/readme/terminal-perf.md)) for rendered typing/frame budgets. Unit tests do not
+because that scan is OS-independent. Its schedule starts after merge. The rendered typing/frame benchmark was retired ([historical guide](../docs/readme/terminal-perf.md)). Unit tests do not
 measure SSH RTT, WSL scheduling or a packaged Electron renderer.
 
 To extend coverage, select a production-path regression with an operation-count,
@@ -55,10 +54,14 @@ old behavior. Use controlled, counterbalanced benchmark samples for timings;
 avoid new machine-dependent millisecond gates in the normal unit suite. A green
 source scan and these contracts cannot establish that the whole app is fast.
 
-Two count ratchets (counts per file may only fall) cover classes the audit only warns about:
+Count ratchets (counts per file may only fall) cover classes the audit only warns about:
 `pnpm check:main-sync-fs-ratchet` counts synchronous `node:fs` calls (every `*Sync` export) in production `src/main` and `src/shared`
 (`config/main-sync-fs-baseline.txt`), and `pnpm check:recurring-timer-ratchet` counts `setInterval`
 calls in production `src/main`, `src/renderer`, `src/shared` and `src/cli`
-(`config/recurring-timer-baseline.txt`). Both run in `check:ratchets` on every non-draft PR that runs static analysis. A new use either
+(`config/recurring-timer-baseline.txt`). `pnpm check:main-blocking-helper-ratchet` counts references to
+functions that make a synchronous fs, child_process or SQLite call, or call such a function (`config/main-blocking-helper-baseline.txt`),
+so a new caller of an existing sync helper in another file fails too. The main-blocking ratchets skip modules
+imported only by worker or utility entries (`config/main-blocking-worker-entries.json`). All run in
+`check:ratchets` on every non-draft PR that runs static analysis. A new use either
 moves off the hot path (async fs or a stat-fingerprint cache; a push signal, a visibility-gated or
 backing-off timer) or raises its file's count with reviewer sign-off.
