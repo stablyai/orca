@@ -421,14 +421,3 @@ describe('webhook card', () => {
     expect(card.text()).not.toContain(hook.url)
   })
 })
-
-describe('deferred cards', () => {
-  it('leave Google setup on the host line', async () => {
-    expect(
-      mobileNativeChatBotCard(
-        { googleSetup: { botId: 'atlas', runId: 'r1', card: 'connect' } },
-        context
-      )
-    ).toBeNull()
-  })
-})

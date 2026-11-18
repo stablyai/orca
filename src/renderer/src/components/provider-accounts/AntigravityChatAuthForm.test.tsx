@@ -38,7 +38,10 @@ vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-c
 }))
 vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityChatAuthConfig: vi.fn(),
-  callAntigravityChatSignIn: vi.fn(async () => ({ flowId: 'new-flow' })),
+  callAntigravityChatSignIn: vi.fn(async () => ({
+    result: { flowId: 'new-flow' },
+    _meta: { runtimeId: 'test-runtime' }
+  })),
   subscribeAntigravityChatSignIn: vi.fn(
     async (owner: RuntimeClientTarget, handlers: RuntimeRpcSubscriptionHandlers) => {
       streams.handlers.set(owner.kind === 'local' ? 'local' : owner.environmentId, handlers)
@@ -134,7 +137,9 @@ it.each(['accounts', 'provider'] as const)(
     await act(async () => {
       finish(enterprise)
     })
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    await waitFor(() =>
+      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+    )
     expect(callAntigravityChatSignIn).toHaveBeenCalledTimes(1)
   }
 )
@@ -180,7 +185,9 @@ it.each([
       async (_owner, config) => config ?? enterprise
     )
     await user.click(screen.getByRole('button', { name: action }))
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    await waitFor(() =>
+      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+    )
     expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
       ...enterprise,
       gcpProject: 'enterprise-project-changed'
@@ -220,7 +227,9 @@ it('commits the visible choice before sign-in while another client’s refresh i
   await act(async () => {
     finishSave(personal)
   })
-  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
   await act(async () => {
     finishRead(enterprise)
   })
@@ -283,7 +292,9 @@ it.each(['accounts', 'provider'] as const)(
       return config ?? enterprise
     })
     await user.click(action)
-    await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+    await waitFor(() =>
+      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+    )
     expect(requests).toEqual(['Get', enterprise])
     expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -354,7 +365,9 @@ it('keeps an edited draft ahead of another client’s choice when recovering a f
     async (_owner, config) => config ?? personal
   )
   await user.click(screen.getByRole('button', { name: /^Sign in/ }))
-  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
   expect(callAntigravityChatAuthConfig).toHaveBeenLastCalledWith(target, {
     ...enterprise,
     gcpProject: 'enterprise-project-new'
@@ -428,3 +441,19 @@ it.each(['success', 'failure'] as const)(
     expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
   }
 )
+
+it('asks a signed-in host to replace its account, not reuse the cached sign-in', async () => {
+  const target = { kind: 'environment', environmentId: 'change-account' } as const
+  streams.initial.set(key(target), { revision: 1, auth: 'signedIn', flow: null })
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(
+    async (_owner, config) => config ?? personal
+  )
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await user.click(await screen.findByRole('button', { name: 'Change account' }))
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', {
+      intent: 'changeAccount'
+    })
+  )
+})
