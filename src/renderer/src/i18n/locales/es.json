@@ -24316,6 +24316,15 @@
       },
       "settingLabel": "Cola de agentes por memoria",
       "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba."
+    },
+    "sidebar": {
+      "home": "Inicio",
+      "create": "Crear",
+      "folders": "Carpetas",
+      "empty": "Agrega un proyecto desde GitHub o una carpeta local para empezar.",
+      "newConversationIn": "Nueva conversación en {{project}}",
+      "settingLabel": "Barra lateral simple",
+      "settingDescription": "Proyectos con un botón + y solo las conversaciones que tú iniciaste. Apágala para ver todas las tarjetas de workspaces, ramas y agentes."
     }
   }
 }

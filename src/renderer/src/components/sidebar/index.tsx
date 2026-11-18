@@ -25,9 +25,12 @@ import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
+import { isZotzConductorSidebar } from '../../../../shared/zotz/zotz-sidebar-layout'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
+const ZotzProjectSidebar = lazyWithRetry(() => import('../zotz/sidebar/ZotzProjectSidebar'))
+const ZotzSidebarTopNav = lazyWithRetry(() => import('../zotz/sidebar/ZotzSidebarTopNav'))
 
 const WorktreeMetaDialog = lazyWithRetry(
   () => import('./workspace-card/metadata/WorktreeMetaDialog')
@@ -180,7 +183,23 @@ function Sidebar({
           style={leftSidebarStyle}
           {...dropHandlers}
         >
-          {sidebarOpen && (
+          {sidebarOpen && isZotzConductorSidebar(settings) ? (
+            <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
+              <ZotzSidebarTopNav />
+              <SeveredTerminalDaemonBanner />
+              <StalledTerminalDaemonBanner />
+              <ZotzProjectSidebar />
+              <div className="relative shrink-0">
+                <SetupScriptPromptCard />
+                <SidebarToolbar
+                  workspaceBoardOpen={workspaceBoardOpen}
+                  workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
+                  onWorkspaceBoardToggle={toggleWorkspaceBoard}
+                />
+              </div>
+            </React.Suspense>
+          ) : null}
+          {sidebarOpen && !isZotzConductorSidebar(settings) && (
             <>
               <SidebarNav />
               <SidebarHeader

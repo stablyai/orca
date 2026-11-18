@@ -25942,6 +25942,15 @@
       },
       "settingLabel": "Agent queue by memory",
       "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
+    },
+    "sidebar": {
+      "home": "Home",
+      "create": "Create",
+      "folders": "Folders",
+      "empty": "Add a project from GitHub or a local folder to start.",
+      "newConversationIn": "New conversation in {{project}}",
+      "settingLabel": "Simple sidebar",
+      "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent."
     }
   }
 }

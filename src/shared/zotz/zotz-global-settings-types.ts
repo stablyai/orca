@@ -10,4 +10,6 @@ export type ZotzGlobalSettings = {
   zotzUpdatesEnabled?: boolean
   /** Hold agent launches until they fit in memory; off only when set to false. */
   zotzAgentQueueEnabled?: boolean
+  /** 'orca' brings back upstream's workspace cards; anything else is the simple project list. */
+  zotzSidebarLayout?: 'conductor' | 'orca'
 }
