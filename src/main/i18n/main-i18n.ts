@@ -2,6 +2,7 @@ import { getSystemLanguageDetection } from './system-language'
 import type { i18n as I18nInstance } from 'i18next'
 
 import { createOrcaI18n } from '../../shared/orca-i18n-instance'
+import { applyZotzBrandToCatalog } from '../../shared/zotz/zotz-brand-copy'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
 
@@ -29,7 +30,8 @@ const LAZY_LOCALE_LOADER_MAP = new Map<string, () => Promise<{ default: Record<s
 
 // Initializes synchronously, so startup dialogs can translate before settings load.
 const orcaI18n = createOrcaI18n({
-  loadCatalog: (language) => LAZY_LOCALE_LOADER_MAP.get(language)?.().then((mod) => mod.default),
+  loadCatalog: (language) =>
+    LAZY_LOCALE_LOADER_MAP.get(language)?.().then((mod) => applyZotzBrandToCatalog(mod.default)),
   englishResources: {}
 })
 

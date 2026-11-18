@@ -80,7 +80,7 @@ export default function ZotzMachineModeWizard({
       toast.info(
         t(
           'zotz.machineMode.pairedDevicesKeepAccess',
-          'Paired computers and phones can still connect until you revoke them in Settings → Remote Orca Servers.'
+          'Paired computers and phones can still connect until you revoke them in Settings → Remote Zotz Servers.'
         )
       )
     }

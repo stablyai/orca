@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ZotzNodeSetupStep } from '../../../shared/zotz/zotz-node-setup-contract'
+import type { ZotzNodeSetupProgress } from '../../../shared/zotz/zotz-node-setup-contract'
 import { shouldAutoShowZotzMachineModeWizard } from '../../../shared/zotz/zotz-machine-mode'
 import type { PreloadApi } from '../../api-types'
 
@@ -11,9 +11,9 @@ export const zotzNodeApi = {
     showFirstRunEducation: process.env.ORCA_DEV_SHOW_FIRST_RUN_EDUCATION
   }),
   runServerSetup: () => ipcRenderer.invoke('zotzNode:runServerSetup'),
-  onSetupProgress: (callback: (steps: ZotzNodeSetupStep[]) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, steps: ZotzNodeSetupStep[]): void =>
-      callback(steps)
+  onSetupProgress: (callback: (progress: ZotzNodeSetupProgress) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: ZotzNodeSetupProgress): void =>
+      callback(progress)
     ipcRenderer.on('zotzNode:setupProgress', listener)
     return () => ipcRenderer.removeListener('zotzNode:setupProgress', listener)
   },

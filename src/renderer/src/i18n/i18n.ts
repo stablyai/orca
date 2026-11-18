@@ -23,6 +23,7 @@ import type { PluginLanguagePackRegistration } from '../../../shared/plugins/art
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
 import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
+import { applyZotzBrandToCatalog } from '../../../shared/zotz/zotz-brand-copy'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
@@ -46,7 +47,7 @@ async function fetchLocaleCatalog(url: string): Promise<Record<string, unknown>>
   if (!response.ok) {
     throw new Error(`Language catalog request failed: ${response.status}`)
   }
-  return response.json()
+  return applyZotzBrandToCatalog(await response.json())
 }
 
 // The provider, onboarding switcher and backend can ask for one locale at once; share the fetch.
