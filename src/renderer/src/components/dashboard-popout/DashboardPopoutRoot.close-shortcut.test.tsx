@@ -170,15 +170,35 @@ describe('dashboard pop-out close shortcut', () => {
 
     press(document.body, { key: 'w', code: 'KeyW' })
     expect(close).toHaveBeenCalledOnce()
+    press(document.body, { key: 'w', code: 'KeyW', repeat: true })
+    press(document.body, { key: 'w', code: 'KeyW', isComposing: true })
+    expect(close).toHaveBeenCalledOnce()
+
     useAppStore.setState({ keybindings: { 'tab.close': ['Mod+Shift+Y'] } })
     press(document.body, { key: 'w', code: 'KeyW' })
     expect(close).toHaveBeenCalledOnce()
     press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
     expect(close).toHaveBeenCalledTimes(2)
 
-    view.unmount()
-    press(document.body, { key: 'Y', code: 'KeyY', shiftKey: true })
+    useAppStore.setState({ keybindings: { 'tab.close': ['Alt+E'] } })
+    press(document.body, { key: 'Dead', code: 'KeyE', metaKey: false, altKey: true })
     expect(close).toHaveBeenCalledTimes(2)
+
+    const input = document.createElement('input')
+    document.body.append(input)
+    useAppStore.setState({ keybindings: { 'tab.close': ['Alt+A'] } })
+    press(input, { key: 'å', code: 'KeyA', metaKey: false, altKey: true })
+    expect(close).toHaveBeenCalledTimes(2)
+    useAppStore.setState({ keybindings: { 'tab.close': ['W'] } })
+    press(input, { key: 'w', code: 'KeyW', metaKey: false })
+    expect(close).toHaveBeenCalledTimes(2)
+    useAppStore.setState({ keybindings: { 'tab.close': ['Mod+W'] } })
+    press(input, { key: 'w', code: 'KeyW', metaKey: true })
+    expect(close).toHaveBeenCalledTimes(3)
+
+    view.unmount()
+    press(document.body, { key: 'w', code: 'KeyW', metaKey: true })
+    expect(close).toHaveBeenCalledTimes(3)
   })
 
   it('honors a double-tap override without closing on a single or interrupted tap', () => {
