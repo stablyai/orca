@@ -24,10 +24,11 @@ export const accounts = defineFixture({
             <WorkspaceAccountOptions
               provider="Codex"
               accounts={[
-                { id: 'personal', label: 'Personal (dev@example.com)' },
-                { id: 'work', label: 'Work (team@example.com)' }
+                { id: 'personal', label: 'dev@example.com · Personal (Plus)' },
+                { id: 'work', label: 'team@example.com · Business' }
               ]}
               selectedId="work"
+              hostDefaultDetail="dev@example.com · Personal (Plus)"
               loading={false}
               saving={false}
               error={null}
@@ -37,6 +38,7 @@ export const accounts = defineFixture({
             <DropdownMenuLabel>Claude</DropdownMenuLabel>
             <WorkspaceAccountOptions
               provider="Claude"
+              hostDefaultDetail="personal@example.com"
               accounts={[{ id: 'claude-work', label: 'Work (claude@example.com)' }]}
               loading={false}
               saving={false}

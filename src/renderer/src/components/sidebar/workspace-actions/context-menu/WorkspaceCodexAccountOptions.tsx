@@ -16,7 +16,7 @@ export function WorkspaceCodexAccountOptions(props: {
       provider="Codex"
       accounts={props.accounts.map((account) => ({
         id: account.id,
-        label: getCodexAccountDisplayLabel(account, props.accounts)
+        label: getCodexAccountDisplayLabel(account, props.accounts, 'inline')
       }))}
     />
   )
