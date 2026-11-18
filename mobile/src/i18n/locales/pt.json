@@ -402,6 +402,15 @@
       "clearAll": "Limpar tudo",
       "deleteAll": "Excluir todas as mensagens na fila",
       "editMessage": "Editar mensagem",
+      "showLess": "Mostrar menos",
+      "moreCount_one": "Mais {{count}}",
+      "moreCount_other": "Mais {{count}}",
+      "moreCount_many": "Mais {{count}}",
+      "deleteMessage": "Excluir mensagem",
+      "queuedCount_one": "{{count}} mensagem na fila",
+      "queuedCount_other": "{{count}} mensagens na fila",
+      "queuedCount_many": "{{count}} mensagens na fila",
+      "foldNeedsAttention": "{{more}}, uma mensagem precisa de atenção",
       "pausedState": "Pausado",
       "queuedState": "Na fila",
       "resume": "Retomar",
@@ -667,6 +676,8 @@
       "handedOffToAgent": "Entregue a um agente",
       "startedAgent": "Agente iniciado",
       "startedWorker": "Worker iniciado",
+      "reopenedWorker": "Worker reaberto",
+      "sentFollowUpToWorker": "Mensagem de acompanhamento enviada ao worker",
       "taskFromCoordinator": "Tarefa do coordenador",
       "messageFromCoordinator": "Mensagem do coordenador",
       "updateFromWorker": "Atualização do worker",
@@ -2805,6 +2816,7 @@
       "images_one": "{{count}} imagem",
       "images_other": "{{count}} imagens",
       "moreActions": "Mais ações",
+      "you": "Você",
       "send": "Enviar",
       "sendAgainHint": "Enviar esta mensagem novamente",
       "sendHint": "Enviar esta mensagem",
@@ -2909,6 +2921,7 @@
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
       "allowAutoClose": "Permitir fechamento automático",
+      "agents": "Agentes",
       "renameTerminalFailed": "Não foi possível renomear o terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -3260,6 +3273,29 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "tabsSheet": {
+      "needsYou": "Precisa de você",
+      "working": "Trabalhando",
+      "everythingElse": "Todo o resto",
+      "open": "Aberto",
+      "closeTab": "Fechar {{title}}"
+    },
+    "tabRows": {
+      "browser": "Navegador",
+      "markdown": "Nota Markdown",
+      "file": "Arquivo",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 aba",
+      "tabCount": "{{count}} abas",
+      "anotherNeedsYou": "outra aba precisa de você",
+      "actionsHint": "Mostra ações para esta aba",
+      "next": "Próxima aba",
+      "previous": "Aba anterior",
+      "hint": "Mostra todas as abas"
     }
   },
   "settings": {
@@ -3873,6 +3909,9 @@
       "planModelUnavailable": "O modelo \"{{model}}\" não está disponível para {{label}}.",
       "planModelWithoutThinking": "O modelo \"{{model}}\" não suporta um nível de esforço de raciocínio.",
       "planThinkingLevelInvalid": "O nível de raciocínio \"{{level}}\" não é válido para {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "O modelo de comando para a revisão do ditado está vazio.",
+      "dictationCleanupAgentUnsupported": "Escolha um agente compatível com a revisão por IA em Configurações -> Voz -> Revisão. Agentes compatíveis: {{agents}}, ou Comando personalizado.",
+      "agentCannotGenerateDictationCleanup": "O agente \"{{agent}}\" não é compatível com a revisão do ditado. Agentes compatíveis: {{agents}}, ou Comando personalizado.",
       "promptTooLargeForArgument": "O prompt de {{label}} é grande demais para ser passado como um único argumento de linha de comando. Adicione menos alterações ao stage e tente novamente.",
       "promptTooLargeForWindows": "O prompt de {{label}} é grande demais para a linha de comando do Windows. Adicione menos alterações ao stage e tente novamente.",
       "pullRequestDetailsUnparseable": "Não foi possível interpretar os detalhes gerados do pull request.",

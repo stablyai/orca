@@ -385,6 +385,15 @@
       "clearAll": "Tout effacer",
       "deleteAll": "Supprimer tous les messages en file d'attente",
       "editMessage": "Modifier le message",
+      "showLess": "Afficher moins",
+      "moreCount_one": "{{count}} de plus",
+      "moreCount_other": "{{count}} de plus",
+      "moreCount_many": "{{count}} de plus",
+      "deleteMessage": "Supprimer le message",
+      "queuedCount_one": "{{count}} message en attente",
+      "queuedCount_other": "{{count}} messages en attente",
+      "queuedCount_many": "{{count}} messages en attente",
+      "foldNeedsAttention": "{{more}}, un message nécessite votre attention",
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
       "resume": "Reprendre",
@@ -644,6 +653,8 @@
       "permissionDenied": "Accès aux photos refusé"
     },
     "agentMessage": {
+      "reopenedWorker": "Worker rouvert",
+      "sentFollowUpToWorker": "Message de suivi envoyé au worker",
       "handedOffToAgent": "Confié à un agent",
       "startedAgent": "Agent démarré"
     },
@@ -2435,6 +2446,7 @@
       "images_one": "{{count}} image",
       "images_other": "{{count}} images",
       "moreActions": "Plus d'actions",
+      "you": "Vous",
       "send": "Envoyer",
       "sendAgainHint": "Renvoyer ce message",
       "sendHint": "Envoyer ce message",
@@ -2539,6 +2551,7 @@
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
       "allowAutoClose": "Autoriser la fermeture automatique",
+      "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2855,6 +2868,29 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "tabsSheet": {
+      "needsYou": "Nécessitent votre attention",
+      "working": "En cours",
+      "everythingElse": "Tout le reste",
+      "open": "Ouvert",
+      "closeTab": "Fermer {{title}}"
+    },
+    "tabRows": {
+      "browser": "Navigateur",
+      "markdown": "Note Markdown",
+      "file": "Fichier",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 onglet",
+      "tabCount": "{{count}} onglets",
+      "anotherNeedsYou": "un autre onglet nécessite votre attention",
+      "actionsHint": "Affiche les actions de cet onglet",
+      "next": "Onglet suivant",
+      "previous": "Onglet précédent",
+      "hint": "Affiche tous les onglets"
     }
   },
   "settings": {
@@ -3449,6 +3485,9 @@
       "planModelUnavailable": "Le modèle « {{model}} » n’est pas disponible pour {{label}}.",
       "planModelWithoutThinking": "Le modèle « {{model}} » ne prend pas en charge les niveaux d’effort de réflexion.",
       "planThinkingLevelInvalid": "Le niveau de réflexion « {{level}} » n’est pas valide pour {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Le modèle de commande pour la correction de la dictée est vide.",
+      "dictationCleanupAgentUnsupported": "Choisissez un agent compatible pour la correction par IA dans Paramètres -> Voix -> Correction. Agents compatibles : {{agents}}, ou Commande personnalisée.",
+      "agentCannotGenerateDictationCleanup": "L’agent « {{agent}} » ne prend pas en charge la correction de la dictée. Agents compatibles : {{agents}}, ou Commande personnalisée.",
       "promptTooLargeForArgument": "Le prompt de {{label}} est trop volumineux pour être transmis en un seul argument de ligne de commande. Stagez moins de modifications et réessayez.",
       "promptTooLargeForWindows": "Le prompt de {{label}} est trop volumineux pour la ligne de commande Windows. Stagez moins de modifications et réessayez.",
       "pullRequestDetailsUnparseable": "Impossible d’analyser les détails générés de la pull request.",
