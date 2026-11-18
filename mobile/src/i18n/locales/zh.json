@@ -1327,8 +1327,7 @@
         "showMoreFiles": "再显示 {{count}} 个"
       },
       "composer": {
-        "planMode": "计划",
-        "exitPlanMode": "退出计划模式"
+        "planMode": "计划"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"

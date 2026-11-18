@@ -1177,8 +1177,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "Planifier",
-        "exitPlanMode": "Quitter le mode plan"
+        "planMode": "Planifier"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"

@@ -8,6 +8,9 @@ import type {
 
 const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }) => string> = {
   model: () => translate('components.native-chat.composer.model', 'Model'),
+  interactionMode: () => translate('components.native-chat.composer.interactionMode', 'Mode'),
+  buildMode: () => translate('components.native-chat.composer.buildMode', 'Build'),
+  planMode: () => translate('components.native-chat.composer.planMode', 'Plan'),
   effort: () => translate('components.native-chat.composer.effort', 'Effort'),
   fastMode: () => translate('components.native-chat.composer.fastMode', 'Fast mode'),
   speed: () => translate('components.native-chat.composer.speed', 'Speed'),

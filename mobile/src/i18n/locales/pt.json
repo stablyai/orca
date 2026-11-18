@@ -1264,8 +1264,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "Plano",
-        "exitPlanMode": "Sair do modo de planejamento"
+        "planMode": "Plano"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",

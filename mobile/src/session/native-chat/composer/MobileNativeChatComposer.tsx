@@ -31,7 +31,6 @@ import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-s
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
-import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
@@ -95,6 +94,7 @@ export function MobileNativeChatComposer({
   // This composer's ✕, which its own held mic may be released over.
   const cancelRef = useRef<HostInstance>(null)
   const [focused, setFocused] = useState(false)
+  const modePressInFocused = useRef(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
   )
@@ -305,7 +305,16 @@ export function MobileNativeChatComposer({
                   sendInFlight={sending || isAttaching}
                   presentation={picker}
                   onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
+                  onModePressIn={() => {
+                    // Web focuses the pill before onPress.
+                    modePressInFocused.current = focused
+                  }}
+                  onDrawerOpen={(page) => {
+                    const refocus =
+                      focused || (page === 'interactionMode' && modePressInFocused.current)
+                    modePressInFocused.current = false
+                    setPicker({ page, refocus })
+                  }}
                   onDrawerAfterClose={() => {
                     if (picker?.refocus) {
                       fieldRef.current?.focus()
@@ -314,7 +323,6 @@ export function MobileNativeChatComposer({
                   }}
                 />
               ) : null}
-              <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
             </MobileNativeChatDictationLeading>
             {onMicPress ? (

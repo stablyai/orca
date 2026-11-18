@@ -5,6 +5,12 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
   switch (id) {
     case 'model':
       return translate('chat.sessionOptionCopy.model', 'Model')
+    case 'interactionMode':
+      return translate('components.native-chat.composer.interactionMode', 'Mode')
+    case 'buildMode':
+      return translate('components.native-chat.composer.buildMode', 'Build')
+    case 'planMode':
+      return translate('components.native-chat.composer.planMode', 'Plan')
     case 'effort':
       return translate('chat.sessionOptionCopy.effort', 'Effort')
     case 'fastMode':

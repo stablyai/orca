@@ -19579,8 +19579,7 @@
           "xhigh": "Sehr hoch"
         },
         "imageUnavailable": "Vorschau nicht verfügbar",
-        "moreControls": "Weitere Chat-Steuerelemente",
-        "exitPlanMode": "Planungsmodus verlassen"
+        "moreControls": "Weitere Chat-Steuerelemente"
       },
       "tool": {
         "exitCode": "Rückgabecode {{value0}}",

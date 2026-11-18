@@ -1138,8 +1138,7 @@
     },
     "native-chat": {
       "composer": {
-        "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık"
+        "planMode": "Plan"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
