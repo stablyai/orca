@@ -126,7 +126,14 @@ describe('NativeChatTranscriptRow New line spacing', () => {
     ],
     ['above-turn-bar', user(), { text: 'Not sent' }, ['-mb-3'], ['-mt-6']],
     ['above-turn-bar', user(), { sending: true }, ['-mb-3'], ['-mt-6']],
-    ['above-turn-bar', user({ timestamp: null }), undefined, ['-mb-3'], ['-mt-6']],
+    ['above-turn-bar', user({ timestamp: null }), undefined, ['-mt-6', '-mb-3'], ['-mb-1.5']],
+    [
+      'above-turn-bar',
+      user({ timestamp: null, blocks: [{ type: 'image-ref', path: '/tmp/shot.png' }] }),
+      undefined,
+      ['-mb-3'],
+      ['-mt-6']
+    ],
     ['above-turn-bar', { ...user(), drawsMessage: false }, undefined, ['-mb-3'], ['-mt-6']],
     [
       'above-row',

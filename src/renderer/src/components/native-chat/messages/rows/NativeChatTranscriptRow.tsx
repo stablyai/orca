@@ -23,6 +23,7 @@ import { NativeChatForkContext } from '../actions/native-chat-fork-context'
 import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from '../../viewport/new-rows/NativeChatNewRowsMarker'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -66,14 +67,14 @@ function newRowsMarkerSpacing(
     // A turn with no prompt opens on its bar, which needs the deeper trim too.
     return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
   }
-  // Only where the hover row is drawn: it always shows a time, so a message without one may have none.
+  // Only where the hover row is drawn: a time or a copy button; an image-only prompt with no time has none.
   const afterHoverMeta =
     slot.drawsMessage &&
     !slot.receipt &&
     slot.message.role === 'user' &&
     !slot.message.from &&
     deliveryNotice === undefined &&
-    Number.isFinite(slot.message.timestamp)
+    (slot.message.timestamp !== null || deriveNativeChatRowContent(slot.message.blocks).hasText)
   return cn('-mb-3', afterHoverMeta && '-mt-6')
 }
 
