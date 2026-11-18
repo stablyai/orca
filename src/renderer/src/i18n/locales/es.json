@@ -86,7 +86,6 @@
       "windows": {
         "administratorApproval": "Windows pedirá aprobación. Usa tu cuenta habitual.",
         "administratorDialogScope": "Esto cambia los permisos de toda la aplicación. SSH y WSL conservan sus propios permisos.",
-        "administratorDocumentation": "Leer la guía",
         "administratorLabel": "Modo administrador",
         "administratorPromptCancellation": "Si cancelas el aviso de Windows, Orca se vuelve a abrir con sus terminales conservadas. Los permisos de SSH y WSL siguen controlándose en sus hosts.",
         "administratorRestartConsequences": "Guarda tu trabajo primero. Tras la aprobación, las terminales y los agentes del host de terminal local actual se cierran. Las pestañas restauradas abren nuevos shells de administrador.",
@@ -5906,10 +5905,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar Orca",
           "29c56f30ee": "Buscar actualizaciones",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Changelog",
-          "cdc87f897e": "Documentación",
           "e565171a7c": "Atajos de teclado",
           "4cf5b868d7": "Enviar comentarios",
           "a428c25998": "Ajustes",
@@ -5917,8 +5914,7 @@
           "4e8f5710d3": "No se pudo reiniciar Orca.",
           "5161eef55d": "Reiniciando Orca...",
           "f8a2c91d4e": "Milestones",
-          "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Onboarding"
         },
         "SidebarToolbar": {
           "87d0064026": "El tablero de espacios de trabajo se movió a la barra inferior",

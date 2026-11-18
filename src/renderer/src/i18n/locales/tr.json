@@ -595,7 +595,6 @@
         "retainedTerminalPermissions": "Yeni terminaller hâlâ önceki izinleri kullanıyorsa Oturumları Yönet'i açıp Arka plan hizmetini yeniden başlat'ı seçin. Bu işlem yerel terminalleri ve içlerinde çalışan komutları kapatır.",
         "administratorRestartFailed": "Orca yeniden başlatılamadı. Tekrar deneyin veya manuel yönergeleri kullanın.",
         "manualAdministratorHelp": "Manuel yönergeler",
-        "administratorDocumentation": "Kılavuzu okuyun",
         "cancelAdministratorRestart": "İptal",
         "closeAdministratorHelp": "Kapat",
         "restartingAdministrator": "Yeniden başlatılıyor…",
@@ -6322,10 +6321,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca'yı Yeniden Başlat",
           "29c56f30ee": "Güncellemeleri Kontrol Et",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Değişiklik Günlüğü",
-          "cdc87f897e": "Belgeler",
           "e565171a7c": "Klavye Kısayolları",
           "4cf5b868d7": "Geri Bildirim Gönder",
           "a428c25998": "Ayarlar",
@@ -6333,8 +6330,7 @@
           "4e8f5710d3": "Orca yeniden başlatılamadı.",
           "5161eef55d": "Orca yeniden başlatılıyor…",
           "f8a2c91d4e": "Dönüm noktaları",
-          "b7e4d2a19c": "Başlangıç",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Başlangıç"
         },
         "SidebarToolbar": {
           "87d0064026": "Çalışma alanı panosu alt çubuğa taşındı",

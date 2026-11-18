@@ -5,6 +5,7 @@ import {
   OPENCODE_MODEL_TRANSPORT_REFUSAL,
   OPENCODE_MODEL_VERSION_REFUSAL
 } from '../../../../shared/agent-launch/choices/agent-launch-model-preferences'
+import { applyZotzBrandToCopy } from '../../../../shared/zotz/zotz-brand-copy'
 
 // Unanchored so caller-owned context around an Electron wrapper survives.
 const IPC_INVOKE_PREFIX = /Error invoking remote method '[^']*':\s*(?:Error:\s*)?/
@@ -25,7 +26,8 @@ function unwrapIpcErrorMessage(message: string, t: Translate = translate): strin
     case OPENCODE_MODEL_TRANSPORT_REFUSAL:
       return t('agentLaunch.opencode.unsupportedLaunch', OPENCODE_MODEL_TRANSPORT_REFUSAL)
     default:
-      return unwrapped || undefined
+      // Main-process errors are hardcoded English; rebrand them where they reach the user.
+      return applyZotzBrandToCopy(unwrapped) || undefined
   }
 }
 

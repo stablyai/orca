@@ -340,7 +340,6 @@
       "windows": {
         "administratorApproval": "Windows demandera une approbation. Utilisez votre compte habituel.",
         "administratorDialogScope": "Cela modifie les autorisations pour toute l'application. SSH et WSL conservent leurs propres autorisations.",
-        "administratorDocumentation": "Lire le guide",
         "administratorLabel": "Mode administrateur",
         "administratorPromptCancellation": "L'annulation de l'invite de Windows rouvre Orca avec ses terminaux conservés. Les autorisations SSH et WSL restent contrôlées sur leurs hôtes.",
         "administratorRestartConsequences": "Enregistrez d'abord votre travail. Après approbation, les terminaux et les agents sur l'hôte de terminaux local actuel se ferment. Les onglets restaurés ouvrent de nouveaux shells d'administrateur.",
@@ -6192,10 +6191,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Redémarrer Orca",
           "29c56f30ee": "Rechercher des mises à jour",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Journal des modifications",
-          "cdc87f897e": "Docs",
           "e565171a7c": "Raccourcis clavier",
           "4cf5b868d7": "Envoyer un commentaire",
           "a428c25998": "Paramètres",
@@ -6203,8 +6200,7 @@
           "4e8f5710d3": "Impossible de redémarrer Orca.",
           "5161eef55d": "Redémarrage d'Orca…",
           "f8a2c91d4e": "Jalons",
-          "b7e4d2a19c": "Prise en main",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Prise en main"
         },
         "SidebarToolbar": {
           "87d0064026": "Tableau des espaces de travail déplacé dans la barre inférieure",

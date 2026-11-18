@@ -670,7 +670,6 @@
         "retainedTerminalPermissions": "If new terminals still use the previous permissions, open Manage Sessions and choose Restart daemon. This closes local terminals and their running commands.",
         "administratorRestartFailed": "Orca could not restart. Try again or use the manual instructions.",
         "manualAdministratorHelp": "Manual instructions",
-        "administratorDocumentation": "Read the guide",
         "cancelAdministratorRestart": "Cancel",
         "closeAdministratorHelp": "Close",
         "restartingAdministrator": "Restarting…",
@@ -7031,10 +7030,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
           "29c56f30ee": "Check for Updates",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Changelog",
-          "cdc87f897e": "Docs",
           "e565171a7c": "Keyboard Shortcuts",
           "4cf5b868d7": "Send Feedback",
           "a428c25998": "Settings",
@@ -7042,8 +7039,7 @@
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
           "f8a2c91d4e": "Milestones",
-          "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Onboarding"
         },
         "SidebarToolbar": {
           "87d0064026": "Workspace board moved to the bottom bar",

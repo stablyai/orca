@@ -14,6 +14,7 @@ import type { RuntimeRpcFailure } from '../../shared/remote-runtime/rpc/runtime-
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
+import { applyZotzBrandToCopy } from '../../shared/zotz/zotz-brand-copy'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
@@ -159,13 +160,13 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
     }
   } else if (concise) {
     // Recovery detail goes to stdout so stderr stays the one-line failure.
-    const [first = '', ...detail] = formatCliError(error, context).split('\n')
+    const [first = '', ...detail] = applyZotzBrandToCopy(formatCliError(error, context)).split('\n')
     if (detail.length > 0) {
       console.log(detail.join('\n'))
     }
     console.error(formatOrchestrationErrorLine(cliErrorCode(error) ?? 'runtime_error', first))
   } else {
-    console.error(formatCliError(error, context))
+    console.error(applyZotzBrandToCopy(formatCliError(error, context)))
   }
 }
 

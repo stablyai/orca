@@ -1,5 +1,6 @@
 import { formatBrowserActionEffects } from '../browser/browser-format'
 import { prepareComputerCliJsonResult } from '../computer/computer-format'
+import { applyZotzBrandToCopy } from '../../shared/zotz/zotz-brand-copy'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function printResult<TResult>(
@@ -11,5 +12,7 @@ export function printResult<TResult>(
     console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
     return
   }
-  console.log(formatter(response.result) + formatBrowserActionEffects(response.result))
+  console.log(
+    applyZotzBrandToCopy(formatter(response.result) + formatBrowserActionEffects(response.result))
+  )
 }

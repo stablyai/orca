@@ -86,7 +86,6 @@
       "windows": {
         "administratorApproval": "Windows 将请求批准，请使用您常用的账户",
         "administratorDialogScope": "这会更改整个应用的权限，SSH 和 WSL 保留各自的权限",
-        "administratorDocumentation": "阅读指南",
         "administratorLabel": "管理员模式",
         "administratorPromptCancellation": "取消 Windows 的提示后，Orca 会带着保留的终端重新打开，SSH 和 WSL 的权限仍由其主机控制",
         "administratorRestartConsequences": "请先保存您的工作，批准后，当前本地终端主机上的终端和代理会关闭，已恢复的标签页会打开新的管理员 shell",
@@ -5874,10 +5873,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重启 Orca",
           "29c56f30ee": "检查更新",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "变更日志",
-          "cdc87f897e": "文档",
           "e565171a7c": "键盘快捷键",
           "4cf5b868d7": "发送反馈",
           "a428c25998": "设置",
@@ -5885,8 +5882,7 @@
           "4e8f5710d3": "无法重新启动 Orca",
           "5161eef55d": "正在重启 Orca…",
           "f8a2c91d4e": "里程碑",
-          "b7e4d2a19c": "入门引导",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "入门引导"
         },
         "SidebarToolbar": {
           "87d0064026": "工作区板已移到底部栏",
