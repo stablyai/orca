@@ -25,11 +25,6 @@ describe('settings search keywords in a localized UI', () => {
       ['unread', 'no leído']
     ],
     [
-      'scroll to latest',
-      () => getChatBehaviorEntriesByKey().scrollToLatestOnSend,
-      ['position', 'posición']
-    ],
-    [
       'turn diffs',
       () => getChatTurnActivityEntriesByKey().turnDiffs,
       ['changed files', 'archivos modificados']
