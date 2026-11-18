@@ -97,6 +97,34 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   }
 }
 
+/** Console output is diagnostic only; a dead terminal or full log volume must not fault main. */
+export function installStdioWriteErrorSink(): void {
+  for (const [streamName, stream] of [
+    ['stdout', process.stdout],
+    ['stderr', process.stderr]
+  ] as const) {
+    let recorded = false
+    // Node reports a failed sync write as an async 'error' event, so console's own swallow misses it.
+    stream?.on('error', (error: unknown) => {
+      if (recorded) {
+        return
+      }
+      recorded = true
+      try {
+        // Not console: it writes to the stream that just failed.
+        recordDurableCrashBreadcrumb('main_stdio_write_failed', {
+          stream: streamName,
+          errorCode: boundedString(readErrorProperty(error, 'code') ?? '', 100),
+          // libuv has no name for some errnos (e.g. EDQUOT) and reports code UNKNOWN.
+          errno: boundedString(readErrorProperty(error, 'errno') ?? '', 20)
+        })
+      } catch {
+        // The log volume that failed may also hold the trace.
+      }
+    })
+  }
+}
+
 export function installUncaughtPipeErrorGuard(): void {
   const onUncaughtException = (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
