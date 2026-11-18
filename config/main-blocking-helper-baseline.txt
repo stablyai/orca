@@ -830,12 +830,13 @@
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
 12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+3 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 creates the retired-epoch pending table on the journal SQL worker
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
 1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-receipt.ts
 4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+1 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: its one-time setup transaction runs on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
@@ -847,6 +848,7 @@
 7 src/main/native-chat/agent-session-journal/journal-domain-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
+2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
 6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
