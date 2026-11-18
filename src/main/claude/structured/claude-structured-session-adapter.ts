@@ -18,6 +18,7 @@ import { acquireClaudeSession } from './lifecycle/claude-structured-session-acqu
 import { supportsClaudeStructuredLocation } from './launch/claude-structured-location-support'
 import * as claudeOptions from './launch/claude-structured-options'
 import { dispatchClaudeMessage } from './launch/claude-structured-message-options'
+import { claudeLivePermissionMode } from './launch/claude-structured-launch-resolution'
 import { readClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
 import {
   ClaudeAcquisitionRegistry,
@@ -170,6 +171,18 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => {
     const { requestTimeoutMs, logger } = this.deps
     return dispatchClaudeMessage(this.session(input.sessionId), input, requestTimeoutMs, logger)
+  }
+
+  applyPermissionMode: NonNullable<StructuredAgentSessionAdapter['applyPermissionMode']> = async (
+    input
+  ) => {
+    const mode = claudeLivePermissionMode(input.mode)
+    const session = this.sessions.get(input.sessionId)
+    // Own/full-access stay spawn-time; a foreign fence's session takes its pick at the next send.
+    if (!mode || !session || session.fence !== input.fence) {
+      return
+    }
+    await session.connection.setPermissionMode(mode)
   }
 
   forkForRewind = claudeForkForRewind

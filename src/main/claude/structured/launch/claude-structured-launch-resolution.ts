@@ -99,6 +99,17 @@ export function claudeStructuredPermissionOptions(
     : { permissionMode: CLAUDE_PERMISSION_MODES[mode] }
 }
 
+/**
+ * The mode a running child can be moved to with a set_permission_mode control request;
+ * undefined for `own` (settings default) and `full-access`, which only its launch flag can
+ * grant, so those picks keep applying at the next spawn (#44021).
+ */
+export function claudeLivePermissionMode(
+  mode: AgentChatPermissionChoice
+): PermissionMode | undefined {
+  return mode === 'own' || mode === 'full-access' ? undefined : CLAUDE_PERMISSION_MODES[mode]
+}
+
 export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
