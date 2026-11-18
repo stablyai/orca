@@ -101,7 +101,9 @@ function parseArgs(argv) {
   }
   for (const name of options.scenarios ?? []) {
     if (!SCENARIOS[name] && name !== 'burst') {
-      throw new Error(`unknown scenario ${name}; known: ${Object.keys(SCENARIOS).join(', ')}`)
+      throw new Error(
+        `unknown scenario ${String(name)}; known: ${Object.keys(SCENARIOS).join(', ')}`
+      )
     }
   }
   return options
@@ -504,7 +506,7 @@ async function main() {
   const incomplete = [
     ...new Set(
       [...runs, ...bursts].flatMap((entry) =>
-        entry.incomplete.map((reason) => `${entry.arm} ${reason}`)
+        entry.incomplete.map((reason) => `${String(entry.arm)} ${String(reason)}`)
       )
     )
   ]

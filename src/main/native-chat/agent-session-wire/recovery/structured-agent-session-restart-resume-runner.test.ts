@@ -13,15 +13,23 @@ it('starts at most six restart continuations at once on a many-core host', async
   const admission = new StructuredAgentSessionResumeAdmission()
   let running = 0
   let peak = 0
-  await Promise.all(
+  let open: () => void = () => {}
+  // Every continuation holds until the gate opens, so all that admission lets start are running at once.
+  const gate = new Promise<void>((resolve) => {
+    open = resolve
+  })
+  const all = Promise.all(
     Array.from({ length: 25 }, (_, index) =>
       admission.run(`session-${index}`, 'restart', async () => {
         running += 1
         peak = Math.max(peak, running)
-        await new Promise((resolve) => setTimeout(resolve, 5))
+        await gate
         running -= 1
       })
     )
   )
+  await vi.waitFor(() => expect(running).toBeGreaterThanOrEqual(6))
+  open()
+  await all
   expect(peak).toBe(6)
 })
