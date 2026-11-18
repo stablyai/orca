@@ -1,7 +1,9 @@
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import type { PtyControllerInventory } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { subscribeSessionTabsInventory } from './session-tabs-inventory'
 
@@ -27,11 +29,21 @@ class RestampingRuntime extends OrcaRuntimeService {
       ]
     }
   }
+  protected override async refreshMobileSessionPtyInventory(): Promise<PtyControllerInventory> {
+    return {
+      livePtyIds: new Set(),
+      allLivePtyIds: new Set(),
+      terminalIdentityByPtyId: new Map(),
+      queriedHostIds: new Set([LOCAL_EXECUTION_HOST_ID])
+    }
+  }
+  flushPublications(): void {
+    this.mobileSessionTabsNotifyCoalescer.flushAll()
+  }
 }
 
-it('sends desktops a timestamp-only chat status change as a version-only frame', async () => {
-  const runtime = new RestampingRuntime()
-  const snapshot = (snapshotVersion: number): RuntimeMobileSessionTabsSnapshot => ({
+function snapshot(snapshotVersion: number): RuntimeMobileSessionTabsSnapshot {
+  return {
     worktree: 'wt-chat-status',
     publicationEpoch: 'epoch-current',
     snapshotVersion,
@@ -39,19 +51,13 @@ it('sends desktops a timestamp-only chat status change as a version-only frame',
     activeTabId: null,
     activeTabType: null,
     tabs: []
-  })
-  await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [snapshot(1)] })
-  const internals = runtime as unknown as {
-    refreshMobileSessionPtyInventory: () => Promise<unknown>
-    mobileSessionTabsNotifyCoalescer: { flushAll: () => void }
   }
-  vi.spyOn(internals, 'refreshMobileSessionPtyInventory').mockResolvedValue({
-    livePtyIds: new Set(),
-    allLivePtyIds: new Set(),
-    terminalIdentityByPtyId: new Map(),
-    queriedHostIds: new Set(['local'])
-  })
-  const emit = vi.fn<(event: unknown) => void>()
+}
+
+it('sends desktops a timestamp-only chat status change as a version-only frame', async () => {
+  const runtime = new RestampingRuntime()
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [snapshot(1)] })
+  const events: unknown[] = []
   await subscribeSessionTabsInventory(
     {
       runtime,
@@ -61,21 +67,24 @@ it('sends desktops a timestamp-only chat status change as a version-only frame',
       // The local desktop window subscribes without a client kind.
       clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
     },
-    emit
+    (event) => events.push(event)
   )
   await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [snapshot(2)] })
-  internals.mobileSessionTabsNotifyCoalescer.flushAll()
+  runtime.flushPublications()
   await new Promise<void>((resolve) => queueMicrotask(resolve))
   await runtime['agentProjections'].senders.withPreparedPublication(() => undefined, false)
 
-  const [census, update] = emit.mock.calls.map(([event]) => event) as {
-    snapshots?: { tabs: unknown[] }[]
-    tabs?: unknown[]
-    snapshotVersion?: number
-  }[]
-  const chat = { type: 'agent-session', id: 'chat-tab', sessionId: 'session-1' }
-  expect(census?.snapshots?.[0]?.tabs).toEqual([expect.objectContaining(chat)])
-  expect(census?.snapshots?.[0]?.tabs[0]).not.toHaveProperty('chatStatus')
-  expect(update).toMatchObject({ type: 'updated', snapshotVersion: 2 })
-  expect(update?.tabs).toEqual(census?.snapshots?.[0]?.tabs)
+  const chat = expect.objectContaining({
+    type: 'agent-session',
+    id: 'chat-tab',
+    sessionId: 'session-1'
+  })
+  expect(events).toEqual([
+    expect.objectContaining({
+      type: 'snapshots',
+      snapshots: [expect.objectContaining({ tabs: [chat] })]
+    }),
+    expect.objectContaining({ type: 'updated', snapshotVersion: 2, tabs: [chat] })
+  ])
+  expect(JSON.stringify(events)).not.toContain('chatStatus')
 })
