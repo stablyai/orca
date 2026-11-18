@@ -52,7 +52,7 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement
   ) {
-    return { width: width(this) } as DOMRect
+    return new DOMRect(0, 0, width(this), 0)
   })
 })
 
