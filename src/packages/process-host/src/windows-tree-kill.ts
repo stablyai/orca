@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import type { ProcessChild } from './process-spec'
 import { constants, getPriority, setPriority } from 'node:os'
 import { windowsSystem32Binary } from './windows-system-binary'
 
@@ -29,15 +30,15 @@ const launchSystemTaskkill: TaskkillLauncher = (rootPid) =>
 let launchTaskkill: TaskkillLauncher = launchSystemTaskkill
 
 // Keyed by handle, not pid: a reused pid must never join another tree's kill.
-const treeKills = new WeakMap<ChildProcess, WindowsTreeKill>()
+const treeKills = new WeakMap<ProcessChild, WindowsTreeKill>()
 
-export function trackedWindowsTreeKill(child: ChildProcess): WindowsTreeKill | undefined {
+export function trackedWindowsTreeKill(child: ProcessChild): WindowsTreeKill | undefined {
   const kill = treeKills.get(child)
   return kill && kill.verdict() !== 'unverifiable' ? kill : undefined
 }
 
 export function inFlightWindowsTreeKill(
-  child: ChildProcess
+  child: ProcessChild
 ): Promise<SettledWindowsTreeKillVerdict> | undefined {
   const kill = treeKills.get(child)
   return kill?.verdict() === 'live' ? kill.settled : undefined
@@ -45,7 +46,7 @@ export function inFlightWindowsTreeKill(
 
 /** Delay the root fallback until taskkill fails or its deadline expires. */
 export function startWindowsTreeKill(
-  child: ChildProcess,
+  child: ProcessChild,
   rootPid: number,
   killRoot: () => void
 ): WindowsTreeKill {
@@ -133,7 +134,7 @@ export function waitForWindowsTreeKill(
   })
 }
 
-function childProcessExited(child: ChildProcess): boolean {
+function childProcessExited(child: ProcessChild): boolean {
   return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 

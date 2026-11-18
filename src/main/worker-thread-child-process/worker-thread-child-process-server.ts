@@ -39,7 +39,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
-      discardingOutput?: boolean
+      discarding?: { stdout: boolean; stderr: boolean }
     }
   >()
 
@@ -69,7 +69,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
-      if (state.discardingOutput) {
+      if (state.discarding?.[type]) {
         return
       }
       state.pendingOutputBytes += chunk.byteLength
@@ -175,10 +175,18 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           child.stderr?.resume()
         }
       } else if (request.type === 'discard-output') {
-        state.discardingOutput = true
-        state.pendingOutputBytes = 0
-        child.stdout?.resume()
-        child.stderr?.resume()
+        state.discarding ??= { stdout: false, stderr: false }
+        if (request.stream) {
+          // The other stream's chunks still in flight are acknowledged as usual, so the shared credit stays exact.
+          state.discarding[request.stream] = true
+          child[request.stream]?.resume()
+        } else {
+          state.discarding.stdout = true
+          state.discarding.stderr = true
+          state.pendingOutputBytes = 0
+          child.stdout?.resume()
+          child.stderr?.resume()
+        }
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {

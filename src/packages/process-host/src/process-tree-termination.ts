@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
+import type { ProcessChild } from './process-spec'
 import { admitProcessTreeKill } from './process-tree-kill-gate'
 import {
   startWindowsTreeKill,
@@ -11,7 +12,7 @@ const SUBPROCESS_TIMEOUT_MS = 2_000
 const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 
 /** POSIX children must be detached: signaling -pid targets the process group. */
-export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
+export function signalProcessTree(child: ProcessChild, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
     killRoot(child, signal)
     return Promise.resolve(true)
@@ -48,7 +49,7 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
   }
 }
 
-export async function forceTerminateProcessTree(child: ChildProcess): Promise<boolean> {
+export async function forceTerminateProcessTree(child: ProcessChild): Promise<boolean> {
   const signaled = await signalProcessTree(child, 'SIGKILL')
   if (!signaled) {
     return false
@@ -60,12 +61,12 @@ export async function forceTerminateProcessTree(child: ChildProcess): Promise<bo
 }
 
 /** A stubbed child leaves both undefined; only a real code or signal proves exit. */
-export function childProcessHasExited(child: ChildProcess): boolean {
+export function childProcessHasExited(child: ProcessChild): boolean {
   return (child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null
 }
 
 function taskkillTree(
-  child: ChildProcess,
+  child: ProcessChild,
   rootPid: number,
   signal?: NodeJS.Signals
 ): Promise<boolean> {
@@ -164,7 +165,7 @@ export function processGroupExists(processGroupId: number): boolean {
   }
 }
 
-function killRoot(child: ChildProcess, signal?: NodeJS.Signals): void {
+function killRoot(child: ProcessChild, signal?: NodeJS.Signals): void {
   try {
     child.kill(signal)
   } catch {

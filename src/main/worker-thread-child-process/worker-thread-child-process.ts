@@ -56,12 +56,15 @@ class WorkerThreadChildStdin extends EventEmitter {
     super()
   }
 
-  write(data: string): boolean {
+  write(data: string | Uint8Array): boolean {
     this.send({ type: 'stdin-write', id: this.id, data })
     return true
   }
 
-  end(): void {
+  end(data?: string | Uint8Array): void {
+    if (data !== undefined) {
+      this.write(data)
+    }
     this.send({ type: 'stdin-end', id: this.id })
   }
 }
@@ -71,6 +74,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
   closed = false
+  abandoned = false
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -95,10 +99,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
-  /** The reader is done; later output stays on the worker instead of crossing to this thread. */
-  discardOutput(): void {
+  /** The reader is done with one stream or both; later output stays on the worker instead of crossing to this thread. */
+  discardOutput(stream?: 'stdout' | 'stderr'): void {
     if (!this.closed) {
-      this.send({ type: 'discard-output', id: this.id })
+      this.send({ type: 'discard-output', id: this.id, ...(stream ? { stream } : {}) })
     }
   }
 
@@ -136,6 +140,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
         }
         return
       case 'error':
+        if (isAbandonedWorkerChildError(event.error)) {
+          this.abandoned = true
+        }
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':

@@ -4,12 +4,13 @@ export type WorkerThreadChildSpec = {
   args: string[]
   cwd?: string
   env?: Record<string, string | undefined>
+  windowsVerbatimArguments?: boolean
   terminationBarrier?: true
 }
 
 export type WorkerThreadChildRequest =
   | { type: 'spawn'; id: number; spec: WorkerThreadChildSpec }
-  | { type: 'stdin-write'; id: number; data: string }
+  | { type: 'stdin-write'; id: number; data: string | Uint8Array }
   | { type: 'stdin-end'; id: number }
   | { type: 'output-consumed'; id: number; bytes: number }
   | { type: 'stop-owned-group'; id: number }
@@ -17,8 +18,8 @@ export type WorkerThreadChildRequest =
   | { type: 'kill'; id: number; signal?: NodeJS.Signals }
   // Drops a spawn still queued behind other launches; ignored once the process exists.
   | { type: 'cancel-spawn'; id: number }
-  // The reader stopped; the worker drains the pipes itself instead of forwarding them.
-  | { type: 'discard-output'; id: number }
+  // The reader stopped (or is full for one stream); the worker drains those pipes itself instead of forwarding them.
+  | { type: 'discard-output'; id: number; stream?: 'stdout' | 'stderr' }
 
 /** Node's errno fields survive the hop so callers can classify spawn failures (spawn ENOENT). */
 export type WorkerThreadChildErrorPayload = {

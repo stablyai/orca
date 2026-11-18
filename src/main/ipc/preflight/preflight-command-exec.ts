@@ -24,29 +24,46 @@ export type PreflightCommandResult = { stdout: string; stderr: string }
 async function withPreflightTimeout<T>(
   command: string,
   commandPromise: Promise<T>,
-  timeoutMs = PREFLIGHT_COMMAND_TIMEOUT_MS
+  timeoutMs = PREFLIGHT_COMMAND_TIMEOUT_MS,
+  started: Promise<void> = Promise.resolve()
 ): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+  let settled = false
   try {
     return await Promise.race([
       commandPromise,
       new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          const error = Object.assign(new Error(`Timed out running ${command}`), {
-            code: 'ETIMEDOUT'
-          })
-          reject(error)
-        }, timeoutMs)
-        if (typeof timeout.unref === 'function') {
-          timeout.unref()
-        }
+        void started.then(() => {
+          if (settled) {
+            return
+          }
+          timeout = setTimeout(() => {
+            const error = Object.assign(new Error(`Timed out running ${command}`), {
+              code: 'ETIMEDOUT'
+            })
+            reject(error)
+          }, timeoutMs)
+          if (typeof timeout.unref === 'function') {
+            timeout.unref()
+          }
+        })
       })
     ])
   } finally {
+    settled = true
     if (timeout) {
       clearTimeout(timeout)
     }
   }
+}
+
+// Windows may queue a launch behind others on a worker; time the run, not the queue.
+function spawnStart(): { started: Promise<void>; onSpawn: () => void } {
+  let onSpawn = (): void => {}
+  const started = new Promise<void>((resolve) => {
+    onSpawn = () => resolve()
+  })
+  return { started, onSpawn }
 }
 
 /** Reject execution failures; callers must distinguish them from absence (docs/reference/wsl-probe-failure-semantics.md). */
@@ -57,21 +74,20 @@ export async function execLocalPreflightCommandOrThrow(
 ): Promise<PreflightCommandResult> {
   const env = options.env ?? buildLocalPreflightEnv()
   const timeoutMs = options.timeoutMs ?? PREFLIGHT_COMMAND_TIMEOUT_MS
-  // Node cannot execFile a batch shim; the shared runner handles its argv safely.
-  if (
-    options.terminationBarrier ||
-    (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command))
-  ) {
+  // Windows: the shared runner launches off Electron main and handles batch-shim argv, which execFile cannot.
+  if (options.terminationBarrier || process.platform === 'win32') {
+    const { started, onSpawn } = spawnStart()
     const pending = runProcess({
       program: command,
       args,
       env,
       timeoutMs,
+      onSpawn,
       ...(options.terminationBarrier ? { terminationBarrier: true } : {})
     })
     const result = options.terminationBarrier
       ? await pending
-      : await withPreflightTimeout(command, pending, timeoutMs)
+      : await withPreflightTimeout(command, pending, timeoutMs, started)
     if (result.timedOut || result.outputTruncated || result.code !== 0) {
       throw Object.assign(new Error(`Failed running ${command}`), {
         ...result,
@@ -96,9 +112,15 @@ export async function execCommandInWslOrThrow(
   target: WslPreflightTarget,
   command: string
 ): Promise<PreflightCommandResult> {
-  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
+  const { started, onSpawn } = spawnStart()
+  const commandPromise = runPreflightCommandInWsl(
+    target,
+    command,
+    PREFLIGHT_COMMAND_TIMEOUT_MS,
+    onSpawn
+  )
   // Diagnostic label only; runPreflightCommandInWsl owns process invocation.
-  return withPreflightTimeout('wsl command', commandPromise)
+  return withPreflightTimeout('wsl command', commandPromise, PREFLIGHT_COMMAND_TIMEOUT_MS, started)
 }
 
 const PREFLIGHT_LOCAL_PROBE_LIMIT = 4
