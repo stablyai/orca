@@ -10,6 +10,7 @@ import {
   readAgentJournalTurnOutcome
 } from '../lifecycle/records/agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-status/lifecycle/agent-turn-outcome'
+import { isStructuredAgentSessionCommandEntry } from '../requests/structured-agent-session-command-entry'
 
 /** Loaded startup causes and authentication explanations already visible in the transcript. */
 export function agentSessionVisibleFailureFacts(
@@ -56,7 +57,8 @@ export function agentSessionUnresolvedFailureRows(
       turn &&
       isRootAgentJournalItem(item) &&
       agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
-        'success'
+        'success' &&
+      !openedByCommand(items, index, turn.userItemId)
     ) {
       break
     }
@@ -69,6 +71,28 @@ export function agentSessionUnresolvedFailureRows(
     }
   }
   return rows
+}
+
+/** Whether the turn at `index` ran a conversation command such as `/compact`, which proves no setup. */
+function openedByCommand(
+  items: readonly AgentJournalRenderItem[],
+  index: number,
+  userItemId: string | undefined
+): boolean {
+  if (userItemId === undefined) {
+    return false
+  }
+  // Its opener sits after the previous turn's row, so the look back stops there.
+  for (let back = index - 1; back >= 0; back -= 1) {
+    const item = items[back]!
+    if (item.itemId === userItemId) {
+      return isStructuredAgentSessionCommandEntry(item.body)
+    }
+    if (item.body.kind === 'turn' && isRootAgentJournalItem(item)) {
+      return false
+    }
+  }
+  return false
 }
 
 function sameInstallation(
