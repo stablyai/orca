@@ -18,7 +18,6 @@ import {
 } from '../pr-status/zotz-pr-status'
 import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
 import { ZotzPrChecksList, ZotzPrChecksSummary } from './ZotzPrChecksList'
-import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import type { ZotzReviewRef } from './zotz-pr-fix-checks'
 
 // Closed for this run only: a new PR or a restart brings the chip back.
@@ -76,8 +75,7 @@ function ChipBody({
       </button>
       <span className="text-muted-foreground">{repoName}</span>
       <span className="min-w-0 truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono">{branch}</span>
-      <span className={cn('flex shrink-0 items-center gap-1 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
-        <ZotzPrStatusIcon status={status} />
+      <span className={cn('shrink-0 font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
         {zotzPrStatusLabel(status, t)}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-2">

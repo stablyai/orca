@@ -25,7 +25,6 @@ import {
   zotzPrTone
 } from '../pr-status/zotz-pr-status'
 import { useZotzPrChecksMonitor } from './use-zotz-pr-checks'
-import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import { ZotzPrChecksList, ZotzPrChecksSummary } from './ZotzPrChecksList'
 import { zotzReviewRef } from './ZotzPrChip'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -165,7 +164,6 @@ function StripWithPr({
           aria-expanded={open}
           className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <ZotzPrStatusIcon status={status} />
           <span className={cn('min-w-0 truncate font-medium', ZOTZ_PR_TONE_TEXT[tone])}>
             {zotzPrStatusLabel(status, t)}
           </span>
