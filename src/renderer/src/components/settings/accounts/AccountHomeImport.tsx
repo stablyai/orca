@@ -39,7 +39,7 @@ export function AccountHomeImportForm<T>({
     setError(null)
     try {
       const path = await window.api.shell.pickDirectory({
-        defaultPath: sourceHome.trim() || undefined
+        defaultPath: sourceHome.trim() ? sourceHome : undefined
       })
       if (path) {
         setSourceHome(path)
@@ -55,7 +55,7 @@ export function AccountHomeImportForm<T>({
     if (unavailable) {
       return
     }
-    const path = pickedPath ? sourceHome : sourceHome.trim().replace(/^"(.*)"$/, '$1')
+    const path = pickedPath ? sourceHome : sourceHome.replace(/^"(.*)"$/, '$1')
     if (!isWindowsAbsolutePathLike(path) && !path.startsWith('/')) {
       setError(t('accounts.homeImport.absolutePath', 'Enter a full directory path.'))
       return
@@ -98,7 +98,7 @@ export function AccountHomeImportForm<T>({
         <p className="text-xs text-muted-foreground">
           {t(
             'accounts.homeImport.description',
-            'Copy a login into a new Orca account home and activate it for {{host}}. The source folder stays unchanged.',
+            'Copy a login into a new Orca account home and activate it for {{host}}. The source sign-in is preserved.',
             { host: runtime.label }
           )}
         </p>
@@ -161,7 +161,13 @@ export function AccountHomeImport<T>(props: ImportProps<T>) {
           {t('accounts.homeImport.trigger', 'Import from home…')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
+      <PopoverContent
+        align="end"
+        aria-label={t('accounts.homeImport.title', 'Import {{provider}} account', {
+          provider: props.provider
+        })}
+        className="w-80 max-w-[calc(100vw-2rem)]"
+      >
         <div className="p-4">
           <AccountHomeImportForm {...props} onImported={() => setOpen(false)} />
         </div>

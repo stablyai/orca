@@ -25189,7 +25189,7 @@
     "homeImport": {
       "absolutePath": "Enter a full directory path.",
       "title": "Import {{provider}} account",
-      "description": "Copy a login into a new Orca account home and activate it for {{host}}. The source folder stays unchanged.",
+      "description": "Copy a login into a new Orca account home and activate it for {{host}}. The source sign-in is preserved.",
       "home": "{{provider}} home directory",
       "browse": "Browse…",
       "hint": "Choose the account home folder, not an individual file.",
