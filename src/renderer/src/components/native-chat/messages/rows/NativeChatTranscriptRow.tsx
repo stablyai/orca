@@ -45,6 +45,7 @@ export type NativeChatTranscriptRowContext = {
   /** Opens a subagent's own view; absent where the transcript has none to open. */
   onOpenSubagent?: (agentId: string) => void
   onScrollMessageToTop: (element: HTMLElement) => void
+  readerAtEnd: () => boolean
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
@@ -80,7 +81,11 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker marker={newRowsMarker} onReveal={context.onScrollMessageToTop} />
+    <NativeChatNewRowsMarker
+      marker={newRowsMarker}
+      readerAtEnd={context.readerAtEnd}
+      onReveal={context.onScrollMessageToTop}
+    />
   ) : null
   const statusRow = status ? (
     <NativeChatWorkingStatus
