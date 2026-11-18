@@ -35,6 +35,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
+  const [openScanPending, setOpenScanPending] = useState(false)
   const runtimeTarget = useWorktreeRuntimeTarget(activeWorktreeId)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
@@ -84,11 +85,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         return
       }
       // Refresh on open to close the quiet 30-second poll window without flashing icons.
+      setOpenScanPending(true)
       void refreshWorkspacePortScanForTarget({
         runtimeTarget,
         replaceWorkspacePortScans,
         getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey
-      })
+      }).finally(() => setOpenScanPending(false))
     },
     [recordFeatureInteraction, runtimeTarget, replaceWorkspacePortScans]
   )
@@ -194,7 +196,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
                 ))
               ) : (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {refreshing
+                  {refreshing || openScanPending
                     ? t(
                         'auto.components.status.bar.PortsStatusSegment.c174bbbfed',
                         'Scanning for workspace ports...'

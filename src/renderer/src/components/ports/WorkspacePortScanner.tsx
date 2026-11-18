@@ -110,6 +110,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       }
 
       const generation = generationRef.current
+      const publishedAtStart = useAppStore.getState().workspacePortScansByKey
       const promise = Promise.all(
         targets.map(async (target) => {
           const key = workspacePortScanKeyForTarget(target)
@@ -151,6 +152,10 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             let sourceChanged =
               Object.keys(scansByKey).length !== Object.keys(publishedScans).length
             for (const { key, result } of reconciled) {
+              // A refresh the user started while this batch ran is newer; keep it.
+              if (key in scansByKey && scansByKey[key] !== publishedAtStart[key]) {
+                continue
+              }
               if (!sourceChanged) {
                 sourceChanged = scansByKey[key] !== result
               }

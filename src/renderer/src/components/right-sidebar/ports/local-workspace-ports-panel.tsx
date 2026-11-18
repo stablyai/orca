@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -123,6 +123,17 @@ export function LocalWorkspacePortsPanel({
 
   // Scope WorkspacePortScanner's shared 30s results instead of starting another poll loop.
   const displayScan = isVisible && scanKey ? (scansByKey[scanKey] ?? null) : null
+  const hasDisplayScan = displayScan !== null
+  const firstScanRequestedKeyRef = useRef<string | null>(null)
+
+  // Background scans publish silently, so opening the panel before any result scans once in view.
+  useEffect(() => {
+    if (!isVisible || !scanKey || hasDisplayScan || firstScanRequestedKeyRef.current === scanKey) {
+      return
+    }
+    firstScanRequestedKeyRef.current = scanKey
+    void refresh()
+  }, [isVisible, scanKey, hasDisplayScan, refresh])
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((current) => ({ ...current, [sectionId]: !current[sectionId] }))
@@ -296,8 +307,7 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              // The background scanner publishes silently, so a missing first result means a scan is pending.
-              !displayScan && (refreshing || Boolean(runtimeTarget))
+              refreshing && !displayScan
                 ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
                 : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
             }
