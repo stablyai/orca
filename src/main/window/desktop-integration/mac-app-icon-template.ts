@@ -21,20 +21,18 @@ export function getMacAppIconTileGeometry(side: number): MacAppIconTileGeometry 
   return { side, tileOffset, tileSide: side - 2 * tileOffset }
 }
 
-/** True when all four corners are opaque, i.e. the art is a full-bleed square, not an icon shape. */
+/** True when every corner pixel is opaque, i.e. the art is a full-bleed square, not an icon shape. */
 export function isFullBleedIconBitmap(bitmap: Uint8Array, side: number): boolean {
   const patch = Math.max(1, Math.round(side * CORNER_SAMPLE_RATIO))
   for (const originY of [0, side - patch]) {
     for (const originX of [0, side - patch]) {
-      let alphaSum = 0
       for (let y = originY; y < originY + patch; y++) {
         for (let x = originX; x < originX + patch; x++) {
-          alphaSum += bitmap[(y * side + x) * 4 + 3]
+          // Any see-through corner pixel means the art already carries its own shape.
+          if (bitmap[(y * side + x) * 4 + 3] < OPAQUE_CORNER_ALPHA) {
+            return false
+          }
         }
-      }
-      // Any see-through corner means the art already carries its own shape.
-      if (alphaSum / (patch * patch) < OPAQUE_CORNER_ALPHA) {
-        return false
       }
     }
   }

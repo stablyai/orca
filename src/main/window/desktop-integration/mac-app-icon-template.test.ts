@@ -43,10 +43,11 @@ describe('isFullBleedIconBitmap', () => {
       geometry
     )
     expect(isFullBleedIconBitmap(alreadyShaped, 64)).toBe(false)
-    const oneClearCorner = solidBitmap(64, [0, 0, 0, 255])
-    for (let y = 0; y < 16; y++) {
-      oneClearCorner.fill(0, y * 64 * 4, (y * 64 + 16) * 4)
+    // A 2×2 clear corner on 1024px art barely moves a corner patch's mean alpha.
+    const tinyClearCorner = solidBitmap(1024, [0, 0, 0, 255])
+    for (const index of [0, 1, 1024, 1025]) {
+      tinyClearCorner[index * 4 + 3] = 0
     }
-    expect(isFullBleedIconBitmap(oneClearCorner, 64)).toBe(false)
+    expect(isFullBleedIconBitmap(tinyClearCorner, 1024)).toBe(false)
   })
 })

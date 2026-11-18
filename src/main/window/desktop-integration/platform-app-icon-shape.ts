@@ -9,7 +9,11 @@ import {
  * macOS draws Dock tiles exactly as given, so full-bleed square art gets Apple's icon shape,
  * margin and shadow to sit like its neighbours. Already-shaped art and other platforms pass through.
  */
-export function fitAppIconToPlatformShape(image: Electron.NativeImage): Electron.NativeImage {
+export function fitAppIconToPlatformShape(
+  image: Electron.NativeImage,
+  // Classify at the image's own resolution so a smaller preview matches what the Dock draws.
+  outputSide = image.getSize().width
+): Electron.NativeImage {
   const { width, height } = image.getSize()
   if (process.platform !== 'darwin' || image.isEmpty() || width !== height) {
     return image
@@ -18,7 +22,7 @@ export function fitAppIconToPlatformShape(image: Electron.NativeImage): Electron
   if (bitmap.length !== width * width * 4 || !isFullBleedIconBitmap(bitmap, width)) {
     return image
   }
-  const geometry = getMacAppIconTileGeometry(width)
+  const geometry = getMacAppIconTileGeometry(outputSide)
   const tileBitmap = image
     .resize({ width: geometry.tileSide, height: geometry.tileSide, quality: 'best' })
     .toBitmap()
@@ -26,5 +30,8 @@ export function fitAppIconToPlatformShape(image: Electron.NativeImage): Electron
     return image
   }
   const shaped = composeMacAppIconBitmap(tileBitmap, geometry)
-  return nativeImage.createFromBitmap(Buffer.from(shaped.buffer), { width, height })
+  return nativeImage.createFromBitmap(Buffer.from(shaped.buffer), {
+    width: outputSide,
+    height: outputSide
+  })
 }

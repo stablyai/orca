@@ -56,9 +56,12 @@ class CustomAppIconImportError extends Error {
 
 // The preview shows the same platform shape the Dock will draw.
 function previewDataUrl(image: Electron.NativeImage): string {
-  return fitAppIconToPlatformShape(
-    image.resize({ width: PREVIEW_ICON_SIDE, height: PREVIEW_ICON_SIDE, quality: 'best' })
-  ).toDataURL()
+  const shaped = fitAppIconToPlatformShape(image, PREVIEW_ICON_SIDE)
+  return shaped === image
+    ? image
+        .resize({ width: PREVIEW_ICON_SIDE, height: PREVIEW_ICON_SIDE, quality: 'best' })
+        .toDataURL()
+    : shaped.toDataURL()
 }
 
 async function decodeCustomAppIcon(sourcePath: string): Promise<Electron.NativeImage> {
