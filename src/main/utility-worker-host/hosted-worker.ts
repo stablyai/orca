@@ -39,6 +39,11 @@ export class HostedWorker extends EventEmitter {
     super()
   }
 
+  /** Null while the worker runs in the utility process. */
+  get threadId(): number | null {
+    return this.local?.threadId ?? null
+  }
+
   postMessage(message: unknown): void {
     if (this.local) {
       this.local.postMessage(message)

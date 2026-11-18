@@ -1,5 +1,9 @@
-import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
+import type {
+  JournalSqlForkReader,
+  JournalSqlConversionReader
+} from './journal-sql-reader-reservations'
 import { ReaderSlot } from './journal-sql-reader-slot'
+import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
@@ -143,7 +147,7 @@ export class JournalSqlReaderPool {
         request,
         ...(work ? { work } : {})
       },
-      signal
+      { signal }
     )
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
@@ -214,7 +218,7 @@ export class JournalSqlReaderPool {
     let slot = this.slots
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
       .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
-    if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
+    if ((!slot || slot.pendingCount > 0) && this.slots.length < JOURNAL_SQL_READERS) {
       slot = new ReaderSlot(
         this.filename,
         this.originalFilename,
@@ -238,4 +242,4 @@ export class JournalSqlReaderPool {
 }
 
 /** The source transaction is released before this reader emits any child page. */
-export { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
+export { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-reservations'

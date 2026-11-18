@@ -6,6 +6,10 @@ import {
 import { JOURNAL_SQL_READER_HOST_NAME } from '../native-chat/agent-session-journal/journal-sql-reader-host-name'
 import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal/journal-sql-reader-spawn'
 import { JOURNAL_READER_REPLY_CREDIT_BYTES } from '../native-chat/agent-session-journal/journal-sql-reader-reply-credit'
+import {
+  journalReaderRequestData,
+  readJournalReaderRequests
+} from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { join } from 'node:path'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
@@ -30,6 +34,7 @@ export function installElectronJournalReaderHost(): void {
             : workerData,
         execArgv: []
       }),
+    (workers) => journalReaderRequestData(readJournalReaderRequests(workers)),
     // Hosted replies past this wait in the reader process; in-process readers use shared credit.
     JOURNAL_READER_REPLY_CREDIT_BYTES
   )
