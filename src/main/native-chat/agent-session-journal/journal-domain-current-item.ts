@@ -204,8 +204,9 @@ export function writeJournalDomainCurrentItem(
     invalidateJournalDomainQueue(db, target, sequence)
   }
   return [
-    // A restored whole output stays in its row; the caller gets back the cut it handed in.
-    restored === write.item ? next : withJournalOutputOf(next, write.item),
+    // A restored whole output stays in its row; the caller gets back the cut it handed in,
+    // marked shortened so its full output can still be read.
+    restored === write.item ? next : { ...withJournalOutputOf(next, write.item), shortened: true },
     ...(readAgentJournalTurn(next.body) || readAgentJournalTurn(input.previous?.item.body)
       ? refreshJournalDomainStopNotes(
           db,

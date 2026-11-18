@@ -1,9 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readCodexJournalRecord } from '../../structured/journal/codex-structured-journal-translation-values'
-import {
-  cutJournalOutput,
-  isCutJournalOutputOf
-} from '../../../native-chat/agent-session-journal/journal-cut-output'
 
 export function savedTurnFacts(saved: AgentJournalRenderItem | null): Record<string, unknown> {
   const body = saved?.body
@@ -32,8 +28,6 @@ export function retainedSize(value: unknown, saved: AgentJournalRenderItem | nul
     body?.kind === 'tool-call' && body.output && !body.output.truncated
       ? body.output.head
       : undefined
-  // A saved output read cut still owns its whole text, matched by size and digest.
-  const cut = cutJournalOutput(saved)
   const savedValues = new Set<unknown>()
   if (body?.kind === 'tool-call') {
     savedValues.add(body.input)
@@ -56,9 +50,6 @@ export function retainedSize(value: unknown, saved: AgentJournalRenderItem | nul
       return 0
     }
     if (entry === borrowed && borrowed !== undefined) {
-      return 8
-    }
-    if (cut && isCutJournalOutputOf(cut, entry)) {
       return 8
     }
     if (savedValues.has(entry)) {

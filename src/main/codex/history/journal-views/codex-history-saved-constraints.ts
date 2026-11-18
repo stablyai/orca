@@ -175,13 +175,17 @@ export function constrainSavedHistoryItem(
             ? mcpToolOutput(item)
             : null
       const cut = cutJournalOutput(saved)
-      if (
-        cut &&
-        body.state !== 'running' &&
-        output !== null &&
-        !isCutJournalOutputOf(cut, output)
-      ) {
-        return null
+      if (cut && body.state !== 'running' && output !== null) {
+        if (!isCutJournalOutputOf(cut, output)) {
+          return null
+        }
+        // The row holds this text whole: drop the source copy so the saved cut is borrowed.
+        if (item.type === 'commandExecution') {
+          delete item.aggregatedOutput
+        }
+        if (item.type === 'mcpToolCall' && item.error == null) {
+          delete item.result
+        }
       }
       if (body.output && !body.output.truncated) {
         if (body.state !== 'running' && output !== null && output !== body.output.head) {
