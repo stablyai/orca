@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   awaitReattachedTerminalPaint,
   observeTerminalCommandPaint,
   vouchTerminalSpawn,
   type TerminalCommandPaintRecord
 } from '../input/terminal-command-paint'
-import { reattachedRestTitleAgent } from './reattached-rest-title'
+import { ReattachedRestTitleReads, reattachedRestTitleAgent } from './reattached-rest-title'
 import { readExactAgentForeground } from './launched-agent-foreground'
 
 const REST_TITLE = '✳ Claude Code'
@@ -49,5 +49,23 @@ describe('reading that the agent itself is in front', () => {
     await expect(
       readExactAgentForeground(readAgent, named('less'), 'pty-1', 'claude')
     ).resolves.toBe('unknown')
+  })
+})
+
+describe('rest-title reads on a quiet reattached pane', () => {
+  it('reads again once discovery stores the root an old owner needs, not before the retry', async () => {
+    const pane: ReturnType<typeof seededPane> & {
+      ptyId: string
+      adoptedRootProcess?: { pid: number } | null
+    } = { ...seededPane(), ptyId: 'pty-1' }
+    awaitReattachedTerminalPaint(pane, 1_000)
+    const confirm = vi.fn(async () => false)
+    const reads = new ReattachedRestTitleReads(() => 5_000, confirm)
+
+    await reads.confirm(pane)
+    expect(reads.confirm(pane)).toBeNull()
+    pane.adoptedRootProcess = { pid: 4_242 }
+    await reads.confirm(pane)
+    expect(confirm).toHaveBeenCalledTimes(2)
   })
 })

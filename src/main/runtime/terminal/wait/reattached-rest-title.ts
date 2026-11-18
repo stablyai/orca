@@ -14,6 +14,7 @@ type RestTitlePty = TerminalCommandPaintRecord & {
   ptyId: string
   lastOscTitle?: string | null
   lastOscTitleEpochMs?: number | null
+  adoptedRootProcess?: { pid: number } | null
 }
 
 /** The agent whose rest title a reattached pane still shows and the fence still masks: the only
@@ -38,7 +39,10 @@ export function reattachedRestTitleAgent(pty: Omit<RestTitlePty, 'ptyId'>): TuiA
 /** One foreground read per pane per quiet stretch (or retry interval), for pending waits only, so a
  *  restart pays no fleet-wide process reads. Shared by every wait on a pane. */
 export class ReattachedRestTitleReads<Pty extends RestTitlePty> {
-  private readonly lastReadByPtyId = new Map<string, { outputClockAt: number | null; at: number }>()
+  private readonly lastReadByPtyId = new Map<
+    string,
+    { outputClockAt: number | null; rootPid: number | null; at: number }
+  >()
   private readonly inFlight = new Set<string>()
 
   constructor(
@@ -54,11 +58,17 @@ export class ReattachedRestTitleReads<Pty extends RestTitlePty> {
       return null
     }
     const outputClockAt = this.outputClockOf(pty)
+    // Why the root too: an old owner's read needs it, and discovery can store it after a failed read.
+    const rootPid = pty.adoptedRootProcess?.pid ?? null
     const last = this.lastReadByPtyId.get(pty.ptyId)
-    if (last?.outputClockAt === outputClockAt && Date.now() - last.at < READ_RETRY_MS) {
+    if (
+      last?.outputClockAt === outputClockAt &&
+      last.rootPid === rootPid &&
+      Date.now() - last.at < READ_RETRY_MS
+    ) {
       return null
     }
-    this.lastReadByPtyId.set(pty.ptyId, { outputClockAt, at: Date.now() })
+    this.lastReadByPtyId.set(pty.ptyId, { outputClockAt, rootPid, at: Date.now() })
     this.inFlight.add(pty.ptyId)
     return this.confirmRestTitle(pty.ptyId, agent)
       .catch(() => false)

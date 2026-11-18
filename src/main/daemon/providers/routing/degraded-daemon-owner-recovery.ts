@@ -1,5 +1,4 @@
 import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
-import { listedOwnerRows } from './daemon-pty-target-inspection'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
@@ -53,22 +52,18 @@ export class DegradedDaemonOwnerRecovery {
     if (!ids || ids.some((id) => !this.routes.has(id))) {
       return this.attachResolver.listProcesses(opts)
     }
-    const idsByOwner = new Map<IPtyProvider, string[]>()
-    for (const id of ids) {
-      const owner = this.routes.get(id)!
-      const group = idsByOwner.get(owner) ?? []
-      group.push(id)
-      idsByOwner.set(owner, group)
-    }
-    const requested = new Set(ids)
-    const listed = await Promise.allSettled(
-      [...idsByOwner].map(async ([owner, ptyIds]) =>
-        (await owner.listProcesses({ ptyIds, targetOwnerOnly: true })).filter(
-          (row) => requested.has(row.id) && this.routes.get(row.id) === owner
-        )
+    const owners = new Set(ids.map((id) => this.routes.get(id)!))
+    const rows = await Promise.all(
+      [...owners].map(async (owner) =>
+        (
+          await owner.listProcesses({
+            ptyIds: ids.filter((id) => this.routes.get(id) === owner),
+            targetOwnerOnly: true
+          })
+        ).filter((row) => ids.includes(row.id) && this.routes.get(row.id) === owner)
       )
     )
-    return listedOwnerRows(listed)
+    return rows.flat()
   }
 
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{

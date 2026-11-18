@@ -62,39 +62,31 @@ export class DaemonPtyTargetInspection {
       adapter: this.exactOwner(id),
       incarnation: this.incarnationFor(id)
     }))
-    const idsByAdapter = new Map<DaemonPtyAdapter, string[]>()
-    for (const target of targets) {
-      const group = idsByAdapter.get(target.adapter) ?? []
-      group.push(target.id)
-      idsByAdapter.set(target.adapter, group)
-    }
-    const listed = await Promise.allSettled(
-      [...idsByAdapter].map(([adapter, ptyIds]) => adapter.listProcesses({ ...opts, ptyIds }))
-    )
-    const rows = listedOwnerRows(listed)
-    // A missing, re-routed or replaced target is absent here; the caller reads that as unknown, never as exit.
-    const targetsById = new Map(targets.map((target) => [target.id, target]))
-    return rows.filter((row) => {
-      const target = targetsById.get(row.id)
-      return (
-        target &&
-        // Why the route, not exactOwner: a target that exited meanwhile throws there and would sink the rest.
-        this.routes.get(target.id) === target.adapter &&
-        this.incarnationFor(target.id) === target.incarnation &&
-        (!target.incarnation || row.incarnationId === target.incarnation)
+    const groups = new Set(targets.map((target) => target.adapter))
+    const rows = (
+      await Promise.all(
+        [...groups].map((adapter) =>
+          adapter.listProcesses({
+            ...opts,
+            ptyIds: targets
+              .filter((target) => target.adapter === adapter)
+              .map((target) => target.id)
+          })
+        )
       )
+    ).flat()
+    for (const target of targets) {
+      if (
+        this.exactOwner(target.id) !== target.adapter ||
+        this.incarnationFor(target.id) !== target.incarnation
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    // A missing or replaced row is absent here; the caller reads that as unknown, never as exit.
+    return rows.filter((row) => {
+      const target = targets.find((candidate) => candidate.id === row.id)
+      return target && (!target.incarnation || row.incarnationId === target.incarnation)
     })
   }
-}
-
-/** Rows from every owner that answered: one failing owner costs only its own targets their rows,
- *  and the read fails only when no owner answered. */
-export function listedOwnerRows<Row>(
-  listed: readonly PromiseSettledResult<readonly Row[]>[]
-): Row[] {
-  const rejected = listed.find((result) => result.status === 'rejected')
-  if (rejected && listed.every((result) => result.status === 'rejected')) {
-    throw rejected.reason
-  }
-  return listed.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
 }
