@@ -55,7 +55,7 @@ const STARTUP_PLAN: AgentStartupPlan = {
   launchCommand: 'claude',
   expectedProcess: 'claude',
   followupPrompt: null,
-  launchConfig: { agentArgs: '', agentEnv: {}, claudeAccountId: 'acct-2' }
+  launchConfig: { agentArgs: '', agentEnv: {} }
 }
 
 async function launch(relaunch?: (claudeAccountId?: string) => void) {
