@@ -1,3 +1,127 @@
+const selectionBlockTags = new Set([
+  'BLOCKQUOTE',
+  'DIV',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'LI',
+  'OL',
+  'P',
+  'PRE',
+  'TABLE',
+  'TBODY',
+  'TFOOT',
+  'THEAD',
+  'TR',
+  'UL'
+])
+const selectionParagraphTags = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P'])
+
+class SelectionTextWriter {
+  value = ''
+
+  append(text: string): void {
+    this.value += text
+  }
+
+  separate(lines: number): void {
+    this.value = this.value.replace(/[\t ]+$/g, '')
+    this.separateRaw(lines)
+  }
+
+  separateRaw(lines: number): void {
+    const trailingLines = this.value.match(/\n*$/)?.[0].length ?? 0
+    this.value += '\n'.repeat(Math.max(0, lines - trailingLines))
+  }
+
+  finish(): string {
+    return this.value.trimEnd()
+  }
+}
+
+function isFormattingWhitespace(node: Text): boolean {
+  if (node.data.trim()) {
+    return false
+  }
+  const nextBoundary = (direction: 'previousSibling' | 'nextSibling'): boolean => {
+    for (let sibling = node[direction]; sibling; sibling = sibling[direction]) {
+      if (sibling.nodeType === Node.TEXT_NODE && !(sibling.textContent ?? '').trim()) {
+        continue
+      }
+      return sibling.nodeType === Node.ELEMENT_NODE && selectionBlockTags.has(sibling.nodeName)
+    }
+    return false
+  }
+  return nextBoundary('previousSibling') || nextBoundary('nextSibling')
+}
+
+function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListItem = false): void {
+  if (node instanceof Text) {
+    if (!isFormattingWhitespace(node)) {
+      writer.append(node.data)
+    }
+    return
+  }
+  if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+    node.childNodes.forEach((child) => writeSelectionNode(child, writer, insideListItem))
+    return
+  }
+  if (!(node instanceof Element)) {
+    return
+  }
+
+  const element = node
+  if (element.tagName === 'BR') {
+    writer.append('\n')
+    return
+  }
+  if (element.tagName === 'PRE') {
+    if (writer.value) {
+      writer.separate(1)
+    }
+    writer.append(element.textContent ?? '')
+    writer.separateRaw(1)
+    return
+  }
+  if (element.tagName === 'TR') {
+    const cells = Array.from(element.children).filter(
+      (child) => child.tagName === 'TD' || child.tagName === 'TH'
+    )
+    cells.forEach((cell, index) => {
+      const cellWriter = new SelectionTextWriter()
+      cell.childNodes.forEach((child) => writeSelectionNode(child, cellWriter))
+      writer.append(cellWriter.finish())
+      if (index < cells.length - 1) {
+        writer.append('\t')
+      }
+    })
+    writer.separate(1)
+    return
+  }
+
+  const isLeafDiv =
+    element.tagName === 'DIV' &&
+    !Array.from(element.children).some((child) => selectionBlockTags.has(child.tagName))
+  const paragraphLines = insideListItem ? 1 : 2
+  if (selectionParagraphTags.has(element.tagName) && writer.value) {
+    writer.separate(1)
+  } else if ((element.tagName === 'LI' || isLeafDiv) && writer.value) {
+    writer.separate(1)
+  } else if ((element.tagName === 'UL' || element.tagName === 'OL') && insideListItem) {
+    writer.separate(1)
+  }
+  const childInsideListItem = insideListItem || element.tagName === 'LI'
+  element.childNodes.forEach((child) => writeSelectionNode(child, writer, childInsideListItem))
+  if (selectionParagraphTags.has(element.tagName)) {
+    writer.separate(paragraphLines)
+  } else if (element.tagName === 'LI' || isLeafDiv) {
+    writer.separate(1)
+  }
+}
+
 /** A selection's text with each `[data-math-source]` formula as its TeX, not KaTeX's duplicated
  *  visual and MathML text; null when the selection holds no formula. Desktop and mobile chat copy it. */
 export function markdownMathSelectionText(selection: Selection, root: Element): string | null {
@@ -37,11 +161,9 @@ export function markdownMathSelectionText(selection: Selection, root: Element): 
       '.select-none, .sr-only, [aria-hidden="true"], button, input, script, style, svg'
     )
     .forEach((element) => element.remove())
-  fragment.querySelectorAll('br').forEach((element) => element.replaceWith('\n'))
-  fragment.querySelectorAll('p,div,blockquote,pre,li,tr,h1,h2,h3,h4,h5,h6').forEach((element) => {
-    element.after(element.tagName === 'P' ? '\n\n' : '\n')
-  })
-  return (fragment.textContent ?? '').replace(/\n{3,}/g, '\n\n').trimEnd()
+  const writer = new SelectionTextWriter()
+  writeSelectionNode(fragment, writer)
+  return writer.finish()
 }
 
 /** Puts the selection on the clipboard as {@link markdownMathSelectionText} when it holds a formula. */
