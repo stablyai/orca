@@ -8,6 +8,7 @@ import type {
 } from '../../../../../../shared/keybindings/types'
 import {
   encodeModifyOtherKeysEnter,
+  encodeTerminalCtrlEnter,
   encodeTerminalShiftEnter,
   TERMINAL_CTRL_BACKSPACE_INPUT
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
@@ -217,7 +218,7 @@ export function resolveTerminalShortcutAction(
       hasCtrlEnterCsiUAuthority?.() === true
     return {
       type: 'sendInput',
-      data: canSendCsiU ? '\x1b[13;5u' : '\r'
+      data: encodeTerminalCtrlEnter(canSendCsiU)
     }
   }
 

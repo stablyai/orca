@@ -2,7 +2,7 @@ import { settlePaneShellForeground } from './pane-agent-shell-lifecycle'
 import { isJobStopStatus } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
 import {
   isLocalNativeWindowsConpty,

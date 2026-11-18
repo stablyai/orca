@@ -33,6 +33,8 @@ type Props = {
   surfaceChoice: NewTabAgentSurfaceChoice | null
   /** Loading, none, other-server or error; shown instead of the agent grid. */
   agentStatusRow: ActionSheetAction | null
+  /** Rows that lead the agents, such as a bot's own new chat. */
+  leadingAgentActions: ActionSheetAction[]
   canCreateBrowser: boolean
   canCreateMarkdownNote: boolean
   onClose: () => void
@@ -49,6 +51,7 @@ export function MobileNewTabSheet({
   agentOptions,
   surfaceChoice,
   agentStatusRow,
+  leadingAgentActions,
   canCreateBrowser,
   canCreateMarkdownNote,
   onClose,
@@ -97,9 +100,10 @@ export function MobileNewTabSheet({
         {...(workspaceName ? { subtitle: workspaceName } : {})}
         onClose={onClose}
       />
-      {showAgentGrid || agentStatusRow ? (
+      {showAgentGrid || agentStatusRow || leadingAgentActions.length > 0 ? (
         <SectionHeader title={t('session.sheets.agents', 'Agents')} first />
       ) : null}
+      {leadingAgentActions.length > 0 ? <ActionSheetContent actions={leadingAgentActions} /> : null}
       {agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
       {showAgentGrid && surfaceChoice ? (
         <MobileSegmentedControl

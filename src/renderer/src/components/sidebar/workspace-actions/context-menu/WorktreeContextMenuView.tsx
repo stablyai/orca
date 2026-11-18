@@ -20,6 +20,7 @@ import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/Worktree
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenuItem'
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
+import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
   WorktreeCopySubMenu,
@@ -33,6 +34,7 @@ import {
   shouldUseNativeContextMenu
 } from './worktree-context-menu-policy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -44,6 +46,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     deletingSubtree,
     developerMenuRevealed,
     effectiveSelectedWorktrees,
+    folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
     handleCloseTerminals,
@@ -200,6 +203,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             workspaceStatuses={workspaceStatuses}
           />
           {!isMultiContext && (
+            <WorktreeHandToBotMenuItem worktree={worktree} disabled={isDeleting} />
+          )}
+          {!isMultiContext && (
             <>
               <DropdownMenuSeparator />
               <WorktreeRowOpenInSubMenu
@@ -210,6 +216,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
+              {folderWorkspaceId ? (
+                <WslMoveFolderWorkspaceMenuItem folderWorkspaceId={folderWorkspaceId} />
+              ) : null}
               <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}

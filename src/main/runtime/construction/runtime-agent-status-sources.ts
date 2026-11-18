@@ -11,7 +11,7 @@ import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driv
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalDrivers {
-  protected readonly getPaneAgentIdentityFn!: HostBindings['getPaneAgentIdentity'] | null
+  protected getPaneAgentIdentityFn: HostBindings['getPaneAgentIdentity'] | null = null
 
   readPaneAgentIdentity(
     paneKey: string,

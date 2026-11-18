@@ -20,6 +20,7 @@ import {
   type NativeChatMessage,
   type NativeChatRole
 } from '../../native-chat-types'
+import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
 
 /** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
 export type NativeChatTurnFoldRow = {
@@ -79,10 +80,11 @@ function deriveTurnFoldRow(
     turnKey,
     role: message.role,
     rendersProse: nativeChatRowRendersProse(message) && !message.blocks.some(isImageOperation),
-    draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
+    draws:
+      hasReceipt || isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
     outlivesTurn:
-      message.agentStart === true ||
+      isNativeChatOrcaCard(message) ||
       message.blocks.some(
         (block) =>
           isSubagentGroupBlock(block) ||

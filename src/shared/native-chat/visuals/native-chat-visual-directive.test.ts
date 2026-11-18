@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isPendingNativeChatVisualDirectiveTail,
   parseNativeChatVisualDirectiveLine,
+  parseNativeChatWebhookDirectiveLine,
   withoutNativeChatVisualDirectiveLines,
-  withoutPendingNativeChatVisualDirectiveTail
+  withoutPendingNativeChatVisualDirectiveTail,
+  withLegacyNativeChatIdeasAsList
 } from './native-chat-visual-directive'
 
 describe('parseNativeChatVisualDirectiveLine', () => {
@@ -73,6 +76,50 @@ describe('withoutNativeChatVisualDirectiveLines', () => {
     // Inline triple backticks open no fence, so a later visual line is still dropped.
     expect(withoutNativeChatVisualDirectiveLines(`Use \`\`\`a\`\`\` inline\n${LINE}`)).toBe(
       'Use ```a``` inline'
+    )
+  })
+})
+
+describe('parseNativeChatWebhookDirectiveLine', () => {
+  const LINE = '::orca-webhook{hook="wh_7Kx2pQ9mT4vB8nLc"}'
+
+  it('reads the hook id from a whole line', () => {
+    expect(parseNativeChatWebhookDirectiveLine(LINE)).toEqual({ hookId: 'wh_7Kx2pQ9mT4vB8nLc' })
+    expect(parseNativeChatWebhookDirectiveLine(`  ${LINE}  \r\n`)).toEqual({
+      hookId: 'wh_7Kx2pQ9mT4vB8nLc'
+    })
+  })
+
+  it.each([
+    '::orca-webhook{hook="wh_short"}',
+    '::orca-webhook{hook="wh_7Kx2pQ9mT4vB8nLc/orcawh_key"}',
+    '::orca-webhook{}',
+    '::orca-webhook{hook="wh_7Kx2pQ9mT4vB8nLc" hook="wh_7Kx2pQ9mT4vB8nLd"}',
+    `text ${LINE}`,
+    `${LINE} trailing`,
+    '::orca-visual{hook="wh_7Kx2pQ9mT4vB8nLc"}'
+  ])('refuses %s', (line) => {
+    expect(parseNativeChatWebhookDirectiveLine(line)).toBeNull()
+  })
+
+  it('is held while streaming and left out of plain text', () => {
+    expect(isPendingNativeChatVisualDirectiveTail('::orca-web')).toBe(true)
+    expect(isPendingNativeChatVisualDirectiveTail('::orca-webhook{hook="wh_7K')).toBe(true)
+    expect(withoutNativeChatVisualDirectiveLines(`It’s live.\n\n${LINE}\n\nDone.`)).toBe(
+      'It’s live.\n\nDone.'
+    )
+    expect(withoutNativeChatVisualDirectiveLines(`\`\`\`\n${LINE}\n\`\`\``)).toContain(LINE)
+  })
+})
+
+describe('withLegacyNativeChatIdeasAsList', () => {
+  it("lists an old transcript's idea lines by their text, leaving fenced code alone", () => {
+    expect(
+      withLegacyNativeChatIdeasAsList(
+        'Pick one:\n::orca-idea{text="Watch my PRs in orca" app="github"}\n  ::orca-idea{text="Answer #eng questions" needs="slack"}\n```\n::orca-idea{text="x"}\n```'
+      )
+    ).toBe(
+      'Pick one:\n- Watch my PRs in orca\n- Answer #eng questions\n```\n::orca-idea{text="x"}\n```'
     )
   })
 })

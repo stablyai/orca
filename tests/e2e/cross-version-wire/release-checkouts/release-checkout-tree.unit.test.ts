@@ -14,11 +14,20 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
-import { extractReleaseCheckoutTree } from './release-checkout-tree'
+import { extractReleaseCheckoutTree, OPTIONAL_ARCHIVE_PATHS } from './release-checkout-tree'
 import { prepareReleaseSnapshotSource } from './release-checkout-prefetch'
 import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
 
 const temporaryRoots: string[] = []
+
+describe('release checkout contents', () => {
+  it('holds every cloud file the desktop build compiles in', () => {
+    const tsconfig = readFileSync(join(__dirname, '../../../../config/tsconfig.node.json'), 'utf8')
+    const compiled = [...tsconfig.matchAll(/"\.\.\/(cloud\/[^"]+)"/g)].map((match) => match[1])
+    expect(compiled.length).toBeGreaterThan(0)
+    expect(OPTIONAL_ARCHIVE_PATHS.filter((path) => path.startsWith('cloud/'))).toEqual(compiled)
+  })
+})
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {

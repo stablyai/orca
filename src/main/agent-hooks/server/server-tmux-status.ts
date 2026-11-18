@@ -1,3 +1,4 @@
+import type { PaneTmuxHostReader } from '../../../shared/agent-hook-listener/presence/pane-tmux-host-proof'
 import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
 import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import { commitTmuxSelectedStatus } from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
@@ -14,6 +15,29 @@ import { tmuxCliWriterEvent } from './cli-writer-observation'
 import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
+  protected readPaneTmuxHost: PaneTmuxHostReader | undefined
+
+  /** A restart forgets the tmux-selected row; a checkpoint shown through the pane's tmux client was
+   *  never the pane's own process. */
+  protected async releaseTmuxHostedCheckpoint(paneKey: string): Promise<void> {
+    const read = this.readPaneTmuxHost
+    const identity = read && !this.getTmuxSelectedStatus(paneKey) && this.paneAgentIdentity(paneKey)
+    if (
+      !read ||
+      !identity ||
+      identity.ended ||
+      identity.status.connectionId !== null ||
+      !identity.status.worktreeId ||
+      !(await read({ paneKey, worktreeId: identity.status.worktreeId }).catch(() => false)) ||
+      this.state.lastStatusByPaneKey.has(paneKey) ||
+      this.getTmuxSelectedStatus(paneKey)
+    ) {
+      return
+    }
+    // The identity is the saved record as probed; a record saved during the probe stays.
+    this.releaseSharedPaneConversation(paneKey, identity.status, identity.status.receivedAt)
+  }
+
   private tmuxOwner: TmuxAgentHookOwner | undefined
   private tmuxRootResolver: (paneKey: string) => Promise<TmuxManagedPty | null> = async () => null
 

@@ -1,3 +1,4 @@
+import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
 import type { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
 import type {
   SleepingAgentSessionRecord,
@@ -91,6 +92,9 @@ export type RuntimeConstructionDependencies = {
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
+  /** The Orca account a paired device says it is signed in to (a phone: its desktop's), with its
+   *  computer; a desktop's comes from the sending connection's claim when one is given. */
+  getPairedDeviceAccount?: PairedDeviceAccountLookup
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -101,7 +105,7 @@ export type RuntimeConstructionDependencies = {
   resolveCodexStructuredLaunchHome?: (input: {
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>
-  prepareCodexCatalogProbeHome?: (homePath: string) => void
+  prepareCodexCatalogProbeHome?: (homePath: string) => void | Promise<void>
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
   /** Live headless-model depth; a host with no renderer to reveal from needs only its PTY provider's live window. */
@@ -111,6 +115,8 @@ export type RuntimeConstructionDependencies = {
   applySessionSearchSettings?: SessionSearchSettingsApply
   orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
   workspaceSleepPlatform?: WorkspaceSleepPlatform
+  /** The Orca profile whose store this runtime serves; fixed for the process, unlike the active one. */
+  servedOrcaProfileId?: string
 }
 
 export type RuntimeConstructionBindings = Required<RuntimeConstructionDependencies>

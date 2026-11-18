@@ -93,34 +93,39 @@ it('stops automatically continuing once five continues in a row end in another u
   ).toBe('failed')
 })
 
-it('continues every chat whose limit reset in the same pass', async () => {
+function sweepOver(
+  open: { tabs: string[]; background: string[] },
+  sent: string[],
+  { enabled = true, loaded = true } = {}
+): StructuredAgentSessionUsageLimitContinue {
   const now = HOST_TEST_NOW
-  const ids = ['chat-a', 'chat-b', 'chat-c']
+  const ids = [...open.tabs, ...open.background]
   const cut = (id: string) => ({
     turnItemId: `${id}-turn`,
     resetsAt: now - 60_000,
     turnEndedAt: now - 120_000,
     chain: 0
   })
-  const sent: string[] = []
-  const sweep = new StructuredAgentSessionUsageLimitContinue({
+  return new StructuredAgentSessionUsageLimitContinue({
     host: {
       logger: recordingStructuredAgentSessionLogger().logger,
       usageLimitAutoContinue: {
-        isEnabled: () => true,
+        isEnabled: () => enabled,
         isWorkspaceAsleep: () => false,
         subscribe: () => () => {}
       },
       store: {
         hostId: 'local',
-        listVisibleSessionIds: () => ids,
-        isSessionTabVisible: () => true,
+        listVisibleSessionIds: () => open.tabs,
+        isSessionTabVisible: (id) => open.tabs.includes(id),
+        listBackgroundSessionIds: () => open.background,
+        isSessionInBackground: (id) => open.background.includes(id),
         cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
         getRecord: (id) => hostTestRestingOptionsRecord(id)
       }
     },
-    sessions: new Map(ids.map((id) => [id, {}])),
-    readSavedCut: async () => null,
+    sessions: new Map(loaded ? ids.map((id) => [id, {}]) : []),
+    readSavedCut: async (id) => (loaded ? null : cut(id)),
     readLoadedCut: async (id) => cut(id),
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
@@ -132,6 +137,31 @@ it('continues every chat whose limit reset in the same pass', async () => {
     publish: () => {},
     now: () => now
   })
-  await sweep.tick()
-  expect(sent).toEqual(ids)
+}
+
+it('continues every chat whose limit reset in the same pass', async () => {
+  const sent: string[] = []
+  await sweepOver({ tabs: ['chat-a', 'chat-b', 'chat-c'], background: [] }, sent).tick()
+  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c'])
+})
+
+// Bot chats and kept-open structured workers run with no tab.
+const TABLESS = { tabs: [], background: ['bot-chat', 'worker-chat'] }
+
+it('continues tabless bot and worker chats at their reset', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent).tick()
+  expect(sent).toEqual(['bot-chat', 'worker-chat'])
+})
+
+it('continues no tabless chat while automatic continue is off', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { enabled: false }).tick()
+  expect(sent).toEqual([])
+})
+
+it('continues tabless chats that are not loaded, as after a restart or a released run', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { loaded: false }).tick()
+  expect(sent).toEqual(['bot-chat', 'worker-chat'])
 })
