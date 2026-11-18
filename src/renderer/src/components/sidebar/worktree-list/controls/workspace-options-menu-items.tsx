@@ -173,16 +173,16 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
     <OptionChoiceSubmenu
       label={t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875', 'Project order')}
       choices={PROJECT_ORDER_OPTIONS.map((option) => ({
-         ...option,
-         disabled: !supportsPersonalOrder && (option.id === 'name' || option.id === 'frequent'),
-         description:
-           !supportsPersonalOrder && option.id === 'recent'
-             ? t(
-                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
-                 'Most recent workspace activity'
-               )
-             : option.description
-       }))}
+        ...option,
+        disabled: !supportsPersonalOrder && (option.id === 'name' || option.id === 'frequent'),
+        description:
+          !supportsPersonalOrder && option.id === 'recent'
+            ? t(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
+                'Most recent workspace activity'
+              )
+            : option.description
+      }))}
       value={projectOrderBy}
       onChange={setProjectOrderBy}
       preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
