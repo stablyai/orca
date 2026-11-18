@@ -25,7 +25,7 @@ vi.mock('electron', async () => {
   }
 })
 
-/** Electron's MessagePortMain over a node port: listeners get `{ data }`. Inlined in the host shim. */
+/** MessagePortMain over a node port: listeners get `{ data }`. Inlined in the host shim. */
 const portMainSource = `(port) => ({
   raw: port,
   postMessage: (message) => port.postMessage(message),
@@ -267,7 +267,7 @@ describe('UtilityWorkerHost', () => {
     await exited
   })
 
-  it('fails, never reruns in main, a worker that dies on its work before its first reply', async () => {
+  it('fails, never reruns in main, a worker that dies before its first reply', async () => {
     fork.mockImplementation(threadUtilityProcess)
     const host = newHost()
     const worker = host.spawn({ filename: dyingEntry, name: 'orca-claude-rewind-transcript' })
@@ -285,7 +285,7 @@ describe('UtilityWorkerHost', () => {
     await next.terminate()
   })
 
-  it('pauses after repeated host crashes, without moving work in-process, until a retry', async () => {
+  it('pauses after repeated host crashes, never running work in main, until a retry', async () => {
     const children: ReturnType<typeof threadUtilityProcess>[] = []
     fork.mockImplementation(() => {
       const child = threadUtilityProcess()
@@ -294,7 +294,11 @@ describe('UtilityWorkerHost', () => {
     })
     const host = newHost({ crashes: 3, windowMs: 60_000, message: 'paused' })
     const spawnEcho = () =>
-      host.spawn({ filename: echoEntry, name: 'orca-workspace-space-scan', workerData: { tag: 'x' } })
+      host.spawn({
+        filename: echoEntry,
+        name: 'orca-workspace-space-scan',
+        workerData: { tag: 'x' }
+      })
     for (let crash = 0; crash < 3; crash++) {
       const worker = spawnEcho()
       await nextMessage(worker)

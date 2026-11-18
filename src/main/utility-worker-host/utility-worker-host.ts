@@ -10,11 +10,12 @@ import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/cra
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
 import { HostedWorker } from './hosted-worker'
-import type {
-  HostedWorkerThread,
-  UtilityWorkerHostEvent,
-  UtilityWorkerHostRequest,
-  UtilityWorkerSpawn
+import {
+  UTILITY_WORKER_HOST_PAUSED,
+  type HostedWorkerThread,
+  type UtilityWorkerHostEvent,
+  type UtilityWorkerHostRequest,
+  type UtilityWorkerSpawn
 } from './utility-worker-host-protocol'
 
 /** A host that cannot start in time loses its workers to in-process threads. */
@@ -31,8 +32,11 @@ let quitting = false
 export type UtilityWorkerHostCrashCap = { crashes: number; windowMs: number; message: string }
 
 export class UtilityWorkerHostPausedError extends Error {
-  readonly code = 'ORCA_UTILITY_WORKER_HOST_PAUSED'
+  readonly code = UTILITY_WORKER_HOST_PAUSED
 }
+
+/** A new thread that can't get memory in a crowded host could load in a healthy one. */
+const RESOURCE_START_FAILURES = new Set(['ERR_WORKER_OUT_OF_MEMORY', 'ERR_WORKER_INIT_FAILED'])
 
 type Host = {
   child: UtilityProcess
@@ -100,7 +104,7 @@ export class UtilityWorkerHost {
     const id = ++this.nextId
     const { port1, port2 } = new MessageChannelMain()
     const worker = new HostedWorker(id, spawn, port2, this.serviceName, {
-      startFailed: () => this.startFailed(host, worker),
+      startFailed: (error) => this.startFailed(host, worker, error),
       // Counted before its consumer hears, so a retry can't start a host past the cap; its exit
       // is still on the way, and a request arriving meanwhile must start a fresh host.
       portLost: () => {
@@ -112,8 +116,9 @@ export class UtilityWorkerHost {
         }
       },
       outOfMemory: () => this.recordCrash(),
+      // A lost host keeps its workers listed for the exit breadcrumb; retiring it clears them.
       exited: (exited) => {
-        if (host.workers.get(id) === exited) {
+        if (!host.lossCounted && host.workers.get(id) === exited) {
           host.workers.delete(id)
           this.scheduleIdleExit(host)
         }
@@ -133,9 +138,10 @@ export class UtilityWorkerHost {
 
   /** A user asked again: clear the crash history and let the next spawn start a fresh host. */
   retry(): void {
-    if (this.paused) {
-      recordDurableCrashBreadcrumb('utility_worker_host_retried', { serviceName: this.serviceName })
+    if (!this.paused) {
+      return
     }
+    recordDurableCrashBreadcrumb('utility_worker_host_retried', { serviceName: this.serviceName })
     this.paused = false
     this.crashes?.forget(this.serviceName)
   }
@@ -193,17 +199,26 @@ export class UtilityWorkerHost {
   }
 
   /** Only this entry moves in-process: it never loaded, so it never ran; the host's others did. */
-  private startFailed(host: Host, worker: HostedWorker): void {
-    this.neverHost.add(worker.spawn.filename)
+  private startFailed(
+    host: Host,
+    worker: HostedWorker,
+    error: NodeJS.ErrnoException | undefined
+  ): void {
     host.workers.delete(worker.id)
-    recordDurableCrashBreadcrumb('utility_worker_host_unavailable', {
-      serviceName: this.serviceName,
-      reason: 'worker-start-failed',
-      role: worker.spawn.name,
-      workers: host.workers.size,
-      retryMs: null
-    })
-    this.adoptOrFail(worker)
+    if (error?.code && RESOURCE_START_FAILURES.has(error.code)) {
+      this.recordCrash()
+      worker.fail(error, 1)
+    } else {
+      this.neverHost.add(worker.spawn.filename)
+      recordDurableCrashBreadcrumb('utility_worker_host_unavailable', {
+        serviceName: this.serviceName,
+        reason: 'worker-start-failed',
+        role: worker.spawn.name,
+        workers: host.workers.size,
+        retryMs: null
+      })
+      this.adoptOrFail(worker)
+    }
     this.scheduleIdleExit(host)
   }
 

@@ -45,6 +45,9 @@ export type UtilityWorkerPortEvent =
 
 export const UTILITY_WORKER_MESSAGE_CHUNK_BYTES = 32 * 2 ** 20
 
+/** The error code a capped host throws from spawn; queues show its message as written. */
+export const UTILITY_WORKER_HOST_PAUSED = 'ORCA_UTILITY_WORKER_HOST_PAUSED'
+
 /** The part of Electron's MessagePortMain both ends use; tests stand in a node port. */
 export type UtilityWorkerPort = {
   postMessage(message: unknown): void

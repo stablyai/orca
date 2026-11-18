@@ -1,7 +1,6 @@
 import { agentConversationCopyRefusal } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionConversationCopyInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { retryHeavyWorkers } from '../../utility-worker-host/heavy-worker-spawn'
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -126,8 +125,6 @@ export async function copyAcpConversation(
         if (!dbPath) {
           throw new Error('OpenCode conversation store is unavailable')
         }
-        // Copy is a user action; asking again is how a user retries after repeated crashes.
-        retryHeavyWorkers()
         const ids = await readOpenCodeForkCoverageViaWorker(
           {
             dbPath,

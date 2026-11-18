@@ -3,10 +3,7 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
-import {
-  retryHeavyWorkers,
-  spawnHeavyWorker
-} from '../../utility-worker-host/heavy-worker-spawn'
+import { retryHeavyWorkers, spawnHeavyWorker } from '../../utility-worker-host/heavy-worker-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath

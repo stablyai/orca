@@ -2,9 +2,6 @@ import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import type { WorkerThreadRole } from '../worker-threads/worker-thread-roles'
 import type { HostedWorkerThread } from './utility-worker-host-protocol'
 
-/** Electron's serviceName for the utility process that hosts whole-file parses and scans. */
-export const HEAVY_WORKER_HOST_NAME = 'Orca background worker'
-
 export type HeavyWorkerSpawner = (
   filename: string | URL,
   options: { name: WorkerThreadRole; workerData?: unknown }

@@ -9,10 +9,8 @@ import { setJournalSqlReaderSpawner } from '../native-chat/agent-session-journal
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { resolveObservabilityConsent } from '../observability'
 import { getLogsDirectory } from '../observability/logs-directory'
-import {
-  HEAVY_WORKER_HOST_NAME,
-  setHeavyWorkerSpawner
-} from '../utility-worker-host/heavy-worker-spawn'
+import { setHeavyWorkerSpawner } from '../utility-worker-host/heavy-worker-spawn'
+import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
 
 const CRASH_WINDOW_MS = 5 * 60_000
 
@@ -27,8 +25,11 @@ const largeSendLog = (): { largeSendLog?: string } =>
 
 /** Chat reads can hold hundreds of MB; outside main's process they can't fill its V8 cage. */
 export function installElectronJournalReaderHost(): void {
-  const host = new UtilityWorkerHost(JOURNAL_SQL_READER_HOST_NAME, hostEntry, ({ filename, name, workerData }) =>
-    spawnWorkerThread(filename, { name, workerData, execArgv: [] })
+  const host = new UtilityWorkerHost(
+    JOURNAL_SQL_READER_HOST_NAME,
+    hostEntry,
+    ({ filename, name, workerData }) =>
+      spawnWorkerThread(filename, { name, workerData, execArgv: [] })
   )
   setJournalSqlReaderSpawner((filename, workerData) =>
     host.spawn({ filename, name: 'orca-journal-sql-reader', workerData, ...largeSendLog() })

@@ -1,5 +1,6 @@
 import { LazyWorkerThreadHost } from './lazy-worker-thread-host'
 import type { WorkerThreadFactory } from './worker-thread-transport'
+import { UTILITY_WORKER_HOST_PAUSED } from '../utility-worker-host/utility-worker-host-protocol'
 
 /** Serialize worker calls; failures must never move their work onto the main thread. */
 
@@ -264,9 +265,11 @@ export class WorkerThreadRequestQueue<
     const pending = this.queue
     this.queue = []
     const failure = this.host.spawnFailure
+    const paused =
+      failure instanceof Error && 'code' in failure && failure.code === UTILITY_WORKER_HOST_PAUSED
     const reason = this.host.isRetiring
       ? 'previous worker still exiting'
-      : failure instanceof Error
+      : paused
         ? failure.message
         : 'worker spawn failed'
     for (const call of pending) {

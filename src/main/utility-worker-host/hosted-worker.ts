@@ -19,7 +19,7 @@ function restoreFailure(failure: UtilityWorkerFailure): Error {
 }
 
 export type HostedWorkerSupervisor = {
-  startFailed(): void
+  startFailed(error: NodeJS.ErrnoException | undefined): void
   portLost(): void
   outOfMemory(): void
   exited(worker: HostedWorker): void
@@ -120,7 +120,7 @@ export class HostedWorker extends EventEmitter {
     }
     // A worker that dies unasked before loading could not load here; the host moves it in-process.
     if (!this.heard && !this.terminating && (event.type === 'error' || event.type === 'exit')) {
-      this.supervisor.startFailed()
+      this.supervisor.startFailed(event.type === 'error' ? restoreFailure(event.error) : undefined)
       return
     }
     if (event.type === 'error' && event.error.code === 'ERR_WORKER_OUT_OF_MEMORY') {
@@ -154,7 +154,10 @@ export class HostedWorker extends EventEmitter {
       return
     }
     this.lastReplyType =
-      message && typeof message === 'object' && 'type' in message && typeof message.type === 'string'
+      message &&
+      typeof message === 'object' &&
+      'type' in message &&
+      typeof message.type === 'string'
         ? message.type
         : null
     this.emit('message', message)
