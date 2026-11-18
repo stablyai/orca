@@ -28,9 +28,10 @@ const { parentPort } = require('node:worker_threads');
 const { pathToFileURL } = require('node:url');
 const { DatabaseSync } = require('node:sqlite');
 const probe = new DatabaseSync(':memory:');
-const [major, minor] = probe.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
+const [major, minor, patch] = probe.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
 probe.close();
-const supported = major > 3 || (major === 3 && minor >= 51);
+// 3.51.0-3.51.2 can corrupt a WAL reset that overlaps a checkpoint, exactly what this worker does.
+const supported = major > 3 || (major === 3 && (minor > 51 || (minor === 51 && patch >= 3)));
 parentPort.on('message', ({ id, path, force }) => {
   if (!supported) {
     parentPort.postMessage({ id, ok: false, unsupported: true });
@@ -90,6 +91,8 @@ export class RowCacheWalCheckpoints {
     { deadline: ReturnType<typeof setTimeout>; path: string }
   >()
   private readonly again = new Set<number>()
+  // Checkpoints a failed worker may still be finishing; removal waits for that worker's exit.
+  private retiringPaths: { path: string }[] = []
   // Files whose checkpoints kept failing stay on SQLite's own checkpointing, across reopens.
   private readonly failedPaths = new Set<string>()
   private readonly catchUpOwed = new Set<number>()
@@ -105,7 +108,7 @@ export class RowCacheWalCheckpoints {
           idleTeardownMs: IDLE_TEARDOWN_MS,
           onMessage: (result) => this.settle(result),
           onError: () => this.fail(),
-          onExit: () => this.fail(),
+          onExit: () => this.fail({ exited: true }),
           isIdle: () => this.inFlight.size === 0,
           onUnavailable: (error) =>
             console.warn(
@@ -136,7 +139,7 @@ export class RowCacheWalCheckpoints {
    * Throws a busy error, so callers retry as they do for any locked database.
    */
   assertRemovable(path: string): void {
-    for (const checkpoint of this.inFlight.values()) {
+    for (const checkpoint of [...this.inFlight.values(), ...this.retiringPaths]) {
       if (checkpoint.path === path) {
         throw new Error('SQLITE_BUSY: row cache checkpoint still running')
       }
@@ -225,12 +228,21 @@ export class RowCacheWalCheckpoints {
     }
   }
 
-  private fail(): void {
+  private fail({ exited = false }: { exited?: boolean } = {}): void {
     if (this.failed) {
       return
     }
     this.failed = true
+    const worker = exited ? null : (this.host?.current ?? null)
     this.host?.destroy()
+    if (worker && this.inFlight.size > 0) {
+      // Terminating doesn't stop a native checkpoint mid-call; its file stays unremovable until exit.
+      const retiring = [...this.inFlight.values()].map(({ path }) => ({ path }))
+      this.retiringPaths.push(...retiring)
+      worker.on('exit', () => {
+        this.retiringPaths = this.retiringPaths.filter((entry) => !retiring.includes(entry))
+      })
+    }
     for (const { deadline } of this.inFlight.values()) {
       clearTimeout(deadline)
     }

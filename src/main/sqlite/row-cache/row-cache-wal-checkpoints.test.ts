@@ -114,6 +114,24 @@ describe('RowCacheWalCheckpoints', () => {
     second.close()
   })
 
+  it('keeps a file a failed worker may still be checkpointing until that worker exits', () => {
+    const worker = new FakeWorker()
+    const walCheckpoints = new RowCacheWalCheckpoints(() => worker)
+    const path = cachePath()
+    const cache = new KeyedJsonRowCache(path, { schemaVersion: 1, walCheckpoints })
+    cache.write([{ key: 'a', json: '"1"' }])
+    cache.close()
+    worker.emit('error', new Error('worker crashed'))
+    writeFileSync(path, 'not a database')
+
+    const later = new KeyedJsonRowCache(path, { schemaVersion: 1, walCheckpoints })
+    expect(() => later.write([{ key: 'b', json: '"2"' }])).toThrow(/SQLITE_BUSY/)
+    worker.emit('exit', 1)
+    later.write([{ key: 'b', json: '"2"' }])
+    expect(later.load(() => null)).toEqual({ kind: 'rows', rows: [{ key: 'b', json: '"2"' }] })
+    later.close()
+  })
+
   it('folds every WAL frame of a live cache and never recreates a removed one', async () => {
     const path = cachePath()
     const db = new SyncDatabase(path)
@@ -132,6 +150,13 @@ describe('RowCacheWalCheckpoints', () => {
         worker.postMessage({ id, path: target, force: true })
       })
     try {
+      const sqlite = db.prepare('SELECT sqlite_version() AS v').get()
+      const [major, minor, patch] = String(sqlite?.v).split('.').map(Number)
+      if (major === 3 && (minor < 51 || (minor === 51 && patch < 3))) {
+        // Older SQLite: the worker declines, and connections keep checkpointing themselves.
+        expect(await ask(1, path)).toMatchObject({ id: 1, ok: false, unsupported: true })
+        return
+      }
       expect(await ask(1, path)).toMatchObject({ id: 1, ok: true })
       const wal = db.prepare('PRAGMA wal_checkpoint(NOOP)').get()
       expect(Number(wal?.log)).toBeGreaterThan(0)
