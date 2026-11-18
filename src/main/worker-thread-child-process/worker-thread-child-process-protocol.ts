@@ -30,6 +30,8 @@ export type WorkerThreadChildErrorPayload = {
 }
 
 export type WorkerThreadChildEvent =
+  // Posted once the server listens, before it handles any request: a worker lost before it ran nothing.
+  | { type: 'ready' }
   | { type: 'spawn'; id: number; pid: number | undefined }
   | { type: 'group-terminated'; id: number }
   // Structured clone turns a Buffer into a plain Uint8Array.

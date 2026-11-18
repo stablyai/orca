@@ -194,4 +194,5 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
   }
   port.on('message', handle)
+  port.postMessage({ type: 'ready' })
 }
