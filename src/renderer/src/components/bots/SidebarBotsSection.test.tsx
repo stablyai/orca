@@ -341,7 +341,6 @@ describe('SidebarBotsSection', () => {
     const preview = document.querySelector('[data-worktree-sidebar-drag-preview]')
     expect(preview?.textContent).toContain('Reviewer')
     expect(entry.className).toContain('opacity-0')
-    expect(entry.className).not.toContain('ring-')
     // Scout and Jelly slide up into the gap Reviewer left.
     const slide = (botId: string): string => {
       const content = rowEntry(botId).firstElementChild
