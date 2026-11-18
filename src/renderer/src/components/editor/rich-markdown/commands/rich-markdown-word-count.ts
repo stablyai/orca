@@ -1,4 +1,15 @@
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+
 const segmenters = new Map<string, Intl.Segmenter>()
+
+function leafText(node: ProseMirrorNode): string {
+  return node.type.name === 'hardBreak' ? ' ' : (node.type.spec.leafText?.(node) ?? '')
+}
+
+/** ProseMirror textContent joins blocks and drops hard breaks; textBetween keeps both separated. */
+export function wordCountText(doc: ProseMirrorNode, from: number, to: number): string {
+  return doc.textBetween(from, to, ' ', leafText)
+}
 
 function segmenterFor(locale: string): Intl.Segmenter {
   let segmenter = segmenters.get(locale)
