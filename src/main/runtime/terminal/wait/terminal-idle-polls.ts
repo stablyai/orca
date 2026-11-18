@@ -210,7 +210,9 @@ export class RuntimeTerminalIdlePolls {
         this.settle(entry, sample.ready())
         return
       }
-      if (await this.readRestTitleForeground(entry, sample)) {
+      const restTitleRead = this.readRestTitleForeground(entry, sample)
+      if (restTitleRead) {
+        await restTitleRead
         return
       }
       const lane = verdict.quietForeground
@@ -291,19 +293,19 @@ export class RuntimeTerminalIdlePolls {
   }
 
   /** A reattached quiet agent's masked rest title, asked about only for a pending wait. */
-  private async readRestTitleForeground(
+  private readRestTitleForeground(
     entry: IdlePollEntry,
     sample: IdlePollSample
-  ): Promise<boolean> {
+  ): Promise<void> | null {
     const read = sample.isQuiet('closed') ? this.restTitleReads.confirm(entry.pty) : null
-    if (!read) {
-      return false
-    }
-    const resample = (await read) && this.entries.has(entry) ? this.sample(entry) : null
-    if (resample?.verdict.kind === 'ready-strong') {
-      this.settle(entry, resample.ready())
-    }
-    return true
+    return read
+      ? read.then((confirmed) => {
+          const resample = confirmed && this.entries.has(entry) ? this.sample(entry) : null
+          if (resample?.verdict.kind === 'ready-strong') {
+            this.settle(entry, resample.ready())
+          }
+        })
+      : null
   }
 
   /** Why the screen too: a dialog that parks the cursor above its own options (Claude's
