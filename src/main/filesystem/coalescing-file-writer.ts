@@ -21,6 +21,8 @@ export class CoalescingFileWriter<T> {
   private quitFrom = 0
   // The last drain stopped on a failure while quitting; only a new save starts another.
   private gaveUp = false
+  // Callers waiting for the state saved as `generation` (or a newer one) to land or fail.
+  private waiters: { generation: number; settle: (landed: boolean) => void }[] = []
 
   /** `commit` resolves false on a failure it has reported; a rejection counts as one too. */
   constructor(private readonly commit: (state: T) => Promise<boolean>) {}
@@ -36,6 +38,19 @@ export class CoalescingFileWriter<T> {
     this.gaveUp = false
     this.wake?.()
     this.run()
+  }
+
+  /** True once what is queued (or newer) is on disk; false at the first failed attempt to save it.
+   *  A failure keeps retrying in the background either way. */
+  landed(): Promise<boolean> {
+    if (this.wanted === undefined) {
+      return Promise.resolve(true)
+    }
+    // Quit gave up on it and nothing retries until a new save.
+    if (this.gaveUp) {
+      return Promise.resolve(false)
+    }
+    return new Promise((settle) => this.waiters.push({ generation: this.generation, settle }))
   }
 
   /** For quit: what is queued lands, and a failing save gets one more try instead of its backoff. */
@@ -72,6 +87,7 @@ export class CoalescingFileWriter<T> {
       const { wanted, generation } = this
       const attempt = ++this.attempts
       const landed = await this.commit(wanted).catch(() => false)
+      this.settleWaiters(generation, landed)
       if (generation !== this.generation) {
         continue
       }
@@ -96,6 +112,17 @@ export class CoalescingFileWriter<T> {
         }
       })
       this.wake = null
+    }
+  }
+
+  private settleWaiters(generation: number, landed: boolean): void {
+    const settled = this.waiters.filter((waiter) => waiter.generation <= generation)
+    if (settled.length === 0) {
+      return
+    }
+    this.waiters = this.waiters.filter((waiter) => waiter.generation > generation)
+    for (const waiter of settled) {
+      waiter.settle(landed)
     }
   }
 }

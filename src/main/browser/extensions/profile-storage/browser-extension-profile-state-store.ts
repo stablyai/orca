@@ -64,6 +64,8 @@ export class BrowserExtensionProfileStateStore {
   // Compared with the newest queued payload, not the landed one, so a revert behind a pending
   // write is still saved.
   private lastQueued: string | undefined
+  // The revision last queued; a clean store never serializes. Starts at the loaded state's.
+  private queuedRevision = 0
   private staleTempsSwept = false
   private closed = false
   /** Bumped by every change, so hot paths can cache what they derive from the state. */
@@ -144,15 +146,24 @@ export class BrowserExtensionProfileStateStore {
       clearTimeout(this.timer)
       this.timer = null
     }
-    if (!this.cache) {
+    if (!this.cache || this.revision === this.queuedRevision) {
       return
     }
+    this.queuedRevision = this.revision
     const payload = JSON.stringify(this.cache)
     if (payload === this.lastQueued) {
       return
     }
     this.lastQueued = payload
     this.writer.save(payload)
+  }
+
+  /** Saves now and settles once it is on disk; throws if the first attempt fails (retries continue). */
+  async flush(): Promise<void> {
+    this.saveNow()
+    if (!(await this.writer.landed())) {
+      throw new Error('Could not save extension state')
+    }
   }
 
   /** Final save on quit; later changes stay in memory only. A failing save gets one more try. */

@@ -93,10 +93,11 @@ describe('BrowserExtensionProfileStateStore', () => {
     })
   })
 
-  it('retries a failed rename at quit and writes nothing for an unchanged update', async () => {
+  it('reports a failed save, retries it at quit and writes nothing for an unchanged update', async () => {
     const store = new BrowserExtensionProfileStateStore(root)
     disk.failNext = true
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
+    await expect(store.flush()).rejects.toThrow('Could not save extension state')
     await store.close()
     expect(disk.renames).toBe(2)
     expect(new BrowserExtensionProfileStateStore(root).read('default', EXTENSION)).toMatchObject({
