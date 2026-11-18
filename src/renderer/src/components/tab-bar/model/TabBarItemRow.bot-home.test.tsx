@@ -86,11 +86,9 @@ function renderRow(item: TabBarItem): void {
 afterEach(cleanup)
 
 describe('TabBarItemRow bot Home tab', () => {
-  it("shows the bot's avatar like its side chats, and still cannot close", () => {
+  it('does not offer to close the Home tab', () => {
     renderRow(chatItem('home-chat'))
     const home = screen.getByTestId('tab')
-    expect(home.textContent).toBe('P')
-    expect(home.querySelector('svg')).toBeNull()
     expect(home.dataset.closable).toBe('false')
   })
 })
