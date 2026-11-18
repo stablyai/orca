@@ -25942,6 +25942,10 @@
       },
       "settingLabel": "Agent queue by memory",
       "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
+    },
+    "orcaPluginCatalog": {
+      "settingLabel": "Download Orca's plugin catalog",
+      "settingDescription": "Shows the official and community plugins from Orca and checks their safety list. Off by default because Zotz is a fork; your own plugin sources work either way."
     }
   }
 }

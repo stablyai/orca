@@ -8,6 +8,7 @@ import {
 } from '../../shared/zotz/zotz-machine-mode'
 import { configureZotzUpdateAutomation } from '../updater/zotz-update-automation'
 import { startZotzMemoryGovernor } from '../zotz/memory-governor/zotz-memory-governor-startup'
+import { startZotzPluginCatalogOptIn } from '../zotz/zotz-plugin-catalog-opt-in'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
@@ -95,6 +96,7 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
+  startZotzPluginCatalogOptIn(store)
   const stopZotzMemoryGovernor = startZotzMemoryGovernor({
     store,
     server: agentHookServer,

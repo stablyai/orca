@@ -1,6 +1,7 @@
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { acquire, release } from '../../execution/github-operation-slots'
 import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
+import { isZotzCloudFeatureAllowed } from '../../../../shared/zotz/zotz-network-policy'
 export const ORCA_REPO = 'stablyai/orca'
 
 // Bound optional star prompts more tightly than user work; failures can fall back to the browser.
@@ -10,6 +11,9 @@ let inFlightStarCheck: Promise<boolean | null> | null = null
 
 /** null means the star state could not be determined. */
 export function checkOrcaStarred(): Promise<boolean | null> {
+  if (!isZotzCloudFeatureAllowed('github-star')) {
+    return Promise.resolve(null)
+  }
   // Independent UI callers share one probe so optional star prompts cannot exhaust GitHub admission.
   inFlightStarCheck ??= runOrcaStarredCheck().finally(() => {
     inFlightStarCheck = null
@@ -47,6 +51,9 @@ async function runOrcaStarredCheck(): Promise<boolean | null> {
 }
 
 export async function starOrca(): Promise<boolean> {
+  if (!isZotzCloudFeatureAllowed('github-star')) {
+    return false
+  }
   await acquire()
   try {
     // Starring is always a click, so it may start the stopped distro its gh lives in (E9).

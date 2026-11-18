@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { ThemeLook } from './onboarding-theme-looks'
 import { ThemeLookCardPreview } from './ThemeLookPreview'
+import { useZotzOrcaPluginCatalogAllowed } from '../zotz/ZotzOrcaPluginCatalogRow'
 
 export const THEME_PLUGINS_URL = 'https://orca.dev/plugins?kind=themes'
 
@@ -37,6 +38,7 @@ export function ThemeLookCarousel({
   ariaLabel: string
   header: React.ReactNode
 }): React.JSX.Element {
+  const themePluginsAvailable = useZotzOrcaPluginCatalogAllowed()
   const t = useTranslate()
   const trackRef = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState<ScrollEdges>({ start: true, end: false })
@@ -156,20 +158,22 @@ export function ThemeLookCarousel({
             </button>
           )
         })}
-        <button
-          type="button"
-          className="flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-1.5 text-center text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-          onClick={openThemePluginDirectory}
-        >
-          <Puzzle className="size-4" />
-          <span className="text-xs font-medium">
-            {t('components.onboarding.theme.looks.moreThemes', 'More themes')}
-          </span>
-          <span className="flex items-center gap-1 text-2xs">
-            {t('components.onboarding.theme.looks.browsePlugins', 'Browse plugins')}
-            <ExternalLink className="size-2.5" />
-          </span>
-        </button>
+        {themePluginsAvailable ? (
+          <button
+            type="button"
+            className="flex w-40 shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-1.5 text-center text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            onClick={openThemePluginDirectory}
+          >
+            <Puzzle className="size-4" />
+            <span className="text-xs font-medium">
+              {t('components.onboarding.theme.looks.moreThemes', 'More themes')}
+            </span>
+            <span className="flex items-center gap-1 text-2xs">
+              {t('components.onboarding.theme.looks.browsePlugins', 'Browse plugins')}
+              <ExternalLink className="size-2.5" />
+            </span>
+          </button>
+        ) : null}
       </div>
     </section>
   )

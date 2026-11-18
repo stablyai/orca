@@ -24316,6 +24316,10 @@
       },
       "settingLabel": "Cola de agentes por memoria",
       "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba."
+    },
+    "orcaPluginCatalog": {
+      "settingLabel": "Descargar el catálogo de plugins de Orca",
+      "settingDescription": "Muestra los plugins oficiales y de la comunidad de Orca y revisa su lista de bloqueo. Viene apagado porque Zotz es un fork; tus propias fuentes de plugins funcionan igual."
     }
   }
 }

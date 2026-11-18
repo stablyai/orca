@@ -20,6 +20,7 @@ import {
 } from './terminal-spawn-error-display'
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
+import { ZOTZ_NEW_ISSUE_URL } from '../../../../../shared/zotz/zotz-app-identity'
 
 export function TerminalErrorToast({
   error,
@@ -168,10 +169,7 @@ export function TerminalErrorToast({
               'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
               'If this persists, please'
             )}{' '}
-            <a
-              href="https://github.com/stablyai/orca/issues"
-              className="underline underline-offset-2"
-            >
+            <a href={ZOTZ_NEW_ISSUE_URL} className="underline underline-offset-2">
               {t('auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699', 'file an issue')}
             </a>
             .
