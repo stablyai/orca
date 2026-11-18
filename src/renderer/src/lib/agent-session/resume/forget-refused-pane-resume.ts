@@ -37,6 +37,7 @@ export function forgetRefusedPaneResume(
     expected && saved?.capturedAt === expected.capturedAt && saved.updatedAt === expected.updatedAt
   if (
     saved &&
+    !saved.mailWake &&
     (exact
       ? namesConversation(refused, saved)
       : // Main and window may capture the same accepted status at different times.

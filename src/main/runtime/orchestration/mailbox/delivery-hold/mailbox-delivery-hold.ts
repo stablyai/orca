@@ -7,6 +7,16 @@ import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
 
 export type MailboxDeliveryHold =
+  | {
+      kind: 'asleep'
+      agentName: string
+      openTab: boolean
+      failed?: boolean
+      liveShell?: boolean
+      waking?: boolean
+      resuming?: boolean
+      workspaceName?: string
+    }
   | { kind: 'not-foreground'; agentName: string }
   | { kind: 'not-live'; agentName: string }
   /** A terminal dialog only a person can answer. */
@@ -105,6 +115,16 @@ export function describeMailboxDeliveryHold(
   receiverCli: OrchestrationCliCommand = 'orca'
 ): string {
   switch (hold.kind) {
+    case 'asleep':
+      if (hold.waking || hold.resuming) {
+        return `Queued. Orca is ${hold.waking ? 'waking' : 'resuming'} ${hold.agentName}; the message will be delivered when it's back.`
+      }
+      if (hold.liveShell) {
+        return `Queued. Re-run ${hold.agentName} in that terminal; the message is waiting.`
+      }
+      return hold.failed
+        ? `Queued. Orca couldn't resume ${hold.agentName} in ${hold.workspaceName ?? 'its workspace'} because the agent didn't reconnect; open its tab to try again. The message is waiting.`
+        : `Queued. Open ${hold.openTab ? 'its tab' : (hold.workspaceName ?? 'its workspace')} to resume ${hold.agentName}; the message is waiting.`
     case 'not-foreground':
       return `Queued. ${hold.agentName} isn't in the foreground of that terminal; the message will be delivered when it's back.`
     case 'not-live':

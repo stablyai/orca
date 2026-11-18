@@ -10,6 +10,12 @@ import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-st
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
+  abstract retrySleptMailboxWakes(): void
+  protected abstract mailWakeShellOccupied(ptyId: string): boolean
+  protected abstract requestSleptMailboxWake(
+    mailbox: string,
+    reservedTypes?: ReadonlySet<string>
+  ): void
   abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
   abstract getAgentStatusOrchestrationContextForPaneKey(
     paneKey: string

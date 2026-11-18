@@ -84,7 +84,9 @@ export function openAgentSessionRecordStoreOnce(
           opened.journalDatabase.stopMaintenance()
         }
         if (opening === slot && !slot.retire) {
-          sessionCrewChanges.notify(new Set(['topology', 'records']))
+          sessionCrewChanges.notify(
+            Object.assign(new Set(['topology', 'records'] as const), { mailGlobal: true as const })
+          )
         }
         return opened
       },
@@ -141,7 +143,9 @@ export function retireAgentSessionRecordStore(
     slot.retire = retire
     slot.database?.stopMaintenance()
     slot.store = undefined
-    sessionCrewChanges.notify(new Set(['topology', 'records']))
+    sessionCrewChanges.notify(
+      Object.assign(new Set(['topology', 'records'] as const), { mailGlobal: true as const })
+    )
   }
   return finishRetirement(slot)
 }
