@@ -67,12 +67,7 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
     async (baseRef: string | null) => {
       await runGitWorkflow('rebase', async () => {
         if (!client) {
-          throw new Error(
-            translate(
-              'sourceControl.actionSheetRunners.waitingForDesktop',
-              'Waiting for desktop...'
-            )
-          )
+          throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
         }
         if (!baseRef) {
           throw new Error(

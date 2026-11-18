@@ -123,7 +123,8 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       args.messages.length,
       args.mailboxHandle,
       args.deps.getCliCommand(expectedTarget.terminal.handle),
-      args.heldDeliveryId
+      args.heldDeliveryId,
+      expectedTarget.terminal.handle
     )
     channel = args.deps.resolvePromptChannel?.(args.terminal) ?? null
   } catch {

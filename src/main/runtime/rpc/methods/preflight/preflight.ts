@@ -6,7 +6,7 @@ import {
 } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
-import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight-remote-windows-terminal-capabilities'
+import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 
 import {
   assertAgentDetectionHostRunning,

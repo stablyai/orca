@@ -116,7 +116,7 @@ export function formatCleanupRunTrigger(
     case 'settings':
       return t('components.settings.workspaceCleanup.trigger.settings', 'After a rule change')
     case 'run-now':
-      return t('components.settings.workspaceCleanup.trigger.runNow', 'Clean up now')
+      return t('components.settings.workspaceCleanup.trigger.runNow', 'Run rules now')
     case 'cli':
       return t('components.settings.workspaceCleanup.trigger.cli', 'From the CLI')
   }

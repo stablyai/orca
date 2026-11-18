@@ -8,7 +8,7 @@ import * as agentLaunchCapabilities from '../../agent-launch/contracts/agent-lau
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES
-} from '../../agent-session/agent-session-runtime-capabilities'
+} from '../../agent-session/capabilities/agent-session-runtime-capabilities'
 import { AI_VAULT_RUNTIME_CAPABILITIES } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
@@ -36,6 +36,7 @@ import { TASK_SOURCE_RUNTIME_CAPABILITIES } from '../../work-items/task-source-r
 import { TERMINAL_RUNTIME_CAPABILITIES } from '../../terminal/runtime-policy/terminal-runtime-capabilities'
 import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
 import {
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_RUNTIME_CAPABILITIES,
@@ -59,6 +60,7 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY,
   ...AUTOMATION_RUNTIME_CLIENT_CAPABILITIES,
   agentLaunchCapabilities.AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const

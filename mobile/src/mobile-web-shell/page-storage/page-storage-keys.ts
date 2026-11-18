@@ -24,8 +24,13 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
 export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   ...TERMINAL_SHORTCUT_STORAGE_KEYS,
   'orca:terminalTextScale',
+  'orca:terminalFontStyle',
   'orca:terminalAutocompleteEnabled',
-  'orca:terminalLinkOpenMode'
+  'orca:terminalLinkOpenMode',
+  /** Chat text size, font and spacing, so an open chat follows Settings too. */
+  'orca:nativeChatText',
+  /** Used or remaining on usage bars, so an open Accounts page follows Settings. */
+  'orca:usagePercentageDisplay'
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -42,7 +47,15 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Whether a terminal link opens in Orca's browser or the phone's. */
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
-  'orca:terminalSplitLayout'
+  'orca:terminalSplitLayout',
+  /** Terminal font, line spacing and weight. */
+  'orca:terminalFontStyle',
+  /** Chat text size, font and spacing; a pinch in a chat saves here. */
+  'orca:nativeChatText',
+  /** The New Tab sheet's Chat or CLI pick. */
+  'orca:newAgentSurface',
+  /** Whether usage bars show the percentage used or remaining. */
+  'orca:usagePercentageDisplay'
 ] as const
 
 /**
@@ -50,7 +63,13 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  * reader refines each key against its own list and refuses the whole frame on one it lacks, so
  * the host sends these only to a page whose `ready` named them in `storageKeys`.
  */
-export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+export const NEGOTIATED_PAGE_STORAGE_KEYS = [
+  'orca:terminalSplitLayout',
+  'orca:terminalFontStyle',
+  'orca:nativeChatText',
+  'orca:newAgentSurface',
+  'orca:usagePercentageDisplay'
+] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {

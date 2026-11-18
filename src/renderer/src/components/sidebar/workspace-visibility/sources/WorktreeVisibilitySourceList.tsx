@@ -9,10 +9,10 @@ import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
   ExternalWorktreeVisibility,
-  Repo
+  Repo,
+  WorktreeVisibilityDefaults
 } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import {
   createWorktreeVisibilitySourceMatcher,
   effectiveDefaultBuiltInWorktreeSourceVisibility,
@@ -28,7 +28,7 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
-import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getWorktreeVisibilityOverrideNotice,
   getWorktreeVisibilitySourceNote,

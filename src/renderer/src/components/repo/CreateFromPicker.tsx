@@ -23,14 +23,14 @@ import {
 } from '../../../../shared/git/refs/branch-ref-label'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
 } from '@/runtime/source-control/references/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
 import { useTranslate } from '@/i18n/use-translate'
-import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
+import { FilePathCursorTooltip } from '@/components/file-actions/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
 

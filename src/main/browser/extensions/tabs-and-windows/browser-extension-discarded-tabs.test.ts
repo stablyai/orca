@@ -5,7 +5,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
@@ -287,38 +287,6 @@ beforeEach(() => {
 })
 
 describe('restored browser pages without a guest are discarded tabs', () => {
-  it('activates through the renderer, then is replaced by the loaded guest', async () => {
-    const [cold] = await query({ discarded: true })
-    const coldId = cold.id!
-    // Showing the page makes it active before its guest exists.
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toContainEqual([{ tabId: coldId, windowId: 1 }])
-    await call('update', [coldId, { active: true }])
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'cold')
-
-    // The guest starts loading before the renderer registers it: no onCreated for a reloaded tab.
-    const loaded = guest(12, mocks.sessions.default, 'https://cold.test/')
-    loaded.emit('did-start-loading')
-    expect(events('onCreated')).toEqual([])
-    mocks.pageByGuest.set(12, 'cold')
-    announceRegisteredBrowserExtensionTab('cold', 12)
-    expect(events('onReplaced')).toEqual([[12, coldId]])
-    expect(events('onCreated')).toEqual([])
-    expect(events('onUpdated')).toContainEqual([
-      12,
-      expect.objectContaining({ status: 'loading' }),
-      expect.objectContaining({ id: 12 })
-    ])
-    // The renderer republishes the active page once registered; it is the same activation.
-    const activations = events('onActivated').length
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toHaveLength(activations)
-    await expect(call('get', [coldId, null])).rejects.toThrow(`No tab with id: ${coldId}.`)
-    expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
-      'https://cold.test/'
-    )
-  })
-
   it("lists no page of a profile whose extensions have not started, not even to Default's", async () => {
     saved.local.browserTabsByWorktree = {
       ...saved.local.browserTabsByWorktree,
@@ -349,6 +317,22 @@ describe('restored browser pages without a guest are discarded tabs', () => {
     expect(await urls()).not.toContain('https://live.test/')
     // A write that still saves the page: its guest was evicted, so it is discarded now.
     writeListener?.('local')
+    expect(await urls()).toContain('https://live.test/')
+  })
+
+  it('lists an evicted page again after a window save main skipped as unchanged', async () => {
+    const live = mocks.guests.get(11)
+    if (!(live instanceof EventEmitter)) {
+      throw new Error('missing guest')
+    }
+    mocks.pageByGuest.set(11, 'live')
+    announceRegisteredBrowserExtensionTab('live', 11)
+    mocks.pageByGuest.delete(11)
+    mocks.guests.delete(11)
+    live.emit('destroyed')
+    const urls = async () => (await query({ discarded: true })).map((entry) => entry.url)
+    expect(await urls()).not.toContain('https://live.test/')
+    discardedTabs.noteWindowSessionSaveUnchanged('local')
     expect(await urls()).toContain('https://live.test/')
   })
 

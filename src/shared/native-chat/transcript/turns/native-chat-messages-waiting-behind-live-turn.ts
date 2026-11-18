@@ -5,7 +5,7 @@ import type {
 import type { AgentSessionLatestTurn } from '../../../agent-session/agent-session-wire'
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import type { NativeChatRole } from '../../native-chat-types'
-import { isStructuredAgentSessionCommandTurn } from '../../../agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandTurn } from '../../../agent-session/requests/structured-agent-session-command-entry'
 import { runningStructuredAgentSessionTurnScope } from '../../../agent-session/view/structured-agent-session-live-turn'
 import { structuredAgentSessionOpeningSendIn } from '../../../agent-session/requests/structured-agent-session-opening-send'
 

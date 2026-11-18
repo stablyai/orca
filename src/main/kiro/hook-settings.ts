@@ -1,5 +1,5 @@
 import { join, posix as pathPosix } from 'node:path'
-import { resolveKiroHomeDir } from '../../shared/kiro-home'
+import { resolveKiroHomeDir } from '../../shared/agent-launch/environment/kiro-home'
 import {
   createManagedCommandMatcher,
   hookDefinitionHasManagedCommand,

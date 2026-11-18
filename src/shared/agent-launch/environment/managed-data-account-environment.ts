@@ -35,7 +35,14 @@ export function restoreManagedDataAccountEnvironment(
 ): void {
   const provider = environment.ORCA_DATA_ACCOUNT_PROVIDER
   const dataHome = environment.ORCA_DATA_ACCOUNT_DATA_HOME
-  if (!dataHome || (provider !== undefined && provider !== 'opencode' && provider !== 'devin')) {
+  if (!dataHome) {
+    // A System-store resume marks only the provider.
+    if (provider === 'opencode') {
+      delete environment.ORCA_DATA_ACCOUNT_PROVIDER
+    }
+    return
+  }
+  if (provider !== undefined && provider !== 'opencode' && provider !== 'devin') {
     return
   }
   let original: z.infer<typeof originalEnvironment> | undefined

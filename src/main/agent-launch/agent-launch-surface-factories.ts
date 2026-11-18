@@ -11,8 +11,9 @@ import type {
   AgentLaunchMode
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { SetupTrustMismatch } from '../../shared/worktree/create-types'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/model-launch/opencode-model-startup-plan'
@@ -118,6 +119,7 @@ export type AgentLaunchWorkspaceFactory = {
     startupTerminalHandle: string | undefined
     startupTerminalCreation?: RuntimeTerminalCreate
     startupTerminalPaneKey?: string
+    setupTrustMismatch?: SetupTrustMismatch
     warning?: string
     promptRodeLaunchCommand?: boolean
   }>

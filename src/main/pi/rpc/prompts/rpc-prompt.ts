@@ -10,7 +10,7 @@ import {
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat/native-chat-types'
 import { agentInlineImageMimeType } from '../../../../shared/native-chat/input/composer/agent-inline-image-types'
-import { detectImageFileSignature } from '../../../../shared/image-file-signature'
+import { detectImageFileSignature } from '../../../../shared/file-content/image-file-signature'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionFact
@@ -19,7 +19,7 @@ import type { AgentSessionAttachmentProblem } from '../../../../shared/agent-ses
 import {
   ClaudeDispatchContentError,
   readClaudeImage
-} from '../../../claude/structured/claude-structured-dispatch-content'
+} from '../../../claude/structured/dispatch/claude-structured-dispatch-content'
 
 type ImageLimits = { image: number; total: number }
 const SHRUNK_IMAGE_LIMITS: ImageLimits = {

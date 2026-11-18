@@ -1,22 +1,22 @@
-import type { AgentSessionForkedFromMark } from '../agent-session-fork-name'
+import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
-import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
+import type { AgentSessionQuestionAnswer } from '../requests/prompts/agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from '../agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../conversation-context/agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSource } from '../agent-session-message-source'
+import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type {
   AgentJournalAgentHandoffItem,
@@ -183,6 +183,7 @@ export type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject,
   AgentJournalPlanApprovalSubject,
+  AgentJournalUrlApprovalSubject,
   AgentJournalUnknownApprovalSubject,
   AgentJournalUnknownKind
 } from './agent-session-journal-approval-subject'

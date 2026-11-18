@@ -22,7 +22,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/rem
 import { publicRuntimeEnvironment } from '../../../rpc/testing/paired-runtime-environment-test-fixture'
 import { createTestStore } from '../../../../store/testing/app-store-test-fixture'
 import { installServerLayoutFrames } from '../server-layout-frames'
-import { applyWebSessionTabsSnapshotWithContext } from '../../../web-session-tabs-sync/apply-snapshot'
+import { applyWebSessionTabsSnapshotWithContext } from '../../../web-session-tabs-sync/snapshots/apply-snapshot'
 
 export const ENV = 'web-env-1'
 export const WT = 'repo::/worktree'

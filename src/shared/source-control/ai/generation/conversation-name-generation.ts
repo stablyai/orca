@@ -1,4 +1,4 @@
-import { normalizeAgentSessionConversationName } from '../../../agent-session/agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from '../../../agent-session/conversation-naming/agent-session-conversation-name'
 import { cleanGeneratedCommitMessage } from './commit-message-agent-output'
 import { sliceAtCodeUnitLimit } from '../../../text/surrogate-safe-text-slice'
 import { renderSourceControlActionCommandTemplate } from '../recipes/source-control-ai-actions'

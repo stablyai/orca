@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { textGenerationFailure } from '../../text-generation-failure-copy'
+import { textGenerationFailure } from '../text-generation-failure-copy'
 
 const eventSchema = z.object({
   type: z.string(),

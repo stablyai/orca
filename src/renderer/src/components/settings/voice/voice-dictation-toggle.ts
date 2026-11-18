@@ -1,4 +1,4 @@
-import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
+import type { DeveloperPermissionRequestResult } from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import type { FeatureTipId } from '../../../../../shared/feature-education/feature-tips'
 import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { toast } from 'sonner'

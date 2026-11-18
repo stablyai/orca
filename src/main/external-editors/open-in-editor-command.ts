@@ -1,5 +1,5 @@
-import { BUILT_IN_EDITOR_COMMANDS } from '../../shared/open-in-applications'
-import type { OpenInApplication } from '../../shared/ui-chrome-types'
+import { BUILT_IN_EDITOR_COMMANDS } from '../../shared/editor/launch/open-in-applications'
+import type { OpenInApplication } from '../../shared/ui-chrome/ui-chrome-types'
 import type { ShellOpenExternalEditorRequest } from '../../shared/shell/opening/shell-open-types'
 
 type EditorSelection = Pick<

@@ -8,7 +8,7 @@ import {
   type LinearClientForWorkspace
 } from '../accounts/linear-account-client'
 import { withLinearRead } from './context/issue-context-resolution'
-import { linearError } from './context/linear-access-errors'
+import { linearNotConnectedError } from './context/linear-not-connected-error'
 import {
   getFanoutClientEntries,
   workspaceFailure,
@@ -19,11 +19,11 @@ import { linearConnectionHasNextPage } from './context/linear-connection-pages'
 import { resolveWorkspaceSelector } from './context/workspace-selector-resolution'
 import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
 import { buildIssueFilter } from './mcp-issue-list-filter'
+import { linearUncappedReadDeadline } from '../requests/linear-read-budget'
 
 // Without --limit, page until completion or safety bounds; return truncation before the CLI RPC deadline.
 const LIST_ISSUES_PAGE_SIZE = 250
 const LIST_ISSUES_MAX_PAGES = 200
-const LIST_ISSUES_READ_BUDGET_MS = 20_000
 
 type RawListIssuesResponse = {
   issues?: {
@@ -73,9 +73,7 @@ export async function listMcpIssues(
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the issue list.']
-    })
+    throw linearNotConnectedError('issue list')
   }
   const pagedRequest = {
     ...request,
@@ -83,7 +81,7 @@ export async function listMcpIssues(
     workspaceId: pagination.workspaceId
   }
   // Share one deadline across fan-out so workspace count cannot multiply the budget.
-  const deadline = Date.now() + LIST_ISSUES_READ_BUDGET_MS
+  const deadline = linearUncappedReadDeadline()
   const { pages, failures } = await readIssueListWorkspaces(
     entries,
     pagedRequest,

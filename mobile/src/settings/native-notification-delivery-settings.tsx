@@ -96,7 +96,7 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         <SettingsNote>
           {t(
             'settings.nativeNotificationDeliverySettings.updateDesktopHint',
-            'Pair an updated desktop to receive notifications on this phone.'
+            'Pair an updated host to receive notifications on this phone.'
           )}
         </SettingsNote>
       ) : null}

@@ -13,7 +13,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import type { createStructuredAgentSessionDispatchFollowUps } from '../structured-agent-session-dispatch-followups'
+import type { createStructuredAgentSessionDispatchFollowUps } from '../lifecycle/structured-agent-session-dispatch-followups'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import type {
@@ -46,8 +46,9 @@ export type StructuredAgentAccountHomeRequest = {
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null
   /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
-   *  `identity` is a read that names the selected account before its folder exists. */
-  purpose: 'launch' | 'read' | 'identity'
+   *  `identity` is a read that names the selected account before its folder exists. `catalog`
+   *  is a read of the account a new chat would launch on, so its models match that chat's. */
+  purpose: 'launch' | 'read' | 'identity' | 'catalog'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */
@@ -104,6 +105,8 @@ export type StructuredAgentLaunchCheck = {
   ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
+  /** Arguments before `--version`. */
+  versionArgs?: readonly string[]
 }
 
 export type StructuredAgentChatProgram = {
@@ -116,6 +119,8 @@ export type StructuredAgentChatProgram = {
     env: Record<string, string>,
     settings: AcpHostBackendSettings
   ) => Promise<boolean>
+  /** Whether no release Orca can install runs here, so chats start only on `hostAlternative`. */
+  onlyHostAlternative?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

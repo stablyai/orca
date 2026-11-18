@@ -18,6 +18,8 @@ export type OrcadHostTransport = RemoteInstallTransport & {
   readonly orcadLaunchEnv?: (
     launch: OrcadLaunchEnvRequest
   ) => Promise<readonly OrcadLaunchEnvEntry[]>
+  /** WSL only: a transport whose every host command first runs the POSIX `fence` statement. */
+  readonly withCommandFence?: (fence: string) => OrcadHostTransport
 }
 
 /** The slot being launched; entries only its own build understands must check the version. */

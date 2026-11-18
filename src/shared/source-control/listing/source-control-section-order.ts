@@ -1,7 +1,7 @@
 import { compareGitStatusEntries } from '../../git/status/git-status-sort'
 import { normalizeSourceControlGroupOrder } from './source-control-group-order'
 import type { GitStatusEntry } from '../../git/status/git-status-types'
-import type { SourceControlGroupOrder } from '../../ui-chrome-types'
+import type { SourceControlGroupOrder } from '../../ui-chrome/ui-chrome-types'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]

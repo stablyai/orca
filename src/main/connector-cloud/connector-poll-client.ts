@@ -13,7 +13,7 @@ import {
   type ConnectorConversation,
   type ConnectorDeliveryResult,
   type ConnectorEvent
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type {
   ExternalConversationHost,
   ExternalConversationSeam

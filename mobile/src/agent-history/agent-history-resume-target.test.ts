@@ -168,25 +168,6 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status).toBe('blocked')
   })
 
-  it('resumes a WSL-stored session in an SSH folder workspace', () => {
-    const target = resolve({
-      session: session({ cwd: '/home/ada/folder/src', filePath: WSL_TRANSCRIPT }),
-      activeWorktreeId: 'folder:folder-ssh',
-      worktrees: [
-        worktree({
-          worktreeId: 'folder:folder-ssh',
-          repoId: 'folder-workspace:group-local',
-          workspaceKind: 'folder-workspace',
-          path: '/home/ada/folder'
-        })
-      ],
-      repos,
-      folderWorkspaces,
-      projectGroups
-    })
-    expect(target.status === 'ready' ? target.targetStatus : target.message).toBe('ssh')
-  })
-
   it('resolves project-scope rows to the matched session worktree before the route worktree', () => {
     const target = resolve({
       session: session({ cwd: '/Users/ada/repo/feature/src' }),
@@ -310,6 +291,32 @@ describe('mobile AI Vault resume target guards', () => {
       hostPlatform: 'win32'
     })
     expect(target.status).toBe('blocked')
+  })
+
+  // #38639: a relayed WSL server answers worktree.ps and status.get from inside the distro.
+  it('resumes a relayed WSL server session only when that server listed it', () => {
+    const serverRoute = {
+      activeWorktreeId: 'route-wt',
+      worktrees: [worktree({ worktreeId: 'route-wt', path: '/home/ada/repo' })],
+      repos,
+      hostPlatform: 'linux' as const
+    }
+    const asServerListsIt = resolve({
+      ...serverRoute,
+      session: session({
+        cwd: '/home/ada/repo',
+        filePath: '/home/ada/.claude/projects/app/s.jsonl'
+      })
+    })
+    // The Windows desktop's scan names the same transcript through its WSL share.
+    const asDesktopListsIt = resolve({
+      ...serverRoute,
+      session: session({ cwd: '/home/ada/repo', filePath: WSL_TRANSCRIPT })
+    })
+    expect(asServerListsIt.status === 'ready' ? asServerListsIt.workspacePath : null).toBe(
+      '/home/ada/repo'
+    )
+    expect(asDesktopListsIt.status).toBe('blocked')
   })
 
   it('resolves a folder workspace pinned to an SSH host by its own executionHostId', () => {
