@@ -20,6 +20,8 @@ import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
+import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
+import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -53,6 +55,7 @@ class OrchestrationDbCore {
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     refreshOutstandingDeliveryTrigger(this.db)
+    installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
       ['federation_relay_items', ['answer_sender_report']]
@@ -94,6 +97,12 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work
         ON dispatch_contexts(creator_dispatch_id, status);
       CREATE INDEX IF NOT EXISTS idx_runs_current_coordinator_handle ON runs(coordinator_handle);
+      CREATE INDEX IF NOT EXISTS idx_runs_current_pane_exact
+        ON runs(coordinator_pane_key) WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_runs_current_pane_leaf
+        ON runs(${RUN_PANE_KEY_MATCH_SUFFIX_SQL})
+        WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL
+          AND instr(coordinator_pane_key, ':') > 1;
       CREATE INDEX IF NOT EXISTS idx_messages_native_account_work
         ON messages(run_id, to_handle, type)
         WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';

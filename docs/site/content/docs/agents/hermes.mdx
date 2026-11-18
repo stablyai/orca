@@ -1,0 +1,61 @@
+---
+title: Hermes Agent setup
+description: Install Hermes Agent, sign it in, and use it in Orca's Chat view, with its permission modes, gateway, and known limits.
+---
+
+Orca runs [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) in a terminal or in its [Chat view](/docs/agents/native-chat). Chat talks to Hermes through `hermes acp`, Hermes' Agent Client Protocol server, and needs Hermes 0.23.0 or later.
+
+## Install and sign in
+
+Install Hermes on the machine that runs the workspace:
+
+```sh
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+```
+
+The installer puts the `hermes` command in `~/.local/bin` (on Windows, in the `bin` folder of `%LOCALAPPDATA%\hermes`). Orca looks there even when that folder is not on your `PATH`.
+
+Then pick a model provider and sign in to it:
+
+```sh
+hermes model
+```
+
+A chat started before Hermes has a provider shows a **Sign in** card that runs the same command. To check the install without starting a chat, run `hermes acp --version` and `hermes acp --check`.
+
+## Use it in Chat
+
+Open **Settings → Agents** and choose **Chat** on the **Hermes** row to make new Hermes tabs open as chats, or pick **Hermes → Launch chat** from the New Tab menu.
+
+The model and reasoning effort pickers list what Hermes reports for its current provider. A custom OpenAI-compatible endpoint lists only the model it is set to.
+
+Permission modes map onto Hermes' own approval settings:
+
+| Orca mode        | What Hermes does                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| Ask for approval | Asks before every file edit, and before commands its approval rules flag.                                |
+| Accept edits     | Allows edits inside the workspace and temp folders; still asks for sensitive paths and flagged commands. |
+| Full access      | Allows file edits, and Orca approves every request Hermes still sends.                                   |
+
+Which commands need approval is a Hermes profile setting (`approvals.mode` in `config.yaml`), not a per-chat one. Orca never starts Hermes with `--yolo`, so switching a chat back to **Ask for approval** asks again.
+
+**/compact** runs Hermes' `/compress`, and **/clear** starts a new conversation. Hermes' other slash commands appear in the composer's command menu, except `/reset`, which would empty the conversation under the chat's transcript.
+
+## The Hermes gateway
+
+Hermes runs conversations and their tools in a per-profile gateway process. The first `hermes acp` starts it, and it keeps running for about ten minutes after its last client leaves. That has a few effects:
+
+- The first chat after the gateway stops can take a minute to start.
+- Tools run with the environment of whichever process started the gateway, so a variable you add to the Hermes row's **Environment** reaches tools only once the gateway restarts. Stop it with `hermes gateway stop`.
+- Closing a chat or pressing Stop cancels its turn in the gateway.
+- Hermes chats don't carry Orca's caller identity, because one gateway serves every chat on the profile. The `orca` command inside a Hermes tool therefore can't act as the chat that ran it.
+
+## Remote hosts
+
+Install and sign in to Hermes on the machine that runs the workspace, such as a [Remote Orca Server](/docs/remote-servers). Chat is not available for SSH workspaces.
+
+## Known limits
+
+- Hermes doesn't offer its question tool over ACP, so it can't ask multiple-choice questions in Chat.
+- `delegate_task` subagents run in the background and report back in a later turn; Chat shows the call, not a subagent card.
+- Session History doesn't list Hermes 0.23 sessions yet, so a closed Hermes chat can't be reopened from there.
