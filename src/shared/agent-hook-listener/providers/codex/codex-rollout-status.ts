@@ -6,7 +6,6 @@ import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { markCodexLeadTurnInterrupted, setCodexMainAgentTurnState } from './codex-state'
 import { pendingCodexAsyncQuestion } from './codex-async-questions'
 import { finishCodexSubagent } from './codex-subagent-roster'
-import { codexCancelNeedsRollout } from './codex-interrupt-hook-support'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 import {
   codexRolloutFile,
@@ -158,7 +157,7 @@ function retireEndedCodexChildren(state: HookListenerState, paneKey: string, now
 }
 
 /** The row rollout facts imply for the current hook row, without I/O: a replayed Stop for an
- *  ended turn (/review, failed turn), a pre-0.150 cancel, or a restatement of names/approvals. */
+ *  ended turn (/review, failed turn), a cancel no Interrupt hook reported, or a restatement of names/approvals. */
 export function codexRolloutStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
@@ -176,8 +175,7 @@ export function codexRolloutStatus(
     lead !== undefined &&
     lead.state !== 'done' &&
     // A turn_aborted for an earlier turn must not cancel the one the hooks opened since.
-    (!rootTurn.turnId || !lead.turnId || rootTurn.turnId === lead.turnId) &&
-    codexCancelNeedsRollout(rollout)
+    (!rootTurn.turnId || !lead.turnId || rootTurn.turnId === lead.turnId)
   const envelope = record(body)
   if (
     !interrupted &&

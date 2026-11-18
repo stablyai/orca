@@ -2,7 +2,6 @@ import type { HookListenerState } from '../../listener-state'
 import {
   readJsonlCursorBytes,
   readJsonlFirstRecordAsync,
-  RolloutReadBatch,
   scheduleRolloutRead,
   type RolloutReadLog,
   type RolloutReadPriority
@@ -49,13 +48,13 @@ export function readCodexRolloutFile(
     ctx.state.codexRolloutByPaneKey.get(paneKey) === rollout &&
     (asRoot ? rollout.root === file : rollout.childFiles.get(filePath) === file)
   // A file its pane stopped following while the read waited for a slot is never read.
-  const batch = new RolloutReadBatch(() => attachedTo(pane.key))
+  const wanted = (): boolean => attachedTo(pane.key)
   // Taken when the read starts: what it can satisfy is what was asked before its bytes were read.
   let start = { epoch: 0, satisfies: 0, at: 0, childHooks: new Map<string, number>() }
   const read = scheduleRolloutRead(
     filePath,
     `${pane.key} ${filePath}`,
-    batch,
+    wanted,
     () => {
       start = {
         epoch: rollout.epoch,
@@ -68,7 +67,7 @@ export function readCodexRolloutFile(
           )
         )
       }
-      return readJsonlCursorBytes({ ...file.cursor }, batch)
+      return readJsonlCursorBytes({ ...file.cursor })
     },
     { priority, log: ctx.log }
   )
@@ -83,24 +82,19 @@ export function readCodexRolloutFile(
   void read.outcome
     .then((result) => {
       if (result.status === 'skipped') {
-        batch.release()
         file.reading = false
         return
       }
       if (result.status === 'timedOut') {
         // The row keeps its last state; the file is read again once this I/O ends, never stacked on it.
-        void read.settled.then(() => {
-          batch.release()
-          retry()
-        })
+        void read.settled.then(retry)
         return
       }
       file.reading = false
       const paneKey = pane.key
       const attached = attachedTo(paneKey)
       let current = attached && (!asRoot || rollout.epoch === start.epoch)
-      // Over the byte budget, the bytes wait for the next read.
-      if (current && result.value !== 'deferred') {
+      if (current) {
         const records = applyJsonlCursorBytes(
           file.cursor,
           result.value,
@@ -121,7 +115,6 @@ export function readCodexRolloutFile(
           )
         }
       }
-      batch.release()
       if (attached && file.readAgain) {
         file.readAgain = false
         readCodexRolloutFile(ctx, pane, rollout, file)
@@ -131,7 +124,6 @@ export function readCodexRolloutFile(
       }
     })
     .catch((error: unknown) => {
-      batch.release()
       file.reading = false
       console.error('[agent-hooks] Codex rollout read failed:', error)
     })
@@ -144,13 +136,15 @@ export function readCodexChildName(
   id: string,
   filePath: string
 ): void {
-  // A child that finished or moved to another rollout while queued is never read.
-  const batch = new RolloutReadBatch(() => roster.get(id)?.identityPath === filePath)
+  // A child that finished or moved to another rollout, or whose pane closed, while queued is never read.
+  const wanted = (): boolean =>
+    ctx.state.codexSubagentRosterByPaneKey.get(pane.key) === roster &&
+    roster.get(id)?.identityPath === filePath
   const { outcome, settled } = scheduleRolloutRead(
     filePath,
     `${pane.key} ${filePath}`,
-    batch,
-    () => readJsonlFirstRecordAsync(filePath, batch),
+    wanted,
+    () => readJsonlFirstRecordAsync(filePath),
     { priority: 1, log: ctx.log }
   )
   void outcome
@@ -162,7 +156,6 @@ export function readCodexChildName(
           : result.status === 'timedOut'
             ? (await settled, 'unreadable' as const)
             : 'unreadable'
-      batch.release()
       // Applied to the roster that asked even if its pane moved; a finished child drops it.
       if (applyCodexSubagentIdentityRead(roster, id, filePath, head, Date.now())) {
         ctx.publish(pane.key)
@@ -171,7 +164,6 @@ export function readCodexChildName(
       ctx.pump(pane.key, false)
     })
     .catch((error: unknown) => {
-      batch.release()
       console.error('[agent-hooks] Codex child name read failed:', error)
     })
 }

@@ -66,8 +66,6 @@ export type CodexRolloutState = {
   root?: CodexRolloutFile
   rootTurn: CodexTranscriptTurn
   turnEnds: Map<string, 'completed' | 'failed'>
-  /** `cli_version` from the root rollout's session_meta, when the read reached the first line. */
-  cliVersion?: string
   /** Child rollouts: reviewer ownership, and for live children how their turn ended. */
   childFiles: Map<string, CodexRolloutFile>
   /**
@@ -120,7 +118,6 @@ export function followCodexRootRollout(
   rollout.root = createRolloutFile(filePath)
   rollout.rootTurn = { interrupted: false }
   rollout.turnEnds.clear()
-  rollout.cliVersion = undefined
   rollout.rootApprovalHold = undefined
   rollout.turnReviewerRequest = undefined
 }
@@ -245,13 +242,6 @@ function readTurnEnd(
   return { turnId, end: payload.error == null ? 'completed' : 'failed' }
 }
 
-function readCliVersion(recordValue: JsonRecord): string | undefined {
-  const version = record(recordValue.payload)?.cli_version
-  return recordValue.type === 'session_meta' && typeof version === 'string'
-    ? version.trim() || undefined
-    : undefined
-}
-
 /** Apply a finished read: `read` undefined means the rollout was unreadable. `childHooks` holds
  *  each child's hook count when the read started. */
 export function commitCodexRolloutRead(
@@ -320,7 +310,6 @@ export function commitCodexRolloutRead(
   }
   reconcileCodexTranscriptTurn(rollout.rootTurn, records)
   for (const recordValue of records) {
-    rollout.cliVersion = readCliVersion(recordValue) ?? rollout.cliVersion
     const turnEnd = readTurnEnd(recordValue)
     if (!turnEnd) {
       continue

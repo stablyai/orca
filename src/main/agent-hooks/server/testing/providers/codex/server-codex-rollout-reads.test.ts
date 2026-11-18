@@ -19,6 +19,7 @@ import {
 import {
   holdReads,
   reads,
+  releaseHeldReads,
   resetRolloutReadGate,
   settle
 } from './codex-rollout-read-gate.test-fixtures'
@@ -95,8 +96,9 @@ beforeEach(async () => {
   await startServer()
 })
 
-afterEach(() => {
+afterEach(async () => {
   server.stop()
+  await releaseHeldReads()
   rmSync(dir, { recursive: true, force: true })
   vi.useRealTimers()
 })
@@ -175,53 +177,46 @@ describe('Codex status from hooks, with async rollout reads only for what hooks 
     })
   })
 
-  it('settles a cancel from Interrupt on Codex 0.150+, where a Ctrl+C copy leaves the turn running', async () => {
+  it('cancels once on Codex 0.150+ from whichever lands first, the Interrupt hook or the rollout abort', async () => {
+    const cancelled = { state: 'done', interrupted: true, outcome: 'cancellation', subagents: [] }
     const root = rollout('root', sessionMeta('0.169.0'), taskStarted(T1))
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'PreToolUse', ...BASH })
-    // The hook, not the rollout, is the cancel: an abort record alone changes nothing on 0.150+.
+    // The Interrupt hook was lost (timed out, or not installed): the rollout's abort ends the turn.
     appendFileSync(root, turnAborted(T1))
     await settle()
-    expect(row()?.state).toBe('working')
+    expect(shown(row())).toEqual(cancelled)
+    const firstDone = row()?.mainAgent?.stateStartedAt
+    // A late Interrupt for the same turn restates that cancel; it is not a second turn end.
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'Interrupt' })
-    expect(shown(row())).toEqual({
-      state: 'done',
-      interrupted: true,
-      outcome: 'cancellation',
-      subagents: []
-    })
+    expect(shown(row())).toEqual(cancelled)
+    expect(row()?.mainAgent?.stateStartedAt).toBe(firstDone)
 
+    // The usual order: the hook cancels, and the abort record written after it changes nothing.
     appendFileSync(root, taskStarted(T2))
     await post({ turn_id: T2, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
-    await post({ turn_id: T2, transcript_path: root, hook_event_name: 'PreToolUse', ...BASH })
+    await post({ turn_id: T2, transcript_path: root, hook_event_name: 'Interrupt' })
+    expect(shown(row())).toEqual(cancelled)
+    const secondDone = row()?.mainAgent?.stateStartedAt
+    appendFileSync(root, turnAborted(T2))
+    await settle()
+    expect(shown(row())).toEqual(cancelled)
+    expect(row()?.mainAgent?.stateStartedAt).toBe(secondDone)
+
+    // A Ctrl+C copy writes no abort, so the turn keeps running until its Stop.
+    appendFileSync(root, taskStarted('turn-3'))
+    await post({ turn_id: 'turn-3', transcript_path: root, hook_event_name: 'UserPromptSubmit' })
+    await post({ turn_id: 'turn-3', transcript_path: root, hook_event_name: 'PreToolUse', ...BASH })
     await settle()
     expect(row()?.state).toBe('working')
-    await post({ turn_id: T2, transcript_path: root, hook_event_name: 'Stop' })
-    expect(shown(row())).toEqual({
-      state: 'done',
-      interrupted: false,
-      outcome: undefined,
-      subagents: []
-    })
+    await post({ turn_id: 'turn-3', transcript_path: root, hook_event_name: 'Stop' })
+    expect(shown(row())).toEqual({ ...cancelled, interrupted: false, outcome: undefined })
   })
 
   it('cancels from the rollout on Codex before 0.150, which has no Interrupt hook', async () => {
     const root = rollout('root', sessionMeta('0.146.0'), taskStarted(T1))
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'PreToolUse', ...BASH })
-    appendFileSync(root, turnAborted(T1))
-    await settle()
-    expect(shown(row())).toEqual({
-      state: 'done',
-      interrupted: true,
-      outcome: 'cancellation',
-      subagents: []
-    })
-  })
-
-  it('keeps the rollout cancel check when the pane does not show its own Codex version', async () => {
-    const root = rollout('root', taskStarted(T1))
-    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
     appendFileSync(root, turnAborted(T1))
     await settle()
     expect(shown(row())).toEqual({
@@ -481,7 +476,7 @@ describe('Codex rollout read ordering', () => {
   })
 
   it('shows a held approval once its read is overdue, so a hung read cannot hide it', async () => {
-    reads.gate = () => new Promise(() => {})
+    holdReads()
     const root = rollout('root', taskStarted(T1), turnContext(T1, 'user'))
     await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
     await post({
@@ -602,6 +597,33 @@ describe('Codex rollout read ordering', () => {
     held.releaseAll()
     await settle()
     expect(row()?.state).toBe('working')
+  })
+
+  it('drops held approvals when status hooks go off, so none turns into Needs you once they are back', async () => {
+    const root = rollout('root', sessionMeta('0.169.0'), taskStarted(T1))
+    const child = rollout('child', childMeta(CHILD_ID, '/root/scout'), taskStarted('child-turn'))
+    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'UserPromptSubmit' })
+    await post({
+      turn_id: 'child-turn',
+      transcript_path: child,
+      hook_event_name: 'SubagentStart',
+      agent_id: CHILD_ID
+    })
+    await settle(1_000)
+    holdReads()
+    await post({
+      turn_id: 'child-turn',
+      transcript_path: child,
+      hook_event_name: 'PermissionRequest',
+      agent_id: CHILD_ID,
+      ...BASH
+    })
+    expect(shown(row()).subagents).toEqual([['scout', 'working']])
+    server.setStatusHooksEnabled(false)
+    server.setStatusHooksEnabled(true)
+    await post({ turn_id: T1, transcript_path: root, hook_event_name: 'PreToolUse', ...BASH })
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(shown(row()).subagents).toEqual([['scout', 'working']])
   })
 
   it('carries a held approval to the pane it moves to', async () => {

@@ -10,66 +10,6 @@ import {
   type JsonlFirstRecord
 } from './codex-rollout-jsonl-format'
 
-// Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
-const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
-// Why: one pane stalled on a slow open must not hold the whole budget and stall every other pane.
-const MAX_BATCH_HELD_ROLLOUT_BYTES = 4 * 1024 * 1024
-let heldRolloutBytes = 0
-const batchesHoldingBytes = new Set<RolloutReadBatch>()
-
-// Why: a cleared pane's batch can wait forever on a stalled open; its bytes are as good as dropped, so they must not block other panes.
-function releaseAbandonedBatches(): void {
-  for (const batch of batchesHoldingBytes) {
-    if (!batch.wanted()) {
-      batch.release()
-    }
-  }
-}
-
-/** One read's (or group of reads'): whether they are still wanted, and the buffer bytes they hold until released. */
-export class RolloutReadBatch {
-  private held = 0
-  private released = false
-
-  constructor(private readonly isWanted: () => boolean = () => true) {}
-
-  wanted(): boolean {
-    return !this.released && this.isWanted()
-  }
-
-  /** A batch's first read always fits its own cap, and the first read anywhere always fits, so nothing starves. */
-  reserve(bytes: number): boolean {
-    if (this.released || (this.held > 0 && this.held + bytes > MAX_BATCH_HELD_ROLLOUT_BYTES)) {
-      return false
-    }
-    if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
-      releaseAbandonedBatches()
-      if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
-        return false
-      }
-    }
-    heldRolloutBytes += bytes
-    this.held += bytes
-    batchesHoldingBytes.add(this)
-    return true
-  }
-
-  /** Returns bytes a read already dropped, such as a parsed first-line buffer. */
-  unreserve(bytes: number): void {
-    const returned = Math.min(bytes, this.held)
-    heldRolloutBytes -= returned
-    this.held -= returned
-  }
-
-  /** Call once the batch is applied or dropped. */
-  release(): void {
-    heldRolloutBytes -= this.held
-    this.held = 0
-    this.released = true
-    batchesHoldingBytes.delete(this)
-  }
-}
-
 // Why: rollout reads use Node's shared libuv threadpool (4 threads by default). Measured with 20
 // conversations and every open held 1.5 s: 2 slots kept other main-process async fs at p95 2 ms
 // (max 0.47 s); 3 slots let it reach p95 341 ms (max 1.4 s); uncapped, 8 s.
@@ -80,6 +20,8 @@ const READ_TIMEOUT_MS = 5_000
 // A timed-out read frees its slot but its I/O still holds a pool thread; at most one such read runs
 // beyond the slots, so hung opens never take every pool thread from the rest of the process.
 const MAX_IO_IN_FLIGHT = MAX_READS_IN_FLIGHT + 1
+// An open that has not returned by now is written off, so stuck I/O can never stop all later reads.
+const IO_ABANDON_MS = 30_000
 const SLOW_QUEUE_LOG_MS = 1_000
 
 export type RolloutReadLog = (line: string) => void
@@ -123,7 +65,7 @@ function enqueueRead(entry: QueuedRead): void {
 /**
  * The process's one rollout read limiter, queued by priority (stable within one); `raise` moves a
  * still-queued read up when something more urgent waits on it. Reads of one file run one after
- * another, so the queue holds at most one entry per file however often it is written. The batch is
+ * another, so the queue holds at most one entry per file however often it is written. `wanted` is
  * rechecked when the slot comes, so work its caller abandoned while queued never touches the disk.
  * A read past READ_TIMEOUT_MS gives its slot back (within MAX_IO_IN_FLIGHT) and resolves `timedOut`; its late result is
  * ignored, and `settled` resolves once the I/O really ends (the reader closes its handle then). The
@@ -132,7 +74,7 @@ function enqueueRead(entry: QueuedRead): void {
 export function scheduleRolloutRead<T>(
   filePath: string,
   label: string,
-  batch: RolloutReadBatch,
+  wanted: () => boolean,
   read: () => Promise<T>,
   options: { priority: RolloutReadPriority; log?: RolloutReadLog }
 ): {
@@ -155,7 +97,7 @@ export function scheduleRolloutRead<T>(
   const entry: QueuedRead = {
     priority: options.priority,
     start: () => {
-      if (!batch.wanted()) {
+      if (!wanted()) {
         resolveOutcome({ status: 'skipped' })
         resolveSettled()
         startQueuedReads()
@@ -175,6 +117,13 @@ export function scheduleRolloutRead<T>(
           startQueuedReads()
         }
       }
+      let ioCounted = true
+      const releaseIo = (): void => {
+        if (ioCounted) {
+          ioCounted = false
+          ioInFlight -= 1
+        }
+      }
       const timer = setTimeout(() => {
         options.log?.(
           `[agent-hooks] Codex rollout read timed out after ${READ_TIMEOUT_MS} ms (waited ${waitedMs} ms): ${label}`
@@ -183,9 +132,18 @@ export function scheduleRolloutRead<T>(
         resolveOutcome({ status: 'timedOut' })
       }, READ_TIMEOUT_MS)
       timer.unref?.()
+      const abandon = setTimeout(() => {
+        options.log?.(
+          `[agent-hooks] Codex rollout read still open after ${IO_ABANDON_MS} ms; no longer counted: ${label}`
+        )
+        releaseIo()
+        startQueuedReads()
+      }, IO_ABANDON_MS)
+      abandon.unref?.()
       const finish = (result: RolloutReadOutcome<T>): void => {
         clearTimeout(timer)
-        ioInFlight -= 1
+        clearTimeout(abandon)
+        releaseIo()
         release()
         startQueuedReads()
         resolveOutcome(result)
@@ -226,14 +184,7 @@ export const rolloutReadLimiterForTests = {
 }
 
 /** Off-thread first-record read; run it through scheduleRolloutRead. */
-export async function readJsonlFirstRecordAsync(
-  filePath: string,
-  batch: RolloutReadBatch
-): Promise<JsonlFirstRecord> {
-  // Over the held-bytes budget reads as a transient failure; the identity retry comes back later.
-  if (!batch.reserve(TRANSCRIPT_LINE_MAX_BYTES)) {
-    return 'unreadable'
-  }
+export async function readJsonlFirstRecordAsync(filePath: string): Promise<JsonlFirstRecord> {
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
@@ -246,17 +197,14 @@ export async function readJsonlFirstRecordAsync(
   } catch (error) {
     return firstRecordError(error)
   } finally {
-    // The buffer is parsed and dropped here, so it holds none of the budget afterwards.
-    batch.unreserve(TRANSCRIPT_LINE_MAX_BYTES)
     await handle?.close().catch(() => {})
   }
 }
 
-/** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished, 'deferred' when over the byte budget. Run it through scheduleRolloutRead. */
+/** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished. Run it through scheduleRolloutRead. */
 export async function readJsonlCursorBytes(
-  cursor: JsonlCursor,
-  batch: RolloutReadBatch
-): Promise<JsonlCursorBytes | undefined | 'deferred'> {
+  cursor: JsonlCursor
+): Promise<JsonlCursorBytes | undefined> {
   if (!cursor.filePath) {
     return undefined
   }
@@ -274,9 +222,6 @@ export async function readJsonlCursorBytes(
   const plan = planJsonlRead(snapshot, size)
   if (plan.length === 0) {
     return plan
-  }
-  if (!batch.reserve(plan.length)) {
-    return 'deferred'
   }
   let handle: FileHandle | undefined
   try {

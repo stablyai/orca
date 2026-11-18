@@ -61,6 +61,10 @@ export async function settle(ms = 12_000): Promise<void> {
 }
 
 /** Hold every read (or only `onlyPath`'s) after it took its bytes; `captured` is the first such read. */
+// Every held read, so teardown can let them finish: a held read keeps its I/O counted in the
+// process-wide limiter, which would starve the tests after it.
+const heldReleases: (() => void)[] = []
+
 export function holdReads(onlyPath?: string): { captured: Promise<void>; releaseAll: () => void } {
   const releases: (() => void)[] = []
   let captured: () => void = () => {}
@@ -70,7 +74,10 @@ export function holdReads(onlyPath?: string): { captured: Promise<void>; release
       return Promise.resolve()
     }
     captured()
-    return new Promise((resolve) => releases.push(resolve))
+    return new Promise((resolve) => {
+      releases.push(resolve)
+      heldReleases.push(resolve)
+    })
   }
   return {
     captured: capturedPromise,
@@ -81,4 +88,16 @@ export function holdReads(onlyPath?: string): { captured: Promise<void>; release
       }
     }
   }
+}
+
+/** Teardown: let every held read finish so none outlives its test in the shared limiter. */
+export async function releaseHeldReads(): Promise<void> {
+  reads.gate = undefined
+  for (const release of heldReleases.splice(0)) {
+    release()
+  }
+  while (reads.io.size > 0) {
+    await Promise.allSettled(reads.io)
+  }
+  await new Promise((resolve) => setImmediate(resolve))
 }

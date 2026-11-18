@@ -332,6 +332,32 @@ describe('Codex rollout reads share two slots per process', () => {
     expect(slots.inFlight()).toBe(0)
   })
 
+  it('keeps reading other panes when opens never return', async () => {
+    const stuck = [0, 1, 2].map((index) => rollout(`stuck-${index}`, taskStarted('turn-1')))
+    const stuckNames = new Set(stuck.map((path) => basename(path)))
+    io.openDelayMs = (filePath) => (stuckNames.has(basename(filePath)) ? 1e9 : 0)
+    for (const [index, path] of stuck.entries()) {
+      await post(pane(index), {
+        turn_id: 'turn-1',
+        transcript_path: path,
+        hook_event_name: 'UserPromptSubmit'
+      })
+    }
+    await settle(6_000)
+    const other = rollout('other', taskStarted('turn-1'))
+    await post(pane(3), {
+      turn_id: 'turn-1',
+      transcript_path: other,
+      hook_event_name: 'UserPromptSubmit'
+    })
+    appendFileSync(
+      other,
+      event({ type: 'task_complete', turn_id: 'turn-1', error: { message: 'x' } })
+    )
+    await settle(40_000)
+    expect(shown(pane(3))).toEqual(['done', 'failure', undefined])
+  })
+
   it('reads a busy pane only once its hooks go quiet, and still catches a turn end without a hook', async () => {
     const key = pane(0)
     const root = rollout('busy', taskStarted('turn-1'), userReviewer('turn-1'))
@@ -361,6 +387,41 @@ describe('Codex rollout reads share two slots per process', () => {
     )
     await settle(2_500)
     expect(shown(key)).toEqual(['done', 'failure', undefined])
+  })
+
+  it('never opens a queued child name read once its pane closed', async () => {
+    const hung = [
+      rollout('hung-0', taskStarted('turn-1')),
+      rollout('hung-1', taskStarted('turn-1'))
+    ]
+    const hungNames = new Set(hung.map((path) => basename(path)))
+    // Only the first open of each is slow, so every read has drained when the test ends.
+    io.openDelayMs = (filePath) => (hungNames.delete(basename(filePath)) ? 8_000 : 0)
+    for (const [index, path] of hung.entries()) {
+      await post(pane(index), {
+        turn_id: 'turn-1',
+        transcript_path: path,
+        hook_event_name: 'UserPromptSubmit'
+      })
+    }
+    await settle(300)
+    expect(slots.inFlight()).toBe(2)
+    const root = rollout('closing-root', taskStarted('turn-1'))
+    const child = rollout('closing-child', childMeta('child-a', '/root/scout'))
+    await post(pane(2), {
+      turn_id: 'turn-1',
+      transcript_path: root,
+      hook_event_name: 'UserPromptSubmit'
+    })
+    await post(pane(2), {
+      transcript_path: child,
+      hook_event_name: 'SubagentStart',
+      agent_id: 'child-a'
+    })
+    server.clearPaneState(pane(2))
+    await settle(12_000)
+    expect(io.openedPaths.filter((path) => basename(path) === basename(child))).toEqual([])
+    expect(io.closed).toBe(io.opened)
   })
 
   it('never opens a queued rollout whose pane stopped wanting it before a slot came', async () => {

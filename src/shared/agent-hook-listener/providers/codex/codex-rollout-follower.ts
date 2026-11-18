@@ -53,7 +53,7 @@ export type CodexRolloutFollowerHost = {
 
 /**
  * Hooks own Codex status. This reads only what they lack (child names, approvals reviewer,
- * /review and failed-turn ends, pre-0.150 cancels), always through fs.promises so a slow open
+ * /review and failed-turn ends, cancels whose Interrupt hook was lost or predates 0.150), always through fs.promises so a slow open
  * delays that one fact and never the event loop. Ordering rules:
  * - one read in flight per file; a request made meanwhile reads again once it lands;
  * - a root read is dropped whole if the turn moved on while it ran (see CodexRolloutState.epoch);
@@ -136,7 +136,7 @@ export class CodexRolloutFollower {
     this.panes.delete(paneKey)
   }
 
-  /** Observation stopped: rollouts are detached too, so reads in flight and held approvals land nowhere. */
+  /** Observation stopped: rollouts and held approvals go too, so reads in flight land nowhere. */
   clearAll(): void {
     for (const pane of this.panes.values()) {
       if (pane.wake) {
@@ -145,6 +145,11 @@ export class CodexRolloutFollower {
     }
     this.panes.clear()
     this.host.state.codexRolloutByPaneKey.clear()
+    for (const roster of this.host.state.codexSubagentRosterByPaneKey.values()) {
+      for (const child of roster.values()) {
+        child.approvalHold = undefined
+      }
+    }
   }
 
   private pump(paneKey: string, tail: boolean): void {
