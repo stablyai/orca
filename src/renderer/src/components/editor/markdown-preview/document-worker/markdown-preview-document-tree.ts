@@ -97,7 +97,9 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
-const SEMANTIC_BLOCK_ATTRIBUTES = ['src', 'href', 'alt', 'checked', 'type', 'className'] as const
+function hasHtmlProperty(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== false
+}
 
 function serializeBlockContent(node: Nodes): string {
   if (node.type === 'text') {
@@ -106,14 +108,30 @@ function serializeBlockContent(node: Nodes): string {
   if (node.type !== 'element') {
     return `${node.type}:${'value' in node ? JSON.stringify(node.value) : ''}`
   }
-  const attrs = SEMANTIC_BLOCK_ATTRIBUTES.flatMap((key) => {
-    const value = node.properties[key]
-    return value === undefined ? [] : [`${key}=${JSON.stringify(value)}`]
-  })
+  const isFootnoteRef = node.tagName === 'a' && hasHtmlProperty(node.properties.dataFootnoteRef)
+  const isFootnoteBackref =
+    node.tagName === 'a' && hasHtmlProperty(node.properties.dataFootnoteBackref)
+  // Ignore document-order-derived IDs and footnote counters so edits above do not perturb unchanged blocks.
+  const attrs = Object.entries(node.properties)
+    .filter(
+      ([key, value]) =>
+        key !== 'id' && !(isFootnoteBackref && key === 'ariaLabel') && hasHtmlProperty(value)
+    )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => {
+      const normalized = Array.isArray(value)
+        ? value.join(' ')
+        : value === true
+          ? ''
+          : String(value)
+      return `${key}=${JSON.stringify(normalized)}`
+    })
   const header = attrs.length ? `${node.tagName}[${attrs.join(',')}]` : node.tagName
-  // Footnote refs render document-global counters ('1', '2') that shift when earlier footnotes are added.
-  if (node.tagName === 'a' && node.properties.dataFootnoteRef) {
+  if (isFootnoteRef) {
     return `<${header}>(footnote-ref)`
+  }
+  if (isFootnoteBackref) {
+    return `<${header}>(footnote-backref)`
   }
   return `<${header}>(${node.children.map((child) => serializeBlockContent(child)).join(',')})`
 }

@@ -4,10 +4,15 @@ import { act, renderHook } from '@testing-library/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { parseMarkdownPreviewDocument } from '../document-worker/markdown-preview-document-tree'
 import type { MarkdownPreviewBlock } from '../document-worker/markdown-preview-document-types'
+import { scrollMarkdownPreviewVirtualizer } from './markdown-preview-anchor-navigation'
 import { useMarkdownPreviewScrollAnchor } from './use-markdown-preview-scroll-anchor'
 
 function createScrollContainer(): HTMLDivElement {
@@ -38,15 +43,14 @@ function useScrollAnchorHarness({
     count: blocks.length,
     getScrollElement: () => rootRef.current,
     estimateSize: () => 100,
+    initialOffset: () => scrollTopCache.get(scrollCacheKey) ?? 0,
     initialRect: { width: 800, height: 600 },
     observeElementRect: (_instance, onRect) => {
       onRect({ width: 800, height: 600 })
       return () => {}
     },
-    scrollToFn: (offset) => {
-      scrollMarks.mark(offset)
-      element.scrollTop = offset
-    }
+    scrollToFn: (offset, options, instance) =>
+      scrollMarkdownPreviewVirtualizer(offset, options, instance, scrollMarks)
   })
 
   useMarkdownPreviewScrollAnchor({
@@ -143,6 +147,20 @@ describe('markdown preview scroll anchor', () => {
       'A.\n\nNew[^a].\n\nRead[^b].\n\n[^a]: first\n[^b]: second\n',
       112,
       212
+    ],
+    [
+      'raw HTML is present when an earlier footnote shifts footnote numbering',
+      'A.<br>B.\n\nRead[^b].\n\n[^a]: first\n[^b]: second\n',
+      'A.<br>B.\n\nNew[^a].\n\nRead[^b].\n\n[^a]: first\n[^b]: second\n',
+      112,
+      212
+    ],
+    [
+      'a 1-based ordered list is inserted above a numbered ordered list',
+      'A.\n\n10. Read\n\nT.\n',
+      'A.\n\n1. Read\n\n---\n\n10. Read\n\nT.\n',
+      112,
+      312
     ]
   ])(
     'keeps scrollTop anchored on the reading block when %s',
@@ -248,6 +266,7 @@ describe('markdown preview scroll anchor', () => {
 
     act(() => {
       firstElement.scrollTop = 212
+      setWithLRU(scrollTopCache, scrollCacheKey, firstElement.scrollTop)
     })
     firstView.unmount()
 
