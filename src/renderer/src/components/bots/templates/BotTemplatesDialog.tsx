@@ -5,16 +5,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Link2, Plus, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
@@ -23,7 +17,7 @@ import { NewBotDialog } from '../NewBotDialog'
 import { openBotShareLink } from '../sharing/bot-share-receive-open'
 import { templateProposal } from '../../../../../shared/bots/bot-proposal'
 import {
-  BOT_TEMPLATES,
+  BOT_TEMPLATE_CATEGORIES,
   type BotTemplate,
   type BotTemplateCategory
 } from '../../../../../shared/bots/bot-templates'
@@ -63,16 +57,20 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
   const botNames = useBots().map((bot) => bot.name)
   const [picked, setPicked] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<BotTemplateCategory | null>(null)
   const [inPlace, setInPlace] = useState(false)
   const [creating, setCreating] = useState<Creating | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const rows = useRef(new Map<string, HTMLDivElement>())
-  const headings = useRef(new Map<BotTemplateCategory, HTMLElement>())
   const invoker = useRef<HTMLElement | null>(null)
 
   const label = (category: BotTemplateCategory) => botTemplateCategoryLabel(category, t)
-  const groups = botTemplateGroups((template) => botTemplateMatches(template, query, label))
+  const groups = botTemplateGroups(
+    (template) =>
+      (!category || template.category === category) && botTemplateMatches(template, query, label)
+  )
   const shown = groups.flatMap((group) => group.templates)
   const selectedId = picked ?? asked ?? lastSelected
   const selected = shown.find((template) => template.id === selectedId) ?? shown[0] ?? null
@@ -132,20 +130,13 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
     }
   }
 
-  const countLabel =
-    shown.length === BOT_TEMPLATES.length
-      ? t('bots.templates.count', '{{count}} templates', { count: BOT_TEMPLATES.length })
-      : t('bots.templates.countOf', '{{shown}} of {{count}} templates', {
-          shown: shown.length,
-          count: BOT_TEMPLATES.length
-        })
-
   return (
     <>
       <DialogContent
         ref={contentRef}
         surface="opaque-panel"
         showCloseButton={false}
+        aria-describedby={undefined}
         className="@container grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] sm:max-w-none"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
@@ -165,12 +156,9 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-2 border-b border-border py-3.5 pr-4 pl-6">
-          <div className="min-w-0 flex-1">
-            <DialogTitle>{t('bots.templates.title', 'Bot templates')}</DialogTitle>
-            <DialogDescription size="compact" aria-live="polite">
-              {countLabel}
-            </DialogDescription>
-          </div>
+          <DialogTitle className="min-w-0 flex-1">
+            {t('bots.templates.title', 'Bot templates')}
+          </DialogTitle>
           <Button
             variant="ghost"
             size="sm"
@@ -218,31 +206,33 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                     placeholder={t('bots.templates.search', 'Search templates')}
                     aria-label={t('bots.templates.search', 'Search templates')}
                     inset="leadingIcon"
-                    adornment="trailing"
                   />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
-                    <ShortcutKeyCombo keys={['/']} />
-                  </span>
                 </div>
-                {shown.length > 0 ? (
-                  <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-none">
-                    {groups.map((group) => (
-                      <Button
-                        key={group.category}
-                        variant="outline"
-                        size="xs"
-                        className="shrink-0"
-                        onClick={() =>
-                          headings.current.get(group.category)?.scrollIntoView({ block: 'start' })
-                        }
-                      >
-                        {label(group.category)}
-                      </Button>
-                    ))}
-                  </div>
-                ) : null}
+                <ToggleGroup
+                  type="single"
+                  orientation="horizontal"
+                  variant="chip"
+                  size="xs"
+                  spacing={1.5}
+                  value={category ?? 'all'}
+                  aria-label={t('bots.templates.filterCategory', 'Filter by category')}
+                  className="mt-2 w-full flex-wrap"
+                  onValueChange={(value) => {
+                    setCategory(BOT_TEMPLATE_CATEGORIES.find((option) => option === value) ?? null)
+                    listRef.current?.scrollTo({ top: 0 })
+                  }}
+                >
+                  <ToggleGroupItem value="all">
+                    {t('bots.templates.allCategories', 'All')}
+                  </ToggleGroupItem>
+                  {BOT_TEMPLATE_CATEGORIES.map((option) => (
+                    <ToggleGroupItem key={option} value={option}>
+                      {label(option)}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
                 {shown.length === 0 ? (
                   <BotTemplatesEmpty
                     query={query}
@@ -259,19 +249,9 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                     className="px-6 pb-8"
                   >
                     {groups.map((group) => (
-                      <section
-                        key={group.category}
-                        role="group"
-                        aria-label={label(group.category)}
-                        ref={(element) => {
-                          if (element) {
-                            headings.current.set(group.category, element)
-                          }
-                        }}
-                      >
-                        <h2 className="sticky top-0 z-[5] flex items-center justify-between bg-popover py-2 text-xs font-medium text-muted-foreground">
-                          <span>{label(group.category)}</span>
-                          <span className="tabular-nums">{group.templates.length}</span>
+                      <section key={group.category} role="group" aria-label={label(group.category)}>
+                        <h2 className="sticky top-0 z-[5] bg-popover py-2 text-xs font-medium text-muted-foreground">
+                          {label(group.category)}
                         </h2>
                         {group.templates.map((template) => (
                           <BotTemplateRow

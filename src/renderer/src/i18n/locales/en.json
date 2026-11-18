@@ -26838,8 +26838,7 @@
       "purposeLabel": "Purpose",
       "purposePlaceholder": "Describe its job (optional)",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
-      "pasteHint": "Paste an image with {{shortcut}}",
-      "nothingUntilCreate": "Nothing is created until you press Create bot."
+      "pasteHint": "Paste an image with {{shortcut}}"
     },
     "section": {
       "title": "Bots",
@@ -28200,6 +28199,7 @@
       "blank": "Blank bot",
       "close": "Close",
       "comesWith": "Comes with",
+      "comesWithHelp": "About template schedules and setup",
       "olderHost": "{{host}} runs an older Orca, so this template’s skills and schedules won’t be added. Update Orca there to get them, or create the bot with just its instructions.",
       "comesWithNote": "Schedules start turned off. Automations and connectors are set up in its first chat, once you pick the repo or channel.",
       "keepSkill": "Add the {{skill}} skill",
@@ -28207,7 +28207,8 @@
       "stateFirstChat": "First chat",
       "stateNotConnected": "Not connected",
       "needsSetup": "Needs setup",
-      "byOrca": "{{category}} · by Orca",
+      "publisher": "by Orca",
+      "official": "Official Orca template",
       "useTemplate": "Use template…",
       "inItsChat": "in its chat",
       "firstChat": "What it does first",
@@ -28217,14 +28218,14 @@
       "noMatchLine": "Start a blank bot and tell it what it’s for in its first chat.",
       "blankFor": "Blank bot for “{{query}}”",
       "clearSearch": "Clear search",
-      "count": "{{count}} templates",
-      "countOf": "{{shown}} of {{count}} templates",
       "closeTooltip": "Close · Esc",
       "fromLink": "From a link",
       "search": "Search templates",
       "originTemplateNamed": "From the {{template}} template",
       "aboutTemplate": "About {{name}}",
       "allTemplates": "All templates",
+      "filterCategory": "Filter by category",
+      "allCategories": "All",
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
@@ -28233,8 +28234,6 @@
         "ops": "Ops",
         "personal": "Personal follow-ups"
       },
-      "whenEvents": "On events",
-      "whenAsked": "When you ask",
       "paletteLine": "Bot template"
     },
     "options": {
