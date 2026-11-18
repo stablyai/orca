@@ -1,0 +1,44 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
+
+vi.mock('react-native', () => ({ Pressable: 'Pressable', Text: 'Text', View: 'View' }))
+vi.mock('../../components/composer-input/FieldTextInput', () => ({
+  FieldTextInput: 'FieldTextInput'
+}))
+vi.mock('./mobile-browser-pane-styles', () => ({ mobileBrowserPaneStyles: {} }))
+vi.mock('../../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'light' }))
+vi.mock('../../i18n/use-mobile-translation', () => ({
+  useMobileTranslation: () => (_key: string, fallback: string) => fallback
+}))
+
+let renderer: ReactTestRenderer | null = null
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+})
+
+describe('MobileBrowserJavaScriptDialog', () => {
+  it('starts a prompt at the page default and sends the typed answer', () => {
+    const sendDialogCommand = vi.fn(async () => {})
+    act(() => {
+      renderer = create(
+        createElement(MobileBrowserJavaScriptDialog, {
+          dialog: {
+            dialogType: 'prompt',
+            message: 'What is your name?',
+            defaultPromptText: 'Ada',
+            origin: 'https://example.com'
+          },
+          sendDialogCommand
+        })
+      )
+    })
+    const field = renderer!.root.findByType('FieldTextInput')
+    expect(field.props.value).toBe('Ada')
+    act(() => field.props.onChangeText('Grace'))
+    act(() => renderer!.root.findAllByType('Pressable').at(-1)!.props.onPress())
+    expect(sendDialogCommand).toHaveBeenCalledWith('browser.dialogAccept', 'Grace')
+  })
+})
