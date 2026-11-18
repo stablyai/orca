@@ -302,6 +302,7 @@ describe('UtilityWorkerHost', () => {
     for (let crash = 0; crash < 3; crash++) {
       const worker = spawnEcho()
       await nextMessage(worker)
+      worker.on('error', () => undefined)
       const hostExited = new Promise((resolve) => children[crash]?.once('exit', resolve))
       children[crash]?.kill()
       await Promise.all([nextExit(worker), hostExited])

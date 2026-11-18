@@ -13,10 +13,12 @@ import {
 
 installFatalSignalListenerGuard()
 
+type WorkerPort = UtilityWorkerPort<UtilityWorkerPortRequest>
+
 type UtilityParentPort = {
   on(
     event: 'message',
-    listener: (event: { data: UtilityWorkerHostRequest; ports: UtilityWorkerPort[] }) => void
+    listener: (event: { data: UtilityWorkerHostRequest; ports: WorkerPort[] }) => void
   ): unknown
   postMessage(message: UtilityWorkerHostEvent): void
 }
@@ -56,7 +58,7 @@ require(${JSON.stringify(filename)})
 post(${JSON.stringify(LOADED)})`
 }
 
-function relay(port: UtilityWorkerPort, bytes: Uint8Array): void {
+function relay(port: WorkerPort, bytes: Uint8Array): void {
   for (let start = 0; start < bytes.byteLength; start += UTILITY_WORKER_MESSAGE_CHUNK_BYTES) {
     const end = Math.min(start + UTILITY_WORKER_MESSAGE_CHUNK_BYTES, bytes.byteLength)
     const view = bytes.subarray(start, end)
@@ -69,11 +71,11 @@ function relay(port: UtilityWorkerPort, bytes: Uint8Array): void {
   }
 }
 
-function send(port: UtilityWorkerPort, event: UtilityWorkerPortEvent): void {
+function send(port: WorkerPort, event: UtilityWorkerPortEvent): void {
   port.postMessage(event)
 }
 
-function host(request: UtilityWorkerHostRequest, port: UtilityWorkerPort): void {
+function host(request: UtilityWorkerHostRequest, port: WorkerPort): void {
   let worker: ReturnType<typeof spawnWorkerThread>
   try {
     if (request.largeSendLog) {
@@ -96,7 +98,7 @@ function host(request: UtilityWorkerHostRequest, port: UtilityWorkerPort): void 
   worker.on('error', (error) => send(port, { type: 'error', error: failure(error) }))
   // The consumer closes the port once it reads this, so the frame is never cut off.
   worker.once('exit', (code) => send(port, { type: 'exit', code }))
-  port.on('message', ({ data }: { data: UtilityWorkerPortRequest }) => {
+  port.on('message', ({ data }) => {
     if (data.type === 'post') {
       worker.postMessage(data.message)
     } else {

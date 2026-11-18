@@ -42,12 +42,12 @@ export class HostedWorker extends EventEmitter {
   constructor(
     readonly id: number,
     readonly spawn: UtilityWorkerSpawn,
-    private readonly port: UtilityWorkerPort,
+    private readonly port: UtilityWorkerPort<UtilityWorkerPortEvent>,
     hostName: string,
     private readonly supervisor: HostedWorkerSupervisor
   ) {
     super()
-    port.on('message', ({ data }: { data: UtilityWorkerPortEvent }) => this.receive(data))
+    port.on('message', ({ data }) => this.receive(data))
     // A host that dies takes the port's other end with it, often before main hears of its exit.
     port.on('close', () => {
       if (!this.local && this.exitCode === undefined) {
