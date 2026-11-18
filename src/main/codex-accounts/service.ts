@@ -15,7 +15,6 @@ import type { RateLimitService } from '../rate-limits/service/rate-limit-service
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
-import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
 import { runCodexLoginSession, type CodexLoginChild } from './login/codex-login-session'
 import { CodexManagedHomePath } from './managed-homes/codex-managed-home-path'
@@ -124,7 +123,7 @@ export class CodexAccountService {
       store,
       rateLimits,
       runtimeHome,
-      readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
+      readIdentityFromHome: (path, accountId) => this.identity.readFromHome(path, accountId),
       selection: this.selection,
       configMirror: this.configMirror,
       managedHomePaths: this.managedHomePaths,
@@ -212,6 +211,7 @@ export class CodexAccountService {
     sourceHome: string,
     target?: CodexAccountAddTarget
   ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
 
@@ -281,11 +281,8 @@ export class CodexAccountService {
     return this.selection.snapshot()
   }
 
-  private readIdentityFromHome(
-    managedHomePath: string,
-    expectedAccountId: string
-  ): Promise<ResolvedCodexIdentity> {
-    return this.identity.readFromHome(managedHomePath, expectedAccountId)
+  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {

@@ -1,3 +1,4 @@
+import { AddCodexFromHomeParams } from '../../../shared/rpc-contract/accounts/accounts-params'
 import { ipcMain } from 'electron'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { CodexAccountAddTarget } from '../../codex-accounts/account-management/codex-account-service-types'
@@ -38,6 +39,15 @@ export function registerCodexAccountHandlers(
       return
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
+  })
+  ipcMain.handle('codexAccounts:importHome', (_event, input: unknown) => {
+    const { sourceHome, ...target } = AddCodexFromHomeParams.parse(input)
+    if (target.runtime === 'wsl') {
+      throw new Error(
+        'Use the CLI to add Codex accounts to WSL. This chooser imports native host homes.'
+      )
+    }
+    return codexAccounts.addAccountFromHome(sourceHome, { runtime: 'host' })
   })
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
