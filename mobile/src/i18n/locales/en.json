@@ -13,6 +13,12 @@
         "systemWithCurrent": "System ({{language}})",
         "heading": "LANGUAGE",
         "description": "System follows this device’s language. Permission prompts always use the device language."
+      },
+      "usage": {
+        "used": "Used",
+        "remaining": "Remaining",
+        "heading": "USAGE PERCENTAGES",
+        "description": "Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone."
       }
     },
     "aboutScreen": {
@@ -385,6 +391,9 @@
     "claude": {
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default."
+    },
+    "usage": {
+      "percentLeft": "{{value}}% left"
     }
   },
   "agentHistory": {
