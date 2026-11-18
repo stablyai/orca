@@ -21,7 +21,7 @@ function isPlainContainer(value: unknown): value is Record<string, unknown> {
   const prototype: unknown = Object.getPrototypeOf(value)
   return (
     (prototype === Object.prototype || prototype === null) &&
-    typeof (value as { toJSON?: unknown }).toJSON !== 'function'
+    typeof Reflect.get(value, 'toJSON') !== 'function'
   )
 }
 
