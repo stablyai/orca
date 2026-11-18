@@ -14,8 +14,14 @@ const PROBE_TIMEOUT_MS = 10_000
 type ProbeAnswer = 'held' | 'idle' | 'unknown'
 type LockHold =
   | { answer: ProbeAnswer }
-  | { answer: 'ready'; releaseFirst: () => Promise<boolean>; release: () => Promise<void> }
+  | {
+      answer: 'ready'
+      stillHeld: () => boolean
+      releaseFirst: () => Promise<boolean>
+      release: () => Promise<void>
+    }
 
+const HELPER_ANSWERS = new Set(['held', 'idle', 'unknown', 'ready', 'released'])
 const THREAD_LOCK_NAME =
   /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})\.lock$/i
 
@@ -121,27 +127,48 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
     child.once('close', () => resolve(null))
     child.once('error', () => resolve(null))
   })
-  child.stdin.on('error', () => {})
+  for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    stream.on('error', () => {})
+  }
   child.stderr.resume()
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]()
-  const nextLine = (): Promise<string | null> =>
-    Promise.race([
-      lines.next().then((line) => (line.done ? null : String(line.value).trim())),
-      closed
-    ])
+  // Skips anything a shell profile or warning printed before the helper's own answer.
+  const nextLine = async (): Promise<string | null> => {
+    for (;;) {
+      const line = await Promise.race([lines.next(), closed])
+      if (!line || line.done) {
+        return null
+      }
+      const text = String(line.value).trim()
+      if (HELPER_ANSWERS.has(text)) {
+        return text
+      }
+    }
+  }
   const stop = async (): Promise<void> => {
     child.stdin.end()
+    // One that won't exit is killed, so a later pass never waits on it.
+    const kill = setTimeout(() => child.kill(), PROBE_TIMEOUT_MS)
+    kill.unref?.()
     await closed
+    clearTimeout(kill)
   }
   // Killing the helper releases all it holds, so one that never answers can't keep Codex waiting.
   // Never once it's ready: a move in progress must not lose its hold.
-  const timer = setTimeout(() => child.kill(), PROBE_TIMEOUT_MS)
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    child.kill()
+  }, PROBE_TIMEOUT_MS)
   timer.unref?.()
   const answer = await nextLine()
   clearTimeout(timer)
-  if (answer === 'ready' && hold) {
+  // A `ready` read after the kill (still buffered) holds nothing anymore.
+  const stillHeld = (): boolean => !timedOut && child.exitCode === null && child.signalCode === null
+  if (answer === 'ready' && hold && stillHeld()) {
     return {
       answer,
+      stillHeld,
       releaseFirst: async () => {
         child.stdin.write('first\n')
         return (await nextLine()) === 'released'
@@ -150,6 +177,9 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
     }
   }
   await stop()
+  if (answer === 'ready' || timedOut) {
+    return null
+  }
   return answer === 'held' || answer === 'idle' || answer === 'unknown' ? { answer } : null
 }
 
@@ -207,6 +237,9 @@ export async function moveIdleThreadLockFolder(
         throw error
       }
     } else {
+      if (!hold.stillHeld()) {
+        return 'busy'
+      }
       await move()
     }
     return 'moved'
