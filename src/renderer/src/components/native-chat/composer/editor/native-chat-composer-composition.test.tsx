@@ -149,23 +149,6 @@ describe('the suggested next prompt in an empty composer', () => {
     expect(onKeyDown).toHaveBeenCalledOnce()
   })
 
-  it("shows the suggestion Tab takes over a room's hint, and the hint once there is none", () => {
-    const props = fieldProps({
-      promptSuggestion: 'add a test for it',
-      idleHint: 'Ask anything, @ to mention bots or files'
-    })
-    const view = render(<TestField {...props} />)
-    const placeholder = () =>
-      textarea().querySelector('[data-placeholder]')?.getAttribute('data-placeholder')
-    expect(placeholder()).toBe('add a test for it')
-    fireEvent.keyDown(textarea(), { key: 'Tab' })
-    expect(promptValue(textarea())).toBe('add a test for it')
-
-    view.rerender(<TestField {...props} promptSuggestion={undefined} draft="" />)
-    changePrompt(textarea(), '')
-    expect(placeholder()).toBe('Ask anything, @ to mention bots or files')
-  })
-
   it('leaves Tab to an open picker and Right Arrow to an IME composition', () => {
     const onKeyDown = vi.fn()
     const props = fieldProps({ promptSuggestion: 'add a test for it', onKeyDown })

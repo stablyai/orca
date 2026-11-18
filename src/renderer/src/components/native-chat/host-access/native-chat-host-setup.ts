@@ -19,6 +19,8 @@ import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
 } from './native-chat-host-command-terminal'
+import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
+import { useNativeChatCliUpdate } from './native-chat-cli-update'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -58,6 +60,8 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The user's own CLI update on the chat's host; null for agents Orca can't update. */
+  update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
   host?: RuntimeClientTarget
 }
@@ -279,6 +283,15 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const terminal = useNativeChatHostCommandTerminal(input)
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
+  const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
   const { target } = input
-  return useMemo(() => ({ signIn, install, host: target }), [signIn, install, target])
+  return useMemo(
+    () => ({
+      signIn,
+      install,
+      update,
+      host: target
+    }),
+    [signIn, install, update, target]
+  )
 }
