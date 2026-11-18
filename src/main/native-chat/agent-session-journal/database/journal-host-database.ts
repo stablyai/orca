@@ -19,6 +19,10 @@ export function journalDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, JOURNAL_DATABASE_FILE)
 }
 
+export function journalDomainDatabasePath(stateDirectory: string): string {
+  return join(stateDirectory, 'agent-session-domain.db')
+}
+
 /** What journal collaborators need from a connection owner; the SQL writer supplies its own. */
 export type JournalTransactionalDatabase = Pick<
   JournalHostDatabase,

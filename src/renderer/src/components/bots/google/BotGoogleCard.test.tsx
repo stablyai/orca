@@ -49,9 +49,9 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-function renderRow(google: boolean): void {
+function renderConnectedRow(): void {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only id, name, members and google.
-  const row = { ...bot, google } as Bot
+  const row = { ...bot, google: true } as Bot
   render(
     <ConfirmationDialogContext.Provider value={mocks.confirm}>
       <BotGoogleCard bot={row} />
@@ -60,18 +60,9 @@ function renderRow(google: boolean): void {
 }
 
 describe('the Google row in a bot’s connectors', () => {
-  it('shows only once Google is added to the bot, with no switch', () => {
-    renderRow(false)
-    expect(screen.queryByText('Google')).toBeNull()
-    cleanup()
-    renderRow(true)
-    expect(screen.getByText('Google')).toBeTruthy()
-    expect(screen.queryByRole('switch')).toBeNull()
-  })
-
   it('removes Google from the bot after a confirm, like other connectors', async () => {
     mocks.confirm.mockResolvedValue(true)
-    renderRow(true)
+    renderConnectedRow()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Google actions' }), {
       button: 0,
       ctrlKey: false

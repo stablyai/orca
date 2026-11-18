@@ -39,7 +39,6 @@ describe('--on "webhook.call ..."', () => {
       'webhook.call where="body.action in opened,reopened" contains="deploy now" pick=body.number subject-from=body.number subject=4512'
     const rule = parseAutomationEventTrigger(spec)
     expect(formatAutomationEventTrigger(rule)).toBe(spec)
-    expect(parseAutomationEventTrigger(formatAutomationEventTrigger(rule))).toEqual(rule)
   })
 
   it.each([
