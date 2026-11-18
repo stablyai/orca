@@ -48,12 +48,11 @@ export function createHangWatchdogDetectionLoop(
       } else if (detected) {
         detected = null
         config.onHangResolved(silentMs)
-      } else if (now - lastTickAt > sleepGapMs) {
-        wokeHeartbeat = true
-      } else if (stallMs !== null && silentMs > stallMs) {
+      } else if (stallMs !== null && silentMs > stallMs && now - lastTickAt <= sleepGapMs) {
         // A tick-gap reset already moved lastHeartbeatAt past any sleep, so this silence was main's.
         config.onStallMissed?.(silentMs, lastHeartbeatAt)
       }
+      wokeHeartbeat ||= now - lastTickAt > sleepGapMs
       lastHeartbeatAt = now
     },
     tick: () => {

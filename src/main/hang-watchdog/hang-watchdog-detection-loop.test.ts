@@ -245,4 +245,23 @@ describe('createHangWatchdogDetectionLoop', () => {
     loop.recordHeartbeat()
     expect(onStallMissed).not.toHaveBeenCalled()
   })
+
+  it('keeps the heartbeat that resolved a hang on wake, so the next stall is timed from it', () => {
+    const { loop, onHangResolved, onStallMissed, advance } = loopWithClock(0, 8_000)
+    loop.recordHeartbeat()
+    for (let i = 0; i < 10; i++) {
+      advance(CHECK_INTERVAL_MS)
+      loop.tick()
+    }
+    advance(70_000)
+    loop.recordHeartbeat()
+    expect(onHangResolved).toHaveBeenCalledTimes(1)
+    advance(1_000)
+    loop.tick()
+    advance(5_000)
+    loop.tick()
+    advance(2_500)
+    loop.recordHeartbeat()
+    expect(onStallMissed).toHaveBeenCalledExactlyOnceWith(8_500, 120_000)
+  })
 })

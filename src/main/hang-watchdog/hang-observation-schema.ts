@@ -69,7 +69,11 @@ export function isHangTierObservation(record: HangObservation): boolean {
 }
 /** Silence at detection plus the time after it: to recovery, or at least to escalation when main never answered. */
 export function hangObservationUnresponsiveMs(record: HangObservation): number {
-  const lastKnownAt = record.resolution?.wallMs ?? record.escalatedAt ?? record.detectedAt
+  // An escalated hang lasted at least to escalation, even if its resolution was stamped earlier.
+  const lastKnownAt = Math.max(
+    record.resolution?.wallMs ?? record.detectedAt,
+    record.escalatedAt ?? record.detectedAt
+  )
   return record.durationMs + Math.max(0, lastKnownAt - record.detectedAt)
 }
 type HangTierFields = Pick<HangObservation, 'tier' | 'escalatedAt'>

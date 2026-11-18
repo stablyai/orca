@@ -210,6 +210,27 @@ describe('previous hang detection', () => {
     })
   })
 
+  it('reports an escalated hang whose recovery was stamped before its escalation as lasting to escalation', () => {
+    const escalated: HangObservation = {
+      ...gap,
+      id: '789:12000:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 12_000,
+      durationMs: 10_000,
+      selfRecovered: true,
+      tier: 'hang',
+      escalatedAt: 47_001,
+      resolution: { ...gap.snapshot!, wallMs: 46_000 }
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), escalated)
+    )
+    preservePreviousHangDetection(dir)
+    setActiveSink({ push() {}, flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)?.unresponsiveMs).toBe(45_001)
+  })
+
   it('reads a stall-only previous run as no hang', () => {
     const stall: HangObservation = {
       ...gap,
