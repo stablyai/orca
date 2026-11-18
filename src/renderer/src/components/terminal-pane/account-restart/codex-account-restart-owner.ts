@@ -179,6 +179,22 @@ export async function prepareCodexAccountRestartOwner(
     throw new Error('terminal_pane_owner_changed')
   }
   if (request.phase === 'unresolved' || request.phase === 'dispatched') {
+    if (
+      previous?.hostEpoch === snapshot.hostEpoch &&
+      snapshot.owner &&
+      'connected' in terminal &&
+      terminal.connected === true &&
+      'ptyId' in terminal &&
+      terminal.ptyId === snapshot.owner.ptyId &&
+      'launchToken' in terminal &&
+      typeof terminal.launchToken === 'string' &&
+      terminal.launchToken !== request.attemptId &&
+      (previous.expected.kind === 'empty' ||
+        snapshot.owner.ptyId !== previous.expected.ptyId ||
+        snapshot.owner.incarnationId !== previous.expected.incarnationId)
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
     throw new Error(ACCOUNT_RESTART_OUTCOME_UNKNOWN)
   }
   if (

@@ -206,13 +206,53 @@ it('keeps an unknown outcome read-only when two wake routes race', async () => {
   expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
 })
 
+it.each([
+  { connected: true, launchToken: 'foreign-attempt', attention: 0 },
+  { connected: false, launchToken: 'foreign-attempt', attention: 1 },
+  { connected: true, launchToken: undefined, attention: 1 }
+])('reconciles unknown ownership with evidence %j', async (control) => {
+  const { session, connect } = await deferredSession()
+  connect.mockImplementation(async (options) => {
+    expect(options.onAccountRestartDispatch()).toBe(true)
+    options.onAccountRestartFailure(new Error('response unavailable'))
+    return undefined
+  })
+  await session.resumeDeferredSpawn()
+  const unknown = useAppStore.getState().pendingPaneAccountRestarts[key]
+  if (typeof unknown !== 'object') {
+    throw new Error('unknown attempt was lost')
+  }
+  const resolved = snapshot({ ptyId: 'foreign-owner', incarnationId: 'inc-foreign' }, 1)
+  call.mockResolvedValue({
+    ...resolved,
+    result: {
+      terminal: {
+        ...resolved.result.terminal,
+        ptyId: 'foreign-owner',
+        connected: control.connected,
+        launchToken: control.launchToken
+      }
+    }
+  })
+  connect.mockClear()
+
+  await retryCodexAccountRestarts([unknown])
+
+  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(control.attention)
+  expect(connect).not.toHaveBeenCalled()
+  expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
+})
+
 it('cannot start or clear output after a successor replaces the waiting view', async () => {
   const { session, connect, retained } = await deferredSession()
   const read = Promise.withResolvers<ReturnType<typeof snapshot>>()
   call.mockReturnValue(read.promise)
   const waking = session.resumeDeferredSpawn()
   session.disposed = true
-  session.deps.paneTransportsRef.current.set(1, { getPtyId: () => 'successor' } as never)
+  session.deps.paneTransportsRef.current.set(1, {
+    ...session.transport,
+    getPtyId: () => 'successor'
+  })
   read.resolve(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
   await waking
 
