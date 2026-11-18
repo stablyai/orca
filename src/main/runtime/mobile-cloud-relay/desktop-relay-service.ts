@@ -63,8 +63,7 @@ export class DesktopRelayService {
     })
     const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
-      readContext: (authOrigin) =>
-        readRelayAuthContext(options.authConfig, options.userDataPath, authOrigin),
+      readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
       hasDemand: ({ identity }) => this.demandLedger.hasDemand(relayIdentityKey(identity)),
       openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
         const broker = await RelaySessionBroker.connect({
