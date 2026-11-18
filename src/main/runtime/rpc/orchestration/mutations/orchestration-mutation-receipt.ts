@@ -127,12 +127,12 @@ export function readMutationReplayNudge(receipt: unknown): MutationReplayNudge |
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
-  const candidate = value as {
+  const candidate: {
     kind?: unknown
     targets?: unknown
     runId?: unknown
     environmentId?: unknown
-  }
+  } = value
   if (candidate.kind === 'federation') {
     return (candidate.runId === undefined || typeof candidate.runId === 'string') &&
       (candidate.environmentId === undefined || typeof candidate.environmentId === 'string')
