@@ -14,8 +14,15 @@ export class SessionProcessInspection {
     this.shellIsRootChild = subprocess.shellIsRootChild === true
   }
 
-  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
-    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
+  inspectChildProcesses(
+    fresh?: boolean,
+    ignoreDetached?: boolean,
+    jobMembershipOnly?: boolean
+  ): ChildProcessVerdictRead {
+    return (
+      this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly) ??
+      'unverifiable'
+    )
   }
 
   observeForeground(): Promise<TerminalForegroundSample> {

@@ -1,3 +1,9 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import {
+  useBotLinkItemTarget,
+  consumeBotLinkItem
+} from '@/lib/agent-session/open/bot-link-item-target'
 // One navigation at a time — a rail pick or a diff reveal — pinned until it lands; rail picks and a subagent view's history page through one cancellable history loop.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -21,11 +27,11 @@ import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-view
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }
-  | { kind: 'rail'; messageId: string; requestId: number }
+  | { kind: 'rail'; messageId: string; requestId: number; fromLink?: true }
 
 export type NativeChatNavigationRequest = {
   revealedDiff: NativeChatDiffReveal | null
-  railJump: { messageId: string; requestId: number } | null
+  railJump: { messageId: string; requestId: number; fromLink?: true } | null
   /** The one slot the window keeps mounted until the request lands. */
   revealIndex: number
   issue: (request: NavigationRequest | null) => void
@@ -64,9 +70,12 @@ export function useNativeChatNavigation({
   journalItems,
   subagentId,
   sessionKey,
+  sessionId,
+  ready = true,
   isVisible,
   loadEarlier,
   holdHistory,
+  releaseHistory,
   scrollRef,
   scrollMessageToTop,
   readerLeavesEnd,
@@ -82,10 +91,13 @@ export function useNativeChatNavigation({
   /** A subagent's view, which pages older history until the agent's spawn is loaded. */
   subagentId: string | null
   sessionKey: string
+  sessionId?: string | null
+  ready?: boolean
   isVisible: boolean
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** Keeps paged history loaded while the reader stays at the end. */
   holdHistory: () => void
+  releaseHistory: () => void
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   readerLeavesEnd: () => void
@@ -100,6 +112,22 @@ export function useNativeChatNavigation({
   )
   const historyJump = useNativeChatHistoryJump({
     step: (target) => {
+      if (target.kind === 'item') {
+        const pending = journalItems?.find((item) => item.itemId === target.id)?.body
+        if (
+          (pending?.kind === 'approval' || pending?.kind === 'question') &&
+          pending.resolution.state === 'pending'
+        ) {
+          return 'landed'
+        }
+        const index = nativeChatSlotIndexOf(slots, target.id)
+        if (index < 0) {
+          holdHistory()
+          return 'page'
+        }
+        issue({ kind: 'rail', messageId: target.id, requestId: nextRequestId(), fromLink: true })
+        return 'landed'
+      }
       if (target.kind === 'rail') {
         return nativeChatRailJumpStep(rail.items, target.id, requestRailJump)
       }
@@ -147,6 +175,22 @@ export function useNativeChatNavigation({
       startHistoryJump({ kind: 'subagent', agentId: subagentId })
     }
   }, [isVisible, startHistoryJump, subagentId])
+  const linkTarget = useBotLinkItemTarget((state) => state.target)
+  useEffect(() => {
+    if (isVisible && ready && linkTarget && linkTarget.sessionId === sessionId) {
+      startHistoryJump({ kind: 'item', id: linkTarget.itemId }, (result) => {
+        if (useBotLinkItemTarget.getState().target !== linkTarget) {
+          return
+        }
+        consumeBotLinkItem(linkTarget)
+        if (result === 'missing') {
+          releaseHistory()
+          scrollToBottom()
+          toast.info(translate('nativeChat.linkedMessageMissing', "Couldn't find that message."))
+        }
+      })
+    }
+  }, [isVisible, ready, linkTarget, sessionId, startHistoryJump, releaseHistory, scrollToBottom])
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()
@@ -157,6 +201,7 @@ export function useNativeChatNavigation({
     scrollRef,
     scrollMessageToTop,
     onActivate: rail.onActivate,
+    onScroll: request.railJump?.fromLink ? readerLeavesEnd : undefined,
     release: issue
   })
   return {

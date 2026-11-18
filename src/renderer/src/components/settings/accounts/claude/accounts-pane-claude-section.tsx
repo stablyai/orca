@@ -17,7 +17,7 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
-import { addClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -66,7 +66,7 @@ export function renderClaudeAccountsSection(
     runClaudeAccountAction('adding', () =>
       trackAccountAddition('claude', accountOwner, () =>
         accountOwner.kind === 'environment'
-          ? addClaudeAccountOnHost(accountOwner)
+          ? signInClaudeAccountOnHost(accountOwner)
           : withCopiedClaudeLink(
               copyLink,
               window.api.claudeAccounts.add({

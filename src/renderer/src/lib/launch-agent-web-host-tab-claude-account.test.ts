@@ -27,12 +27,24 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 
 vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', () => ({
   hostSupportsLaunchChoices: vi.fn(async () => false),
-  readHostAgentStartupSettings: vi.fn(async () => null)
+  readHostAgentStartupSettings: vi.fn(async () => ({}))
 }))
 
-vi.mock('@/runtime/agent-launch-settings/use-host-agent-launch-preferences', () => ({
-  ensureAgentLaunchPreferences: vi.fn(async () => ({}))
+vi.mock('../../../shared/agent-launch/startup/agent-startup-plan-inputs', () => ({
+  resolveAgentStartupPlanInputs: vi.fn(() => ({}))
 }))
+
+vi.mock(
+  '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    planLaunchAgentStartupPrompt: () => ({
+      startupPlan: STARTUP_PLAN,
+      pasteDraftAfterLaunch: null,
+      submitPastedPrompt: false
+    })
+  })
+)
 
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: mockCreateTerminal
@@ -53,11 +65,6 @@ async function launch(relaunch?: (claudeAccountId?: string) => void) {
     agent: 'claude',
     worktreeId: 'repo-1::/repo/wt',
     environmentId: 'env-1',
-    buildStartup: () => ({
-      startupPlan: STARTUP_PLAN,
-      pasteDraftAfterLaunch: null,
-      submitPastedPrompt: false
-    }),
     prompt: '',
     promptDelivery: 'auto-submit',
     claudeAccountId: 'acct-2',

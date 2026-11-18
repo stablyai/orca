@@ -17,7 +17,7 @@ import { OffscreenBrowserBackend } from '../../browser/backends/offscreen-browse
 import { memorySaverIdleMs } from '../../browser/backends/offscreen-page-idle-freeing'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from '../cloud-startup/main-process-relay-status'
-import { startDesktopRelayService } from '../cloud-startup/main-process-relay-startup'
+import { startMainProcessRelayService } from '../cloud-startup/main-process-relay-startup'
 import { getServeOptions } from '../serve-launch/serve-options'
 import { getBundledWebClientRoot, printServeReady } from '../serve-launch/main-process-serve'
 import {
@@ -43,8 +43,8 @@ import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/termina
 import { triggerStartupNotificationRegistration } from '../../ipc/notifications/startup-notification-registration'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
 import {
-  connectDesktopConnectorCloud,
-  installDesktopConnectorCloud
+  connectMainProcessConnectorCloud,
+  installMainProcessConnectorCloud
 } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
@@ -151,6 +151,7 @@ async function launchServeMode(
 ): Promise<void> {
   // Headless serve has no first paint to prioritize; apply persisted proxy before relay/CLI/RPC fetchers.
   await state.initialProxyApplicationReady
+  connectMainProcessConnectorCloud()
   // Give WSL registration brief migration time without letting slow repair hold all RPC readiness.
   logStartupMilestone('wsl-cli-barrier-start')
   await state.managedWslCliStartupBarrierReady
@@ -194,8 +195,10 @@ async function launchServeMode(
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
+  // After RPC has its pairing identity, so a signed-in server reaches phones through the relay too.
+  startMainProcessRelayService(runtimeRpc)
   scheduleAgentLaunchRecordWarmup(null)
-  // Headless phones still register/unregister tokens, though this host dispatches no push notifications.
+  // Serve pushes like the desktop: its own attention (chat turns, bot runs) reaches paired phones through this service.
   startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
   installServeQuitHandling()
@@ -248,8 +251,8 @@ async function launchDesktopMode(
     )
   }
   // Register before proxy await so concurrent token mints wait rather than fail provider_missing; installer requests are already guarded.
-  startDesktopRelayService(runtimeRpc)
-  connectDesktopConnectorCloud()
+  startMainProcessRelayService(runtimeRpc)
+  connectMainProcessConnectorCloud()
   // Create the window before awaiting proxy readiness; the request guard already fences fetches.
   await state.initialProxyApplicationReady
   // Apply persisted proxy before the push gateway's first request.
@@ -286,9 +289,7 @@ export async function initializeMainProcessRuntimeLaunch(
   state.serveOptions = serveOptions
   installCloudSessionShutdownFlush()
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
-  if (!serveOptions) {
-    installDesktopConnectorCloud()
-  }
+  installMainProcessConnectorCloud(serveOptions !== null)
   const shellPathReady = shellPathHydration.whenReady()
   // Publish the same shell-PATH generation to renderer Git and terminal startup barriers.
   state.shellPathReady = shellPathReady

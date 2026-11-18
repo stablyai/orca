@@ -29,7 +29,7 @@ export function wasAppForegroundedRecently(now = Date.now()): boolean {
 export type HostReadIntent = 'action' | 'open' | 'foreground' | 'background'
 
 export function hostReadIntent(
-  read: HostQueryRead,
+  read: Pick<HostQueryRead, 'live' | 'previousFromStore'>,
   previous: unknown,
   recentlyForegrounded: () => boolean = wasAppForegroundedRecently
 ): HostReadIntent {

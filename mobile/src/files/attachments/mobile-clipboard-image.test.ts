@@ -19,9 +19,9 @@ function fail(id: string, code: string, message: string): RpcFailure {
 }
 
 function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
-  calls: Array<{ method: string; params: unknown }>
+  calls: { method: string; params: unknown }[]
 } {
-  const calls: Array<{ method: string; params: unknown }> = []
+  const calls: { method: string; params: unknown }[] = []
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {

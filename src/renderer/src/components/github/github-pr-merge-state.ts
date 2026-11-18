@@ -1,9 +1,10 @@
-import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import {
+  getGitHubPRMergeChip,
   resolveGitHubPRMergeState,
   type GitHubPRAutoMergeActionIntent,
+  type GitHubPRMergeChipKind,
   type GitHubPRMergeStateInput,
-  type GitHubPRMergeStateKind
+  type HostedReviewMergeTone
 } from '../../../../shared/github/pull-requests/merge/pull-request-merge-state'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -27,6 +28,12 @@ const SUCCESS_TONE =
   'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
 const WARNING_TONE = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
 const DANGER_TONE = 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+const TONE_CLASSES: Record<HostedReviewMergeTone, string> = {
+  neutral: MUTED_TONE,
+  success: SUCCESS_TONE,
+  warning: WARNING_TONE,
+  danger: DANGER_TONE
+}
 
 function presentAutoMergeAction(
   intent: GitHubPRAutoMergeActionIntent | null,
@@ -65,16 +72,14 @@ function presentAutoMergeAction(
   }
 }
 
-function presentMergeStateKind(
-  kind: GitHubPRMergeStateKind,
-  item: GitHubPRMergeStateInput,
+function presentMergeChipKind(
+  kind: GitHubPRMergeChipKind,
   t: Translate = translate
-): Pick<GitHubPRMergeStatePresentation, 'label' | 'tone' | 'tooltip'> {
+): Pick<GitHubPRMergeStatePresentation, 'label' | 'tooltip'> {
   switch (kind) {
     case 'merged':
       return {
         label: t('auto.components.github.pr.merge.state.83ecdbb4a6', 'Merged'),
-        tone: MUTED_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.62eb8d39da',
           'This pull request is already merged'
@@ -83,7 +88,6 @@ function presentMergeStateKind(
     case 'closed':
       return {
         label: t('auto.components.github.pr.merge.state.4f976d3450', 'Closed'),
-        tone: DANGER_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.820fd21663',
           'This pull request is closed'
@@ -92,7 +96,6 @@ function presentMergeStateKind(
     case 'draft':
       return {
         label: t('auto.components.github.pr.merge.state.ec8e2cebaa', 'Draft'),
-        tone: MUTED_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.f03028e055',
           'This pull request is still a draft'
@@ -101,7 +104,6 @@ function presentMergeStateKind(
     case 'review_required':
       return {
         label: t('auto.components.github.pr.merge.state.1f8eb81c0e', 'Approval required'),
-        tone: WARNING_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.a20db875ed',
           'GitHub requires review approval before this pull request can merge'
@@ -110,7 +112,6 @@ function presentMergeStateKind(
     case 'changes_requested':
       return {
         label: t('auto.components.github.pr.merge.state.c606463dc2', 'Changes requested'),
-        tone: DANGER_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.b289646bcd',
           'GitHub reports requested changes on this pull request'
@@ -119,7 +120,6 @@ function presentMergeStateKind(
     case 'conflicts':
       return {
         label: t('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts'),
-        tone: DANGER_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.b37d45bca9',
           'GitHub reports merge conflicts'
@@ -132,7 +132,6 @@ function presentMergeStateKind(
           kind === 'merge_queue_auto_merge_on'
             ? t('auto.components.github.pr.merge.state.autoMergeOn', 'Auto-merge on')
             : t('auto.components.github.pr.merge.state.b169f943e1', 'Merge when ready'),
-        tone: WARNING_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.35ec24bc43',
           'This base branch uses GitHub merge queue'
@@ -141,7 +140,6 @@ function presentMergeStateKind(
     case 'merge_status_unavailable':
       return {
         label: t('auto.components.github.pr.merge.state.bd4f27b50e', 'Merge'),
-        tone: MUTED_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.09896aad26',
           'Merge status is unavailable for this PR'
@@ -150,7 +148,6 @@ function presentMergeStateKind(
     case 'behind':
       return {
         label: t('auto.components.github.pr.merge.state.039c072f94', 'Behind'),
-        tone: WARNING_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.c614e2660a',
           'Update the branch before merging'
@@ -159,23 +156,19 @@ function presentMergeStateKind(
     case 'blocked':
       return {
         label: t('auto.components.github.pr.merge.state.bf5e4c6c92', 'Blocked'),
-        tone: DANGER_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.1766eb46ba',
           'GitHub reports this pull request is blocked'
         )
       }
-    case 'mergeable_checks_failed':
-      if (getProviderChecksOutcome(item.checksSummary, item.checksStatus) === 'cancelled') {
-        return {
-          label: t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled'),
-          tone: MUTED_TONE,
-          tooltip: t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
-        }
+    case 'checks_cancelled':
+      return {
+        label: t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled'),
+        tooltip: t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
       }
+    case 'mergeable_checks_failed':
       return {
         label: t('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed'),
-        tone: DANGER_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.1432ecff30',
           'GitHub says this PR can merge, but some checks failed'
@@ -184,7 +177,6 @@ function presentMergeStateKind(
     case 'mergeable_checks_pending':
       return {
         label: t('auto.components.github.pr.merge.state.4e2507176b', 'Checks pending'),
-        tone: WARNING_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.9bd983ce8f',
           'GitHub says this PR can merge, but checks are still running'
@@ -193,7 +185,6 @@ function presentMergeStateKind(
     case 'mergeable_checks_passed':
       return {
         label: t('auto.components.github.pr.merge.state.def355ff38', 'Able to merge'),
-        tone: SUCCESS_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.e42c5bae67',
           'GitHub says this PR can merge and checks passed'
@@ -202,7 +193,6 @@ function presentMergeStateKind(
     case 'mergeable':
       return {
         label: t('auto.components.github.pr.merge.state.def355ff38', 'Able to merge'),
-        tone: SUCCESS_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.cbf0113af6',
           'GitHub says this PR can merge'
@@ -211,7 +201,6 @@ function presentMergeStateKind(
     case 'checks_passed':
       return {
         label: t('auto.components.github.pr.merge.state.a5b66afb58', 'Checks passed'),
-        tone: SUCCESS_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.fbd4f57f0a',
           'Checks passed. Merge eligibility will be checked again before merging.'
@@ -220,7 +209,6 @@ function presentMergeStateKind(
     case 'checking':
       return {
         label: t('auto.components.github.pr.merge.state.f958920f3a', 'Checking'),
-        tone: MUTED_TONE,
         tooltip: t(
           'auto.components.github.pr.merge.state.a80132573b',
           'GitHub is still computing this pull request merge status'
@@ -234,8 +222,10 @@ export function presentGitHubPRMergeState(
   t?: Translate
 ): GitHubPRMergeStatePresentation {
   const decision = resolveGitHubPRMergeState(item)
+  const chip = getGitHubPRMergeChip(decision.kind, item)
   return {
-    ...presentMergeStateKind(decision.kind, item, t),
+    ...presentMergeChipKind(chip.kind, t),
+    tone: TONE_CLASSES[chip.tone],
     directMergeAvailable: decision.directMergeAvailable,
     autoMergeAction: presentAutoMergeAction(decision.autoMergeAction, t)
   }

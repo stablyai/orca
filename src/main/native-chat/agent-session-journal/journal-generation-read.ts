@@ -52,10 +52,12 @@ export function readJournalGeneration(
       items.set(item.itemId, item)
       const turn = readAgentJournalTurn(item.body)
       if (turn?.userItemId) {
+        // A Claude turn names its echo's id, an alias of the row the journal keeps.
         const opener = scope.db
           .prepare(`SELECT payload_json FROM journal_items
-          WHERE session_id=? AND epoch=? AND hidden=0 AND item_id=?`)
-          .get(...scope.prefix, turn.userItemId)
+          WHERE session_id=? AND epoch=? AND hidden=0 AND item_id=COALESCE(
+            (SELECT item_id FROM journal_item_aliases WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
+          .get(...scope.prefix, ...scope.prefix, turn.userItemId, turn.userItemId)
         if (opener) {
           const user = scope.decode<AgentJournalRenderItem>(opener.payload_json)
           items.set(user.itemId, user)

@@ -20,6 +20,9 @@ const FolderWorkspacePrChecksPanel = lazy(
   () => import('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel')
 )
 const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
+const BotActivityPanel = lazy(() => import('../bots/BotActivityPanel'))
+const BotConnectorsPanel = lazy(() => import('../bots/BotConnectorsPanel'))
+const BotChatsPanel = lazy(() => import('../bots/BotChatsPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -68,6 +71,9 @@ export function RightSidebarPanelContent({
             isVisible={rightSidebarOpen && effectiveTab === 'pr-checks'}
           />
         )}
+        {effectiveTab === 'bot-activity' && <BotActivityPanel />}
+        {effectiveTab === 'bot-connectors' && <BotConnectorsPanel />}
+        {effectiveTab === 'bot-chats' && <BotChatsPanel />}
         {/* Remount on plugin changes so an old iframe cannot post through the next plugin's rebound bridge. */}
         {isPluginPanelTabKey(effectiveTab) && (
           <PluginPanel key={effectiveTab} tabKey={effectiveTab} />

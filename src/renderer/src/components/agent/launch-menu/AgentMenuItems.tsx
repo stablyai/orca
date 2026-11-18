@@ -19,11 +19,11 @@ import {
   newAgentPromptOutcome
 } from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
-import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
 import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { launchWithClaudeAccountChoice } from '../../claude-account-prompt/choose-claude-launch-account'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
+import { OpenAgentSettingsMenuItem } from './OpenAgentSettingsMenuItem'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -238,10 +238,6 @@ export function ProjectedAgentMenuItems({
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
-  const openAgentSettings = useCallback(() => {
-    useAppStore.getState().openSettingsTarget({ pane: 'agents', repoId: null })
-    useAppStore.getState().openSettingsPage()
-  }, [])
   if (model.state === 'loading') {
     // Why: rows fill in once when every answer is known, instead of reshuffling under the pointer.
     return (
@@ -261,7 +257,7 @@ export function ProjectedAgentMenuItems({
             </span>
           </DropdownMenuItem>
         ))}
-        <AgentSettingsMenuItem onSelect={openAgentSettings} />
+        <OpenAgentSettingsMenuItem />
       </>
     )
   }
@@ -368,7 +364,7 @@ export function ProjectedAgentMenuItems({
           )
         })
       )}
-      <AgentSettingsMenuItem onSelect={openAgentSettings} />
+      <OpenAgentSettingsMenuItem />
     </>
   )
 }

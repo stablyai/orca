@@ -1,6 +1,10 @@
-import { renderOrchestrationArgv, type OrchestrationAgentView } from '../agent-view'
+import {
+  formatAgentFieldsText,
+  renderOrchestrationArgv,
+  type OrchestrationAgentView
+} from '../agent-view'
 import { stripClaudePinnedLaunchMarker } from '../../../shared/claude/claude-pinned-launch-error'
-import type { WorkerStartReceipt } from './worker-output'
+import { formatLinkedItem, type WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
   agent?: string | null
@@ -46,6 +50,7 @@ type WorkerStartFields = {
   residualResources?: string[]
   nextCommands?: string[]
   keptOpen?: true
+  linkedItem?: WorkerStartReceipt['linkedItem']
   next?: string
 }
 
@@ -84,6 +89,7 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
           value.state !== 'ready' && !unobserved && residual.length ? residual : undefined,
         nextCommands: value.state === 'ready' || unobserved ? undefined : value.nextCommands,
         keptOpen: value.keptOpen,
+        linkedItem: value.linkedItem,
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
@@ -91,6 +97,10 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
             : value.next
       }
     },
+    text: ({ linkedItem, ...fields }) =>
+      linkedItem
+        ? `${formatLinkedItem(linkedItem)}\n${formatAgentFieldsText(fields)}`
+        : formatAgentFieldsText(fields),
     failure: (value) =>
       value.state === 'ready'
         ? undefined

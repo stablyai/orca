@@ -1,27 +1,17 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage
-} from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey
-} from '../../../../../../shared/workspace/identity/workspace-scope'
 import { buildParentPrChecksRows } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-rows'
 import type { ParentPrChecksRow } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-row-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
+import { getFolderWorkspaceChildWorktrees } from '../../../../../../shared/folder-workspace-child-worktrees'
 
 type FolderWorkspaceCardPrDisplayArgs = {
-  folderWorkspaceId: string
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage> | null | undefined
-  /** Children on other machines (selectCrossStoreFolderChildrenById). */
-  crossStoreChildren: readonly Worktree[]
-  worktreeLineageById: Record<string, WorktreeLineage> | null | undefined
-  worktreeMap: ReadonlyMap<string, Worktree>
+  /** The folder workspace's host identity (getFolderWorkspaceHostIdentity). */
+  folderIdentity: string
+  /** selectSidebarChildrenByParentIdentity */
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
   repoMap: ReadonlyMap<string, Repo>
   hostedReviewCache: AppState['hostedReviewCache'] | null
   prCache: AppState['prCache'] | null
@@ -37,23 +27,21 @@ const REVIEW_STATUS_PRIORITY: Record<string, number> = {
 }
 
 export function getFolderWorkspaceCardPrDisplay({
-  folderWorkspaceId,
-  workspaceLineageByChildKey,
-  crossStoreChildren,
-  worktreeLineageById,
-  worktreeMap,
+  folderIdentity,
+  childrenByParentIdentity,
   repoMap,
   hostedReviewCache,
   prCache,
   settings
 }: FolderWorkspaceCardPrDisplayArgs): WorktreeCardPrDisplay | null {
-  const attachedWorktrees = getAttachedWorktreesForFolderWorkspaceCard({
-    folderWorkspaceId,
-    workspaceLineageByChildKey,
-    crossStoreChildren,
-    worktreeLineageById,
-    worktreeMap
-  })
+  const { childWorktrees, lineageChildrenByParentIdentity } = getFolderWorkspaceChildWorktrees(
+    folderIdentity,
+    childrenByParentIdentity
+  )
+  const attachedWorktrees = [
+    ...childWorktrees,
+    ...[...lineageChildrenByParentIdentity.values()].flat()
+  ]
 
   const reviews = buildParentPrChecksRows({
     worktrees: attachedWorktrees,
@@ -74,46 +62,6 @@ export function getFolderWorkspaceCardPrDisplay({
   return reviews.sort(compareReviewDisplays)[0] ?? null
 }
 
-function getAttachedWorktreesForFolderWorkspaceCard({
-  folderWorkspaceId,
-  workspaceLineageByChildKey,
-  crossStoreChildren,
-  worktreeLineageById,
-  worktreeMap
-}: Pick<
-  FolderWorkspaceCardPrDisplayArgs,
-  | 'folderWorkspaceId'
-  | 'workspaceLineageByChildKey'
-  | 'crossStoreChildren'
-  | 'worktreeLineageById'
-  | 'worktreeMap'
->): Worktree[] {
-  const folderKey = folderWorkspaceKey(folderWorkspaceId)
-  const directChildren = Object.values(workspaceLineageByChildKey ?? {})
-    .filter((lineage) => lineage.parentWorkspaceKey === folderKey)
-    .map((lineage) => getWorkspaceLineageChild(lineage, worktreeMap))
-    .filter((worktree): worktree is Worktree => worktree !== null)
-    .concat(crossStoreChildren)
-
-  const included = new Map(directChildren.map((worktree) => [worktree.id, worktree]))
-  const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
-    worktreeLineageById ?? {},
-    worktreeMap
-  )
-  const queue = [...directChildren]
-  for (let index = 0; index < queue.length; index += 1) {
-    for (const child of childrenByParentId.get(queue[index].id) ?? []) {
-      if (child.isArchived || included.has(child.id)) {
-        continue
-      }
-      included.set(child.id, child)
-      queue.push(child)
-    }
-  }
-
-  return [...included.values()]
-}
-
 function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrDisplay | null {
   if (!row.provider || row.provider === 'unsupported' || row.reviewNumber === null) {
     return null
@@ -130,24 +78,6 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
       ? row.checksSummary
       : undefined
   }
-}
-
-function getWorkspaceLineageChild(
-  lineage: WorkspaceLineage,
-  worktreeMap: ReadonlyMap<string, Worktree>
-): Worktree | null {
-  const childScope = parseWorkspaceKey(lineage.childWorkspaceKey)
-  if (childScope?.type !== 'worktree') {
-    return null
-  }
-  const worktree = worktreeMap.get(childScope.worktreeId)
-  if (!worktree || worktree.isArchived) {
-    return null
-  }
-  if (lineage.childInstanceId && lineage.childInstanceId !== worktree.instanceId) {
-    return null
-  }
-  return worktree
 }
 
 function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardPrDisplay): number {

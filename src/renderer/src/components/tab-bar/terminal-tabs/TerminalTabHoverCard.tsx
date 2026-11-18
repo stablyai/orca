@@ -13,6 +13,7 @@ export function TerminalTabHoverCard({
   title,
   agent,
   shell,
+  identityDetail,
   icon,
   alert,
   description,
@@ -23,6 +24,7 @@ export function TerminalTabHoverCard({
   title: string
   agent: TerminalAgent | null
   shell: string | null | undefined
+  identityDetail?: string
   icon: ReactNode
   alert?: ComponentProps<typeof TabHoverCard>['alert']
   description?: ComponentProps<typeof TabHoverCard>['description']
@@ -31,11 +33,13 @@ export function TerminalTabHoverCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const { label: accountLabel, pinned, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
-  const programName = agent
-    ? [getAgentLabel(agent), accountLabel].filter(Boolean).join(' · ')
-    : shell
-      ? basename(shell)
-      : t('tabHoverCard.terminal', 'Terminal')
+  const programName =
+    identityDetail ??
+    (agent
+      ? [getAgentLabel(agent), accountLabel].filter(Boolean).join(' · ')
+      : shell
+        ? basename(shell)
+        : t('tabHoverCard.terminal', 'Terminal'))
   return (
     <TabHoverCard
       title={title}
@@ -43,7 +47,10 @@ export function TerminalTabHoverCard({
       icon={icon}
       alert={alert}
       description={description}
-      showWhenUnclipped={showWhenUnclipped || (pinned && agent !== null)}
+      showWhenUnclipped={
+        showWhenUnclipped || identityDetail !== undefined || (pinned && agent !== null)
+      }
+      programNameIsProse={identityDetail !== undefined}
       onOpenChange={onTooltipOpenChange}
     >
       {children}

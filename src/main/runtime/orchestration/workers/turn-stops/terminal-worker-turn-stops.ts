@@ -8,6 +8,7 @@ import {
   type TerminalAgentTurnNewsItem
 } from '../../../push/notifications/terminal-agent-turn-news'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
   reportWorkerTurnStop,
@@ -31,7 +32,7 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null }
+type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mailTaken?: number }
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
@@ -42,7 +43,14 @@ export class TerminalWorkerTurnStops {
       // The Dispatch the stop belongs to is the one active when the stop was seen.
       prepare: (news) => {
         const resolved = this.resolve(news.paneKey)
-        return { ...news, dispatchId: resolved && workerTurnStopDispatchId(resolved.target) }
+        const dispatchId = resolved && workerTurnStopDispatchId(resolved.target)
+        return {
+          ...news,
+          dispatchId,
+          ...(resolved && dispatchId
+            ? { mailTaken: readCoordinatorMailCount(resolved.db, dispatchId) }
+            : {})
+        }
       },
       deliver: (stop) => void this.report(stop),
       setTimer: deps.setTimer,
@@ -92,6 +100,7 @@ export class TerminalWorkerTurnStops {
         stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         turnStartedAt: stop.row.turnStartedAt,
         reason,
+        mailTaken: stop.mailTaken,
         lastOutput,
         ...(approval ? { approval } : {})
       },
