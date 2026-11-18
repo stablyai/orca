@@ -48,8 +48,10 @@ export async function answerSeedCoveredQueries(
   }
 }
 
-// Bounds what a recovering model holds while its capture waits; past it, bytes count as dropped output.
+// Bounds what recovering models hold while captures wait; past it, bytes count as dropped output.
 const GAP_RECOVERY_QUEUE_CAP_CHARS = 256 * 1024
+const GAP_RECOVERY_TOTAL_QUEUE_CAP_CHARS = 32 * 1024 * 1024
+let recoveryQueuedCharsTotal = 0
 
 export function releaseRecoveryQueue(
   recovery: RuntimeHeadlessTerminal['gapReseed'],
@@ -57,6 +59,7 @@ export function releaseRecoveryQueue(
 ): void {
   if (recovery) {
     recovery.queuedChars -= chars
+    recoveryQueuedCharsTotal -= chars
   }
 }
 
@@ -70,8 +73,12 @@ export function admitWhileRecovering(
   if (!recovery) {
     return { data, queriesOnly: false, recovery }
   }
-  if (recovery.queuedChars + data.length <= GAP_RECOVERY_QUEUE_CAP_CHARS) {
+  if (
+    recovery.queuedChars + data.length <= GAP_RECOVERY_QUEUE_CAP_CHARS &&
+    recoveryQueuedCharsTotal + data.length <= GAP_RECOVERY_TOTAL_QUEUE_CAP_CHARS
+  ) {
     recovery.queuedChars += data.length
+    recoveryQueuedCharsTotal += data.length
     return { data, queriesOnly: false, recovery }
   }
   recovery.frontier = Math.max(recovery.frontier, outputSequence)
