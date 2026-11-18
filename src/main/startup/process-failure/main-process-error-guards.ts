@@ -97,7 +97,7 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   }
 }
 
-type StdioStream = Pick<NodeJS.WritableStream, 'on'> & { destroy?: () => unknown }
+type StdioStream = Pick<NodeJS.WritableStream, 'on'>
 
 /** Console output is diagnostic only; a dead terminal or full log volume must not fault main. */
 export function installStdioWriteErrorSink(
@@ -109,17 +109,12 @@ export function installStdioWriteErrorSink(
   for (const [streamName, stream] of streams) {
     let failed = false
     // Node re-emits a failed sync write as an async 'error' event; console swallows only the first.
+    // Stdio retries at most once per event-loop turn, so output resumes once space frees up.
     stream?.on('error', (error: unknown) => {
       if (failed) {
         return
       }
       failed = true
-      try {
-        // Drop later output instead of retrying a dead target; stdio destroy leaves the fd open.
-        stream.destroy?.()
-      } catch {
-        // Already torn down.
-      }
       try {
         // Not console: it writes to the stream that just failed.
         recordDurableCrashBreadcrumb('main_stdio_write_failed', {

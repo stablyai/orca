@@ -39,7 +39,7 @@ describe('installStdioWriteErrorSink', () => {
     recordDurableCrashBreadcrumbMock.mockReset()
   })
 
-  it('absorbs real console write failures on a dead stdout and stops writing to it', async () => {
+  it('absorbs repeated real console write failures on a dead stdout', async () => {
     const stdout = deadLogStream()
     installStdioWriteErrorSink([['stdout', stdout]])
     const logger = new Console({ stdout, stderr: stdout, ignoreErrors: false })
@@ -49,7 +49,6 @@ describe('installStdioWriteErrorSink', () => {
     logger.info('[runtime-rpc] client connected', { deviceId: 'b' })
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(stdout.destroyed).toBe(true)
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
       'main_stdio_write_failed',
       expect.objectContaining({ stream: 'stdout', errorCode: expect.stringMatching(/^E/) })
@@ -82,6 +81,6 @@ describe('installStdioWriteErrorSink', () => {
     stderr.write('diagnostic line\n')
     await closed(stderr)
 
-    expect(stderr.destroyed).toBe(true)
+    expect(stderr.errored).toMatchObject({ code: expect.stringMatching(/^E/) })
   })
 })
