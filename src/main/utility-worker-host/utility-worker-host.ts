@@ -1,11 +1,5 @@
 import type { Worker } from 'node:worker_threads'
-import {
-  app,
-  MessageChannelMain,
-  utilityProcess,
-  type MessagePortMain,
-  type UtilityProcess
-} from 'electron'
+import { app, MessageChannelMain, utilityProcess } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
@@ -13,6 +7,7 @@ import {
   type UtilityWorkerHostCrashCap
 } from './utility-worker-host-crash-loop'
 import { HostedWorker } from './hosted-worker'
+import { asError, stopChild, type Host } from './utility-worker-host-process'
 import {
   recordUtilityWorkerHeapPressure,
   utilityWorkerHeapData
@@ -20,7 +15,6 @@ import {
 import {
   UtilityWorkerHostPausedError,
   type HostedWorkerThread,
-  type UtilityWorkerHeapReport,
   type UtilityWorkerHostEvent,
   type UtilityWorkerHostRequest,
   type UtilityWorkerSpawn
@@ -38,32 +32,6 @@ let quitting = false
 
 /** A new thread that can't get memory in a crowded host could load in a healthy one. */
 const RESOURCE_START_FAILURES = new Set(['ERR_WORKER_OUT_OF_MEMORY', 'ERR_WORKER_INIT_FAILED'])
-
-type Host = {
-  child: UtilityProcess
-  ready: boolean
-  queued: { request: UtilityWorkerHostRequest; port: MessagePortMain }[]
-  workers: Map<number, HostedWorker>
-  readyTimer: ReturnType<typeof setTimeout>
-  idleTimer?: ReturnType<typeof setTimeout>
-  retired: boolean
-  /** Its loss is counted once, by whichever of port close or process exit main hears first. */
-  lossCounted: boolean
-  /** The owner's context, taken at the first port close, before any worker fails. */
-  exitContext?: CrashReportBreadcrumbData
-  heap?: UtilityWorkerHeapReport
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
-}
-
-/** A child still launching has no PID to kill yet; kill it once it has one. */
-function stopChild(host: Host): void {
-  if (!host.child.kill()) {
-    host.child.once('spawn', () => host.child.kill())
-  }
-}
 
 /**
  * Runs worker threads in one Electron utility process. Electron main and its worker threads share
@@ -123,7 +91,7 @@ export class UtilityWorkerHost {
           }
         }
       },
-      outOfMemory: () => this.recordCrash(),
+      outOfMemory: () => this.recordCrashUnlessLost(host),
       // A lost host keeps its workers listed for the exit breadcrumb; retiring it clears them.
       exited: (exited) => {
         if (!host.lossCounted && host.workers.get(id) === exited) {
@@ -219,7 +187,7 @@ export class UtilityWorkerHost {
   private countLoss(host: Host): void {
     if (!host.lossCounted && !quitting) {
       host.lossCounted = true
-      this.recordCrash()
+      this.crashLoop?.record()
     }
   }
 
@@ -230,13 +198,9 @@ export class UtilityWorkerHost {
     error: NodeJS.ErrnoException | undefined
   ): void {
     host.workers.delete(worker.id)
-    const paused = this.pauseMessage
     if (error?.code && RESOURCE_START_FAILURES.has(error.code)) {
-      this.recordCrash()
+      this.recordCrashUnlessLost(host)
       worker.fail(error, 1)
-    } else if (paused !== null) {
-      // Paused work never moves into main, which shares the V8 cage the host keeps it out of.
-      worker.fail(new UtilityWorkerHostPausedError(paused), 1)
     } else {
       this.neverHost.add(worker.spawn.filename)
       recordDurableCrashBreadcrumb('utility_worker_host_unavailable', {
@@ -252,6 +216,12 @@ export class UtilityWorkerHost {
   }
 
   private adoptOrFail(worker: HostedWorker): void {
+    const paused = this.pauseMessage
+    if (paused !== null) {
+      // Paused work never moves into main, which shares the V8 cage the host keeps it out of.
+      worker.fail(new UtilityWorkerHostPausedError(paused), 1)
+      return
+    }
     try {
       worker.adopt(this.spawnInProcess(worker.spawn))
     } catch (error) {
@@ -259,8 +229,11 @@ export class UtilityWorkerHost {
     }
   }
 
-  private recordCrash(): void {
-    this.crashLoop?.record()
+  /** A worker's own failure, heard while its host drains, is part of the host loss already counted. */
+  private recordCrashUnlessLost(host: Host): void {
+    if (!host.lossCounted) {
+      this.crashLoop?.record()
+    }
   }
 
   private scheduleIdleExit(host: Host): void {
