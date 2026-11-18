@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View } from 'react-native'
 import { FileText, ListChecks } from 'lucide-react-native'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
@@ -123,16 +124,12 @@ export function MobileDiffReviewBody({
     )
   }
   if (diffState.kind === 'image') {
-    // Same view as the file tab: the image after the change, or the deleted one.
     return (
-      <View style={filePreviewStyles.imageContainer}>
-        <MobilePanZoomImage
-          uri={diffState.dataUri}
-          label={t('files.filePreviewBody.imageLabel', '{{title}} image', {
-            title: currentItem?.filePath ?? ''
-          })}
-        />
-      </View>
+      <DiffImage
+        key={diffState.dataUri}
+        diffState={diffState}
+        title={currentItem?.filePath ?? ''}
+      />
     )
   }
   if (diffState.kind !== 'ready') {
@@ -153,6 +150,31 @@ export function MobileDiffReviewBody({
       {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
       onEditNote={onEditNote}
     />
+  )
+}
+
+/** Same view as the file tab: the image after the change, or the deleted one. */
+function DiffImage({
+  diffState,
+  title
+}: {
+  diffState: Extract<ReviewDiffState, { kind: 'image' }>
+  title: string
+}) {
+  const t = useMobileTranslation()
+  // An image the WebView can't decode stays hidden, so fall back to the binary notice.
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <DiffUnavailableState diffState={{ kind: 'binary', itemKey: diffState.itemKey }} />
+  }
+  return (
+    <View style={filePreviewStyles.imageContainer}>
+      <MobilePanZoomImage
+        uri={diffState.dataUri}
+        onError={() => setFailed(true)}
+        label={t('files.filePreviewBody.imageLabel', '{{title}} image', { title })}
+      />
+    </View>
   )
 }
 

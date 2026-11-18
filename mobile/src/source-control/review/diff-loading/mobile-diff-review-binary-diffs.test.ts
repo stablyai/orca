@@ -21,9 +21,9 @@ const INPUT: MobileReviewDiffInput = {
   ignoreTrimWhitespace: true
 }
 
-async function loadWithHostReply(result: unknown) {
+async function loadWithHostReply(result: unknown, input: MobileReviewDiffInput = INPUT) {
   const client = createFakeRpcClient()
-  const loading = loadMobileDiffReviewDiff(client, 'wt-1', INPUT)
+  const loading = loadMobileDiffReviewDiff(client, 'wt-1', input)
   await Promise.resolve()
   client.requests.at(-1)?.resolve(rpcSuccess('diff', result))
   return loading
@@ -57,5 +57,27 @@ it('calls a side past the host read cap too large rather than binary', async () 
     kind: 'too-large',
     itemKey: 'unstaged:logo.png',
     byteLength: undefined
+  })
+})
+
+it('shows the old image for an image deleted on the branch', async () => {
+  await expect(
+    loadWithHostReply(
+      { ...binarySides, originalContent: 'R0lGODlh', isImage: true, mimeType: 'image/gif' },
+      {
+        ...INPUT,
+        itemKey: 'branch:logo.gif',
+        scope: 'branch',
+        deleted: true,
+        baseRef: 'origin/main',
+        baseOid: 'base',
+        headOid: 'head',
+        mergeBase: 'base'
+      }
+    )
+  ).resolves.toEqual({
+    kind: 'image',
+    itemKey: 'branch:logo.gif',
+    dataUri: 'data:image/gif;base64,R0lGODlh'
   })
 })

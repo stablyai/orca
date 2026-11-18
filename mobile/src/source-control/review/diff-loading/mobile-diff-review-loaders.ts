@@ -196,7 +196,10 @@ export async function loadMobileDiffReviewDiff(
     )
   }
   if (result.kind === 'binary') {
-    const dataUri = mobileDiffImageDataUri(result)
+    // Branch and commit diffs don't flag deletion; the queue's status already proves it.
+    const dataUri = mobileDiffImageDataUri(
+      input.deleted ? { ...result, modifiedDeleted: true } : result
+    )
     return dataUri
       ? { kind: 'image', itemKey: input.itemKey, dataUri }
       : { kind: 'binary', itemKey: input.itemKey }
