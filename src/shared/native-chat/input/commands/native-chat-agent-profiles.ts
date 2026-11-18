@@ -117,11 +117,11 @@ export function nativeChatCommandOpensTerminal(agent: AgentType, command: string
   )
 }
 
-/** Exclude desktop-only answers: mobile lacks composer answers/transcript reply rows and would offer commands with no visible result. */
+/** Exclude composer answers: mobile has no local answer row, so they would show nothing. Transcript replies render on both. */
 export function getAgentAnsweredNativeChatCommands(
   agent: AgentType
 ): readonly SlashCommandSuggestion[] {
-  return getVerifiedNativeChatCommands(agent).filter((command) => command.reply === undefined)
+  return getVerifiedNativeChatCommands(agent).filter((command) => command.reply !== 'composer')
 }
 
 /** Offer catalog commands handled by agent message text in the picker as well as accepting typed input. */
