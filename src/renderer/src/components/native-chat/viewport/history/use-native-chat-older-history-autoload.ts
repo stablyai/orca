@@ -9,6 +9,8 @@ export type NativeChatOlderHistoryAutoload = {
   sentinelRef: (node: HTMLElement | null) => void
   /** Offer manual loading after failure/no progress or without IntersectionObserver. */
   isAutoLoadEnabled: boolean
+  /** The last read of this history failed (not merely empty), so the row offers a retry. */
+  loadFailed: boolean
   /** Manual load: clears a failure so auto-load resumes if it succeeds. */
   loadEarlierManually: () => void
 }
@@ -37,6 +39,7 @@ export function useNativeChatOlderHistoryAutoload({
   const [sentinel, setSentinel] = useState<HTMLElement | null>(null)
   // A swapped transcript must not inherit another history’s failure.
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
+  const [readFailedHistoryKey, setReadFailedHistoryKey] = useState<string | null>(null)
 
   const canObserve = typeof IntersectionObserver !== 'undefined'
   const isAutoLoadEnabled = autoLoad && canObserve && failedHistoryKey !== historyKey
@@ -48,6 +51,7 @@ export function useNativeChatOlderHistoryAutoload({
       if (result === 'failed' || result === 'unchanged') {
         setFailedHistoryKey(historyKey)
       }
+      setReadFailedHistoryKey(result === 'failed' ? historyKey : null)
     })
   }
   // Lane callbacks change identity with their state; the observer must not.
@@ -56,6 +60,7 @@ export function useNativeChatOlderHistoryAutoload({
   const loadEarlierManually = (): void => {
     onManualLoad?.()
     setFailedHistoryKey(null)
+    setReadFailedHistoryKey(null)
     loadPage()
   }
 
@@ -77,5 +82,10 @@ export function useNativeChatOlderHistoryAutoload({
     return () => observer.disconnect()
   }, [scrollRef, sentinel, shouldObserve, historyKey])
 
-  return { sentinelRef: setSentinel, isAutoLoadEnabled, loadEarlierManually }
+  return {
+    sentinelRef: setSentinel,
+    isAutoLoadEnabled,
+    loadFailed: readFailedHistoryKey === historyKey,
+    loadEarlierManually
+  }
 }

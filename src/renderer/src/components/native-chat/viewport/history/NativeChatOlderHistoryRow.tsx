@@ -37,6 +37,13 @@ export function NativeChatOlderHistoryRow({
         <span role="status" aria-live="polite" className="text-xs text-chat-foreground-faint">
           {loadingEarlier ? <DelayedLoadingLabel /> : null}
         </span>
+      ) : olderHistory.loadFailed && !loadingEarlier ? (
+        <span role="alert" className="flex items-center gap-2 text-xs text-destructive">
+          {t('components.native-chat.loadEarlierFailed', "Couldn't load earlier messages.")}
+          <Button variant="outline" size="xs" onClick={olderHistory.loadEarlierManually}>
+            {t('components.native-chat.loadEarlierRetry', 'Retry')}
+          </Button>
+        </span>
       ) : (
         <Button
           variant="ghost"
