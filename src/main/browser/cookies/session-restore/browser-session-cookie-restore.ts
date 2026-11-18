@@ -99,14 +99,16 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
   }
   const filePath = routeSnapshotPath(partition)
   stopTracking(filePath)
-  // File first: any restore that starts from here on reads nothing.
-  await removeSessionCookieSnapshot(filePath)
-  // One that read it already (or ran past its page's timeout) finishes before the jar is cleared.
-  const restore = routeRestores.get(filePath)
-  routeRestores.delete(filePath)
-  await restore
-  // And the tracker such a restore started goes too.
-  stopTracking(filePath)
+  try {
+    // File first: any restore that starts from here on reads nothing.
+    await removeSessionCookieSnapshot(filePath)
+  } finally {
+    // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
+    // and the next restore tracks the jar again even when the file could not go.
+    const restore = routeRestores.get(filePath)
+    routeRestores.delete(filePath)
+    await restore
+  }
 }
 
 async function restoreSnapshotTargets(targets: readonly SnapshotTarget[]): Promise<void> {
