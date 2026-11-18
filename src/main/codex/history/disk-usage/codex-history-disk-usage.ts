@@ -58,6 +58,8 @@ async function measure(
   signal: AbortSignal
 ): Promise<CodexHistoryDiskUsage> {
   const { homes, accounts } = await listHostCodexRolloutHomeSources(settings)
+  // A walk stopped by a release or deletion ends its worker; wait for it so this one can start.
+  await getQueue().retired()
   const response = await getQueue().dispatch(
     (id) => ({
       id,

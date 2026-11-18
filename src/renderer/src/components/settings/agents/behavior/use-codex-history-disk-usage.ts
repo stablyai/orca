@@ -11,6 +11,7 @@ import {
 } from '@/lib/window-activity/window-park-visibility'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CodexHistoryDiskUsage } from '../../../../../../shared/workspace-cleanup/codex-history-disk-usage'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 // The host walks every Codex home within a minute, then answers with a lower bound.
 const DISK_USAGE_TIMEOUT_MS = 2 * 60_000
@@ -54,7 +55,7 @@ export function useCodexHistoryDiskUsage(
     }
     const target = runtimeTargetForOwnerEnvironment(environmentId)
     // Names this read so the host can stop the walk once no view waits for it.
-    const consumerId = crypto.randomUUID()
+    const consumerId = createNonSecureContextUuid()
     let current = true
     let settled = false
     void callRuntimeRpc<CodexHistoryDiskUsage>(
