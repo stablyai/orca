@@ -60,6 +60,7 @@ export type TerminalDocumentTerminalOptions = {
   fontWeight: string
   fontWeightBold: string
   lineHeight: number
+  scrollback: number
 }
 
 export type TerminalDocumentTerminal = {

@@ -37,6 +37,7 @@ import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdown
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
 import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
+import { useTerminalHostSettings } from '../terminal/preferences/terminal-host-settings'
 
 export function MobileSessionActiveContent({
   controller
@@ -122,6 +123,7 @@ export function MobileSessionActiveContent({
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
+  const terminalHostSettings = useTerminalHostSettings(client, controller.connState)
   const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
@@ -309,6 +311,7 @@ export function MobileSessionActiveContent({
                     : activeTerminalKeyboardLift
               }
               terminalTheme={terminal.terminalTheme}
+              hostSettings={terminalHostSettings}
               textScale={terminalTextScale}
               fontStyle={terminalFontStyle}
               onTextScaleChange={commitPinchedTextScale}

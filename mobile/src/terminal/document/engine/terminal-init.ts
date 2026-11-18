@@ -32,7 +32,6 @@ import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
 import { attachWebglAddon, cancelWebglContextRecovery } from './webgl-recovery'
 import { afterWritesDrained, enqueueWrite, pumpWrites, resetWriteQueue } from './write-queue'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../../src/shared/terminal/replay/terminal-scrollback-policy'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../../src/shared/terminal/appearance/terminal-unicode-provider'
 
 function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) {
@@ -43,7 +42,7 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
     minimumContrastRatio: scope.terminalMinimumContrastRatio,
     ...terminalFontOptions(scope),
     fontSize: terminalFontPxForScale(scope.currentTextScale),
-    scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+    scrollback: scope.scrollbackRows,
     // Parser query replies need stdin enabled; native still validates their grammar.
     disableStdin: false,
     cursorBlink: MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink,
