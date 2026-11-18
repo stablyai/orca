@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatWorkRunMember, nativeChatWorkRunEntries } from './native-chat-work-run'
+import {
+  nativeChatWorkRunMember,
+  nativeChatWorkRunEntries
+} from './transcript/folding/native-chat-work-run'
 import { approvalReviewMessage } from '../native-chat-activity.test-fixture'
 
 describe('successful automatic review activity', () => {
