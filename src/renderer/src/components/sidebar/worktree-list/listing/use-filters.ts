@@ -38,6 +38,7 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { isDoneWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -83,6 +84,11 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
   hideDetachedHeadWorkspaces: ({ state, worktree }) => {
     if (isDetachedHeadWorkspace(worktree)) {
       state.setHideDetachedHeadWorkspaces(false)
+    }
+  },
+  hideDoneWorkspaces: ({ state, worktree }) => {
+    if (isDoneWorkspaceStatus(worktree.workspaceStatus)) {
+      state.setHideDoneWorkspaces(false)
     }
   },
   hideWorkspacesFromOtherDevices: ({ state, statuses, worktree }) => {

@@ -941,7 +941,8 @@
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "hideDone": "Hide Done"
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",
