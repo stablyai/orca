@@ -112,6 +112,6 @@ it('proves the original unchanged across a new device number, never by a WAL siz
   const saved = { ...current, main: { ...current.main, dev: '16777229' } }
   expect(sameJournalLegacySource(JSON.stringify(saved), current)).toBe(true)
   // Saved before WAL identity was kept: reused frames can keep the size after a write.
-  const sizeOnly = { ...saved, wal: { kind: 'nonempty', size: '8192' } }
+  const sizeOnly = { ...current, wal: { kind: 'nonempty', size: '8192' } }
   expect(sameJournalLegacySource(JSON.stringify(sizeOnly), current)).toBe(false)
 })

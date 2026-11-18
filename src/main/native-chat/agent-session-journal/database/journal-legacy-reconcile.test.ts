@@ -349,7 +349,9 @@ it.each([10, 100])(
     }
     const first = await upgrade(root)
     cleanup.push(first.close)
-    asOlderChatStore(first.db)
+    // Baselines missing, receipt with its WAL identity: only such a receipt proves the original unchanged.
+    first.db.exec(`DELETE FROM agent_session_store_meta
+      WHERE key LIKE 'journal.legacy-revision%' OR key = 'journal.legacy-revisions-kept.v1'`)
 
     const prepared = vi.spyOn(first.db, 'prepare')
     reconcileJournalLegacySource(root, first.db)
