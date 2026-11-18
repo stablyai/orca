@@ -1,8 +1,14 @@
+import { getProxySessionApplicationReadiness } from '../../../network/proxy-settings'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { observeBrowserExtensionCookieChanges } from '../api/cookies'
+import {
+  observeBrowserExtensionProxySession,
+  whenBrowserExtensionProxyReady,
+  browserExtensionProxyRequestReadiness
+} from '../proxy/browser-extension-proxy-session'
 import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTabInSession } from '../permissions/browser-extension-active-tab'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
@@ -11,7 +17,10 @@ import {
   forgetBrowserExtensionContentScriptRestore,
   restoreBrowserExtensionContentScripts
 } from '../api-runtime/browser-extension-content-scripts'
-import { setBrowserSessionRequestDecider } from '../../sessions/requests/browser-session-request-decisions'
+import {
+  setBrowserSessionRequestDecider,
+  type BrowserSessionRequestDecider
+} from '../../sessions/requests/browser-session-request-decisions'
 import { browserExtensionDnrRequestDecider } from '../declarative-net-request/session/browser-extension-dnr-requests'
 import {
   attachBrowserExtensionDnr,
@@ -31,6 +40,24 @@ const servedSessions = new WeakSet<Electron.Session>()
 
 // Why below startup's 3s wait: a worker that never answers must not use the whole budget alone.
 const CONTENT_SCRIPT_RESTORE_TIMEOUT_MS = 2_500
+
+type RequestDecision = ReturnType<BrowserSessionRequestDecider['beforeRequest']>
+
+function whenProxyReady(session: Electron.Session, action: () => RequestDecision): RequestDecision {
+  const nativeReady = getProxySessionApplicationReadiness(session)
+  const extensionReady = browserExtensionProxyRequestReadiness(session)
+  if (nativeReady === false || extensionReady === false) {
+    return { cancel: true }
+  }
+  if (nativeReady === true && extensionReady === true) {
+    return action()
+  }
+  return Promise.all([nativeReady, extensionReady]).then(
+    (allowed) =>
+      allowed.every(Boolean) ? (whenProxyReady(session, action) ?? {}) : { cancel: true },
+    () => ({ cancel: true })
+  )
+}
 
 /** A download from an unregistered extension page (popup, popout) belongs to the active tab. */
 function resolveExtensionDownloadOwner(webContentsId: number): string | null {
@@ -52,10 +79,38 @@ function resolveExtensionDownloadOwner(webContentsId: number): string | null {
 /** Wires cookie, request and content-blocking services into each extension session; restores scripts on load. */
 export function installBrowserExtensionSessionServices(): void {
   installBrowserExtensionWebRequestForwarding()
-  setBrowserSessionRequestDecider(browserExtensionDnrRequestDecider)
+  setBrowserSessionRequestDecider({
+    ...browserExtensionDnrRequestDecider,
+    beforeRequest: (session, details) => {
+      const decide = () => browserExtensionDnrRequestDecider.beforeRequest(session, details)
+      if (!/^(https?|wss?):/.test(details.url)) {
+        return decide()
+      }
+      return whenProxyReady(session, () => {
+        let decision: RequestDecision
+        try {
+          decision = decide()
+        } catch (error) {
+          return whenProxyReady(session, () => {
+            throw error
+          })
+        }
+        return decision && 'then' in decision
+          ? decision.then(
+              (response) => whenProxyReady(session, () => response) ?? {},
+              (error: unknown) =>
+                whenProxyReady(session, () => {
+                  throw error
+                }) ?? {}
+            )
+          : whenProxyReady(session, () => decision)
+      })
+    }
+  })
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
   setBrowserExtensionSessionHooks({
     attached: (sess, profileId, enabledExtensionIds) => {
+      observeBrowserExtensionProxySession(sess, profileId, enabledExtensionIds)
       observeBrowserExtensionCookieChanges(sess)
       observeBrowserExtensionWebRequests(sess)
       // Why at attach: chrome.action calls create state before any toolbar asks for it.
@@ -99,7 +154,8 @@ export function installBrowserExtensionSessionServices(): void {
           extension,
           CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
         ),
-        whenBrowserExtensionDnrLoaded(sess)
+        whenBrowserExtensionDnrLoaded(sess),
+        whenBrowserExtensionProxyReady(sess)
       ])
     }
   })

@@ -8,88 +8,38 @@ import {
 import {
   clearElectronProxyCredentialsForSession,
   haveSameElectronProxyCredentials,
-  resetElectronProxyCredentialsForTests,
   separateElectronProxyCredentials,
   setElectronProxyCredentialsForSession,
   type ElectronProxyCredentials
 } from './electron-proxy-credentials'
-import { runBoundedProxyApplication } from './bounded-proxy-application'
-import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
-import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
+import {
+  defaultProxySession,
+  type ProxySession,
+  type SessionProxyConfig
+} from './electron-default-proxy-session'
+import {
+  resolveProxyPolicyWithoutSession,
+  proxyPolicyKey,
+  type ProxyApplyResult
+} from './proxy-policy-resolution'
+
+import {
+  clearProxySessionCredentials,
+  getSessionProxyApplicationState,
+  enqueueSessionProxyApplication,
+  type SessionProxyApplicationState
+} from './session-proxy-application'
+export {
+  clearProxySessionCredentials,
+  resetProxyApplicationForTests,
+  resetSessionProxyApplicationForTests,
+  awaitProxySessionApplication,
+  getProxySessionApplicationReadiness,
+  getProxySessionConfiguration,
+  observeProxySessionConfiguration
+} from './session-proxy-application'
 
 const PROXY_PROBE_URL = 'https://api.anthropic.com/'
-type SessionProxyApplicationState = {
-  appliedKey: string | null
-  settledKey: string | null
-  appliedResult: Extract<ProxyApplyResult, { source: 'settings' | 'env' }> | null
-  credentials: ElectronProxyCredentials | null
-  tail: Promise<unknown>
-  readiness: 'ready' | 'pending' | 'failed'
-  retired: boolean
-}
-let sessionProxyApplications = new WeakMap<ProxySession, SessionProxyApplicationState>()
-
-function proxyMemoKey(result: ProxyApplyResult): string {
-  return result.source === 'settings' || result.source === 'env'
-    ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
-    : result.source
-}
-
-export function resetProxyApplicationForTests(): void {
-  sessionProxyApplications = new WeakMap()
-  resetElectronProxyCredentialsForTests()
-}
-
-export function resetSessionProxyApplicationForTests(proxySession: ProxySession): void {
-  sessionProxyApplications.delete(proxySession)
-  clearElectronProxyCredentialsForSession(proxySession)
-}
-
-export function clearProxySessionCredentials(proxySession: ProxySession): void {
-  const state = sessionProxyApplications.get(proxySession)
-  if (state) {
-    state.credentials = null
-  }
-  clearElectronProxyCredentialsForSession(proxySession)
-}
-
-/** Wait for the newest policy; apply errors keep requests fail-closed. */
-export async function awaitProxySessionApplication(proxySession: ProxySession): Promise<boolean> {
-  while (true) {
-    const state = sessionProxyApplications.get(proxySession)
-    if (!state || state.retired) {
-      return !state
-    }
-    const observed = state.tail
-    try {
-      await observed
-    } catch {
-      if (state.tail === observed) {
-        return false
-      }
-      continue
-    }
-    if (state.tail === observed) {
-      return !state.retired
-    }
-  }
-}
-
-export function getProxySessionApplicationReadiness(
-  proxySession: ProxySession
-): boolean | Promise<boolean> {
-  const state = sessionProxyApplications.get(proxySession)
-  if (!state) {
-    return true
-  }
-  if (state.retired || state.readiness === 'failed') {
-    return false
-  }
-  if (state.readiness === 'ready') {
-    return true
-  }
-  return awaitProxySessionApplication(proxySession)
-}
 
 export async function releaseProxySessionApplication(
   proxySession: ProxySession,
@@ -98,6 +48,12 @@ export async function releaseProxySessionApplication(
   await enqueueSessionProxyApplication(
     proxySession,
     async (state) => {
+      if (state.override) {
+        await proxySession.setProxy(state.restoreConfig)
+        state.configuration = state.restoreConfig
+        await proxySession.closeAllConnections?.()
+        state.override = null
+      }
       await releaseSessionProxyPin(proxySession, state)
       clearElectronProxyCredentialsForSession(proxySession)
       return { source: 'none' }
@@ -116,60 +72,82 @@ export async function retireProxySessionApplication(proxySession: ProxySession):
   }
 }
 
-function getSessionProxyApplicationState(proxySession: ProxySession): SessionProxyApplicationState {
-  let state = sessionProxyApplications.get(proxySession)
-  if (!state) {
-    state = {
-      appliedKey: null,
-      settledKey: null,
-      appliedResult: null,
-      credentials: null,
-      tail: Promise.resolve(),
-      readiness: 'ready',
-      retired: false
-    }
-    sessionProxyApplications.set(proxySession, state)
-  }
-  return state
-}
-
-async function enqueueSessionProxyApplication(
-  proxySession: ProxySession,
-  apply: (state: SessionProxyApplicationState) => Promise<ProxyApplyResult>,
-  allowRetired = false
-): Promise<ProxyApplyResult> {
-  const state = getSessionProxyApplicationState(proxySession)
-  if (state.retired && !allowRetired) {
-    throw new Error('Proxy session is retired')
-  }
-  const operation = state.tail
-    .catch(() => {})
-    .then(() => runBoundedProxyApplication(() => apply(state)))
-  state.tail = operation
-  state.readiness = 'pending'
-  void operation.then(
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'ready'
-      }
-    },
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'failed'
-      }
-    }
-  )
-  return operation
-}
-
 export function applyProxySettingsToSession(
   proxySession: ProxySession,
   settings: NetworkProxySettings,
   options: { env?: Record<string, string | undefined>; probeUrl?: string } = {}
 ): Promise<ProxyApplyResult> {
-  return enqueueSessionProxyApplication(proxySession, (state) =>
-    resolveAndApplySessionProxy(proxySession, state, settings, options)
-  )
+  return enqueueSessionProxyApplication(proxySession, (state) => {
+    state.requestedSettings = settings
+    state.requestedOptions = options
+    if (state.overrideUncertain) {
+      throw new Error('Proxy override must be reapplied or cleared before requests can resume')
+    }
+    return state.override
+      ? Promise.resolve<ProxyApplyResult>({ source: 'extension' })
+      : resolveAndApplySessionProxy(proxySession, state, settings, options)
+  }).then((result) => {
+    getSessionProxyApplicationState(proxySession).onConfigurationChanged?.()
+    return result
+  })
+}
+
+/** Extension overrides share the app policy queue; app changes are remembered until release. */
+export function setProxySessionOverride(
+  proxySession: ProxySession,
+  config: SessionProxyConfig | null,
+  restoreConfig: SessionProxyConfig
+): Promise<void> {
+  const operation = enqueueSessionProxyApplication(proxySession, async (state) => {
+    const previous = state.override
+    if (!state.overrideUncertain && JSON.stringify(previous) === JSON.stringify(config)) {
+      return null
+    }
+    const apply = async (next: SessionProxyConfig | null): Promise<void> => {
+      clearProxySessionCredentials(proxySession)
+      state.appliedKey = null
+      state.settledKey = null
+      state.appliedResult = null
+      await proxySession.setProxy(next ?? restoreConfig)
+      state.configuration = next ?? restoreConfig
+      if (!next) {
+        await resolveAndApplySessionProxy(
+          proxySession,
+          state,
+          state.requestedSettings,
+          state.requestedOptions
+        )
+      }
+      await proxySession.closeAllConnections?.()
+      if ((next ?? restoreConfig).mode === 'pac_script') {
+        await proxySession.forceReloadProxyConfig?.()
+      }
+    }
+    try {
+      await apply(config)
+      state.override = config
+      state.restoreConfig = restoreConfig
+      state.overrideUncertain = false
+      return null
+    } catch (error) {
+      try {
+        await apply(previous)
+        state.overrideUncertain = false
+      } catch (rollbackError) {
+        state.overrideUncertain = true
+        throw new AggregateError(
+          [error, rollbackError],
+          'Could not apply or restore proxy configuration'
+        )
+      }
+      return { error }
+    }
+  })
+  return operation.then((failure) => {
+    if (failure) {
+      throw failure.error
+    }
+  })
 }
 
 async function resolveAndApplySessionProxy(
@@ -201,7 +179,7 @@ async function resolveAndApplySessionProxy(
       ...(bypassRules ? { proxyBypassRules: bypassRules } : {})
     }
     if (
-      state.settledKey === proxyMemoKey(result) &&
+      state.settledKey === proxyPolicyKey(result) &&
       haveSameElectronProxyCredentials(state.credentials, credentials)
     ) {
       return result
@@ -242,6 +220,7 @@ async function releaseSessionProxyPin(
     return
   }
   await proxySession.setProxy({ mode: 'system' })
+  state.configuration = { mode: 'system' }
   // Retain the pin marker until stale pooled connections close so retries cannot skip cleanup.
   state.settledKey = null
   state.credentials = null
@@ -257,7 +236,7 @@ async function applySessionProxyResult(
   result: Extract<ProxyApplyResult, { source: 'settings' | 'env' }>,
   credentials: ElectronProxyCredentials | null
 ): Promise<ProxyApplyResult> {
-  const key = proxyMemoKey(result)
+  const key = proxyPolicyKey(result)
   if (
     state.settledKey === key &&
     haveSameElectronProxyCredentials(state.credentials, credentials)
@@ -269,6 +248,11 @@ async function applySessionProxyResult(
     proxyRules: result.proxyRules,
     ...(result.proxyBypassRules ? { proxyBypassRules: result.proxyBypassRules } : {})
   })
+  state.configuration = {
+    mode: 'fixed_servers',
+    proxyRules: result.proxyRules,
+    proxyBypassRules: result.proxyBypassRules
+  }
   state.appliedKey = key
   state.settledKey = null
   state.appliedResult = result
@@ -292,8 +276,14 @@ export async function ensureElectronProxyFromEnvironment(
     return resolveProxyPolicyWithoutSession({}, options.env ?? process.env)
   }
   return enqueueSessionProxyApplication(proxySession, (state) => {
+    if (state.overrideUncertain) {
+      throw new Error('Proxy override must be reapplied or cleared before requests can resume')
+    }
+    if (state.override) {
+      return Promise.resolve<ProxyApplyResult>({ source: 'extension' })
+    }
     if (!options.force && state.appliedResult !== null) {
-      if (state.settledKey === proxyMemoKey(state.appliedResult)) {
+      if (state.settledKey === proxyPolicyKey(state.appliedResult)) {
         return Promise.resolve(state.appliedResult)
       }
       return applySessionProxyResult(proxySession, state, state.appliedResult, state.credentials)

@@ -10,7 +10,7 @@ import { separateElectronProxyCredentials } from './electron-proxy-credentials'
 export type ProxyApplyResult =
   | { source: 'settings'; proxyRules: string; proxyBypassRules?: string }
   | { source: 'env'; proxyRules: string; proxyBypassRules?: string }
-  | { source: 'system' | 'none' | 'invalid-settings' | 'invalid-env' }
+  | { source: 'system' | 'none' | 'invalid-settings' | 'invalid-env' | 'extension' }
 
 export function resolveProxyPolicyWithoutSession(
   settings: NetworkProxySettings,
@@ -41,4 +41,10 @@ export function resolveProxyPolicyWithoutSession(
     return { source: 'invalid-settings' }
   }
   return { source: envProxy.ok ? 'none' : 'invalid-env' }
+}
+
+export function proxyPolicyKey(result: ProxyApplyResult): string {
+  return result.source === 'settings' || result.source === 'env'
+    ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
+    : result.source
 }

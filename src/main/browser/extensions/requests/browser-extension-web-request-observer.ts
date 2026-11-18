@@ -25,6 +25,7 @@ import { extensionHasPermission } from '../api-runtime/browser-extension-namespa
 import { hasBrowserExtensionHostPermission } from '../permissions/browser-extension-permission-grants'
 import { canExtensionAccessRequest } from '../permissions/browser-extension-request-host-access'
 import { resolveBrowserExtensionTab } from '../tabs-and-windows/browser-extension-tab-model'
+import { reportBrowserExtensionProxyError } from '../proxy/browser-extension-proxy-session'
 
 /**
  * chrome.webRequest, observed rather than blocking. Electron 43 delivers no webRequest events to
@@ -38,6 +39,9 @@ function forward(
   event: ObservedWebRequestEvent,
   details: ObservedWebRequestDetails
 ): void {
+  if (event === 'onErrorOccurred' && details.error) {
+    reportBrowserExtensionProxyError(session, details.error)
+  }
   if (
     isRequestHiddenFromExtensions(details) ||
     !getBrowserExtensionProfileIdForSession(session) ||
@@ -98,7 +102,10 @@ function observeRemainingEvents(session: Electron.Session): void {
 
 export function observeBrowserExtensionWebRequests(session: Electron.Session): void {
   const maybeObserve = (extension: Electron.Extension): void => {
-    if (extensionHasPermission(extension, 'webRequest', session)) {
+    if (
+      extensionHasPermission(extension, 'webRequest', session) ||
+      extensionHasPermission(extension, 'proxy', session)
+    ) {
       observeRemainingEvents(session)
     }
   }

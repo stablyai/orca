@@ -1,5 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  answerBrowserSessionBeforeRequest,
+  setBrowserSessionRequestDecider
+} from '../../sessions/requests/browser-session-request-decisions'
 
 type FakeSession = { extensions: EventEmitter }
 type AttachHook = {
@@ -13,7 +17,12 @@ const mocks = vi.hoisted(() => {
     persistedEnabled,
     sessionByTabId: new Map<number, unknown>(),
     updateEnabled: vi.fn(),
-    updatePinned: vi.fn()
+    updatePinned: vi.fn(),
+    dnrBefore: vi.fn<() => Electron.CallbackResponse | Promise<Electron.CallbackResponse> | null>(
+      () => null
+    ),
+    proxyReadiness: vi.fn<() => boolean | Promise<boolean>>(() => true),
+    nativeProxyReadiness: vi.fn<() => boolean | Promise<boolean>>(() => true)
   }
 })
 // Why loosely typed: the real hooks only touch `extensions` events, which the fake provides.
@@ -33,7 +42,15 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
 vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { setUnownedDownloadOwnerResolver: vi.fn() }
 }))
+vi.mock('../../../network/proxy-settings', () => ({
+  getProxySessionApplicationReadiness: mocks.nativeProxyReadiness
+}))
 vi.mock('../api/cookies', () => ({ observeBrowserExtensionCookieChanges: vi.fn() }))
+vi.mock('../proxy/browser-extension-proxy-session', () => ({
+  observeBrowserExtensionProxySession: vi.fn(),
+  whenBrowserExtensionProxyReady: vi.fn(),
+  browserExtensionProxyRequestReadiness: mocks.proxyReadiness
+}))
 vi.mock('../api-runtime/browser-extension-content-scripts', () => ({
   forgetBrowserExtensionContentScriptRestore: vi.fn(),
   restoreBrowserExtensionContentScripts: vi.fn()
@@ -44,11 +61,8 @@ vi.mock('../api-runtime/browser-extension-api-host', () => ({
 vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   getActiveBrowserTabId: () => null
 }))
-vi.mock('../../sessions/requests/browser-session-request-decisions', () => ({
-  setBrowserSessionRequestDecider: vi.fn()
-}))
 vi.mock('../declarative-net-request/session/browser-extension-dnr-requests', () => ({
-  browserExtensionDnrRequestDecider: vi.fn()
+  browserExtensionDnrRequestDecider: { beforeRequest: mocks.dnrBefore }
 }))
 vi.mock('../declarative-net-request/session/browser-extension-dnr-session', () => ({
   attachBrowserExtensionDnr: vi.fn(),
@@ -89,6 +103,124 @@ function extension(id: string): Electron.Extension {
 }
 
 installBrowserExtensionSessionServices()
+
+beforeEach(() => {
+  mocks.dnrBefore.mockReset().mockReturnValue(null)
+  mocks.proxyReadiness.mockReset().mockReturnValue(true)
+  mocks.nativeProxyReadiness.mockReset().mockReturnValue(true)
+})
+afterAll(() => setBrowserSessionRequestDecider(null))
+
+function requestDecision(): Promise<Electron.CallbackResponse> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the mocked extension services consume this session.
+  const session = attachedSession() as unknown as Electron.Session
+  return new Promise((resolve) =>
+    answerBrowserSessionBeforeRequest(
+      session,
+      {
+        id: 1,
+        url: 'https://example.test/',
+        method: 'GET',
+        resourceType: 'mainFrame',
+        referrer: '',
+        timestamp: 1,
+        uploadData: []
+      },
+      resolve
+    )
+  )
+}
+
+describe('proxy readiness while deciding a request', () => {
+  it('cancels a delayed DNR redirect when the proxy fails before completion', async () => {
+    const decision = Promise.withResolvers<Electron.CallbackResponse>()
+    mocks.dnrBefore.mockReturnValue(decision.promise)
+    const response = requestDecision()
+    mocks.proxyReadiness.mockReturnValue(false)
+    decision.resolve({ redirectURL: 'https://redirect.test/' })
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
+  it('awaits asynchronous readiness again after a delayed DNR decision', async () => {
+    const entered = Promise.withResolvers<void>()
+    const decision = Promise.withResolvers<Electron.CallbackResponse>()
+    mocks.proxyReadiness.mockReturnValueOnce(Promise.resolve(true))
+    mocks.dnrBefore.mockImplementation(() => {
+      entered.resolve()
+      return decision.promise
+    })
+    const response = requestDecision()
+    await entered.promise
+    mocks.proxyReadiness.mockReturnValue(Promise.resolve(false))
+    decision.resolve({})
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
+  it('rechecks asynchronous readiness after a synchronous DNR decision', async () => {
+    mocks.dnrBefore.mockImplementation(() => {
+      mocks.proxyReadiness.mockReturnValue(Promise.resolve(false))
+      return { redirectURL: 'https://redirect.test/' }
+    })
+    await expect(requestDecision()).resolves.toEqual({ cancel: true })
+  })
+
+  it('cancels a delayed DNR redirect when the native proxy update fails', async () => {
+    const decision = Promise.withResolvers<Electron.CallbackResponse>()
+    mocks.dnrBefore.mockReturnValue(decision.promise)
+    const response = requestDecision()
+    mocks.nativeProxyReadiness.mockReturnValue(false)
+    decision.resolve({ redirectURL: 'https://redirect.test/' })
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
+  it.each([true, false])(
+    'respects a pending native proxy update settling to %s',
+    async (allowed) => {
+      const decision = Promise.withResolvers<Electron.CallbackResponse>()
+      const nativeReady = Promise.withResolvers<boolean>()
+      mocks.dnrBefore.mockReturnValue(decision.promise)
+      const response = requestDecision()
+      mocks.nativeProxyReadiness.mockReturnValueOnce(nativeReady.promise)
+      decision.resolve({ redirectURL: 'https://redirect.test/' })
+      nativeReady.resolve(allowed)
+      await expect(response).resolves.toEqual(
+        allowed ? { redirectURL: 'https://redirect.test/' } : { cancel: true }
+      )
+    }
+  )
+
+  it('observes an extension proxy failure while the final native update is pending', async () => {
+    const entered = Promise.withResolvers<void>()
+    const nativeReady = Promise.withResolvers<boolean>()
+    mocks.dnrBefore.mockImplementation(() => {
+      mocks.nativeProxyReadiness.mockImplementationOnce(() => {
+        entered.resolve()
+        return nativeReady.promise
+      })
+      return { redirectURL: 'https://redirect.test/' }
+    })
+    const response = requestDecision()
+    await entered.promise
+    mocks.proxyReadiness.mockReturnValue(false)
+    nativeReady.resolve(true)
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+
+  it('preserves the DNR response when readiness remains available', async () => {
+    mocks.proxyReadiness.mockReturnValueOnce(Promise.resolve(true))
+    mocks.dnrBefore.mockReturnValue({ redirectURL: 'https://redirect.test/' })
+    await expect(requestDecision()).resolves.toEqual({ redirectURL: 'https://redirect.test/' })
+  })
+
+  it('keeps a failed DNR decision blocked when the proxy also became unavailable', async () => {
+    const decision = Promise.withResolvers<Electron.CallbackResponse>()
+    mocks.dnrBefore.mockReturnValue(decision.promise)
+    const response = requestDecision()
+    mocks.proxyReadiness.mockReturnValue(false)
+    decision.reject(new Error('DNR unavailable'))
+    await expect(response).resolves.toEqual({ cancel: true })
+  })
+})
 
 describe('extension unload in an attached session', () => {
   it("revokes the extension's activeTab grants on that session's tabs only", () => {
