@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeAutomationEventTrigger,
   formatAutomationEventTrigger,
   formatAutomationTriggerOptions,
   offeredEventSources,
@@ -42,9 +41,6 @@ describe('--on "webhook.call ..."', () => {
     const rule = parseAutomationEventTrigger(spec)
     expect(formatAutomationEventTrigger(rule)).toBe(spec)
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(rule))).toEqual(rule)
-    expect(describeAutomationEventTrigger(rule)).toBe(
-      'its webhook is called, where body.action in opened,reopened, on 4512, containing "deploy now"'
-    )
   })
 
   it.each([

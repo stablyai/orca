@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sessionWorkerLook, sessionWorkerRestingLabel } from './orchestration-session-worker-status'
+import { sessionWorkerLook } from './orchestration-session-worker-status'
 
 describe('sessionWorkerLook', () => {
   it('draws only a worker whose agent is mid-turn as working', () => {
@@ -19,10 +19,9 @@ describe('sessionWorkerLook', () => {
     })
   })
 
-  it('rests an open ask on its coordinator, named in its label, never needing you', () => {
+  it('rests an open ask on its coordinator without putting it under needs-you', () => {
     const asks = sessionWorkerLook({ state: 'working', activity: 'working', pendingQuestion: true })
     expect(asks).toEqual({ status: 'done', group: 'idle', asksCoordinator: true })
-    expect(sessionWorkerRestingLabel(asks, 'Bot builder')).toBe('Asked Bot builder a question')
   })
 
   it('shows a prompt the agent reports over its open ask', () => {
