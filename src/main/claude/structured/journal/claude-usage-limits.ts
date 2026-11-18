@@ -41,6 +41,22 @@ export function claudePooledUsageLimit(text: string, now: number): AgentSessionU
   return resetsAt ? { resetsAt } : {}
 }
 
+// The CLI's own limit line when it sends no typed api_error: older builds' "Claude AI usage limit
+// reached|<epoch s>", and the "You've hit your session limit · resets 3pm" family.
+const LEGACY_LIMIT = /^Claude AI usage limit reached\|(\d{9,11})\s*$/i
+const HIT_LIMIT = /^You(?:'|’)ve hit your (?:[\w-]+ )*limit\b/i
+
+/** Only for text the CLI sent as a rate-limit error or failed result, never for prose. */
+export function claudeLimitLine(text: string, now: number): AgentSessionUsageLimit | null {
+  const trimmed = text.trim()
+  const legacy = LEGACY_LIMIT.exec(trimmed)?.[1]
+  if (legacy) {
+    const resetsAt = usageLimitResetsAt(Number(legacy) * 1000, now)
+    return resetsAt ? { resetsAt } : {}
+  }
+  return HIT_LIMIT.test(trimmed) ? {} : claudePooledUsageLimit(text, now)
+}
+
 export type ClaudeUsageLimitRow = AgentSessionFailureRowWords & {
   kind: 'status'
   tone: 'warning'
@@ -81,7 +97,10 @@ export class ClaudeUsageLimits {
     }
     const typed = claudeText(message.api_error)
     const text = messageText(message)
-    const pooled = claudePooledUsageLimit(text, this.now())
+    const pooled =
+      message.error === 'rate_limit' && !typed
+        ? claudeLimitLine(text, this.now())
+        : claudePooledUsageLimit(text, this.now())
     // A login failure is an explicit cause, even though it carries no api_error.
     const cause =
       typed === 'usage_limit_reached' || pooled
@@ -117,9 +136,7 @@ export class ClaudeUsageLimits {
     const status = message.api_error_status
     const resultText = claudeText(message.result) ?? ''
     const pooled =
-      failed && (status == null || status === 429)
-        ? claudePooledUsageLimit(resultText, this.now())
-        : null
+      failed && (status == null || status === 429) ? claudeLimitLine(resultText, this.now()) : null
     if (pooled) {
       return this.row(resultText, true, pooled)
     }

@@ -54,3 +54,51 @@ it("prefers the pool's earliest reset over an older rejection still cached", () 
     usageLimit: { resetsAt: Date.parse('2026-10-15T01:39:59.530Z') }
   })
 })
+
+// The assistant frame a subscription limit ends a turn with when the CLI sends no typed api_error.
+const limitAssistant = (text: string) => ({
+  type: 'assistant',
+  error: 'rate_limit',
+  parent_tool_use_id: null,
+  message: { content: [{ type: 'text', text }] }
+})
+
+it("reads the CLI's own limit line as a usage limit, with a rejection's reset", () => {
+  const limits = new ClaudeUsageLimits(() => NOW)
+  limits.observe({
+    type: 'rate_limit_event',
+    rate_limit_info: { status: 'rejected', rateLimitType: 'five_hour', resetsAt: NOW / 1000 + 3600 }
+  })
+  const row = limits.assistant(
+    limitAssistant('You’ve hit your session limit · resets 1am (America/New_York)')
+  )
+  expect(readAgentSessionFailureFact(row?.failure)).toMatchObject({
+    kind: 'usageLimitReached',
+    usageLimit: { window: 'session', resetsAt: NOW + 3600 * 1000 }
+  })
+})
+
+it('reads the limit line without any rejection seen', () => {
+  const row = new ClaudeUsageLimits(() => NOW).assistant(
+    limitAssistant("You've hit your limit · resets 3pm")
+  )
+  expect(readAgentSessionFailureFact(row?.failure)?.kind).toBe('usageLimitReached')
+})
+
+it("reads an older CLI's limit line with its reset epoch", () => {
+  const row = new ClaudeUsageLimits(() => NOW).assistant(
+    limitAssistant(`Claude AI usage limit reached|${NOW / 1000 + 7200}`)
+  )
+  expect(readAgentSessionFailureFact(row?.failure)).toMatchObject({
+    kind: 'usageLimitReached',
+    usageLimit: { resetsAt: NOW + 7200 * 1000 }
+  })
+})
+
+it('leaves prose about limits that is no rate-limit error alone', () => {
+  const row = new ClaudeUsageLimits(() => NOW).assistant({
+    ...limitAssistant("You've hit your limit on retries, so I stopped."),
+    error: undefined
+  })
+  expect(row).toBeNull()
+})

@@ -12,6 +12,10 @@ import {
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
+import { connectorFailure } from './external-conversation-failure'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
@@ -50,6 +54,8 @@ export class ConnectorReplyRecovery {
       hasSession: (sessionId: string) => boolean
       /** Whether the chat is a bot's conversation, whose quiet marker means nothing to tell. */
       isBot: (sessionId: string) => boolean
+      /** The chat's agent, which names it in the failure a source shows. */
+      agentOf: (sessionId: string) => string
       fillTurn: ConversationReplyFill
       /** Rows were filled: wake the sender. */
       filled: () => void
@@ -205,11 +211,22 @@ export class ConnectorReplyRecovery {
       return idle && !claimed(row) && at > 0 && at < lastEnded ? ('unattributed' as const) : null
     }
     const left = (await journal.read(sessionId)).filter((row) => !row.fill)
+    // A typed rejection says why, as the live end would.
+    const rejection = (row: Unfilled): ConnectorFailure | undefined => {
+      const key = messageOf(row)?.itemId
+      const fact = readAgentSessionFailureFact(
+        snapshot.submissions.find(
+          (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === key
+        )?.rejection
+      )
+      return fact && connectorFailure(fact, this.deps.agentOf(sessionId))
+    }
     for (const outcome of ['failed', 'interrupted', 'unattributed'] as const) {
       await this.fillEach(
         journal,
         left.filter((row) => evidence(row) === outcome),
-        outcome
+        outcome,
+        outcome === 'failed' ? rejection : undefined
       )
     }
     if ((await journal.read(sessionId)).some((row) => !row.fill)) {
@@ -247,7 +264,15 @@ export class ConnectorReplyRecovery {
         outcome,
         prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
         bot: this.deps.isBot(sessionId),
-        links: []
+        links: [],
+        ...(outcome === 'failure'
+          ? {
+              failure: connectorFailure(
+                structuredAgentSessionTurnFailure(snapshot.items, turn.itemId),
+                this.deps.agentOf(sessionId)
+              )
+            }
+          : {})
       })
     }
     return []
@@ -256,15 +281,20 @@ export class ConnectorReplyRecovery {
   private async fillEach(
     journal: ConnectorReplyJournal,
     rows: readonly Unfilled[],
-    outcome: 'not_found' | 'unattributed' | 'failed' | 'interrupted'
+    outcome: 'not_found' | 'unattributed' | 'failed' | 'interrupted',
+    failureOf?: (row: Unfilled) => ConnectorFailure | undefined
   ): Promise<void> {
     await journal.fillOutcomes(
-      rows.map((row) => ({
-        account: row.account,
-        deliveryId: row.deliveryId,
-        outcome,
-        answerDeliveryId: row.deliveryId
-      }))
+      rows.map((row) => {
+        const failure = failureOf?.(row)
+        return {
+          account: row.account,
+          deliveryId: row.deliveryId,
+          outcome,
+          answerDeliveryId: row.deliveryId,
+          ...(failure ? { failure } : {})
+        }
+      })
     )
   }
 
