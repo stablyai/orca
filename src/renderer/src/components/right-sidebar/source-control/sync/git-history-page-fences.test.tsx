@@ -67,6 +67,11 @@ describe('useSourceControlGitHistory session page', () => {
     expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'loading' })
 
     await act(async () => {
+      root.render(<Probe headOid="h1" compareBaseOid={null} />)
+    })
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'loading' })
+
+    await act(async () => {
       root.render(
         <Probe
           headOid="h1"
@@ -79,7 +84,12 @@ describe('useSourceControlGitHistory session page', () => {
   })
 
   it('hides an empty branch page once the base moves under an unchanged HEAD, even if the refresh fails or lands late', async () => {
-    const emptyOnB1: GitHistoryResult = { ...branchPage('x', 'h1', 'b1'), items: [] }
+    const initial = branchPage('x', 'h1', 'b1')
+    const emptyOnB1: GitHistoryResult = {
+      ...initial,
+      items: [],
+      branch: { ...initial.branch!, ahead: 0, unpushed: 0 }
+    }
     mocks.getRuntimeGitHistory.mockResolvedValueOnce(emptyOnB1)
     const root = await mount({ headOid: 'h1', compareBaseOid: 'b1' })
     await flush()
