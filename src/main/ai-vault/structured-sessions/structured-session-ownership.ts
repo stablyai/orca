@@ -22,6 +22,7 @@ import {
 import type { AiVaultPrepareSessionResumeArgs } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
+import type { AgentSessionConversationKeys } from '../../runtime/agent-session/records/agent-session-conversation-key-index'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,
@@ -175,28 +176,33 @@ function acquiredAccountHome(sessionId: string): AgentSessionAccountHome | undef
     : undefined
 }
 
-// Build one lookup per projection to avoid scanning all chat records for every row.
+// Each row asks the store's ownership index, so a projection never walks every saved chat.
 function ownershipLookup():
   | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
   | null {
-  if (!getStructuredAgentSessionHost()) {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
     return null
   }
-  const byProviderSession = new Map<string, StructuredProviderSessionOwnership>()
-  for (const ownership of listOwnership()) {
-    const key = `${ownership.provider}\0${ownership.providerSessionId}`
-    const kept = byProviderSession.get(key)
-    if (!kept || (kept.role !== 'head' && ownership.role === 'head')) {
-      byProviderSession.set(key, ownership)
-    }
-  }
+  const { store } = host.deps
   return (row) => {
-    const found = historyRowOwners(row.agent).flatMap(
-      (owner) => byProviderSession.get(`${owner}\0${row.sessionId}`) ?? []
-    )
+    // Per provider the first head link, else the first link, in listing order.
+    const found = historyRowOwners(row.agent).flatMap((owner) => {
+      const owned = listStructuredProviderSessionOwnership(
+        store.conversationsKeyedBy(ownershipKeys, `${owner}\0${row.sessionId}`)
+      ).filter(
+        (ownership) => ownership.provider === owner && ownership.providerSessionId === row.sessionId
+      )
+      return owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
+    })
     return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
   }
 }
+
+const ownershipKeys: AgentSessionConversationKeys = (view) =>
+  listStructuredProviderSessionOwnership([view]).map(
+    ({ provider, providerSessionId }) => `${provider}\0${providerSessionId}`
+  )
 
 /** One history row agent can correspond to several chat providers. */
 const HISTORY_ROW_OWNERS = new Map<string, StructuredAgentId[]>()

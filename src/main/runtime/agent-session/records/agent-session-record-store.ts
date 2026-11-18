@@ -24,6 +24,8 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
+import type { AgentSessionConversationKeys } from './agent-session-conversation-key-index'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
 import type {
@@ -114,7 +116,20 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+    readAgentSessionWorkspaceAttention(
+      this.journalDatabase,
+      this.conversationsKeyedBy(scopeKeys, agentSessionScopeKey(location)),
+      location
+    )
+  /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
+  conversationsKeyedBy = (
+    keys: AgentSessionConversationKeys,
+    key: string
+  ): AgentSessionConversationView[] =>
+    this.transactions.keyIndexes
+      .get(this.state, keys)
+      .sessionIds(key)
+      .flatMap((sessionId) => this.getConversation(sessionId) ?? [])
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
   /** Sessions a committed /clear continued into this one, derived from every held conversation
    *  (unreadable leases still count) and rebuilt only when lineage changes. */
@@ -136,7 +151,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
   }
   lineageRevision = (): object => this.transactions.lineageRevision()
-  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
+  providerAliasOwner = (nativeId: string): string | null =>
+    this.transactions.keyIndexes.get(this.state, nativeIdKeys).first(nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
@@ -348,3 +364,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
         })
     )
 }
+
+const nativeIdKeys: AgentSessionConversationKeys = (view) =>
+  view.providerHandleChain.map(({ handle }) => handle.nativeId)
+
+const scopeKeys: AgentSessionConversationKeys = (view) => [agentSessionScopeKey(view.location)]
