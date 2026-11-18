@@ -27,7 +27,7 @@ function tidyRuntime() {
     bots: {
       assertEnabled: () => {},
       list: () => [makeTestBot({ id: 'b1', agent: 'claude' })],
-      memory: { undo, history: async () => [], undone: async () => false }
+      memory: { undo, history: async () => [], undoneKnown: () => false, whenUndoneKnown: () => {} }
     },
     lookAround
   }

@@ -43,8 +43,12 @@ export type BotMemoryHistory = {
   append: (botId: string, by: BotMemoryAuthor, change: BotMemoryChange) => Promise<void>
   /** Newest first, including every append made before this call. */
   list: (botId: string) => Promise<BotMemoryHistoryRow[]>
-  /** Whether a row of the bot's history undoes row `rowId`; disk is read only before the bot's first read. */
-  undone: (botId: string, rowId: string) => Promise<boolean>
+  /** Whether a row of the bot's history undoes row `rowId`, from memory; undefined until the bot's
+   *  history was first read. */
+  undoneKnown: (botId: string, rowId: string) => boolean | undefined
+  /** Reads the bot's history once if `undoneKnown` can't answer yet, then calls `then` (the latest one
+   *  asked for, per bot); nothing when it already can. */
+  whenUndoneKnown: (botId: string, then: () => void) => void
   /** The bot was deleted: its history goes too. */
   removed: (botId: string) => Promise<void>
   /** Everything queued so far has landed; for quit. */
@@ -54,7 +58,8 @@ export type BotMemoryHistory = {
 export const NO_BOT_MEMORY_HISTORY: BotMemoryHistory = {
   append: async () => {},
   list: async () => [],
-  undone: async () => false,
+  undoneKnown: () => false,
+  whenUndoneKnown: () => {},
   removed: async () => {},
   settled: async () => {}
 }
@@ -155,6 +160,13 @@ export function createBotMemoryHistory(
     }
     return rows
   }
+  // Per bot, the rows its undo rows point at, kept from its first read on so asking needs no disk.
+  // A removal drops it, again once its turn comes, after every read queued before it.
+  const undoneRows = new Map<string, Set<string>>()
+  // Per bot, at most one read building it for someone waiting to hear, and who that is.
+  const undoneLoads = new Map<string, () => void>()
+  const undoTargets = (rows: readonly BotMemoryHistoryRow[]): Set<string> =>
+    new Set(rows.flatMap((row) => (row.by.kind === 'undo' ? [row.by.of] : [])))
   // Per bot, at most one queued write and one queued read, however slow the disk: rows not yet written
   // wait here (newest first, at most MAX_ROWS) and reads add them to what the file holds.
   const pending = new Map<
@@ -186,18 +198,18 @@ export function createBotMemoryHistory(
       const rows = state.unwritten
       state.unwritten = []
       if (rows.length > 0) {
-        await io.write(botId, JSON.stringify([...rows, ...(await read(botId))].slice(0, MAX_ROWS)))
+        const written = [...rows, ...(await read(botId))].slice(0, MAX_ROWS)
+        await io.write(botId, JSON.stringify(written))
+        // What retention or the row cap dropped no longer counts as undone.
+        if (undoneRows.has(botId)) {
+          undoneRows.set(botId, undoTargets([...state.unwritten, ...written]))
+        }
       }
     })
       .catch((error: unknown) => console.warn('[bots] memory history not written', error))
       .finally(() => forget(botId))
     return state.write
   }
-  // Per bot, the rows its undo rows point at, kept from its first read on so asking needs no disk.
-  // A removal drops it, again once its turn comes, after every read queued before it.
-  const undoneRows = new Map<string, Set<string>>()
-  const undoTargets = (rows: readonly BotMemoryHistoryRow[]): Set<string> =>
-    new Set(rows.flatMap((row) => (row.by.kind === 'undo' ? [row.by.of] : [])))
   // Bots no one opens still lose their old rows: after the first use, every bot's history is
   // pruned in the background, one at a time behind that bot's own work.
   let sweep: Promise<void> | null = null
@@ -245,6 +257,7 @@ export function createBotMemoryHistory(
     removed: (botId) => {
       // What was queued before the removal keeps its own state; anything after starts afresh behind it.
       undoneRows.delete(botId)
+      undoneLoads.delete(botId)
       const before = pending.get(botId)
       if (before) {
         before.unwritten = []
@@ -257,14 +270,24 @@ export function createBotMemoryHistory(
       startSweep()
       return removed
     },
-    undone: async (botId, rowId) => {
-      const known = undoneRows.get(botId)
-      if (known) {
-        return known.has(rowId)
+    undoneKnown: (botId, rowId) => undoneRows.get(botId)?.has(rowId),
+    whenUndoneKnown: (botId, then) => {
+      if (undoneRows.has(botId)) {
+        return
       }
-      // The bot's first read builds the index; reads already queued share it.
-      await history.list(botId)
-      return undoneRows.get(botId)?.has(rowId) ?? false
+      const loading = undoneLoads.has(botId)
+      undoneLoads.set(botId, then)
+      if (loading) {
+        return
+      }
+      history.list(botId).then(
+        () => {
+          const loaded = undoneLoads.get(botId)
+          undoneLoads.delete(botId)
+          loaded?.()
+        },
+        () => undoneLoads.delete(botId)
+      )
     },
     settled
   }

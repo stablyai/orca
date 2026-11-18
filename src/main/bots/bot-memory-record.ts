@@ -154,8 +154,8 @@ export function createBotMemoryRecord(
     change,
     noted,
     history: (botId: string) => history.list(botId),
-    /** Whether history row `rowId` was undone, without reading disk once the bot's history was read. */
-    undone: (botId: string, rowId: string) => history.undone(botId, rowId),
+    undoneKnown: (botId: string, rowId: string) => history.undoneKnown(botId, rowId),
+    whenUndoneKnown: (botId: string, then: () => void) => history.whenUndoneKnown(botId, then),
     /** Every history write queued so far, landed; for quit. */
     historySettled: () => history.settled(),
     /** Takes `fact` out of MEMORY.md and the record; false when neither had it. */

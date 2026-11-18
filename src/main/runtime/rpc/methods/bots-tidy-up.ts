@@ -23,15 +23,25 @@ function botById(context: RpcContext, botId: string) {
   return bot
 }
 
-export async function botTidyUpView(context: RpcContext, botId: string): Promise<BotTidyUpView> {
+export function botTidyUpView(context: RpcContext, botId: string): BotTidyUpView {
   const bot = botById(context, botId)
   const { runtime } = context
   const setting = botTidyUp(bot)
   const state = tidyUpState(runtime.lookAround.get(bot.id))
   const lastRun = state.runs.at(-1)
   const rowId = state.last?.rowId
-  // History keeps which rows were undone, so a poll doesn't wait on the disk past the bot's first read.
-  const undone = rowId != null && (await runtime.bots.memory.undone(bot.id, rowId))
+  // From what history holds in memory, never waiting on the disk: before the bot's history was read,
+  // say not undone, read it once, and have the view read again then.
+  let undone = false
+  if (rowId != null) {
+    const known = runtime.bots.memory.undoneKnown(bot.id, rowId)
+    if (known === undefined) {
+      runtime.bots.memory.whenUndoneKnown(bot.id, () =>
+        runtime.notifyBotsChanged({ botIds: [bot.id], kinds: ['lookAround'] })
+      )
+    }
+    undone = known === true
+  }
   return {
     setting,
     last: state.last ? { ...state.last, undone } : null,
@@ -49,7 +59,7 @@ export const BOT_TIDY_UP_METHODS = [
     name: 'bots.tidyUp.get',
     permission: 'workspace',
     params: BotTidyUpAct,
-    handler: async (params, context) => ({ tidyUp: await botTidyUpView(context, params.botId) })
+    handler: (params, context) => ({ tidyUp: botTidyUpView(context, params.botId) })
   }),
   defineMethod({
     name: 'bots.tidyUp.now',
@@ -79,7 +89,7 @@ export const BOT_TIDY_UP_METHODS = [
         botHomeFolder(bot),
         params.rowId
       )
-      return { undone, tidyUp: await botTidyUpView(context, bot.id) }
+      return { undone, tidyUp: botTidyUpView(context, bot.id) }
     }
   })
 ]
