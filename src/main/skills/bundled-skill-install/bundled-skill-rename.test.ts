@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -59,6 +59,20 @@ describe('bundled skill rename', () => {
     const again = await previewBundledSkillInstall(input)
     expect(again.skills.flatMap((skill) => skill.ops).every((op) => op.kind === 'keep')).toBe(true)
     expect(await read(unselected)).toBe(NEW_TEXT)
+  })
+
+  it('retires a former name beside a current copy without writing into that copy', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.claude, NEW_TEXT)
+    await writeCopy(former(home.claude), FORMER_TEXT)
+    await chmod(home.claude, 0o555)
+    try {
+      await previewAndInstall({ ...serviceInput(home, { installedOnly: true }), sources: [SOURCE] })
+    } finally {
+      await chmod(home.claude, 0o755)
+    }
+    expect(await snapshot(home.claude)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+    expect(await snapshot(former(home.claude))).toBe('missing')
   })
 
   it('updates a former agent-only copy without adding shared or other agent installations', async () => {

@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { sameBundledSkillObserved } from './bundled-skill-plan-identity'
 import type {
   BundledSkillCleanup,
@@ -13,7 +14,7 @@ import {
   isBundledSkillAutoUpdateOp
 } from '../../../shared/skills/bundled/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
-import { classifyBundledSkillPath } from './bundled-skill-classification'
+import { classifyBundledSkillPath, isShippedBundledSkillFile } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 import { buildBundledSkillPlan, type BundledSkillPlanInput } from './bundled-skill-plan'
 import {
@@ -67,11 +68,45 @@ function backupFor(run: SkillRun): string {
   return bundledSkillBackupPath(run.input.destination.homeDirectory, run.entry.name)
 }
 
+/** A lone replaced SKILL.md is backed up under its own name, like a folder copy's. */
+function fileBackupFor(run: SkillRun): string {
+  return join(backupFor(run), 'SKILL.md')
+}
+
 async function settleCleanup(run: SkillRun, cleanup: BundledSkillCleanup) {
   await requireUnchanged(run, cleanup.path, cleanup.observed)
   await (cleanup.action === 'delete'
     ? removeBundledSkillSibling(run.input.filesystem, cleanup.path)
-    : backUpBundledSkillPath(run.input.filesystem, cleanup.path, backupFor(run)))
+    : backUpBundledSkillPath(
+        run.input.filesystem,
+        cleanup.path,
+        cleanup.observed.kind === 'file' ? fileBackupFor(run) : backupFor(run)
+      ))
+}
+
+/** The replaced SKILL.md held edits that could not be backed up; they stay at `path`. */
+class BundledSkillStrandedError extends Error {
+  constructor(
+    readonly path: string,
+    readonly code: string
+  ) {
+    super(`bundled-skill-stranded: ${path}`)
+  }
+}
+
+/** Keep bytes an editor wrote between the last check and the rename by re-hashing the replaced file. */
+async function settleReplacedFile(run: SkillRun, old: string): Promise<string | undefined> {
+  const { filesystem } = run.input
+  try {
+    if (await isShippedBundledSkillFile(filesystem, old, run.source, run.entry.digest)) {
+      // A shipped leftover is the next plan's delete cleanup if this fails.
+      await removeBundledSkillSibling(filesystem, old).catch(() => undefined)
+      return undefined
+    }
+    return await backUpBundledSkillPath(filesystem, old, fileBackupFor(run))
+  } catch (error) {
+    throw new BundledSkillStrandedError(old, filesystemErrorCode(error))
+  }
 }
 
 function requireLinkTarget(op: BundledSkillOp): string {
@@ -105,9 +140,16 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
       await requireUnchanged(run, op.path, op.observed)
       await filesystem.createLink(requireLinkTarget(op), op.path)
       return undefined
-    case 'update':
-      await updateBundledSkillFile(filesystem, op.path, run.source.text, verify)
-      return undefined
+    case 'update': {
+      // Retiring a former name beside a current copy needs no write inside the folder.
+      if (op.observed.kind === 'folder' && op.observed.skillDigest === run.entry.digest) {
+        await requireUnchanged(run, op.path, op.observed)
+        return undefined
+      }
+      const old = await updateBundledSkillFile(filesystem, op.path, run.source.text, verify)
+      // The new SKILL.md is in; an edit that cannot be preserved surfaces as a stranded failure.
+      return old ? settleReplacedFile(run, old) : undefined
+    }
     case 'replace': {
       const backupPath = backupFor(run)
       await replaceBundledSkillPath(
@@ -168,16 +210,25 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
               ...(backupPath ? { backupPath } : {})
             }),
             (error: unknown): BundledSkillOpOutcome =>
-              error instanceof BundledSkillChangedError
-                ? { path: op.path, kind: op.kind, status: 'changed' as const }
-                : {
+              error instanceof BundledSkillStrandedError
+                ? {
                     path: op.path,
                     kind: op.kind,
-                    status: 'failed' as const,
-                    error: filesystemErrorCode(error)
+                    status: 'failed',
+                    error: error.code,
+                    strandedPath: error.path
                   }
+                : error instanceof BundledSkillChangedError
+                  ? { path: op.path, kind: op.kind, status: 'changed' as const }
+                  : {
+                      path: op.path,
+                      kind: op.kind,
+                      status: 'failed' as const,
+                      error: filesystemErrorCode(error)
+                    }
           )
-    statuses.set(op.path, outcome.status)
+    // A stranded replaced file still means the new SKILL.md is in place for dependent links.
+    statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
     ops.push(outcome)
   }
   if (

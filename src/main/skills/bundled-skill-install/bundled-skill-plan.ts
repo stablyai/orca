@@ -126,7 +126,7 @@ async function planTarget(
     context.digest,
     root,
     folderClass === 'absent',
-    folderClass === 'current' || folderClass === 'released' ? path : undefined
+    observed.kind === 'folder' ? path : undefined
   )
   const base = { path, role: root.role, agents: root.agents, observed }
   const leave = (reason: NonNullable<BundledSkillOp['reason']>, replaceable: boolean) =>

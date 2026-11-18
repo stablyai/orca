@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import {
   access,
   chmod,
+  link,
   lstat,
   mkdir,
   readFile,
@@ -43,6 +44,8 @@ export type BundledSkillFilesystem = {
   writeFolder(path: string, files: readonly { path: string; text: string }[]): Promise<void>
   /** Creates a new file (never overwrites), mode 0644. */
   writeFile(path: string, text: string): Promise<void>
+  /** Hard-links a file; rejects where the filesystem has no hard links. */
+  linkFile(existing: string, newPath: string): Promise<void>
   /** Creates a private backup directory (0700 on POSIX), tightening existing permissions. */
   ensureDirectory(path: string): Promise<void>
   rename(source: string, target: string): Promise<void>
@@ -140,6 +143,7 @@ export const nativeBundledSkillFilesystem: BundledSkillFilesystem = {
     }
   },
   writeFile: (path, text) => writeFile(path, text, { mode: 0o644, flag: 'wx' }),
+  linkFile: (existing, newPath) => link(existing, newPath),
   ensureDirectory: async (path) => {
     await mkdir(path, { recursive: true, mode: 0o700 })
     if (process.platform !== 'win32') {

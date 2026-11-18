@@ -114,28 +114,42 @@ export async function putBundledSkillFolder(
   }
 }
 
-const FILE_STAGE = /^\.SKILL\.md\.orca-stage-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u
+const FILE_SIBLING = /^\.SKILL\.md\.orca-(stage|old)-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u
 
-/** Exactly the name updateBundledSkillFile writes, so a user's look-alike file is never hidden or deleted. */
-export function isBundledSkillFileStage(entryName: string): boolean {
-  return FILE_STAGE.test(entryName)
+/** Exactly the names updateBundledSkillFile writes, so a user's look-alike file is never hidden or deleted. */
+export function bundledSkillFileSiblingKind(entryName: string): 'stage' | 'old' | null {
+  const kind = FILE_SIBLING.exec(entryName)?.[1]
+  return kind === 'stage' || kind === 'old' ? kind : null
 }
 
-/** Replaces only SKILL.md, by an atomic rename within the folder; every other entry is the user's and stays untouched. */
+/**
+ * Replaces only SKILL.md, by an atomic rename within the folder; every other entry is the user's
+ * and stays untouched. Returns a hard link to the replaced bytes so the caller can keep an edit
+ * that raced the rename; undefined where the filesystem cannot hard-link.
+ */
 export async function updateBundledSkillFile(
   filesystem: BundledSkillFilesystem,
   folder: string,
   text: string,
   verify: () => Promise<boolean>
-): Promise<void> {
+): Promise<string | undefined> {
   const target = join(folder, SKILL_FILE)
   const staged = siblingPath(target, BUNDLED_SKILL_STAGE_MARKER)
+  let old: string | undefined = siblingPath(target, BUNDLED_SKILL_OLD_MARKER)
   try {
     await filesystem.writeFile(staged, text)
+    old = await filesystem.linkFile(target, old).then(
+      () => old,
+      () => undefined
+    )
     await requireUnchanged(verify, folder)
     await filesystem.rename(staged, target)
+    return old
   } catch (error) {
     await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
+    if (old) {
+      await removeBundledSkillSibling(filesystem, old).catch(() => undefined)
+    }
     throw error
   }
 }

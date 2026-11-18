@@ -14,9 +14,12 @@ import type {
 } from '../../shared/skills/bundled/bundled-skill-plan'
 import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
 import {
+  BUNDLED_SKILL_FILE_IN_USE_TEXT,
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
-  summarizeBundledSkillOutcomes
+  isBundledSkillFileInUse,
+  summarizeBundledSkillOutcomes,
+  summarizeBundledSkillPlan
 } from '../../shared/skills/bundled/bundled-skill-summary'
 import {
   isSkillInstallProviderId,
@@ -138,7 +141,9 @@ function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
     case 'skipped':
       return 'Skipped: the shared copy it depends on did not land.'
     case 'failed':
-      return `Failed: ${op.error ?? 'unknown error'}`
+      return isBundledSkillFileInUse(op)
+        ? BUNDLED_SKILL_FILE_IN_USE_TEXT
+        : `Failed: ${op.error ?? 'unknown error'}`
   }
 }
 
@@ -236,7 +241,9 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
               ...forceHint,
               '',
               `Plan digest: ${plan.planDigest}`,
-              `Rerun without --dry-run to ${verb} now.`
+              summarizeBundledSkillPlan(plan).hasWork
+                ? `Rerun without --dry-run to ${verb} now.`
+                : `Nothing to ${verb}.`
             ].join('\n')
       )
       return

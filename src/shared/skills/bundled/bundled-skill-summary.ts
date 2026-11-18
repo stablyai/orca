@@ -5,6 +5,7 @@ import {
   type BundledSkillLeaveReason,
   type BundledSkillOp,
   type BundledSkillOpKind,
+  type BundledSkillOpOutcome,
   type BundledSkillOutcome,
   type BundledSkillPlan,
   type BundledSkillPlanEntry
@@ -232,6 +233,18 @@ export type BundledSkillOutcomeText =
   | 'Needs attention'
 
 // Leaving another owner’s folder is reported without failure.
+const FILE_IN_USE_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+/** Windows refuses to replace a SKILL.md another program holds open or that is marked read-only. */
+export function isBundledSkillFileInUse(
+  op: Pick<BundledSkillOpOutcome, 'kind' | 'status' | 'error'>
+): boolean {
+  return op.kind === 'update' && op.status === 'failed' && FILE_IN_USE_CODES.has(op.error ?? '')
+}
+
+export const BUNDLED_SKILL_FILE_IN_USE_TEXT =
+  'SKILL.md is open in another program or marked read-only, so it was not changed. Close it or clear read-only, then update again.'
+
 const DONE_TEXT: Readonly<Record<BundledSkillOpKind, BundledSkillOutcomeText | null>> = {
   keep: null,
   leave: null,

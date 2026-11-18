@@ -4,7 +4,7 @@ import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundle
 import { isOsMetadataSkillEntryName } from '../package-archive/skill-package-identity'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { bundledSkillTreeSignature } from './bundled-skill-tree-signature'
-import { isBundledSkillFileStage } from './bundled-skill-folder-swap'
+import { bundledSkillFileSiblingKind } from './bundled-skill-folder-swap'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
 export type BundledSkillFolderClass = 'absent' | 'current' | 'released' | 'edited' | 'other'
@@ -62,6 +62,18 @@ async function observeTree(
   }
 }
 
+/** Whether a lone SKILL.md file holds bytes some Orca build shipped, so deleting it loses nothing. */
+export async function isShippedBundledSkillFile(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  source: BundledSkillSource,
+  currentDigest: string
+): Promise<boolean> {
+  const bytes = await filesystem.readFile(path, MAX_SKILL_BYTES)
+  const digest = bytes ? bundledSkillTextDigest(bytes) : null
+  return digest !== null && (digest === currentDigest || source.releasedDigests.includes(digest))
+}
+
 /** Planning and execution share this observation shape so race checks compare like with like. */
 export async function classifyBundledSkillPath(
   filesystem: BundledSkillFilesystem,
@@ -96,13 +108,13 @@ export async function classifyBundledSkillPath(
   if (!listing) {
     return classified('other', { kind: 'unreadable' })
   }
-  // Only a plain file is OS-authored or Orca's own update stage; a folder or link wearing the name is content.
+  // Only a plain file is OS-authored or Orca's own update sibling; a folder or link wearing the name is content.
   const entries = listing
     .filter(
       (entry) =>
         !(
           entry.kind === 'file' &&
-          (isOsMetadataSkillEntryName(entry.name) || isBundledSkillFileStage(entry.name))
+          (isOsMetadataSkillEntryName(entry.name) || bundledSkillFileSiblingKind(entry.name))
         )
     )
     .map((entry) => `${entry.name}:${entry.kind}`)
