@@ -22,7 +22,9 @@ import {
   glabRepoExecOptions
 } from '../projects/gitlab-project-ref-resolution'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
-import type { ProjectRef } from '../projects/project-ref-parser'
+import { parseGitLabProjectRefCandidate, type ProjectRef } from '../projects/project-ref-parser'
+import { readRemoteUrl } from '../../git/remotes/remote-url-probe'
+import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
 import { encodedProject } from '../projects/project-path-encoding'
 import {
   hasHostedReviewLocalGitOptions,
@@ -49,8 +51,35 @@ export async function getProjectSlug(
   options: HostedReviewExecutionOptions = {}
 ): Promise<ProjectRef | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  if (await originCannotBeGitLab(repoPath, connectionId, localGitArgs[0])) {
+    return null
+  }
   const knownHosts = await getGlabKnownHosts(connectionId, localGitArgs[0])
   return getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
+}
+
+/** Ask glab for its signed-in hosts only when origin could be a GitLab project. */
+async function originCannotBeGitLab(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  localGitOptions: HostedReviewLocalGitOptions | undefined
+): Promise<boolean> {
+  try {
+    const remoteUrl = await readRemoteUrl(
+      {
+        repoPath,
+        connectionId,
+        ...(localGitOptions?.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions?.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
+      },
+      'origin'
+    )
+    // SSH repos are read on their host; keep the existing path for them.
+    return remoteUrl !== null && parseGitLabProjectRefCandidate(remoteUrl) === null
+  } catch (error) {
+    // Transient and SSH failures go to the project-ref read below, which classifies them.
+    return isStableMissingGitRemoteError(error)
+  }
 }
 
 /** Failures and confirmed absence return null. */
