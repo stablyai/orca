@@ -28,7 +28,8 @@ import {
 export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
-  queuedAt: number
+  /** Null when this client did not make the send and nothing dates it. */
+  queuedAt: number | null
   phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
@@ -244,7 +245,9 @@ export function projectStructuredAgentSessionMessageRows(
           timestamp: entry.queuedAt,
           blocks: entry.body.blocks,
           ...(entry.afterSequence !== undefined
-            ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
+            ? {
+                journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt ?? 0 }
+              }
             : {}),
           ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
         }

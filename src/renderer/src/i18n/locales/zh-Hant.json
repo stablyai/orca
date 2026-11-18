@@ -164,7 +164,8 @@
         "peerCheckFailed": "Orca 無法向 WSL 主機詢問此電腦上的另一個 Orca 是否仍在使用該主機：{{detail}}",
         "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}",
         "installLockWait_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後接手。",
-        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。"
+        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。",
+        "installLockWaitHolderGone": "此發行版中的另一個 Orca 安裝已停止。Orca 將在幾秒內接手。"
       }
     },
     "agentSummary": {
@@ -1934,7 +1935,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未設定專案位置"
+        "locationNotSet": "尚未設定專案位置",
+        "hostLocalGitProject": "此專案沒有相符的 Git 遠端儲存庫",
+        "hostLocalFolderProject": "資料夾專案無法連結到其他主機"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",
@@ -5463,8 +5466,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "關閉",
           "64c71cf7b9": "Orca 尚未在這台電腦上安裝任何技能。",
-          "0900db719a": "— 已斷開連線",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "本機",
           "3677ae58e7": "Orca 透過連結安裝的技能。可重新安裝、還原至較早版本，或移除技能。",
           "44d118a8f7": "由 Orca 安裝",
@@ -5498,8 +5499,6 @@
           "a4dfd33095": "一個工作區",
           "c779621aa0": "全域技能",
           "63cc9e31fe": "目的地",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已斷開連線",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "本機",
           "b8a0b706ad": "機器"
@@ -6084,6 +6083,7 @@
           "removeDescriptionSsh": "此操作僅將 {{name}} 從 Orca 中移除。檔案仍保留在 {{host}} 上 — 重新新增該 SSH 主機即可恢復。",
           "removeDescriptionLocal": "此操作僅將 {{name}} 從 Orca 中移除。檔案仍保留在您的磁碟上。",
           "removeDescriptionVmRecipe": "這會從 Orca 中移除 {{name}}。其 VM 配方決定是否永久刪除環境及其檔案。",
+          "linkedWorkspaceWarning_other": "此專案中的 {{count}} 個工作區也會從 Orca 中移除。",
           "openTerminalWarning_other": "此專案中開啟的 {{count}} 個終端機將會關閉。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
@@ -19067,6 +19067,7 @@
         "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
         "historyUnusable": "無法載入此聊天。",
         "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+        "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
         "savedByNewerOrca": "這些聊天由更新版本的 Orca 儲存。",
         "updateOrcaToKeepUsing": "請更新 Orca 以繼續使用這些聊天。",
         "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 儲存。",
@@ -19256,6 +19257,7 @@
         "availableAfterSessionStarts": "工作階段開始後可用。",
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
+          "none": "無",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -20318,7 +20320,11 @@
         "turnDiffsTitle": "回合差異",
         "turnDiffsCopy": "在回覆下方顯示每個回合變更的檔案及行數。",
         "turnDiffsSearchChangedFiles": "已變更檔案",
-        "turnDiffsSearchEdits": "編輯"
+        "turnDiffsSearchEdits": "編輯",
+        "promptSuggestionsTitle": "建議的提示詞",
+        "promptSuggestionsCopy": "Claude 回覆後，它對你下一則訊息的猜測會顯示在空白的訊息框中。按 Tab 即可使用。每次猜測都是一次額外請求，會計入你的 Claude 用量。",
+        "promptSuggestionsSearchNext": "下一個提示詞",
+        "promptSuggestionsSearchGhost": "幽靈文字"
       },
       "voice": {
         "dictationLanguage": {
@@ -23317,10 +23323,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
-    "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
-    "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
-    "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
-    "catalogUnresolved": "尚未載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogEmpty": "{{agent}} 沒有可用模型。",
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
@@ -23339,6 +23341,7 @@
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",
     "workspaceStartupFailed": "無法啟動 {{agent}}。請檢查此設定中的引數並重試。",
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
+    "effortDefault": "預設",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
   },

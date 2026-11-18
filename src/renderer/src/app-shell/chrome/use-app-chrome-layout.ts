@@ -11,7 +11,7 @@ import { selectActiveTerminalChromeState } from './active-terminal-chrome-select
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
-} from '../../components/terminal/background-terminal-worktree-mount'
+} from '../../components/terminal/workspace-mounting/background-terminal-worktree-mount'
 
 export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 

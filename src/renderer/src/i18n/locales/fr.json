@@ -1739,7 +1739,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Emplacement du projet non défini"
+        "locationNotSet": "Emplacement du projet non défini",
+        "hostLocalGitProject": "Ce projet n'a pas de dépôt Git distant correspondant",
+        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",
@@ -5377,8 +5379,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fermer",
           "64c71cf7b9": "Orca n'a encore installé aucun skill sur cette machine.",
-          "0900db719a": "— déconnecté",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Cet ordinateur",
           "3677ae58e7": "Skills installés par Orca depuis un lien. Réinstallez-les, revenez à une version antérieure ou supprimez-les.",
           "44d118a8f7": "Installés par Orca",
@@ -5413,8 +5413,6 @@
           "a4dfd33095": "Un seul espace de travail",
           "c779621aa0": "Skills globaux",
           "63cc9e31fe": "Destination",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— déconnecté",
           "0785d0a503": "— mise à jour requise",
           "8562dd1e6e": "Cet ordinateur",
           "b8a0b706ad": "Machine"
@@ -6069,6 +6067,9 @@
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
           "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "linkedWorkspaceWarning_one": "{{count}} espace de travail de ce projet sera aussi retiré d'Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
           "openTerminalWarning_one": "{{count}} terminal ouvert dans ce projet sera fermé.",
           "openTerminalWarning_other": "{{count}} terminaux ouverts dans ce projet seront fermés.",
           "openTerminalWarning_many": "{{count}} terminaux ouverts dans ce projet seront fermés."
@@ -16783,7 +16784,7 @@
           "documentPathCopied": "Copié",
           "workspaceFileChipLabel": "Fichier d'espace de travail",
           "previewMenuControl": "Options d'aperçu",
-          "openSourceControl": "Fichier open source",
+          "openSourceControl": "Ouvrir le fichier source",
           "openExternallyControl": "Ouvrir avec l'application par défaut",
           "copyDocumentRelativePathControl": "Copier le chemin relatif",
           "openExternallyUnknownHostError": "Impossible d'ouvrir '{{value0}}' : l'hôte qui le possède n'est plus connu.",
@@ -19313,6 +19314,7 @@
         "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
         "historyUnusable": "Impossible de charger ce chat.",
         "historyUnavailable": "Orca n'a pas pu ouvrir l'historique de ce chat pour le moment.",
+        "savedInOtherFolder": "Cette conversation a été enregistrée dans un autre dossier.",
         "savedByNewerOrca": "Les chats ont été enregistrés par une version plus récente d'Orca.",
         "updateOrcaToKeepUsing": "Mettez à jour Orca pour continuer à les utiliser.",
         "chatSavedByNewerOrca": "Ce chat a été enregistré par une version plus récente d'Orca.",
@@ -19443,6 +19445,7 @@
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
         "optionUpdateFailed": "Impossible de mettre à jour l'option",
         "optionValue": {
+          "none": "Aucun",
           "fast": "Rapide",
           "minimal": "Minimal",
           "low": "Basse",
@@ -20196,18 +20199,13 @@
         "effortApplyFailed": "Impossible d’appliquer l’effort {{value}}."
       },
       "usageLimitActions": {
-        "continueNow": "Continuer maintenant",
-        "leadIn": "Continuez cette conversation sans attendre :",
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
         "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",
-        "openSetting": "Reprendre automatiquement à la réinitialisation des limites",
-        "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
-        "scheduled": "Orca reprendra ce chat à {{time}}.",
-        "cancel": "Ne pas reprendre"
+        "scheduled": "Orca reprendra ce chat à {{time}}."
       },
       "settings": "Paramètres du chat",
       "textAttachmentPreview": {
@@ -20768,7 +20766,11 @@
         "turnDiffsTitle": "Différences des tours",
         "turnDiffsCopy": "Affiche sous la réponse les fichiers modifiés à chaque tour, avec les nombres de lignes.",
         "turnDiffsSearchChangedFiles": "fichiers modifiés",
-        "turnDiffsSearchEdits": "modifications"
+        "turnDiffsSearchEdits": "modifications",
+        "promptSuggestionsTitle": "Prompts suggérés",
+        "promptSuggestionsCopy": "Après une réponse de Claude, sa suggestion pour votre prochain message s’affiche dans la zone de message vide. Appuyez sur Tab pour l’utiliser. Chaque suggestion est une requête supplémentaire qui compte dans votre utilisation de Claude.",
+        "promptSuggestionsSearchNext": "prochain prompt",
+        "promptSuggestionsSearchGhost": "texte fantôme"
       },
       "voice": {
         "dictationLanguage": {
@@ -21489,7 +21491,8 @@
         "installLockWait_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
         "installLockWaitGivesUp_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minute.",
         "installLockWaitGivesUp_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
-        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes."
+        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
+        "installLockWaitHolderGone": "L’autre installation d’Orca dans cette distribution s’est arrêtée. Orca prend le relais dans quelques secondes."
       }
     },
     "agentSummary": {
@@ -23575,10 +23578,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
-    "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
-    "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
-    "catalogInstall": "Installez {{agent}} sur cet hôte pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
-    "catalogUnresolved": "Les modèles de {{agent}} ne sont pas chargés. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
     "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
     "search": "Rechercher, p. ex. Opus 5.5…",
     "configure": "Configurer {{agent}}",
@@ -23597,6 +23596,7 @@
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers",
     "workspaceStartupFailed": "Impossible de démarrer {{agent}}. Vérifiez les arguments de cette configuration et réessayez.",
     "sameAsTextDefault": "Identique au modèle par défaut · {{value0}}",
+    "effortDefault": "Par défaut",
     "chatChoicesNote": "Les choix de modèle ou d’effort de {{agent}} sans option CLI s’appliquent aux chats.",
     "composedChoicesNote": "Les choix d’effort et de vitesse de {{agent}} sont inclus dans l’argument du modèle."
   },

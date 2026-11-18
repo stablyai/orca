@@ -24,6 +24,7 @@ import { sayNativeChatSessionOptionTranslated as say } from './native-chat-sessi
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
 import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { orderEffortLevels } from '../../../../../../../shared/agent-session/options/view/effort-level-order'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -239,7 +240,10 @@ function OptionRow(props: {
         // Why -ml-2: a wrapped group lines its first label up under the row's.
         className={cn('flex-wrap', layout !== 'inline' && '-ml-2')}
       >
-        {descriptor.kind.choices.map((choice) => (
+        {(descriptor.category === 'thought_level'
+          ? orderEffortLevels(descriptor.kind.choices)
+          : descriptor.kind.choices
+        ).map((choice) => (
           <LevelSegment key={choice.value} optionId={descriptor.id} choice={choice} />
         ))}
       </ToggleGroup>

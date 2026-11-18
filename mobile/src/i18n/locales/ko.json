@@ -18,6 +18,10 @@
       "title": "계정",
       "useReset": "재설정권 사용",
       "weeklyWindow": "7일"
+    },
+    "claude": {
+      "usageSignInLabel": "다시 로그인",
+      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
     }
   },
   "agentHistory": {
@@ -395,6 +399,7 @@
       "otherDevice": "다른 기기"
     },
     "sessionOptionCopy": {
+      "none": "없음",
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
       "chooseInAgentPicker": "에이전트 선택기에서 선택…",
       "effort": "추론 수준",
@@ -665,6 +670,10 @@
       "mark": "분기 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "분기: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "인용",
+      "hint": "선택한 텍스트를 메시지에 인용으로 추가합니다"
     }
   },
   "common": {
@@ -687,7 +696,9 @@
     "retry": "다시 시도",
     "save": "저장",
     "settings": "설정",
-    "unknown": "알 수 없음"
+    "unknown": "알 수 없음",
+    "waitingForHost": "호스트 대기 중…",
+    "connectingToHost": "호스트에 연결 중…"
   },
   "components": {
     "accountsSnapshot": {
@@ -697,7 +708,7 @@
       "copyFailed": "복사하지 못함",
       "copyPrompt": "프롬프트 복사",
       "statusUnreadable": "이 호스트의 상태를 읽을 수 없습니다. 다시 시도 중…",
-      "updateRequired": "휴대폰에서 에이전트를 시작하려면 컴퓨터의 Orca를 업데이트하세요."
+      "updateRequired": "휴대폰에서 에이전트를 시작하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "agentSpinner": {
       "monitoring": "백그라운드 작업 모니터링 중",
@@ -828,7 +839,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "미전송 메모 {{count}}개",
       "unsentNotes_other": "미전송 메모 {{count}}개",
-      "updateRequired": "컴퓨터에서 Orca를 업데이트하세요"
+      "updateRequired": "이 호스트에서 Orca를 업데이트하세요"
     },
     "diffReviewFileSummary": {
       "changed": "변경됨",
@@ -892,7 +903,7 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "Orca 데스크톱 업데이트"
+      "updateDesktop": "이 호스트의 Orca 업데이트"
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
@@ -958,23 +969,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
-      "desktopTooOldBody": "페어링된 데스크톱 앱의 버전이 오래되어 현재 Orca 모바일 앱과 호환되지 않습니다. 컴퓨터에서 Orca를 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "desktopTooOldBody": "이 호스트의 Orca 버전이 오래되어 현재 Orca 모바일 앱과 호환되지 않습니다. 이 호스트에서 Orca를 업데이트한 후 다시 연결하세요.",
       "getVersion": "Orca {{version}} 받기",
-      "mobileTooOldAppStore": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
-      "mobileTooOldGooglePlay": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
-      "mobileTooOldGitHubReleases": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "mobileTooOldAppStore": "이 호스트에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "mobileTooOldGooglePlay": "이 호스트에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "mobileTooOldGitHubReleases": "이 호스트에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
       "openAppStore": "App Store 열기",
       "openGooglePlay": "Google Play 열기",
       "openGitHubReleases": "GitHub Releases 열기",
       "refreshRecoveryNote": "이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
-      "refreshWorkspaceBody": "이 호스트용으로 캐시된 워크스페이스가 데스크톱에서 요구하는 버전보다 오래되었습니다. 이 호스트에 다시 연결하여 최신 버전을 다운로드하세요.",
+      "refreshWorkspaceBody": "이 호스트용으로 캐시된 워크스페이스가 호스트에서 요구하는 버전보다 오래되었습니다. 이 호스트에 다시 연결하여 최신 버전을 다운로드하세요.",
       "refreshWorkspaceTitle": "모바일 워크스페이스 새로고침",
-      "updateDesktopTitle": "컴퓨터의 Orca 업데이트",
+      "updateDesktopTitle": "이 호스트의 Orca 업데이트",
       "updateMobileTitle": "Orca 모바일 업데이트",
       "updateRecoveryNote": "이미 업데이트하셨습니까? 호스트 화면으로 돌아가 연결을 새로고침하세요. 이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
-      "workspaceNeedsUpdateAppStore": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
-      "workspaceNeedsUpdateGooglePlay": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
-      "workspaceNeedsUpdateGitHubReleases": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요."
+      "workspaceNeedsUpdateAppStore": "이 호스트의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "workspaceNeedsUpdateGooglePlay": "이 호스트의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "workspaceNeedsUpdateGitHubReleases": "이 호스트의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요."
     },
     "richMarkdownEditor": {
       "imageUrl": "이미지 URL",
@@ -1385,12 +1396,10 @@
     "fileExplorerPanel": {
       "backToSession": "세션으로 돌아가기",
       "closeFiles": "파일 닫기",
-      "connecting": "데스크톱에 연결 중…",
       "emptyState": "찾은 파일이 없습니다.",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
-      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
-      "waiting": "데스크톱 대기 중…"
+      "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시"
     },
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
@@ -1420,8 +1429,7 @@
     "fileMediaPreview": {
       "downloading": "{{total}} 중 {{bytes}} 다운로드 중",
       "loadFailed": "미디어를 불러올 수 없습니다.",
-      "loading": "미디어 로드 중…",
-      "waiting": "데스크톱 대기 중…"
+      "loading": "미디어 로드 중…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "SSH 연결을 확인하지 못했습니다. 호스트에 다시 연결한 후 다시 시도하세요."
@@ -1460,8 +1468,7 @@
       "saveArtifact": "터미널 아티팩트 저장",
       "saveFailed": "파일을 저장할 수 없습니다.",
       "stay": "계속 편집",
-      "title": "미리보기",
-      "waiting": "데스크톱 대기 중…"
+      "title": "미리보기"
     },
     "filePreviewSourceText": {
       "previewLabel": "파일 미리보기",
@@ -1693,13 +1700,13 @@
       "localWindows": "로컬 Windows",
       "projectOrder": "프로젝트 순서",
       "projects": "프로젝트",
-      "savingToDesktop": "데스크톱에 저장 중",
+      "savingToDesktop": "호스트에 저장 중",
       "show": "표시",
       "showProperties": "속성 표시",
       "sortBy": "정렬 기준",
       "syncedAcrossDevices": "기기 간 동기화됨",
       "thisComputer": "이 컴퓨터",
-      "waitingForDesktop": "아직 데스크톱 응답을 기다리는 중",
+      "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
     },
     "workspaceRenameSheet": {
@@ -2083,7 +2090,7 @@
       "committedChangesFailed": "커밋된 변경 사항을 불러오지 못했습니다.",
       "committedChangesUnavailable": "커밋된 변경 사항을 사용할 수 없습니다.",
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
-      "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 데스크톱의 Orca를 업데이트하세요.",
+      "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 이 호스트의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
@@ -2332,7 +2339,7 @@
       "emptyPrompt": "이 작업에 저장된 프롬프트가 비어 있습니다. 컴퓨터에서 소스 제어 AI 설정을 업데이트하세요.",
       "loadFailed": "사용 가능한 에이전트를 로드하지 못했습니다.",
       "promptNotSent": "에이전트가 시작되었지만 프롬프트가 전송되지 않았습니다.",
-      "updateRequired": "휴대폰에서 에이전트를 시작하려면 컴퓨터의 Orca를 업데이트하세요."
+      "updateRequired": "휴대폰에서 에이전트를 시작하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "prSidebarState": {
       "loadFailed": "PR을 로드할 수 없습니다."
@@ -2422,7 +2429,6 @@
     },
     "sheets": {
       "browser": "브라우저",
-      "browserUpdateRequired": "모바일 브라우저 스트리밍을 사용하려면 데스크톱 업데이트가 필요합니다.",
       "chat": "채팅",
       "copyAllAndLeave": "모두 복사 후 나가기",
       "copyDraftsFailed": "초안을 복사하지 못했습니다.",
@@ -2518,7 +2524,6 @@
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",
       "browserCreateFailed": "브라우저를 만들지 못했습니다.",
       "browserUnavailable": "아직 브라우저 페이지를 사용할 수 없습니다.",
-      "browserUpdateRequired": "모바일 브라우저 스트리밍을 사용하려면 데스크톱 업데이트가 필요합니다.",
       "invalidUrl": "올바른 URL을 입력하세요.",
       "noteCreateFailed": "Markdown 노트를 만들지 못했습니다.",
       "untitledNoteCreateFailed": "제목 없는 Markdown 노트를 만들 수 없습니다."
@@ -2529,26 +2534,21 @@
       "noteAdded": "메모 추가됨",
       "notesCopied": "메모 복사됨",
       "saveNoteFailed": "메모를 저장하지 못했습니다.",
-      "saveNotesFailed": "리뷰 메모를 저장하지 못했습니다.",
-      "waitingForDesktop": "데스크톱 대기 중…"
+      "saveNotesFailed": "리뷰 메모를 저장하지 못했습니다."
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "리뷰를 저장하지 못했습니다.",
-      "saveStateFailed": "리뷰 상태를 저장하지 못했습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "saveStateFailed": "리뷰 상태를 저장하지 못했습니다."
     },
     "useDiffReviewController": {
       "loadFailed": "리뷰를 로드할 수 없습니다.",
-      "missingWorktree": "워크트리가 없습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "missingWorktree": "워크트리가 없습니다."
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "차이점을 로드할 수 없습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "loadFailed": "차이점을 로드할 수 없습니다."
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "소스 제어 작업에 실패했습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "actionFailed": "소스 제어 작업에 실패했습니다."
     },
     "useDiffReviewInteractions": {
       "openFailed": "세션에서 열 수 없습니다."
@@ -2562,8 +2562,7 @@
       "notesSentWithWarning": "리뷰 메모를 전송했습니다. {{warning}}",
       "promptNotSent": "에이전트가 시작되었지만 메모가 전송되지 않았습니다. '메모 복사'로 복사한 후 붙여넣으세요.",
       "sendFailed": "메모를 전송하지 못했습니다.",
-      "startingAgent": "에이전트 시작 중…",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "startingAgent": "에이전트 시작 중…"
     },
     "useImageAttachment": {
       "attachFailed": "첨부 실패",
@@ -2602,8 +2601,7 @@
       "presetsUnavailable": "에이전트 프리셋 사용 불가"
     },
     "usePrAiTriage": {
-      "launchFailed": "에이전트를 실행하지 못했습니다.",
-      "waitingForDesktop": "데스크톱 대기 중…"
+      "launchFailed": "에이전트를 실행하지 못했습니다."
     },
     "usePrCommentActions": {
       "actionFailed": "댓글 작업에 실패했습니다."
@@ -2671,6 +2669,7 @@
       "conversationCleared": "이 대화는 지워졌습니다.",
       "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
       "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+      "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
       "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
       "historyUnusable": "이 채팅을 불러올 수 없습니다.",
       "hostReconciling": "Orca가 다시 시작된 후 이 채팅을 아직 확인하고 있습니다.",
@@ -2853,7 +2852,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "알림 전송 설정을 불러오지 못했습니다. 다시 시도하려면 이 화면을 다시 여세요.",
       "saveFailed": "알림 전송 설정을 저장하지 못했습니다. 다시 시도하세요.",
-      "updateDesktopHint": "이 휴대폰에서 알림을 받으려면 업데이트된 데스크톱을 페어링하세요."
+      "updateDesktopHint": "이 휴대폰에서 알림을 받으려면 업데이트된 호스트를 페어링하세요."
     },
     "notificationDisplayTest": {
       "accepted": "Orca 푸시 서비스에서 요청을 접수했습니다. 알림이 도착했는지 확인하세요.",
@@ -2942,8 +2941,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "리베이스할 기본 브랜치가 없습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "noBaseBranch": "리베이스할 기본 브랜치가 없습니다."
     },
     "actions": {
       "checkingReviewStatus": "리뷰 상태를 확인 중입니다.",
@@ -3106,8 +3104,7 @@
       "loadFilesFailed": "커밋 파일을 불러올 수 없습니다.",
       "noCommits": "커밋이 없습니다.",
       "noFileChanges": "파일 변경 사항 없음",
-      "retryFiles": "커밋 파일 다시 불러오기",
-      "waitingForDesktop": "데스크톱 응답 대기 중…"
+      "retryFiles": "커밋 파일 다시 불러오기"
     },
     "gitStatus": {
       "conflicts": "충돌"
@@ -3172,10 +3169,8 @@
       "changes": "변경 사항"
     },
     "loaders": {
-      "connectingToDesktop": "데스크톱에 연결 중…",
       "loadFailed": "소스 제어를 로드할 수 없습니다.",
-      "updateDesktop": "모바일에서 소스 제어를 사용하려면 Orca 데스크톱 앱을 업데이트하세요.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "updateDesktop": "모바일에서 소스 제어를 사용하려면 이 호스트의 Orca를 업데이트하세요."
     },
     "modals": {
       "currentBranch": "현재",
@@ -3360,8 +3355,7 @@
       "windowsBatchUnsafeArguments": "{{label}}은(는) 여러 줄 프롬프트를 인수로 받을 수 없는 Windows 배치 스크립트를 통해 실행됩니다. 설정에서 에이전트 실행 파일을 지정하거나, Orca가 프롬프트를 stdin으로 보내도록 {prompt}가 없는 사용자 지정 명령을 사용하세요."
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "에이전트를 실행하지 못했습니다.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "launchFailed": "에이전트를 실행하지 못했습니다."
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "커밋 메시지를 생성하지 못했습니다."
@@ -3369,8 +3363,7 @@
     "useMobileGitRequests": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",
       "branchUnavailable": "브랜치 상태를 확인할 수 없습니다.",
-      "commitFailed": "커밋 실패",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
+      "commitFailed": "커밋 실패"
     },
     "conflictActions": {
       "needsNewerHost": "휴대전화에서 병합 충돌을 해결하려면 이 워크스페이스를 실행 중인 컴퓨터의 Orca를 업데이트하세요.",
@@ -3387,15 +3380,7 @@
       "confirmGitHubRebase": "PR #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
       "confirmGitLabMerge": "병합 요청 #{{number}}을(를) 병합하시겠습니까?",
       "confirmGitLabSquash": "병합 요청 #{{number}}의 커밋을 합쳐서 병합하시겠습니까?",
-      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?",
-      "merged": "병합됨",
-      "closed": "닫힘",
-      "conflicts": "충돌",
-      "behind": "뒤처짐",
-      "blocked": "차단됨",
-      "checksPending": "검사 대기 중",
-      "ableToMerge": "병합 가능",
-      "unknown": "알 수 없음"
+      "confirmGitLabRebase": "병합 요청 #{{number}}을(를) 리베이스한 후 병합하시겠습니까?"
     },
     "pagination": {
       "pageUnreachable": "{{page}}페이지는 GitHub 검색에서 반환할 수 있는 범위를 벗어났습니다.",
@@ -3571,8 +3556,8 @@
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
       "connectLinearTitle": "Linear 계정 연결",
       "jiraStatusFailed": "Jira 상태를 읽지 못했습니다.",
-      "updateDesktopMessage": "모바일 작업 화면을 사용하려면 더 최신 버전의 데스크톱 런타임이 필요합니다.",
-      "updateDesktopTitle": "Orca 데스크톱 업데이트"
+      "updateDesktopMessage": "모바일 작업 화면을 사용하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다.",
+      "updateDesktopTitle": "이 호스트의 Orca 업데이트"
     },
     "options": {
       "all": "모두",
@@ -3800,7 +3785,6 @@
       "title": "작업"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, 예: project = ABC AND statusCategory != Done",
       "projectPlaceholder": "프로젝트 보기 검색…",
       "providerPlaceholder": "{{provider}} 작업 검색…"
     },
@@ -4240,6 +4224,116 @@
               "3f1422adc1": "평일 {{time}}",
               "cc71e252ba": "매주 {{day}} {{time}}"
             }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "이슈 검색 또는 JQL 입력, 예: project = ABC",
+        "jiraTextMatchesNotice": "텍스트 일치 결과를 표시합니다. Jira에서 이 검색을 JQL로 실행할 수 없습니다."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "취소됨"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "병합됨",
+              "4f976d3450": "닫힘",
+              "1f8eb81c0e": "승인 필요",
+              "c606463dc2": "변경 요청됨",
+              "7e8bbe3cd7": "충돌",
+              "b169f943e1": "준비되면 병합",
+              "autoMergeOn": "자동 병합 켜짐",
+              "039c072f94": "뒤처짐",
+              "bf5e4c6c92": "차단됨",
+              "87fa36ac83": "체크 실패",
+              "4e2507176b": "체크 대기 중",
+              "def355ff38": "병합 가능",
+              "f958920f3a": "확인 중"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "병합됨",
+                  "88d044c42f": "닫힘",
+                  "96b05e374c": "충돌",
+                  "5105b0e584": "승인 필요",
+                  "893a999c8c": "변경 요청됨",
+                  "01ab632a21": "해결되지 않은 스레드",
+                  "bf628700f6": "파이프라인이 성공해야 합니다",
+                  "65c847ad1e": "검사 대기 중",
+                  "382c70faeb": "뒤에",
+                  "195917574e": "확인 중",
+                  "4ecc0d90ee": "막힌",
+                  "49ac4fec10": "검사 실패",
+                  "04a3015a12": "병합 가능"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira에서 이 JQL 쿼리를 실행할 수 없습니다. 구문을 확인하고 다시 시도하세요."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}}에서 사용량 없음",
+            "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
+            "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
+            "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
+            "f8b8dbed85": "사용량 사용할 수 없음",
+            "e2c6a4f917": "Grok을 실행하여 새로 고침",
+            "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
+            "0d8d7cfe15": "Claude 세션 대기 중",
+            "claude": {
+              "waiting": {
+                "label": "Claude 실행 시 업데이트됨",
+                "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
+              }
+            },
+            "1804cd8c3f": "로그인 새로 고치는 중",
+            "bf2e739f18": "로그인 사용할 수 없음",
+            "f8f0f9d8cc": "네트워크 문제",
+            "minimax": {
+              "expired": {
+                "label": "로그인이 만료되었습니다",
+                "apiKey": "MiniMax API 키가 만료되었습니다. 설정에서 교체하세요.",
+                "cookie": "MiniMax 세션 쿠키가 만료되었습니다. 설정에서 교체하세요."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "로그인 만료",
+                "message": "Orca가 실행 중인 컴퓨터의 터미널에서 cursor-agent login을 실행한 뒤 사용량을 다시 시도하세요."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "구독 없음"
+              }
+            },
+            "7ad719c4bf": "제한됨",
+            "e740f92596": "새로 고침 실패",
+            "2c35eca8d4": "사용량을 가져올 수 없습니다.",
+            "d1b7f509ac": "Orca를 실행하는 컴퓨터의 터미널에서 grok을 실행하고 시작될 때까지 기다리세요. 메시지가 표시되면 로그인을 완료한 후 사용량 조회를 다시 시도하세요. 채팅 메시지를 보낼 필요는 없습니다.",
+            "a37e8c15d4": "Orca를 실행하는 컴퓨터의 터미널에서 kimi를 실행하고 시작될 때까지 기다린 후 사용량 조회를 다시 시도하세요.",
+            "3d3c9c0c1f": "실시간 Claude 터미널이 자격 증명을 교체한 후 Claude 사용량이 새로 고쳐집니다.",
+            "42fdd4da1d": "Claude 로그인을 새로 고치는 중입니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다.",
+            "c06c1d215d": "네트워크 요청 실패로 Claude 사용량을 새로 고칠 수 없습니다.",
+            "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
+            "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
+            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. Agent 세션은 여전히 로그인되어 있을 수 있습니다."
           }
         }
       }

@@ -3,7 +3,7 @@ import { Settings } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
   DropdownMenuItem,
   DropdownMenuShortcut,
@@ -25,6 +25,7 @@ import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
 import { useCreateRowScroller } from './use-create-row-scroller'
+import { isPressedPointer, useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
 import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
 
 const EMPTY_LAYOUT: NewTabMenuLayout = { order: [], hidden: [] }
@@ -64,6 +65,7 @@ export function TabBarCreateRow({
   const [keyboardNav, setKeyboardNav] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
+  const hoverTooltip = useCreateRowHoverTooltip()
   const { scrollerRef, scroller, attachScroller, overflow, revealIcon } = useCreateRowScroller()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
@@ -110,6 +112,15 @@ export function TabBarCreateRow({
     )
   }
   const activeItem = visible[active]
+  // The pointer may enter the row first or already be inside it; either way the keyboard label
+  // it replaces counts as just shown, so the next icon opens without a cold wait. A press or drag
+  // is not hover intent and gets no head start.
+  const handOffToPointer = (pressed: boolean): void => {
+    if (keyboardActive && !pressed) {
+      hoverTooltip.startSkipWindow()
+    }
+    setKeyboardNav(false)
+  }
   const recorderHasFocus = (): boolean =>
     document.activeElement?.matches('[data-shortcut-recorder-active]') ?? false
   const customizeLabel = t('tabBar.createRow.customize', 'Customize')
@@ -132,9 +143,9 @@ export function TabBarCreateRow({
             'tabBar.createRow.label',
             'New tab actions. Left and Right choose; the last one customizes this row.'
           )}
-          onPointerEnter={() => {
+          onPointerEnter={(event) => {
             pointerInside.current = true
-            setKeyboardNav(false)
+            handOffToPointer(isPressedPointer(event))
           }}
           onPointerLeave={() => {
             pointerInside.current = false
@@ -149,6 +160,7 @@ export function TabBarCreateRow({
           onKeyDown={(event) => {
             setKeyboardNav(true)
             setHoveredIndex(null)
+            hoverTooltip.hover(null)
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
               setActiveIndex(Math.max(0, active - 1))
@@ -167,16 +179,19 @@ export function TabBarCreateRow({
           <TabBarCreateRowIcons
             items={visible}
             highlightedIndex={keyboardActive ? active : hoveredIndex}
+            tooltipIndex={keyboardActive ? active : hoverTooltip.tooltipIndex}
             overflow={overflow}
             scrollerRef={scrollerRef}
             attachScroller={attachScroller}
             onEscape={closeMenu}
-            onHover={(index) => {
+            onHover={(index, pressed) => {
               if (index !== null) {
-                setKeyboardNav(false)
+                handOffToPointer(pressed ?? false)
               }
               setHoveredIndex(index)
+              hoverTooltip.hover(index, pressed)
             }}
+            onPress={hoverTooltip.press}
             onRun={run}
           />
           <Tooltip open={keyboardActive && active === customizeIndex}>

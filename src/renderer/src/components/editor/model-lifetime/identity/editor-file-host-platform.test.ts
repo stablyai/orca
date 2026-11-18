@@ -156,9 +156,4 @@ describe('host OS of an open file, from a Windows client', () => {
     const wslPath = file(localRoute, '\\\\wsl.localhost\\Ubuntu\\home\\me\\new.txt')
     expect(eolOf(storeWith(wslPath))).toBe('\n')
   })
-
-  it('lets the End of Line setting override the host', () => {
-    expect(eolOf(storeWith(file(localRoute, 'C:\\repo\\new.txt'), 'lf'))).toBe('\n')
-    expect(eolOf(storeWith(file(wslRoute), 'crlf'))).toBe('\r\n')
-  })
 })

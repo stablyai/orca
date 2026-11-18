@@ -4,7 +4,7 @@ import '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layo
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   ORCA_LAYOUT_OWNER_IS_MAIN: true

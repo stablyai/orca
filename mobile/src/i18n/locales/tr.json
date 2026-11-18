@@ -18,6 +18,10 @@
       "title": "Hesaplar",
       "useReset": "Sıfırlama hakkını kullan",
       "weeklyWindow": "7g"
+    },
+    "claude": {
+      "usageSignInLabel": "Yeniden oturum aç",
+      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin."
     }
   },
   "agentHistory": {
@@ -395,6 +399,7 @@
       "otherDevice": "başka bir cihaz"
     },
     "sessionOptionCopy": {
+      "none": "Yok",
       "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
       "chooseInAgentPicker": "Ajan seçicisinden seç…",
       "effort": "Çaba",
@@ -669,6 +674,10 @@
       "mark": "Çatal ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Çatal: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Alıntıla",
+      "hint": "Seçili metni mesaja alıntı olarak ekler"
     }
   },
   "common": {
@@ -691,7 +700,9 @@
     "retry": "Yeniden dene",
     "save": "Kaydet",
     "settings": "Ayarlar",
-    "unknown": "Bilinmiyor"
+    "unknown": "Bilinmiyor",
+    "waitingForHost": "Sunucu bekleniyor…",
+    "connectingToHost": "Sunucuya bağlanılıyor…"
   },
   "components": {
     "accountsSnapshot": {
@@ -701,7 +712,7 @@
       "copyFailed": "Kopyalanamadı",
       "copyPrompt": "İstemi kopyala",
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Yeniden deneniyor…",
-      "updateRequired": "Telefonunuzdan ajan başlatmak için bilgisayarınızdaki Orca'yı güncelleyin."
+      "updateRequired": "Telefonunuzdan ajan başlatmak için bu sunucudaki Orca'yı güncelleyin."
     },
     "agentSpinner": {
       "monitoring": "Arka plan görevleri izleniyor",
@@ -832,7 +843,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "{{count}} gönderilmemiş not",
       "unsentNotes_other": "{{count}} gönderilmemiş not",
-      "updateRequired": "Bilgisayarınızdaki Orca'yı güncelleyin"
+      "updateRequired": "Bu sunucudaki Orca'yı güncelleyin"
     },
     "diffReviewFileSummary": {
       "changed": "Değişti",
@@ -896,7 +907,7 @@
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne Jira sitenizi ekleyin, ardından yeniden kontrol edin.",
       "connectOnDesktop": "Bilgisayarınızda Jira'yı bağlayın",
       "credentialUnreadable": "Jira bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
-      "updateDesktop": "Bilgisayarınızdaki Orca'yı güncelleyin"
+      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin"
     },
     "markdownBlocks": {
       "copyCode": "Kodu kopyala",
@@ -962,23 +973,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
-      "desktopTooOldBody": "Eşleştirilmiş bu masaüstü uygulaması, mevcut Orca Mobile sürümünüz için çok eski. Bilgisayarınızdaki Orca'yı güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "desktopTooOldBody": "Bu sunucudaki Orca, mevcut Orca Mobile sürümünüz için çok eski. Bu sunucudaki Orca'yı güncelleyin, ardından bağlanmayı tekrar deneyin.",
       "getVersion": "Orca {{version}} Sürümünü İndir",
-      "mobileTooOldAppStore": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
-      "mobileTooOldGooglePlay": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
-      "mobileTooOldGitHubReleases": "Bu masaüstü uygulaması, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "mobileTooOldAppStore": "Bu sunucu, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "mobileTooOldGooglePlay": "Bu sunucu, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "mobileTooOldGitHubReleases": "Bu sunucu, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
       "openAppStore": "App Store'u Aç",
       "openGooglePlay": "Google Play'i Aç",
       "openGitHubReleases": "GitHub Releases Sayfasını Aç",
       "refreshRecoveryNote": "Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
-      "refreshWorkspaceBody": "Bu sunucu için önbelleğe alınan çalışma alanı, masaüstü uygulamasının beklediğinden daha eski. Güncel sürümü indirmek için bu sunucuya yeniden bağlanın.",
+      "refreshWorkspaceBody": "Bu sunucu için önbelleğe alınan çalışma alanı, sunucunun beklediğinden daha eski. Güncel sürümü indirmek için bu sunucuya yeniden bağlanın.",
       "refreshWorkspaceTitle": "Mobil çalışma alanını yenileyin",
-      "updateDesktopTitle": "Bilgisayarınızdaki Orca'yı güncelleyin",
+      "updateDesktopTitle": "Bu sunucudaki Orca'yı güncelleyin",
       "updateMobileTitle": "Orca Mobile'ı güncelleyin",
       "updateRecoveryNote": "Zaten güncellediniz mi? Sunucular bölümüne dönüp bağlantıyı yenileyin. Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
-      "workspaceNeedsUpdateAppStore": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
-      "workspaceNeedsUpdateGooglePlay": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
-      "workspaceNeedsUpdateGitHubReleases": "Bu masaüstü uygulamasının mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin."
+      "workspaceNeedsUpdateAppStore": "Bu sunucunun mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı App Store üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "workspaceNeedsUpdateGooglePlay": "Bu sunucunun mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı Google Play üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+      "workspaceNeedsUpdateGitHubReleases": "Bu sunucunun mobil çalışma alanı, Orca Mobile'ın daha yeni bir sürümünü gerektiriyor. Orca Mobile'ı GitHub Releases üzerinden güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin."
     },
     "richMarkdownEditor": {
       "imageUrl": "Görsel URL'si",
@@ -1389,12 +1400,10 @@
     "fileExplorerPanel": {
       "backToSession": "Oturuma dön",
       "closeFiles": "Dosyaları kapat",
-      "connecting": "Masaüstüne bağlanılıyor…",
       "emptyState": "Dosya bulunamadı",
       "loadFailed": "Dosyalar yüklenemedi",
       "title": "Dosyalar",
-      "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
-      "waiting": "Masaüstü bekleniyor…"
+      "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
@@ -1424,8 +1433,7 @@
     "fileMediaPreview": {
       "downloading": "İndiriliyor: {{bytes}} / {{total}}",
       "loadFailed": "Medya yüklenemedi",
-      "loading": "Medya yükleniyor…",
-      "waiting": "Masaüstü bekleniyor…"
+      "loading": "Medya yükleniyor…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "SSH bağlantısı doğrulanamadı. Sunucuya yeniden bağlanın ve tekrar deneyin."
@@ -1464,8 +1472,7 @@
       "saveArtifact": "Terminal çıktısını kaydet",
       "saveFailed": "Dosya kaydedilemedi",
       "stay": "Kal",
-      "title": "Önizleme",
-      "waiting": "Masaüstü bekleniyor…"
+      "title": "Önizleme"
     },
     "filePreviewSourceText": {
       "previewLabel": "Dosya önizlemesi",
@@ -1697,13 +1704,13 @@
       "localWindows": "Yerel Windows",
       "projectOrder": "Proje sırası",
       "projects": "Projeler",
-      "savingToDesktop": "Bilgisayara kaydediliyor",
+      "savingToDesktop": "Sunucuya kaydediliyor",
       "show": "Göster",
       "showProperties": "Özellikleri göster",
       "sortBy": "Sıralama ölçütü",
       "syncedAcrossDevices": "Cihazlarınız arasında eşitlenir",
       "thisComputer": "Bu bilgisayar",
-      "waitingForDesktop": "Bilgisayardan hâlâ yanıt bekleniyor",
+      "waitingForDesktop": "Sunucudan hâlâ yanıt bekleniyor",
       "workspaceOptions": "Çalışma alanı seçenekleri"
     },
     "workspaceRenameSheet": {
@@ -2087,7 +2094,7 @@
       "committedChangesFailed": "Commit'lenmiş değişiklikler yüklenemedi",
       "committedChangesUnavailable": "Commit'lenmiş değişiklikler kullanılamıyor",
       "committedDiffUnavailable": "Commit'lenmiş diff kullanılamıyor",
-      "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için Orca masaüstü uygulamasını güncelleyin.",
+      "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için bu sunucudaki Orca'yı güncelleyin.",
       "diffLoadFailed": "Diff yüklenemedi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi"
     },
@@ -2336,7 +2343,7 @@
       "emptyPrompt": "Bu işlem için kaydedilen istem boş. Bilgisayarınızda Kaynak Kontrolü AI ayarlarını güncelleyin.",
       "loadFailed": "Kullanılabilir ajanlar yüklenemedi.",
       "promptNotSent": "Ajan başlatıldı, ancak istem gönderilemedi.",
-      "updateRequired": "Telefonunuzdan ajan başlatmak için bilgisayarınızdaki Orca'yı güncelleyin."
+      "updateRequired": "Telefonunuzdan ajan başlatmak için bu sunucudaki Orca'yı güncelleyin."
     },
     "prSidebarState": {
       "loadFailed": "Pull request yüklenemedi"
@@ -2426,7 +2433,6 @@
     },
     "sheets": {
       "browser": "Tarayıcı",
-      "browserUpdateRequired": "Mobil tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "chat": "Sohbet",
       "copyAllAndLeave": "Tümünü Kopyala ve Ayrıl",
       "copyDraftsFailed": "Taslaklar kopyalanamadı",
@@ -2522,7 +2528,6 @@
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
       "browserCreateFailed": "Tarayıcı oluşturulamadı",
       "browserUnavailable": "Tarayıcı sayfası henüz kullanılamıyor.",
-      "browserUpdateRequired": "Mobilde tarayıcı yayını için masaüstü uygulaması güncellenmeli",
       "invalidUrl": "Geçerli bir URL girin",
       "noteCreateFailed": "Markdown notu oluşturulamadı",
       "untitledNoteCreateFailed": "Başlıksız Markdown notu oluşturulamadı"
@@ -2533,26 +2538,21 @@
       "noteAdded": "Not eklendi",
       "notesCopied": "Notlar kopyalandı",
       "saveNoteFailed": "Not kaydedilemedi",
-      "saveNotesFailed": "İnceleme notları kaydedilemedi",
-      "waitingForDesktop": "Masaüstü uygulaması bekleniyor…"
+      "saveNotesFailed": "İnceleme notları kaydedilemedi"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "İnceleme kaydedilemedi",
-      "saveStateFailed": "İnceleme durumu kaydedilemedi",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "saveStateFailed": "İnceleme durumu kaydedilemedi"
     },
     "useDiffReviewController": {
       "loadFailed": "İnceleme yüklenemedi",
-      "missingWorktree": "Worktree eksik",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "missingWorktree": "Worktree eksik"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "Diff yüklenemedi",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "loadFailed": "Diff yüklenemedi"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi"
     },
     "useDiffReviewInteractions": {
       "openFailed": "Oturumda açılamadı"
@@ -2566,8 +2566,7 @@
       "notesSentWithWarning": "İnceleme notları gönderildi. {{warning}}",
       "promptNotSent": "Ajan başlatıldı, ancak notlar gönderilemedi. Yapıştırmak için Notları Kopyala seçeneğini kullanın.",
       "sendFailed": "Notlar gönderilemedi",
-      "startingAgent": "Ajan başlatılıyor…",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "startingAgent": "Ajan başlatılıyor…"
     },
     "useImageAttachment": {
       "attachFailed": "Eklenemedi",
@@ -2606,8 +2605,7 @@
       "presetsUnavailable": "Ajan Ön Ayarları Kullanılamıyor"
     },
     "usePrAiTriage": {
-      "launchFailed": "Ajan başlatılamadı",
-      "waitingForDesktop": "Masaüstü uygulaması bekleniyor…"
+      "launchFailed": "Ajan başlatılamadı"
     },
     "usePrCommentActions": {
       "actionFailed": "Yorum işlemi gerçekleştirilemedi"
@@ -2675,6 +2673,7 @@
       "conversationCleared": "Bu konuşma temizlendi.",
       "goalsUnsupported": "Bu ajan hedefleri desteklemiyor.",
       "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+      "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
       "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
       "historyUnusable": "Bu sohbet yüklenemiyor.",
       "hostReconciling": "Orca yeniden başlatma sonrasında bu sohbeti hâlâ kontrol ediyor.",
@@ -2857,7 +2856,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "İletim ayarları yüklenemedi. Yeniden denemek için bu ekranı tekrar açın.",
       "saveFailed": "İletim ayarları kaydedilemedi. Yeniden deneyin.",
-      "updateDesktopHint": "Bu telefonda bildirim almak için güncel bir masaüstü uygulamasıyla eşleştirin."
+      "updateDesktopHint": "Bu telefonda bildirim almak için güncel bir sunucuyla eşleştirin."
     },
     "notificationDisplayTest": {
       "accepted": "Orca'nın anlık bildirim hizmeti tarafından kabul edildi. Bildirimin gelip gelmediğini kontrol edin.",
@@ -2946,8 +2945,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "Üzerine rebase edilecek temel branch yok",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "noBaseBranch": "Üzerine rebase edilecek temel branch yok"
     },
     "actions": {
       "checkingReviewStatus": "İnceleme durumu kontrol ediliyor.",
@@ -3110,8 +3108,7 @@
       "loadFilesFailed": "Commit dosyaları yüklenemedi",
       "noCommits": "Commit yok.",
       "noFileChanges": "Dosya değişikliği yok",
-      "retryFiles": "Commit dosyalarını yüklemeyi yeniden dene",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "retryFiles": "Commit dosyalarını yüklemeyi yeniden dene"
     },
     "gitStatus": {
       "conflicts": "Conflict'ler"
@@ -3176,10 +3173,8 @@
       "changes": "Değişiklikler"
     },
     "loaders": {
-      "connectingToDesktop": "Masaüstüne bağlanılıyor…",
       "loadFailed": "Kaynak kontrolü yüklenemedi",
-      "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için Orca masaüstü uygulamasını güncelleyin.",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için bu sunucudaki Orca'yı güncelleyin."
     },
     "modals": {
       "currentBranch": "geçerli",
@@ -3364,8 +3359,7 @@
       "windowsBatchUnsafeArguments": "{{label}}, çok satırlı istemi argüman olarak alamayan bir Windows toplu iş betiği üzerinden çalışır. Ayarlar bölümünde ajanın yürütülebilir dosyasını belirtin veya Orca'nın istemi stdin üzerinden göndermesi için {prompt} içermeyen özel bir komut kullanın."
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "Ajan başlatılamadı",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "launchFailed": "Ajan başlatılamadı"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit mesajı oluşturulamadı"
@@ -3373,8 +3367,7 @@
     "useMobileGitRequests": {
       "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",
       "branchUnavailable": "Branch durumu alınamadı",
-      "commitFailed": "Commit'lenemedi",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
+      "commitFailed": "Commit'lenemedi"
     },
     "conflictActions": {
       "needsNewerHost": "Birleştirme çakışmalarını telefonunuzdan çözmek için bu çalışma alanının çalıştığı bilgisayarda Orca’yı güncelleyin.",
@@ -3391,15 +3384,7 @@
       "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
       "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
       "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
-      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
-      "merged": "Birleştirildi",
-      "closed": "Kapatıldı",
-      "conflicts": "Çakışmalar",
-      "behind": "Geride",
-      "blocked": "Engellendi",
-      "checksPending": "Kontroller bekleniyor",
-      "ableToMerge": "Birleştirilebilir",
-      "unknown": "Bilinmiyor"
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?"
     },
     "pagination": {
       "pageUnreachable": "{{page}}. sayfa GitHub aramasının döndürebileceği aralığın dışında.",
@@ -3575,8 +3560,8 @@
       "connectLinearMessage": "Doğrudan Görevler bölümünden size atanan Linear sorunlarına göz atın ve üzerlerinde çalışmaya başlayın.",
       "connectLinearTitle": "Linear hesabınızı bağlayın",
       "jiraStatusFailed": "Jira durumu okunamadı",
-      "updateDesktopMessage": "Bu mobil Görevler görünümü için masaüstü çalışma zamanının daha yeni bir sürümü gerekiyor.",
-      "updateDesktopTitle": "Orca masaüstü uygulamasını güncelleyin"
+      "updateDesktopMessage": "Bu mobil Görevler görünümü için bu sunucuda Orca'nın daha yeni bir sürümü gerekiyor.",
+      "updateDesktopTitle": "Bu sunucudaki Orca'yı güncelleyin"
     },
     "options": {
       "all": "Tümü",
@@ -3804,7 +3789,6 @@
       "title": "Görevler"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, ör. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Proje görünümünde ara…",
       "providerPlaceholder": "{{provider}} görevlerinde ara…"
     },
@@ -4244,6 +4228,116 @@
               "3f1422adc1": "Hafta içi {{time}}'de",
               "cc71e252ba": "{{day}} günleri {{time}}'de"
             }
+          }
+        }
+      },
+      "TaskPage": {
+        "99c2755218": "Sorun arayın veya JQL girin; ör. project = ABC",
+        "jiraTextMatchesNotice": "Metin eşleşmeleri gösteriliyor. Jira bu aramayı JQL olarak çalıştıramadı."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "İptal Edildi"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Merge Edildi",
+              "4f976d3450": "Kapatıldı",
+              "1f8eb81c0e": "Onay gerekli",
+              "c606463dc2": "Değişiklik istendi",
+              "7e8bbe3cd7": "Conflict'ler",
+              "b169f943e1": "Hazır olunca merge et",
+              "autoMergeOn": "Otomatik merge açık",
+              "039c072f94": "Geride",
+              "bf5e4c6c92": "Engellendi",
+              "87fa36ac83": "Kontroller başarısız oldu",
+              "4e2507176b": "Kontroller bekliyor",
+              "def355ff38": "Merge edilebilir",
+              "f958920f3a": "Kontrol ediliyor"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Merge edildi",
+                  "88d044c42f": "Kapatıldı",
+                  "96b05e374c": "Conflict'ler",
+                  "5105b0e584": "Onay gerekiyor",
+                  "893a999c8c": "Değişiklik istendi",
+                  "01ab632a21": "Çözülmemiş konular",
+                  "bf628700f6": "Kontroller geçmeli",
+                  "65c847ad1e": "Kontroller bekliyor",
+                  "382c70faeb": "Geride",
+                  "195917574e": "Kontrol ediliyor",
+                  "4ecc0d90ee": "Engellendi",
+                  "49ac4fec10": "Kontroller başarısız",
+                  "04a3015a12": "Merge edilebilir"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Bu JQL sorgusu Jira'da çalıştırılamadı. Sözdizimini kontrol edip yeniden deneyin."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "{{server}} sunucusundan kullanım bilgisi yok",
+            "remoteOwnerNotConfigured": "{{server}} üzerinde yapılandırılmadı",
+            "claudeUnknownOnHost": "{{server}} sunucusundan Claude kullanım bilgisi alınamıyor. Orada oturum açılmamış olabilir veya API anahtarıyla faturalandırma kullanılıyor olabilir.",
+            "remoteOwnerSignInSavedHere": "Oturum açma bilgileri yalnızca bu bilgisayarda kayıtlı.",
+            "f8b8dbed85": "Kullanım bilgisi yok",
+            "e2c6a4f917": "Yenilemek için Grok'u çalıştırın",
+            "f90b3d7a16": "Yenilemek için Kimi'yi çalıştırın",
+            "0d8d7cfe15": "Claude oturumu bekleniyor",
+            "claude": {
+              "waiting": {
+                "label": "Claude çalıştığında güncellenir",
+                "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
+              }
+            },
+            "1804cd8c3f": "Oturum açma yenileniyor",
+            "bf2e739f18": "Oturum açma kullanılamıyor",
+            "f8f0f9d8cc": "Ağ sorunu",
+            "minimax": {
+              "expired": {
+                "label": "Oturum açma süresi doldu",
+                "apiKey": "MiniMax API anahtarının süresi doldu. Ayarlar bölümünde değiştirin.",
+                "cookie": "MiniMax oturum çerezinin süresi doldu. Ayarlar bölümünde değiştirin."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Oturum açma süresi doldu",
+                "message": "Orca'nın çalıştığı bilgisayarda bir terminalde cursor-agent login komutunu çalıştırın, ardından kullanım bilgilerini yeniden yüklemeyi deneyin."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Abonelik yok"
+              }
+            },
+            "7ad719c4bf": "Sınırlı",
+            "e740f92596": "Yenileme başarısız oldu",
+            "2c35eca8d4": "Kullanım alınamadı",
+            "d1b7f509ac": "Orca'yı çalıştıran bilgisayarda bir terminalde grok komutunu çalıştırın ve başlamasını bekleyin. İstenirse oturum açmayı tamamlayın, ardından kullanım bilgilerini almayı yeniden deneyin. Sohbet mesajı göndermenize gerek yok.",
+            "a37e8c15d4": "Orca'yı çalıştıran bilgisayarda bir terminalde kimi'yi çalıştırın, başlamasını bekleyin, ardından kullanımı tekrar deneyin.",
+            "3d3c9c0c1f": "Claude kullanımı, canlı Claude terminali kimlik bilgilerini döndürdükten sonra yenilenecek.",
+            "42fdd4da1d": "Claude oturumu yenileniyor. Ajan oturumları hâlâ açık olabilir.",
+            "c06c1d215d": "Ağ isteği başarısız olduğu için Claude kullanımı yenilenemedi.",
+            "cabdc2a9e0": "Claude oturum açma kimlik bilgileri okunamadı.",
+            "a7517cccb6": "Claude kullanımı şu anda kullanılamıyor.",
+            "8418ec448d": "{{value0}} kullanımı yenilenemedi. Ajan oturumları hâlâ açık olabilir."
           }
         }
       }

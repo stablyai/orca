@@ -1,4 +1,4 @@
-import { useGitHubOperationOwner } from '@/hooks/useGitHubOperationScope'
+import { useGitHubOperationOwner } from '@/lib/work-items/github/useGitHubOperationScope'
 import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
