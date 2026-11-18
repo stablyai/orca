@@ -37,8 +37,9 @@ export function MobileNativeChatPacedProse({
   children: (block: NativeChatBlock, index: number, shown: MobileNativeChatPacedText) => ReactNode
 }): React.JSX.Element {
   const source = useMemo(() => nativeChatProseToMarkdown(blocks), [blocks])
-  const shown = useMobileNativeChatPacedText(rowKey, source, growingBlock?.type === 'text', paced)
-  const drawn = useNativeChatRedrawPace(shown.text, shown.revealing)
+  const streaming = growingBlock?.type === 'text'
+  const shown = useMobileNativeChatPacedText(rowKey, source, streaming, paced)
+  const drawn = useNativeChatRedrawPace(shown.text, streaming || shown.revealing)
   let end = 0
   const rows = blocks.map((block, index) => {
     const text = isTextBlock(block) ? block.text : ''
