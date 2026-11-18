@@ -20647,11 +20647,11 @@
         "runCommandWhenDone": "完成後再執行 /{{command}}。",
         "commandAfterAnswer": "請先回答代理程式的問題或回應核准要求，然後再執行 /{{command}}。",
         "pluginInputRequired": "{{agent}} 已停止，因為「{{plugin}}」外掛正在終端機窗格中等待輸入。請在聊天工作階段中停用此外掛，或在 {{agent}} 終端機中執行任務。",
-        "antigravitySystemNotSignedIn": "Antigravity 尚未登入。请在執行此聊天的计算机上執行 `agy` 进行登入，然后重新傳送訊息。",
-        "claudeEffortInvalid": "Claude 推理强度无效；请選擇 low、medium、high、xhigh 或 max，然后重新傳送。",
-        "forkOriginalLatestOnly": "{{agent}} 只能從原始聊天中的最新回覆建立分支。请開啟該聊天，待最新回覆完成后再從它建立分支。",
-        "forkOriginalLatestOnlyNamed": "{{agent}} 只能從「{{detail}}」中的最新回覆建立分支。请開啟該聊天，待最新回覆完成后再從它建立分支。",
-        "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回复。请開啟原始聊天并從那里建立分支。",
+        "antigravitySystemNotSignedIn": "Antigravity 尚未登入。請在執行此聊天的電腦上執行 `agy` 進行登入，然後重新傳送訊息。",
+        "claudeEffortInvalid": "Claude 推理強度無效；請選擇 low、medium、high、xhigh 或 max，然後重新傳送。",
+        "forkOriginalLatestOnly": "{{agent}} 只能從原始聊天中的最新回覆建立分支。請開啟該聊天，待最新回覆完成後再從它建立分支。",
+        "forkOriginalLatestOnlyNamed": "{{agent}} 只能從「{{detail}}」中的最新回覆建立分支。請開啟該聊天，待最新回覆完成後再從它建立分支。",
+        "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回覆。請開啟原始聊天並從那裡建立分支。",
         "forkOriginalMissingNamed": "{{agent}} 在「{{detail}}」中找不到此回覆，請開啟該聊天並從那裡建立分支。",
         "forkOriginalUnavailable": "{{agent}} 無法在原始聊天中從此回覆建立分支，請開啟原始聊天並從那裡建立分支。",
         "forkOriginalUnavailableNamed": "{{agent}} 無法在「{{detail}}」中從此回覆建立分支，請開啟該聊天並從那裡建立分支。",
@@ -20934,7 +20934,7 @@
         "imageUnavailable": "無法預覽",
         "moreControls": "更多聊天控制項",
         "exitPlanMode": "結束計畫模式",
-        "modelAndEffort": "模型与推理强度",
+        "modelAndEffort": "模型與推理強度",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "permissionAppliesNextMessage": "{{saved}} 從下一條訊息起生效；目前為 {{active}}"
       },
@@ -21209,13 +21209,13 @@
         "allowedByYou": "已由你允許",
         "allowedInTerminal": "已在工作者的終端機中允許",
         "answerFailed": "{{name}}：{{detail}}",
-        "answerInTerminal": "请在工作者的終端機中回答",
-        "answerNotApplied": "{{name}}：回答未送达此提示",
-        "answerWorkerEnded": "{{name}} 已结束，因此此提示已關閉",
+        "answerInTerminal": "請在工作者的終端機中回答",
+        "answerNotApplied": "{{name}}：回答未送達此提示",
+        "answerWorkerEnded": "{{name}} 已結束，因此此提示已關閉",
         "answeredInChat": "已在工作者的聊天中回答",
-        "autoDenied": "已由 Claude 在 2:00 后自动拒絕",
-        "closedUnnamed": "已關閉，未记录回答",
-        "countdown": "如果无人回答，Claude 将在 {{time}} 后自动拒絕。",
+        "autoDenied": "已由 Claude 在 2:00 後自動拒絕",
+        "closedUnnamed": "已關閉，未記錄回答",
+        "countdown": "如果無人回答，Claude 將在 {{time}} 後自動拒絕。",
         "deniedByCoordinator": "已被協調者拒絕",
         "deniedByYou": "已由你拒絕",
         "deniedInTerminal": "已在工作者的終端機中拒絕",
@@ -21685,14 +21685,14 @@
         "at": "于",
         "failingLead": "CI 失敗于",
         "greenLead": "CI 通過于",
-        "hidden": "Orca 将不再显示 CI 结果行",
-        "hide": "不再显示 CI 结果行"
+        "hidden": "Orca 將不再顯示 CI 結果列",
+        "hide": "不再顯示 CI 結果列"
       },
-      "creationChatNotOpened": "你的工作樹已就绪，但聊天未能開啟。请重试以開啟聊天并带上你的訊息。",
+      "creationChatNotOpened": "你的工作樹已就緒，但聊天未能開啟。請重試以開啟聊天並帶上你的訊息。",
       "editDeliveryNotice": "編輯",
-      "explicitChatWslAddHost": "從 Windows 開啟的 WSL 檔案夾中無法使用聊天。请将該發行版新增為 WSL 主機（新增项目 → 新增遠端主機 → 新增 WSL 發行版）后在那里聊天，或在終端機中開啟代理程式。",
-      "explicitChatWslMoveToHost": "從 Windows 開啟的 WSL 檔案夾中無法使用聊天。请在 WSL 主機上執行项目后在那里聊天，或在終端機中開啟代理程式。",
-      "explicitChatWslRunAsHost": "将 {{distro}} 作為主機執行",
+      "explicitChatWslAddHost": "從 Windows 開啟的 WSL 檔案夾中無法使用聊天。請將該發行版新增為 WSL 主機（新增專案 → 新增遠端主機 → 新增 WSL 發行版）後在那裡聊天，或在終端機中開啟代理程式。",
+      "explicitChatWslMoveToHost": "從 Windows 開啟的 WSL 檔案夾中無法使用聊天。請在 WSL 主機上執行專案後在那裡聊天，或在終端機中開啟代理程式。",
+      "explicitChatWslRunAsHost": "將 {{distro}} 作為主機執行",
       "githubPeek": {
         "comments": "{{count}} 則留言",
         "oneComment": "1 則留言",
@@ -22962,20 +22962,20 @@
           "title": "從这里啟動新代理程式"
         },
         "split": {
-          "bodyWithoutShortcut": "右键點擊窗格查看拆分选项。"
+          "bodyWithoutShortcut": "右鍵點擊窗格查看拆分選項。"
         },
         "splitChat": {
-          "body": "按 {terminal.splitRight}，或點擊聊天顶部的拆分按钮，两侧各有独立的标签页。",
-          "bodyWithoutShortcut": "點擊聊天顶部的拆分按钮，两侧各有独立的标签页。"
+          "body": "按 {terminal.splitRight}，或點擊聊天頂部的拆分按鈕，兩側各有獨立的分頁。",
+          "bodyWithoutShortcut": "點擊聊天頂部的拆分按鈕，兩側各有獨立的分頁。"
         }
       },
       "badgeNew": "新功能",
       "projectsCollapseAll": {
         "intro": {
           "action": "知道了",
-          "body": "按 {sidebar.projects.toggleCollapse}、點擊此按钮，或按住 {{modifier}} 點擊任意项目标题。",
-          "bodyWithoutShortcut": "點擊此按钮，或按住 {{modifier}} 點擊任意项目标题。",
-          "title": "一次性折叠所有项目"
+          "body": "按 {sidebar.projects.toggleCollapse}、點擊此按鈕，或按住 {{modifier}} 點擊任意專案標題。",
+          "bodyWithoutShortcut": "點擊此按鈕，或按住 {{modifier}} 點擊任意專案標題。",
+          "title": "一次摺疊所有專案"
         }
       }
     },
@@ -23076,20 +23076,20 @@
     "agentNotes": {
       "activeAgentNeedsPermission": "目前的代理程式需要權限。",
       "activeSubmitFailed": "備註可能已貼上到目前終端機，但 Orca 無法提交它們。",
-      "activeTerminalUnavailable": "開啟此工作樹中的代理程式終端機，然后重新傳送備註。",
-      "approvalUnseen": "{{target}} 代理程式可能正在等待批准。请在本轮结束后再傳送備註。",
-      "empty": "没有可傳送的備註。",
-      "hostUpdateRequired": "请更新 {{target}} 代理程式所在主機上的 Orca 后再傳送備註。",
-      "notAgentSession": "{{target}} 終端機不是可识别的代理程式工作階段。",
-      "notReady": "{{target}} 代理程式尚未准备好接收输入。",
-      "notWritable": "{{target}} 代理程式未接受这些備註。",
-      "notWritableSelection": "{{target}} 代理程式未接受所选内容。",
-      "selectedAgentNeedsPermission": "所选代理程式需要权限。",
-      "selectedSubmitFailed": "備註可能已貼上到所选終端機，但 Orca 無法提交它們。",
-      "selectedTerminalUnavailable": "所选終端機已不可用。",
-      "statusUnverified": "無法验证 {{target}} 代理程式的狀態。",
+      "activeTerminalUnavailable": "開啟此工作樹中的代理程式終端機，然後重新傳送備註。",
+      "approvalUnseen": "{{target}} 代理程式可能正在等待核准。請在本輪結束後再傳送備註。",
+      "empty": "沒有可傳送的備註。",
+      "hostUpdateRequired": "請更新 {{target}} 代理程式所在主機上的 Orca 後再傳送備註。",
+      "notAgentSession": "{{target}} 終端機不是可識別的代理程式工作階段。",
+      "notReady": "{{target}} 代理程式尚未準備好接收輸入。",
+      "notWritable": "{{target}} 代理程式未接受這些備註。",
+      "notWritableSelection": "{{target}} 代理程式未接受所選內容。",
+      "selectedAgentNeedsPermission": "所選代理程式需要權限。",
+      "selectedSubmitFailed": "備註可能已貼上到所選終端機，但 Orca 無法提交它們。",
+      "selectedTerminalUnavailable": "所選終端機已不可用。",
+      "statusUnverified": "無法驗證 {{target}} 代理程式的狀態。",
       "targetActive": "目前",
-      "targetSelected": "所选"
+      "targetSelected": "所選"
     },
     "orchestrationCrew": {
       "asksYou": "向你提問",

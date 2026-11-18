@@ -2294,9 +2294,9 @@
     },
     "gates": {
       "allThreadsResolved": "所有討論串均已解決",
-      "approvals_one": "{{count}} 個批准",
-      "approvals_other": "{{count}} 個批准",
-      "approvedBy": "{{logins}} 已批准",
+      "approvals_one": "{{count}} 個核准",
+      "approvals_other": "{{count}} 個核准",
+      "approvedBy": "{{logins}} 已核准",
       "changesRequested": "要求更改",
       "checksFailing_one": "{{count}} 項檢查失敗",
       "checksFailing_other": "{{count}} 項檢查失敗",
@@ -2316,7 +2316,7 @@
       "conflictsWithBase": "與 {{base}} 存在衝突",
       "fromBots_one": "{{count}} 則來自機器人",
       "fromBots_other": "{{count}} 則來自機器人",
-      "noApprovals": "尚無批准",
+      "noApprovals": "尚無核准",
       "noChecks": "無檢查項",
       "noConflicts": "沒有衝突",
       "noConflictsWithBase": "與 {{base}} 沒有衝突",
@@ -2349,8 +2349,8 @@
     },
     "reviewersSheet": {
       "addReviewer": "新增評審人",
-      "approvals_one": "{{count}} 個批准",
-      "approvals_other": "{{count}} 個批准"
+      "approvals_one": "{{count}} 個核准",
+      "approvals_other": "{{count}} 個核准"
     },
     "screens": {
       "allCount": "全部 {{count}}",
