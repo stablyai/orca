@@ -136,7 +136,7 @@ export class CodexManagedHomeLifecycle {
     if (!trimmed) {
       throw new Error('A Codex home directory path is required.')
     }
-    const resolvedSourceHome = resolve(trimmed)
+    const resolvedSourceHome = resolve(sourceHome)
     let sourceAuthContents: string
     try {
       sourceAuthContents = readFileSync(join(resolvedSourceHome, 'auth.json'), 'utf-8')
