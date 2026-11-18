@@ -14,10 +14,11 @@ import { serveNativeAnnounceVerb } from './accessibility/native-accessibility-an
 import { createNativeMediaVerbServer } from './media-picking/native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './media-picking/native-media-device'
 
-export type NativeDeviceVerb = Exclude<
+type ShellServedVerb = Exclude<
   BridgeNativeVerb,
   'native.storage.read' | 'native.pdf.view' | 'native.image.act' | typeof BRIDGE_STORE_VERB
 >
+export type NativeDeviceVerb = Exclude<ShellServedVerb, 'native.browser.local'>
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
 export function useNativeDeviceVerbs(

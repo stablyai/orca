@@ -22,6 +22,7 @@ import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
+import { useNativeLocalBrowser } from '../platform/native-local-browser'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
@@ -78,6 +79,8 @@ export type MobileWebShellScreenProps = {
   onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
 }
+
+type ShellChainVerb = Exclude<BridgeNativeVerb, 'native.browser.local' | 'native.browser.view'>
 
 // Key the native view by session id so reducer-requested remounts rebuild the WebView and reinstall every fence; the view has no independent reload.
 export function MobileWebShellScreen({
@@ -152,9 +155,10 @@ export function MobileWebShellScreen({
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
-  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+  const serveShellVerb = (verb: ShellChainVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
@@ -170,6 +174,12 @@ export function MobileWebShellScreen({
       console.warn('[web-shell] could not open a URL for the page', { url, error })
     })
   }
+  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+    verb === 'native.browser.local'
+      ? localBrowser.serve(params)
+      : verb === 'native.browser.view'
+        ? localBrowser.serveView(params)
+        : serveShellVerb(verb, params)
 
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {
@@ -372,7 +382,10 @@ export function MobileWebShellScreen({
         ref={bridge.viewRef}
         // Overlays cannot cover the screen beneath; hide their opaque WebView until first paint.
         style={[styles.shellView, overlay && pageFrame !== 'painted' && styles.unpaintedOverlay]}
-        onLayout={pageFold.onShellLayout}
+        onLayout={(event) => {
+          pageFold.onShellLayout(event)
+          localBrowser.onPageLayout(event)
+        }}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
@@ -404,6 +417,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
+      {localBrowser.overlay}
       {overlay ? null : (
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}

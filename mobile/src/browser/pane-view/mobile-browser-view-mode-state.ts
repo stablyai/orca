@@ -3,25 +3,13 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 const BROWSER_VIEW_MODE_STATE_LIMIT = 40
 const browserViewModeByPageKey = new Map<string, MobileBrowserViewMode>()
 
+// The choice lives on the phone: a page opened on the desktop still opens here in mobile view, and the desktop keeps its own.
 export function getInitialMobileBrowserViewMode(
   worktreeId: string,
-  browserPageId: string | null,
-  url = 'about:blank'
+  browserPageId: string | null
 ): MobileBrowserViewMode {
   const pageKey = makeBrowserViewModePageKey(worktreeId, browserPageId)
-  if (!pageKey) {
-    return defaultMobileBrowserViewMode(url)
-  }
-  return browserViewModeByPageKey.get(pageKey) ?? defaultMobileBrowserViewMode(url)
-}
-
-function defaultMobileBrowserViewMode(url: string): MobileBrowserViewMode {
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'file:' && /\.html?$/i.test(parsed.pathname) ? 'mobile' : 'web'
-  } catch {
-    return 'web'
-  }
+  return (pageKey && browserViewModeByPageKey.get(pageKey)) || 'mobile'
 }
 
 export function saveMobileBrowserViewMode(

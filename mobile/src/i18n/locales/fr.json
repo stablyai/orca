@@ -2900,7 +2900,7 @@
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
       "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
-      "phoneBrowserDescription": "Ouvrir dans Safari, Chrome ou un autre navigateur sur ce téléphone.",
+      "phoneBrowserDescription": "Ouvrir dans le navigateur système de ce téléphone.",
       "saveFailed": "Impossible d'enregistrer les préférences du navigateur. Réessayez.",
       "title": "Navigateur"
     },
