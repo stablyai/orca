@@ -202,6 +202,17 @@ describe('Claude prompt event arriving after its turn', () => {
     ).not.toBe('working')
   })
 
+  it('never shows the pane working for an older turn’s prompt replayed after live events', () => {
+    claude({ hook_event_name: 'SessionStart', source: 'startup' })
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'now' })
+    claude({ hook_event_name: 'Stop', prompt_id: SECOND })
+
+    expect(
+      event({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'old' }, true)?.payload
+        ?.state
+    ).not.toBe('working')
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching() {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })

@@ -3,6 +3,7 @@ import type { AgentHookEventPayload } from '../../../listener-event'
 import type { AgentHookSource } from '../../../transport/agent-hook-relay'
 import { normalizeClaudePromptId } from '../../../listener-limits'
 import { readString } from '../../../tool-input-preview'
+import { readFirstString } from '../../../interactive-tool'
 import { withClaudeToolRequestId } from '../../../claude-tool-request-identity'
 
 /** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
@@ -51,7 +52,7 @@ function orderClaudeTurn(
 ): ClaudeTurnOrder | null {
   const passThrough = { eventName, opensTurn: false }
   // Child events share the lead's prompt_id but say nothing about the lead's turn order.
-  if (source !== 'claude' || readString(hookPayload, 'agent_id') !== undefined) {
+  if (source !== 'claude' || readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined) {
     return passThrough
   }
   const isPrompt = eventName === 'UserPromptSubmit'
@@ -112,7 +113,8 @@ function orderClaudeTurn(
   if (isReplay && turns.live) {
     // A replay after live events is older than them; it is recognized but never becomes the current turn.
     turns.replayedTurnIds = [...turns.replayedTurnIds, promptId].slice(-TURN_IDS_PER_SESSION)
-    return { eventName, opensTurn: false }
+    // Its prompt event is an older turn's: settle it as late so it never shows the pane working.
+    return { eventName: isPrompt ? CLAUDE_LATE_PROMPT_SUBMIT_EVENT : eventName, opensTurn: false }
   }
   turns.turnIds = [...turns.turnIds, promptId].slice(-TURN_IDS_PER_SESSION)
   turns.promptArrived = isPrompt

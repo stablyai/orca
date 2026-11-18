@@ -72,11 +72,14 @@ export function withClaudeToolRequestId(
 ): Record<string, unknown> {
   const toolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const fields = readRequestFields(hookPayload)
-  const ended = endedRequests(eventName, toolUseId, fields.toolAgentId, hookPayload, opensTurn)
+  const ended = endedRequests(eventName, toolUseId, fields.toolAgentId, hookPayload)
+  // A new prompt_id is the next turn even when its prompt event has not arrived: no lead request outlives its turn.
   const open =
     ended === 'all'
       ? []
-      : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter((entry) => !ended(entry))
+      : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter(
+          (entry) => !ended(entry) && !(opensTurn && entry.toolAgentId === undefined)
+        )
   if (eventName === 'Elicitation') {
     // An MCP dialog waits on the user too; batches never list it, so only its own result or a boundary ends it.
     addUserWait(open, { ...fields, ...elicitationWait(hookPayload) })
@@ -167,8 +170,7 @@ function endedRequests(
   eventName: unknown,
   toolUseId: string | undefined,
   toolAgentId: string | undefined,
-  hookPayload: Record<string, unknown>,
-  opensTurn: boolean
+  hookPayload: Record<string, unknown>
 ): 'all' | ((entry: ClaudeToolRequest) => boolean) {
   if (
     eventName === 'SessionStart' &&
@@ -197,11 +199,9 @@ function endedRequests(
     return (entry) => isOwnedCall(entry, toolAgentId) && settled.has(entry.toolUseId)
   }
   // A lead's calls never outlive its turn; background children's can. An injected task notification is not a turn.
-  // A new prompt_id is the next turn even when its prompt event has not arrived yet.
   const leadTurnBoundary =
     toolAgentId === undefined &&
-    (opensTurn ||
-      eventName === 'Stop' ||
+    (eventName === 'Stop' ||
       eventName === 'StopFailure' ||
       (eventName === 'UserPromptSubmit' && isExplicitUserPrompt(hookPayload)))
   return (entry) => leadTurnBoundary && entry.toolAgentId === undefined
