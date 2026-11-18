@@ -26,7 +26,7 @@ export function useWorktreeAgentActivation(worktreeId: string, executionHostId?:
 }
 
 /** Open an agent's pane the way its sidebar row does, including before its tab hydrates.
- * Callers inside the card pass revealInSidebar: false; the clicked card is already on screen. */
+ * A row passes revealInSidebar: false: it opens its own card, which is on screen. */
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
