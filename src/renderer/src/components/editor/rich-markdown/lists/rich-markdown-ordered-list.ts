@@ -11,6 +11,7 @@ const paragraphInterrupters = [
 ]
 
 const orderedListMarker = new RegExp(`^\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)]`)
+const orderedListStart = new RegExp(`^\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)]\\s`)
 const lineTerminator = /[\n\r\u2028\u2029]/
 
 /** Linear form of the base's item pattern `^(\s*)(marker)([.)])\s+(.*)$` (no m flag), which
@@ -67,7 +68,7 @@ export const RichMarkdownOrderedList = OrderedList.extend({
     tokenize(src, tokens, lexer) {
       // Why: the base tokenizer scans the full remaining source before rejecting a non-list, and
       // accepts exactly when its first line is an item. Check the marker first: most calls are prose.
-      if (!orderedListMarker.test(src)) {
+      if (!orderedListStart.test(src)) {
         return undefined
       }
       const firstLineEnd = src.indexOf('\n')
