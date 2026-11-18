@@ -3,6 +3,7 @@ import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
 import {
+  UTILITY_WORKER_RELAY_EXPIRED,
   UTILITY_WORKER_RELAY_HOLD_LIMIT_MS,
   UtilityWorkerRelayBudget
 } from './utility-worker-relay-budget'
@@ -76,7 +77,7 @@ function relay(id: number, bytes: Uint8Array, seq?: number): void {
 
 const budget = new UtilityWorkerRelayBudget(relay, (id) => {
   const message = `worker reply waited ${UTILITY_WORKER_RELAY_HOLD_LIMIT_MS / 1000} s for main to consume earlier replies`
-  port.postMessage({ type: 'error', id, error: { name: 'Error', message } })
+  port.postMessage({ type: 'error', id, error: { name: UTILITY_WORKER_RELAY_EXPIRED, message } })
   void workers.get(id)?.terminate()
 })
 

@@ -1,5 +1,7 @@
 /** A reply main can't make room for within this long fails its worker instead of growing main. */
 export const UTILITY_WORKER_RELAY_HOLD_LIMIT_MS = 60_000
+/** Names the failure of a held reply, which says nothing about whether the worker could load. */
+export const UTILITY_WORKER_RELAY_EXPIRED = 'UtilityWorkerRelayExpired'
 
 type Held =
   | { id: number; since: number; bytes: Uint8Array }
@@ -101,8 +103,9 @@ export class UtilityWorkerRelayBudget {
         this.timer = undefined
         const oldest = this.held[0]
         if (oldest && this.now() - oldest.since >= UTILITY_WORKER_RELAY_HOLD_LIMIT_MS) {
-          this.drop(oldest.id)
+          // The error goes first: dropping sends whatever the worker queued behind its replies.
           this.expire(oldest.id)
+          this.drop(oldest.id)
         } else {
           this.armExpiry()
         }

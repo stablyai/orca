@@ -61,8 +61,10 @@ describe('UtilityWorkerRelayBudget', () => {
     const { budget, relayed, expired } = budgetOf(4 * MB)
     budget.offer(1, new Uint8Array(4 * MB))
     budget.offer(2, new Uint8Array(1 * MB))
+    budget.after(2, () => expired.push(-2))
     vi.advanceTimersByTime(60_000)
-    expect(expired).toEqual([2])
+    // The failure reaches main before the exit the worker queued behind its reply.
+    expect(expired).toEqual([2, -2])
     expect(relayed.map(({ id }) => id)).toEqual([1])
     budget.ack(1)
     expect(relayed.map(({ id }) => id)).toEqual([1])

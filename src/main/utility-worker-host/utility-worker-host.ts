@@ -3,6 +3,7 @@ import { app, utilityProcess, type UtilityProcess } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { HostedWorker } from './hosted-worker'
+import { UTILITY_WORKER_RELAY_EXPIRED } from './utility-worker-relay-budget'
 import type {
   HostedWorkerThread,
   UtilityWorkerHostEvent,
@@ -28,6 +29,14 @@ type Host = {
   readyTimer: ReturnType<typeof setTimeout>
   idleTimer?: ReturnType<typeof setTimeout>
   retired: boolean
+}
+
+/** An unheard worker's exit or error means it could not load here, unless main was the holdup. */
+function startFailure(event: UtilityWorkerHostEvent): boolean {
+  return (
+    event.type === 'exit' ||
+    (event.type === 'error' && event.error.name !== UTILITY_WORKER_RELAY_EXPIRED)
+  )
 }
 
 /** A child still launching has no PID to kill yet; kill it once it has one. */
@@ -143,7 +152,7 @@ export class UtilityWorkerHost {
       return
     }
     // A worker that dies unasked before saying anything could not load here; run it in-process.
-    if (!worker.heard && !worker.terminating && event.type !== 'message') {
+    if (!worker.heard && !worker.terminating && startFailure(event)) {
       this.giveUp(host, 'worker-start-failed')
       return
     }
