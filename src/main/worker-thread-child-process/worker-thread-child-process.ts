@@ -176,6 +176,7 @@ export class WorkerThreadChildProcessHost {
   private nextId = 1
   private workerAnswered = false
   private workerReady = false
+  private workerError: string | null = null
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
 
@@ -184,8 +185,16 @@ export class WorkerThreadChildProcessHost {
       factory,
       idleTeardownMs: IDLE_TEARDOWN_MS,
       onMessage: (event) => this.route(event),
-      onError: (error) => this.abandonAll(`Child process worker failed: ${error.message}`),
-      onExit: (code) => this.abandonAll(`Child process worker exited with code ${code}`),
+      // A worker error can arrive ahead of messages it already posted; its exit comes after them, so decide there.
+      onError: (error) => {
+        this.workerError ??= error.message
+      },
+      onExit: (code) =>
+        this.abandonAll(
+          this.workerError === null
+            ? `Child process worker exited with code ${code}`
+            : `Child process worker failed: ${this.workerError}`
+        ),
       isIdle: () => this.children.size === 0,
       onUnavailable: (error) =>
         console.warn(
@@ -208,6 +217,7 @@ export class WorkerThreadChildProcessHost {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
       this.workerReady = false
+      this.workerError = null
     }
     return this.host.ensure() !== null
   }
@@ -286,6 +296,7 @@ export class WorkerThreadChildProcessHost {
     const ran = this.workerReady
     this.workerAnswered = false
     this.workerReady = false
+    this.workerError = null
     const abandoned = [...this.children.values()]
     this.children.clear()
     this.host.destroy()
