@@ -5300,7 +5300,8 @@
     },
     "search": {
       "toggle": "Search agents",
-      "placeholder": "Search agents"
+      "placeholder": "Search agents and workspaces",
+      "noAgent": "No agent"
     },
     "desktops": {
       "pickerTitle": "Show agents on",
@@ -5320,7 +5321,8 @@
       "offlineSeenJustNow": "Offline · seen just now",
       "seenAgo": "Seen {{ago}} ago",
       "seenJustNow": "Seen just now",
-      "clear": "Clear"
+      "clear": "Clear",
+      "workspaces": "Workspaces"
     },
     "swipe": {
       "read": "Read",
