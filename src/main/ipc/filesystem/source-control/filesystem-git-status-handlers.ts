@@ -135,6 +135,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         submodulePath: string
         connectionId?: string
         area?: GitStagingArea
+        workingTreeOnly?: boolean
       }
     ): Promise<GitStatusResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -146,7 +147,8 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         (worktreePath, gitOptions) =>
           getSubmoduleStatus(worktreePath, args.submodulePath, {
             ...gitOptions,
-            ...(args.area === 'staged' ? { staged: true } : {})
+            ...(args.area === 'staged' ? { staged: true } : {}),
+            ...(args.workingTreeOnly === true ? { workingTreeOnly: true } : {})
           })
       )
     }

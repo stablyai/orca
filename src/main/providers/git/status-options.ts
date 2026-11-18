@@ -8,3 +8,8 @@ export type GitProviderStatusOptions = {
   branchLineTotalMergeBase?: string
   signal?: AbortSignal
 }
+
+export type GitSubmoduleStatusOptions = {
+  /** Only the submodule's own working-tree changes: no committed-range rows, no line stats. */
+  workingTreeOnly?: boolean
+}

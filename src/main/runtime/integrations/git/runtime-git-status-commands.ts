@@ -19,7 +19,10 @@ import type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches
 } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
-import type { GitProviderStatusOptions } from '../../../providers/git/status-options'
+import type {
+  GitProviderStatusOptions,
+  GitSubmoduleStatusOptions
+} from '../../../providers/git/status-options'
 import {
   localGitOptionsForTarget,
   requireLocalRuntimeGitRoute,
@@ -59,13 +62,15 @@ export class RuntimeGitStatusCommands {
   async getRuntimeGitSubmoduleStatus(
     worktreeSelector: string,
     submodulePath: string,
-    area: GitStagingArea = 'unstaged'
+    area: GitStagingArea = 'unstaged',
+    options?: GitSubmoduleStatusOptions
   ): Promise<GitStatusResult> {
     const target = await resolveGatedGitTarget(this.host, worktreeSelector)
     return requireRuntimeGitProvider(target).getSubmoduleStatus(
       target.worktree.path,
       submodulePath,
-      area
+      area,
+      options
     )
   }
 

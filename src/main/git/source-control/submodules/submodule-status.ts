@@ -27,9 +27,12 @@ import {
 export async function getSubmoduleStatus(
   worktreePath: string,
   submodulePath: string,
-  options: GetStatusOptions & { staged?: boolean } = {}
+  options: GetStatusOptions & { staged?: boolean; workingTreeOnly?: boolean } = {}
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
+  if (options.workingTreeOnly) {
+    return getSubmoduleWorkingTreeStatus(submoduleWorktreePath, options)
+  }
   const limit = resolveGitStatusLimit(options.limit)
   // Read independent inputs concurrently; staged expansion needs HEAD/index only, not inner status.
   const [workingResult, fromOid, toOid] = await Promise.all([
@@ -72,6 +75,33 @@ export async function getSubmoduleStatus(
     return { ...workingResult, entries: [] }
   }
   return workingResult
+}
+
+/** The submodule's own working-tree changes only: no committed-range rows and no line stats. */
+async function getSubmoduleWorkingTreeStatus(
+  submoduleWorktreePath: string,
+  options: GetStatusOptions
+): Promise<GitStatusResult> {
+  // An unchecked-out submodule folder has no repo of its own; Git would walk up to the parent.
+  if (!(await isOwnRepositoryRoot(submoduleWorktreePath, options))) {
+    return { entries: [], conflictOperation: 'unknown' }
+  }
+  return getStatus(submoduleWorktreePath, { ...options, includeLineStats: false })
+}
+
+async function isOwnRepositoryRoot(
+  directoryPath: string,
+  options: GitRuntimeOptions
+): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', '--show-prefix'], {
+      ...gitOptionsForWorktree(directoryPath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
+    return stdout.trim() === ''
+  } catch {
+    return false
+  }
 }
 
 async function computeSubmoduleRangeEntries(

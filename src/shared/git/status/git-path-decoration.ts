@@ -1,6 +1,6 @@
 import type { GitFileStatus, GitStatusEntry } from './git-status-types'
 
-type StatusPath = Pick<GitStatusEntry, 'path' | 'status' | 'submodule' | 'submoduleRoot'>
+type StatusPath = Pick<GitStatusEntry, 'path' | 'status' | 'submodule'>
 import { normalizeRelativePath, splitPathSegments } from '../../file-access/cross-platform-path'
 
 const STATUS_PRIORITY: Record<GitFileStatus, number> = {
@@ -53,9 +53,8 @@ export function buildFolderStatusMap(
     }
 
     const segments = splitPathSegments(entry.path)
-    // A dirty submodule is a directory in the explorer, so it carries its own folder status.
-    const folderSegments =
-      entry.submodule && !entry.submoduleRoot ? segments : segments.slice(0, -1)
+    // A dirty submodule, at any nesting depth, is a directory in the explorer with its own folder status.
+    const folderSegments = entry.submodule ? segments : segments.slice(0, -1)
     if (folderSegments.length === 0) {
       continue
     }

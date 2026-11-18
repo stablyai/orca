@@ -25,7 +25,8 @@ export const GIT_STATUS_METHODS = [
       const status = await runtime.getRuntimeGitSubmoduleStatus(
         params.worktree,
         params.submodulePath,
-        params.area
+        params.area,
+        params.workingTreeOnly === true ? { workingTreeOnly: true } : undefined
       )
       return {
         ...status,
