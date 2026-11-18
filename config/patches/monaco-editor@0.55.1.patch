@@ -18,3 +18,21 @@ index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c
          this._domNode.className = 'gutter monaco-editor';
          const scrollDecoration = this._domNode.appendChild(h('div.scroll-decoration', { role: 'presentation', ariaHidden: 'true', style: { width: '100%' } })
              .root);
+diff --git a/esm/vs/basic-languages/typescript/typescript.js b/esm/vs/basic-languages/typescript/typescript.js
+--- a/esm/vs/basic-languages/typescript/typescript.js
++++ b/esm/vs/basic-languages/typescript/typescript.js
+@@ -302,12 +302,12 @@
+       // delimiters and operators
+       [/[()\[\]]/, "@brackets"],
+       [/[<>](?!@symbols)/, "@brackets"],
+-      [/!(?=([^=]|$))/, "delimiter"],
++      [/!(?=([^=]|$))/, "operator"],
+       [
+         /@symbols/,
+         {
+           cases: {
+-            "@operators": "delimiter",
++            "@operators": "operator",
+             "@default": ""
+           }
+         }
