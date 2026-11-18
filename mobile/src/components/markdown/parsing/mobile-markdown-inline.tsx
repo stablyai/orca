@@ -1,6 +1,6 @@
 import type { PhrasingContent } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
-import type { TextProps } from 'react-native'
+import { StyleSheet, type TextProps } from 'react-native'
 import { openExternalLink } from '../../../platform/external-links/external-link'
 import {
   detectFilePathSegments,
@@ -105,7 +105,13 @@ function renderInlineCode(
   onPress?: () => void
 ): ReactNode {
   const size = ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
-  const style = [outer, styles.inlineCode, size, ctx.tone.inlineCode]
+  const style = [
+    outer,
+    styles.inlineCode,
+    size,
+    ctx.tone.inlineCode,
+    { fontWeight: StyleSheet.flatten(outer)?.fontWeight ?? '400' }
+  ]
   return onPress ? (
     <MarkdownText
       key={key}

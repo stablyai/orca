@@ -22,7 +22,7 @@ export function AppearanceChatTextWeightControl({
   forceVisiblePrimary
 }: {
   appearance: Required<NativeChatAppearanceSettings>
-  onChange: (updates: NativeChatAppearanceSettings) => void
+  onChange: (updates: NativeChatAppearanceSettings) => Promise<boolean>
   forceVisiblePrimary?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -57,7 +57,15 @@ export function AppearanceChatTextWeightControl({
                   )
                 ]}
                 onValueChange={([value]) => setDraft({ savedWeight: fontWeight, value })}
-                onValueCommit={([value]) => onChange({ fontWeight: value })}
+                onValueCommit={async ([value]) => {
+                  if (!(await onChange({ fontWeight: value }))) {
+                    setDraft((current) =>
+                      current.savedWeight === fontWeight && current.value === value
+                        ? { savedWeight: fontWeight, value: fontWeight }
+                        : current
+                    )
+                  }
+                }}
               />
               <div className="flex justify-between text-xs text-muted-foreground" aria-hidden>
                 {NATIVE_CHAT_FONT_WEIGHTS.map((weight) => (

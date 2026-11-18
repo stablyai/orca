@@ -174,7 +174,11 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
                   { width, textAlign: node.align?.[cellIndex] ?? 'left' }
                 ]}
               >
-                {renderInline(cells[cellIndex]?.children ?? [], cellCtx)}
+                {renderInline(
+                  cells[cellIndex]?.children ?? [],
+                  cellCtx,
+                  rowIndex === 0 ? { fontWeight: styles.tableHeader.fontWeight } : undefined
+                )}
               </MarkdownText>
             ))}
           </View>
@@ -276,7 +280,10 @@ function renderBlock(
             ctx.tone.text
           ]}
         >
-          {renderInline(node.children, ctx)}
+          {renderInline(node.children, ctx, [
+            { fontWeight: styles.heading.fontWeight },
+            ctx.tone.text
+          ])}
         </MarkdownText>
       )
     case 'blockquote':

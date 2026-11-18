@@ -49,8 +49,8 @@ export function AppearanceChatSection({
   const increase = formatPrimaryShortcutLabel('zoom.in', keybindings)
   const decrease = formatPrimaryShortcutLabel('zoom.out', keybindings)
   const entries = getChatAppearanceEntriesByKey({ increase, decrease }, t)
-  const update = (updates: NativeChatAppearanceSettings): void => {
-    void writeNativeChatAppearance(
+  const update = (updates: NativeChatAppearanceSettings): Promise<boolean> => {
+    return writeNativeChatAppearance(
       (current) => normalizeNativeChatAppearanceSettings({ ...current, ...updates }),
       updateSettings
     )
