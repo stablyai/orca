@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from '../testing/helper-follow-up-cli.test-support'
+import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 import { AgentHookServer } from '../../../../../../agent-hooks/server/agent-hook-server'
@@ -14,14 +15,17 @@ describe('opening a terminal worker Orca closed', () => {
   const { h, panes, pair, success } = useHelperFollowUpCli()
 
   /** A finished helper whose pane recorded `conversation`, then closed by Orca. */
-  async function closedHelper(recorded = true) {
+  async function closedHelper(
+    recorded = true,
+    providerSession: AgentProviderSessionMetadata = CONVERSATION
+  ) {
     const { helper } = await pair()
     if (recorded) {
       vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
         paneKey: panes.get('term_helper')!,
         agent: 'claude',
         processIncarnation: 'process:term_helper',
-        providerSession: CONVERSATION,
+        providerSession,
         observedAt: 1
       })
     }
@@ -160,5 +164,31 @@ describe('opening a terminal worker Orca closed', () => {
     const [uncertainId, later] = resume.mock.calls.map(([, request]) => request.mutationId)
     expect(resume).toHaveBeenCalledTimes(2)
     expect(later).not.toBe(uncertainId)
+  })
+
+  it('resumes again once the agent left the reopened terminal', async () => {
+    const { resource, resume, report } = await closedHelper()
+    await open(resource.terminal_handle)
+    report({ agentType: 'claude', providerSession: CONVERSATION })
+    vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
+    await open(resource.terminal_handle)
+    expect(resume).toHaveBeenCalledTimes(2)
+  })
+  describe('its conversation log, for a terminal that is gone for good', () => {
+    const transcript = (dispatch: string) => h.call('orchestration.workerTranscript', { dispatch })
+    const LOG = '/home/me/.claude/projects/fixture/conversation.jsonl'
+
+    it('names the log its agent reported, by the Dispatch a row holds', async () => {
+      const { helper } = await closedHelper(true, { ...CONVERSATION, transcriptPath: LOG })
+      expect(await transcript(helper.dispatchId)).toEqual({
+        transcript: { agent: 'claude', path: LOG }
+      })
+    })
+
+    it('has none when the agent reported no log, or no conversation at all', async () => {
+      const { helper } = await closedHelper()
+      expect(await transcript(helper.dispatchId)).toEqual({ transcript: null })
+      expect(await transcript('ctx_unknown')).toEqual({ transcript: null })
+    })
   })
 })

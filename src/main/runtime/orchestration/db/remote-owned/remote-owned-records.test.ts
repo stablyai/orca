@@ -6,6 +6,7 @@ import type { RunRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { getRemoteDispatch, listRemoteDispatches } from './remote-dispatch-records'
 import { importRemoteOwnedItem, type PulledRemoteOwnedItem } from './remote-owned-import'
+import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import {
   getRemotePlacement,
   recordRemoteStart,
@@ -123,7 +124,8 @@ describe('remote-owned records on the coordinating Orca', () => {
   function mailItem(
     id: string,
     type: string,
-    provenance: { dispatchId: string; taskId: string } | null
+    provenance: { dispatchId: string; taskId: string } | null,
+    payload: Record<string, unknown> | null = null
   ) {
     return item('worker_mail', {
       v: 1,
@@ -135,7 +137,7 @@ describe('remote-owned records on the coordinating Orca', () => {
         type,
         subject: `${type} subject`,
         body: 'body',
-        payload: null,
+        payload: payload && JSON.stringify(payload),
         priority: 'normal',
         threadId: null
       },
@@ -339,6 +341,24 @@ describe('remote-owned records on the coordinating Orca', () => {
         })
       )
       expect(db.getTask('task_t')).toMatchObject({ status: 'failed', result: 'local D2 failure' })
+    })
+  })
+
+  it("delivers the server worker's imported worker_done as it was sent", () => {
+    startedOnB('task_t', 'ctx_b1')
+    importItem(
+      mailItem(
+        'msg_done',
+        'worker_done',
+        { dispatchId: 'ctx_b1', taskId: 'task_t' },
+        { taskId: 'task_t', dispatchId: 'ctx_b1', outcome: 'succeeded' }
+      )
+    )
+    const imported = db.getMessageById('msg_done')!
+    expect(reconcileLifecycleMessage(db, imported)).toEqual({ action: 'ignored' })
+    expect(db.getMessageById('msg_done')).toMatchObject({
+      subject: 'worker_done subject',
+      body: 'body'
     })
   })
 

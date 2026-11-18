@@ -916,6 +916,13 @@
       "cleanup": {
         "recipeDescription": "在听写文本插入前进行整理"
       }
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "每晚凌晨 3 点之后，或这台电脑唤醒后",
+        "everyWeekLine": "每周一次，凌晨 3 点之后，或这台电脑唤醒后",
+        "everyDescriptionAwake": "如果这台电脑当时处于睡眠状态，会在唤醒后运行。只在有新聊天的夜晚之后运行。每次整理都会像一次简短聊天一样使用你的 {{agent}} 套餐。"
+      }
     }
   },
   "menu": {
@@ -1980,7 +1987,9 @@
         "noSavedConversation": "此聊天没有可复制的已保存对话"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未设置项目位置"
+        "locationNotSet": "尚未设置项目位置",
+        "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",
@@ -5647,8 +5656,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "关闭",
           "64c71cf7b9": "Orca 尚未在此计算机上安装任何技能",
-          "0900db719a": "— 已断开连接",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "此计算机",
           "3677ae58e7": "Orca 通过链接安装的技能。可以重新安装、回退到早期版本或将其删除",
           "44d118a8f7": "由 Orca 安装",
@@ -5682,8 +5689,6 @@
           "a4dfd33095": "单个工作区",
           "c779621aa0": "全局技能",
           "63cc9e31fe": "目标位置",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已断开连接",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "此计算机",
           "b8a0b706ad": "计算机"
@@ -6001,7 +6006,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismissError": "清除错误",
           "dismissing": "正在清除…"
         },
         "CreateProjectLocationField": {
@@ -6153,10 +6157,8 @@
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在您的磁盘上",
           "removeDescriptionVmRecipe": "这将从 Orca 中移除 {{name}}，其 VM 配方决定是否永久删除环境及其文件",
+          "linkedWorkspaceWarning_other": "此项目中的 {{count}} 个工作区也将从 Orca 中移除",
           "openTerminalWarning_other": "此项目中打开的 {{count}} 个终端将被关闭"
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "显示活动工作区"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "从侧边栏隐藏",
@@ -8762,7 +8764,7 @@
           "112f3b934f": "源代码控制 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "在此撤销并不能阻止拥有这台电脑 SSH 访问权限的人重新配对，要彻底阻止，请移除其 SSH 访问权限",
+          "sshAccessCaveat": "撤销链接也会撤销在它打开的终端中创建的链接。任何能在这台电脑上使用终端的人（通过 SSH 或链接）仍可重新配对。",
           "6f6d5188ed": "撤销 {{value0}}",
           "434e4a6af6": "当前链接",
           "df142657a5": "尚未使用",
@@ -21149,7 +21151,8 @@
         "chat": {
           "label": "聊天界面",
           "description": "智能体在聊天中回复，消息和差异会渲染显示",
-          "terminalFallback": "不支持聊天的智能体，以及在此计算机上通过 SSH 或 WSL 打开的文件夹，仍会在终端中打开",
+          "recommended": "推荐",
+          "terminalFallback": "不支持聊天的 Agent 会改用终端打开。",
           "noneDetected": "已检测的智能体都不支持聊天界面"
         },
         "terminal": {
@@ -22492,6 +22495,16 @@
       "description": "当前工作区已在侧边栏中隐藏，将其显示会清除侧边栏筛选条件",
       "confirm": "清除筛选条件并显示",
       "cancel": "保留筛选条件"
+    },
+    "revealCurrent": {
+      "label": "显示当前项",
+      "noWorkspace": "没有打开任何内容",
+      "fullPageView": "此页面在侧边栏中没有对应的行",
+      "archived": "已归档的工作区不会列在侧边栏中",
+      "botsOff": "机器人已关闭，因此不会列出此机器人",
+      "botHidden": "此机器人已暂停，并被机器人选项隐藏",
+      "renameBotPage": "机器人或群组的页面不是工作树。要重命名，请使用其行菜单中的“重命名”。",
+      "renameUnlisted": "此工作区当前未列在侧边栏中，因此无法在那里重命名。"
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主机",
@@ -24358,6 +24371,7 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
     }
@@ -25498,6 +25512,48 @@
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
     "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "该对话未在此电脑上打开。"
+    },
+    "activity": {
+      "title": "活动"
+    },
+    "connectors": {
+      "tab": "连接器"
+    },
+    "files": {
+      "tab": "文件"
+    },
+    "upcoming": {
+      "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
+      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
+      "lookDueNow": "现在到期 · {{every}}"
+    },
+    "palette": {
+      "placeholder": "搜索机器人、聊天、终端、工作区、任务、设置和操作...",
+      "description": "搜索机器人、聊天、终端、工作区、任务、设置和操作",
+      "scopedPlaceholder": "搜索机器人...",
+      "scopedLabel": "搜索机器人",
+      "scopeHint": "输入 @ 只显示机器人",
+      "chip": "机器人",
+      "chipLabel": "机器人，显示全部",
+      "searchEverything": "在全部内容中搜索“{{text}}”",
+      "searchBotsFor": "在机器人中搜索“{{text}}”",
+      "noMatch": "没有与“{{text}}”匹配的机器人",
+      "noBotsYet": "还没有机器人",
+      "filtersPaused": "筛选仅适用于工作区，不适用于机器人",
+      "showEverything": "显示全部",
+      "footerBots": "机器人",
+      "matchesPurpose": "与用途匹配。",
+      "scopedStatus_other": "仅显示机器人。找到 {{count}} 个结果。",
+      "sidebarSearchLabel": "搜索机器人、工作区和浏览器标签页",
+      "section": "机器人"
+    },
+    "templates": {
+      "browse": "浏览模板"
+    }
   },
   "speechModelUpdate": {
     "update": "更新",

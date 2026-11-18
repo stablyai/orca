@@ -52,6 +52,9 @@ export function registerRuntimeWindowLifecycle(
     reposChanged: () => send('repos:changed'),
     browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
+    botsChanged: (scope) => send('bots:changed', scope),
+    orchestrationSessionWorkersChanged: (sessionId) =>
+      send('runtime:orchestrationSessionWorkersChanged', { sessionId }),
     workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,

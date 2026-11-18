@@ -44,7 +44,7 @@ const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: num
   { table: 'removed_orchestration_work', where: 'run_id = ?1' }
 ]
 
-/** Rows one retention step deletes from one table. */
+/** Rows one retention step deletes from one table, small enough to keep each step short. */
 const RUN_CHILD_PAGE_ROWS = 128
 
 const RUN_CHILD_PAGES = RUN_CHILD_DELETES.map(({ table, where, pageRows }) => ({

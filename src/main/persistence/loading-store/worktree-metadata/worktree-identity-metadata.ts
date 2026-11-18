@@ -231,10 +231,14 @@ export function setWorktreeMetaForHost(
 ): WorktreeMeta {
   const state = runtime.state
   const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
-  migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
+  const migrated = migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
   const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
   const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
   if (identityKeys.length > 1 && meta.instanceId === undefined) {
+    // The refused write still migrated the legacy row; save it and tell observers.
+    if (migrated) {
+      scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+    }
     throw new Error('Worktree identity is ambiguous for this host and locator.')
   }
   const existingIdentityKey = resolveAliasIdentityKey(state, alias)
