@@ -17,6 +17,13 @@ function optionUpdateFailureDescription(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+export function toastSessionOptionUpdateFailure(error: unknown): void {
+  toast.error(
+    translate('components.native-chat.composer.optionUpdateFailed', 'Could not update option'),
+    { description: optionUpdateFailureDescription(error) }
+  )
+}
+
 export function runSessionOptionSurfaceCall<T>(
   pending: T,
   setPending: (pending: T | null) => void,
@@ -24,11 +31,6 @@ export function runSessionOptionSurfaceCall<T>(
 ): void {
   setPending(pending)
   void call()
-    .catch((error) => {
-      toast.error(
-        translate('components.native-chat.composer.optionUpdateFailed', 'Could not update option'),
-        { description: optionUpdateFailureDescription(error) }
-      )
-    })
+    .catch(toastSessionOptionUpdateFailure)
     .finally(() => setPending(null))
 }

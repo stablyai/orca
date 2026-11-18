@@ -6,6 +6,7 @@ import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { defineRpcOperation, runRpcOperation } from '../../../../transport/rpc/rpc-operation'
 
 const discoveredModel = z.object({
@@ -44,6 +45,9 @@ const discoverModels = defineRpcOperation({
   }
 })
 
+// A chat reopened mid-turn lists what it listed before instead of the seed list.
+const discoveredModelsByScope = new Map<string, CatalogModel[]>()
+
 /** The runtime resolves the workspace's execution host, including SSH and folder workspaces. */
 export function useMobileNativeChatModelDiscovery(args: {
   client: Parameters<typeof runRpcOperation>[0] | null
@@ -51,6 +55,8 @@ export function useMobileNativeChatModelDiscovery(args: {
   hostId: string
   worktreeId: string
   enabled: boolean
+  /** A listed scope waits for the turn to end before asking the host again. */
+  isWorking?: boolean
 }): CatalogModel[] | null {
   const { client, agent, hostId, worktreeId, enabled } = args
   const scope = JSON.stringify([hostId, worktreeId, agent])
@@ -59,9 +65,12 @@ export function useMobileNativeChatModelDiscovery(args: {
     scope: string
     models: CatalogModel[]
   } | null>(null)
+  const cached = discoveredModelsByScope.get(scope) ?? null
+  const fetched = result?.client === client && result?.scope === scope
+  const deferred = args.isWorking === true && cached !== null
   useEffect(() => {
     const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
-    if (!enabled || !client || !worktreeId || !agent || !catalog) {
+    if (!enabled || fetched || deferred || !client || !worktreeId || !agent || !catalog) {
       return
     }
     let cancelled = false
@@ -72,7 +81,9 @@ export function useMobileNativeChatModelDiscovery(args: {
         }
         const models = discovery ? catalogModelsFromModelDiscovery(agent, discovery) : null
         if (models !== null) {
-          setResult({ client, scope, models: mergeDiscoveredCatalogModels(agent, catalog, models) })
+          const merged = mergeDiscoveredCatalogModels(agent, catalog, models)
+          setBoundedScopeCacheEntry(discoveredModelsByScope, scope, merged)
+          setResult({ client, scope, models: merged })
         }
       })
       .catch(() => {
@@ -81,6 +92,9 @@ export function useMobileNativeChatModelDiscovery(args: {
     return () => {
       cancelled = true
     }
-  }, [agent, client, enabled, scope, worktreeId])
-  return enabled && result?.client === client && result?.scope === scope ? result.models : null
+  }, [agent, client, deferred, enabled, fetched, scope, worktreeId])
+  if (!enabled) {
+    return null
+  }
+  return fetched ? result.models : cached
 }

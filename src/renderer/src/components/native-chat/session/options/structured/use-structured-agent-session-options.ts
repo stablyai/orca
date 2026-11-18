@@ -148,8 +148,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const setStructuredOption = writer.setOption
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
-      await setStructuredOption(id, value)
+      const applied = await setStructuredOption(id, value)
       return {
+        ...(applied ? {} : { refused: true as const }),
         snapshot: lockSnapshotRef.current(
           structuredAgentSessionShownSnapshot(
             optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)

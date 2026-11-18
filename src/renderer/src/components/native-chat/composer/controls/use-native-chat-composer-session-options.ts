@@ -4,11 +4,25 @@ import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   SessionOptionDescriptor,
+  SessionOptionSetResult,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
+import { createNativeChatTurnNotedOptionPicksHook } from '../../../../../../shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
+
+const useNativeChatTurnNotedOptionPicks = createNativeChatTurnNotedOptionPicksHook({
+  useCallback,
+  useMemo,
+  useState
+})
+
+const isRefusedSetResult = (result: SessionOptionSetResult): boolean => result.refused === true
+
+const NO_STRUCTURED_SNAPSHOT: SessionOptionDescriptor[] = []
+const refuseStructuredOption = (): Promise<never> =>
+  Promise.reject(new Error('No structured chat is attached.'))
 
 type ComposerSessionOptionsArgs = Pick<
   NativeChatComposerProps,
@@ -21,6 +35,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
   | 'structuredTransport'
+  | 'isWorking'
 > &
   Pick<
     Parameters<typeof useNativeChatSessionOptionCommand>[0],
@@ -39,7 +54,8 @@ export function useNativeChatComposerSessionOptions({
   onSwitchToTerminal,
   readTerminalScreen,
   paneKey,
-  structuredTransport
+  structuredTransport,
+  isWorking = false
 }: ComposerSessionOptionsArgs): {
   /** What a PTY command send needs from the session options. */
   ptyCommandRouting: {
@@ -66,8 +82,26 @@ export function useNativeChatComposerSessionOptions({
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
     readTerminalScreen,
-    paneKey
+    paneKey,
+    isWorking
   })
+  const structuredSurface = structuredTransport?.optionsSurface ?? null
+  const structured = useNativeChatTurnNotedOptionPicks({
+    scope: structuredTransport?.sessionId ?? null,
+    isWorking,
+    snapshot: structuredTransport?.optionSnapshot ?? NO_STRUCTURED_SNAPSHOT,
+    setOption: structuredSurface?.setOption ?? refuseStructuredOption,
+    refused: isRefusedSetResult
+  })
+  const notingSurface = useMemo(
+    () =>
+      structuredSurface && {
+        ...structuredSurface,
+        getSnapshot: () => structured.snapshot,
+        setOption: structured.setOption
+      },
+    [structuredSurface, structured.snapshot, structured.setOption]
+  )
   const onCommandSent = useCallback(
     (command: string, delivery: NativeChatSendHandle) => {
       if (!onSwitchToTerminal || !nativeChatCommandOpensTerminal(agent, command)) {
@@ -88,7 +122,7 @@ export function useNativeChatComposerSessionOptions({
       sessionOptionsSurface: pty.surface,
       onCommandSent
     },
-    surface: structuredTransport?.optionsSurface ?? pty.surface,
-    snapshot: structuredTransport?.optionSnapshot ?? pty.snapshot
+    surface: notingSurface ?? pty.surface,
+    snapshot: structuredTransport ? structured.snapshot : pty.snapshot
   }
 }
