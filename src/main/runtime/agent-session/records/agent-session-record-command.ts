@@ -8,7 +8,7 @@ import {
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
-import { recordAgentSessionAcquisitionExit } from '../agent-session-acquisition-exit-transition'
+import { recordAgentSessionAcquisitionExit } from '../ownership/agent-session-acquisition-exit-transition'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
@@ -65,6 +65,7 @@ export type AgentSessionRecordCommand =
       args: WithoutRecord<typeof releaseAgentSessionOwnerAfterSurfaceClose>
     }
   | { kind: 'cancel-continue'; cut: UsageLimitContinueIdentity }
+  | { kind: 'skip-async-questions'; itemId: string }
   | { kind: 'last-turn'; lastTurn?: AgentSessionLastTurn }
   | { kind: 'rewind'; fence: number; rewind: AgentSessionRewindRecord }
   | { kind: 'sleep'; now: number; fence: number }
@@ -163,6 +164,9 @@ export function applyAgentSessionRecordCommand(
       break
     case 'cancel-continue':
       next = cancelAgentSessionUsageLimitContinue(record, command.cut)
+      break
+    case 'skip-async-questions':
+      next = { ...record, asyncQuestionsSkippedThrough: command.itemId }
       break
     case 'last-turn': {
       const { lastTurn: previous, ...rest } = record

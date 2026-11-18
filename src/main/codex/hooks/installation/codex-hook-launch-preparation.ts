@@ -1,5 +1,5 @@
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dedupeInFlightRun } from '../../../runtime/concurrency/in-flight-run-dedupe'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
 import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
@@ -38,10 +38,24 @@ export class CodexHookLaunchPreparation {
   private readonly launchPrepInFlight = new Map<string, Promise<AgentHookInstallStatus>>()
   private readonly completedLaunchPrep = new Map<
     string,
-    { digest: string; status: AgentHookInstallStatus }
+    { digest: string; inputs: string; status: AgentHookInstallStatus }
   >()
   clear(): void {
     this.completedLaunchPrep.clear()
+  }
+  /** A completed preparation that ran the config mirror still matches every file it read. */
+  async isConfigPreparationCurrent(runtimeHomePath: string): Promise<boolean> {
+    const keys = (['install', 'codex-launch', 'refresh'] as const).map(
+      (lane) => `${launchPrepKey(lane, runtimeHomePath)}\0config`
+    )
+    if (!keys.some((key) => this.completedLaunchPrep.has(key))) {
+      return false
+    }
+    const inputs = await readCodexLaunchPreparationInputs(runtimeHomePath)
+    return (
+      inputs !== null &&
+      keys.some((key) => this.completedLaunchPrep.get(key)?.inputs === inputs.digest)
+    )
   }
   install(
     runtimeHomePath: string,
@@ -240,7 +254,11 @@ export class CodexHookLaunchPreparation {
       }
     )
     if (complete && result.matches && result.value.stable && digest !== null) {
-      this.completedLaunchPrep.set(key, { digest, status: { ...result.value.status } })
+      this.completedLaunchPrep.set(key, {
+        digest,
+        inputs: before.digest,
+        status: { ...result.value.status }
+      })
       if (this.completedLaunchPrep.size > 32) {
         this.completedLaunchPrep.delete(this.completedLaunchPrep.keys().next().value!)
       }

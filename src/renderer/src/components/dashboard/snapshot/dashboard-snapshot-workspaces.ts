@@ -5,7 +5,7 @@ import {
   type DashboardCard,
   type DashboardCardHostKind,
   type DashboardCardWorkspaceKind
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
   getWorktreeExecutionHostId,
@@ -13,7 +13,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'

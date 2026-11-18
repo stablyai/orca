@@ -1,6 +1,6 @@
 import { settleDesktopActivation } from './runtime-launch-activation'
 import { app, type BrowserWindow } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
 import {
   getCanonicalUserDataPath,
@@ -14,6 +14,7 @@ import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-envi
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../../browser/backends/offscreen-browser-backend'
+import { memorySaverIdleMs } from '../../browser/backends/offscreen-page-idle-freeing'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from '../cloud-startup/main-process-relay-status'
 import { startDesktopRelayService } from '../cloud-startup/main-process-relay-startup'
@@ -39,7 +40,7 @@ import {
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
-import { triggerStartupNotificationRegistration } from '../../ipc/startup-notification-registration'
+import { triggerStartupNotificationRegistration } from '../../ipc/notifications/startup-notification-registration'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
 import {
   connectDesktopConnectorCloud,
@@ -180,7 +181,9 @@ async function launchServeMode(
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,
-        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page)
+        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page),
+        isPageSaved: (page) => runtime.serveBrowserTabs.isSaved(page),
+        idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
   }

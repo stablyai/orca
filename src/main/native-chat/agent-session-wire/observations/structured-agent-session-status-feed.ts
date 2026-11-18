@@ -203,6 +203,7 @@ export class StructuredAgentSessionStatusFeed {
       state: projection.state,
       stopping: projection.stopping,
       usageLimitContinue: this.deps.readUsageLimitContinue?.(sessionId, projection.usageLimitCut),
+      runningPermissionMode: this.deps.runningPermissionMode?.(sessionId),
       childWork: this.childWorkFields(sessionId, session.params.provider),
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now

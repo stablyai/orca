@@ -1,4 +1,4 @@
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { getMobileUiLocale } from './mobile-i18n'
 
 // Explicit script/region: Hermes passes tags to the platform formatter, which reads bare `zh` and `pt` differently by OS.

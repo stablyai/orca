@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type {
   WorkspaceCleanupEvaluation,
   WorkspaceCleanupKeepCause,
@@ -17,7 +17,7 @@ export const WORKSPACE_CLEANUP_REPORT_RUN_LIMIT = 20
 // Matches T3 Code's report cap; a run over hundreds of workspaces must not bloat the sidecar.
 export const WORKSPACE_CLEANUP_REPORT_ROW_LIMIT = 200
 
-/** Who started a run. 'run-now' is an app's Clean up now; 'cli' is `orca` on the command line. */
+/** Who started a run. 'run-now' is an app's Run rules now; 'cli' is `orca` on the command line. */
 export type WorkspaceCleanupRunTrigger = 'startup' | 'hourly' | 'settings' | 'run-now' | 'cli'
 
 export type WorkspaceCleanupRunOutcome = 'removed' | 'archived' | 'kept' | 'failed'
@@ -66,6 +66,8 @@ export type WorkspaceCleanupRun = {
   counts: Record<WorkspaceCleanupRunOutcome, number>
   /** Sum of removed and archived rows' known sizes. */
   freedBytes: number
+  /** Chat history of deleted workspaces this run deleted; absent when the setting was off or on older hosts. */
+  chatHistory?: { deleted: number; failed: number; freedBytes: number }
   /** Removed, archived and failed rows, then kept ones, capped at WORKSPACE_CLEANUP_REPORT_ROW_LIMIT. */
   rows: WorkspaceCleanupRunRow[]
   /** Set when the run itself could not finish, in plain words. */

@@ -1,5 +1,5 @@
 /** Drop hidden renderer delivery after model ingestion; reveal restores a snapshot, while sidecar interest keeps raw bytes flowing. */
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { _resetPtyEscapeBoundaryForTest, clearPtyEscapeBoundary } from './pty-escape-boundary'
 
 export type HiddenPtyDeliveryGateSettings = Pick<

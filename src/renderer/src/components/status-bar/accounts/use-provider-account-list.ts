@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
@@ -16,7 +16,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
   target: RuntimeClientTarget,
   syncKey: string,
   initial: ProviderAccountsSnapshot[Provider],
-  observe = false
+  observe = false,
+  enabled = true
 ) {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const ownerTarget = useMemo<RuntimeClientTarget>(
@@ -35,13 +36,17 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     () => observedProviderAccounts(ownerTarget, provider),
     [ownerTarget, provider]
   )
-  const observing = observe && environmentId !== null
+  const observing = enabled && observe && environmentId !== null
   const answer = useSyncExternalStore(
     observing ? observation.subscribe : noSubscription,
     observing ? observation.getSnapshot : noSnapshot,
     noSnapshot
   )
   const [local, setLocal] = useState({ ownerKey, accounts: initial, known: false })
+  // Why: a list read started before a selection can settle after the selection reply.
+  const writeSequenceRef = useRef(0)
+  // Reused in-flight reads keep the sequence from when this list first awaited them.
+  const readStartSequencesRef = useRef(new WeakMap<Promise<ProviderAccountsSnapshot>, number>())
   const accounts = observing
     ? (answer?.accounts ?? initial)
     : local.ownerKey === ownerKey
@@ -55,6 +60,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       if (!mountedRef.current) {
         return
       }
+      writeSequenceRef.current += 1
       if (observing) {
         observation.setAccounts(next)
       } else {
@@ -68,25 +74,31 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [mountedRef, observing, observation, ownerKey]
   )
   const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
+    if (!enabled) {
+      return
+    }
+    const request = fetchProviderAccountsSnapshot(ownerTarget)
+    const writeSequence = readStartSequencesRef.current.get(request) ?? writeSequenceRef.current
+    readStartSequencesRef.current.set(request, writeSequence)
+    const snapshot = await request
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
       return
     }
-    if (mountedRef.current) {
+    if (mountedRef.current && writeSequence === writeSequenceRef.current) {
       if (observing) {
         observation.setAccounts(snapshot[provider])
       } else {
         setLocal({ ownerKey, accounts: snapshot[provider], known: true })
       }
     }
-  }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef])
+  }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef, enabled])
   useEffect(() => {
-    if (!observing) {
+    if (enabled && !observing) {
       void loadAccounts().catch((error: unknown) =>
         console.error(`Failed to load ${provider} accounts:`, error)
       )
     }
-  }, [loadAccounts, observing, provider, syncKey])
+  }, [loadAccounts, observing, provider, syncKey, enabled])
   return { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef }
 }

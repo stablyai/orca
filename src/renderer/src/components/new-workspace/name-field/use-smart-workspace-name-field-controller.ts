@@ -3,7 +3,7 @@ import {
   getActiveWorkspaceEmojiShortcode,
   searchWorkspaceEmojiShortcodes
 } from '@/lib/workspace/display/workspace-emoji-shortcodes'
-import type { StandardEmojiShortcodeEntry } from '../../../../../shared/emoji-shortcode-catalog'
+import type { StandardEmojiShortcodeEntry } from '../../../../../shared/text/emoji-shortcode-catalog'
 import type { SmartWorkspaceNameFieldProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from '../source-search/use-work-item-source-search'
 import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'

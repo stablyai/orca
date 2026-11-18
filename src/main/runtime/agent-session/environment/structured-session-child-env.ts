@@ -113,3 +113,17 @@ function applyThisAppCli(env: Record<string, string>): Record<string, string> {
   }
   return set
 }
+
+const CALLER_IDENTITY_ENV = [ORCA_AGENT_SESSION_ID_ENV, 'ORCA_TERMINAL_HANDLE']
+
+/** A sealed child's environment without its caller identity; the structured marker stays, so
+ *  Orca's CLI refuses to guess a caller rather than name another chat. */
+export function withoutCallerIdentity(
+  env: Readonly<Record<string, string>>,
+  envToDelete: readonly string[]
+): { env: Record<string, string>; envToDelete: string[] } {
+  const kept = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !CALLER_IDENTITY_ENV.includes(key))
+  )
+  return { env: kept, envToDelete: [...new Set([...envToDelete, ...CALLER_IDENTITY_ENV])] }
+}

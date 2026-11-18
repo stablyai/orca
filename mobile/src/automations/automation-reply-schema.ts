@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/validation/zod-salvage'
 
 const hostId = z.string().transform((value, ctx) => {

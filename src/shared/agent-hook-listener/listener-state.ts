@@ -15,7 +15,7 @@ import type { ClaudeToolRequest } from './claude-tool-request-identity'
 import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
-import type { MuseSessionLogState } from './providers/muse/muse-session-log'
+import type { MusePaneState } from './providers/muse/muse-pane-state'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
@@ -97,26 +97,16 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
+  /** DSH child sessions named by SubagentStart; the bridge stamps their hooks with their own session_id. */
+  dshChildSessionIdsByPaneKey: Map<string, Set<string>>
 }
 
 export type HermesPaneTurn = {
   ended: boolean
-  /** `delegate_task` children run their own turns, under their own session ids, inside the parent's. */
+  /** `delegate_task` children seen in this pane; they run their own turns under their own session ids. */
   childSessionIds: Set<string>
   /** The pane's own session, which its children's hooks must not replace. */
   sessionId: string
-}
-
-export type MusePaneState = {
-  /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
-  childSessionIds: Set<string>
-  /** Spawned subagents between SubagentStart and SubagentStop, by child session id, with their last hook time. */
-  runningChildren: Map<string, number>
-  /** Main-agent status as last derived, so restatements keep its clock. */
-  mainAgent?: AgentMainAgentStatus
-  log?: MuseSessionLogState
-  /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
-  pendingApproval?: { toolName?: string; toolInput?: unknown }
 }
 
 export type GrokActiveTurn = {
@@ -172,7 +162,8 @@ export function createHookListenerState(
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map(),
-    hermesTurnByPaneKey: new Map()
+    hermesTurnByPaneKey: new Map(),
+    dshChildSessionIdsByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -250,6 +241,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
+  state.dshChildSessionIdsByPaneKey.delete(paneKey)
   // Unfinished evidence and exit intent belong to the ended process.
   deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
@@ -306,6 +298,7 @@ export function movePaneCacheState(
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.dshChildSessionIdsByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -353,5 +346,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.dshChildSessionIdsByPaneKey.clear()
   state.hookRootAttempts.clear()
 }

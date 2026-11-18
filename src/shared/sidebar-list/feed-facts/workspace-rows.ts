@@ -4,7 +4,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../../repository/repo-types'

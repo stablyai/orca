@@ -2,6 +2,7 @@ import type { AgentSessionStatusSummary } from '../../../../../shared/agent-sess
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import {
   reportWorkerTurnStop,
   type WorkerTurnStopReason,
@@ -122,8 +123,12 @@ export function chatWorkerTurnStopReporter(
         return
       }
       // The Dispatch a stop belongs to is one open when it was seen.
-      const seen = new Set(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => dispatch.id)
+      // Mail taken after the turn ended belongs to the next turn, though it lands before this report.
+      const seen = new Map(
+        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => [
+          dispatch.id,
+          readCoordinatorMailCount(db, dispatch.id)
+        ])
       )
       let approval: AgentJournalApprovalItem | null = null
       const deliver = (): void => {
@@ -174,6 +179,7 @@ export function chatWorkerTurnStopReporter(
                 from,
                 stopKey: stop.stopKey,
                 reason: stop.reason,
+                mailTaken: seen.get(dispatch.id),
                 // The payload names the prompt; the agent's prose before it adds nothing.
                 lastOutput: payload ? undefined : status?.lastAssistantMessage,
                 // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.

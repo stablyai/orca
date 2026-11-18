@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import { WORKSPACE_ROW_FILTER_UI_FIELDS } from './workspace-row-filters'
 
 /** The non-filter UI state a host's own phone mirrors through ui.get/ui.set. */

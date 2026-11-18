@@ -9,7 +9,7 @@ import {
   recordPtySurface,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from '../../terminal/surface/pty-recorded-surface-topology'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,
@@ -26,7 +26,10 @@ import {
   panesBoundToAnotherWorkspace,
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
-import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  type ExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
 import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 

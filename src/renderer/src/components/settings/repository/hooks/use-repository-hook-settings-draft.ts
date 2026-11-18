@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RepoHookSettings } from '../../../../../../shared/orca-yaml-hook-types'
+import type { RepoHookSettings } from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   areHookSettingsDraftsEqual,

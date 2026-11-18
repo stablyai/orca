@@ -10,7 +10,7 @@ import type {
   AgentJournalTurnItem,
   AgentJournalTurnLifecycle
 } from '../../journal/agent-session-journal-types'
-import { isAdmissibleAgentSessionContextUsage } from '../../agent-session-context-usage-schema'
+import { isAdmissibleAgentSessionContextUsage } from '../../conversation-context/agent-session-context-usage-schema'
 import { agentTurnLifecycleText } from '../../../agent-status/presentation/agent-turn-lifecycle-text'
 import { tuiAgentDisplayName } from '../../../agent-launch/catalog/tui-agent-display-names'
 

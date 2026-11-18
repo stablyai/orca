@@ -14,7 +14,7 @@ import {
   loadTaskPageJiraProjectStatusOrder
 } from '@/components/task-page/jira/listing/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page/jira/listing/task-page-jira-load-state'
-import { searchTaskPageJiraIssues } from '@/components/task-page/jira/listing/task-page-jira-search'
+import { searchJiraIssuesByInput } from '../../../../../../shared/jira/jira-issue-input-search'
 import { JIRA_ITEM_LIMIT } from '../../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../../use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
@@ -138,7 +138,7 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     const request = jiraHasWorkspace
       ? readLinkedJiraIssues(linkedJiraIssueRefs, searchJiraIssues, jiraTaskSourceContext, force)
       : trimmed.length > 0
-        ? searchTaskPageJiraIssues(
+        ? searchJiraIssuesByInput(
             trimmed,
             async (jql) => {
               const sprintJql = jiraCurrentSprint ? withCurrentSprintClause(jql) : jql
