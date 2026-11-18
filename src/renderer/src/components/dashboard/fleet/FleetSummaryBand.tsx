@@ -37,10 +37,7 @@ export function FleetSummaryBand({
     }))
   ]
   return (
-    <div
-      className="grid grid-cols-[repeat(var(--fleet-tiles),minmax(0,1fr))] gap-2 @max-[40rem]:grid-cols-3"
-      style={{ '--fleet-tiles': tiles.length } as React.CSSProperties}
-    >
+    <div className="grid auto-cols-[minmax(0,1fr)] grid-flow-col gap-2 @max-[40rem]:grid-flow-row @max-[40rem]:grid-cols-3">
       {tiles.map((tile) => (
         <div
           key={tile.key}

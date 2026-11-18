@@ -13,28 +13,29 @@ export function AgentDashboardViewToggle({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <ToggleGroup
-      type="single"
-      variant="segmented"
-      size="xs"
-      spacing={1}
-      value={view}
-      onValueChange={(value) => {
-        if (value === 'board' || value === 'fleet') {
-          onViewChange(value)
-        }
-      }}
-      aria-label={t('dashboardPopout.fleet.view.label', 'Dashboard view')}
-      className="shrink-0 bg-muted p-0.5"
-    >
-      <ToggleGroupItem value="board" className="gap-1.5">
-        <Columns3 className="size-3" />
-        {t('dashboardPopout.fleet.view.board', 'Board')}
-      </ToggleGroupItem>
-      <ToggleGroupItem value="fleet" className="gap-1.5">
-        <Network className="size-3" />
-        {t('dashboardPopout.fleet.view.fleet', 'Fleet')}
-      </ToggleGroupItem>
-    </ToggleGroup>
+    <div className="shrink-0 rounded-md bg-muted p-0.5">
+      <ToggleGroup
+        type="single"
+        variant="segmented"
+        size="xs"
+        spacing={1}
+        value={view}
+        onValueChange={(value) => {
+          if (value === 'board' || value === 'fleet') {
+            onViewChange(value)
+          }
+        }}
+        aria-label={t('dashboardPopout.fleet.view.label', 'Dashboard view')}
+      >
+        <ToggleGroupItem value="board">
+          <Columns3 className="size-3" />
+          {t('dashboardPopout.fleet.view.board', 'Board')}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="fleet">
+          <Network className="size-3" />
+          {t('dashboardPopout.fleet.view.fleet', 'Fleet')}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
   )
 }
