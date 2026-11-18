@@ -8,7 +8,6 @@ import {
   isImageRefBlock,
   isTextBlock,
   type NativeChatBlock,
-  type NativeChatImageRefBlock,
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isAgentSessionHostStatusPresentation } from '../../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
