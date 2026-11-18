@@ -102,6 +102,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.bulkUnstage',
   'git.cancelGenerateCommitMessage',
   'git.cancelGeneratePullRequestFields',
+  'git.checkIgnored',
   'git.checkout',
   'git.commit',
   'git.commitCompare',
