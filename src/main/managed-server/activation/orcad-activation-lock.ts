@@ -11,7 +11,7 @@ import {
   orphanInstallLockCommand,
   probeInstallLockExistsCommand
 } from '../install/remote-install-lock-commands'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   ORCAD_FENCE_OWNER_FILENAME,
   posixOrcadFenceOwnedTest,
@@ -19,9 +19,9 @@ import {
   type OrcadFence
 } from './orcad-activation-fence-scope'
 import { orcadRemoteBaseDir, orcadWindowsHomeOpCommand } from '../install/orcad-remote-windows-node'
-import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../../ssh/orcad-held-fence-tokens'
-import { exitedOwnLockProof } from '../../ssh/orcad-exited-own-lock'
-import { isWindowsRemoteHost } from '../../ssh/ssh-remote-platform'
+import { forgetHeldOrcadFence, rememberHeldOrcadFence } from './orcad-held-fence-tokens'
+import { exitedOwnLockProof } from './orcad-exited-own-lock'
+import { isWindowsRemoteHost } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadActivationFenceLockDir,
   orcadActivationTransactionPath,

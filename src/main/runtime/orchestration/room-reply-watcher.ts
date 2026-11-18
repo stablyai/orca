@@ -8,11 +8,11 @@
  * needs it and never detaches, so a room answers even while no client is looking.
  */
 
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-turn-completion-wire'
-import type { OrchestrationDb } from './db'
+import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { OrchestrationDb } from './db/orchestration-db'
 import type { RoomMemberRow, RoomWithMembers } from './db/rooms/room-store'
 import { postRoomReply, runRoomRound, sendRoomTurn, type RoomRoundDeps } from './room-round'
 import { assistantTextForTurn, turnStartedByRoom } from './room-reply-turn-text'
@@ -147,7 +147,11 @@ async function handleCompletion(
   }
   setAttentionStatus(deps.db, completion.sessionId, false)
   const failed = completion.outcome === 'failure'
-  const snapshot = await deps.host.journalSnapshot(completion.sessionId)
+  const snapshot = (
+    await (
+      await deps.host.journalReads(completion.sessionId)
+    ).operationWindow({ turnIds: [completion.turnId] })
+  ).snapshot
   if (!turnStartedByRoom(snapshot.items, completion.turnId)) {
     return
   }

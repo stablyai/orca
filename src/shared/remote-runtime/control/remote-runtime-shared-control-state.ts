@@ -1,15 +1,14 @@
-import type { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { releaseRemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
-import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type {
   SharedControlLogicalSubscription,
   SharedControlPendingRequest,
   SharedControlReadyWaiter
 } from './remote-runtime-shared-control-types'
 import { getSubscriptionId, isEndResult } from './remote-runtime-shared-control-protocol'
-import { withReconnectJitter } from '../../reconnect-jitter'
-import { tagRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
+import { tagRuntimeSubscriptionReplayResponse } from '../rpc/runtime-subscription-replay'
 
 export function rejectSharedControlPendingRequest(
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>,
@@ -161,24 +160,4 @@ export function closeSharedControlSocketState(args: {
   } catch {
     // Best-effort cleanup of remote runtime control socket.
   }
-}
-
-export function scheduleSharedControlReconnect(args: {
-  current: ReturnType<typeof setTimeout> | null
-  intentionallyClosed: boolean
-  reconnectAttempt: number
-  delaysMs: readonly number[]
-  open: () => void
-}): { timer: ReturnType<typeof setTimeout> | null; reconnectAttempt: number } {
-  if (args.current || args.intentionallyClosed) {
-    return { timer: args.current, reconnectAttempt: args.reconnectAttempt }
-  }
-  const delay = withReconnectJitter(
-    args.delaysMs[Math.min(args.reconnectAttempt, args.delaysMs.length - 1)]
-  )
-  const timer = setTimeout(args.open, delay)
-  if (typeof timer.unref === 'function') {
-    timer.unref()
-  }
-  return { timer, reconnectAttempt: args.reconnectAttempt + 1 }
 }

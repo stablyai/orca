@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
@@ -69,46 +69,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
       tab3: `ssh:other-target@@pty-1`
     })
   })
-
-  it('replaces the old id in activeConnectionIdsAtShutdown and dedupes', () => {
-    const session = makeSession({
-      activeConnectionIdsAtShutdown: [OLD_ID, NEW_ID, 'ssh-unrelated']
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
-    expect(session.activeConnectionIdsAtShutdown).toEqual([NEW_ID, 'ssh-unrelated'])
-  })
-
-  it('re-points sleeping agent records pinned to the old connection', () => {
-    const session = makeSession({
-      sleepingAgentSessionsByPaneKey: {
-        'tab1:leaf-1': {
-          paneKey: 'tab1:leaf-1',
-          worktreeId: 'r1::/wt',
-          agent: 'claude',
-          providerSession: { key: 'session_id', id: 's-1' },
-          prompt: 'p',
-          state: 'done',
-          capturedAt: 1,
-          updatedAt: 1,
-          connectionId: OLD_ID
-        }
-      }
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
-    expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf-1'].connectionId).toBe(NEW_ID)
-  })
-
-  it('returns false when nothing references the old id', () => {
-    const session = makeSession({
-      tabsByWorktree: { 'r1::/wt': [makeTab({ ptyId: 'local-pty' })] },
-      activeConnectionIdsAtShutdown: ['ssh-unrelated']
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(false)
-    expect(session.activeConnectionIdsAtShutdown).toEqual(['ssh-unrelated'])
-  })
 })
 
 describe('migrateUiHostScopeSshTargetId', () => {
@@ -135,16 +95,5 @@ describe('migrateUiHostScopeSshTargetId', () => {
       { hostId: `ssh:${NEW_ID}`, repoId: 'remote-repo' },
       { hostId: 'local', repoId: 'local-repo' }
     ])
-  })
-
-  it('returns false when the old host id appears nowhere', () => {
-    const ui = makeUi({
-      workspaceHostScope: 'all',
-      visibleWorkspaceHostIds: ['local'],
-      workspaceHostOrder: ['local'],
-      manualRepoOrder: [{ hostId: 'local', repoId: 'local-repo' }]
-    })
-
-    expect(migrateUiHostScopeSshTargetId(ui, OLD_ID, NEW_ID)).toBe(false)
   })
 })

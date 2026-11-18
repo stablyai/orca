@@ -1,8 +1,8 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-turn-completion-wire'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { OrchestrationDb } from './db'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { OrchestrationDb } from './db/orchestration-db'
 import { ensureRoomReplyWatcher } from './room-reply-watcher'
 
 const aliceMember = 'orca_session_id:session_alice_0001'
@@ -22,7 +22,9 @@ const hostWith = (snapshotItems: AgentJournalRenderItem[] = []) => {
       subscribers.push(sub)
       return () => undefined
     }),
-    journalSnapshot: vi.fn(async () => ({ items: snapshotItems })),
+    journalReads: vi.fn(async () => ({
+      operationWindow: async () => ({ snapshot: { items: snapshotItems } })
+    })),
     send: vi.fn(
       async (
         _caller: unknown,

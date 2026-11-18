@@ -1,7 +1,10 @@
-import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup-host-identity'
+import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
+import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'

@@ -12,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { useActiveWorktreeId, useAllWorktrees } from '@/store/selectors'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useActiveWorktreeId } from '@/store/workspaces/selection/use-selected-worktree'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { BOT_AGENTS, LOCAL } from './room-types'
 import { readAgentModels, type CatalogModel } from './room-model-catalog'
 

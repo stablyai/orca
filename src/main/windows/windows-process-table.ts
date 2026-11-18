@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/orcad-artifacts'
+import { createProcessTableSnapshotReader } from '../../shared/process-observation/tables/process-table-snapshot-reader'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
@@ -31,6 +31,9 @@ type NativeProcessInfo = {
   creationTimeMs?: number
 }
 
+/** node-addon-api's default OnError hands the callback an Error (e.g. bad_alloc) instead of rows. */
+type NativeProcessSnapshot = NativeProcessInfo[] | Error | undefined
+
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
@@ -40,10 +43,7 @@ type WindowsProcessTreeModule = {
   /** Compiled addon capabilities; patched JS enums may sit above an older prebuilt binary. */
   supportedProcessDataFlags?: number
   getProcessCreationTime?: (pid: number) => number | undefined
-  getAllProcesses: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags?: number
-  ) => void
+  getAllProcesses: (callback: (processes: NativeProcessSnapshot) => void, flags?: number) => void
 }
 
 const requireFromMain = createRequire(__filename)
@@ -59,10 +59,7 @@ let requireNative: NativeRequire = requireFromMain
 /** Bare relay addon has no queue; nativeReadGate must serialize it to prevent concurrent native snapshots. The npm wrapper adds its own coalescing queue. */
 type WindowsProcessTreeAddon = {
   getProcessCreationTime?: (pid: number) => number | undefined
-  getProcessList: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags: number
-  ) => void
+  getProcessList: (callback: (processes: NativeProcessSnapshot) => void, flags: number) => void
   supportedProcessDataFlags?: number
 }
 
@@ -250,7 +247,8 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         clearTimeout(deadline)
         // Only this read's callback proves its outstanding native work drained.
         unreturnedReads.delete(readId)
-        if (!processes) {
+        // A throw here escapes the addon's callback loop and kills the host (#33350).
+        if (!Array.isArray(processes)) {
           reject(new Error('windows process table returned no snapshot'))
           return
         }
@@ -291,11 +289,19 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
   now: () => Date.now()
 })
 
+/** One identity projection per CIM snapshot, so panes polling it share the array and its index. */
+const identityProjections = new WeakMap<readonly WindowsProcessRow[], WindowsProcessIdentityRow[]>()
+
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
   if (moduleLoader() === null) {
     const rows = await (fresh ? detailedReader.getFreshSnapshot() : detailedReader.getSnapshot())
-    return rows.map(toIdentityRow)
+    let identity = identityProjections.get(rows)
+    if (!identity) {
+      identity = rows.map(toIdentityRow)
+      identityProjections.set(rows, identity)
+    }
+    return identity
   }
   return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
 }

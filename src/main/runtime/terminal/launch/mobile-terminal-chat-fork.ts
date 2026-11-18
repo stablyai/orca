@@ -1,19 +1,23 @@
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
-import type { AiVaultResumeLaunchSettings } from '../../../../shared/ai-vault-resume-startup'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { MobileTerminalCommand } from './mobile-terminal-startup'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
+  type AgentLaunchRuntime,
+  agentLaunchQuotingShell
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { resolveWslHostAgentCmdOverrides } from './wsl-host-agent-terminal-launch'
+import {
+  type AiVaultResumeLaunchSettings,
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  buildAiVaultLocalResumeStartup,
-  getAiVaultResumeCodexHome,
-  resolveAiVaultCopiedSessionAgentArgs
-} from '../../../../shared/ai-vault-resume-startup'
+  buildAiVaultLocalResumeStartup
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { getAiVaultResumeCodexHome } from '../../../../shared/ai-vault/resume/ai-vault-resume-path'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
 export function buildMobileTerminalChatFork(args: {
@@ -40,27 +44,23 @@ export function buildMobileTerminalChatFork(args: {
   ) {
     throw new Error('chat_fork_runtime_incompatible')
   }
+  const liveShell = agentLaunchQuotingShell(runtime)
   const startupArgs = {
     session: source,
     host: {
       platform: runtime.platform,
       codexHome: getAiVaultResumeCodexHome(source.codexHome, runtime.platform),
-      liveShell: agentLaunchQuotingShell(runtime)
+      liveShell
     },
-    settings
+    settings: isTuiAgent(source.agent)
+      ? withWslHostAgentCommand(settings, source.agent, runtime.platform, liveShell)
+      : settings
   }
   if (prepared.forkedSession) {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
   }
   const startup = prepared.forkedSession
-    ? buildAiVaultLocalResumeStartup({
-        ...startupArgs,
-        agentArgs: resolveAiVaultCopiedSessionAgentArgs({
-          ...startupArgs,
-          sourceAgent: source.sourceAgent
-        }),
-        embedCwd: false
-      })
+    ? buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false })
     : buildAiVaultForkStartup(startupArgs)
   if (!startup) {
     throw new Error('chat_fork_source_unavailable')
@@ -77,4 +77,17 @@ export function buildMobileTerminalChatFork(args: {
     ...(isTuiAgent(source.agent) ? { launchAgent: source.agent } : {}),
     launchRuntime: runtime
   }
+}
+
+/** A fork is a launch of the stock CLI too; pin its distro path for this launch only. */
+function withWslHostAgentCommand(
+  settings: AiVaultResumeLaunchSettings,
+  agent: TuiAgent,
+  platform: NodeJS.Platform,
+  shell: AgentStartupShell
+): AiVaultResumeLaunchSettings {
+  const cmdOverrides = settings.agentCmdOverrides ?? {}
+  // Forks run where the source chat ran, which this module requires to be this local host.
+  const resolved = resolveWslHostAgentCmdOverrides({ agent, cmdOverrides, platform, shell })
+  return resolved === cmdOverrides ? settings : { ...settings, agentCmdOverrides: resolved }
 }

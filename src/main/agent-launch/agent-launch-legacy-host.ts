@@ -3,16 +3,27 @@
 import type {
   AgentLaunchPrompt,
   AgentLaunchPromptDisposal,
-  AgentLaunchResult
-} from '../../shared/agent-launch-intent'
-import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
+  AgentLaunchResult,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentLaunchExecution, AgentLaunchLegacyHostExecution } from './agent-launch-execution'
-import type { AgentLaunchModeReceipt } from './agent-launch-mode'
+
 import {
   HANDED_TO_TERMINAL,
   launchCommandPrompt,
   promptReceipt
 } from './agent-launch-prompt-delivery'
+
+/** What a created workspace reports beside its surface; the client re-asks with setup the host skipped. */
+export function createdWorkspaceReport(
+  placed: Pick<AgentLaunchResult, 'warning' | 'setupTrustMismatch'>
+): Pick<AgentLaunchResult, 'warning' | 'setupTrustMismatch'> {
+  return {
+    ...(placed.warning ? { warning: placed.warning } : {}),
+    ...(placed.setupTrustMismatch ? { setupTrustMismatch: placed.setupTrustMismatch } : {})
+  }
+}
 
 /** No returned agent may mean deferred activation; creating another risks a duplicate. */
 export class AgentLaunchStartupAgentNotCreatedError extends Error {
@@ -49,6 +60,7 @@ export function legacyHostCreateResult(
     startupTerminalHandle: string | undefined
     startupTerminalPaneKey?: string
     warning?: string
+    setupTrustMismatch?: AgentLaunchResult['setupTrustMismatch']
   },
   receipt: AgentLaunchModeReceipt
 ): AgentLaunchResult {
@@ -64,7 +76,7 @@ export function legacyHostCreateResult(
     },
     worktreeId: placed.worktreeId,
     receipt,
-    ...(placed.warning ? { warning: placed.warning } : {}),
+    ...createdWorkspaceReport(placed),
     ...promptReceipt(intent, legacyCreatePromptDisposal(intent))
   }
 }

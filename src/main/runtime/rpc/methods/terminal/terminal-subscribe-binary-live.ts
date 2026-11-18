@@ -1,7 +1,7 @@
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   mobileSnapshotByteBudget,
   sendMobileResizeRestream,
@@ -14,10 +14,12 @@ import type {
   TerminalSubscriptionArgs
 } from './terminal-subscribe-types'
 import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
+import type { TerminalOutputCredit } from './terminal-output-credit'
 
 export function activateTerminalSubscribeBinaryLive(
   args: TerminalSubscriptionArgs,
-  state: TerminalSubscribeBinaryState
+  state: TerminalSubscribeBinaryState,
+  outputCredit: TerminalOutputCredit | null
 ): void {
   const { params, runtime, emit, ptyId, clientId, isMobile, supportsDesktopViewportClaims } = args
   const lateRendererReady = state.lateRendererReadyPromise
@@ -58,6 +60,9 @@ export function activateTerminalSubscribeBinaryLive(
           truncatedByByteBudget: recovery.truncatedByByteBudget,
           data: recovery.data
         })
+        if (typeof recovery.seq === 'number') {
+          outputCredit?.dropOutputCoveredBySnapshot(recovery.seq)
+        }
         state.lastResizeCols = recovery.cols
         console.log('[mobile-terminal-stream] recovery snapshot', {
           terminal: params.terminal,
@@ -117,6 +122,9 @@ export function activateTerminalSubscribeBinaryLive(
           }
           if (!restreamed) {
             sendResizedFrame(event)
+          } else {
+            // The restream reports no output seq, so held output may duplicate it.
+            outputCredit?.recoverHeldOutput()
           }
         })
         // Even failed replay must report geometry.

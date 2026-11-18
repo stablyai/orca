@@ -1,5 +1,5 @@
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { defineMethod } from '../../../core'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { runRoomRound, postRoomReply } from '../../../../orchestration/room-round'
 import { ROOM_SOURCE } from '../../../../orchestration/room-bot-spawn'
 import {
@@ -23,9 +23,10 @@ import { ORCHESTRATION_ROOM_BOT_METHODS } from './room-bot-methods'
 
 export const ORCHESTRATION_ROOM_METHODS = [
   ...ORCHESTRATION_ROOM_BOT_METHODS,
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomCreate',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomCreateParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -40,9 +41,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomList',
     permission: 'workspace',
+    access: { kind: 'reads', targets: {} },
     params: RoomListParams,
     handler: (_params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -55,9 +57,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomShow',
     permission: 'workspace',
+    access: { kind: 'reads', targets: {} },
     params: RoomShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -73,9 +76,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomDelete',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomDeleteParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -84,9 +88,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomMemberAdd',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomMemberAddParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -112,9 +117,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomMemberRemove',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomMemberRemoveParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -123,9 +129,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomSend',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomSendParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -180,9 +187,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomPost',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomPostParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -216,9 +224,10 @@ export const ORCHESTRATION_ROOM_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomLog',
     permission: 'workspace',
+    access: { kind: 'reads', targets: {} },
     params: RoomLogParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

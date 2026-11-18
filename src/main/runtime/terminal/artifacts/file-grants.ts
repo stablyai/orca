@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { assertTerminalArtifactNotHardLinked, terminalFileStatIdentity } from './artifact-integrity'
+import { terminalFileStatIdentity } from './artifact-integrity'
 import { runtimeFileSshTargetId, type ResolvedRuntimeFileTarget } from '../../files/file-target'
 
 const TERMINAL_FILE_GRANT_TTL_MS = 10 * 60 * 1000
@@ -20,8 +20,12 @@ export type RuntimeFileStatLike = {
   nlink?: number
   mtime?: number | Date
   mtimeMs?: number
+  ctimeMs?: number
   isDirectory?: () => boolean
 }
+
+/** The granted bytes in fixed blocks; lets a page be verified without the whole file. */
+export type TerminalFileContentBlocks = { byteLength: number; digests: readonly string[] }
 
 export type TerminalFileGrant = {
   id: string
@@ -33,8 +37,8 @@ export type TerminalFileGrant = {
   statIdentity: string | null
   // Linux can reuse inodes and coarse mtimes; the digest catches same-size content swaps.
   contentDigest: string | null
-  readOnly: boolean
-  provenance: 'terminal-output' | 'native-chat'
+  /** Set with contentDigest from the same read; null where no digest pins the file. */
+  contentBlocks?: TerminalFileContentBlocks | null
   expiryTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -47,12 +51,10 @@ export class RuntimeTerminalFileGrants {
     worktreeId: string
     absolutePath: string
     clientId?: string
-    readOnly?: boolean
-    provenance: TerminalFileGrant['provenance']
     stats: RuntimeFileStatLike
     contentDigest?: string | null
+    contentBlocks?: TerminalFileContentBlocks | null
   }): TerminalFileGrant {
-    assertTerminalArtifactNotHardLinked(args.stats)
     const grant: TerminalFileGrant = {
       id: randomUUID(),
       worktreeId: args.worktreeId,
@@ -62,8 +64,7 @@ export class RuntimeTerminalFileGrants {
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
       statIdentity: terminalFileStatIdentity(args.stats),
       contentDigest: args.contentDigest ?? null,
-      readOnly: args.readOnly === true,
-      provenance: args.provenance
+      contentBlocks: args.contentBlocks ?? null
     }
     this.terminalFileGrants.set(grant.id, grant)
     this.scheduleTerminalFileGrantExpiry(grant)

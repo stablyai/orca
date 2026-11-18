@@ -1,30 +1,24 @@
 import { constants } from 'node:fs/promises'
-import {
-  RuntimeTerminalFileGrants,
-  type RuntimeTerminalFileGrantHost,
-  type TerminalFileGrant
-} from './file-grants'
+import { RuntimeTerminalFileGrants, type RuntimeTerminalFileGrantHost } from './file-grants'
 import type {
   RuntimeFilePreviewResult,
-  RuntimeFileReadResult,
-  RuntimeTerminalPathResolution
-} from '../../../../shared/runtime-file-contracts'
+  RuntimeFileReadChunkResult,
+  RuntimeFileReadResult
+} from '../../../../shared/file-content/runtime-file-read'
+import type { RuntimeTerminalPathResolution } from '../../../../shared/terminal/runtime-terminal-file-path'
 import {
+  assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,
-  isTerminalArtifactHardLinked,
   truncateMobileFilePreview
 } from './artifact-integrity'
 import {
-  resolveAllowedLocalTerminalArtifactPath,
   openLocalTerminalArtifactGrant,
   readLocalTerminalArtifactFileFromHandle,
-  readLocalTerminalArtifactPreviewFromHandle
+  readLocalTerminalArtifactPreviewFromHandle,
+  readLocalTerminalArtifactRangeFromHandle
 } from './local-artifact-read'
 import { statLocalTerminalArtifact } from './artifact-stat'
-import { requireReachableFilesystemRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { assertPreviewWithinTransportBudget } from '../../files/file-preview-budget'
-import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { isMobileBinaryPath } from '../../files/mobile-file-kind'
 import { writeTerminalArtifactFile } from './artifact-write'
 
@@ -35,68 +29,41 @@ export class RuntimeTerminalArtifacts {
     this.grants = new RuntimeTerminalFileGrants(host)
   }
 
-  async resolveAllowedTerminalArtifactPath(args: {
-    absolutePath: string
-    connectionId?: string
-    worktreePath: string
-  }): Promise<string | null> {
-    if (args.connectionId) {
-      throw new SshHostNotServedError(args.connectionId)
-    }
-    return resolveAllowedLocalTerminalArtifactPath(args.absolutePath, args.worktreePath)
-  }
-
-  async resolveNativeChatArtifactPath(
-    absolutePath: string,
-    connectionId?: string
-  ): Promise<string> {
-    requireReachableFilesystemRoute(getConnectionExecutionHostId(connectionId))
-    return canonicalPathForArtifactComparison(absolutePath)
-  }
-
   async resolveAbsoluteFileGrant(args: {
     worktreeId: string
-    artifactPath: string
-    rejectedAbsolutePath?: string
+    absolutePath: string
     clientId?: string
-    readOnly?: boolean
-    provenance?: TerminalFileGrant['provenance']
   }): Promise<RuntimeTerminalPathResolution> {
-    const { stats, contentDigest } = await statLocalTerminalArtifact(args.artifactPath)
+    // Why: the grant binds the canonical path so later reads cannot be redirected through a symlink.
+    const canonicalPath = await canonicalPathForArtifactComparison(args.absolutePath)
+    const { stats, contentDigest, contentBlocks, binary } =
+      await statLocalTerminalArtifact(canonicalPath)
     const isDirectory = stats.isDirectory()
-    if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
-      return {
-        worktree: args.worktreeId,
-        relativePath: null,
-        absolutePath: args.rejectedAbsolutePath ?? args.artifactPath,
-        exists: false,
-        isDirectory: false
-      }
-    }
     const grant = isDirectory
       ? null
       : this.grants.createTerminalFileGrant({
           worktreeId: args.worktreeId,
-          absolutePath: args.artifactPath,
+          absolutePath: canonicalPath,
           clientId: args.clientId,
-          readOnly: args.readOnly === true,
-          provenance: args.provenance ?? 'terminal-output',
           stats,
-          contentDigest
+          contentDigest,
+          contentBlocks
         })
     return {
       worktree: args.worktreeId,
       relativePath: null,
-      absolutePath: args.artifactPath,
+      absolutePath: canonicalPath,
       exists: true,
       isDirectory,
       openTarget: grant
         ? {
             kind: 'absolute-file',
             provider: grant.provider,
-            absolutePath: args.artifactPath,
+            absolutePath: canonicalPath,
             grantId: grant.id,
-            ...(grant.readOnly ? { readOnly: true } : {})
+            byteLength: stats.size,
+            // Why: a grant serves text only; a binary file opens where its bytes editors page it.
+            ...(binary || isMobileBinaryPath(canonicalPath) ? { binary: true as const } : {})
           }
         : undefined
     }
@@ -158,6 +125,57 @@ export class RuntimeTerminalArtifacts {
       )
       this.grants.refreshTerminalFileGrant(grant)
       return assertPreviewWithinTransportBudget(preview, maxContentBytes)
+    } finally {
+      await handle.close()
+    }
+  }
+
+  async readTerminalArtifactChunk(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    offset: number,
+    length: number,
+    clientId?: string
+  ): Promise<RuntimeFileReadChunkResult> {
+    const { grant } = await this.grants.requireTerminalFileGrant(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      clientId
+    )
+    const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+    try {
+      const chunk = await readLocalTerminalArtifactRangeFromHandle(handle, grant, offset, length)
+      this.grants.refreshTerminalFileGrant(grant)
+      return chunk
+    } finally {
+      await handle.close()
+    }
+  }
+
+  /** A granted file's `files.stat` answer, so a reader can page it and spot a rewrite. */
+  async statTerminalArtifact(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    clientId?: string
+  ): Promise<{ size: number; isDirectory: false; mtime: number; ctime: number }> {
+    const { grant } = await this.grants.requireTerminalFileGrant(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      clientId
+    )
+    const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+    try {
+      const stats = await handle.stat()
+      if (!stats.isFile()) {
+        throw new Error('Cannot read a directory')
+      }
+      assertTerminalFileGrantFresh(grant, stats)
+      this.grants.refreshTerminalFileGrant(grant)
+      return { size: stats.size, isDirectory: false, mtime: stats.mtimeMs, ctime: stats.ctimeMs }
     } finally {
       await handle.close()
     }

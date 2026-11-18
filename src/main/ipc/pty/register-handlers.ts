@@ -1,15 +1,16 @@
-import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
+
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { Store } from '../../persistence'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
-import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
+import type { Store } from '../../persistence/loading-store/store'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
+import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/shell/launch/terminal-startup-cwd'
 import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from './delivery/pty-hidden-delivery-gate'
-import { localProvider, type ResolvedPtyHost } from './provider/registry'
+import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
@@ -66,8 +67,9 @@ import {
   resolveCodexResumeLaunch,
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
-import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/launchers/linux-terminal-orca-cli-shim'
+
+import { bindTerminalPaneStatusLifecycle } from './pane/terminal-pane-status-lifecycle'
 
 export function registerPtyHandlers(
   mainWindow?: PtyRendererDelivery,
@@ -96,30 +98,8 @@ export function registerPtyHandlers(
   setRebindProviderListeners(() => {})
   registerRendererLifecycleResetHandlers(mainWindow?.webContents)
 
-  // Only local PTYs change ownership during this machine's daemon swap.
-  const getLocalPtyStartupPromise = (
-    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
-  ): Promise<void> | undefined => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return undefined
-    }
-    // Cold-start local spawns must await daemon handoff; other hosts own their startup.
-    const startup = options?.awaitLocalPtyStartup?.()
-    // Restart replacements must reach the new daemon.
-    const restart = settledDaemonRestart()
-    return startup && restart
-      ? Promise.all([startup, restart]).then(() => undefined)
-      : (startup ?? restart)
-  }
-
-  const getLocalPtyProviderStartupPromise = (
-    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
-  ): Promise<void> | undefined => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return undefined
-    }
-    return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
-  }
+  const { getLocalPtyStartupPromise, getLocalPtyProviderStartupPromise } =
+    createLocalPtyStartupPromises(options)
 
   // macOS window reactivation can re-register; remove old handlers first.
   ipcMain.removeHandler('pty:spawn')
@@ -167,6 +147,7 @@ export function registerPtyHandlers(
     options
   })
   wirePtyIpcSession(session)
+  bindTerminalPaneStatusLifecycle(runtime, store)
   configureLocalPtyProvider({
     runtime,
     getSettings,
@@ -217,13 +198,26 @@ export function registerPtyHandlers(
 
   const assertWorkspaceAcceptsNewPty = (
     worktreeId: string | undefined,
-    sessionId?: string
-  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId)
+    sessionId?: string,
+    cwd?: string,
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
+  ): Promise<void> | void =>
+    assertWorkspaceAcceptsNewPtyImpl(
+      store,
+      worktreeId,
+      sessionId,
+      cwd,
+      passiveWslRestore,
+      connectionId
+    )
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
-  ): string | undefined => resolvePtySpawnStartupCwdImpl(store, worktreeId, cwd, missingDirFallback)
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
+  ): string | undefined =>
+    resolvePtySpawnStartupCwdImpl(store, worktreeId, cwd, missingDirFallback, connectionId)
   const prepareCodexResumeHomeBound = (
     args: Parameters<typeof prepareCodexResumeHome>[1]
   ): ReturnType<typeof prepareCodexResumeHome> =>

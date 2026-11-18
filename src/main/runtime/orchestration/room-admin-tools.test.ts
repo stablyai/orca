@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from './db'
+import { OrchestrationDb } from './db/orchestration-db'
 import {
   parseAdminToolCalls,
   runAdminToolCalls,

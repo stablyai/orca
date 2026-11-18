@@ -1,0 +1,1 @@
+export const DEFAULT_TERMINAL_LIST_LIMIT = 200

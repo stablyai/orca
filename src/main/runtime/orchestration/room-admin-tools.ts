@@ -1,4 +1,4 @@
-import type { OrchestrationDb } from './db'
+import type { OrchestrationDb } from './db/orchestration-db'
 import type { RoomMemberRow, RoomWithMembers } from './db/rooms/room-store'
 
 // Host-side group tools for room admins (the ds-bot Main Bot pattern): an admin

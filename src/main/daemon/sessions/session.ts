@@ -1,0 +1,371 @@
+import { createSessionInitialOutput } from './session-initial-output'
+import { isValidPtySize } from '../protocol/daemon-pty-size'
+import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
+import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
+import { SessionProducerPause } from './session-producer-pause'
+import { SessionFocusReport } from './session-focus-report'
+import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
+import { SessionTerminationController } from './session-termination-controller'
+import { SessionProcessInspection } from './session-process-inspection'
+import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
+import type { SessionOptions } from './session-options'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { randomUUID } from 'node:crypto'
+import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+
+import type {
+  SessionState,
+  ShellReadyState,
+  TakePendingOutputResult
+} from '../protocol/daemon-rpc-contract'
+import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
+import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+
+export class Session extends SessionProcessInspection {
+  readonly sessionId: string
+  readonly incarnationId = randomUUID()
+  readonly terminalHandle: string | null
+  readonly launchAgent: TuiAgent | null
+  readonly wslDistro: string | null
+  private _state: SessionState = 'running'
+  private _exitCode: number | null = null
+  exitCause: TerminalExitCause | undefined
+  private readonly initialOutput: ReturnType<typeof createSessionInitialOutput>
+  private _disposed = false
+  private readonly onSessionExit?: (code: number) => void
+  private readonly output: SessionOutputPlane
+  private readonly producerPause: SessionProducerPause
+  private readonly shellReady: SessionShellReadyBarrier
+  private readonly termination: SessionTerminationController
+  readonly startupIngress: PtyStartupIngress
+  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly focusReport = new SessionFocusReport()
+
+  constructor(opts: SessionOptions) {
+    super(opts.subprocess)
+    this.initialOutput = createSessionInitialOutput(opts)
+    this.sessionId = opts.sessionId
+    this.terminalHandle = opts.terminalHandle ?? null
+    this.launchAgent = opts.launchAgent ?? null
+    this.wslDistro = opts.wslDistro ?? null
+    this.onSessionExit = opts.onExit
+    const isAlive = () => !this._disposed && this._state !== 'exited'
+    const pipeline = createSessionOutputPipeline(opts, isAlive)
+    this.output = pipeline.output
+    this.recoveryBarrier = pipeline.recoveryBarrier
+    this.producerPause = new SessionProducerPause(this.subprocess)
+    this.termination = new SessionTerminationController({
+      sessionId: this.sessionId,
+      subprocess: this.subprocess,
+      isExited: () => this._state === 'exited',
+      releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
+    })
+
+    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
+      this.startupIngress.accept(data)
+    )
+
+    this.startupIngress = new PtyStartupIngress({
+      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+      readForegroundGroup: this.subprocess.readForegroundGroup,
+      write: (data) => this.subprocess.write(data),
+      onEmission: (emission) => this.recoveryBarrier.accept(emission)
+    })
+    try {
+      this.subprocess.onData((data) => {
+        if (!this._disposed) {
+          this.shellReady.ingestSubprocessData(data)
+        }
+      })
+      this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    } catch (error) {
+      this._disposed = true
+      this.shellReady.dispose()
+      this.recoveryBarrier.dispose()
+      this.output.disposeEmulator()
+      throw error
+    }
+  }
+
+  get state(): SessionState {
+    return this._state
+  }
+
+  get shellState(): ShellReadyState {
+    return this.shellReady.state
+  }
+
+  get historySeeded(): boolean | undefined {
+    return this.output.historySeeded
+  }
+
+  get exitCode(): number | null {
+    return this._exitCode
+  }
+
+  get isAlive(): boolean {
+    return this._state !== 'exited'
+  }
+
+  get hasAttachedClients(): boolean {
+    return this.output.hasAttachedClients
+  }
+
+  get physicalCompletion(): Promise<void> {
+    return this.termination.physicalCompletion
+  }
+
+  get isTerminating(): boolean {
+    return this.termination.isTerminating
+  }
+
+  /** Claim termination before async teardown; false means exited or already claimed. */
+  beginTermination(): boolean {
+    return this.termination.beginTermination()
+  }
+
+  get pid(): number {
+    return this.subprocess.pid
+  }
+
+  /** A PTY job result of unavailable does not prove child exit. */
+  terminateOwnedTree(): JobTerminationOutcome {
+    return this.subprocess.terminateOwnedTree()
+  }
+
+  write(data: string): void {
+    // Human input must reach rc-file readers while automatic startup commands wait for readiness.
+    if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
+      this.subprocess.write(data)
+    }
+  }
+
+  /** No viewer is left to blur, so tell a ?1004 program focus is gone unless it already heard so. */
+  reportFocusLost(): void {
+    if (!this.isAlive || this._disposed) {
+      return
+    }
+    const focusOut = this.focusReport.takeFocusLoss(this.recoveryBarrier.focusReportingArming)
+    if (focusOut) {
+      this.subprocess.write(focusOut)
+    }
+  }
+
+  /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
+  writeStartupCommand(data: string): void {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
+      this.subprocess.write(data)
+    }
+  }
+
+  resize(cols: number, rows: number): void {
+    if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
+      return
+    }
+    this.output.resize(cols, rows)
+    this.subprocess.resize(cols, rows)
+  }
+
+  /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
+  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
+    if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
+  }
+
+  resumeProducer(source?: 'stream'): void {
+    this.producerPause.resumeClient(source)
+  }
+
+  /** Signal the root only after its descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    this.termination.signalTerminationRoot()
+  }
+
+  /** Arm escalation after a coordinator begins snapshot-first teardown. */
+  scheduleForceDisposeFallback(): void {
+    this.termination.scheduleForceDisposeFallback()
+  }
+
+  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
+    await this.termination.forceKillAndWaitForExit(timeoutMs)
+  }
+
+  signal(sig: string): void {
+    this.termination.signal(sig)
+  }
+
+  attachClient(client: Omit<AttachedClient, 'token'>): symbol {
+    return this.output.attachClient(client)
+  }
+
+  detachClient(token: symbol): void {
+    this.output.detachClient(token)
+    // With no viewer left to resume the producer, release its pause eagerly.
+    if (!this.output.hasAttachedClients) {
+      this.producerPause.release({ resume: true })
+      this.reportFocusLost()
+    }
+  }
+
+  detachAllClients(): void {
+    this.output.clearClients()
+    this.producerPause.release({ resume: true })
+  }
+
+  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+    this.startupIngress.snapshotBarrier()
+    return this.output.getSnapshot(opts)
+  }
+
+  getPartialEscapeTailAnsi(): string {
+    return this.output.getPartialEscapeTailAnsi()
+  }
+
+  getAppliedSize(): { cols: number; rows: number } | null {
+    return this.output.getAppliedSize()
+  }
+
+  takePendingOutput(
+    includeSnapshot: boolean,
+    opts: { teardownSnapshot?: boolean } = {}
+  ): TakePendingOutputResult | null {
+    if (this._disposed) {
+      return null
+    }
+    const heldBytes =
+      includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
+    return this.output.takePendingOutput(includeSnapshot, heldBytes, () => this.getSnapshot())
+  }
+
+  getCwd(): string | null {
+    return this.output.getCwd()
+  }
+
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  async settleShellOwnershipConfirmation(): Promise<void> {
+    await this.recoveryBarrier.awaitProofSettled()
+    // Snapshot only after the drained prompt is parsed into the model.
+    await this.output.flushParsedWrites()
+  }
+
+  clearScrollback(): void {
+    this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
+  }
+
+  resetInputModes(): void {
+    this.output.applyInputModeGround(this.recoveryBarrier.groundInputModes())
+  }
+
+  prepareForFinalSnapshot(): string {
+    const held = this.shellReady.releaseHeldBytes()
+    this.startupIngress.snapshotBarrier(true)
+    // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
+    this.recoveryBarrier.flushPending()
+    return held
+  }
+
+  dispose(): void {
+    if (this._disposed) {
+      return
+    }
+
+    // Capture termination intent before flipping the state to exited.
+    this.drainStartupOutput()
+    const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
+    const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
+    if (wasTerminating) {
+      this.termination.forceKillDuringDispose().catch(() => {})
+      this._exitCode = -1
+      this.termination.clearTerminating()
+    }
+
+    this.#teardownSubprocess()
+    this._state = 'exited'
+
+    this.output.clearClients()
+    this.shellReady.clearPendingWrites()
+    this.recoveryBarrier.dispose()
+    this.output.disposeEmulator()
+
+    for (const client of clientsToNotify) {
+      client.onExit(-1, this.incarnationId)
+    }
+  }
+
+  /** Free an exited child’s handle without signalling its PID, which may have been reused. */
+  disposeSubprocess(): void {
+    this.#teardownSubprocess()
+    this._state = 'exited'
+  }
+
+  /** Wait for physical child exit before final shutdown disposal; callers must check isAlive first. */
+  async forceKillAndDisposeSubprocess(): Promise<void> {
+    await this.forceKillAndWaitForExit()
+    this.dispose()
+  }
+
+  /** The caller owns state changes after capturing pre-teardown termination intent. */
+  #teardownSubprocess(): void {
+    if (this._disposed) {
+      return
+    }
+    this._disposed = true
+    this.output.markDisposed()
+    this.producerPause.release({ resume: true })
+    this.termination.cancelForceKillFallback()
+    this.shellReady.dispose()
+    this.termination.disposeSubprocessHandle()
+  }
+
+  private drainStartupOutput(): void {
+    this.shellReady.releaseDeviceAttributes()
+    this.shellReady.releaseHeldBytes()
+    this.startupIngress.drainAndClose()
+    // Drain before notifying exits or disposing the attached output plane.
+    this.recoveryBarrier.flushPending()
+  }
+
+  private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
+    // Preserve operator-close intent even when process exit beats the control reply.
+    if (this.termination.isTerminating) {
+      cause = { kind: 'operator_close' }
+    }
+    this.termination.markPhysicalExit()
+    if (this._disposed) {
+      return
+    }
+
+    this.drainStartupOutput()
+    cause = this.initialOutput.resolveExit(code, cause, this.incarnationId)
+    this.exitCause = cause
+    this._exitCode = code
+    this._state = 'exited'
+    this.termination.clearTerminating()
+    // The child is reaped; clear pause timers without resuming its handle.
+    this.producerPause.release({ resume: false })
+
+    this.termination.cancelForceKillFallback()
+    this.shellReady.clearReadyTimer()
+    this.shellReady.clearFlushGate()
+
+    // Free the native fd before GC without marking Session disposed, which would skip its reaper.
+    this.termination.disposeSubprocessHandle()
+
+    this.output.broadcastExit(code, this.incarnationId, cause)
+
+    // Let the host release the emulator and remove the exited session from its map.
+    this.onSessionExit?.(code)
+  }
+
+  closeStartupQueryAuthority(): number {
+    return this.startupIngress.closeQueryAuthority()
+  }
+}

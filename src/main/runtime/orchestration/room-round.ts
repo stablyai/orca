@@ -14,13 +14,13 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
+import { parseOrcaSessionAddress } from '../../../shared/agent-session/identity/orca-session-address'
 import { roomMentionsIn, type RoomMentionable } from '../../../shared/orchestration-room-mentions'
-import type { OrchestrationDb } from './db'
+import type { OrchestrationDb } from './db/orchestration-db'
 import type { RoomLogRow, RoomMemberRow, RoomWithMembers } from './db/rooms/room-store'
-import { sendAgentTurn, type StructuredAgentTurnHost } from './send-agent-turn'
+import { sendAgentTurn, type StructuredAgentTurnHost } from './turn-delivery/send-agent-turn'
 
 export type RoomSlotStatus =
   | 'waiting'

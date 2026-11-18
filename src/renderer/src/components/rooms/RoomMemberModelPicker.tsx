@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import {
   Select,
   SelectContent,

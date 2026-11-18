@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { assistantTextForTurn } from './room-reply-turn-text'
 
 const item = (

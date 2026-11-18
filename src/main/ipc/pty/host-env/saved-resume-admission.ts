@@ -1,27 +1,28 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
-  agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
-} from '../../../../shared/agent-status-types'
-import type { AgentSessionRecordStore } from '../../../runtime/agent-session-record-store'
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeasePossiblyWriting,
   listStructuredProviderSessionOwnership
-} from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+} from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+// oxfmt-ignore
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   keysMayMatch,
   terminalConversationKey
-} from '../../../native-chat/structured-conversation-key'
+} from '../../../native-chat/conversation-adoption/structured-conversation-key'
 
 export type ResumeSpawnArgs = {
   connectionId?: string | null
@@ -137,7 +138,7 @@ async function judgeResumes(
     )
     return { verdict: 'unverifiable', refused: resumes[0] }
   }
-  const heads = listStructuredProviderSessionOwnership(store.listRecords()).filter(
+  const heads = listStructuredProviderSessionOwnership(store.listConversations()).filter(
     (holding) => holding.role === 'head'
   )
   const tabs = store.getVisibleSessionTabIndex()
@@ -145,7 +146,7 @@ async function judgeResumes(
     const holders = heads.filter((holding) =>
       keysOf(refused).some((key) => keysMayMatch(holding.key, key))
     )
-    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.lease))) {
+    if (holders.some((holding) => agentSessionLeasePossiblyWriting(holding.ownerObservation))) {
       return { verdict: 'chat-writing', refused }
     }
     if (holders.length > 0 && (!tabs || !tabs.present)) {

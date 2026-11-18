@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { defineMethod } from '../../../core'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { spawnRoomBot } from '../../../../orchestration/room-bot-spawn'
 import { MAIN_BOT_NAME, MAIN_BOT_ROOM_NAME } from '../../../../orchestration/room-admin-tools'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../../../../shared/structured-agent-session-mutation'
+} from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { ensureRoomReplyWatcherForCurrentHost } from '../../../../orchestration/room-reply-watcher'
 import {
   RoomBotCreateParams,
@@ -18,9 +18,10 @@ import {
 import { roomError, exposeRoom, adminNeedsRespawn } from './room-presentation'
 
 export const ORCHESTRATION_ROOM_BOT_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomBotCreate',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomBotCreateParams,
     handler: async (params, ctx) => {
       const db = ctx.runtime.getOrchestrationDb()
@@ -50,9 +51,10 @@ export const ORCHESTRATION_ROOM_BOT_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomEnsureMainBot',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomEnsureMainBotParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -132,9 +134,10 @@ export const ORCHESTRATION_ROOM_BOT_METHODS = [
     }
   }),
 
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.roomMemberSetModel',
     permission: 'workspace',
+    access: { kind: 'writes', targets: {} },
     params: RoomMemberModelParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

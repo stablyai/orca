@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OrchestrationDb } from './db'
+import { OrchestrationDb } from './db/orchestration-db'
 
 const open = () => new OrchestrationDb(':memory:')
 

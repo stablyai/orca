@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -73,6 +73,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Omitting --limit returns every match (result.meta.limit is null); --limit <n> caps the read.',
+      '--state takes a state name or type, or open for any state not done or canceled.',
       'JSON sets result.truncated when a cap held results back; text prints truncated: showing N.',
       'Reuse --cursor from the previous page. Issued cursors bind the workspace; raw Linear cursors still need --workspace.',
       '--priority is 0=none, 1=urgent, 2=high, 3=medium, 4=low. JSON includes priorityLabel on each issue.'

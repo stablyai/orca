@@ -1,10 +1,12 @@
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  removeManagedCommands,
   type HookDefinition,
   type HooksConfig
-} from '../agent-hooks/installer-utils'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
 
 export const GROK_TOOL_EVENT_MATCHER = '.*'
 

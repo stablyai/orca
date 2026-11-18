@@ -1,5 +1,5 @@
-import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
-import { resolvePtySpawnHostEnv } from '../spawn-host-env'
+import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
+import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {
@@ -26,6 +26,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     mintedSessionId: ctx.ownsNewIncarnation,
     resumeOnSelectedAccount: Boolean(args.replacesPtyId),
     emptySessionIdSkipsHostEnv: false,
+    wslPassiveRestore: args.wslPassiveRestore === true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
     deps: ctx.deps,
