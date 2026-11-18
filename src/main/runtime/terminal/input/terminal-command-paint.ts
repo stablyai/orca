@@ -64,6 +64,8 @@ export class TerminalCommandPaint {
   private reattach: 'unknown' | 'vouched' | 'armed' = 'unknown'
   /** A 133;C parsed since the last 133;D or reattach fence; later ones are the agent's own. */
   private startSeen = false
+  /** A command finished or started since the reattach fence; lost output never erases it. */
+  private boundarySinceReattach = false
   private repaintOffered = false
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
@@ -105,6 +107,7 @@ export class TerminalCommandPaint {
         )
       }
       this.betweenCommands = true
+      this.boundarySinceReattach = this.reattach === 'armed'
       this.startSeen = false
       this.repaintRequestable = false
       this.composers = new Map()
@@ -117,6 +120,8 @@ export class TerminalCommandPaint {
         this.startedAt = at
         this.startSeen = true
         this.startFollowsFinishInRead = finishEnd !== -1
+        this.restoredReportAt = null
+        this.boundarySinceReattach = this.reattach === 'armed'
         // Why identity too: a report from the last command can share this read's millisecond.
         if (finishEnd === -1) {
           this.retiredTitleAt = reports.lastOscTitleAt ?? null
@@ -207,7 +212,7 @@ export class TerminalCommandPaint {
 
   /** A command finished or started since the reattach fence: the program it hid may be gone. */
   hasBoundarySinceReattach(): boolean {
-    return this.reattach === 'armed' && (this.startSeen || this.betweenCommands)
+    return this.boundarySinceReattach
   }
 
   /** A reattach fence with no command boundary since: the program it hid is still the one running. */

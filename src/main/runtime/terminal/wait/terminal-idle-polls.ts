@@ -285,8 +285,11 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       this.quietForegroundByPtyId.set(ptyId, { ...read, process, pending: false })
-      // Why not settle here: the next tick reads the cached pager through the weak-ready path,
-      // which checks the rendered screen for a blocker first.
+      // Why a tick now, not settling here: the weak-ready path reads the cached answer and checks
+      // the rendered screen for a blocker first; waiting for the next sweep could outlast a short wait.
+      if (process !== null && this.entries.has(entry)) {
+        queueMicrotask(() => void this.tick(entry))
+      }
     } finally {
       entry.foregroundPollInFlight = false
     }
