@@ -6,7 +6,10 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../ipc/worktree-logic'
+import {
+  computeWorkspaceRootAsync,
+  getWorktreePathSettings
+} from '../../ipc/worktrees/paths/worktree-logic'
 import { getWorktreeMirrorDistro } from '../execution-host/project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from '../execution-host/local-project-runtime-resolution'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

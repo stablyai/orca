@@ -79,6 +79,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Inline git blame after the cursor line; the status-bar item is separate. */
+  editorInlineBlame: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
@@ -216,6 +218,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
   nativeChatLinkPreviews?: boolean
+  /** Spellcheck and autocorrect (system text replacement) in the chat composer; absent means on. */
+  nativeChatComposerSpellcheck?: boolean
   /** A card under a chat turn that opened a pull request; absent means on. */
   nativeChatOpenedPullRequests?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */

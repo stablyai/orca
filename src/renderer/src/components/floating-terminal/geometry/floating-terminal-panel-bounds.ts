@@ -256,6 +256,14 @@ export function readPersistedFloatingTerminalPanelBounds(): FloatingTerminalPane
   }
 }
 
+export function clearPersistedFloatingTerminalPanelBounds(): void {
+  try {
+    getWindowStorage()?.removeItem(FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY)
+  } catch {
+    // localStorage may be unavailable; a mounted panel still resets for this session.
+  }
+}
+
 export function persistFloatingTerminalPanelBounds(
   bounds: FloatingTerminalPanelCommittedBounds
 ): void {

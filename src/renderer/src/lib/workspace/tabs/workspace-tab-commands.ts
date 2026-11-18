@@ -16,7 +16,7 @@ import {
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
-} from '@/hooks/ipc-tab-switch'
+} from '@/lib/workspace/tabs/ipc-tab-switch'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {

@@ -30,7 +30,7 @@ import {
 } from '@/runtime/source-control/references/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
 import { useTranslate } from '@/i18n/use-translate'
-import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
+import { FilePathCursorTooltip } from '@/components/file-actions/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
 

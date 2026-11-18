@@ -12,7 +12,7 @@ import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placemen
 import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
-import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.

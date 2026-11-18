@@ -299,7 +299,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'muse',
     launchCmd: 'muse --trust-workspace',
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Windows Muse reads console input records (crossterm), so an Enter landing mid-paste stays in its draft (#43126).
+    windowsInputRecordPasteNewline: 'alt-enter'
   },
   dsh: {
     detectCmd: 'dsh-tui',

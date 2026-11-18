@@ -31,7 +31,7 @@ import {
 export const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 
 export const AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on your computer to start an agent from your phone.'
+  'Update Orca on this host to start an agent from your phone.'
 
 // host-status-gates keeps re-reading a failed status in the background, so the user need not act.
 export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host's status. Retrying…"
@@ -65,6 +65,8 @@ export async function launchAgentInExistingWorkspace(args: {
   agent: TuiAgent
   agentArgs?: string
   surface?: 'chat' | 'terminal'
+  /** The phone user's chat preference; the host still opens a chat only where one can run. */
+  nativeChatDefault?: boolean
   prompt?: AgentLaunchPrompt
   /** Model and effort the host applies on whichever route it picks. */
   sessionOptions?: Readonly<Record<string, string>>
@@ -83,6 +85,7 @@ export async function launchAgentInExistingWorkspace(args: {
     ...(args.surface && args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
       ? { surface: args.surface }
       : {}),
+    nativeChatDefault: args.nativeChatDefault,
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),

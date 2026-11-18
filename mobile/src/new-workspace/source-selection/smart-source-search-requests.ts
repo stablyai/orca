@@ -6,10 +6,7 @@ import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { JiraIssue, JiraSiteSelection } from '../../../../src/shared/jira/jira-types'
 import { getJiraIssueSearchQuery } from '../../../../src/shared/new-workspace/smart-workspace-source-results'
-import {
-  buildJiraIssueKeyJql,
-  buildJiraTextMatchJql
-} from '../../../../src/shared/jira/jira-search-input-jql'
+import { searchJiraIssuesByKeyOrText } from '../../../../src/shared/jira/jira-issue-input-search'
 import { jiraIssueSearchRead } from '../../tasks/providers/jira/mobile-jira-operations'
 import { repoBaseRefSearchRead } from '../../source-control/branches/mobile-repo-base-ref-operations'
 import {
@@ -103,15 +100,15 @@ export async function searchJiraIssues(
   if (!searchable) {
     return []
   }
-  // Issue keys are exact lookups; try them before text search.
-  const jql = buildJiraIssueKeyJql(searchable) ?? buildJiraTextMatchJql(searchable)
-  return jiraIssueSearchRead.interpret(
-    await jiraIssueSearchRead.request(client, {
-      jql,
-      limit: JIRA_LIMIT,
-      siteId: siteId ?? undefined
-    })
-  )
+  return searchJiraIssuesByKeyOrText(searchable, async (jql) => [
+    ...jiraIssueSearchRead.interpret(
+      await jiraIssueSearchRead.request(client, {
+        jql,
+        limit: JIRA_LIMIT,
+        siteId: siteId ?? undefined
+      })
+    )
+  ])
 }
 
 export async function searchBranches(

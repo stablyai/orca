@@ -9,7 +9,11 @@ import {
   stripClientHints,
   applyUserAgentMetadataHeaders
 } from './browser-user-agent-request-headers'
-import { googleAuthUserAgent, shouldUseGoogleAuthIdentity } from '../browser-google-auth-ua'
+import {
+  googleAuthUserAgent,
+  shouldUseGoogleAuthIdentity,
+  teamsRequestUserAgent
+} from '../browser-site-user-agent'
 
 export type BrowserSessionRequestUserAgentResolver = (args: {
   session: Session
@@ -56,12 +60,15 @@ export function installBrowserSessionUserAgentPolicy(
       currentUserAgent: requestUserAgent,
       effectiveUserAgent
     })
-    if (!identity) {
-      return
+    if (identity) {
+      setUserAgentHeader(headers, identity.userAgent)
+      if (identity.kind === 'mobile') {
+        applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+      }
     }
-    setUserAgentHeader(headers, identity.userAgent)
-    if (identity.kind === 'mobile') {
-      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+    const outgoingUserAgent = currentUserAgent(headers)
+    if (outgoingUserAgent) {
+      setUserAgentHeader(headers, teamsRequestUserAgent(details.url, outgoingUserAgent))
     }
   }
   sess.webRequest.onBeforeSendHeaders(
