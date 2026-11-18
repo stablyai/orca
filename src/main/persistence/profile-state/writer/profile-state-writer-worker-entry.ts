@@ -12,6 +12,7 @@ import {
   type ProfileStateWriterResponse
 } from './profile-state-writer-protocol'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
+import { profileStateWriterPatching } from '../documents/profile-state-patched-domains'
 
 installWorkerSendLedger('orca-profile-state-writer')
 
@@ -50,7 +51,10 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
       authority.writeCompleteSerializedDomains(request.replacements)
       break
     case 'write-domains':
-      authority.writeSerializedDomains(request.replacements, { patches: request.patches })
+      authority.writeSerializedDomains(request.replacements, {
+        patches: request.patches,
+        patching: profileStateWriterPatching
+      })
       break
     case 'write-automation':
       authority.writeSerializedAutomationRuns(

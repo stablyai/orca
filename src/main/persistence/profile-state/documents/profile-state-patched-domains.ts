@@ -12,6 +12,7 @@ import {
   prepareProfileStateDomainMutation,
   type PreparedProfileStateMutation
 } from './profile-state-domain-write-validation'
+import type { ProfileStateDomainPatching } from './profile-state-domain-writes'
 
 type CommittedDomain = { contentHash: string; value: unknown }
 
@@ -78,4 +79,10 @@ export function preparePatchedProfileStateDomain(
     { domain: patch.domain, payload: JSON.stringify(value) },
     { value }
   )
+}
+
+/** Patch support for the writer worker; main never applies patches. */
+export const profileStateWriterPatching: ProfileStateDomainPatching = {
+  prepare: preparePatchedProfileStateDomain,
+  remember: rememberPatchedProfileStateDomains
 }

@@ -13,6 +13,7 @@ import type {
 } from './profile-state-authority'
 import { Store } from '../store'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { profileStateWriterPatching } from '../../profile-state/documents/profile-state-patched-domains'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -67,7 +68,11 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     const capturedPatches = patches && structuredClone(patches)
     this.captures.push([...captured])
     await this.dispatch(
-      () => this.inner.writeSerializedDomains(captured, { patches: capturedPatches }),
+      () =>
+        this.inner.writeSerializedDomains(captured, {
+          patches: capturedPatches,
+          patching: profileStateWriterPatching
+        }),
       true
     )
   }

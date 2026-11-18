@@ -7,6 +7,7 @@ import { readProfileStateRevision } from '../database/profile-state-revision'
 import { openProfileStateDatabase } from '../database/profile-state-database'
 import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
+import { profileStateWriterPatching as patching } from './profile-state-patched-domains'
 import { buildProfileStateCutoverFixture } from '../../profile-state-cutover-fixture'
 
 const temporaryDirectories: string[] = []
@@ -81,6 +82,7 @@ describe('profile state dirty-domain writes', () => {
         writeProfileStateDomains(db, {
           expectedRevision: 1,
           replacements: [],
+          patching,
           patches: [
             {
               domain: 'workspaceSession',
@@ -101,6 +103,7 @@ describe('profile state dirty-domain writes', () => {
         writeProfileStateDomains(db, {
           expectedRevision: 2,
           replacements: [],
+          patching,
           patches: [
             {
               domain: 'workspaceSession',
