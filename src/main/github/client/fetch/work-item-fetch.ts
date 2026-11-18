@@ -11,6 +11,7 @@ import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../.
 import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { getCachedGitHubPRStackSummary } from './../lookup/pr-stack-summary-cache'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
@@ -171,12 +172,23 @@ export async function fetchPullRequestWorkItem(
       )
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
+      const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
       try {
+        // Merging a stacked PR lands it in the stack base, whose rules then apply.
+        const stack =
+          mapped.state === 'open'
+            ? await getCachedGitHubPRStackSummary(
+                ownerRepo,
+                number,
+                ghOptions,
+                executionScope
+              ).catch(() => undefined)
+            : undefined
         const mergeMetadata = await detectRepositoryMergeMetadata(
           ownerRepo,
-          baseRefName,
+          stack?.baseRefName ?? baseRefName,
           ghOptions,
-          githubPRStackExecutionScope(connectionId, localGitOptions)
+          executionScope
         )
         return {
           ...mapped,
