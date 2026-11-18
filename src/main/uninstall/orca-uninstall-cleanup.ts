@@ -1,7 +1,5 @@
 import { access, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isManagedAgentHookTarget } from '../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
 import type { ServeServiceRun } from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
 import type {
@@ -12,16 +10,15 @@ import type {
   OrcaUninstallStep
 } from '../../shared/uninstall/orca-uninstall-types'
 import {
-  getManagedAgentHookStatuses,
-  removeManagedAgentHooks
-} from '../agent-hooks/installation/managed-agent-hook-controls'
-import {
   findPluginHookFiles,
   removePluginHookFiles,
   type PluginHookRemoval
 } from '../agent-hooks/installation/opencode-pi-plugin-hook-files'
 import type { OrcaInstallIdentity } from './orca-install-identity'
-import { forgetClaudeAgentViewMarkers } from '../claude/agent-view/agent-view-uninstall'
+import {
+  listRegistryAgentLeftovers,
+  removeRegistryAgentHooks
+} from './orca-uninstall-agent-leftovers'
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 import { describeOrcaUninstallPath } from './orca-uninstall-path-display'
 import {
@@ -60,14 +57,14 @@ function isOrcaOwnedCli(status: CliInstallStatus | null): status is CliInstallSt
 
 /** Read-only: lists what Orca added outside its own folders. */
 export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<OrcaUninstallPlan> {
-  const registryAgents: OrcaUninstallAgentEntry[] = getManagedAgentHookStatuses()
-    .filter((status) => status.managedHooksPresent)
-    .map((status) => ({
-      agent: status.agent,
-      paths: status.configPath ? [describeOrcaUninstallPath(status.configPath, host)] : [],
-      state: 'present',
-      detail: null
-    }))
+  const registryAgents: OrcaUninstallAgentEntry[] = (
+    await listRegistryAgentLeftovers(host.userDataPath)
+  ).map(({ agent, paths }) => ({
+    agent,
+    paths: paths.map((path) => describeOrcaUninstallPath(path, host)),
+    state: 'present',
+    detail: null
+  }))
   const pluginAgents: OrcaUninstallAgentEntry[] = (
     await findPluginHookFiles({ homeDir: host.homeDir })
   ).map((entry) => ({
@@ -112,18 +109,6 @@ function isPending(
   return entry.state !== 'removed' && (only === null || only.has(id))
 }
 
-function registryOutcome(
-  status: AgentHookInstallStatus | undefined
-): Pick<OrcaUninstallAgentEntry, 'state' | 'detail'> {
-  if (!status) {
-    return { state: 'removed', detail: null }
-  }
-  if (status.state === 'error' || status.managedHooksPresent) {
-    return { state: 'error', detail: status.detail ?? 'Orca hooks are still in this file.' }
-  }
-  return { state: 'removed', detail: null }
-}
-
 async function runAgentHooks(
   plan: OrcaUninstallPlan,
   host: OrcaUninstallHost,
@@ -155,19 +140,10 @@ async function runAgentHooks(
       })
     ).map((removal) => [removal.agent, removal])
   )
-  const registryAgents = pending.map((entry) => entry.agent).filter(isManagedAgentHookTarget)
-  const statuses = new Map<string, AgentHookInstallStatus>(
-    registryAgents.length === 0
-      ? []
-      : (await removeManagedAgentHooks({ agents: registryAgents })).map((status) => [
-          status.agent,
-          status
-        ])
+  const outcomes = await removeRegistryAgentHooks(
+    new Set(pending.map((entry) => entry.agent)),
+    host
   )
-  const claude = statuses.get('claude')
-  if (claude && registryOutcome(claude).state === 'removed') {
-    await forgetClaudeAgentViewMarkers().catch(() => {})
-  }
   return update((entry) => {
     const plugin = pluginRemovals.get(entry.agent)
     if (plugin) {
@@ -175,9 +151,7 @@ async function runAgentHooks(
         ? { state: 'error', detail: plugin.error }
         : { state: 'removed', detail: null }
     }
-    return PLUGIN_AGENTS.has(entry.agent)
-      ? { state: 'removed', detail: null }
-      : registryOutcome(statuses.get(entry.agent))
+    return outcomes.get(entry.agent) ?? { state: 'removed', detail: null }
   })
 }
 

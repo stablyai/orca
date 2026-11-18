@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
+  isPlainObject,
+  parseHooksJsonText
+} from '../agent-hooks/installation/configuration/hooks-json-read'
 
 // Muse strips nonstandard environment variables from managed hooks unless allowlisted.
 export const MUSE_MANAGED_HOOK_ENV_VARS = [
@@ -23,6 +26,12 @@ export function hasOrcaEnvVars(config: Record<string, unknown>): boolean {
   const names: readonly unknown[] = MUSE_MANAGED_HOOK_ENV_VARS
   const listed = config.managed_hooks_env_vars
   return Array.isArray(listed) && listed.some((name) => names.includes(name))
+}
+
+/** Only the schema_version Orca writes is left; strict JSON keeps a file with user comments. */
+export function isOnlyOrcaSchemaVersion(text: string): boolean {
+  const config = parseHooksJsonText(text)
+  return config?.schema_version === 1 && Object.keys(config).length === 1
 }
 
 export type MuseSettingsSource = {

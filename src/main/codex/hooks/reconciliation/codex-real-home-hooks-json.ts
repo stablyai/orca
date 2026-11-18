@@ -32,8 +32,12 @@ export function getRealHomeHookKeySourcePaths(
 }
 
 // Keep the pristine backup separate from writeHooksJson's rolling hooks.json.bak.
-function getRealHomeHookStateDir(userDataPath: string): string {
+export function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')
+}
+
+export function getRealHomeHooksPristineBackupPath(userDataPath: string): string {
+  return join(getRealHomeHookStateDir(userDataPath), 'hooks.json.pre-orca')
 }
 
 export class HooksJsonChangedError extends Error {
@@ -83,7 +87,7 @@ export function backupRealHomeHooksJsonOnce(
     return
   }
   const backupDir = getRealHomeHookStateDir(userDataPath)
-  const backupPath = join(backupDir, 'hooks.json.pre-orca')
+  const backupPath = getRealHomeHooksPristineBackupPath(userDataPath)
   if (existsSync(backupPath)) {
     return
   }

@@ -14,6 +14,7 @@ import {
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { probeClaudeCliVersion } from '../../claude/cli-capabilities/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
+import { runWithoutRollingFileBackups } from '../../filesystem/rolling-file-backup'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
@@ -208,7 +209,7 @@ export async function removeManagedAgentHooks(
       continue
     }
     try {
-      results.push(await remove())
+      results.push(await runWithoutRollingFileBackups(remove))
     } catch (error) {
       results.push(errorStatus(agent, error))
     }
@@ -225,7 +226,7 @@ export async function removeManagedAgentHooksAsync(
       ([agent]) => allowed === null || allowed.has(agent)
     ).map(async ([agent, remove]) => {
       try {
-        return await remove()
+        return await runWithoutRollingFileBackups(remove)
       } catch (error) {
         return errorStatus(agent, error)
       }

@@ -7,7 +7,7 @@ import {
 import { assertOwnedHostCodexManagedHomePath } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 // Enumerate disk to include retired accounts without a settings store; WSL scans its own homes.
-export function getCodexAccountHomeSessionDirectories(): string[] {
+export function listCodexAccountHomes(): string[] {
   const accountsRoot = join(getOrcaUserDataPath(), 'codex-accounts')
   try {
     return readdirSync(accountsRoot, { withFileTypes: true })
@@ -21,9 +21,7 @@ export function getCodexAccountHomeSessionDirectories(): string[] {
             systemCodexHomePath: getSystemCodexHomePath(),
             expectedAccountId: entry.name
           })
-          const sessionsPath = join(accountHome, 'sessions')
-          // Why: a redirected sessions root could make usage scan unrelated, unbounded trees.
-          return lstatSync(sessionsPath).isDirectory() ? [sessionsPath] : []
+          return [accountHome]
         } catch {
           return []
         }
@@ -31,4 +29,16 @@ export function getCodexAccountHomeSessionDirectories(): string[] {
   } catch {
     return []
   }
+}
+
+export function getCodexAccountHomeSessionDirectories(): string[] {
+  return listCodexAccountHomes().flatMap((accountHome) => {
+    const sessionsPath = join(accountHome, 'sessions')
+    try {
+      // Why: a redirected sessions root could make usage scan unrelated, unbounded trees.
+      return lstatSync(sessionsPath).isDirectory() ? [sessionsPath] : []
+    } catch {
+      return []
+    }
+  })
 }
