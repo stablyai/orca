@@ -63,7 +63,25 @@ export class HistoryResumePlanner {
     if (args.commitToken) {
       const receipt = this.receipts.get(args.commitToken)
       if (!receipt) {
+        const retained = await this.deps.ledger.launchReceipts.get(args.commitToken)
+        if (retained && retained.workspaceId === args.workspaceId) {
+          const current = (await this.deps.ledger.list()).find(
+            (entry) =>
+              entry.provider === retained.entry.provider &&
+              entry.filePath === retained.entry.filePath
+          )
+          if (current && current.openedAt >= retained.entry.openedAt) {
+            return { useRealCodexHome: false }
+          }
+          if (retained.entry.openedAt + 1_800_000 > Date.now()) {
+            await this.deps.ledger.record(retained.entry)
+            return { useRealCodexHome: false }
+          }
+        }
         throw new Error('The resume receipt expired. Refresh History.')
+      }
+      if (receipt.workspaceId !== args.workspaceId) {
+        throw new Error('The resume receipt belongs to another workspace.')
       }
       const openedAt = Date.now()
       for (const entry of receipt.entries) {

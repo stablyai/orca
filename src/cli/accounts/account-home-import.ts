@@ -31,7 +31,9 @@ export async function importAccountHome(ctx: HandlerContext, agent: string): Pro
       ? sourceHome
       : resolve(ctx.cwd, sourceHome)
   const wsl = parseWslUncPath(source)
-  const target = wsl ? { runtime: 'wsl' as const, wslDistro: wsl.distro } : null
+  const target = wsl
+    ? { runtime: 'wsl' as const, wslDistro: wsl.distro }
+    : { runtime: 'host' as const }
   const historyFlag = ctx.flags.get('import-history')
   if (
     historyFlag !== undefined &&

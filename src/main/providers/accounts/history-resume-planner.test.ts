@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { appendFile, mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HistoryResumePlanner } from './history-resume-planner'
+import { HistoryResumePlanner, type HistoryResumePlannerDeps } from './history-resume-planner'
 import { HistoryContinuationLedger } from './history-continuation-ledger'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 
@@ -10,6 +10,7 @@ const sessionId = '00000000-0000-4000-8000-000000000010'
 let root: string
 let ledger: HistoryContinuationLedger
 let planner: HistoryResumePlanner
+let plannerDeps: HistoryResumePlannerDeps
 let args: AiVaultPrepareSessionResumeArgs
 let workspaceAccountId: string | undefined
 let workAvailable = true
@@ -30,7 +31,7 @@ beforeEach(async () => {
   workspaceAccountId = undefined
   workAvailable = true
   failIndex = false
-  planner = new HistoryResumePlanner({
+  plannerDeps = {
     ledger,
     roots: async () => [join(home, 'sessions'), join(target, 'sessions')],
     workspacePath: () => workspace,
@@ -48,7 +49,8 @@ beforeEach(async () => {
       missingThreads: 0,
       failedThreads: failIndex ? 1 : 0
     })
-  })
+  }
+  planner = new HistoryResumePlanner(plannerDeps)
   args = {
     agent: 'codex',
     sessionId,
@@ -194,4 +196,15 @@ it('keeps a validated resume choice after commit even when the workspace account
   await expect(
     planner.accountForReceipt(opened.resumeReceipt!, 'codex', 'folder:another')
   ).rejects.toThrow('another workspace')
+})
+
+it('recovers an unacknowledged open after a host restart and accepts the commit retry', async () => {
+  const opened = await open('work')
+  planner = new HistoryResumePlanner(plannerDeps)
+  await expect(
+    planner.prepare({ ...args, workspaceId: 'folder:another', commitToken: opened.resumeReceipt })
+  ).rejects.toThrow('expired')
+  await planner.prepare({ ...args, commitToken: opened.resumeReceipt })
+  await planner.prepare({ ...args, commitToken: opened.resumeReceipt })
+  expect((await planner.prepare({ ...args, preview: true })).resumePlan?.lastAccountId).toBe('work')
 })
