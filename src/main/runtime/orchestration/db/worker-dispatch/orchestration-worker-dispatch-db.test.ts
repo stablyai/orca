@@ -185,36 +185,6 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
   })
 
-  it.each([
-    [{ workerProcessExited: true, terminalExited: true }, 'released'],
-    [{ workerProcessExited: true, workerStage: 'agent_session_lost' }, 'not_requested']
-  ] as const)('releases the terminal only on its own exit (%o)', (options, releaseState) => {
-    const d = createDb()
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'exit' })
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    d.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: 'term_worker',
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1',
-      worktreeId: 'repo::worktree',
-      setupState: 'not_applicable',
-      terminalOwnership: 'created',
-      effects: []
-    })
-    d.markWorkerDispatchReady(started.dispatch.id)
-    d.failDispatch(started.dispatch.id, 'exited', options)
-    expect(d.getWorkerDispatch(started.dispatch.id)?.state).toBe('failed')
-    expect(d.getWorkerTerminalResourceByOwner(started.dispatch.id)?.release_state).toBe(
-      releaseState
-    )
-  })
-
   it('allows explicit stop recovery from uncertain local and remote starts', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'uncertain local start' })

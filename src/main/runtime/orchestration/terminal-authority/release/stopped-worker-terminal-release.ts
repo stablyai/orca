@@ -1,5 +1,7 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import type { WorkerTerminalProcessIndex } from './worker-terminal-process-liveness'
+import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
+import type { OrchestrationDb } from '../../db/orchestration-db'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 const PAGE_ROWS = 50
@@ -32,8 +34,8 @@ export function sweepStoppedWorkerTerminals(
 }
 
 /**
- * Releases settled workers' terminals that are still owned and never requested, as older builds left
- * them after a stop or exit, so their Run can retire. Only an exact process exit counts; a live or
+ * Releases settled terminal workers' rows that are still owned and never requested, as older builds
+ * left them after a stop or exit, so their Run can retire. Only an exact process exit counts; a live or
  * unverifiable process keeps its row. Each host is listed once per sweep.
  */
 async function releaseExitedWorkerTerminals(
@@ -46,10 +48,14 @@ async function releaseExitedWorkerTerminals(
   }
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
   // Timestamps are whole seconds: only rows written before the sweep's second predate every listing.
-  const fence = String(db.db.prepare("SELECT datetime('now') AS now").get()?.now)
-  const exited: { requestingDispatchId: string; resourceId: string; processIncarnation: string }[] =
-    []
-  let structuredHostReady = false
+  const fence = readSqliteNow(db)
+  const exited: {
+    requestingDispatchId: string
+    resourceId: string
+    processIncarnation: string
+    terminalHandle: string
+    attachedAt: string
+  }[] = []
   let after = 0
   for (;;) {
     const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
@@ -62,16 +68,9 @@ async function releaseExitedWorkerTerminals(
       if (!processIncarnation) {
         continue
       }
+      // A chat worker can restart on mail between this check and the release; only its stop settles it.
       if (isStructuredWorkerHandle(resource.terminal_handle)) {
-        // Without a saved reference its chat history is read through the live row; keep that.
-        if (!db.hasWorkerTerminalArchive(resource.owner_dispatch_id)) {
-          continue
-        }
-        if (!structuredHostReady) {
-          // Structured liveness reads the session host's durable records.
-          structuredHostReady = true
-          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-        }
+        continue
       }
       const liveness = await runtime
         .inspectTerminalProcessIncarnationLiveness(
@@ -86,13 +85,34 @@ async function releaseExitedWorkerTerminals(
       exited.push({
         requestingDispatchId: resource.owner_dispatch_id,
         resourceId: resource.id,
-        processIncarnation
+        processIncarnation,
+        terminalHandle: resource.terminal_handle,
+        attachedAt:
+          db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at
       })
     }
     if (page.length < PAGE_ROWS) {
       break
     }
   }
+  // A wall clock stepped back since the fence could let a newer row slip under it.
+  if (exited.length === 0 || stopped() || readSqliteNow(db) < fence) {
+    return 0
+  }
+  for (const release of exited) {
+    // Record where its output still lives, as a stop does; synchronous, so nothing runs in between.
+    archiveWorkerOutputBeforeStop({
+      runtime,
+      db,
+      dispatchId: release.requestingDispatchId,
+      terminalHandle: release.terminalHandle,
+      attachedAt: release.attachedAt
+    })
+  }
   // One write, so Crew readers wake once per sweep; it re-checks owner, incarnation and archive.
-  return exited.length > 0 && !stopped() ? db.settleDeadWorkerTerminalReleases(exited) : 0
+  return db.settleDeadWorkerTerminalReleases(exited)
+}
+
+function readSqliteNow(db: OrchestrationDb): string {
+  return String(db.db.prepare("SELECT datetime('now') AS now").get()?.now)
 }

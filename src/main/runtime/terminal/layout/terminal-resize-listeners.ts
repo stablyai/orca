@@ -75,7 +75,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       : { reason: 'exited' as const, cause: errorContext }
     const settledLocally = this.failActiveDispatchAndReport(handle, paneKey ?? undefined, {
       error: errorContext,
-      options: { workerProcessExited: true, terminalExited: true, terminationReason: cause.kind },
+      options: { workerProcessExited: true, terminationReason: cause.kind },
       processExited: true,
       stop: { ...stop, lastOutput }
     })
