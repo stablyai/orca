@@ -1,5 +1,9 @@
 // The desktop's Request access wording, from the shared table, for the phone's bot sheet.
-import { BOT_ACCESS_FROM_PHONE, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
+import {
+  botAccessPlace,
+  botAccessCopy,
+  type BotAccessHost
+} from '../../../src/shared/bots/bot-access-copy'
 import {
   accessRequestIdentity,
   accessRequestPerson
@@ -19,6 +23,7 @@ import {
 /** What the phone knows of a bot's access. */
 export type PhoneAccessBot = {
   name: string
+  accessHost?: BotAccessHost
   agent: string
   permissionMode?: AgentChatPermissionMode
   google?: boolean
@@ -37,7 +42,7 @@ export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail
     botReachLineText(line, {
       name: bot.name,
       agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: BOT_ACCESS_FROM_PHONE,
+      place: botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' }),
       mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
     })
   )
@@ -75,7 +80,7 @@ export function accessGrantConfirmCopy(
         person,
         name,
         place: accessRequestPlace(request),
-        ...BOT_ACCESS_FROM_PHONE
+        ...botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' })
       }),
       identity
         ? botAccessCopy('account', { connector: CONNECTOR_SOURCE_NAMES[request.source], identity })
@@ -84,7 +89,10 @@ export function accessGrantConfirmCopy(
       ...phoneBotReachLines(bot).map((line) =>
         line.detail ? `${line.title}. ${line.detail}` : `${line.title}.`
       ),
-      botAccessCopy('yourAccess', { name, ...BOT_ACCESS_FROM_PHONE }),
+      botAccessCopy('yourAccess', {
+        name,
+        ...botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' })
+      }),
       botAccessCopy('removeAnyTime')
     ]
       .filter(Boolean)
