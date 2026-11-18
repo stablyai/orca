@@ -48,10 +48,16 @@ function launcherIn(appBundle: string): { resourcesPath: string; launcher: strin
 }
 
 async function writeLauncher(
-  appBundle: string
+  appBundle: string,
+  bundleId = 'com.stablyai.orca'
 ): Promise<{ resourcesPath: string; launcher: string }> {
   const paths = launcherIn(appBundle)
   await mkdir(join(paths.resourcesPath, 'bin'), { recursive: true })
+  await writeFile(
+    join(appBundle, 'Contents', 'Info.plist'),
+    `<plist><dict>\n<key>CFBundleIdentifier</key>\n<string>${bundleId}</string>\n</dict></plist>`,
+    'utf8'
+  )
   await writeFile(paths.launcher, '#!/usr/bin/env bash\necho orca\n', {
     encoding: 'utf8',
     mode: 0o755
@@ -94,7 +100,17 @@ describe('CLI link owned by another Orca app', () => {
     await mkdir(join(root, 'bin'), { recursive: true })
     await writeFile(plainFile, '', 'utf8')
 
-    expect(await otherMacAppBundle(other.launcher, ours.launcher)).toBe(otherApp)
+    expect(await otherMacAppBundle(other.launcher, ours.launcher)).toEqual({
+      path: otherApp,
+      isOrca: true
+    })
+    // The bundle identifier decides, not the bundle name.
+    const renamedApp = join(root, 'Renamed.app')
+    const renamed = await writeLauncher(renamedApp)
+    expect(await otherMacAppBundle(renamed.launcher, ours.launcher)).toEqual({
+      path: renamedApp,
+      isOrca: true
+    })
     expect(await otherMacAppBundle(ours.launcher, ours.launcher)).toBeNull()
     expect(await otherMacAppBundle(plainFile, ours.launcher)).toBeNull()
     expect(
@@ -253,6 +269,79 @@ describe('CLI link owned by another Orca app', () => {
       expect(after.state).toBe('installed')
       expect(after.detail).toBe(`Registered at ${commandPath}.`)
       expect(await readlink(commandPath)).toBe(ours.launcher)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'uses neutral text for a non-Orca bundle whose launcher is named orca',
+    async () => {
+      const root = await tempRoot()
+      const toolApp = join(root, 'Tool.app')
+      const tool = await writeLauncher(toolApp, 'com.example.tool')
+      const ours = await writeLauncher(join(root, 'Orca Beta.app'))
+      const { installer, commandPath } = await installerLinkedTo(root, tool.launcher, ours)
+
+      const before = await installer.getStatus()
+      expect(before.state).toBe('stale')
+      expect(before.detail).toBe(
+        `${commandPath} belongs to another app (${toolApp}). Register replaces it.`
+      )
+
+      const after = await installer.install()
+      expect(after.state).toBe('installed')
+      expect(after.detail).toBe(`Replaced the ${commandPath} link to ${toolApp}.`)
+    }
+  )
+
+  /** Runs `change` just before the status probe that follows the link change. */
+  function beforeFinalStatus(installer: CliInstaller, change: () => Promise<void>): void {
+    const realGetStatus = installer.getStatus.bind(installer)
+    let calls = 0
+    vi.spyOn(installer, 'getStatus').mockImplementation(async () => {
+      calls += 1
+      if (calls === 2) {
+        await change()
+      }
+      return realGetStatus()
+    })
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the notice when the other app goes away after the link changes',
+    async () => {
+      const root = await tempRoot()
+      const otherApp = join(root, 'Orca.app')
+      const other = await writeLauncher(otherApp)
+      const ours = await writeLauncher(join(root, 'Orca Beta.app'))
+      const { installer, commandPath } = await installerLinkedTo(root, other.launcher, ours)
+      beforeFinalStatus(installer, () => rm(otherApp, { recursive: true, force: true }))
+
+      const after = await installer.install()
+      expect(after.state).toBe('installed')
+      expect(after.detail).toBe(
+        `Replaced the ${commandPath} link to ${otherApp}. To switch back, register the CLI again in that app.`
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'adds no notice when a missing app comes back after the link changes',
+    async () => {
+      const root = await tempRoot()
+      const goneApp = join(root, 'Gone', 'Orca.app')
+      const ours = await writeLauncher(join(root, 'Orca Beta.app'))
+      const { installer, commandPath } = await installerLinkedTo(
+        root,
+        launcherIn(goneApp).launcher,
+        ours
+      )
+      beforeFinalStatus(installer, async () => {
+        await writeLauncher(goneApp)
+      })
+
+      const after = await installer.install()
+      expect(after.state).toBe('installed')
+      expect(after.detail).toBe(`Registered at ${commandPath}.`)
     }
   )
 })

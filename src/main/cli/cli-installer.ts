@@ -136,6 +136,8 @@ export class CliInstaller extends CliPathRegistration {
       )
     }
 
+    // Read the other app before the link changes; later probes see the disk after Register.
+    const replacedApp = await otherMacAppBundle(status.currentTarget, status.launcherPath)
     if (status.installMethod === 'symlink') {
       await this.installSymlink(status)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
@@ -159,11 +161,12 @@ export class CliInstaller extends CliPathRegistration {
     const finalStatus = await (extractedRoot
       ? this.getStatusForLauncher(extractedRoot.stableLauncherPath)
       : this.getStatus())
-    const replacedApp = await otherMacAppBundle(status.currentTarget, status.launcherPath)
     return replacedApp && finalStatus.state === 'installed'
       ? {
           ...finalStatus,
-          detail: `Replaced the ${status.commandPath} link to ${replacedApp}. To switch back, register the CLI again in that app.`
+          detail: replacedApp.isOrca
+            ? `Replaced the ${status.commandPath} link to ${replacedApp.path}. To switch back, register the CLI again in that app.`
+            : `Replaced the ${status.commandPath} link to ${replacedApp.path}.`
         }
       : finalStatus
   }

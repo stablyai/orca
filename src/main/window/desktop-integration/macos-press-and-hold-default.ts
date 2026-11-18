@@ -55,8 +55,12 @@ export function isOrcaPreferencesDomain(domain: string): boolean {
 }
 
 export function readBundleIdentifierFromExecutablePath(execPath: string): string | null {
+  return readBundleIdentifierFromInfoPlist(join(dirname(dirname(execPath)), 'Info.plist'))
+}
+
+export function readBundleIdentifierFromInfoPlist(infoPlistPath: string): string | null {
   try {
-    const plist = readFileSync(join(dirname(dirname(execPath)), 'Info.plist'), 'utf8')
+    const plist = readFileSync(infoPlistPath, 'utf8')
     const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(plist)
     const identifier = match?.[1]?.trim()
     return identifier ? identifier : null

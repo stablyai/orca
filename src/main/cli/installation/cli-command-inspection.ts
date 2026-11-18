@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { lstat, readFile, readlink, realpath } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { CliInstallMethod, CliInstallStatus } from '../../../shared/cli-install-types'
 import { isAppImageExtractedLauncherPath } from '../appimage/appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
@@ -13,17 +13,23 @@ import { isMissingError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from '../command-paths/cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from '../appimage/legacy-appimage-cli-wrapper'
+import {
+  isOrcaPreferencesDomain,
+  readBundleIdentifierFromInfoPlist
+} from '../../window/desktop-integration/macos-press-and-hold-default'
 
 // Match after-install.sh's electron-builder name variants when reclaiming packaged launchers.
 const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Orca', '/opt/orca-ide', '/opt/orca']
 
 const MAC_APP_LAUNCHER_RE = /^(.*?\.app)[/\\]Contents[/\\]Resources[/\\]bin[/\\][^/\\]+$/
 
+export type OtherMacAppBundle = { path: string; isOrca: boolean }
+
 /** The other .app bundle that owns `target`, when `target` exists and is not in the bundle of `launcherPath`. */
 export async function otherMacAppBundle(
   target: string | null,
   launcherPath: string
-): Promise<string | null> {
+): Promise<OtherMacAppBundle | null> {
   const other = target?.match(MAC_APP_LAUNCHER_RE)?.[1]
   if (!target || !other) {
     return null
@@ -35,7 +41,12 @@ export async function otherMacAppBundle(
     // Another path to our own bundle is not another app. realpath gives the letter case
     // on disk, so a case-insensitive disk compares the same bundle as equal.
     const oursOnDisk = ours ? await realpath(ours).catch(() => null) : null
-    return (await realpath(other)) === oursOnDisk ? null : other
+    if ((await realpath(other)) === oursOnDisk) {
+      return null
+    }
+    // Users can rename or move Orca.app, so the bundle identifier decides, not the name.
+    const bundleId = readBundleIdentifierFromInfoPlist(join(other, 'Contents', 'Info.plist'))
+    return { path: other, isOrca: bundleId !== null && isOrcaPreferencesDomain(bundleId) }
   } catch {
     return null
   }
@@ -121,11 +132,13 @@ export class CliCommandInspection extends CliInstallLocation {
         currentTarget: resolvedCurrentTarget,
         detail: isInstalled
           ? `Registered at ${commandPath}.`
-          : isManagedStaleTarget && otherApp
-            ? `${commandPath} belongs to another Orca app (${otherApp}). Register replaces it. To switch back, register the CLI again in that app.`
-            : isManagedStaleTarget
-              ? `${commandPath} points to an older Orca launcher.`
-              : `${commandPath} points to a non-Orca launcher.`
+          : otherApp?.isOrca
+            ? `${commandPath} belongs to another Orca app (${otherApp.path}). Register replaces it. To switch back, register the CLI again in that app.`
+            : otherApp
+              ? `${commandPath} belongs to another app (${otherApp.path}). Register replaces it.`
+              : isManagedStaleTarget
+                ? `${commandPath} points to an older Orca launcher.`
+                : `${commandPath} points to a non-Orca launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {

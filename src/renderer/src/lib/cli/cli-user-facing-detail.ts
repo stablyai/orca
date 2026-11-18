@@ -100,6 +100,18 @@ const KNOWN_CLI_DETAILS: {
     vars: (match) => ({ path: match?.[1] ?? '', app: match?.[2] ?? '' })
   },
   {
+    test: /^(.+) belongs to another app \((.+)\)\. Register replaces it\.?$/,
+    key: 'auto.lib.cli.detail.nonOrcaAppOwnsLink',
+    fallback: '{{path}} belongs to another app ({{app}}). Register replaces it.',
+    vars: (match) => ({ path: match?.[1] ?? '', app: match?.[2] ?? '' })
+  },
+  {
+    test: /^Replaced the (.+) link to (.+?)\.?$/,
+    key: 'auto.lib.cli.detail.replacedNonOrcaAppLink',
+    fallback: 'Replaced the {{path}} link to {{app}}.',
+    vars: (match) => ({ path: match?.[1] ?? '', app: match?.[2] ?? '' })
+  },
+  {
     test: /Registered at (.+)\.?$/,
     key: 'auto.lib.cli.detail.registeredAt',
     fallback: 'Registered at {{path}}.',
