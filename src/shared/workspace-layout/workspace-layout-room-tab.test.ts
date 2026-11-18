@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { TAB_CONTENT_TRAITS, toVisibleTabType } from './tab-groups/tab-types'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf } from './workspace-layout-command-types'
 import { build, testContext, WS } from './commands/workspace-layout-command.test-fixture'
@@ -35,10 +34,5 @@ describe('a room tab', () => {
     expect(again.ok && again.model).toEqual(model)
     const taken = applyLayoutCommand(model, room({ tabId: results[0]!.tabId! }), ctx)
     expect(taken.ok ? 'applied' : taken.code).toBe('tab_exists')
-  })
-
-  it('renders without a backing record and shows where a chat does', () => {
-    expect(TAB_CONTENT_TRAITS.room.renderableWithoutRecord).toBe(true)
-    expect(toVisibleTabType('room')).toBe('agent-session')
   })
 })

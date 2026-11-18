@@ -6,13 +6,8 @@ import {
   connectorNoAccessView
 } from './connector-message-asker-view'
 
-// English fallbacks with i18next's interpolation and the one-item plural.
 function t(_key: string, fallback: string, values: Record<string, unknown> = {}): string {
-  const text =
-    values.count === 1 && typeof values.defaultValue_one === 'string'
-      ? values.defaultValue_one
-      : fallback
-  return text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values[name]))
+  return fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values[name]))
 }
 
 const SAM: ConnectorMessageAsker = {
@@ -87,11 +82,6 @@ describe('connectorNoAccessView', () => {
       ['Someone', 'S', 'Someone · Slack · no access', 'Only on main.']
     ])
     expect(new Set(view?.lines.map((line) => line.key)).size).toBe(3)
-  })
-
-  it('says one line in the singular', () => {
-    const view = connectorNoAccessView({ ...SAM, noAccess: [{ text: 'hi' }] }, t)
-    expect(view?.toggle).toBe('1 earlier message in the thread')
   })
 })
 

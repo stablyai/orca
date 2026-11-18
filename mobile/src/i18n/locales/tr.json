@@ -165,11 +165,13 @@
       "invalidUrl": "Geçerli bir URL girin."
     },
     "paneView": {
-      "dialogTitle": "Tarayıcı İletişim Kutusu",
       "forward": "İleri",
       "keyboardPlaceholder": "Sayfaya yazın…",
       "reload": "Yenile",
-      "sendText": "Tarayıcıya metin gönder"
+      "sendText": "Tarayıcıya metin gönder",
+      "dialogTitleWithOrigin": "{{origin}} diyor ki",
+      "dialogTitleNoOrigin": "Bu sayfa diyor ki",
+      "dialogAnswer": "Yanıt"
     },
     "pointerModifiers": {
       "clickModifier": "Tıklamalarda {{key}} tuşunu kullan"
@@ -182,6 +184,9 @@
     "viewModeSwitch": {
       "mobileView": "Web sitesinin mobil görünümünü göster",
       "webView": "Web sitesinin masaüstü görünümünü göster"
+    },
+    "loadFailure": {
+      "retry": "Yeniden dene"
     }
   },
   "chat": {
@@ -215,7 +220,8 @@
     "contextUsage": {
       "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
       "title": "Bağlam",
-      "estimated": "Son yanıta göre tahmin edilmiştir."
+      "estimated": "Son yanıta göre tahmin edilmiştir.",
+      "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",

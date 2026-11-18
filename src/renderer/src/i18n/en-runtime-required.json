@@ -1575,7 +1575,9 @@
       "pill": {
         "addedRepositories_one": "Added {{count}} repository",
         "addedRepositories_other": "Added {{count}} repositories"
-      }
+      },
+      "repositoryCount_one": "{{count}} repository in {{accounts}}",
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
     },
     "google": {
       "headline": {

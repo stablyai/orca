@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountsState
@@ -227,9 +228,9 @@ export function fetchProviderAccountsSnapshot(
 export async function selectClaudeProviderAccount(
   target: RuntimeClientTarget,
   selection: ProviderAccountSelection
-): Promise<ClaudeRateLimitAccountsState> {
+): Promise<ClaudeAccountSelectResult> {
   if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+    return callRuntimeRpc<ClaudeAccountSelectResult>(
       target,
       'accounts.selectClaude',
       { accountId: selection.accountId },
