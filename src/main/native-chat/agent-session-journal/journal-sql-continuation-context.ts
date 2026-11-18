@@ -62,7 +62,7 @@ export function journalDomainContextHead(
 /** Where the next export page starts: items in visible order, then the chat's sends. */
 type JournalContinuationFrom = { part: 'items' | 'sends'; after: SqliteBindings }
 
-type JournalContinuationPage = JournalContinuationContext & {
+type JournalContinuationPage = Omit<JournalContinuationContext, 'cursor'> & {
   next: JournalContinuationFrom | null
 }
 
@@ -97,7 +97,17 @@ function readJournalDomainContinuationContext(
     submissions: [] as AgentJournalSubmission[],
     continued: [] as JournalContinuedPayload[]
   }
-  let page = readJournalDomainContinuationPage(db, target)
+  // One snapshot: the head and clear boundary hold for every page.
+  const cursor = journalDomainContextHead(db, target)
+  const clear = Number(
+    db
+      .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_context_clear
+      WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1`)
+      .get(target.sessionId, target.epoch)?.sequence ?? 0
+  )
+  const read = (from?: JournalContinuationFrom) =>
+    readJournalDomainContinuationPage(db, target, clear, from)
+  let page = read()
   for (;;) {
     for (const part of page.continued) {
       context.continued.push({ ...part, index: part.index + context.items.length })
@@ -105,9 +115,9 @@ function readJournalDomainContinuationContext(
     context.items.push(...page.items)
     context.submissions.push(...page.submissions)
     if (!page.next) {
-      return { cursor: page.cursor, ...context }
+      return { cursor, ...context }
     }
-    page = readJournalDomainContinuationPage(db, target, page.next)
+    page = read(page.next)
   }
 }
 
@@ -115,18 +125,12 @@ function readJournalDomainContinuationContext(
 function readJournalDomainContinuationPage(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
+  clear: number,
   from: JournalContinuationFrom = { part: 'items', after: [] }
 ): JournalContinuationPage {
   const prefix = [target.sessionId, target.epoch] as const
-  const cursor = journalDomainContextHead(db, target)
-  const clear = Number(
-    db
-      .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_context_clear
-      WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1`)
-      .get(...prefix)?.sequence ?? 0
-  )
   const continued: JournalContinuedPayload[] = []
-  const page = { cursor, items: [], submissions: [], continued, next: null }
+  const page = { items: [], submissions: [], continued, next: null }
   const { after } = from
   if (from.part === 'items') {
     const rows = db
@@ -194,11 +198,11 @@ function spillJournalDomainContinuation(
 ): { kind: 'continuation-spill'; bytes: number | null } {
   // A blob passes NUL, which text functions stop at.
   const row = db
-    .prepare(`SELECT revision, CAST(json_extract(payload_json,?) AS BLOB) AS bytes
-      FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
-    .get(`$.body.${spill.field}.head`, target.sessionId, target.epoch, spill.itemId)
+    .prepare(`SELECT CAST(json_extract(payload_json,?) AS BLOB) AS bytes
+      FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0 AND revision=?`)
+    .get(`$.body.${spill.field}.head`, target.sessionId, target.epoch, spill.itemId, spill.revision)
   const bytes = row?.bytes
-  if (!row || Number(row.revision) !== spill.revision || !(bytes instanceof Uint8Array)) {
+  if (!(bytes instanceof Uint8Array)) {
     return { kind: 'continuation-spill', bytes: null }
   }
   const fd = openSync(spill.path, 'wx', 0o600)

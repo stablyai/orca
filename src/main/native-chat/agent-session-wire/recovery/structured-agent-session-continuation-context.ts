@@ -75,21 +75,27 @@ export function continuationContextReader(
     if (!continued && !text.trim()) {
       return { status: 'current', capturedText: '' }
     }
-    const spills: string[] = []
+    // Spills not yet streamed and removed.
+    const spills = new Set<string>()
     let prepared: Promise<void> | undefined
-    const spillRoot = agentSessionContextSnapshotRoot(deps.journalDatabase.stateDirectory)
+    const snapshotRoot = agentSessionContextSnapshotRoot(deps.journalDatabase.stateDirectory)
+    // Apart from published snapshots, so the crash sweep visits only spills.
+    const spillRoot = join(snapshotRoot, 'spills')
     // One extraction per text, written by the reader to a private file main then streams.
     const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
       // Checked and swept once per export, before its first spill.
-      prepared ??= ensureOwnedTempStagingRoot(spillRoot).then(async (owned) => {
-        if (!owned) {
+      prepared ??= (async () => {
+        if (
+          !(await ensureOwnedTempStagingRoot(snapshotRoot)) ||
+          !(await ensureOwnedTempStagingRoot(spillRoot))
+        ) {
           throw new Error('Chat context snapshot folder is not private')
         }
         await removeStaleSpills(spillRoot)
-      })
+      })()
       await prepared
       const path = join(spillRoot, `${randomUUID()}.spill`)
-      spills.push(path)
+      spills.add(path)
       const { itemId, revision, field } = part
       // One extraction at a time across exports: each can hold a whole stored text in the reader.
       const bytes = await runKeyedSerializedOperation(spillQueue, 'spill', () =>
@@ -98,7 +104,10 @@ export function continuationContextReader(
       if (bytes === null) {
         throw new ContinuedPayloadSuperseded()
       }
-      return continuedFileText(path, trimEnd, () => rm(path, { force: true }))
+      return continuedFileText(path, trimEnd, async () => {
+        await rm(path, { force: true })
+        spills.delete(path)
+      })
     }
     let path: string
     try {
@@ -118,7 +127,7 @@ export function continuationContextReader(
       }
       throw error
     } finally {
-      await Promise.all(spills.map((spilled) => rm(spilled, { force: true })))
+      await Promise.all([...spills].map((spilled) => rm(spilled, { force: true })))
     }
     return {
       status: 'current',
@@ -136,7 +145,7 @@ const STALE_SPILL_MS = 60 * 60 * 1000
 
 async function removeStaleSpills(root: string): Promise<void> {
   const names = await readdir(root).catch(() => [])
-  for (const name of names.filter((entry) => entry.endsWith('.spill'))) {
+  for (const name of names) {
     const path = join(root, name)
     const modified = await stat(path).then(
       (info) => info.mtimeMs,
