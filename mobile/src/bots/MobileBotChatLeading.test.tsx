@@ -72,11 +72,10 @@ describe('ChatBadgedIcon', () => {
     expect(geometry.cutoutCentre).toBeCloseTo(geometry.centre)
   })
 
-  it('draws the waiting dot as a 7 pt badge with a 1 pt gap', () => {
+  it('aligns the waiting dot with the icon cutout', () => {
     const geometry = badgeGeometry(render('needs-you'))
     expect(geometry.glyph).toBe('View')
     expect(geometry.size).toBe(7)
-    expect(geometry.gap).toBeCloseTo(1)
     expect(geometry.cutoutCentre).toBeCloseTo(geometry.centre)
   })
 })

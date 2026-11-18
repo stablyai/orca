@@ -343,11 +343,6 @@ export function NewBotDialog({
                 {t('bots.new.fromTemplate', 'Start from a template')}
               </button>
             ) : null}
-            {template ? (
-              <span className="text-xs text-muted-foreground">
-                {t('bots.new.nothingUntilCreate', 'Nothing is created until you press Create bot.')}
-              </span>
-            ) : null}
             <BotCreateButton
               type="submit"
               className="ml-auto"

@@ -21,6 +21,7 @@ import { jsonBytes } from './connector-snapshot'
 // prEvents: pull request events for its bots' workers, listed only while it takes them. batchedSends:
 // a conversation's sends that queued behind its start or send come in one poll and run as one turn.
 // ownDmChats: a bot start for a DM that ran in the bot's Chat opens the DM a chat of its own.
+// askerNote: Orca's lines on where a bot was asked come apart from the asker's words.
 const FEATURES = [
   'answer',
   CONNECTOR_ANSWER_TEXT_FEATURE,
@@ -33,6 +34,7 @@ const FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
+  'askerNote',
   CONNECTOR_REPLIES_OUTBOX_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']

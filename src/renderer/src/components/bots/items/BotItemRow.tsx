@@ -1,4 +1,4 @@
-// One item in a bot's Items tab. Hover or focus on an open row swaps its age (a snoozed row's wake time)
+// One item in a bot's Items tab. Hover or keyboard focus on an open row swaps its age (a snoozed row's wake time)
 // for ✓ Done and ⋯ (Done, Snooze, Cancel); hovering its icon shows its checkbox, and once any row is checked every row shows one. A dot
 // marks a row that changed since the tab was last opened. A pointer-opened ⋯ menu closes when the
 // pointer leaves row and menu.
@@ -71,7 +71,7 @@ export function BotItemRow({
       role="listitem"
       data-bot-item={item.number}
       className={cn(
-        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent focus-within:bg-accent has-[[data-state=open]]:bg-accent',
+        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent',
         selected && 'bg-accent'
       )}
     >
@@ -117,7 +117,7 @@ export function BotItemRow({
                 className={cn(
                   'flex shrink-0 items-center gap-2',
                   !closed &&
-                    'group-focus-within/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
+                    'group-has-[:focus-visible]/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
                 )}
               >
                 {unseen ? (

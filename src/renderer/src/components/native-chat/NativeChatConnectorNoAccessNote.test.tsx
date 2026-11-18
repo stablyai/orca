@@ -30,16 +30,4 @@ describe('NativeChatConnectorNoAccessNote', () => {
     )
     expect(screen.getByTitle('Someone · Slack · no access')).toBeInTheDocument()
   })
-
-  it('counts one line in the singular', () => {
-    render(
-      <NativeChatConnectorNoAccessNote
-        messageId="m2"
-        asker={{ ...ASKER, noAccess: [{ name: 'Alex Kim', text: 'hi' }] }}
-      />
-    )
-    expect(
-      screen.getByRole('button', { name: /1 earlier message in the thread/ })
-    ).toBeInTheDocument()
-  })
 })

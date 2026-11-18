@@ -1,5 +1,9 @@
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
 import { callBotRpc } from '@/lib/bot-hosts'
+import { selectFocusedChatTab } from '@/lib/focused-chat-workers'
+import { useAppStore } from '@/store'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
@@ -17,7 +21,25 @@ async function markSeen(bot: Bot, sessionIds: string[]): Promise<void> {
   }
 }
 
-/** Opens one of the bot's chats as a focused tab; a thread's or a run's gets its tab here. */
+/** The chat's tab when it is the one on screen, where activating it again would change nothing. */
+function shownChatTab(bot: Bot, sessionId: string): { id: string } | null {
+  const state = useAppStore.getState()
+  const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
+  if (state.activeView !== 'terminal' || state.activeWorktreeId !== workspaceId) {
+    return null
+  }
+  const tab = selectFocusedChatTab(state, workspaceId)
+  return tab?.entityId === sessionId ? tab : null
+}
+
+/** Opens one of the bot's chats as a focused tab; a thread's or a run's gets its tab here. The chat
+ *  already on screen goes to its newest output, its composer focused with the usual glow. */
 export function openBotSession(bot: Bot, sessionId: string): void {
+  const shown = shownChatTab(bot, sessionId)
+  if (shown) {
+    targetBotChatLatest(sessionId)
+    requestNativeChatComposerFocus(shown.id, { revealDraft: true })
+    return
+  }
   void activate(bot, sessionId).then((opened) => (opened ? markSeen(bot, [sessionId]) : undefined))
 }

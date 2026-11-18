@@ -101,7 +101,7 @@ export function describeJournalReaderOperation(
       return {
         operation: `database:${operation.operation.kind}`,
         chat:
-          'sessionId' in operation.operation && typeof operation.operation.sessionId === 'string'
+          'sessionId' in operation.operation && operation.operation.sessionId !== undefined
             ? chatHash(operation.operation.sessionId)
             : null
       }

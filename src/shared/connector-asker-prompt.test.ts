@@ -252,6 +252,27 @@ describe('a bot’s prompt', () => {
     )
   })
 
+  it("gives the agent Orca's note on where it was asked after the message, and shows the message alone", () => {
+    const prompt = connectorAskerPrompt(
+      'github',
+      {
+        ...OWNER,
+        name: 'octo-owner',
+        place: { kind: 'pull_request', id: 'acme/web#8' },
+        text: 're-run it',
+        note: 'Branch fix-it into main.\nRead the pull request and its comments with gh.'
+      },
+      'This message also matches your automation "CI".'
+    )
+
+    expect(
+      prompt.endsWith(
+        '\n\nBranch fix-it into main.\nRead the pull request and its comments with gh.\n\nThis message also matches your automation "CI".'
+      )
+    ).toBe(true)
+    expect(connectorMessageShownText(prompt)).toBe('re-run it')
+  })
+
   it('shows any other text as written', () => {
     for (const text of [
       'review this',
