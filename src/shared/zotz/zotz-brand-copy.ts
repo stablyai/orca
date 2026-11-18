@@ -9,14 +9,15 @@ export function _setZotzBrandCopyDisabledForTests(disabled: boolean): void {
 
 // Zotz copy names Orca on purpose (its base version, the official Orca app); leave it alone.
 const ZOTZ_COPY_NAMESPACE = 'zotz'
-const ORCA_WORD = /\bOrca\b/g
+// `\b` keeps ORCA_* env var names: `_` is a word character.
+const ORCA_WORD = /\b(?:Orca|ORCA)\b/g
 // The official Orca Mobile app keeps its name: Zotz pairs with it unchanged.
 const KEEPS_ORCA_AFTER = /^\s+[Mm]obile\b|^ app on this (?:device|phone)\b/
 const KEEPS_ORCA_BEFORE = /m[óo]vil(?:es)? (?:de|para) $/
 
 /** Rebrands visible copy without touching interpolated values, which are applied later. */
 export function applyZotzBrandToCopy(text: string): string {
-  if (globalThis.zotzBrandCopyDisabledForTests || !text.includes('Orca')) {
+  if (globalThis.zotzBrandCopyDisabledForTests || !/Orca|ORCA/.test(text)) {
     return text
   }
   return text.replace(ORCA_WORD, (match, offset: number) => {
@@ -26,7 +27,7 @@ export function applyZotzBrandToCopy(text: string): string {
       KEEPS_ORCA_AFTER.test(after) ||
       KEEPS_ORCA_BEFORE.test(before) ||
       (before.endsWith('app de ') && /^ en este (?:dispositivo|teléfono)/.test(after))
-    return keeps ? match : 'Zotz'
+    return keeps ? match : match === 'ORCA' ? 'ZOTZ' : 'Zotz'
   })
 }
 

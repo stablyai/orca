@@ -24,6 +24,13 @@ describe('Zotz brand copy', () => {
     )
   })
 
+  it('renames the all-caps wordmark but keeps ORCA_* variable names', () => {
+    expect(applyZotzBrandToCopy('ORCA')).toBe('ZOTZ')
+    expect(applyZotzBrandToCopy('Restart Orca with ORCA_ALLOW_INSECURE_WEB_PAIRING=1.')).toBe(
+      'Restart Zotz with ORCA_ALLOW_INSECURE_WEB_PAIRING=1.'
+    )
+  })
+
   it('leaves the zotz namespace of a catalog alone', () => {
     expect(
       applyZotzBrandToCatalog({
