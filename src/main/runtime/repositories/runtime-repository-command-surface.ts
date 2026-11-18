@@ -64,8 +64,10 @@ export type RuntimeRepositoryCommandSurface = {
   isGitAvailable: RuntimeServerEnvironmentCommands['isGitAvailable']
   listSparsePresets: RuntimeRepositorySparsePresets['list']
   saveSparsePreset: RuntimeRepositorySparsePresets['save']
+  removeSparsePreset: RuntimeRepositorySparsePresets['remove']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
@@ -148,6 +150,7 @@ export function installRuntimeRepositoryCommandSurface(
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
+    removeSparsePreset: sparse.remove.bind(sparse),
     addRepo: async (...args: Parameters<typeof registrations.add>) => {
       const repo = await registrations.add(...args)
       void target.repositoryForkBackfill.enqueue([repo])
@@ -160,6 +163,7 @@ export function installRuntimeRepositoryCommandSurface(
       }
       return result
     },
+    getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])

@@ -16,8 +16,8 @@ import {
 import type { AcpTurnFailures } from '../timeline/acp-turn-failures'
 import type { ContentBlock, SessionUpdate } from '../generated/acp-protocol.generated'
 
-export function acpCompactPrompt(instructions?: string): ContentBlock[] {
-  return [{ type: 'text', text: agentSessionCompactCommandText(instructions) }]
+export function acpCompactPrompt(instructions?: string, command?: string): ContentBlock[] {
+  return [{ type: 'text', text: agentSessionCompactCommandText(instructions, command) }]
 }
 
 export type AcpCompaction = { reply: string; failure?: AcpTurnFailureEvidence }

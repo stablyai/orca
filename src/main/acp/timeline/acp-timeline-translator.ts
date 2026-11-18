@@ -216,10 +216,7 @@ export class AcpTimelineTranslator {
       events.push(...this.start(turn, extension?.at ?? at, operation))
     }
     this.ownership.messages.observe(owner.turn, update)
-    const join = {
-      thread: this.options.sessionId,
-      ...(turn === undefined ? {} : { turn })
-    }
+    const join = { thread: this.options.sessionId, ...(turn === undefined ? {} : { turn }) }
     if (extension?.backgroundTasks) {
       const tasks = extension.backgroundTasks.filter((task) => !this.subagents.has(task.taskId))
       events.push(...this.backgroundTasks.translate(tasks, join))
@@ -235,6 +232,9 @@ export class AcpTimelineTranslator {
       return events
     }
     events.push(...this.failures.notification(turn, extension))
+    if (extension?.disposition === 'map' && extension.failure && standard) {
+      return events
+    }
     const end = extension?.end
     if (end && turn) {
       // Hook refusal ends immediately; normal completion waits for the prompt reply.
