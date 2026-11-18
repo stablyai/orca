@@ -106,6 +106,8 @@ export class CodexAccountHistoryPasses {
     const onWarning = (error: unknown): void => {
       console.warn('[codex-account-history] Account history was not fully shared:', error)
     }
+    // Whatever this pass settles, an older busy retry no longer speaks for the home.
+    this.cancelRetry(key)
     try {
       if (!shared) {
         if (await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })) {
@@ -139,6 +141,11 @@ export class CodexAccountHistoryPasses {
     }
   }
 
+  private cancelRetry(key: string): void {
+    clearTimeout(this.busyRetries.get(key))
+    this.busyRetries.delete(key)
+  }
+
   // The account in use always has a Codex running at launch: retry until a moment none holds a lock.
   private retryWhenIdle(key: string, accountHome: string): void {
     if (this.busyRetries.has(key)) {
@@ -147,7 +154,12 @@ export class CodexAccountHistoryPasses {
     const timer = inRootContext(() =>
       setTimeout(() => {
         this.busyRetries.delete(key)
-        if (!isCodexAccountHistoryWorkStopping()) {
+        // A request queued since (an unshare above all) decides instead; the retry would replace it.
+        if (
+          !isCodexAccountHistoryWorkStopping() &&
+          this.isStillShared(accountHome) &&
+          !this.requests.has(key)
+        ) {
           void this.run(accountHome, true, {
             stillWanted: () =>
               !isCodexAccountHistoryWorkStopping() && this.isStillShared(accountHome)

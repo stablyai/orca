@@ -164,7 +164,8 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
   const answer = await nextLine()
   clearTimeout(timer)
   // A `ready` read after the kill (still buffered) holds nothing anymore.
-  const stillHeld = (): boolean => !timedOut && child.exitCode === null && child.signalCode === null
+  const stillHeld = (): boolean =>
+    !timedOut && !child.killed && child.exitCode === null && child.signalCode === null
   if (answer === 'ready' && hold && stillHeld()) {
     return {
       answer,
