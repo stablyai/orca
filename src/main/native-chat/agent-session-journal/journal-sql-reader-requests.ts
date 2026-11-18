@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { JournalSqlReaderOperation } from './journal-sql-reader-protocol'
 import type { ReaderSlot } from './journal-sql-reader-slot'
+import type { JournalSqlReaderWorker } from './journal-sql-reader-spawn'
 import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 
 /**
@@ -116,4 +117,9 @@ export function describeJournalReaderOperation(
 
 function chatHash(sessionId: string): string {
   return createHash('sha256').update(sessionId).digest('hex').slice(0, 8)
+}
+
+/** A thread's id, including a hosted reader moved in-process; null inside the utility process. */
+export function journalReaderThreadId(worker: JournalSqlReaderWorker): number | null {
+  return 'threadId' in worker && typeof worker.threadId === 'number' ? worker.threadId : null
 }

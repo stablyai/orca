@@ -10,6 +10,7 @@ import { AgentSessionJournalError } from './writing/journal-write-guards'
 import {
   claimJournalReaderRecord,
   describeJournalReaderOperation,
+  journalReaderThreadId,
   recordJournalReaderRequest,
   type JournalReaderRunningRequest,
   releaseJournalReaderRecord
@@ -84,6 +85,8 @@ export class JournalSqlConversionReader {
 export class ReaderSlot {
   private readonly worker: JournalSqlReaderWorker
   private nextId = 0
+  /** Ids only grow, so the oldest pending id only moves forward. */
+  private oldestId = 1
   private readonly pending = new Map<
     number,
     {
@@ -275,14 +278,23 @@ export class ReaderSlot {
     this.recordRunning()
   }
 
+  // A Map's first entry walks over deleted ones, so draining a long queue that way is quadratic.
+  private oldestPending() {
+    while (this.oldestId <= this.nextId && !this.pending.has(this.oldestId)) {
+      this.oldestId++
+    }
+    const pending = this.pending.get(this.oldestId)
+    return pending && ([this.oldestId, pending] as const)
+  }
+
   /** Replies are FIFO: the oldest unanswered request is running, or answered but not yet read. */
   private recordRunning(): void {
     if (this.record === undefined) {
       return
     }
-    const oldest = this.pending.entries().next().value
+    const oldest = this.oldestPending()
     const queued = this.pending.size - 1
-    const threadId = workerThreadId(this.worker)
+    const threadId = journalReaderThreadId(this.worker)
     if (
       oldest?.[0] === this.running?.id &&
       queued === this.running?.queued &&
@@ -314,9 +326,4 @@ export class ReaderSlot {
     this.running = { id, queued, request }
     recordJournalReaderRequest(this.record, request)
   }
-}
-
-/** A thread's id, including a hosted reader moved in-process; null inside the utility process. */
-function workerThreadId(worker: JournalSqlReaderWorker): number | null {
-  return 'threadId' in worker && typeof worker.threadId === 'number' ? worker.threadId : null
 }
