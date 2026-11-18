@@ -1,6 +1,5 @@
-import { access } from 'node:fs/promises'
+import { access, lstat } from 'node:fs/promises'
 import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/agent-accounts/claude/claude-profile-routing'
-import { isDirectory } from './profiles/claude-profile-homes'
 import { claudeProfileSetupFailed } from './profiles/routing/claude-profile-launch-errors'
 import { claudeProfileMarkerPath, describeClaudeProfile } from './profiles/claude-profile-paths'
 import type { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
@@ -35,11 +34,17 @@ export async function prepareClaudePinnedAccountLaunch(
     executionHostId: 'local',
     runtime: 'host'
   })
-  const markerPresent = await access(claudeProfileMarkerPath(profile)).then(
-    () => true,
-    () => false
-  )
-  if (!isDirectory(profile.home) || !markerPresent) {
+  const [homePresent, markerPresent] = await Promise.all([
+    lstat(profile.home).then(
+      (info) => info.isDirectory(),
+      () => false
+    ),
+    access(claudeProfileMarkerPath(profile)).then(
+      () => true,
+      () => false
+    )
+  ])
+  if (!homePresent || !markerPresent) {
     await router.prepareAccount(accountId).catch(() => {
       throw claudeProfileSetupFailed()
     })
