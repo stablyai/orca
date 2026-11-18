@@ -571,12 +571,21 @@ module.exports = {
       ...commonExtraResources,
       ...windowsRuntimeResources,
       {
+        from: 'resources/win32/bin/zotz.cmd',
+        to: 'bin/zotz.cmd'
+      },
+      // Zotz: `orca` stays out of the PATH-registered bin dir; only Zotz's terminals prepend orca-compat.
+      {
         from: 'resources/win32/bin/orca.cmd',
-        to: 'bin/orca.cmd'
+        to: 'orca-compat/orca.cmd'
       },
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
-        to: 'bin/orca.exe'
+        to: 'orca-compat/orca.exe'
+      },
+      {
+        from: 'native/windows-cli-launcher/.build/orca.exe',
+        to: 'bin/zotz.exe'
       },
       {
         from: 'native/windows-cli-launcher/.build/orca-administrator-restart.exe',
@@ -658,6 +667,10 @@ module.exports = {
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
+      },
+      {
+        from: 'resources/darwin/bin/orca',
+        to: 'bin/zotz'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',

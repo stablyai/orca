@@ -66,7 +66,7 @@ Spec en [`RENAME-SPEC.md`](./RENAME-SPEC.md). Va después de la Fase 3b para que
 
 - [ ] CLI `zotz` en el PATH global; `orca` solo como alias dentro de las terminales de Zotz.
 - [ ] `~/.orca` → `~/.zotz`, procesos `zotz-*.exe`, etiquetas de launchd, sidecar de macOS y ejecutable de Linux, con migración.
-- [ ] Alias `ZOTZ_*` → `ORCA_*` al arrancar cada proceso.
+- [x] Alias `ZOTZ_*` → `ORCA_*` al arrancar cada proceso.
 - [ ] **No** se renombran protocolo/RPC/pairing (app móvil oficial) ni `ORCA_*`/`@orca/*` en el código (costo de sync).
 
 ---
@@ -582,3 +582,11 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Vistas previas de enlaces (`ZotzLinkPreview/1.0`) y Jira se presentan como Zotz. Los textos de permisos de macOS (`NS*UsageDescription`) dicen "Zotz allows…".
 - Sorpresa: `pnpm check:changed` selecciona casi toda la suite (la política de red y el rebrand de textos se importan en todos lados) y las pruebas unitarias llegan al tope de 30 min. Se corrieron acotadas: 1475 pasan; solo falla `process-host-dev-rebuild.test.ts` (espera a un watcher de rolldown en carpetas temporales; no usa nada de esta rama).
 - Pendiente: los 17 enlaces de la galería de funciones siguen en `orca.dev/docs` (el título entero es el enlace; hace falta decidir si se quitan o se apuntan a docs propias). El diálogo de comentarios de Orca queda en el código, sin ruta para abrirlo.
+
+### 2026-11-18 — Fase 1c, parte 1 (misma rama `zotz/fase-2b-sin-orca`, por decisión de Hugo)
+
+- **Alias:** `src/shared/zotz/zotz-env-aliases.ts`. Se importa primero en `src/main/index.ts` y `src/cli/index.ts`; los procesos hijos (daemon, terminales) heredan las `ORCA_*` ya llenas.
+- **CLI `zotz`:** el comando que se registra es `zotz` en las tres plataformas (`/usr/local/bin/zotz` o `~/.local/bin/zotz`; en Windows el PATH apunta a `resources\bin`, que ahora trae `zotz.exe`/`zotz.cmd`). `orca.exe`/`orca.cmd` de Windows se mueven a `resources\orca-compat`, que solo las terminales de Zotz anteponen al PATH; en macOS y Linux `orca` sigue en `resources/bin`, que no está en el PATH global. El lanzador nativo es el mismo binario (busca `Zotz.exe` dos carpetas arriba, así que funciona desde ambas carpetas).
+- Instalaciones existentes: en Windows el PATH ya apunta a `resources\bin`, así que `zotz` aparece solo al actualizar y `orca` deja de estar en el PATH global. En macOS/Linux hay que registrar `zotz` otra vez desde Ajustes → CLI; el enlace viejo `orca` sigue apuntando a Zotz hasta que se borre.
+- Sin tocar: el nombre del lanzador de Linux (`orca-ide`), la CLI dentro de WSL y el comando que se sugiere a los agentes (`orca`/`orca.cmd`/`orca-ide`, que siguen funcionando dentro de Zotz).
+- Falta probar en hardware: `zotz --help` desde una terminal nueva en la MSI y que `orca` ya no exista fuera de Zotz.

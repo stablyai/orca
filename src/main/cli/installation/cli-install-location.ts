@@ -13,10 +13,8 @@ import {
   type AppImageExtractionOptions
 } from '../appimage/appimage-extracted-root'
 import { resolveGenerationStableLauncherPath } from '../appimage/appimage-generation-stable-launcher'
-import {
-  getBundledLauncherPath,
-  LINUX_CLI_COMMAND_NAME
-} from '../packaged-assets/bundled-cli-launcher-path'
+import { getBundledLauncherPath } from '../packaged-assets/bundled-cli-launcher-path'
+import { ZOTZ_CLI_COMMAND } from '../../../shared/zotz/zotz-app-identity'
 import { DEFAULT_MAC_COMMAND_PATH, DEV_COMMAND_NAME } from './cli-install-constants'
 import { ensureDevLauncher } from '../launchers/cli-dev-launcher'
 import type { CliInstallerOptions, InstallSpec } from './cli-installer-contracts'
@@ -70,7 +68,7 @@ export abstract class CliInstallLocation {
       // Why: development builds must not claim the production shell command.
       return DEV_COMMAND_NAME
     }
-    return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : 'orca'
+    return ZOTZ_CLI_COMMAND
   }
 
   constructor(options: CliInstallerOptions = {}) {
@@ -92,7 +90,7 @@ export abstract class CliInstallLocation {
     const candidateMacPath = options.defaultMacCommandPath ?? DEFAULT_MAC_COMMAND_PATH
     this.macCommandPath = existsSync(dirname(candidateMacPath))
       ? candidateMacPath
-      : join(this.homePath, '.local', 'bin', 'orca')
+      : join(this.homePath, '.local', 'bin', ZOTZ_CLI_COMMAND)
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
     this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
     this.userPathMutationReader =
@@ -233,7 +231,7 @@ export abstract class CliInstallLocation {
 
     if (this.platform === 'linux') {
       // Linux registration stays user-scoped; it has no privileged global install flow.
-      return join(this.homePath, '.local', 'bin', LINUX_CLI_COMMAND_NAME)
+      return join(this.homePath, '.local', 'bin', ZOTZ_CLI_COMMAND)
     }
 
     if (this.platform === 'win32') {

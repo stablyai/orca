@@ -25,7 +25,7 @@ async function makeBundledLauncherFixture() {
   const launcher = await readFile(join(process.cwd(), 'resources', 'darwin', 'bin', 'orca'), 'utf8')
   const resourcesPath = await createPackagedMacLauncher(fixture.root, launcher)
   const bundledBin = join(resourcesPath, 'bin')
-  const launcherPath = join(bundledBin, 'orca')
+  const launcherPath = join(bundledBin, 'zotz')
   return {
     root: fixture.root,
     bundledBin,
@@ -63,8 +63,8 @@ describe('CliInstaller', () => {
       const resourcesPath = await createPackagedMacLauncher(fixture.root)
       const usrLocalBin = join(fixture.root, 'usr', 'local', 'bin')
       const userLocalBin = join(homePath, '.local', 'bin')
-      const defaultInstallPath = join(usrLocalBin, 'orca')
-      const userInstallPath = join(userLocalBin, 'orca')
+      const defaultInstallPath = join(usrLocalBin, 'zotz')
+      const userInstallPath = join(userLocalBin, 'zotz')
       await mkdir(usrLocalBin, { recursive: true })
       await mkdir(userLocalBin, { recursive: true })
       await writeFile(userInstallPath, '#!/usr/bin/env bash\necho other-orca\n', {
@@ -103,12 +103,12 @@ describe('CliInstaller', () => {
 
       const status = await new CliInstaller({
         ...installerOptions,
-        defaultMacCommandPath: join(usrLocalBin, 'orca'),
+        defaultMacCommandPath: join(usrLocalBin, 'zotz'),
         processPathEnv: [bundledBin, usrLocalBin].join(':')
       }).install()
 
       expect(status.state).toBe('installed')
-      expect(status.commandPath).toBe(join(usrLocalBin, 'orca'))
+      expect(status.commandPath).toBe(join(usrLocalBin, 'zotz'))
       await expectLauncherIntact()
     })
 
@@ -120,7 +120,7 @@ describe('CliInstaller', () => {
 
       const installer = new CliInstaller({
         ...installerOptions,
-        commandPathOverride: join(aliasBin, 'orca')
+        commandPathOverride: join(aliasBin, 'zotz')
       })
 
       await expect(installer.install()).rejects.toThrow('link to itself')
@@ -132,8 +132,8 @@ describe('CliInstaller', () => {
         await makeBundledLauncherFixture()
       const usrLocalBin = join(root, 'usr', 'local', 'bin')
       await mkdir(usrLocalBin, { recursive: true })
-      const hardLink = join(usrLocalBin, 'orca')
-      await link(join(bundledBin, 'orca'), hardLink)
+      const hardLink = join(usrLocalBin, 'zotz')
+      await link(join(bundledBin, 'zotz'), hardLink)
 
       const status = await new CliInstaller({
         ...installerOptions,

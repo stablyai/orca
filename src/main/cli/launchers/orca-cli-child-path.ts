@@ -4,7 +4,10 @@ import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-enviro
 import { readInheritedPath } from '../../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
-import { getBundledLauncherPath } from '../packaged-assets/bundled-cli-launcher-path'
+import {
+  getBundledLauncherPath,
+  getOrcaCompatLauncherDir
+} from '../packaged-assets/bundled-cli-launcher-path'
 import { DEV_COMMAND_NAME } from '../installation/cli-install-constants'
 
 export type OrcaCliChildPathOptions = {
@@ -70,9 +73,14 @@ export function prependOrcaCliDirToChildPath(
       env.ORCA_CLI_BIN_DIR = bundledCliBin
     }
     const inheritedPath = readInheritedPath(env, platform)
+    // Zotz children keep `orca` for skills and prompts written for Orca; on Windows it lives outside the PATH dir.
+    const cliDirs =
+      platform === 'win32'
+        ? `${bundledCliBin}${pathDelimiter}${getOrcaCompatLauncherDir(opts.resourcesPath)}`
+        : bundledCliBin
     env[resolvePathEnvKey(env, platform)] = inheritedPath
-      ? `${bundledCliBin}${pathDelimiter}${inheritedPath}`
-      : bundledCliBin
+      ? `${cliDirs}${pathDelimiter}${inheritedPath}`
+      : cliDirs
     // Why the native launcher on Windows: `orca.cmd` refuses message bodies cmd.exe would mangle.
     return getBundledLauncherPath(platform, opts.resourcesPath)
   }
