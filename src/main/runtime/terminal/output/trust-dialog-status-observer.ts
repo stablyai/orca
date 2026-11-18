@@ -199,9 +199,9 @@ export class TrustDialogStatusObserver {
     if (emulator.isSynchronizedOutput) {
       return true
     }
-    // Pause, keeping the card: the next output or the recovered screen's observe re-arms the read.
+    // Keep the card and read again: a screen being rebuilt is no evidence it closed.
     if (this.deps.isScreenRestoring(ptyId)) {
-      return false
+      return true
     }
     const card = startupDialogPrompt(emulator, owned.agent)
     if (!card) {

@@ -3,7 +3,14 @@ import type {
   GapRecovery,
   RuntimeHeadlessTerminal
 } from '../records/runtime-terminal-state-records'
-import { newGapRecovery, takeSeedCoveredQueries } from './provider-seed-covered-bytes'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import {
+  gapJournalAfter,
+  newGapRecovery,
+  restartGapJournalAfterGap,
+  startGapJournal,
+  stopGapJournal
+} from './gap-recovery-journal'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -12,11 +19,15 @@ const GAP_RESEED_WARN_AFTER_ATTEMPTS = 5
 const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
 // Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
 const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
+const GAP_RESEED_CATCH_UP_POLL_MS = 50
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 
-/** After the provider drops output, rebuild main's model from its snapshot; until then the screen is restoring, never the torn suffix. */
+type RebuildResult = 'rebuilt' | 'failed' | 'behind'
+
+/** After the provider drops output, main's model keeps parsing and answering queries, but its screen is untrusted
+ *  until it is repainted from a provider snapshot plus the output journaled since that capture started. */
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   private gapCapturesInFlight = 0
   private readonly gapCaptureWaiters: (() => void)[] = []
@@ -27,120 +38,175 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.disposeHeadlessTerminal(ptyId)
       return
     }
-    const frontier = this.getPtyOutputSequence(ptyId)
-    const current = this.headlessTerminals.get(ptyId)
-    if (current?.gapReseed) {
-      // One recovery per PTY: a later gap only raises the frontier its snapshot must reach.
-      current.gapReseed.frontier = frontier
+    const state = this.getOrCreateHeadlessTerminal(ptyId)
+    const gapEnd = this.getPtyOutputSequence(ptyId)
+    state.writeChain = state.writeChain
+      .then(async () => {
+        // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
+        await state.emulator.write('\x18')
+        // The dropped bytes are behind this model now; a snapshot at the gap end needs nothing newer.
+        state.outputSequence = Math.max(state.outputSequence, gapEnd)
+      })
+      .catch(() => {})
+    if (state.gapReseed) {
+      restartGapJournalAfterGap(state.gapReseed, gapEnd)
       return
     }
-    this.startGapReseed(ptyId, newGapRecovery(frontier), 0, current?.gapReseedLastCaptureAt)
+    this.startGapRecovery(ptyId, state)
   }
 
-  /** Execution-context correction mid-recovery restarts recovery, keeping the frontier and the restoring screen. */
+  /** Execution-context correction replaces the model; the replacement is no more trustworthy than the gap left it. */
   protected override replaceHeadlessTerminalAfterExecutionContextChange(
     ptyId: string,
     retryLateSeed = true
   ): void {
-    const current = this.headlessTerminals.get(ptyId)
-    if (current?.gapReseed) {
-      const carried = newGapRecovery(current.gapReseed.frontier, current.gapReseed)
-      this.startGapReseed(ptyId, carried, 0, current.gapReseedLastCaptureAt)
-      return
-    }
+    const recovering = this.headlessTerminals.get(ptyId)?.gapReseed !== undefined
     super.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, retryLateSeed)
+    const replacement = this.headlessTerminals.get(ptyId)
+    if (recovering && replacement) {
+      this.startGapRecovery(ptyId, replacement)
+    }
   }
 
-  private startGapReseed(
-    ptyId: string,
-    recovery: GapRecovery,
-    attempt: number,
-    lastCaptureAt: number | undefined
-  ): void {
-    const frontier = recovery.frontier
-    const state = this.replaceHeadlessTerminalForProviderSeed(ptyId)
+  private startGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
+    const recovery = newGapRecovery()
     state.gapReseed = recovery
-    state.gapReseedLastCaptureAt = lastCaptureAt
-    // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model; readers treat the screen as restoring.
+    this.providerSnapshotPreferredPtys.add(ptyId)
+    // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model.
     this.headlessHydrationState.set(ptyId, 'pending')
-    let seeded = false
-    state.writeChain = state.writeChain
-      .then(async () => {
-        const wait = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
-        if (wait > 0) {
-          await delay(wait)
-        }
-        if (this.headlessTerminals.get(ptyId) !== state) {
-          return
-        }
-        await this.acquireGapCaptureSlot()
-        try {
-          if (this.headlessTerminals.get(ptyId) !== state) {
-            return
-          }
-          state.gapReseedLastCaptureAt = Date.now()
-          // From here a live byte may land after the snapshot, so it must queue rather than be assumed covered.
-          recovery.capturing = true
-          // Screen only: a storm repeats this, and history readers go to the provider instead.
-          // Hold the slot for the whole request, not the readers' shorter wait, so late answers still land.
-          const { snapshot } = await this.awaitProviderTerminalBuffer(
-            ptyId,
-            { scrollbackRows: 0 },
-            { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS }
-          )
-          // A null capture is a failed or late one: only snapshot-capable daemons send gaps.
-          if (
-            !snapshot ||
-            this.headlessTerminals.get(ptyId) !== state ||
-            snapshot.seq < (state.gapReseed?.frontier ?? frontier)
-          ) {
-            return
-          }
-          seeded =
-            (await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)) &&
-            // A gap during an asynchronous seed write leaves the frame behind again.
-            snapshot.seq >= (state.gapReseed?.frontier ?? frontier)
-          if (seeded) {
-            // Owed replies, in arrival order, before any queued chunk's own.
-            const owed = takeSeedCoveredQueries(recovery, snapshot.seq)
-            if (owed) {
-              await state.emulator.write(owed, { forwardQueryReplies: true })
-            }
-          }
-        } finally {
-          this.releaseGapCaptureSlot()
-        }
-      })
-      .catch(() => {
-        // A failed capture retries below; live bytes already chain behind this state.
-      })
-      .finally(() => {
-        if (this.headlessTerminals.get(ptyId) !== state) {
-          return
-        }
-        if (seeded) {
-          this.finishGapReseed(ptyId, state, recovery)
-          return
-        }
-        if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
-          console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
-            ptyIdSuffix: ptyId.slice(-10),
-            attempts: attempt + 1
-          })
-        }
-        // Stay restoring; back off so a slow daemon or a sustained storm cannot loop captures.
-        const backoff =
-          attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
-        setTimeout(() => {
-          if (this.headlessTerminals.get(ptyId) === state && state.gapReseed) {
-            const carried = newGapRecovery(state.gapReseed.frontier, state.gapReseed)
-            this.startGapReseed(ptyId, carried, attempt + 1, state.gapReseedLastCaptureAt)
-          }
-        }, backoff).unref?.()
-      })
+    void this.runGapRecovery(ptyId, state, recovery)
   }
 
-  private finishGapReseed(
+  private isGapRecovering(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery
+  ): boolean {
+    return (
+      this.headlessTerminals.get(ptyId) === state &&
+      state.gapReseed === recovery &&
+      this.ptysById.get(ptyId)?.connected !== false
+    )
+  }
+
+  private async runGapRecovery(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery
+  ): Promise<void> {
+    for (let attempt = 0; this.isGapRecovering(ptyId, state, recovery); attempt++) {
+      if (attempt === GAP_RESEED_WARN_AFTER_ATTEMPTS) {
+        console.warn('[terminal] dropped-output recovery still waiting for a current snapshot', {
+          ptyIdSuffix: ptyId.slice(-10),
+          attempts: attempt
+        })
+      }
+      // Back off so a slow daemon or a sustained storm cannot loop captures; the screen stays untrusted meanwhile.
+      const backoff =
+        attempt < 2 ? 0 : Math.min(500 * 2 ** (attempt - 2), GAP_RESEED_BACKOFF_MAX_MS)
+      const paced = (state.gapReseedLastCaptureAt ?? 0) + GAP_RESEED_MIN_INTERVAL_MS - Date.now()
+      if (Math.max(backoff, paced) > 0) {
+        await delay(Math.max(backoff, paced))
+      }
+      if (!this.isGapRecovering(ptyId, state, recovery)) {
+        return
+      }
+      await this.acquireGapCaptureSlot()
+      try {
+        if (
+          this.isGapRecovering(ptyId, state, recovery) &&
+          (await this.captureAndRebuildAfterGap(ptyId, state, recovery))
+        ) {
+          return
+        }
+      } catch {
+        // A failed capture retries; the live model is untouched.
+      } finally {
+        stopGapJournal(recovery)
+        this.releaseGapCaptureSlot()
+      }
+    }
+  }
+
+  private async captureAndRebuildAfterGap(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery
+  ): Promise<boolean> {
+    state.gapReseedLastCaptureAt = Date.now()
+    // Journal before asking, so whatever the snapshot misses after its seq is here.
+    startGapJournal(recovery, this.getPtyOutputSequence(ptyId))
+    // Screen only: a storm repeats this, and history readers go to the provider instead.
+    const { snapshot } = await this.awaitProviderTerminalBuffer(
+      ptyId,
+      { scrollbackRows: 0 },
+      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS }
+    )
+    if (!snapshot) {
+      return false
+    }
+    const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
+    for (;;) {
+      const result = await this.rebuildScreenAfterGap(ptyId, state, recovery, snapshot)
+      if (result !== 'behind') {
+        return result === 'rebuilt'
+      }
+      // The provider is ahead of the bytes this process has parsed; wait for them to land.
+      if (Date.now() > deadline) {
+        return false
+      }
+      await delay(GAP_RESEED_CATCH_UP_POLL_MS)
+    }
+  }
+
+  /** Repaints in the write chain, between live chunks, so no chunk lands mid-repaint. */
+  private rebuildScreenAfterGap(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    recovery: GapRecovery,
+    snapshot: PtyProviderBufferSnapshot
+  ): Promise<RebuildResult> {
+    const step = state.writeChain.then(async (): Promise<RebuildResult> => {
+      if (!this.isGapRecovering(ptyId, state, recovery)) {
+        return 'failed'
+      }
+      const parsedTo = state.outputSequence
+      if (parsedTo < snapshot.seq) {
+        return 'behind'
+      }
+      // Null when the snapshot predates the journal (a reader's older shared capture, a later gap) or it overflowed.
+      const after = gapJournalAfter(recovery, snapshot.seq, parsedTo)
+      if (after === null) {
+        return 'failed'
+      }
+      // Silent writes: the live parse already answered every query in these bytes.
+      // CAN, then RIS: an open escape cannot swallow the reset.
+      await state.emulator.write('\x18\x1bc')
+      state.emulator.setRestoredOscLinks(undefined)
+      if (!(await this.writeProviderSnapshotScreen(ptyId, state, snapshot))) {
+        return 'failed'
+      }
+      await state.emulator.write(`${snapshot.pendingEscapeTailAnsi ?? ''}${after}`)
+      if (after === '') {
+        // Live ownership saw every byte after the snapshot; with none, the provider's view is current.
+        state.ownership.seedOwner(snapshot.terminalOwner, {
+          alternateScreen: state.emulator.isAlternateScreen
+        })
+      }
+      if (!this.isGapRecovering(ptyId, state, recovery)) {
+        return 'failed'
+      }
+      this.finishGapRecovery(ptyId, state, recovery)
+      return 'rebuilt'
+    })
+    state.writeChain = step.then(
+      () => {},
+      () => {}
+    )
+    return step
+  }
+
+  private finishGapRecovery(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     recovery: GapRecovery
@@ -149,9 +215,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     state.historyFromProvider = true
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
-    // Only bytes that arrived while recovering, at their arrival time: an old notice still on screen is not news.
-    if (recovery.suppressedTail) {
-      this.observeHeadlessChunk(ptyId, state, recovery.suppressedTail, recovery.suppressedAt)
+    // Only output that arrived while untrusted, at its arrival time: what the snapshot painted earlier is not news.
+    if (recovery.unobservedTail) {
+      this.observeHeadlessChunk(ptyId, state, recovery.unobservedTail, recovery.unobservedAt)
     }
   }
 

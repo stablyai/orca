@@ -86,7 +86,7 @@ it.each([false, true])(
   }
 )
 
-it('reseeds the model from the provider after a dropped span instead of trusting the suffix', async () => {
+it('rebuilds the screen from a provider snapshot plus the output after it, cutting a straddling chunk', async () => {
   const capture: { land?: (value: PtyProviderBufferSnapshot) => void } = {}
   const runtime = createRuntime()
   runtime.setPtyController({
@@ -102,13 +102,17 @@ it('reseeds the model from the provider after a dropped span instead of trusting
   try {
     runtime.onPtyData('pty-gap', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-gap', 9)
-    // Seq 16 -> 20: the daemon captured "ta" of this chunk before it arrived here.
+    await vi.waitFor(() => assert(capture.land))
+    // Seq 16 -> 20, after the capture was asked for: the daemon caught "ta" of it.
     runtime.onPtyData('pty-gap', 'tail', 2)
-    await new Promise((resolve) => setImmediate(resolve))
     assert(capture.land)
+    expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).toBeNull()
     capture.land({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
-    await new Promise((resolve) => setImmediate(resolve))
-    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')
+    const snapshot = await vi.waitFor(async () => {
+      const rebuilt = await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')
+      assert(rebuilt)
+      return rebuilt
+    })
     expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
   } finally {
     await runtime.onPtyExit('pty-gap', 0)
@@ -133,6 +137,7 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
   try {
     runtime.onPtyData('pty-stale', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-stale', 9)
+    // Arrives before the capture is asked for, so a snapshot without it is missing output.
     runtime.onPtyData('pty-stale', 'tail', 2)
     // Captures are paced a second apart.
     await vi.advanceTimersByTimeAsync(5_000)

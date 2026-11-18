@@ -69,7 +69,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       const pendingEscapeTailAnsi =
         state.rendererSeedSeq !== undefined
           ? state.rendererSeedEscapeTail
-          : (state.providerSeed?.escapeTail ?? snapshot.pendingEscapeTailAnsi)
+          : snapshot.pendingEscapeTailAnsi
       const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
       return data.length > 0 || opts.includeEmpty === true
         ? this.preferTrackedLastTitle(ptyId, {

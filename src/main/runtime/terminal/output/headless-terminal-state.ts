@@ -1,6 +1,7 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-terminal-hydration'
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import { stopGapJournal } from './gap-recovery-journal'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
@@ -119,18 +120,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     return state
   }
 
-  /** Swap in a fresh model that readers skip until a provider snapshot seeds it. */
-  protected replaceHeadlessTerminalForProviderSeed(ptyId: string): RuntimeHeadlessTerminal {
-    this.disposeHeadlessTerminal(ptyId)
-    this.providerSnapshotPreferredPtys.add(ptyId)
-    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
-    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
-    this.headlessTerminals.set(ptyId, state)
-    return state
-  }
-
-  /** Seeds `state` from a provider snapshot; false when the model was replaced meanwhile. */
-  protected async seedHeadlessFromProviderSnapshot(
+  /** Paint a provider snapshot at its captured grid, then return to the model's; false when the model was replaced meanwhile. */
+  protected async writeProviderSnapshotScreen(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
     snapshot: PtyProviderBufferSnapshot
@@ -141,7 +132,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!this.terminalCwdByPtyId.has(ptyId)) {
       this.recordOsc7MetadataForPty(ptyId, data)
     }
-    // Parse at the captured grid: a resize during capture would otherwise wrap the frame.
     const grid = state.emulator.getAppliedSize()
     if (grid.cols !== snapshot.cols || grid.rows !== snapshot.rows) {
       state.emulator.resize(snapshot.cols, snapshot.rows)
@@ -150,9 +140,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (this.headlessTerminals.get(ptyId) !== state) {
       return false
     }
-    const ptySize = this.getTerminalSize(ptyId)
-    if (ptySize && (ptySize.cols !== snapshot.cols || ptySize.rows !== snapshot.rows)) {
-      state.emulator.resize(ptySize.cols, ptySize.rows)
+    if (grid.cols !== snapshot.cols || grid.rows !== snapshot.rows) {
+      state.emulator.resize(grid.cols, grid.rows)
     }
     if (snapshot.cwd !== undefined) {
       state.emulator.setCwd(snapshot.cwd)
@@ -163,16 +152,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (snapshot.oscLinks !== undefined) {
       state.emulator.setRestoredOscLinks(snapshot.oscLinks)
     }
-    state.ownership.seedOwner(snapshot.terminalOwner, {
-      alternateScreen: state.emulator.isAlternateScreen
-    })
-    state.outputSequence = snapshot.seq
-    // Why: live bytes queued behind this seed while it was captured are already in it; writing them again doubles frames.
-    state.providerSeed = {
-      seq: snapshot.seq,
-      escapeTail: snapshot.pendingEscapeTailAnsi ?? '',
-      queryCarry: ''
-    }
     return true
   }
 
@@ -180,7 +159,11 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     ptyId: string,
     retryLateSeed = true
   ): void {
-    const state = this.replaceHeadlessTerminalForProviderSeed(ptyId)
+    this.disposeHeadlessTerminal(ptyId)
+    this.providerSnapshotPreferredPtys.add(ptyId)
+    const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
+    const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    this.headlessTerminals.set(ptyId, state)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     let seedTimedOut = false
     let seeded = false
@@ -215,7 +198,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
           })
           return
         }
-        seeded = await this.seedHeadlessFromProviderSnapshot(ptyId, state, snapshot)
+        if (!(await this.writeProviderSnapshotScreen(ptyId, state, snapshot))) {
+          return
+        }
+        state.ownership.seedOwner(snapshot.terminalOwner, {
+          alternateScreen: state.emulator.isAlternateScreen
+        })
+        state.outputSequence = snapshot.seq
+        seeded = true
       })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
@@ -235,6 +225,10 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
+    }
+    if (state.gapReseed) {
+      // Journaled bytes straddling a resize cannot be replayed at one grid; the next capture starts after it.
+      stopGapJournal(state.gapReseed)
     }
     const unpainted = state.unrepaintedReflowGrid
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
@@ -285,8 +279,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     }
     // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
     state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
-    // A recovering model's chain waits on a capture; the user's clear must not.
-    await (state.gapReseed ? undefined : state.writeChain)
+    await state.writeChain
   }
 
   // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
@@ -298,17 +291,16 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!state) {
       return
     }
+    if (state.gapReseed) {
+      // A rebuild from bytes before this ground would undo it; the next capture starts after it.
+      stopGapJournal(state.gapReseed)
+    }
     // Why on the chain: the ground must land after every PTY chunk already queued.
     const completion = state.writeChain.then(async () => {
       await state.emulator.write(state.ownership.groundInputModes())
       state.rendererSeedEscapeTail = undefined
-      if (state.providerSeed) {
-        // The ground supersedes an escape the seed left open; the seq skip still applies.
-        state.providerSeed.escapeTail = ''
-        state.providerSeed.queryCarry = ''
-      }
     })
     state.writeChain = completion.catch(() => {})
-    await (state.gapReseed ? undefined : completion)
+    await completion
   }
 }

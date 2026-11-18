@@ -18,12 +18,8 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
-import {
-  admitWhileRecovering,
-  consumeSeedCoverage,
-  releaseRecoveryQueue
-} from './provider-seed-covered-bytes'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { journalGapRecoveryChunk, noteUnobservedGapChunk } from './gap-recovery-journal'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
@@ -40,7 +36,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     readLaunchedAgentForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
     getEmulator: (ptyId) =>
       this.ptysById.has(ptyId) ? this.headlessTerminals.get(ptyId)?.emulator : undefined,
-    isScreenRestoring: (ptyId) => this.headlessHydrationState.get(ptyId) === 'pending',
+    isScreenRestoring: (ptyId) => this.headlessTerminals.get(ptyId)?.gapReseed !== undefined,
     readStatus: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       return pty ? this.readPtyAgentStatusRow(ptyId, pty) : undefined
@@ -228,7 +224,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       .catch(() => {})
   }
 
-  /** Per-chunk screen observers; covered chunks run them too, since the seed painted their screen. */
+  /** Per-chunk screen observers, run on a screen this runtime trusts. */
   protected observeHeadlessChunk(
     ptyId: string,
     state: RuntimeHeadlessTerminal,
@@ -236,8 +232,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     outputObservedAt: number
   ): void {
     const pty = this.ptysById.get(ptyId)
-    // A screen still recovering from dropped output is no evidence for dialogs or failures.
-    if (!pty || this.headlessTerminals.get(ptyId) !== state || state.gapReseed) {
+    if (!pty || this.headlessTerminals.get(ptyId) !== state) {
       return
     }
     const command = this.terminalSpawnCommandsByPtyId.get(ptyId)
@@ -274,36 +269,17 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
 
   protected trackHeadlessTerminalData(
     ptyId: string,
-    chunkData: string,
+    data: string,
     outputSequence: number,
     forwardQueryReplies = false,
     rawChunk = false
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
-    const admitted = admitWhileRecovering(
-      state,
-      chunkData,
-      outputSequence,
-      forwardQueryReplies,
-      outputObservedAt
-    )
-    if (!admitted.queued) {
-      return
+    if (state.gapReseed) {
+      journalGapRecoveryChunk(state.gapReseed, data, outputSequence, rawChunk)
     }
     const completion = state.writeChain.then(async () => {
-      releaseRecoveryQueue(admitted.recovery, chunkData.length)
-      const { covered, data } = await consumeSeedCoverage(state, chunkData, outputSequence, {
-        rawChunk,
-        forwardQueryReplies,
-        recoveryAdmitted: admitted.recovery !== undefined
-      })
-      if (covered !== '') {
-        this.observeHeadlessChunk(ptyId, state, covered, outputObservedAt)
-      }
-      if (data === null) {
-        return
-      }
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
       if (state.rendererSeedSeq !== undefined) {
@@ -323,7 +299,12 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         }
       }
       for (const chunk of splitFreebuffScreenUpdates(data, state.emulator.partialEscapeTailAnsi)) {
+        // Replies stay live while the screen rebuilds; only screen evidence waits for it.
         await state.emulator.write(chunk, { forwardQueryReplies })
+        if (state.gapReseed) {
+          noteUnobservedGapChunk(state.gapReseed, chunk, outputObservedAt)
+          continue
+        }
         this.observeHeadlessChunk(ptyId, state, chunk, outputObservedAt)
       }
       state.outputSequence = outputSequence
