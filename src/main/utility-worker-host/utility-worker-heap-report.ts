@@ -27,7 +27,9 @@ export function utilityWorkerHeapData(
     hostHeapMB: Math.round(report.hostBytes / MB),
     totalHeapMB: Math.round(utilityWorkerHeapTotal(report) / MB),
     // The total covers the readers sampled then; some may have exited before this breadcrumb.
-    heapReportWorkers: report.workers.length
+    heapReportWorkers: report.workers.length,
+    // Unknown readings are left out of the total, so a nonzero count marks it as incomplete.
+    heapReportUnknown: report.workers.filter((worker) => worker.bytes === null).length
   }
   workers.forEach((worker, index) => {
     const heap = heaps.get(worker.id)
