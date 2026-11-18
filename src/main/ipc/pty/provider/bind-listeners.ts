@@ -85,6 +85,9 @@ export function bindProviderListeners(session: PtyIpcSession): void {
             rawLength,
             payload.transformed
           )
+      if (outputSeq !== undefined && payload.seq !== undefined) {
+        session.runtime?.anchorProviderSequence(payload.id, outputSeq, payload.seq)
+      }
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })
   )

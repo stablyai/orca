@@ -62,3 +62,19 @@ describe('Session output sequence before the first attach', () => {
     session.dispose()
   })
 })
+
+describe('Session output frames', () => {
+  it('stamps every output frame with the stream position after it', () => {
+    const { session, emit } = createUnattachedSession()
+    const seqs: (number | undefined)[] = []
+    session.attachClient({
+      onData: (_data: string, _rawLength?: number, _transformed?: boolean, seq?: number) =>
+        seqs.push(seq),
+      onExit: () => {}
+    })
+    emit('abc')
+    emit('de')
+    expect(seqs).toEqual([3, 5])
+    session.dispose()
+  })
+})

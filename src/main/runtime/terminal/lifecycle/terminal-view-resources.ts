@@ -104,6 +104,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected providerSequenceInitializedPtys = new Set<string>()
 
   protected providerSequenceOffsetByPtyId = new Map<string, number>()
+  /** Bumped when a stamped frame moves the offset; present once the stream has anchored. */
+  protected readonly providerSequenceAnchorRevisions = new Map<string, number>()
 
   protected providerSnapshotPreferredPtys = new Set<string>()
 

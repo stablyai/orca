@@ -164,43 +164,82 @@ it('recaptures when output arrived during a capture whose seq cannot place it', 
   }
 })
 
-it.each([3, 200_000_000])(
-  'rebuilds from a fresh capture on a silent stream even when its seq (%i) does not match this one',
-  async (seq) => {
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      getSize: () => grid,
-      serializeProviderBuffer: async () => ({
-        data: '\x1b[H\x1b[2Jfresh',
-        ...grid,
-        seq,
-        source: 'headless' as const
-      })
-    })
-    try {
-      runtime.onPtyData('pty-seq', 'stale\r\n', 1)
-      runtime.notePtyDataGap('pty-seq', 9)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
-      const headless = runtime as unknown as {
-        serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
-      }
-      const snapshot = await vi.waitFor(
-        async () => {
-          const rebuilt = await headless.serializeHeadlessTerminalBuffer('pty-seq')
-          assert(rebuilt)
-          return rebuilt
-        },
-        { timeout: 5_000 }
-      )
-      expect(await replay(snapshot, '')).toEqual(['fresh'])
-    } finally {
-      await runtime.onPtyExit('pty-seq', 0)
-    }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
+const headlessOf = (runtime: OrcaRuntimeService) =>
+  runtime as unknown as {
+    serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
   }
-)
+
+// As the provider listener delivers a frame the daemon stamped with its stream position.
+const stamped = (runtime: OrcaRuntimeService, ptyId: string, data: string, seq: number) =>
+  runtime.anchorProviderSequence(ptyId, runtime.onPtyData(ptyId, data, 2), seq)
+
+it('places a snapshot by the stream stamps when a reattach left this count ahead of the provider', async () => {
+  const capture: { land?: (value: PtyProviderBufferSnapshot) => void } = {}
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: () =>
+      new Promise<PtyProviderBufferSnapshot>((resolve) => {
+        capture.land = resolve
+      })
+  })
+  try {
+    // Delivered during the attach call and already inside the provider's baseline of 1000: counted twice.
+    runtime.onPtyData('pty-drift', 'stale\r\n', 1)
+    runtime.synchronizePtyOutputSequenceFromProvider('pty-drift', {
+      value: 1000,
+      generation: 'continued'
+    })
+    stamped(runtime, 'pty-drift', 'x'.repeat(10), 1010)
+    runtime.notePtyDataGap('pty-drift', 9)
+    const land = await vi.waitFor(() => {
+      assert(capture.land)
+      return capture.land
+    })
+    stamped(runtime, 'pty-drift', 'tail', 1023)
+    land({ data: '\x1b[H\x1b[2Jfresh\r\ntail', ...grid, seq: 1023, source: 'headless' })
+    const snapshot = await vi.waitFor(async () => {
+      const rebuilt = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-drift')
+      assert(rebuilt)
+      return rebuilt
+    })
+    expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
+  } finally {
+    await runtime.onPtyExit('pty-drift', 0)
+  }
+})
+
+it('returns to the live screen when an unstamped stream never lines up with the provider', async () => {
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async () => ({
+      data: '\x1b[H\x1b[2Jprovider',
+      ...grid,
+      seq: 3,
+      source: 'headless' as const
+    })
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  try {
+    runtime.onPtyData('pty-unstamped', 'live\r\n', 1)
+    runtime.notePtyDataGap('pty-unstamped', 9)
+    await vi.advanceTimersByTimeAsync(60_000)
+    vi.useRealTimers()
+    const snapshot = await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-unstamped')
+    expect(await replay(snapshot, '')).toEqual(['live'])
+  } finally {
+    vi.useRealTimers()
+    await runtime.onPtyExit('pty-unstamped', 0)
+  }
+})
 
 describe('the hidden renderer after dropped output', () => {
   function createRendererRuntime() {

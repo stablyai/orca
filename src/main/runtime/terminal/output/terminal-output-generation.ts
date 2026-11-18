@@ -140,6 +140,30 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
 
+  /** Why: main counts delivered chars, which can drift from the daemon's count across a reattach. */
+  anchorProviderSequence(ptyId: string, outputSequence: number, providerSeq: number): void {
+    if (!this.providerSequenceInitializedPtys.has(ptyId) || !Number.isFinite(providerSeq)) {
+      return
+    }
+    const offset = outputSequence - providerSeq
+    const previous = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+    const revision = this.providerSequenceAnchorRevisions.get(ptyId)
+    if (revision !== undefined && offset === previous) {
+      return
+    }
+    this.providerSequenceOffsetByPtyId.set(ptyId, offset)
+    this.providerSequenceAnchorRevisions.set(
+      ptyId,
+      offset === previous ? (revision ?? 0) : (revision ?? 0) + 1
+    )
+    if (offset !== previous && revision === undefined) {
+      console.warn('[terminal] provider stream position re-anchored', {
+        ptyId,
+        drift: offset - previous
+      })
+    }
+  }
+
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,
     providerSequence: { value: number; generation: 'continued' | 'reset' },
@@ -167,6 +191,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
     if (providerSequence.generation === 'reset') {
       this.advancePtyLifecycleGeneration(ptyId)
+      this.providerSequenceAnchorRevisions.delete(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {

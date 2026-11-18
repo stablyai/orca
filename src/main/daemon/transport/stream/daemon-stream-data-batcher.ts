@@ -220,6 +220,8 @@ export class DaemonStreamDataBatcher {
         : entrySequenceChars === 0
           ? 0
           : slice.length
+      const sliceSeq =
+        entry.seq === undefined ? undefined : entry.seq - (entrySequenceChars - sliceSequenceChars)
       if (end >= entry.data.length) {
         batch.queue.shift()
         releaseDaemonStreamEntry(batch, entry)
@@ -244,7 +246,7 @@ export class DaemonStreamDataBatcher {
         slice,
         this.maxLineBytes,
         sliceSequenceChars,
-        entry.seq,
+        sliceSeq,
         entry.transformed
       )
     }

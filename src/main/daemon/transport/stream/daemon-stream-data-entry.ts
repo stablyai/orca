@@ -17,11 +17,12 @@ export function appendDaemonStreamData(
   options: DaemonStreamEnqueueOptions
 ): number {
   const last = batch.queue.at(-1)
-  // Control and transformed spans mark indivisible source-stream positions.
+  // Control, transformed and salvaged spans mark indivisible source-stream positions.
   if (
     last?.sessionId === sessionId &&
     !last.control &&
     !last.transformed &&
+    last.sequenceChars === undefined &&
     options.transformed !== true
   ) {
     last.data += data

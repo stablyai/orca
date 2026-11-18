@@ -184,6 +184,8 @@ export type RuntimeHeadlessTerminal = {
   awaitingContextSeed?: boolean
   /** When the last dropped-output capture started, carried across attempts to pace them. */
   gapReseedLastCaptureAt?: number
+  /** Recovery could not line the provider's seq up with this stream; later gaps keep the live parse. */
+  gapReseedAbandoned?: boolean
   /** Seeded screen-only after dropped output, so history comes from the provider. */
   historyFromProvider?: boolean
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */

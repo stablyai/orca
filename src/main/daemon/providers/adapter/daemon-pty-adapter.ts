@@ -7,7 +7,11 @@ import {
   FENCED_TERMINATION_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact
 } from '../../protocol/daemon-protocol-version'
-import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
+import {
+  emitPtyListeners,
+  createPtyDataPayload,
+  createPtyExitPayload
+} from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-events'
 import { logWslPaneDiagnostic } from '../wsl/daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from '../wsl/daemon-wsl-bridge-exit'
@@ -151,17 +155,8 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
 
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
-        emitPtyListeners(this.dataListeners, (listener) =>
-          listener({
-            id: event.sessionId,
-            data: event.payload.data,
-            ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
-              ? {}
-              : { sequenceChars: event.payload.rawLength ?? event.payload.sequenceChars }),
-            ...(event.payload.transformed ? { transformed: true } : {}),
-            ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
-          })
-        )
+        const payload = createPtyDataPayload(event, this.protocolVersion)
+        emitPtyListeners(this.dataListeners, (listener) => listener(payload))
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
