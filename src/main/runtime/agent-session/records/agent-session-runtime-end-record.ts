@@ -2,9 +2,13 @@
 // Only a recorded start without end implies crash; missing/unreadable/pruned records leave cause unknown.
 
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
-import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
+import {
+  readNodeFileSyncWithinLimit,
+  readNodeFileWithinLimit
+} from '../../../../shared/file-content/node-bounded-file-reader'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
 import {
   AGENT_SESSION_RESUME_TRIGGERS,
@@ -107,61 +111,69 @@ function readTrigger(value: unknown): AgentSessionResumeTrigger | undefined {
   return AGENT_SESSION_RESUME_TRIGGERS.find((trigger) => trigger === value)
 }
 
-function readRecord(
-  path: string,
-  runtime: string
-): { startedAt: number; end: AgentSessionOrcaStopCause | undefined } | undefined {
-  try {
-    const parsed: unknown = JSON.parse(
-      readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8')
+type RecordReading = { startedAt: number; end: AgentSessionOrcaStopCause | undefined }
+
+function parseRecord(text: string, runtime: string): RecordReading | undefined {
+  const parsed: unknown = JSON.parse(text)
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('runtime' in parsed) ||
+    parsed.runtime !== runtime ||
+    !('startedAt' in parsed) ||
+    typeof parsed.startedAt !== 'number'
+  ) {
+    return undefined
+  }
+  if (!('end' in parsed) || parsed.end === undefined) {
+    return { startedAt: parsed.startedAt, end: 'crash' }
+  }
+  const end = parsed.end
+  return {
+    startedAt: parsed.startedAt,
+    end: readTrigger(
+      typeof end === 'object' && end !== null && 'trigger' in end ? end.trigger : undefined
     )
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !('runtime' in parsed) ||
-      parsed.runtime !== runtime ||
-      !('startedAt' in parsed) ||
-      typeof parsed.startedAt !== 'number'
-    ) {
-      return undefined
-    }
-    if (!('end' in parsed) || parsed.end === undefined) {
-      return { startedAt: parsed.startedAt, end: 'crash' }
-    }
-    const end = parsed.end
-    return {
-      startedAt: parsed.startedAt,
-      end: readTrigger(
-        typeof end === 'object' && end !== null && 'trigger' in end ? end.trigger : undefined
-      )
-    }
+  }
+}
+
+function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
+  try {
+    return parseRecord(
+      readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8'),
+      runtime
+    )?.end
   } catch {
     return undefined
   }
 }
 
 /** When the newest other runtime started: what it recorded is what the run that just ended cut. */
-export function previousAgentSessionRuntimeStartedAt(
+export async function previousAgentSessionRuntimeStartedAt(
   stateDirectory: string,
   runtime: string
-): number | undefined {
+): Promise<number | undefined> {
   const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
-  let names: string[]
-  try {
-    names = readdirSync(directory)
-  } catch {
-    return undefined
-  }
-  let latest: number | undefined
-  for (const name of names) {
-    const other = RECORD_FILE.exec(name)?.[1]
-    const startedAt =
-      other && other !== runtime ? readRecord(join(directory, name), other)?.startedAt : undefined
-    if (startedAt !== undefined && (latest === undefined || startedAt > latest)) {
-      latest = startedAt
-    }
-  }
-  return latest
+  const names = await readdir(directory).catch(() => [])
+  const starts = await Promise.all(
+    names.map(async (name) => {
+      const other = RECORD_FILE.exec(name)?.[1]
+      if (!other || other === runtime) {
+        return undefined
+      }
+      try {
+        const { buffer } = await readNodeFileWithinLimit(
+          join(directory, name),
+          MAX_RUNTIME_RECORD_BYTES
+        )
+        return parseRecord(buffer.toString('utf8'), other)?.startedAt
+      } catch {
+        return undefined
+      }
+    })
+  )
+  const known = starts.filter((startedAt) => startedAt !== undefined)
+  return known.length > 0 ? Math.max(...known) : undefined
 }
 
 /** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */
@@ -178,7 +190,7 @@ export function readAgentSessionRuntimeEnds(
   const ends = new Map<string, AgentSessionOrcaStopCause>()
   for (const name of names) {
     const runtime = RECORD_FILE.exec(name)?.[1]
-    const end = runtime ? readRecord(join(directory, name), runtime)?.end : undefined
+    const end = runtime ? readRecordedEnd(join(directory, name), runtime) : undefined
     if (runtime && end) {
       ends.set(runtime, end)
     }

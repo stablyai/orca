@@ -34,7 +34,7 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
   /** When the run that just ended started; unknown when no earlier run left a record. */
-  previousRunStartedAt: number | undefined
+  previousRunStartedAt: () => Promise<number | undefined>
   resumeWorkOnRestart: () => boolean
 }
 
@@ -55,7 +55,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
   }
   const recordedBy = Date.now()
   const cutByLastRun = async () => {
-    const since = deps.previousRunStartedAt
+    const since = await deps.previousRunStartedAt()
     const offers = [
       ...(await deps.restartResume.list()),
       ...(await deps.restartResume.listFailures())
@@ -102,10 +102,11 @@ export function structuredAgentSessionLaunchContinuationDeps(
         restartResume: host.restartResume,
         store: host.deps.store,
         startedAt: Math.trunc(performance.timeOrigin),
-        previousRunStartedAt: previousAgentSessionRuntimeStartedAt(
-          host.deps.journalDatabase.stateDirectory,
-          agentSessionRuntimeIncarnation()
-        ),
+        previousRunStartedAt: () =>
+          previousAgentSessionRuntimeStartedAt(
+            host.deps.journalDatabase.stateDirectory,
+            agentSessionRuntimeIncarnation()
+          ),
         resumeWorkOnRestart
       }
     : undefined

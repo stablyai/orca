@@ -64,7 +64,7 @@ function launch(resumeWorkOnRestart: boolean) {
       }
     },
     startedAt: 5,
-    previousRunStartedAt: 3,
+    previousRunStartedAt: async () => 3,
     resumeWorkOnRestart: () => resumeWorkOnRestart
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
