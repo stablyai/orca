@@ -30,16 +30,24 @@ function fakeHost(answer: (method: string, params: unknown) => RpcResponse) {
   return { client, calls }
 }
 
-function storingHost(byteLength = 3, name = 'spec.pdf', failAppend = false) {
-  return fakeHost((method) => {
+// Like the host's upload store, it refuses a commit whose bytes differ from the declared size.
+function storingHost(name = 'spec.pdf', failAppend = false) {
+  let declared = 0
+  let received = 0
+  return fakeHost((method, params) => {
+    const args = Object.fromEntries(Object.entries(params ?? {}))
     if (method === 'agentSessionAttachment.uploadStart') {
+      declared = Number(args.byteLength)
       return ok({ uploadId: 'upload-1' })
     }
     if (method === 'agentSessionAttachment.uploadAppend') {
+      received += Buffer.from(String(args.contentBase64), 'base64').byteLength
       return failAppend ? fail('disk full') : ok({})
     }
     if (method === 'agentSessionAttachment.uploadCommit') {
-      return ok({ path: `/store/upload-1/${name}`, name, byteLength })
+      return received === declared
+        ? ok({ path: `/store/upload-1/${name}`, name, byteLength: received })
+        : fail('Attachment upload is incomplete')
     }
     return ok({ aborted: true })
   })
@@ -47,7 +55,7 @@ function storingHost(byteLength = 3, name = 'spec.pdf', failAppend = false) {
 
 function fileOf(
   parts: readonly string[],
-  byteLength = parts.reduce((sum, part) => sum + Buffer.from(part, 'base64').length, 0)
+  byteLength = parts.reduce((sum, part) => sum + Buffer.byteLength(part), 0)
 ): PickedMobileFile {
   return {
     name: 'spec.pdf',
@@ -63,7 +71,7 @@ const CHUNK = 393216
 
 describe('uploadMobileAgentSessionAttachment', () => {
   it("aborts the slot when a chunk fails and reports the host's reason", async () => {
-    const host = storingHost(3, 'spec.pdf', true)
+    const host = storingHost('spec.pdf', true)
     await expect(
       uploadMobileAgentSessionAttachment(host.client, {
         sessionId: 'session-1',
@@ -92,6 +100,16 @@ describe('uploadMobileAgentSessionAttachment', () => {
     ).toEqual([0, CHUNK, CHUNK * 2])
     expect(host.calls.at(-1)?.method).toBe('agentSessionAttachment.uploadCommit')
     expect(progress).toEqual([CHUNK, CHUNK * 2, CHUNK * 2 + 1])
+  })
+
+  it('fails the upload when the bytes sent differ from the declared size', async () => {
+    const host = storingHost()
+    await expect(
+      uploadMobileAgentSessionAttachment(host.client, {
+        sessionId: 'session-1',
+        file: fileOf(['abc'], 2)
+      })
+    ).rejects.toThrow('Attachment upload is incomplete')
   })
 
   it('sends one empty append for an empty file', async () => {
