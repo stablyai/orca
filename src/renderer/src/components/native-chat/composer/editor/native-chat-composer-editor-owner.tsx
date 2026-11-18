@@ -105,17 +105,21 @@ const ComposerEditorOwner = createContext<ComposerEditors | null>(null)
 
 /** Gives the owned editor a view while shown; hidden, it keeps its state but no view or document listeners.
  *  Render before EditorContent so the view exists when EditorContent adopts it. */
-export function NativeChatComposerEditorView({ editor }: { editor: Editor }): React.JSX.Element {
+export function NativeChatComposerEditorView({ editor }: { editor: Editor }): null {
   useLayoutEffect(() => {
     // One view per editor: Tiptap would replace a live view without destroying it.
     if (disposedEditors.has(editor) || !editor.isDestroyed) {
       return
     }
     editor.mount(document.createElement('div'))
-    return () => editor.unmount()
+    return () => {
+      // Without its stylesheet handle, unmount skips a whole-page `.tiptap` query and leaves the
+      // shared stylesheet in place; removing and re-adding it would restyle the page each switch.
+      Reflect.set(editor, 'css', null)
+      editor.unmount()
+    }
   }, [editor])
-  // Tiptap drops its shared stylesheet when no `.tiptap` element is left, restyling the whole page on every chat switch.
-  return <span className="tiptap" hidden />
+  return null
 }
 
 /** The tab owns editors and their state; only a shown composer gives one a view. */
