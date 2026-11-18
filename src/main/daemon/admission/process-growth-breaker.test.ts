@@ -74,4 +74,14 @@ describe('countDescendantsByRoot', () => {
       ])
     )
   })
+
+  it('leaves skipped subtrees out of every count', () => {
+    const rows = [
+      { pid: 2, ppid: 1 },
+      { pid: 3, ppid: 2 },
+      { pid: 4, ppid: 3 },
+      { pid: 5, ppid: 1 }
+    ]
+    expect(countDescendantsByRoot(rows, [1], new Set([2]))).toEqual(new Map([[1, 1]]))
+  })
 })

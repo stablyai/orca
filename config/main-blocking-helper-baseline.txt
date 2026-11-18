@@ -452,7 +452,6 @@
 6 src/main/daemon/launch/daemon-spawner.ts
 8 src/main/daemon/launch/daemon-stale-kill.ts
 4 src/main/daemon/launch/local-terminal-daemon-stop.ts
-5 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 2 src/main/daemon/permissions/daemon-tcc-attribution.ts
 11 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
@@ -462,8 +461,8 @@
 3 src/main/daemon/providers/adapter/daemon-pty-daemon-recovery.ts
 1 src/main/daemon/providers/adapter/daemon-pty-runtime-state.ts
 1 src/main/daemon/providers/adapter/daemon-pty-session-control.ts
-6 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
-18 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
+5 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
+17 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
 7 src/main/daemon/providers/lifecycle/daemon-provider-restart.ts
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
@@ -827,8 +826,8 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-12 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
-2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+13 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts # store-open tail fold (one-shot startup); same SQL already in main-blocking-sqlite-baseline
+3 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup)
 8 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 40 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
@@ -857,7 +856,8 @@
 2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
 1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-3 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts
+5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
+10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-table.ts
 1 src/main/native-chat/agent-session-journal/queued-messages/journal-queue-import.ts
