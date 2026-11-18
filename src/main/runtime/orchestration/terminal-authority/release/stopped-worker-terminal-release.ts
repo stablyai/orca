@@ -12,6 +12,8 @@ const PAGE_ROWS = 50
 const MAX_ROWS_PER_SWEEP = 1000
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
+// Where the next sweep resumes, so rows that never resolve can't hold back the ones after them.
+const sweepCursors = new WeakMap<OrchestrationDb, number>()
 
 /** Run after a terminal inventory, when an absent process reads as exited rather than not yet found. */
 export function sweepStoppedWorkerTerminals(
@@ -56,7 +58,8 @@ async function releaseExitedWorkerTerminals(
   const fence = readSqliteNow(db)
   // Every row is listed before any host is: a process alive when its row was read is in the listing.
   const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
-  for (let after = 0; candidates.length < MAX_ROWS_PER_SWEEP;) {
+  let after = sweepCursors.get(db) ?? 0
+  for (;;) {
     const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
     for (const resource of page) {
       after = resource.row_id
@@ -67,9 +70,14 @@ async function releaseExitedWorkerTerminals(
       }
     }
     if (page.length < PAGE_ROWS) {
+      after = 0
+      break
+    }
+    if (candidates.length >= MAX_ROWS_PER_SWEEP) {
       break
     }
   }
+  sweepCursors.set(db, after)
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
   const exited: {
     requestingDispatchId: string
