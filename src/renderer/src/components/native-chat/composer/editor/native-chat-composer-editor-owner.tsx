@@ -42,11 +42,6 @@ class EditorSelection {
 // Tiptap reports an unmounted editor as destroyed too; only these may never mount a view again.
 const disposedEditors = new WeakSet<Editor>()
 
-function disposeEditor(editor: Editor): void {
-  disposedEditors.add(editor)
-  editor.destroy()
-}
-
 class ComposerEditors {
   private editors = new Map<string, OwnedEditor>()
   private generation = 0
@@ -59,7 +54,7 @@ class ComposerEditors {
         if (generation === this.generation) {
           for (const entry of this.editors.values()) {
             entry.release()
-            disposeEditor(entry.editor)
+            entry.editor.destroy()
           }
           this.editors.clear()
         }
@@ -69,7 +64,7 @@ class ComposerEditors {
 
   get(scope: string, options: Options): OwnedEditor {
     const existing = this.editors.get(scope)
-    if (existing && !existing.editor.isDestroyed) {
+    if (existing && !disposedEditors.has(existing.editor)) {
       existing.options = options
       return existing
     }
@@ -89,13 +84,14 @@ class ComposerEditors {
         onSelectionUpdate: (...args) => entry.options.onSelectionUpdate?.(...args)
       })
     }
+    entry.editor.on('destroy', () => disposedEditors.add(entry.editor))
     this.editors.set(scope, entry)
     if (isNativeChatEditDraft(scope)) {
       entry.release = subscribeToNativeChatComposerDraft(scope, () => {
         if (!ephemeralDrafts.has(scope)) {
           this.editors.delete(scope)
           entry.release()
-          disposeEditor(entry.editor)
+          entry.editor.destroy()
         }
       })
     }
