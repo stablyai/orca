@@ -1,3 +1,4 @@
+import { hasStructuredAgentLaunchInWorktree } from './structured-agent-session-launch-status'
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -182,6 +183,17 @@ describe('a message sent to a chat whose start failed', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     })
+  })
+
+  it('keeps an empty workspace owned while a Default chat create is pending', () => {
+    mocks.createIntent.mockReturnValueOnce(launchIntent('default-pending'))
+    mocks.launch.mockReturnValueOnce(new Promise(() => {}))
+    startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
+      requestId: 'default-pending-request',
+      omitEffort: true
+    })
+    expect(hasStructuredAgentLaunchInWorktree(WORKTREE_ID)).toBe(true)
+    resetStructuredAgentLaunchRegistryForTests()
   })
 
   async function failThenTakeComposerText(): Promise<void> {

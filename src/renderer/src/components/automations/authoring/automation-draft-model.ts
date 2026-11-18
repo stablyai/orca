@@ -74,7 +74,6 @@ export function draftExtraAgentArgsNeedFreshSession(
   const views = automationLaunchInputs(draft.agentId, draft)
   const choices = draft.surface === 'chat' ? views.chatSessionOptions : views.sessionOptions
   const consumed =
-    Boolean(views.omitEffort) ||
     Object.keys(choices ?? {}).length > 0 ||
     (draft.surface !== 'chat' &&
       (draft.agentArgs !== undefined || hasExtraAgentArgs(draft.extraAgentArgs)))

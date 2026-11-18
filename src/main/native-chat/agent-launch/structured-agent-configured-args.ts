@@ -6,7 +6,10 @@ import {
   resolveTuiAgentLaunchArgs,
   type AgentLaunchProfileSettings
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import {
+  quoteStartupArg,
+  tokenizeStartupCommand
+} from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/shell/launch/windows-terminal-shell'
 import { withoutAgentEffortArgs } from '../../../shared/agent-launch/choices/agent-choice-args'
 
@@ -30,7 +33,8 @@ export function structuredAgentConfiguredArgs(
         { target: 'structured', shell }
       ).args
     : resolveTuiAgentLaunchArgs(agent, settings)
-  const cleared = omitEffort && isTuiAgent(agent) ? withoutAgentEffortArgs(agent, source) : source
+  const cleared =
+    omitEffort && isTuiAgent(agent) ? withoutAgentEffortArgs(agent, source, shell) : source
   if (cleared === null) {
     throw new Error(`${agent} Arguments cannot safely omit effort.`)
   }
@@ -46,8 +50,8 @@ export function withoutStructuredAgentEffortArgs(agent: string, args: readonly s
   if (!isTuiAgent(agent)) {
     throw new Error(`${agent} cannot safely omit effort.`)
   }
-  const source = args.map((arg) => JSON.stringify(arg)).join(' ')
-  const cleared = withoutAgentEffortArgs(agent, source)
+  const source = args.map((arg) => quoteStartupArg(arg, 'posix')).join(' ')
+  const cleared = withoutAgentEffortArgs(agent, source, 'posix')
   if (cleared === null) {
     throw new Error(`${agent} Arguments cannot safely omit effort.`)
   }

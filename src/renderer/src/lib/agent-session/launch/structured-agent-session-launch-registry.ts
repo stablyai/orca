@@ -61,11 +61,10 @@ export function structuredLaunchIdentity(
   if (forkFrom) {
     return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
   }
-  const effortIdentity = scope.omitEffort ? ':omit-effort' : ''
   // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom
-    ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}${effortIdentity}`
-    : `${agent}:${worktreeId}${effortIdentity}`
+    ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}`
+    : `${agent}:${worktreeId}`
 }
 
 export function getStructuredAgentSessionLaunchLifecycle(

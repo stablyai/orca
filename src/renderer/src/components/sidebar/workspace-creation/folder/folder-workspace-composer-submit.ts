@@ -167,7 +167,7 @@ export async function submitFolderWorkspaceCreate({
   const structuredLaunch = plan?.route === 'structured-native-chat'
   const hostStartsTerminal =
     setupSupported && Boolean(runtimeEnvironmentId) && Boolean(quickAgent) && !structuredLaunch
-  if (quickAgent && runtimeEnvironmentId && !structuredLaunch) {
+  if (quickAgent && runtimeEnvironmentId) {
     // Why: refuse before creating; a paired host older than Default effort would launch its Settings effort.
     await requireAgentLaunchOmitEffort(runtimeEnvironmentId, omitEffort)
   }

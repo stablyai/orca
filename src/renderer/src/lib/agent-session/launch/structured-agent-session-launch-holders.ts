@@ -35,7 +35,11 @@ export function structuredLaunchesHoldingIdentity(
 /** The launch a start joins: the one `requestId` re-delivers, or a resume of its conversation. */
 export function getJoinableStructuredLaunchState(
   identity: string,
-  requestId: string
+  requestId: string,
+  omitEffort?: true
 ): StructuredLaunchState | undefined {
-  return structuredLaunchesHoldingIdentity((candidate) => candidate === identity, requestId).at(-1)
+  return structuredLaunchesHoldingIdentity(
+    (candidate) => candidate === identity,
+    requestId
+  ).findLast((state) => state.intent.params.omitEffort === omitEffort)
 }

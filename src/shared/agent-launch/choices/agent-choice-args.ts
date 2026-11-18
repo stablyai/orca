@@ -75,11 +75,31 @@ export function analyzeAgentChoiceArgs(
 }
 
 /** Omission must remove every carrier without changing the meaning of unrelated arguments. */
-export function withoutAgentEffortArgs(agent: TuiAgent, text: string): string | null {
-  if (PERMISSION_LAUNCH_GRAMMARS.some((shell) => !tokenizeStartupCommand(text, shell).ok)) {
-    return null
+export function withoutAgentEffortArgs(
+  agent: TuiAgent,
+  text: string,
+  shell?: AgentStartupShell
+): string | null {
+  const grammars = shell ? [shell] : PERMISSION_LAUNCH_GRAMMARS
+  const parsed = grammars.map((grammar) => ({
+    grammar,
+    parsed: tokenizeStartupCommand(text, grammar)
+  }))
+  if (parsed.some((entry) => !entry.parsed.ok)) {
+    // A picker has no consuming shell yet; harmless text can wait for the host's proof.
+    const valid = parsed.filter((entry) => entry.parsed.ok)
+    return valid.length &&
+      valid.every(({ grammar }) => {
+        const candidate = analyzeChoiceArgs(agent, text, [grammar])
+        return (
+          !candidate.opaqueKeys.has('effort') &&
+          !candidate.occurrences.some((entry) => entry.key === 'effort')
+        )
+      })
+      ? text
+      : null
   }
-  const analysis = analyzeAgentChoiceArgs(agent, text)
+  const analysis = analyzeChoiceArgs(agent, text, grammars)
   const effort = analysis.occurrences.filter((entry) => entry.key === 'effort')
   if (analysis.opaqueKeys.has('effort') || effort.some((entry) => !entry.source)) {
     return null
@@ -88,7 +108,7 @@ export function withoutAgentEffortArgs(agent: TuiAgent, text: string): string | 
   if (cleared === null) {
     return null
   }
-  const remaining = analyzeAgentChoiceArgs(agent, cleared)
+  const remaining = analyzeChoiceArgs(agent, cleared, grammars)
   return remaining.opaqueKeys.has('effort') ||
     remaining.occurrences.some((entry) => entry.key === 'effort')
     ? null

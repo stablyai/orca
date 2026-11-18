@@ -259,8 +259,8 @@ export function terminalSessionOptionInputs(args: {
     raw = merged.agentArgs
   }
   if (args.omitEffort) {
-    const cleared = withoutAgentEffortArgs(args.agent, raw ?? '')
-    const command = withoutAgentEffortArgs(args.agent, args.command ?? '')
+    const cleared = withoutAgentEffortArgs(args.agent, raw ?? '', args.shell)
+    const command = withoutAgentEffortArgs(args.agent, args.command ?? '', args.shell)
     if (cleared === null || command === null || command !== (args.command ?? '')) {
       throw new Error(
         'Default effort cannot safely remove effort from the configured arguments or command.'

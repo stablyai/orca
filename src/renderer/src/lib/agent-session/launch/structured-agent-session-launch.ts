@@ -176,7 +176,7 @@ function structuredAgentLaunchState(
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = structuredLaunchIdentity(worktreeId, agent, options)
-  const existing = getJoinableStructuredLaunchState(identity, options.requestId)
+  const existing = getJoinableStructuredLaunchState(identity, options.requestId, options.omitEffort)
   const joined = existing && joinStructuredLaunchState(existing, options)
   if (joined) {
     return joined

@@ -1,3 +1,4 @@
+import { assertAutomationExtraAgentArgs } from '../../automations/launch/automation-extra-agent-args-record'
 import { expect, it } from 'vitest'
 import { terminalSessionOptionInputs, resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import {
@@ -118,3 +119,25 @@ it.each(['--debug --effort high', '--effort "high', '--add-dir "unfinished'])(
     ).toThrow()
   }
 )
+
+it('keeps a saved Default automation valid when it reuses its session', () => {
+  expect(() =>
+    assertAutomationExtraAgentArgs({
+      agentId: 'claude',
+      reuseSession: true,
+      launchPreferences: { options: { effort: null } }
+    })
+  ).not.toThrow()
+})
+
+it('preserves valid host Arguments when another shell cannot parse them', () => {
+  const result = terminalSessionOptionInputs({
+    agent: 'claude',
+    shell: 'posix',
+    omitEffort: true,
+    agentArgs: "--append-system-prompt don\\'t\\ panic",
+    sessionOptions: undefined
+  })
+  expect(result.agentArgs).toBe("--append-system-prompt don\\'t\\ panic")
+  expect(result.sessionOptions?.effort).toBeUndefined()
+})
