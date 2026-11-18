@@ -19,6 +19,8 @@ import type {
 
 const TODOIST_API_BASE = 'https://api.todoist.com/api/v1'
 const PAGE_SIZE = 200
+// Why: the signal also bounds body reads, so a stalled response cannot hold task results.
+const REQUEST_TIMEOUT_MS = 30_000
 
 async function todoistRequest(token: string, path: string, init?: RequestInit): Promise<unknown> {
   const url = `${TODOIST_API_BASE}${path}`
@@ -32,7 +34,11 @@ async function todoistRequest(token: string, path: string, init?: RequestInit): 
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
   headers.set('Authorization', `Bearer ${token}`)
-  const response = await httpClient.fetch(url, { ...init, headers })
+  const response = await httpClient.fetch(url, {
+    ...init,
+    headers,
+    signal: init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  })
   if (!response.ok) {
     const message =
       response.status === 401 || response.status === 403
@@ -56,9 +62,11 @@ async function readTodoistError(response: Response): Promise<string> {
 
 async function fetchPages(token: string, path: string, limit: number): Promise<unknown[]> {
   const items: unknown[] = []
+  // Why: Todoist rejects a cursor reused with different parameters, so the page size stays fixed.
+  const pageSize = String(Math.min(PAGE_SIZE, limit))
   let cursor: string | null = null
   do {
-    const params = new URLSearchParams({ limit: String(Math.min(PAGE_SIZE, limit - items.length)) })
+    const params = new URLSearchParams({ limit: pageSize })
     if (cursor) {
       params.set('cursor', cursor)
     }
@@ -66,11 +74,9 @@ async function fetchPages(token: string, path: string, limit: number): Promise<u
     const page = await todoistRequest(token, `${path}${separator}${params}`)
     const results = isRecord(page) && Array.isArray(page.results) ? page.results : []
     items.push(...results)
-    // Why: an empty page with a cursor (repeated or not) would otherwise loop forever.
-    cursor =
-      results.length > 0 && isRecord(page) && typeof page.next_cursor === 'string'
-        ? page.next_cursor || null
-        : null
+    const next = isRecord(page) && typeof page.next_cursor === 'string' ? page.next_cursor : null
+    // Why: a repeated cursor would loop forever; an empty page with a new cursor still has more.
+    cursor = next && next !== cursor ? next : null
   } while (cursor && items.length < limit)
   return items.slice(0, limit)
 }

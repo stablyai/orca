@@ -67,15 +67,47 @@ export function getTodoistCredentialError(): string | null {
   return credentialError
 }
 
-export async function saveTodoistCredential(token: string, viewer: TodoistViewer): Promise<void> {
-  await mkdir(getOrcaDir(), { recursive: true })
-  // Why: one-shot on user connect; reuses the shared atomic, owner-only credential writer.
-  writeEncryptedCredential('Todoist', getTokenPath(), token)
-  writeCredentialFileAtomic(getViewerPath(), Buffer.from(JSON.stringify(viewer), 'utf-8'))
+// Why: an interleaved save and clear could leave one account's token beside another's viewer.
+let credentialMutation: Promise<void> = Promise.resolve()
+
+function serializeCredentialMutation(mutation: () => Promise<void>): Promise<void> {
+  const next = credentialMutation.then(mutation)
+  credentialMutation = next.catch(() => {})
+  return next
+}
+
+function resetCredentialCache(): void {
+  // Why: undefined re-reads disk, so a token that survives a failed delete still shows as connected.
   generation += 1
-  cachedToken = token
-  cachedViewer = viewer
+  cachedToken = null
+  cachedViewer = undefined
   credentialError = null
+}
+
+async function removeCredentialFiles(): Promise<void> {
+  for (const path of [getTokenPath(), getViewerPath()]) {
+    await rm(path, { force: true })
+  }
+}
+
+export function saveTodoistCredential(token: string, viewer: TodoistViewer): Promise<void> {
+  return serializeCredentialMutation(async () => {
+    await mkdir(getOrcaDir(), { recursive: true })
+    try {
+      // Why: one-shot on user connect; reuses the shared atomic, owner-only credential writer.
+      writeEncryptedCredential('Todoist', getTokenPath(), token)
+      writeCredentialFileAtomic(getViewerPath(), Buffer.from(JSON.stringify(viewer), 'utf-8'))
+    } catch (error) {
+      // Why: a half-written pair would label one account's tasks with another's name; drop both.
+      resetCredentialCache()
+      await removeCredentialFiles().catch(() => {})
+      throw error
+    }
+    generation += 1
+    cachedToken = token
+    cachedViewer = viewer
+    credentialError = null
+  })
 }
 
 /** Throws CredentialDecryptionError when the saved token cannot be decrypted. */
@@ -106,13 +138,14 @@ export async function loadTodoistToken(): Promise<string | null> {
 }
 
 /** Throws when a file cannot be deleted, so a failed disconnect is not reported as success. */
-export async function clearTodoistCredential(): Promise<void> {
-  // Why: undefined re-reads disk, so a token that survives a failed delete still shows as connected.
-  generation += 1
-  cachedToken = null
-  cachedViewer = undefined
-  credentialError = null
-  for (const path of [getTokenPath(), getViewerPath()]) {
-    await rm(path, { force: true })
-  }
+export function clearTodoistCredential(): Promise<void> {
+  return serializeCredentialMutation(async () => {
+    resetCredentialCache()
+    try {
+      await removeCredentialFiles()
+    } finally {
+      // Why: a read that finished during removal must not keep the deleted token cached.
+      resetCredentialCache()
+    }
+  })
 }

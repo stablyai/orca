@@ -72,24 +72,30 @@ describe('todoist client', () => {
     expect(calls.filter((url) => url.includes('/tasks/filter'))).toHaveLength(2)
   })
 
-  it('drops deleted tasks and stops on an empty page that still has a cursor', async () => {
+  it('drops deleted tasks, follows empty pages with a new cursor and stops on a repeated one', async () => {
     const calls = mockFetch((url) => {
       if (url.pathname === '/api/v1/projects') {
         return { results: [], next_cursor: null }
       }
-      return url.searchParams.get('cursor')
-        ? { results: [], next_cursor: 'c1' }
-        : {
+      expect(url.searchParams.get('limit')).toBe('50')
+      switch (url.searchParams.get('cursor')) {
+        case 'c1':
+          return { results: [], next_cursor: 'c2' }
+        case 'c2':
+          return { results: [{ id: 't3', content: 'Later' }], next_cursor: 'c2' }
+        default:
+          return {
             results: [
               { id: 't1', content: 'Gone', is_deleted: true },
               { id: 't2', content: 'Kept' }
             ],
             next_cursor: 'c1'
           }
+      }
     })
     const tasks = await listTodoistTasks('', 50)
-    expect(tasks.map((task) => task.id)).toEqual(['t2'])
-    expect(calls.filter((url) => new URL(url).pathname === '/api/v1/tasks')).toHaveLength(2)
+    expect(tasks.map((task) => task.id)).toEqual(['t2', 't3'])
+    expect(calls.filter((url) => new URL(url).pathname === '/api/v1/tasks')).toHaveLength(3)
   })
 
   it('lists all active tasks when the query is empty', async () => {
