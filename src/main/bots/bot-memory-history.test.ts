@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { HELD_BOT_RULES } from './bot-turn-rules.test-fixture'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
 import { createBotMemoryHistory } from './bot-memory-history'
@@ -226,6 +226,39 @@ describe("a bot's memory history", () => {
       ['- first']
     ])
   })
+
+  it.each([20, 200])(
+    'writes %i edits made behind a stalled disk in one batch, newest first',
+    async (edits) => {
+      const stored = new Map<string, string>()
+      let release = (): void => {}
+      const stalled = new Promise<void>((resolve) => (release = resolve))
+      let writes = 0
+      const io = {
+        read: async (botId: string) => stored.get(botId) ?? null,
+        write: async (botId: string, text: string | null) => {
+          writes += 1
+          await stalled
+          void (text === null ? stored.delete(botId) : stored.set(botId, text))
+        },
+        bots: async () => [...stored.keys()]
+      }
+      const history = createBotMemoryHistory(io)
+      const edit = (index: number) =>
+        history.append('bot-1', { kind: 'owner' }, botMemoryChange('', `- fact ${index}\n`))
+      const first = edit(0)
+      await vi.waitFor(() => expect(writes).toBe(1))
+      const appended = [first, ...Array.from({ length: edits - 1 }, (_, index) => edit(index + 1))]
+      release()
+      await Promise.all(appended)
+
+      expect(writes).toBe(2)
+      const rows = await createBotMemoryHistory(io).list('bot-1')
+      expect(rows.map((row) => row.change.added[0]?.line)).toEqual(
+        Array.from({ length: edits }, (_, index) => `- fact ${edits - 1 - index}`)
+      )
+    }
+  )
 
   it('creates MEMORY.md for a change when the file is missing', async () => {
     const { read, record, remove, rows } = bot(OLD)

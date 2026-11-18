@@ -150,6 +150,30 @@ export function createBotMemoryHistory(
     }
     return rows
   }
+  // Appends waiting for their bot's turn share one write: a slow disk holds one pending batch a bot,
+  // at most MAX_ROWS rows, not a rewrite per append. A read or removal closes it, keeping order.
+  const openBatches = new Map<string, { rows: BotMemoryHistoryRow[]; written: Promise<void> }>()
+  const batched = (botId: string, row: BotMemoryHistoryRow): Promise<void> => {
+    const open = openBatches.get(botId)
+    if (open) {
+      open.rows = [row, ...open.rows].slice(0, MAX_ROWS)
+      return open.written
+    }
+    const batch = {
+      rows: [row],
+      written: queued(botId, async () => {
+        if (openBatches.get(botId) === batch) {
+          openBatches.delete(botId)
+        }
+        await io.write(
+          botId,
+          JSON.stringify([...batch.rows, ...(await read(botId))].slice(0, MAX_ROWS))
+        )
+      })
+    }
+    openBatches.set(botId, batch)
+    return batch.written
+  }
   // Bots no one opens still lose their old rows: after the first use, every bot's history is
   // pruned in the background, one at a time behind that bot's own work.
   let sweep: Promise<void> | null = null
@@ -168,6 +192,7 @@ export function createBotMemoryHistory(
   }
   return {
     list: (botId) => {
+      openBatches.delete(botId)
       const rows = queued(botId, () => read(botId))
       startSweep()
       return rows
@@ -178,13 +203,12 @@ export function createBotMemoryHistory(
         return Promise.resolve()
       }
       const row: BotMemoryHistoryRow = { id: randomUUID(), at: now(), ...redacted(by, change) }
-      const appended = queued(botId, async () => {
-        await io.write(botId, JSON.stringify([row, ...(await read(botId))].slice(0, MAX_ROWS)))
-      })
+      const appended = batched(botId, row)
       startSweep()
       return appended
     },
     removed: (botId) => {
+      openBatches.delete(botId)
       const removed = queued(botId, () => io.write(botId, null))
       startSweep()
       return removed
