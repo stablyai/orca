@@ -168,6 +168,24 @@ it('takes the revision a chat awaiting its older-Orca compare waited on, so no c
   ).toBe('["legacy",4]')
 })
 
+it("drops a forgotten copy's mapping and failure, so none of its keys outlive it", () => {
+  const db = journal()
+  for (const [key, value] of [
+    ['journal.legacy-copy-source:gone-chat', 'original-chat'],
+    ['journal.legacy-failed:gone-chat', '{"revision":null,"error":"damaged"}'],
+    ['journal.legacy-pending-copy:original-chat', 'gone-chat']
+  ]) {
+    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(key, value)
+  }
+  expect(forget(db)).toBe(true)
+  expect(
+    count(
+      db,
+      "agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%' OR key LIKE 'journal.legacy-failed:%' OR key LIKE 'journal.legacy-pending-copy:%'"
+    )
+  ).toBe(0)
+})
+
 const refusals: {
   name: string
   gone?: Partial<AgentSessionRecord>

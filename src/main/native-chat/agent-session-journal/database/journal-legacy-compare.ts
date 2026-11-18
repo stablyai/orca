@@ -2,7 +2,12 @@ import type Database from '../../../sqlite/sync-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { isUnsettledQueuedMessage } from '../queued-messages/queued-message-table'
 import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
-import { journalLegacyChatRevision, recordJournalLegacyChatRevision } from './journal-legacy-source'
+import {
+  journalLegacyChatRevision,
+  journalLegacyFailureKey,
+  recordJournalLegacyChatRevision,
+  settleJournalLegacyCopy
+} from './journal-legacy-source'
 import {
   deleteMeta,
   JOURNAL_LEGACY_COMPARE,
@@ -150,7 +155,7 @@ function heldEveryItem(
 
 /**
  * A forgotten chat takes the revision its compare or copy waited on, so an older Orca's unchanged
- * copy never brings it back.
+ * copy never brings it back; a forgotten copy drops its mapping, so no key outlives it.
  */
 export function absorbForgottenJournalLegacyChat(db: Database.Database, sessionId: string): void {
   for (const prefix of [JOURNAL_LEGACY_COMPARE, JOURNAL_LEGACY_COPY_DUE]) {
@@ -160,4 +165,6 @@ export function absorbForgottenJournalLegacyChat(db: Database.Database, sessionI
       recordJournalLegacyChatRevision(db, sessionId, revision)
     }
   }
+  settleJournalLegacyCopy(db, sessionId)
+  deleteMeta(db, journalLegacyFailureKey(sessionId))
 }
