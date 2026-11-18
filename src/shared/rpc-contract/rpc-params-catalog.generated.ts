@@ -35,6 +35,7 @@ import { BrowserClientPageMetadataParams } from '../browser/client-hosting/brows
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
   DesktopBrowserBridgeAttachParams,
+  DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
 } from '../browser/client-hosting/desktop-browser-bridge-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
@@ -1424,6 +1425,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
+  'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,

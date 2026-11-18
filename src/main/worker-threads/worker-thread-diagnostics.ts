@@ -15,6 +15,12 @@ import {
   type WorkerSendLedgerEntry
 } from './worker-send-ledger'
 import type { WorkerThreadRole } from './worker-thread-roles'
+import {
+  journalReaderRequestData,
+  onJournalReaderRequest,
+  readJournalReaderRequests,
+  type JournalReaderRunningRequest
+} from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { observeWorkerThreads } from './worker-thread-spawn'
 import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 import {
@@ -43,6 +49,7 @@ type WorkerHeap = { entry: LiveWorker; heap: number }
 export function installWorkerThreadDiagnostics(): void {
   const live = new Set<LiveWorker>()
   let largeSendLogSet = false
+  onJournalReaderRequest(annotateReaderRequest)
   let sampling: ReturnType<typeof setTimeout> | undefined
   const schedule = (delayMs: number): void => {
     sampling = setTimeout(() => {
@@ -74,6 +81,9 @@ export function installWorkerThreadDiagnostics(): void {
           role,
           code: typeof error?.code === 'string' ? error.code : null,
           ...(ledger ? ledgerData('', ledger) : {}),
+          ...journalReaderRequestData(
+            readJournalReaderRequests().filter((request) => request.threadId === entry.threadId)
+          ),
           mainHeapMB: Math.round(getHeapStatistics().total_heap_size / MB)
         })
       })
@@ -111,6 +121,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
       ...mainHeapSpaces(),
       workers: heaps.length
     }
+    Object.assign(data, journalReaderRequestData(readJournalReaderRequests()))
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
       const slot = ledger.get(entry.threadId)
       Object.assign(data, {
@@ -181,6 +192,23 @@ function workerAnnotation(sample: WorkerHeap, slot: WorkerSendLedgerEntry | unde
   const lastKB = Math.round(slot.lastBytes / 1024)
   const maxKB = Math.round(slot.maxBytes / 1024)
   return `${heap} last=${slot.lastKind}/${slot.lastItems}/${lastKB}KB max=${slot.maxKind}/${maxKB}KB`
+}
+
+/** Written before the reader gets the request, so an abort mid-read still names it. */
+function annotateReaderRequest(reader: number, request: JournalReaderRunningRequest | null): void {
+  const key = `orca-reader-${reader}`
+  try {
+    if (request) {
+      const value =
+        `${request.operation} chat=${request.chat ?? '-'} queued=${request.queued} ` +
+        `tid=${request.threadId ?? '-'} at=${new Date(request.startedAt).toISOString()}`
+      crashReporter.addExtraParameter(key, value.slice(0, ANNOTATION_MAX_LENGTH))
+    } else {
+      crashReporter.removeExtraParameter(key)
+    }
+  } catch {
+    // Crash reporting may be off; diagnostics only.
+  }
 }
 
 function ledgerData(prefix: string, slot: WorkerSendLedgerEntry): CrashReportBreadcrumbData {

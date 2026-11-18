@@ -192,7 +192,7 @@ describe('BotLinearSetupDialog', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
-  it('connects in one trip, then turns the bot on by itself and shows who can ask', async () => {
+  it('connects in one trip, then turns the bot on by itself and shows how to ask', async () => {
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([]) })
     const members = [
       slackSam,
@@ -217,9 +217,9 @@ describe('BotLinearSetupDialog', () => {
       })
     )
     expect(await screen.findByText('Reviewer is on Linear')).toBeDefined()
-    // The done screen lists the workspace it was turned on in, and who can ask there.
-    expect(screen.getByText('Acme (linear.app/acme)')).toBeDefined()
-    expect(screen.getByText('Who can ask Reviewer')).toBeDefined()
+    // The done screen names the workspace it was turned on in, and how to ask there.
+    expect(screen.getByText('Signed in as Dana in Acme (linear.app/acme)')).toBeDefined()
+    expect(screen.getByText('bot:reviewer')).toBeDefined()
   })
 
   it('leaves the bot off when the sign-in that linked was another surface’s', async () => {
@@ -320,7 +320,7 @@ describe('BotLinearSetupDialog', () => {
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([workspace(), beta]) })
     await act(async () => finishTrip({ ok: true, value: link({ workspaceId: 'org-2' }) }))
     // It goes on into the workspace just picked.
-    expect(await screen.findByText('Beta (linear.app/beta)')).toBeDefined()
+    expect(await screen.findByText('Signed in as Dana in Beta (linear.app/beta)')).toBeDefined()
     expect(api.botLinear.unlink).not.toHaveBeenCalled()
   })
 

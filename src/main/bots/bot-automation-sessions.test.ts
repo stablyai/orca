@@ -104,6 +104,40 @@ describe('botAutomationSessions', () => {
     expect(deps.chats.sendToSession).not.toHaveBeenCalled()
   })
 
+  it("drops a wait's thread answer when its gone chat's run lands in the Home Chat", async () => {
+    const { deps, sessions: chats } = sessions()
+    const automationRun = {
+      runId: 'run-1',
+      automation: {
+        id: 'wait-1',
+        name: 'Run 1',
+        enabled: true,
+        nextRunAt: 0,
+        updatedAt: 0,
+        dtstart: 0,
+        rrule: 'FREQ=DAILY',
+        workspaceId: 'folder:f1'
+      },
+      trigger: 'event' as const,
+      toConversation: true as const,
+      instructionsLength: 0
+    }
+
+    await chats.sendToBotChat(bot, 'closed-chat', 'PR merged', { automationRun }, true)
+    await chats.sendToBotChat(bot, 'side-chat', 'PR merged', { automationRun }, true)
+
+    const { toConversation: _dropped, ...homeRun } = automationRun
+    expect(deps.chats.sendToChat).toHaveBeenCalledExactlyOnceWith(bot.id, 'PR merged', undefined, {
+      automationRun: homeRun
+    })
+    expect(deps.chats.sendToSession).toHaveBeenCalledExactlyOnceWith(
+      bot.id,
+      'side-chat-after-clear',
+      'PR merged',
+      { automationRun }
+    )
+  })
+
   it('keeps the session when naming it fails', async () => {
     const { deps, sessions: started } = sessions()
     deps.nameSession.mockRejectedValueOnce(new Error('rename failed'))

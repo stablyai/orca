@@ -134,9 +134,20 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
+// Structured chat rows hydrate at any age, so cutoffs are never age-pruned; the newest clears bound growth instead.
+const ACTIVITY_CLEARED_AT_MAX_ENTRIES = 500
+
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
+  const valid = sanitizePaneKeyTimestampRecord(value, Number.POSITIVE_INFINITY)
+  const entries = Object.entries(valid)
+  if (entries.length <= ACTIVITY_CLEARED_AT_MAX_ENTRIES) {
+    return valid
+  }
+  return Object.fromEntries(
+    entries
+      .toSorted(([, left], [, right]) => right - left)
+      .slice(0, ACTIVITY_CLEARED_AT_MAX_ENTRIES)
+  )
 }
 
 export function sanitizeWorkspaceCleanupDismissals(

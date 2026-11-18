@@ -223,7 +223,6 @@
 2 src/main/daemon/launch/daemon-protocol-cleanup.ts
 11 src/main/daemon/launch/daemon-spawner.ts
 1 src/main/daemon/launch/daemon-stale-kill.ts
-1 src/main/daemon/observability/daemon-adoption-telemetry-event.ts
 1 src/main/daemon/observability/daemon-file-log.ts
 3 src/main/daemon/permissions/daemon-tcc-attribution.ts
 5 src/main/daemon/process-scopes/daemon-cgroup-scope.ts
@@ -464,6 +463,7 @@
 6 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 2 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 1 src/main/qoder/workspace-trust.ts
+1 src/main/qwen-code/workspace-trust.ts # Qwen fresh-launch trust (#43989): sync read-modify-write like qoder/workspace-trust.ts so concurrent launches and the sync Qwen hook install cannot lose entries
 4 src/main/rate-limits/providers/cursor/cursor-auth.ts
 2 src/main/rate-limits/providers/grok/grok-auth.ts
 2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
