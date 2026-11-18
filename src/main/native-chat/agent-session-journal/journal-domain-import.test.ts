@@ -14,6 +14,7 @@ import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-epoch.tes
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { discardJournalDomainImportPage } from './journal-domain-import-discard'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { JournalSqlConversions } from './journal-sql-conversions'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
@@ -206,7 +207,10 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
   expect(
     db.prepare("SELECT lifecycle_state FROM journal_items WHERE item_id='reasoning'").get()
   ).toEqual({ lifecycle_state: 'running' })
-  maintain(db, { kind: 'import-discard', sessionId: 'session' })
+  // Discard is paged by a work and time budget; drain it as the conversion owner does.
+  while (runJournalTransaction(db, () => discardJournalDomainImportPage(db, 'session')).more) {
+    continue
+  }
   expect(db.prepare('SELECT settlement_id FROM journal_settlements').all()).toEqual([])
   expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
   const resumed = prepareJournalDomainImport(reader, 'session')!
