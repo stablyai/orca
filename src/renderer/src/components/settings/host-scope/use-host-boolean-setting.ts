@@ -9,6 +9,7 @@ import { errorMessage } from '../../../../../shared/errors/error-message'
 export type HostBooleanSettingKey =
   | 'codexShareHistoryAcrossAccounts'
   | 'deleteChatHistoryWithWorkspace'
+  | 'nativeChatAutoContinueAfterUsageLimit'
 
 /** `unsupported`: an older host that neither reports nor accepts the setting. */
 export type HostBooleanSetting =

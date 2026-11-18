@@ -22324,6 +22324,8 @@
         "usageLimitContinueSearchLimit": "usage limit",
         "usageLimitContinueSearchReset": "reset",
         "usageLimitContinueToggleLabel": "Toggle continuing chats when a usage limit resets",
+        "usageLimitContinueUnsupported": "Update Orca on {{host}} to change this setting there.",
+        "usageLimitContinueUpdateFailed": "Couldn't update the setting on {{host}}.",
         "idleStopTitle": "Stop idle agents after",
         "idleStopCopy": "Ends a chat's agent once the chat has been idle this long, to free memory. The chat stays, and your next message starts the agent again. Choose Never for agents that keep working in the background between turns.",
         "idleStopSearchIdle": "idle",
