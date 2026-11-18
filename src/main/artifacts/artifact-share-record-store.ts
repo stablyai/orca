@@ -96,8 +96,8 @@ function persistPrune(profileId: string, userDataPath: string): void {
   if (prunesQueued.has(path)) {
     return
   }
-  prunesQueued.add(path)
   const lifecycle = captureArtifactShareLifecycle(profileId, userDataPath)
+  prunesQueued.add(path)
   const assertCurrent = (): void => {
     if (!isArtifactShareLifecycleCurrent(profileId, userDataPath, lifecycle)) {
       throw new Error('Artifact share records were cleared before the prune was written.')
