@@ -4396,6 +4396,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira no pudo ejecutar esta consulta JQL. Comprueba la sintaxis y vuelve a intentarlo."
       }
     }
   }

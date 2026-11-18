@@ -4296,6 +4296,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Bu JQL sorgusu Jira'da çalıştırılamadı. Sözdizimini kontrol edip yeniden deneyin."
       }
     }
   }

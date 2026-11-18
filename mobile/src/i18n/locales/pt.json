@@ -4983,6 +4983,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "O Jira não conseguiu executar esta consulta JQL. Verifique a sintaxe e tente novamente."
       }
     }
   }

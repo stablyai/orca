@@ -5036,6 +5036,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira 无法执行此 JQL 查询。请检查语法后重试"
       }
     }
   },

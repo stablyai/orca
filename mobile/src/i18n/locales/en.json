@@ -5111,6 +5111,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira couldn't run this JQL query. Check the syntax and try again."
       }
     }
   },

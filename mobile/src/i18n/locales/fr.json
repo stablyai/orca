@@ -4396,6 +4396,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira n’a pas pu exécuter cette requête JQL. Vérifiez la syntaxe et réessayez."
       }
     }
   }

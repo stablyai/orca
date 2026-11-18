@@ -56,6 +56,19 @@ export async function readTaskListRows(
       filter: input.jiraFilter,
       siteId: input.jiraConnection.selection
     })
+    const reason = jqlRejection?.reason ? [jqlRejection.reason] : []
+    if (jqlRejection && issues.length === 0) {
+      // Why: nothing matched as text either, so Jira's JQL error is the answer, not an empty list.
+      throw new Error(
+        joinSentences([
+          translate(
+            'auto.components.taskPageJiraLoadState.jqlFailed',
+            "Jira couldn't run this JQL query. Check the syntax and try again."
+          ),
+          ...reason
+        ])
+      )
+    }
     return {
       items: issues.map(createJiraTask),
       notice: jqlRejection
@@ -64,7 +77,7 @@ export async function readTaskListRows(
               'auto.components.TaskPage.jiraTextMatchesNotice',
               "Showing text matches. Jira couldn't run this search as JQL."
             ),
-            ...(jqlRejection.reason ? [jqlRejection.reason] : [])
+            ...reason
           ])
         : ''
     }

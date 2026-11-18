@@ -4296,6 +4296,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira konnte diese JQL-Abfrage nicht ausführen. Syntax prüfen und erneut versuchen."
       }
     }
   }

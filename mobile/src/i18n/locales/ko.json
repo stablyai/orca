@@ -4292,6 +4292,9 @@
             }
           }
         }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira에서 이 JQL 쿼리를 실행할 수 없습니다. 구문을 확인하고 다시 시도하세요."
       }
     }
   }
