@@ -9,11 +9,7 @@ const copy = {
       'chat.rewind.historyNotPaginated',
       "This older Codex chat can't go back to an earlier message. Start a new chat to use Rewind to here."
     ),
-  busy: () =>
-    translate(
-      'chat.rewind.busy',
-      'Available once the agent is idle and nothing in this chat is waiting on you.'
-    ),
+  busy: () => translate('chat.rewind.busy', 'Available when chat is idle'),
   'stale-epoch': () =>
     translate(
       'chat.rewind.staleEpoch',
