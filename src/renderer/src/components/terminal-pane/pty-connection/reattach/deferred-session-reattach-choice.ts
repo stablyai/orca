@@ -1,4 +1,3 @@
-import { routeCodexAccountRestartWake } from '../../account-restart/codex-account-restart-wake'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store/index'
@@ -14,11 +13,6 @@ import { startDeferredSessionReattachUnlessHiddenAgentResume } from '../spawn/hi
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function runDeferredSessionReattachChoice(session: ConnectPanePtySession): void {
-  const accountWake = routeCodexAccountRestartWake(session)
-  if (accountWake !== undefined) {
-    void accountWake
-    return
-  }
   // An explicit replacement owns its startup; saved recovery state must not substitute another agent.
   if (session.pendingReplacedPtyId) {
     session.startFreshSpawn()

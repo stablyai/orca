@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import { selectCodexStaleSessionCount } from '@/components/status-bar/accounts/codex-restart-status-summary'
 import { installSpawnDeferredSleep } from '../pty-connection/spawn/spawn-deferred-sleep'
 import { bindStartFreshSpawn } from '../pty-connection/spawn/fresh-spawn-start'
 import { defersToMainPaneStart } from '../pty-connection/spawn/main-pane-start-request'
+import { runDeferredSessionAttach } from '../pty-connection/deferred-session-attach'
 import { showFramePatch } from '@/store/slices/tabs/moved-tab-selection'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
 import {
@@ -105,44 +106,53 @@ async function deferredSession() {
   }
 }
 
-it('wakes a deferred account restart with its captured conversation and conditional host envelope', async () => {
-  const { session, connect, retained, request, bind } = await deferredSession()
-  useAppStore.setState({
-    agentStatusByPaneKey: acceptedAgentStatuses([]),
-    sleepingAgentSessionsByPaneKey: {}
-  })
-  connect.mockImplementation(async (options) => {
-    expect(options.command).toBe('codex resume conversation-1')
-    expect(options.resumeProviderSession).toEqual({ id: 'conversation-1' })
-    expect(options.resumeSpawnIntent).toBe('user-resume')
-    expect(options.accountRestart.expected).toEqual({
-      kind: 'endpoint',
-      ptyId: 'old',
-      incarnationId: 'inc-old',
-      bindingGeneration: 0
+it.each(['deferred overlay', 'legacy attach'] as const)(
+  'resumes the captured conversation through the conditional host envelope from %s',
+  async (entry) => {
+    const { session, connect, retained, request, bind } = await deferredSession()
+    useAppStore.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses([]),
+      sleepingAgentSessionsByPaneKey: {}
     })
-    expect(options.accountRestart.attemptId).not.toBe(request.attemptId)
-    expect(options.env.ORCA_AGENT_LAUNCH_TOKEN).toBe(options.accountRestart.attemptId)
-    expect(options.onAccountRestartDispatch()).toBe(true)
-    const result = { id: 'replacement', incarnationId: 'inc-new' }
-    const layout = useAppStore.getState().terminalLayoutsByTabId.tab
-    showFramePatch(useAppStore, {
-      terminalLayoutsByTabId: {
-        tab: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leaf]: 'replacement' } }
-      }
+    connect.mockImplementation(async (options) => {
+      expect(options.command).toBe('codex resume conversation-1')
+      expect(options.resumeProviderSession).toEqual({ id: 'conversation-1' })
+      expect(options.resumeSpawnIntent).toBe('user-resume')
+      expect(options.accountRestart.expected).toEqual({
+        kind: 'endpoint',
+        ptyId: 'old',
+        incarnationId: 'inc-old',
+        bindingGeneration: 0
+      })
+      expect(options.accountRestart.attemptId).not.toBe(request.attemptId)
+      expect(options.env.ORCA_AGENT_LAUNCH_TOKEN).toBe(options.accountRestart.attemptId)
+      expect(options.onAccountRestartDispatch()).toBe(true)
+      const result = { id: 'replacement', incarnationId: 'inc-new' }
+      const layout = useAppStore.getState().terminalLayoutsByTabId.tab
+      showFramePatch(useAppStore, {
+        terminalLayoutsByTabId: {
+          tab: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leaf]: 'replacement' } }
+        }
+      })
+      expect(options.shouldContinue(result)).toBe(true)
+      bind('replacement')
+      return result
     })
-    expect(options.shouldContinue(result)).toBe(true)
-    bind('replacement')
-    return result
-  })
 
-  await expect(session.resumeDeferredSpawn()).resolves.toBe('replacement')
+    if (entry === 'legacy attach') {
+      session.legacyRelayBridgePtyId = 'old'
+      runDeferredSessionAttach(session)
+      await vi.waitFor(() => expect(retained.has(leaf)).toBe(false))
+    } else {
+      await expect(session.resumeDeferredSpawn()).resolves.toBe('replacement')
+    }
 
-  expect(session.transport.getPtyId()).toBe('replacement')
-  expect(retained.has(leaf)).toBe(false)
-  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
-  expect(session.deps.accountRestartToken).toBeUndefined()
-})
+    expect(session.transport.getPtyId()).toBe('replacement')
+    expect(retained.has(leaf)).toBe(false)
+    expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+    expect(session.deps.accountRestartToken).toBeUndefined()
+  }
+)
 
 it('initializes a retained account pane before choosing its main-layout wake route', async () => {
   const { session } = await deferredSession()
