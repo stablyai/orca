@@ -48,4 +48,13 @@ describe('Codex capacity candidate bounds', () => {
     expect(tracker.observe('', readScreen, () => synchronized, 7)).toBe(true)
     expect(tracker.pendingAt).toBe(7)
   })
+
+  it('keeps the arrival time of a notice pending when a gap untrusts the screen', () => {
+    const tracker = createCodexCapacityNoticeTracker()
+    const readScreen = () => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›']
+    expect(tracker.observe(`■ ${CODEX_CAPACITY_MESSAGE}`, readScreen, () => true, 3)).toBe(false)
+    tracker.resetAfterGap()
+    expect(tracker.observe('', readScreen, () => false, 9)).toBe(true)
+    expect(tracker.pendingAt).toBe(3)
+  })
 })

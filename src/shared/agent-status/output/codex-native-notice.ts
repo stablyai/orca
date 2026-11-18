@@ -113,6 +113,8 @@ export class CodexNoticeTracker {
 
   /** Output was dropped before the next byte: carries describe bytes that never finished, the candidate did. */
   resetAfterGap(): void {
+    // The gap leaves the screen untrusted: a pending notice now waits on recovery.
+    this.heldUntrusted = this.heldUntrusted || this.pending
     this.tail = ''
     this.synchronized = false
     // An escape string the dropped bytes would have closed must not swallow the next notice.
