@@ -84,7 +84,7 @@ export function sendPointToPointMessage(args: {
         ? {
             code: 'stale_task_id',
             recipient: to,
-            message: `Task ${staleTaskId} is an earlier task of this worker; this report was recorded for task ${dispatch.task_id} of Dispatch ${dispatch.id}. Use task ${dispatch.task_id} from now on.`
+            message: `Task ${staleTaskId} is an earlier task of this worker; Orca read it as task ${dispatch.task_id} of Dispatch ${dispatch.id}. Use task ${dispatch.task_id} from now on.`
           }
         : undefined
     const withReportWarnings: SendReceipt = (receipt) => {
@@ -130,7 +130,7 @@ export function sendPointToPointMessage(args: {
       if (refusal) {
         const rejection =
           db.convertLifecycleMessageToRejection(msg.id, refusal.code, refusal.reason) ?? msg
-        const receipt = withSendWarnings({
+        const receipt = withReportWarnings({
           message: exposeMessage(rejection),
           lifecycle: {
             action: 'rejected',
@@ -163,7 +163,7 @@ export function sendPointToPointMessage(args: {
       }
       if (reconciled.action === 'rejected') {
         const rejection = db.getMessageById(msg.id) ?? msg
-        const receipt = withSendWarnings({
+        const receipt = withReportWarnings({
           message: exposeMessage(rejection),
           lifecycle: reconciled
         })
