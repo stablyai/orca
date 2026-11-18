@@ -30,7 +30,7 @@ export async function cancelTraexTurn(
     }
   }
   await pause()
-  let cancelled = paused
+  let cancelled = false
   let turnMayOpen = false
   const current = journalTurn === session.timeline?.openTurnId && native === session.activeTurn
   if (native && current) {
@@ -56,7 +56,7 @@ export async function cancelTraexTurn(
     await pause()
   }
   return {
-    cancelled: cancelled || paused,
+    cancelled: cancelled || (paused && facts.interrupt === 'not-needed'),
     ...(journalTurn ? { turnId: journalTurn } : {}),
     stop: facts,
     ...(turnMayOpen ? { refusal: { turnMayOpen: true as const } } : {})

@@ -286,6 +286,33 @@ it('reports cancellation when a goal-only pause succeeds after a rejected attemp
   })
 })
 
+it('keeps a turn running when its goal pauses but its interrupt is rejected', async () => {
+  session = createSession()
+  await session.open(new AbortController().signal)
+  await dispatchTraexMessage(session, {
+    sessionId: 'trae-controls',
+    fence: 1,
+    clientMessageId: 'goal-interrupt-rejected',
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'goal-interrupt-rejected' }]
+    }
+  })
+  const result = await cancelTraexTurn(session, { sessionId: 'trae-controls', fence: 1 })
+  expect(result).toMatchObject({
+    cancelled: false,
+    stop: { pause: 'acknowledged', interrupt: 'unconfirmed' }
+  })
+  expect(
+    await session.connection.request('thread/goal/get', { threadId: session.threadId })
+  ).toMatchObject({
+    goal: { status: 'paused' }
+  })
+  await drained()
+  expect(await journal.reads.newestTurn()).toMatchObject({ state: 'running' })
+})
+
 it('offers a fresh mode approval after its response is rejected', async () => {
   session = createSession()
   await session.open(new AbortController().signal)

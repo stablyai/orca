@@ -16,7 +16,10 @@ import {
 } from '../../acquisition/structured-agent-session-attach'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
-import { performAttach } from '../../acquisition/structured-agent-session-attach-flow'
+import {
+  performAttach,
+  type AttachFlowInput
+} from '../../acquisition/structured-agent-session-attach-flow'
 import type { StructuredAgentSessionAttachLock } from '../../acquisition/structured-agent-session-attach-lock'
 import { TRAEX_STRUCTURED_AGENT } from '../../../../traex/traex-agent-definition'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
@@ -203,7 +206,7 @@ describe('adopting a provider conversation on create', () => {
   })
 })
 
-it.each(['cancelled', 'completed'] as const)(
+it.each(['cancelled', 'completed', 'concurrent', 'unimported'] as const)(
   'prepares %s native history outside the attach commit',
   async (outcome) => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-native-cancel-'))
@@ -259,6 +262,25 @@ it.each(['cancelled', 'completed'] as const)(
       },
       database: await openTestAgentSessionDatabase(root)
     })
+    const saveDuringImport = async () => {
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'saved-during-import' },
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved during import' }] },
+        { fence, turnScope: { kind: 'thread' } }
+      )
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'reply-saved-during-import' },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Reply saved during import' }]
+        },
+        { fence, turnScope: { kind: 'thread' } }
+      )
+    }
+    if (outcome === 'unimported') {
+      await saveDuringImport()
+    }
     const controller = new AbortController()
     const entered = Promise.withResolvers<void>()
     const history =
@@ -280,7 +302,7 @@ it.each(['cancelled', 'completed'] as const)(
       }
     }
     try {
-      const attaching = performAttach({
+      const flow: AttachFlowInput = {
         store,
         adapter: {
           ...adapter(),
@@ -306,7 +328,8 @@ it.each(['cancelled', 'completed'] as const)(
         lock,
         openConversation: async () => journal,
         onAttached: () => {}
-      })
+      }
+      const attaching = performAttach(flow)
       const settled = attaching.then(
         (value) => value,
         (error: unknown) => error
@@ -325,6 +348,9 @@ it.each(['cancelled', 'completed'] as const)(
         controller.abort(new Error('Caller cancelled history preparation'))
         await expect(attaching).rejects.toThrow('Caller cancelled history preparation')
       } else {
+        if (outcome === 'concurrent') {
+          await saveDuringImport()
+        }
         history.resolve({
           sourceEmpty: false,
           items: [
@@ -351,6 +377,32 @@ it.each(['cancelled', 'completed'] as const)(
           role: 'user',
           blocks: [{ type: 'text', text: 'Restored conversation' }]
         })
+        if (outcome === 'concurrent' || outcome === 'unimported') {
+          const messages = (await readTestJournalItems(journal)).flatMap((row) =>
+            row.body.kind === 'message'
+              ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+              : []
+          )
+          expect(messages).toEqual([
+            'Restored conversation',
+            'Saved during import',
+            'Reply saved during import'
+          ])
+          expect(await journal.reads.itemProvenance('orca:saved-during-import')).toMatchObject({
+            ownerFence: 1
+          })
+          expect(
+            await performAttach({
+              ...flow,
+              adapter: {
+                ...flow.adapter,
+                readConversationHistory: async () => {
+                  throw new Error('Provider history is unavailable')
+                }
+              }
+            })
+          ).toMatchObject({ ok: true })
+        }
       }
     } finally {
       await journal.close()

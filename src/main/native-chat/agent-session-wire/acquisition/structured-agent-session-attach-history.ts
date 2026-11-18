@@ -23,7 +23,14 @@ export async function attachSessionJournalHistory(input: {
     return attachJournal({ record, openConversation: flow.openConversation })
   })
   const prepared = await lock.wait(
-    readPendingAdoptedTranscript(flow.params, attached, input.prepared, lock.signal, flow.adapter)
+    readPendingAdoptedTranscript(
+      flow.params,
+      attached,
+      record,
+      input.prepared,
+      lock.signal,
+      flow.adapter
+    )
   )
   await lock.commit(async () => {
     const current = flow.store.getRecord(record.sessionId)

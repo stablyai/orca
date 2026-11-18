@@ -11,6 +11,7 @@ let modeReplyFailed = false
 let replaceTurnOnGoalRead = false
 let goal = null
 let goalPauseFailed = false
+let interruptRejected = false
 const send = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 const reply = (id, result) => send({ id, result })
 const notify = (method, params) => send({ method, params: { threadId, ...params } })
@@ -169,6 +170,10 @@ createInterface({ input: process.stdin })
       } else if (text === 'goal-pause-retry') {
         goal = { objective: 'Keep working', status: 'active' }
         complete('Goal is active')
+      } else if (text === 'goal-interrupt-rejected') {
+        goal = { objective: 'Keep working', status: 'active' }
+        goalPauseFailed = true
+        interruptRejected = true
       } else if (text === 'mode-retry') {
         modeReplyFailed = false
         notify('mode/changeRequested', {
@@ -509,19 +514,14 @@ createInterface({ input: process.stdin })
         }
       })
     } else if (id === 'nonblocking-audit') {
-      notify('error', {
-        turnId,
-        willRetry: false,
-        error: { message: 'Capacity unavailable', codexErrorInfo: 'serverOverloaded' }
-      })
-      notify('turn/completed', {
-        turn: {
-          id: turnId,
-          status: 'failed',
-          error: { message: 'Capacity unavailable', codexErrorInfo: 'serverOverloaded' }
-        }
-      })
+      const error = { message: 'Capacity unavailable', codexErrorInfo: 'serverOverloaded' }
+      notify('error', { turnId, willRetry: false, error })
+      notify('turn/completed', { turn: { id: turnId, status: 'failed', error } })
     } else if (method === 'turn/interrupt') {
+      if (interruptRejected) {
+        send({ id, error: { code: -32000, message: 'Turn interrupt was rejected' } })
+        return
+      }
       if (delayedStartReply !== null) {
         reply(delayedStartReply, { turn: { id: turnId, status: 'interrupted', items: [] } })
         delayedStartReply = null
