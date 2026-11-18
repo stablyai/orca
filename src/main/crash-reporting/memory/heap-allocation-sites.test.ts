@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarizeSamplingProfile, trustedScriptPrefixFor } from './renderer-heap-allocation-sites'
+import { summarizeSamplingProfile, trustedScriptPrefixFor } from './heap-allocation-sites'
 
 const PAGE = 'file:///Users/someone/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
 const BUNDLE = trustedScriptPrefixFor(PAGE)

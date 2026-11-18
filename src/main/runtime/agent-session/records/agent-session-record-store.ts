@@ -144,6 +144,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
+  /** Records whose lease may be held: what renewal and restart reconciliation visit. */
+  listLeaseHolders = (): AgentSessionRecord[] => this.transactions.leaseHolders.list(this.state)
+
   /** Replaced runtimes captured at load; absent for sessions this runtime created. */
   replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
 
