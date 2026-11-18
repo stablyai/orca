@@ -20,7 +20,8 @@ describe('a reattached agent ready screen', () => {
       hasPaintedSinceReattach: () => outputAt !== null,
       requestRepaint,
       readRestTitle: () => null,
-      confirmForeground: async () => true,
+      confirmForeground: async () => 'agent' as const,
+      owner: {},
       isCurrent: () => true,
       applyIdle
     })
@@ -48,7 +49,8 @@ describe('a reattached agent ready screen', () => {
       hasPaintedSinceReattach: () => false,
       requestRepaint,
       readRestTitle: () => null,
-      confirmForeground: async () => true,
+      confirmForeground: async () => 'agent' as const,
+      owner: {},
       isCurrent: () => true,
       applyIdle
     })
@@ -60,9 +62,8 @@ describe('a reattached agent ready screen', () => {
 
   it("counts a quiet agent's retained rest title only when the program in front is that agent", async () => {
     vi.useFakeTimers()
-    const restore = (foreground: 'claude' | 'zsh') => {
+    const restore = (foreground: 'agent' | 'shell') => {
       const applyIdle = vi.fn()
-      const confirmForeground = vi.fn(async () => foreground === 'claude')
       restoreFromReattachedReadyScreen({
         agent: 'claude',
         readScreen: () => null,
@@ -70,18 +71,48 @@ describe('a reattached agent ready screen', () => {
         hasPaintedSinceReattach: () => true,
         requestRepaint: vi.fn(),
         readRestTitle: () => '✳ Claude Code',
-        confirmForeground,
+        confirmForeground: async () => foreground,
+        owner: {},
         isCurrent: () => true,
         applyIdle
       })
-      return { applyIdle, confirmForeground }
+      return applyIdle
     }
     vi.setSystemTime(10_000)
-    const claude = restore('claude')
-    const shell = restore('zsh')
+    const claude = restore('agent')
+    const shell = restore('shell')
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(claude.applyIdle).toHaveBeenCalledTimes(1)
-    expect(shell.confirmForeground).toHaveBeenCalledTimes(1)
-    expect(shell.applyIdle).not.toHaveBeenCalled()
+    expect(claude).toHaveBeenCalled()
+    expect(shell).not.toHaveBeenCalled()
+  })
+
+  it('tries the rest title again in the next quiet stretch when the agent printed during the read', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+    let outputAt = 0
+    let reads = 0
+    const applyIdle = vi.fn()
+    restoreFromReattachedReadyScreen({
+      agent: 'claude',
+      readScreen: () => null,
+      readOutputClockAt: () => outputAt,
+      hasPaintedSinceReattach: () => true,
+      requestRepaint: vi.fn(),
+      readRestTitle: () => '✳ Claude Code',
+      confirmForeground: async () => {
+        reads += 1
+        if (reads === 1) {
+          outputAt = Date.now()
+        }
+        return 'agent'
+      },
+      owner: {},
+      isCurrent: () => true,
+      applyIdle
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(applyIdle).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(applyIdle).toHaveBeenCalled()
   })
 })

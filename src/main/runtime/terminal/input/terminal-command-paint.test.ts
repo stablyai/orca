@@ -72,4 +72,13 @@ describe('the command an agent report speaks for', () => {
     observeTerminalCommandPaint(record, START, START, 5_000)
     expect(isCurrentCommandReport(record, 2_000)).toBe(true)
   })
+
+  it('starts the next command at a start that follows a finish in the same read', () => {
+    const record: TerminalCommandPaintRecord = {}
+    observeTerminalCommandPaint(record, START, START, 1_000)
+    const handoff = `${FINISH}~/repo % codex\r\n${START}`
+    observeTerminalCommandPaint(record, handoff, handoff, 5_000)
+    expect(isCurrentCommandReport(record, 2_000)).toBe(false)
+    expect(isCurrentCommandReport(record, 5_000)).toBe(true)
+  })
 })

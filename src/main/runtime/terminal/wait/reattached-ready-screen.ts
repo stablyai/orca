@@ -8,6 +8,7 @@ import {
 import type { RuledScreen } from './screen-input-veto'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 
 /** Long enough for a renderer's resize repaint and a redraw-interrupted quiet window. */
@@ -52,59 +53,78 @@ export type ReattachedReadyScreenRestore = {
   requestRepaint: () => void
   /** The rest title retained from before the reattach, if any. */
   readRestTitle: () => string | null
-  /** A fresh read at the PTY's owner that the program in front is `agent` itself. */
-  confirmForeground: () => Promise<boolean>
+  /** A fresh read at the PTY's owner: `agent` when the program in front is that agent itself. */
+  confirmForeground: () => Promise<LaunchedAgentForeground>
+  /** The pane's record: one rest-title recovery runs per pane however often it is reattached. */
+  owner: object
   /** False once a respawn, exit or live status decides instead. */
   isCurrent: () => boolean
   applyIdle: () => void
 }
 
+/** At most this many foreground reads per pane recovery; each waits for its own quiet stretch. */
+const REST_TITLE_FOREGROUND_READS = 3
+/** Panes with a rest-title recovery under way: a second attach of the same pane joins it. */
+const restTitleRecoveries = new WeakSet<object>()
+
 /** A quiet agent that reads no screen leaves only its rest title, which may outlive it: a Claude
  *  that exited before the restart leaves `✳` over the shell, and the shell's prompt redraw is paint.
- *  So paint never revives the title; it counts once, after a quiet stretch since the reattach, when
- *  a fresh foreground read names the title's own agent. One read per quiet stretch; unverifiable
- *  hosts (Windows) and any output, title or boundary change keep the input held. */
+ *  So paint never revives the title; it counts after a quiet stretch since the reattach, when a fresh
+ *  foreground read names the title's own agent. Output during a read retries in the next quiet
+ *  stretch; a shell in front, or a title, boundary or lifecycle change, ends it; unverifiable hosts
+ *  (Windows) keep the input held. */
 function restoreFromReattachedRestTitle(
   restore: ReattachedReadyScreenRestore,
   recheckUntil: number
 ): void {
   const title = restore.readRestTitle()
   if (
+    restTitleRecoveries.has(restore.owner) ||
     !title ||
     detectExplicitIdleStatusFromTitle(title) !== 'idle' ||
     resolveTerminalTitlePolicyAgentType(title) !== restore.agent
   ) {
     return
   }
-  const quietAt = (restore.readOutputClockAt() ?? Date.now()) + TUI_IDLE_QUIESCENCE_MS
-  setTimeout(
-    () => {
-      const outputClockAt = restore.readOutputClockAt()
-      if (!restore.isCurrent() || restore.readRestTitle() !== title) {
-        return
-      }
-      if (outputClockAt !== null && Date.now() - outputClockAt < TUI_IDLE_QUIESCENCE_MS) {
-        if (Date.now() < recheckUntil) {
-          restoreFromReattachedRestTitle(restore, recheckUntil)
+  restTitleRecoveries.add(restore.owner)
+  let readsLeft = REST_TITLE_FOREGROUND_READS
+  const stillWanted = (): boolean =>
+    restore.isCurrent() && restore.readRestTitle() === title && Date.now() < recheckUntil
+  const afterQuiet = (): void => {
+    const quietAt = (restore.readOutputClockAt() ?? Date.now()) + TUI_IDLE_QUIESCENCE_MS
+    setTimeout(check, Math.max(quietAt - Date.now(), 0)).unref?.()
+  }
+  const finish = (): void => {
+    restTitleRecoveries.delete(restore.owner)
+  }
+  const check = (): void => {
+    const outputClockAt = restore.readOutputClockAt()
+    if (!stillWanted()) {
+      finish()
+      return
+    }
+    if (outputClockAt !== null && Date.now() - outputClockAt < TUI_IDLE_QUIESCENCE_MS) {
+      afterQuiet()
+      return
+    }
+    readsLeft -= 1
+    void restore
+      .confirmForeground()
+      .catch(() => 'unknown' as const)
+      .then((foreground) => {
+        if (!stillWanted() || foreground === 'shell') {
+          finish()
+        } else if (foreground === 'agent' && restore.readOutputClockAt() === outputClockAt) {
+          finish()
+          restore.applyIdle()
+        } else if (readsLeft > 0) {
+          afterQuiet()
+        } else {
+          finish()
         }
-        return
-      }
-      void restore
-        .confirmForeground()
-        .then((confirmed) => {
-          if (
-            confirmed &&
-            restore.isCurrent() &&
-            restore.readRestTitle() === title &&
-            restore.readOutputClockAt() === outputClockAt
-          ) {
-            restore.applyIdle()
-          }
-        })
-        .catch(() => {})
-    },
-    Math.max(quietAt - Date.now(), 0)
-  ).unref?.()
+      })
+  }
+  afterQuiet()
 }
 
 /** Give a reattached agent idle once its own repaint shows its ready screen. A quiet agent is asked

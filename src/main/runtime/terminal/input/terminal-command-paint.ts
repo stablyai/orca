@@ -94,7 +94,8 @@ export class TerminalCommandPaint {
     }
     if (this.markerEndInChunk !== -1) {
       // Why only at a boundary: an agent that writes its own 133;C mid-session is not a new command.
-      if (!this.startSeen) {
+      // Why a finish before it too: then this C starts the next command, not the agent's own.
+      if (!this.startSeen || finishEnd !== -1) {
         this.startedAt = at
         this.startSeen = true
       }

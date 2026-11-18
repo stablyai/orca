@@ -16,7 +16,7 @@ import {
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { readExactAgentForeground } from '../wait/launched-agent-foreground'
 import {
   admitRestoredTerminalReport,
   hasTerminalCommandPainted,
@@ -286,8 +286,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
           requestRepaint: () => this.requestReattachedRepaint(ptyId),
           readRestTitle: () => pty.lastOscTitle ?? null,
-          confirmForeground: async () =>
-            isTuiAgent(agent) && (await this.readLaunchedAgentForeground(ptyId, agent)) === 'agent',
+          confirmForeground: () => readExactAgentForeground(this, this.ptyController, ptyId, agent),
+          owner: pty,
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })

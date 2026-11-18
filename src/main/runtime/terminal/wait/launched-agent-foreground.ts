@@ -6,7 +6,11 @@ import {
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
@@ -187,4 +191,25 @@ export async function readLaunchedAgentForeground(
   } catch {
     return 'unknown'
   }
+}
+
+/** `agent` only when the program in front is `agent` itself: the launched-agent read, which on a
+ *  local host admits any non-shell, then a fresh process-table name at the owner that names it. */
+export async function readExactAgentForeground(
+  runtime: {
+    readLaunchedAgentForeground(ptyId: string, agent: TuiAgent): Promise<LaunchedAgentForeground>
+  },
+  controller: Pick<RuntimePtyController, 'confirmForegroundProcess'> | null | undefined,
+  ptyId: string,
+  agent: TerminalAgent
+): Promise<LaunchedAgentForeground> {
+  if (!isTuiAgent(agent)) {
+    return 'unknown'
+  }
+  const foreground = await runtime.readLaunchedAgentForeground(ptyId, agent)
+  if (foreground !== 'agent') {
+    return foreground
+  }
+  const name = (await controller?.confirmForegroundProcess?.(ptyId)) ?? null
+  return recognizeAgentProcess(name)?.agent === agent ? 'agent' : 'unknown'
 }
