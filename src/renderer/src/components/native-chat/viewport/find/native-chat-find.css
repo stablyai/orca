@@ -6,13 +6,21 @@
   --native-chat-find-top-inset: var(--orca-pane-title-height);
 }
 
-/* Paint find Ranges with CSS highlights in preview colors; only color/background are supported. */
+/* Paint find Ranges with CSS highlights; only color/background are supported. */
 ::highlight(native-chat-find-match) {
-  background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-mix),
+    transparent
+  );
   color: inherit;
 }
 
 ::highlight(native-chat-find-active-match) {
-  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-active-mix),
+    transparent
+  );
   color: inherit;
 }

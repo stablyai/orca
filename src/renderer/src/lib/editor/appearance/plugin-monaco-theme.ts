@@ -2,7 +2,7 @@ import type * as Monaco from 'monaco-editor'
 import type { PluginThemeTokenColorRule } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
 import type { ColorProbe } from '../../../app-shell/appearance/plugin-theme-tokens'
-import { contrastRatio, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
+import { contrastRatio, mix, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 
 export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneThemeData }
 
@@ -31,6 +31,25 @@ const MONACO_OPT_IN_COLORS: readonly (readonly [string, string, string])[] = [
   ['textLink.foreground', '--text-link', '--text-link'],
   ['textLink.activeForeground', '--text-link', '--text-link']
 ]
+
+/** Mix an accent deep enough to read as a surface without lowering text contrast below AA. */
+function accentSurface(
+  hue: Rgba,
+  background: Rgba,
+  foreground: Rgba,
+  percent: number
+): Rgba | null {
+  for (let step = percent; step >= 10; step -= 2) {
+    const surface = mix(hue, background, step)
+    if (
+      contrastRatio(surface, background) >= 1.2 &&
+      contrastRatio(foreground, surface) >= MIN_TEXT_CONTRAST
+    ) {
+      return surface
+    }
+  }
+  return null
+}
 
 function hex([r, g, b, a]: Rgba): string {
   const byte = (value: number): string =>
@@ -85,8 +104,10 @@ export function derivePluginMonacoTheme(input: {
   const accent = color('--accent')
   const ring = color('--ring') ?? foreground
   const themed = input.painted['--editor-selection'] ? color('--editor-selection') : null
-  // Why the ring by default: a theme's accent is a faint hover tint, too weak to read as a selection.
-  const selection: Rgba = themed ?? [ring[0], ring[1], ring[2], 0.3]
+  const link = color('--text-link') ?? color('--callout-note')
+  const selectionMix = input.base === 'dark' ? 34 : 28
+  const accentSelection = link ? accentSurface(link, background, foreground, selectionMix) : null
+  const selection: Rgba = themed ?? accentSelection ?? [ring[0], ring[1], ring[2], 0.3]
   const faded: Rgba = [selection[0], selection[1], selection[2], selection[3] / 2]
   // Why: the gate checks a theme's selection at full strength; halved, it can blend into a
   // mid-tone that hides the text, so an unfocused editor then keeps the full color.
@@ -94,6 +115,12 @@ export function derivePluginMonacoTheme(input: {
     !themed || contrastRatio(foreground, over(faded, background)) >= MIN_TEXT_CONTRAST
       ? faded
       : selection
+  const searchMixes =
+    input.base === 'dark' ? { inactive: 26, active: 50 } : { inactive: 22, active: 45 }
+  const searchInactive = link
+    ? accentSurface(link, background, foreground, searchMixes.inactive)
+    : null
+  const searchActive = link ? accentSurface(link, background, foreground, searchMixes.active) : null
   const popover = color('--popover')
   const border = color('--border')
   const colors: Record<string, string> = {
@@ -109,6 +136,12 @@ export function derivePluginMonacoTheme(input: {
   }
   if (accent) {
     colors['editor.lineHighlightBackground'] = hex(accent)
+  }
+  if (searchInactive) {
+    colors['editor.findMatchHighlightBackground'] = hex(searchInactive)
+  }
+  if (searchActive) {
+    colors['editor.findMatchBackground'] = hex(searchActive)
   }
   if (popover) {
     colors['editorWidget.background'] = hex(popover)
