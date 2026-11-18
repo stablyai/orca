@@ -27,8 +27,6 @@ import {
 } from './tabs/MobileBrowserProfilePicker'
 import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
 import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobile-windows-shell-choices'
-import { useRouteCapability } from '../worktree/execution-hosts/use-workspace-client'
-import { SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -107,13 +105,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
-  const offersShellChoices = useRouteCapability(
-    SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY
-  )
   // The host owns which shells it would start here, as desktop's menu does for its own projects.
   const terminalShells = useMobileWindowsShellChoices({
     client,
-    enabled: offersShellChoices,
     sheetOpen: showCreateTabDrawer,
     worktreeId
   })
