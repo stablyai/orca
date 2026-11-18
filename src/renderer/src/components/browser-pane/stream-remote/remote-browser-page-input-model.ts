@@ -88,6 +88,8 @@ export function getRemoteBrowserHistoryMethod(
   return button === 3 ? 'browser.back' : button === 4 ? 'browser.forward' : null
 }
 
+const MAX_CONTEXT_MENU_IMAGE_URL_LENGTH = 256 * 1024
+
 /** What the page under a right-click offers, read in the streamed page since no ContextMenuParams cross the runtime RPC. */
 export function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
@@ -97,22 +99,39 @@ export function buildRemoteContextMenuExpression(x: number, y: number): string {
     const image = closest('img');
     const NON_TEXT_INPUTS = ['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'];
     const field = target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && !NON_TEXT_INPUTS.includes(target.type)) ? target : null;
-    const editableTarget = field || (target && target.isContentEditable ? target : null);
+    // A click inside a contenteditable editor lands on a descendant; its editing host is what takes focus.
+    let editableTarget = field || (target && target.isContentEditable ? target : null);
+    while (!field && editableTarget && editableTarget.parentElement && editableTarget.parentElement.isContentEditable) {
+      editableTarget = editableTarget.parentElement;
+    }
     const writable = Boolean(editableTarget) && !(field && (field.readOnly || field.disabled));
+    const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
     // Like a native right-click, an editable field takes focus so the edit items act on it.
     if (editableTarget && document.activeElement !== editableTarget && !editableTarget.contains(document.activeElement)) {
-      editableTarget.focus();
+      editableTarget.focus({ preventScroll: true });
     }
-    const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
-    const fieldSelection = field && typeof field.selectionStart === 'number' ? field.value.slice(field.selectionStart, field.selectionEnd) : '';
-    const selectionText = field ? fieldSelection : (selection ? String(selection) : '');
+    // ...and a click outside the editor's selection moves the caret to the pointer.
+    if (!field && editableTarget && selection && typeof document.caretRangeFromPoint === 'function') {
+      const inSelection = !selection.isCollapsed && selection.rangeCount && Array.from(selection.getRangeAt(0).getClientRects()).some((rect) =>
+        ${JSON.stringify(x)} >= rect.left && ${JSON.stringify(x)} <= rect.right && ${JSON.stringify(y)} >= rect.top && ${JSON.stringify(y)} <= rect.bottom);
+      const caret = inSelection ? null : document.caretRangeFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
+      if (caret && editableTarget.contains(caret.startContainer)) {
+        selection.removeAllRanges();
+        selection.addRange(caret);
+      }
+    }
+    // Some input types (email, number) expose no selection offsets; the document selection still holds their text.
+    const selectionText = field && typeof field.selectionStart === 'number'
+      ? field.value.slice(field.selectionStart, field.selectionEnd)
+      : (selection ? String(selection) : '');
     const commandEnabled = (command) => { try { return document.queryCommandEnabled(command); } catch { return true; } };
     const hidden = field && field.type === 'password';
     return JSON.stringify({
       linkUrl: anchor && anchor.href ? anchor.href : null,
       pageUrl: location.href || 'about:blank',
       selectionText: hidden ? '' : selectionText,
-      imageUrl: image ? image.currentSrc || image.src || null : null,
+      // Why capped: a large inline data: image would push the reply past the runtime's size limit.
+      imageUrl: image && (image.currentSrc || image.src || '').length <= ${MAX_CONTEXT_MENU_IMAGE_URL_LENGTH} ? image.currentSrc || image.src || null : null,
       editable: editableTarget ? {
         canUndo: writable && commandEnabled('undo'),
         canRedo: writable && commandEnabled('redo'),

@@ -2,6 +2,7 @@ import { runRemoteBrowserNavigationCommand } from './remote-browser-page-navigat
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
+import { browserNavigationLeavesFaviconOrigin } from '../../../../../shared/browser/browser-favicon-url'
 import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { resolveBrowserAddressBarSubmission } from '../navigate/browser-address-bar-navigation'
 import { routeWorkspaceDocAddressSubmission } from '../navigate/workspace-doc-address-submission'
@@ -82,6 +83,10 @@ export function useRemoteBrowserPageNavigation({
       onUpdatePageState(browserTab.id, {
         title,
         loading: false,
+        // Like local pages: the old site's icon must not ride along until the host sends the new one.
+        ...(page && page.url !== safeUrl && browserNavigationLeavesFaviconOrigin(page.url, safeUrl)
+          ? { faviconUrl: null }
+          : {}),
         ...(tab.loadError !== undefined ? { loadError: tab.loadError } : {})
       })
       // File remote navigations in client suggestion history only when URL/title changes; post-input tab reads must not rewrite the store.

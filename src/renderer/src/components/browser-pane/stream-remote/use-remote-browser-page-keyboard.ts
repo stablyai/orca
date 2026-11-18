@@ -38,7 +38,12 @@ type CopyWrite = { text: string }
 
 type RemoteKeyboardInput =
   | { method: 'browser.keypress'; key: string }
-  | { method: 'browser.keyboardInsertText'; text: string; copyWriteAtPaste: CopyWrite | null }
+  | {
+      method: 'browser.keyboardInsertText'
+      /** Null reads this machine's clipboard in turn, as a menu Paste has no paste event. */
+      text: string | null
+      copyWriteAtPaste: CopyWrite | null
+    }
   | {
       method: 'clipboardCommand'
       command: RemoteBrowserClipboardCommand
@@ -143,7 +148,7 @@ export function useRemoteBrowserPageKeyboard({
           const pasteText =
             lastCopyWrite && lastCopyWrite !== input.copyWriteAtPaste
               ? lastCopyWrite.text
-              : input.text
+              : (input.text ?? (await window.api.ui.readClipboardText()))
           await assertClipboardTextWithinLimitWithYield(pasteText)
           // Why chunks: one request carrying a large paste would exceed the runtime socket's frame cap.
           for (const text of iterateBrowserTextInsertionChunks(pasteText)) {
@@ -273,9 +278,10 @@ export function useRemoteBrowserPageKeyboard({
       return
     }
     if (command === 'paste' || command === 'pasteAndMatchStyle') {
-      const copyWriteAtPaste = lastCopyWriteRef.current
-      void window.api.ui.readClipboardText().then((text) => {
-        enqueueRemoteKeyboardInput({ method: 'browser.keyboardInsertText', text, copyWriteAtPaste })
+      enqueueRemoteKeyboardInput({
+        method: 'browser.keyboardInsertText',
+        text: null,
+        copyWriteAtPaste: lastCopyWriteRef.current
       })
       return
     }

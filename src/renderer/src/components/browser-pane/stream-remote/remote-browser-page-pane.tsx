@@ -328,7 +328,11 @@ export function RemoteBrowserPagePane({
       {contextMenu ? (
         <RemoteBrowserPageContextMenu
           contextMenu={contextMenu}
-          onDismiss={() => setContextMenu(null)}
+          onDismiss={() => {
+            setContextMenu(null)
+            // Keys reach the page only through the frame, so edits like Select All need it focused again.
+            imageRef.current?.focus()
+          }}
           history={history}
           actions={{
             edit: runRemoteEditCommand,
