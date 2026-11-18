@@ -16,4 +16,8 @@ it('reads failed-request retries as retries and the final failure as reply text'
       '\n⚠ agent executor error: generating and executing: Error 502, Message: Bad Gateway: Failed to connect to backend API, Status: UNAVAILABLE, Details: []\n'
     )
   ).toBeUndefined()
+  expect(retry?.('⚠ API error (attempt 1): quoted by the model')).toBeUndefined()
+  expect(retry?.('\n⚠ API error (attempt 1): Error 502\nupstream unavailable\n')).toBe(
+    'Error 502\nupstream unavailable'
+  )
 })
