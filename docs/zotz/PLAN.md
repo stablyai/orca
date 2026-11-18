@@ -570,3 +570,10 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - 8f: Ajustes → Recursos con los límites editables.
 - La reserva de un agente recién admitido dura 90 s y puede contarlo dos veces junto a su medición durante ese rato, así que admite de menos, nunca de más.
 - Falta la prueba de punta a punta con agentes reales: en la MSI no hay Visual Studio C++ para correr Zotz desde el código.
+
+### 2026-11-18 — Barra lateral simple estilo Conductor (`zotz/sidebar-conductor`)
+
+- Nuevo default `zotzSidebarLayout` (≠ `'orca'`): arriba Inicio / Crear / Buscar; debajo cada proyecto con su `+` (abre el creador de workspaces de upstream con el proyecto elegido) y solo las conversaciones del usuario: sin el checkout principal salvo que tenga pestañas abiertas, sin lo creado por la CLI ni por automatizaciones. Las carpetas sueltas (`~`) salen solo con pestañas abiertas.
+- Enganche: un `if` en `components/sidebar/index.tsx`; el resto vive en `components/zotz/sidebar/`. Ajustes → General → "Barra lateral simple" regresa a las tarjetas de Orca.
+- Pendiente: el switch "sin worktree" al crear (conversación directa en la carpeta del proyecto), marcar como "propias" las conversaciones abiertas desde Zotz para ocultar agentes externos dentro del mismo worktree, y "Conectar a mi servidor" en modo personal.
+- `server-hook-session-binding.test.ts` ya fallaba en `main` antes de esta rama.
