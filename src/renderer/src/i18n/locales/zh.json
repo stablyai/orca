@@ -13714,10 +13714,8 @@
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载\"{{value0}}\"",
-            "f729bcd97d": "无法下载文件夹\"{{value0}}\"",
             "1a3df04ae1": "打开",
             "bce4d4e44f": "下载\"{{value0}}\"",
-            "a4029c996b": "已下载文件夹\"{{value0}}\"",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "进入",
             "66a29dde82": "复制相对路径",
@@ -20333,7 +20331,7 @@
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息",
         "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息，请开始新聊天以使用“回溯到此处”",
-        "busy": "当代理空闲且此聊天中没有等待您处理的内容时可用",
+        "busy": "聊天空闲时可用",
         "staleEpoch": "对话已发生变化，请查看最新消息后重试",
         "invalidTarget": "对话无法返回到此消息，未做任何更改",
         "historyLimit": "此对话过长，无法回溯，未做任何更改",
@@ -23396,7 +23394,6 @@
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "chatSeparate": "与你的 agy 终端账户相互独立",
-      "chatAccount": "聊天账户",
       "chatBadgeSigningIn": "正在登录",
       "chatBadgeSignedIn": "已登录",
       "chatBadgeSignedOut": "未登录",
@@ -23410,8 +23407,6 @@
       "enterpriseFieldsShort": "请输入项目和位置",
       "chatUseMethod": "重新登录以使用 {{method}}",
       "signInEllipsis": "登录…",
-      "terminalInfoWindows": "运行 agy 登录后，在此保存该登录信息；如需添加其他账户，请在 agy 中运行 /logout 并重新登录；选择后将应用到主机默认的 agy 凭据",
-      "terminalInfo": "运行 agy 登录后，在此保存该登录信息；如需添加其他账户，请在 agy 中运行 /logout 并重新登录；适用于新的 agy 会话",
       "loadFailed": "无法加载 agy 账户",
       "loading": "正在加载账户…",
       "notSignedIn": "未登录",
@@ -23776,9 +23771,7 @@
     }
   },
   "mediaPreview": {
-    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器",
-    "openFailed": "无法在默认应用中打开此文件",
-    "openDefault": "在默认应用中打开"
+    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器"
   },
   "projectBoard": {
     "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项",

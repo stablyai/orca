@@ -22,6 +22,10 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
 import type { NewTabAgentSurfaceChoice } from '../agent-launch/use-mobile-new-tab-agent-options'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
+import {
+  WINDOWS_GIT_BASH_SHELL,
+  type BuiltInWindowsTerminalShell
+} from '../../../../src/shared/shell/launch/windows-terminal-shell'
 
 const AGENT_GRID_COLUMNS = 3
 
@@ -39,10 +43,29 @@ type Props = {
   canCreateMarkdownNote: boolean
   onClose: () => void
   onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
-  onCreateTerminal: () => void
+  /** Desktop's Windows shell entries the host would start, its default first; empty keeps one Terminal row. */
+  terminalShells: readonly BuiltInWindowsTerminalShell[]
+  onCreateTerminal: (shell?: BuiltInWindowsTerminalShell) => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
   onCreateMarkdownNote: () => void
+}
+
+// Desktop's names for its Windows shell menu entries.
+function windowsShellLabel(
+  shell: BuiltInWindowsTerminalShell,
+  t: ReturnType<typeof useMobileTranslation>
+): string {
+  switch (shell) {
+    case 'powershell.exe':
+      return t('session.sheets.shellPowerShell', 'PowerShell')
+    case 'cmd.exe':
+      return t('session.sheets.shellCmd', 'CMD Prompt')
+    case WINDOWS_GIT_BASH_SHELL:
+      return t('session.sheets.shellGitBash', 'Git Bash')
+    case 'wsl.exe':
+      return t('session.sheets.shellWsl', 'WSL')
+  }
 }
 
 export function MobileNewTabSheet({
@@ -56,6 +79,7 @@ export function MobileNewTabSheet({
   canCreateMarkdownNote,
   onClose,
   onCreateAgent,
+  terminalShells,
   onCreateTerminal,
   onCreateBrowser,
   onCreateMarkdownNote
@@ -157,12 +181,25 @@ export function MobileNewTabSheet({
         </View>
       ) : null}
       <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.actions}>
-        <ListRow
-          key="terminal"
-          title={t('session.sheets.terminal', 'Terminal')}
-          leading={<SquareTerminal size={16} color={iconColor} />}
-          onPress={() => closeAndRun(onCreateTerminal)}
-        />
+        {terminalShells.length > 0 ? (
+          terminalShells.map((shell) => (
+            <ListRow
+              key={shell}
+              title={t('session.sheets.terminalWithShell', 'Terminal: {{shell}}', {
+                shell: windowsShellLabel(shell, t)
+              })}
+              leading={<SquareTerminal size={16} color={iconColor} />}
+              onPress={() => closeAndRun(() => onCreateTerminal(shell))}
+            />
+          ))
+        ) : (
+          <ListRow
+            key="terminal"
+            title={t('session.sheets.terminal', 'Terminal')}
+            leading={<SquareTerminal size={16} color={iconColor} />}
+            onPress={() => closeAndRun(() => onCreateTerminal())}
+          />
+        )}
         {canCreateBrowser ? (
           <ListRow
             key="browser"

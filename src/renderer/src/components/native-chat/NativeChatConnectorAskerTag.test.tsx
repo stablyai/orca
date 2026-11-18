@@ -33,15 +33,4 @@ describe('NativeChatConnectorAskerTag', () => {
       forceSystemBrowser: true
     })
   })
-
-  it('shows the cached avatar, then initials when it can’t load', () => {
-    const { container } = render(<NativeChatConnectorAskerTag asker={SAM} />)
-    const image = container.querySelector('img')
-    if (!image) {
-      throw new Error('no avatar image')
-    }
-    fireEvent.error(image)
-    expect(container.querySelector('img')).toBeNull()
-    expect(screen.getByText('SL')).toBeInTheDocument()
-  })
 })

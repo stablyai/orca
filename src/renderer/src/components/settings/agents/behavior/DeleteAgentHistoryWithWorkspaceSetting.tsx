@@ -104,12 +104,12 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
                     {diskUsage.complete
                       ? t(
                           'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltip',
-                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          'Space Codex uses for its own chat history on {{host}}, including chats from workspaces you still have.',
                           { host: hostLabel }
                         )
                       : t(
                           'components.settings.agents.deleteHistoryWithWorkspace.codexHistoryTooltipAtLeast',
-                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have. This setting removes only chats from workspaces that no longer exist.',
+                          'Codex uses at least this much space for its own chat history on {{host}}, including chats from workspaces you still have.',
                           { host: hostLabel }
                         )}
                   </TooltipContent>

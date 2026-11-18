@@ -85,6 +85,8 @@ async function readAgentHistory(
   }
   const reply = await agentHistorySessionScan.request(client, {
     limit: MOBILE_AI_VAULT_SESSION_LIMIT,
+    // Like desktop History: IDE transcripts continue in a new CLI conversation.
+    includeAntigravityIdeSessions: true,
     force,
     // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
     ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)

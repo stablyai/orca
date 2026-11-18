@@ -1,3 +1,4 @@
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
@@ -28,7 +29,7 @@ export function routedSessionHostIds(
   for (const hostId of state.hydratedRuntimeSessionHostIds ?? []) {
     hostIds.add(hostId)
   }
-  for (const owner of [...(state.folderWorkspaces ?? []), ...(state.projectGroups ?? [])]) {
+  for (const owner of [...(selectFolderWorkspaces(state) ?? []), ...(state.projectGroups ?? [])]) {
     const parsed = parseExecutionHostId(owner.executionHostId)
     if (parsed) {
       hostIds.add(parsed.id)

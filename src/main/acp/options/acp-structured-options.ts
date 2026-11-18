@@ -1,4 +1,4 @@
-import { acpEffortOption, acpSelectChoices } from './acp-select-choices'
+import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
@@ -40,6 +40,7 @@ export class AcpStructuredOptions {
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
       | 'fastConfigId'
+      | 'interactionModes'
     > = {}
   ) {}
 
@@ -234,7 +235,21 @@ export class AcpStructuredOptions {
       const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
+    if (key === 'interactionMode') {
+      const option = this.select('mode')
+      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
+      return option && native ? { method: 'config', configId: option.id, value: native } : null
+    }
     return null
+  }
+
+  /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
+  needsInteractionMode(value: string): boolean {
+    const write = this.write('interactionMode', value)
+    return write?.method === 'config'
+      ? this.appliedInput.get('interactionMode') !== value ||
+          this.select('mode')?.currentValue !== write.value
+      : value === 'plan'
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
