@@ -25,6 +25,7 @@ import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
 import { useCreateRowScroller } from './use-create-row-scroller'
+import { useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
 import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
 
 const EMPTY_LAYOUT: NewTabMenuLayout = { order: [], hidden: [] }
@@ -64,6 +65,7 @@ export function TabBarCreateRow({
   const [keyboardNav, setKeyboardNav] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
+  const hoverTooltip = useCreateRowHoverTooltip()
   const { scrollerRef, scroller, attachScroller, overflow, revealIcon } = useCreateRowScroller()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
@@ -149,6 +151,7 @@ export function TabBarCreateRow({
           onKeyDown={(event) => {
             setKeyboardNav(true)
             setHoveredIndex(null)
+            hoverTooltip.hover(null)
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
               setActiveIndex(Math.max(0, active - 1))
@@ -167,6 +170,7 @@ export function TabBarCreateRow({
           <TabBarCreateRowIcons
             items={visible}
             highlightedIndex={keyboardActive ? active : hoveredIndex}
+            tooltipIndex={keyboardActive ? active : hoverTooltip.tooltipIndex}
             overflow={overflow}
             scrollerRef={scrollerRef}
             attachScroller={attachScroller}
@@ -176,7 +180,9 @@ export function TabBarCreateRow({
                 setKeyboardNav(false)
               }
               setHoveredIndex(index)
+              hoverTooltip.hover(index)
             }}
+            onPress={hoverTooltip.press}
             onRun={run}
           />
           <Tooltip open={keyboardActive && active === customizeIndex}>
