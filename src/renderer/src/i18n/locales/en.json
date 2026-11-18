@@ -670,7 +670,6 @@
         "retainedTerminalPermissions": "If new terminals still use the previous permissions, open Manage Sessions and choose Restart daemon. This closes local terminals and their running commands.",
         "administratorRestartFailed": "Orca could not restart. Try again or use the manual instructions.",
         "manualAdministratorHelp": "Manual instructions",
-        "administratorDocumentation": "Read the guide",
         "cancelAdministratorRestart": "Cancel",
         "closeAdministratorHelp": "Close",
         "restartingAdministrator": "Restarting…",
@@ -5983,7 +5982,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "output",
               "5d66fdd7c2": "input",
               "7080aeaebb": "Reasoning",
@@ -7031,10 +7029,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
           "29c56f30ee": "Check for Updates",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Changelog",
-          "cdc87f897e": "Docs",
           "e565171a7c": "Keyboard Shortcuts",
           "4cf5b868d7": "Send Feedback",
           "a428c25998": "Settings",
@@ -7042,8 +7038,7 @@
           "4e8f5710d3": "Couldn't restart Orca.",
           "5161eef55d": "Restarting Orca…",
           "f8a2c91d4e": "Milestones",
-          "b7e4d2a19c": "Onboarding",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Onboarding"
         },
         "SidebarToolbar": {
           "87d0064026": "Workspace board moved to the bottom bar",
@@ -25941,7 +25936,39 @@
         "tooltip": "Agent queue and memory"
       },
       "settingLabel": "Agent queue by memory",
-      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting."
+      "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting.",
+      "canceledNotice": "{{agent}} canceled in the queue: it did not start.",
+      "dismissCanceled": "Dismiss",
+      "canceledMark": "Canceled"
+    },
+    "sidebar": {
+      "home": "Home",
+      "create": "Create",
+      "folders": "Folders",
+      "empty": "Add a project from GitHub or a local folder to start.",
+      "newConversationIn": "New conversation in {{project}}",
+      "settingLabel": "Simple sidebar",
+      "settingDescription": "Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent.",
+      "archived": "Conversation archived",
+      "undo": "Undo",
+      "rename": "Rename",
+      "duplicate": "Duplicate in a new worktree",
+      "archive": "Archive",
+      "delete": "Delete",
+      "conversationActions": "Conversation actions"
+    },
+    "composer": {
+      "worktreeLabel": "Worktree",
+      "worktreeOff": "The conversation works on this branch in the project folder. Zotz switches the folder to it first.",
+      "branchLabel": "Branch",
+      "worktreeOn": "A new worktree is created from this branch; your project folder stays as it is.",
+      "switchFailed": "The project folder cannot switch to that branch",
+      "useWorktree": "Use a worktree instead",
+      "stayOnBranch": "Stay on {{branch}}"
+    },
+    "orcaPluginCatalog": {
+      "settingLabel": "Download Orca's plugin catalog",
+      "settingDescription": "Shows the official and community plugins from Orca and checks their safety list. Off by default because Zotz is a fork; your own plugin sources work either way."
     }
   }
 }

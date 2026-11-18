@@ -4,7 +4,12 @@ import { Button } from '../ui/button'
 import { SettingsRow, SettingsSwitchRow } from '../settings/form-controls/SettingsFormControls'
 import { useAppStore } from '../../store/index'
 import { SettingsGroup } from '../settings/section-layout/SettingsGroup'
-import { isZotzMachineModeHost, openZotzMachineModeWizard } from './zotz-machine-mode-wizard-event'
+import {
+  isZotzAutomatedLaunch,
+  isZotzMachineModeHost,
+  openZotzMachineModeWizard
+} from './zotz-machine-mode-wizard-event'
+import { isZotzConductorSidebar } from '../../../../shared/zotz/zotz-sidebar-layout'
 
 /** Settings → General entry to switch between personal and server, or re-run server setup. */
 export function ZotzMachineModeSection({
@@ -15,6 +20,9 @@ export function ZotzMachineModeSection({
   const t = useTranslate()
   const queueEnabled = useAppStore((state) => state.settings?.zotzAgentQueueEnabled !== false)
   const updateSettings = useAppStore((state) => state.updateSettings)
+  const simpleSidebar = useAppStore((state) =>
+    isZotzConductorSidebar(state.settings, isZotzAutomatedLaunch())
+  )
   if (!isZotzMachineModeHost()) {
     return null
   }
@@ -46,6 +54,17 @@ export function ZotzMachineModeSection({
         )}
         checked={queueEnabled}
         onChange={() => void updateSettings({ zotzAgentQueueEnabled: !queueEnabled })}
+      />
+      <SettingsSwitchRow
+        label={t('zotz.sidebar.settingLabel', 'Simple sidebar')}
+        description={t(
+          'zotz.sidebar.settingDescription',
+          'Projects with a + button and only the conversations you started. Turn it off to see every workspace card, branch and agent.'
+        )}
+        checked={simpleSidebar}
+        onChange={() =>
+          void updateSettings({ zotzSidebarLayout: simpleSidebar ? 'orca' : 'conductor' })
+        }
       />
     </SettingsGroup>
   )

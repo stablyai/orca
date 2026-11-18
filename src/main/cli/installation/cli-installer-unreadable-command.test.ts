@@ -20,9 +20,9 @@ async function createUnreadableCommandFixture() {
   const foreignBin = join(fixture.root, 'foreign', 'bin')
   await mkdir(defaultBin, { recursive: true })
   await mkdir(foreignBin, { recursive: true })
-  const commandPath = join(defaultBin, 'orca')
-  const foreignPath = join(foreignBin, 'orca')
-  await symlink(join(resourcesPath, 'bin', 'orca'), commandPath)
+  const commandPath = join(defaultBin, 'zotz')
+  const foreignPath = join(foreignBin, 'zotz')
+  await symlink(join(resourcesPath, 'bin', 'zotz'), commandPath)
   await writeFile(foreignPath, unreadableContents, { mode: 0o111 })
   return { ...fixture, resourcesPath, defaultBin, foreignBin, commandPath, foreignPath }
 }

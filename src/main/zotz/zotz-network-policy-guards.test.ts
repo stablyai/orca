@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _setZotzCloudFeaturesOpenForTests } from '../../shared/zotz/zotz-network-policy'
 import { isConsentEnvOverridden } from '../telemetry/consent'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { assertZotzMarketplaceAllowed } from './zotz-plugin-catalog-guard'
 
 const TELEMETRY_ENV_KEYS = [
   'DO_NOT_TRACK',
@@ -44,5 +45,16 @@ describe('Zotz network policy guards', () => {
 
   it('reports Orca Cloud sign-in as unconfigured in packaged builds', () => {
     expect(getOrcaCloudAuthConfig({}, true).configured).toBe(false)
+  })
+  it("refuses Orca's plugin catalogs but keeps user marketplaces", () => {
+    expect(() =>
+      assertZotzMarketplaceAllowed('https://github.com/stablyai/orca-plugins.git')
+    ).toThrow()
+    expect(() =>
+      assertZotzMarketplaceAllowed('https://github.com/stablyai/orca-community-plugins')
+    ).toThrow()
+    expect(() =>
+      assertZotzMarketplaceAllowed('https://github.com/acme/my-plugins.git')
+    ).not.toThrow()
   })
 })

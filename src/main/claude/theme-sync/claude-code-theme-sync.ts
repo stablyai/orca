@@ -138,7 +138,7 @@ function releasedTheme(previousTheme: string | null, terminalBase: string): Clau
   // Claude Code's own default is dark; `auto` follows the terminal background.
   const base =
     previousTheme === null ? 'dark' : previousTheme === 'auto' ? terminalBase : previousTheme
-  return { name: 'Orca', base, overrides: {} }
+  return { name: 'Zotz', base, overrides: {} }
 }
 
 /** Writes the replaced theme back into settings.json; the theme to show running sessions, if it reverted. */

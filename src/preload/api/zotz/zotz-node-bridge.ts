@@ -10,6 +10,7 @@ export const zotzNodeApi = {
     // Upstream's DEV_SHOW_FIRST_RUN_EDUCATION_ENV override for dev onboarding.
     showFirstRunEducation: process.env.ORCA_DEV_SHOW_FIRST_RUN_EDUCATION
   }),
+  automatedLaunch: Boolean(process.env.ORCA_E2E_USER_DATA_DIR),
   runServerSetup: () => ipcRenderer.invoke('zotzNode:runServerSetup'),
   onSetupProgress: (callback: (progress: ZotzNodeSetupProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: ZotzNodeSetupProgress): void =>

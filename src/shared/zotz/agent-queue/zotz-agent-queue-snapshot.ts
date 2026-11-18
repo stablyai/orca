@@ -46,11 +46,20 @@ export type ZotzAgentQueueSnapshot = {
     position: number
     waitReason: ZotzAgentWaitReason | 'pressure' | null
   }[]
+  /** Launches the user canceled; their panes stay as plain shells with a "canceled" mark. */
+  canceled: {
+    id: string
+    agent: TuiAgent
+    /** The workspace the pane belongs to, when known. */
+    label: string
+    canceledAt: number
+  }[]
 }
 
 export const EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT: ZotzAgentQueueSnapshot = {
   memory: null,
   running: [],
   done: [],
-  queued: []
+  queued: [],
+  canceled: []
 }

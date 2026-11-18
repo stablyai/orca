@@ -4,6 +4,7 @@ import {
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginMarketplaceStore } from './plugin-marketplace-store'
+import { guardZotzPluginCatalogSeed } from '../../zotz/zotz-plugin-catalog-guard'
 
 // Why throttled: listings wait on an in-flight seed, so an offline retry must not stall every view.
 const COMMUNITY_SEED_RETRY_MS = 10 * 60 * 1000
@@ -31,7 +32,7 @@ export class CommunityMarketplaceSeed {
     if (this.failedAt !== null && now - this.failedAt < COMMUNITY_SEED_RETRY_MS) {
       return Promise.resolve()
     }
-    const seed = this.perform()
+    const seed = guardZotzPluginCatalogSeed(() => this.perform())
       .then(() => {
         this.failedAt = null
       })

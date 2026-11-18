@@ -32,7 +32,7 @@ import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimag
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
 const localCliRegistrationQueues = new Map<string, Promise<void>>()
 
-function runLocalCliRegistrationOperation<T>(operation: () => Promise<T>): Promise<T> {
+export function runLocalCliRegistrationOperation<T>(operation: () => Promise<T>): Promise<T> {
   return runKeyedSerializedOperation(localCliRegistrationQueues, 'local', operation)
 }
 

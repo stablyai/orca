@@ -90,7 +90,7 @@ export function claudeCodeThemeFromTerminal(palette: ITheme | null): ClaudeCodeT
     selectionBg: selection && contrastRatio(text, selection) >= MIN_TEXT_CONTRAST ? selection : null
   }
   return {
-    name: 'Orca',
+    name: 'Zotz',
     base: light ? 'light' : 'dark',
     overrides: Object.fromEntries(
       Object.entries(overrides).flatMap(([key, value]) =>

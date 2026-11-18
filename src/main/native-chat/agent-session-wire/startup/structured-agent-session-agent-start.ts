@@ -41,6 +41,7 @@ import {
   refusedStructuredAgentSessionStart,
   structuredAgentSessionStartParams
 } from './structured-agent-session-start-eligibility'
+import { holdZotzStructuredAgentStart } from '../../../zotz/memory-governor/zotz-structured-agent-start-hold'
 
 /** Preserve attach refusal verdicts so callers distinguish recovery in progress from permanent loss. */
 export type StructuredAgentSessionResumeOutcome =
@@ -176,6 +177,14 @@ async function runStart(
     return eligible
   }
   const { params, startupOptions } = eligible
+  const zotzHeld = await holdZotzStructuredAgentStart(
+    context.deps.store.getRecord(sessionId),
+    lock.wait,
+    lock.signal
+  )
+  if (zotzHeld) {
+    return zotzHeld
+  }
   let attached: AgentSessionMutationResult<AgentSessionAttachResult>
   let acquisitionError: unknown
   let aborted = false

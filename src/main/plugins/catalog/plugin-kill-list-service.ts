@@ -7,6 +7,7 @@ import {
 } from '../../../shared/plugins/catalog/plugin-kill-list'
 import { PluginKillListStore } from './plugin-kill-list-store'
 import { fetchBoundedJson } from './plugin-bounded-json-fetch'
+import { isZotzPluginCatalogAllowed } from '../../zotz/zotz-plugin-catalog-guard'
 
 export const PLUGIN_KILL_LIST_URL = 'https://orca.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
@@ -72,6 +73,9 @@ export class PluginKillListService {
   }
 
   refresh(): Promise<PluginKillList> {
+    if (!isZotzPluginCatalogAllowed()) {
+      return Promise.resolve(this.currentList ?? emptyKillList())
+    }
     const refresh = this.refreshChain
       .catch(() => this.currentList ?? emptyKillList())
       .then(() => this.performRefresh())
@@ -103,7 +107,7 @@ export class PluginKillListService {
 
   /** Keeps a background refresh running while plugins are on; stops it when they are off. */
   syncPeriodicRefresh(enabled: boolean, intervalMs = PLUGIN_KILL_LIST_REFRESH_INTERVAL_MS): void {
-    if (!enabled) {
+    if (!enabled || !isZotzPluginCatalogAllowed()) {
       this.dispose()
       return
     }

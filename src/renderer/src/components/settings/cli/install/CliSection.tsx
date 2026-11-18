@@ -28,6 +28,7 @@ import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshnes
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
+import { ZOTZ_CLI_COMMAND } from '../../../../../../shared/zotz/zotz-app-identity'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -49,19 +50,15 @@ function getRevealLabel(platform: string, t: Translate = translate): string {
 
 function getInstallDescription(platform: string): string {
   if (platform === 'darwin') {
-    return 'Register `orca` in /usr/local/bin.'
+    return 'Register `zotz` in /usr/local/bin.'
   }
   if (platform === 'linux') {
-    return 'Register `orca-ide` in ~/.local/bin.'
+    return 'Register `zotz` in ~/.local/bin.'
   }
   if (platform === 'win32') {
-    return 'Register `orca` in your user PATH.'
+    return 'Register `zotz` in your user PATH.'
   }
   return 'CLI registration is not yet available on this platform.'
-}
-
-function getFallbackCommandName(platform: string): string {
-  return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
 export function CliSection({
@@ -110,7 +107,7 @@ export function CliSection({
   )
 
   const closeDialog = useCallback((): void => setDialogOpen(false), [])
-  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
+  const commandName = status?.commandName ?? ZOTZ_CLI_COMMAND
   const { busyAction, installFailure, clearInstallFailure, install, remove } =
     useCliRegistrationActions({
       commandName,

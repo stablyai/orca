@@ -180,11 +180,6 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '新功能',
     ja: '新機能'
   },
-  'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
-    ko: 'Discord',
-    zh: 'Discord',
-    ja: 'Discord'
-  },
   'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1': {
     ko: 'Orca 재시작',
     zh: '重启 Orca',

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createInterface, type Interface } from 'node:readline'
 import type { Readable, Writable } from 'node:stream'
+import { ZOTZ_APP_ID } from '../../shared/zotz/zotz-app-identity'
 
 /** Stdin EOF tells the wrapper that Orca died. */
 export type LogStreamChild = ChildProcessByStdio<Writable, Readable, Readable>
@@ -9,6 +10,8 @@ export type LogStreamChild = ChildProcessByStdio<Writable, Readable, Readable>
 
 // TCC can attribute terminal access to the detached helper independently of the main app.
 const ORCA_RESPONSIBLE_IDENTIFIERS = new Set([
+  ZOTZ_APP_ID,
+  `${ZOTZ_APP_ID}.helper`,
   'com.stablyai.orca',
   'com.stablyai.orca.helper',
   'com.stablyai.orca.dev',

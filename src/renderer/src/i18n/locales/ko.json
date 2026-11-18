@@ -86,7 +86,6 @@
       "windows": {
         "administratorApproval": "Windows에서 승인을 요청합니다. 평소 사용하는 계정을 사용하세요.",
         "administratorDialogScope": "이 변경은 앱 전체의 권한에 적용됩니다. SSH와 WSL은 각자의 권한을 유지합니다.",
-        "administratorDocumentation": "가이드 읽기",
         "administratorLabel": "관리자 모드",
         "administratorPromptCancellation": "Windows 프롬프트를 취소하면 Orca가 유지된 터미널과 함께 다시 열립니다. SSH와 WSL 권한은 각자의 호스트에서 계속 제어됩니다.",
         "administratorRestartConsequences": "먼저 작업을 저장하세요. 승인 후 현재 로컬 터미널 호스트의 터미널과 에이전트가 닫힙니다. 복원된 탭은 새 관리자 셸을 엽니다.",
@@ -4716,7 +4715,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "출력",
               "5d66fdd7c2": "입력",
               "7080aeaebb": "추론",
@@ -5664,10 +5662,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca 재시작",
           "29c56f30ee": "업데이트 확인",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "변경 내역",
-          "cdc87f897e": "문서",
           "e565171a7c": "키보드 단축키",
           "4cf5b868d7": "피드백 보내기",
           "a428c25998": "설정",
@@ -5675,8 +5671,7 @@
           "4e8f5710d3": "Orca를 다시 시작할 수 없습니다.",
           "5161eef55d": "Orca를 다시 시작하는 중…",
           "f8a2c91d4e": "마일스톤",
-          "b7e4d2a19c": "온보딩",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "온보딩"
         },
         "SidebarToolbar": {
           "87d0064026": "워크스페이스 보드가 하단 바로 옮겨졌습니다",

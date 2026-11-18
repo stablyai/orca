@@ -58,6 +58,7 @@ const RUNNING_PROGRESS: ZotzNodeSetupProgress = {
 function stubServerSetup(running = false): void {
   window.api.zotzNode = {
     autoShowFirstRun: false,
+    automatedLaunch: false,
     onSetupProgress: (callback) => {
       if (running) {
         setTimeout(() => callback(RUNNING_PROGRESS), 0)

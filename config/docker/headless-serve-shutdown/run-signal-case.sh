@@ -88,7 +88,7 @@ fi
 
 registered_cli_verified=false
 if [[ "$entrypoint_kind" == appimage ]]; then
-  registered_cli="$HOME/.local/bin/orca-ide"
+  registered_cli="$HOME/.local/bin/zotz"
   expected_target="$XDG_CACHE_HOME/orca/appimage/launcher/orca-ide"
   actual_target=$(readlink "$registered_cli" 2>/dev/null || true)
   if [[ "$actual_target" != "$expected_target" ]]; then

@@ -11,5 +11,6 @@ export const zotzAgentQueueApi = {
     return () => ipcRenderer.removeListener('zotzAgentQueue:changed', listener)
   },
   forceStart: (id: string) => ipcRenderer.invoke('zotzAgentQueue:forceStart', id),
-  cancel: (id: string) => ipcRenderer.invoke('zotzAgentQueue:cancel', id)
+  cancel: (id: string) => ipcRenderer.invoke('zotzAgentQueue:cancel', id),
+  dismissCanceled: (id: string) => ipcRenderer.invoke('zotzAgentQueue:dismissCanceled', id)
 } satisfies PreloadApi['zotzAgentQueue']

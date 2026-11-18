@@ -3740,9 +3740,6 @@
   "auto.components.stats.UsageOverviewPane.e06d1baf5c": {
     "ko": "사용량 개요 새로고침"
   },
-  "auto.components.stats.share.card.utils.19f4b4dc75": {
-    "ko": "github.com/stablyai/orca"
-  },
   "auto.components.stats.share.card.utils.7080aeaebb": {
     "ko": "추론"
   },

@@ -599,7 +599,6 @@
         "retainedTerminalPermissions": "Falls neue Terminals weiterhin die vorherigen Berechtigungen verwenden, „Sitzungen verwalten“ öffnen und „Daemon neu starten“ auswählen. Dadurch werden lokale Terminals und ihre laufenden Befehle beendet.",
         "administratorRestartFailed": "Orca konnte nicht neu gestartet werden. Erneut versuchen oder der manuellen Anleitung folgen.",
         "manualAdministratorHelp": "Manuelle Anleitung",
-        "administratorDocumentation": "Anleitung lesen",
         "cancelAdministratorRestart": "Abbrechen",
         "closeAdministratorHelp": "Schließen",
         "restartingAdministrator": "Wird neu gestartet…",
@@ -5323,7 +5322,6 @@
         "share": {
           "card": {
             "utils": {
-              "19f4b4dc75": "github.com/stablyai/orca",
               "d864fc5f98": "Ausgabe",
               "5d66fdd7c2": "Eingabe",
               "7080aeaebb": "Denkprozess",
@@ -6345,10 +6343,8 @@
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca neu starten",
           "29c56f30ee": "Nach Updates suchen",
-          "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Änderungsprotokoll",
-          "cdc87f897e": "Dokumentation",
           "e565171a7c": "Tastenkürzel",
           "4cf5b868d7": "Feedback senden",
           "a428c25998": "Einstellungen",
@@ -6356,8 +6352,7 @@
           "4e8f5710d3": "Orca konnte nicht neu gestartet werden.",
           "5161eef55d": "Orca wird neu gestartet…",
           "f8a2c91d4e": "Meilensteine",
-          "b7e4d2a19c": "Einstieg",
-          "c4f8e1b72a": "X"
+          "b7e4d2a19c": "Einstieg"
         },
         "SidebarToolbar": {
           "87d0064026": "Arbeitsbereichsübersicht in die untere Leiste verschoben",

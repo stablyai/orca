@@ -6,6 +6,7 @@ import {
 } from '../../../shared/plugins/catalog/plugin-install-stats'
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
 import { fetchBoundedJson } from './plugin-bounded-json-fetch'
+import { isZotzPluginCatalogAllowed } from '../../zotz/zotz-plugin-catalog-guard'
 
 export const PLUGIN_INSTALL_STATS_URL = 'https://orca.dev/plugins/stats.json'
 const PLUGIN_INSTALL_STATS_MAX_BYTES = 2 * 1024 * 1024
@@ -80,7 +81,12 @@ export class PluginInstallStatsService {
   }
 
   private refreshIfStale(): void {
-    if (this.inFlight || this.now() < this.nextFetchAt || !this.isFetchAllowed()) {
+    if (
+      this.inFlight ||
+      this.now() < this.nextFetchAt ||
+      !this.isFetchAllowed() ||
+      !isZotzPluginCatalogAllowed()
+    ) {
       return
     }
     this.inFlight = this.performRefresh()
