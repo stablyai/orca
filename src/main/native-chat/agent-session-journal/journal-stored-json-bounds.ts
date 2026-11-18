@@ -8,8 +8,9 @@ const SHORTENED_HEAD_CHARS = 16 * 1024
  * holds a larger value; one stored item can reach hundreds of MB. An oversized value comes back
  * NULL with its size, or with `shortenColumn` (the plain column an oversized value comes from), as
  * the item with its tool output or patch head cut, keeping the original size and digest the way
- * running output is kept. `bytes` should measure plain columns: SQLite sizes those without reading
- * their text.
+ * running output is kept. Shortening starts at half the limit: a reply serializes any character
+ * past U+00FF as two bytes, so only a value under half always fits it. `bytes` should measure plain
+ * columns: SQLite sizes those without reading their text.
  */
 export function boundedStoredJsonSql(
   expression: string,
@@ -17,8 +18,12 @@ export function boundedStoredJsonSql(
   options: { bytes?: string; shortenColumn?: string } = {}
 ): string {
   const bytes = options.bytes ?? `octet_length(${expression})`
-  const oversized = options.shortenColumn ? shortenedJsonSql(options.shortenColumn) : 'NULL'
-  return `CASE WHEN ${bytes}<=${LIMIT} THEN ${expression} ELSE ${oversized} END AS ${as},
+  const value = options.shortenColumn
+    ? `CASE WHEN ${bytes}<=${LIMIT / 2} THEN ${expression}
+      ELSE COALESCE(${shortenedJsonSql(options.shortenColumn)},
+        CASE WHEN ${bytes}<=${LIMIT} THEN ${expression} END) END`
+    : `CASE WHEN ${bytes}<=${LIMIT} THEN ${expression} END`
+  return `${value} AS ${as},
     ${bytes} AS ${as}_bytes`
 }
 
@@ -31,7 +36,7 @@ function shortenedJsonSql(json: string): string {
     THEN json_set(${json},'${payload}.head',
       substr(json_extract(${json},'${payload}.head'),1,${SHORTENED_HEAD_CHARS}),
       '${payload}.truncated',json('true'))`
-  return `(SELECT CASE WHEN octet_length(shortened)<=${LIMIT} THEN shortened END
+  return `(SELECT CASE WHEN octet_length(shortened)<=${LIMIT / 2} THEN shortened END
     FROM (SELECT CASE ${cut('$.body.output')} ${cut('$.body.patch')} END AS shortened LIMIT 1))`
 }
 
