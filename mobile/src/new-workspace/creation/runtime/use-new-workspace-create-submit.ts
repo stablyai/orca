@@ -216,7 +216,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         }
         setupApproval = resolved.approved
       }
-      if (!(await saveStartupPolicy(client, selectedRepo, args.setupWait, args.setError))) {
+      if (!(await saveStartupPolicy(client, setupRepo, args.setupWait, args.setError))) {
         return
       }
       const createdWithAgentId =
