@@ -74,6 +74,7 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
   } else if (event.type === 'dialog') {
     const dialogType = event.dialogType ?? 'alert'
     const message = event.message ?? 'Browser dialog'
+    const nextOccurrence = (lastDialogOccurrence += 1)
     setDialog((current) => ({
       dialogType,
       message,
@@ -83,7 +84,7 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
       occurrence:
         current?.dialogType === dialogType && current.message === message
           ? current.occurrence
-          : (lastDialogOccurrence += 1)
+          : nextOccurrence
     }))
   } else if (event.type === 'dialogClosed') {
     setDialog(null)

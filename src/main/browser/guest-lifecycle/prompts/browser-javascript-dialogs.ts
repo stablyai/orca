@@ -1,5 +1,4 @@
 import type {
-  BrowserJavaScriptDialog,
   BrowserJavaScriptDialogAnswer,
   BrowserJavaScriptDialogPrompt
 } from '../../../../shared/browser/prompts/browser-javascript-dialog'
@@ -26,7 +25,7 @@ type OpenDialog = {
 }
 
 const openDialogs = new Map<number, OpenDialog>()
-const openedListeners = new Map<number, Set<(dialog: BrowserJavaScriptDialog) => void>>()
+const openedListeners = new Map<number, Set<(dialog: BrowserJavaScriptDialogPrompt) => void>>()
 
 export function getBrowserJavaScriptDialog(guestId: number): BrowserJavaScriptDialogPrompt | null {
   return openDialogs.get(guestId)?.dialog ?? null
@@ -49,7 +48,7 @@ export function answerBrowserJavaScriptDialog(
 
 export function onBrowserJavaScriptDialogOpened(
   guestId: number,
-  listener: (dialog: BrowserJavaScriptDialog) => void
+  listener: (dialog: BrowserJavaScriptDialogPrompt) => void
 ): () => void {
   let listeners = openedListeners.get(guestId)
   if (!listeners) {

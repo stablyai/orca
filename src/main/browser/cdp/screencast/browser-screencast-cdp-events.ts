@@ -5,12 +5,24 @@ import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { enrichFrameMetadata, readFrameMetadata } from './browser-screencast-frame-metadata'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import type {
+  BrowserScreencastEvent,
   BrowserScreencastOptions,
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
 import { isLiveFrameCompatibleWithViewport } from './browser-screencast-viewport-fit'
 import type { BrowserJavaScriptDialogPrompt } from '../../../../shared/browser/prompts/browser-javascript-dialog'
-import { browserPagePromptOrigin } from '../../guest-lifecycle/prompts/browser-page-prompts'
+
+export function browserScreencastDialogEvent(
+  dialog: BrowserJavaScriptDialogPrompt
+): BrowserScreencastEvent {
+  return {
+    type: 'dialog',
+    dialogType: dialog.type,
+    message: dialog.message,
+    defaultPromptText: dialog.defaultPromptText,
+    origin: dialog.origin
+  }
+}
 
 type BrowserScreencastMessageHandlerDeps = {
   dbg: WebContents['debugger']
@@ -43,36 +55,10 @@ export function createBrowserScreencastMessageHandler(
     if (isStopping() && method !== 'Page.screencastFrame') {
       return
     }
-    if (method === 'Page.javascriptDialogOpening') {
-      const payload =
-        params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
-      const dialogType = typeof payload.type === 'string' ? payload.type : 'alert'
-      options.onEvent?.({
-        type: 'dialog',
-        dialogType,
-        message: typeof payload.message === 'string' ? payload.message : 'Browser dialog',
-        defaultPromptText:
-          dialogType === 'prompt' && typeof payload.defaultPrompt === 'string'
-            ? payload.defaultPrompt
-            : '',
-        // CDP's url is the asking frame's, so viewers name the same origin the desktop card does.
-        origin: browserPagePromptOrigin(typeof payload.url === 'string' ? payload.url : null)
-      })
-      return
-    }
+    // Openings come from Orca's dialog owner (see startBrowserScreencast), which knows the asking frame.
     if (method === 'Page.javascriptDialogClosed') {
       const open = openDialog()
-      options.onEvent?.(
-        open
-          ? {
-              type: 'dialog',
-              dialogType: open.type,
-              message: open.message,
-              defaultPromptText: open.defaultPromptText,
-              origin: open.origin
-            }
-          : { type: 'dialogClosed' }
-      )
+      options.onEvent?.(open ? browserScreencastDialogEvent(open) : { type: 'dialogClosed' })
       return
     }
     if (method === 'Page.frameNavigated') {

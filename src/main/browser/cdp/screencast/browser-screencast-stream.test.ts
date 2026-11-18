@@ -142,20 +142,6 @@ describe('startBrowserScreencast', () => {
       onFrame: vi.fn(),
       onEvent
     })
-    webContents.debugger.emit('message', {}, 'Page.javascriptDialogOpening', {
-      type: 'prompt',
-      message: 'Your name?',
-      defaultPrompt: 'Ada',
-      url: 'https://frame.example.com/embed'
-    })
-    expect(onEvent).toHaveBeenLastCalledWith({
-      type: 'dialog',
-      dialogType: 'prompt',
-      message: 'Your name?',
-      defaultPromptText: 'Ada',
-      origin: 'https://frame.example.com'
-    })
-
     const answer = vi.fn()
     webContents.emit(
       '-run-dialog',
@@ -167,17 +153,30 @@ describe('startBrowserScreencast', () => {
       },
       answer
     )
-
-    // The turned-away dialog's close names no dialog.
-    webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
-
-    expect(onEvent).toHaveBeenLastCalledWith({
+    const held = {
       type: 'dialog',
       dialogType: 'prompt',
       message: 'Your name?',
       defaultPromptText: 'Ada',
       origin: 'https://frame.example.com'
-    })
+    }
+    expect(onEvent).toHaveBeenLastCalledWith(held)
+
+    // A second frame's dialog is turned away without replacing the held one on viewers' screens.
+    const turnedAway = vi.fn()
+    const eventsBefore = onEvent.mock.calls.length
+    webContents.emit(
+      '-run-dialog',
+      { dialogType: 'alert', messageText: 'Ad', defaultPromptText: '' },
+      turnedAway
+    )
+    expect(turnedAway).toHaveBeenCalledExactlyOnceWith(false, '')
+    expect(onEvent).toHaveBeenCalledTimes(eventsBefore)
+
+    // The turned-away dialog's close names no dialog.
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
+
+    expect(onEvent).toHaveBeenLastCalledWith(held)
     // The last viewer leaving dismisses it, so a later session isn't blocked behind it.
     session.stop()
     await session.done
