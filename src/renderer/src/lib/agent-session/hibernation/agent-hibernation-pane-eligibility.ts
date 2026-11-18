@@ -1,6 +1,4 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
-import { isResumableTuiAgent } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
@@ -8,8 +6,8 @@ import type {
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
+import { completedAgentTurnAllowsStop } from '../../../../../shared/agent-session/lifecycle/stopping/completed-agent-turn-stop'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/resume/live-resume-anchor-record'
-import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
@@ -52,12 +50,6 @@ function getPaneLivePtyId(
   return ptyId ? { leafId: parsed.leafId, ptyId } : null
 }
 
-// Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
-const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
-  orchestration
-    ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
-    : false
-
 export function getEligiblePane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
@@ -92,13 +84,7 @@ export function getEligiblePane(args: {
     sleepingRecord,
     tab.worktreeId
   )
-  if (
-    entry.state !== 'done' ||
-    agentTurnEndedUncleanly(entry) ||
-    Boolean(entry.subagents?.length) ||
-    hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLiveResumeAnchor)
-  ) {
+  if (!completedAgentTurnAllowsStop(entry) || (sleepingRecord && !hasOnlyLiveResumeAnchor)) {
     return null
   }
   if (
@@ -107,10 +93,7 @@ export function getEligiblePane(args: {
   ) {
     return null
   }
-  if (!entry.agentType || !isResumableTuiAgent(entry.agentType) || !entry.providerSession) {
-    return null
-  }
-  if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
+  if (!entry.agentType || !entry.providerSession) {
     return null
   }
   // Anchor on first done, not repaint/replay updatedAt; floor by last foreground visit, fresh PTY binding and real completion boundary.

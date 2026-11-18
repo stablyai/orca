@@ -225,6 +225,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return holding ? (draft ? 'draft' : 'restoring') : null
   }
 
+  /** Whether main's screen of this PTY shows typed, unsent composer text; false when unread. */
+  protected ptyShowsComposerDraft(ptyId: string): boolean {
+    const state = this.readWholeScreenModel(ptyId)
+    return !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+  }
+
   // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
   private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)

@@ -49,6 +49,8 @@ let daemonDisconnectDone = false
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
+// Each idle agent's history checkpoint and stop; one that misses it keeps running, as before.
+const IDLE_AGENT_QUIT_STOP_DEADLINE_MS = 4_000
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
@@ -202,9 +204,10 @@ function installWillQuitHandler(): void {
       const sshShutdown = beginSshShutdown()
       killAllPty()
       const watcherShutdown = shutdownWatchersOnce()
-      const storeFlush = (async () => {
+      // True once the final save is durable and frozen.
+      const storeFlush = (async (): Promise<boolean> => {
         if (!finalStore) {
-          return
+          return false
         }
         try {
           await finalStore.flushFinalOrThrowAsync()
@@ -213,8 +216,10 @@ function installWillQuitHandler(): void {
             state.profileStateAdmission?.release()
             state.profileStateAdmission = undefined
           }
+          return true
         } catch (error) {
           console.error('[persistence] Failed to finalize profile state:', error)
+          return false
         }
       })()
       return { sshShutdown, watcherShutdown, storeFlush }
@@ -255,10 +260,19 @@ function installWillQuitHandler(): void {
       structuredAgentSessionShutdown,
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
-    // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
-    const daemonTeardown = removalQuiescence.then(() =>
-      isDevParentShutdownRequested() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
-    )
+    // Normal quits keep the detached daemon for mid-turn agents and shells; dev-parent death leaves its temporary profile ownerless.
+    const daemonTeardown = removalQuiescence.then(async () => {
+      if (isDevParentShutdownRequested()) {
+        return daemon.shutdownDaemon()
+      }
+      // Stop idle agents only after their resume records are durable, so next launch resumes them as after a reboot.
+      if (!updateQuitInProgress && !state.isServeMode && (await storeFlush)) {
+        await state.runtime
+          ?.stopIdleAgentTerminalsForQuit(Date.now() + IDLE_AGENT_QUIT_STOP_DEADLINE_MS)
+          .catch((error) => console.warn('[quit] Failed to stop idle agents:', error))
+      }
+      return daemon.disconnectDaemon()
+    })
     // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
     const teardowns = [

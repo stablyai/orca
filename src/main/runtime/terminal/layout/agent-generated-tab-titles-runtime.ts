@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
+import { OrcaRuntimeWithQuitIdleAgentStops } from '../stop/quit-idle-agent-stops'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -9,7 +9,7 @@ import {
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './runtime-layout-apply'
 
-export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithWorktreeSleepResumeRecording {
+export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntimeWithQuitIdleAgentStops {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
 
   private readonly agentGeneratedTabTitles = new AgentGeneratedTabTitles({
