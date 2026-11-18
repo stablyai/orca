@@ -83,8 +83,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     options?: { keepAwake?: boolean }
   ): void {
     super.ensureOrchestrationFederationRelay(runId, options)
+    this.ensureOrchestrationPeerMailRelay()
+  }
+
+  ensureOrchestrationPeerMailRelay(environmentId?: string): void {
     this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
-    this.peerMailRelay.ensure()
+    this.peerMailRelay.ensure(environmentId)
   }
 
   /** What the pull loop last heard from a paired server, without asking it. */

@@ -104,8 +104,8 @@ export async function sendPeerMail(args: {
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, to }, server: server.name },
-    () => runtime.ensureOrchestrationFederationRelay(),
-    { kind: 'federation' }
+    () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
+    { kind: 'federation', environmentId: server.environmentId }
   )
 }
 

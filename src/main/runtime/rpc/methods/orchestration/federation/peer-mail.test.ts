@@ -17,6 +17,10 @@ import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
+import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
+import { STATUS_METHODS } from '../../host-management/status'
+import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 
 // Retries run at once so a recovering pull loop is observable without waiting out its backoff.
 vi.mock(
@@ -42,6 +46,47 @@ describe('agent mail between paired Orca servers', () => {
   let bClientKind: 'runtime' | 'mobile'
   let aCredential: string
   let hasEnvironment: () => boolean
+  const cliServers = new Map<Side, OrcaRuntimeRpcServer>()
+
+  async function cli(side: Side, ...args: string[]) {
+    for (const name of [
+      'AGENT_SESSION_ID',
+      'TERMINAL_HANDLE',
+      'PANE_KEY',
+      'PAIRING_CODE',
+      'REMOTE_PAIRING',
+      'ENVIRONMENT',
+      'AGENT_LAUNCH_TOKEN'
+    ]) {
+      vi.stubEnv(`ORCA_${name}`, '')
+    }
+    for (const name of ['ID', 'INCARNATION', 'PROFILE_PATH']) {
+      vi.stubEnv(`ORCA_RUNTIME_SOURCE_${name}`, '')
+    }
+    const userDataPath = join(dir, side === a ? 'cli-a' : 'cli-b')
+    vi.stubEnv('ORCA_USER_DATA_PATH', userDataPath)
+    if (!cliServers.has(side)) {
+      const server = new OrcaRuntimeRpcServer({
+        runtime: side.runtime,
+        userDataPath,
+        methods: [...STATUS_METHODS, ...TERMINAL_QUERY_METHODS, ...ORCHESTRATION_METHODS]
+      })
+      await server.start()
+      cliServers.set(side, server)
+    }
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {})
+    process.exitCode = 0
+    try {
+      const cliPath = '../../../../../../cli/index'
+      const { main } = await import(cliPath)
+      await main(['orchestration', ...args, '--json', '--full'])
+      const last: unknown = logs.mock.lastCall?.[0]
+      return typeof last === 'string' ? JSON.parse(last) : undefined
+    } finally {
+      logs.mockRestore()
+      process.exitCode = 0
+    }
+  }
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -109,12 +154,17 @@ describe('agent mail between paired Orca servers', () => {
     a = openSide('a', "Jinwoo's Mac", transport)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    for (const server of cliServers.values()) {
+      await server.stop()
+    }
+    cliServers.clear()
     a.runtime.stopOrchestrationFederationRelay()
     b.runtime.stopOrchestrationFederationRelay()
     a.db.close()
     b.db.close()
     rmSync(dir, { recursive: true, force: true })
+    vi.unstubAllEnvs()
   })
 
   let requestCount = 0
@@ -150,15 +200,23 @@ describe('agent mail between paired Orca servers', () => {
   }
 
   it('carries a terminal agent mail to the paired server and its flagless reply back', async () => {
-    const sent = await mutation(a, 'orchestration.send', {
-      from: 'term_a',
-      on: 'devB',
-      to: 'term_b',
-      subject: 'Check the build',
-      type: 'question',
-      body: 'Is main green?'
-    })
-    expect(sent).toMatchObject({ ok: true, result: { server: 'devB', message: { to: 'term_b' } } })
+    const sent = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--on',
+      'devB',
+      '--to',
+      'term_b',
+      '--subject',
+      'Check the build',
+      '--type',
+      'question',
+      '--body',
+      'Is main green?'
+    )
+    expect(sent).toMatchObject({ result: { server: 'devB', message: { to: 'term_b' } } })
 
     const [onB] = mailFor(b, 'term_b')
     expect(onB).toMatchObject({
@@ -167,13 +225,8 @@ describe('agent mail between paired Orca servers', () => {
       type: 'question'
     })
 
-    const replied = await mutation(b, 'orchestration.reply', {
-      id: onB!.id,
-      body: 'Green.',
-      from: 'term_b'
-    })
+    const replied = await cli(b, 'reply', '--id', onB!.id, '--body', 'Green.', '--from', 'term_b')
     expect(replied).toMatchObject({
-      ok: true,
       result: { message: { subject: 'Re: Check the build' } }
     })
 
@@ -292,20 +345,80 @@ describe('agent mail between paired Orca servers', () => {
     expect(mailFor(b, 'term_b')).toMatchObject([{ subject: 'Next step', type }])
   })
 
+  it.each([100, 1000])('keeps unrelated %i Dispatches and servers asleep for peer mail', async (n) => {
+    for (let i = 0; i < n; i += 1) {
+      const task = a.db.createTask({ runId: ORCHESTRATION_LEGACY_RUN_ID, spec: 'Unrelated work' })
+      a.db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {},
+        federation: {
+          environmentId: `unrelated_${i}`,
+          environmentName: `Unrelated ${i}`,
+          peerFingerprint: `fingerprint_${i}`,
+          protocolVersion: 3
+        }
+      })
+      a.db.openHomePeerMailConversation({
+        environmentId: `unrelated_${i}`,
+        peerFingerprint: `fingerprint_${i}`,
+        localParty: 'term_a',
+        localPaneKey: A_PANE
+      })
+    }
+    const dispatchScan = vi.spyOn(a.db, 'listActiveFederatedDispatches')
+    const serverScan = vi.spyOn(a.db, 'listHomePeerMailEnvironments')
+    const request = {
+      id: 'send_once',
+      authToken: 'local',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'peer_send_once',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: 'Only this server',
+        type: 'question'
+      }
+    }
+    expect(await a.dispatcher.dispatch(request)).toMatchObject({ ok: true })
+    expect(await a.dispatcher.dispatch(request)).toMatchObject({ ok: true })
+    expect(mailFor(b, 'term_b')).toHaveLength(1)
+    const [onB] = mailFor(b, 'term_b')
+    expect(
+      await mutation(b, 'orchestration.reply', { id: onB!.id, body: 'Here.', from: 'term_b' })
+    ).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
+    const [back] = mailFor(a, 'term_a')
+    expect(
+      await mutation(a, 'orchestration.reply', { id: back!.id, body: 'Thanks.', from: 'term_a' })
+    ).toMatchObject({ ok: true })
+    expect(dispatchScan).not.toHaveBeenCalled()
+    expect(serverScan).not.toHaveBeenCalled()
+  })
+
   it('refuses new types on an old enum peer while keeping its status mail working', async () => {
     bCapabilities = (capabilities) =>
       capabilities.filter(
         (capability) => capability !== ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
       )
-    const sent = await mutation(a, 'orchestration.send', {
-      from: 'term_a',
-      on: 'devB',
-      to: 'term_b',
-      subject: 'Question',
-      type: 'question'
-    })
+    const sent = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--on',
+      'devB',
+      '--to',
+      'term_b',
+      '--subject',
+      'Question',
+      '--type',
+      'question'
+    )
     expect(sent).toMatchObject({
-      ok: false,
       error: { code: 'server_mail_unsupported', data: { effectsApplied: false } }
     })
     expect(b.db.getInbox(10)).toEqual([])
