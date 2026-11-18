@@ -68,24 +68,32 @@ export class DaemonPtyTargetInspection {
       group.push(target.id)
       idsByAdapter.set(target.adapter, group)
     }
-    const rows = (
-      await Promise.all(
-        [...idsByAdapter].map(([adapter, ptyIds]) => adapter.listProcesses({ ...opts, ptyIds }))
-      )
-    ).flat()
-    for (const target of targets) {
-      if (
-        this.exactOwner(target.id) !== target.adapter ||
-        this.incarnationFor(target.id) !== target.incarnation
-      ) {
-        throw new Error('terminal_handle_stale')
-      }
-    }
-    // A missing or replaced row is absent here; the caller reads that as unknown, never as exit.
+    const listed = await Promise.allSettled(
+      [...idsByAdapter].map(([adapter, ptyIds]) => adapter.listProcesses({ ...opts, ptyIds }))
+    )
+    const rows = listedOwnerRows(listed)
+    // A missing, re-routed or replaced target is absent here; the caller reads that as unknown, never as exit.
     const targetsById = new Map(targets.map((target) => [target.id, target]))
     return rows.filter((row) => {
       const target = targetsById.get(row.id)
-      return target && (!target.incarnation || row.incarnationId === target.incarnation)
+      return (
+        target &&
+        this.exactOwner(target.id) === target.adapter &&
+        this.incarnationFor(target.id) === target.incarnation &&
+        (!target.incarnation || row.incarnationId === target.incarnation)
+      )
     })
   }
+}
+
+/** Rows from every owner that answered: one failing owner costs only its own targets their rows,
+ *  and the read fails only when no owner answered. */
+export function listedOwnerRows<Row>(
+  listed: readonly PromiseSettledResult<readonly Row[]>[]
+): Row[] {
+  const rejected = listed.find((result) => result.status === 'rejected')
+  if (rejected && listed.every((result) => result.status === 'rejected')) {
+    throw rejected.reason
+  }
+  return listed.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
 }
