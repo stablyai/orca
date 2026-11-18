@@ -81,15 +81,23 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
         ]
       })
     )
-    printResult({ ...result, result: { chats } }, json, (value) =>
-      value.chats.length === 0
-        ? 'No chat sessions.'
-        : value.chats
-            .map(
-              (chat) =>
-                `${chat.sessionId}  ${chat.agentType ?? 'agent'}  ${chat.state}  ${chat.conversationName ?? ''}  ${chat.worktree.path}`
-            )
-            .join('\n')
+    printResult(
+      { ...result, result: { chats, truncated: result.result.truncated } },
+      json,
+      (value) => {
+        const body =
+          value.chats.length === 0
+            ? 'No chat sessions.'
+            : value.chats
+                .map(
+                  (chat) =>
+                    `${chat.sessionId}  ${chat.agentType ?? 'agent'}  ${chat.state}  ${chat.conversationName ?? ''}  ${chat.worktree.path}`
+                )
+                .join('\n')
+        return result.result.truncated
+          ? `${body}\n(Partial list: the host returned ${result.result.worktrees.length} of ${result.result.totalCount} worktrees; pass --limit to widen the page.)`
+          : body
+      }
     )
   },
   'chat read': async ({ flags, client, json }) => {

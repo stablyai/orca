@@ -8,7 +8,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca chat list [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit'],
     notes: [
-      'Lists structured chat sessions the host reports through worktree.ps, across every workspace. Terminal agents are not chats and do not appear.',
+      'Lists structured chat sessions the host reports through worktree.ps, across every workspace. Terminal agents are not chats and do not appear. When the host pages its listing, the command warns that the result is partial; --limit widens the page.',
       'Each row carries the sessionId `orca chat read` and `orca chat rename` take, plus the paneKey, agent state, conversation name, and owning worktree.',
       'To write to a chat rather than read it, use `orca orchestration send --to orca_session_id:<sessionId>`; chat panes have no terminal handle.'
     ],
