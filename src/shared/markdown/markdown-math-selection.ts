@@ -19,6 +19,7 @@ const selectionBlockTags = new Set([
   'UL'
 ])
 const selectionParagraphTags = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P'])
+const collapsibleWhitespace = /^[\t\n\r ]*$/
 
 class SelectionTextWriter {
   private readonly chunks: string[] = []
@@ -47,7 +48,9 @@ class SelectionTextWriter {
   }
 
   separate(lines: number): void {
-    this.pendingLines = Math.max(this.pendingLines, lines - this.trailingLines)
+    if (this.hasContent) {
+      this.pendingLines = Math.max(this.pendingLines, lines - this.trailingLines)
+    }
   }
 
   finish(): string {
@@ -56,12 +59,15 @@ class SelectionTextWriter {
 }
 
 function isFormattingWhitespace(node: Text): boolean {
-  if (node.data.trim()) {
+  if (!collapsibleWhitespace.test(node.data)) {
     return false
   }
   const nextBoundary = (direction: 'previousSibling' | 'nextSibling'): boolean => {
     for (let sibling = node[direction]; sibling; sibling = sibling[direction]) {
-      if (sibling.nodeType === Node.TEXT_NODE && !(sibling.textContent ?? '').trim()) {
+      if (
+        sibling.nodeType === Node.TEXT_NODE &&
+        collapsibleWhitespace.test(sibling.textContent ?? '')
+      ) {
         continue
       }
       return sibling.nodeType === Node.ELEMENT_NODE && selectionBlockTags.has(sibling.nodeName)
@@ -71,15 +77,63 @@ function isFormattingWhitespace(node: Text): boolean {
   return nextBoundary('previousSibling') || nextBoundary('nextSibling')
 }
 
-function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListItem = false): void {
+function textEndsAtBlockBoundary(node: Text): boolean {
+  for (let current: Node = node; current.parentNode; current = current.parentNode) {
+    for (let sibling = current.nextSibling; sibling; sibling = sibling.nextSibling) {
+      if (
+        sibling.nodeType === Node.COMMENT_NODE ||
+        (sibling.nodeType === Node.TEXT_NODE &&
+          collapsibleWhitespace.test(sibling.textContent ?? ''))
+      ) {
+        continue
+      }
+      return (
+        sibling.nodeType === Node.ELEMENT_NODE &&
+        (selectionBlockTags.has(sibling.nodeName) || sibling.nodeName === 'BR')
+      )
+    }
+    const parent = current.parentNode
+    if (
+      parent.nodeType === Node.DOCUMENT_FRAGMENT_NODE ||
+      (parent instanceof Element &&
+        (selectionBlockTags.has(parent.tagName) ||
+          parent.tagName === 'TD' ||
+          parent.tagName === 'TH'))
+    ) {
+      return true
+    }
+  }
+  return true
+}
+
+function writeSelectionNode(
+  node: Node,
+  writer: SelectionTextWriter,
+  insideListItem = false,
+  selectedTrailingText?: Text
+): void {
   if (node instanceof Text) {
     if (!isFormattingWhitespace(node)) {
-      writer.append(node.data)
+      let end = node.data.length
+      if (
+        node !== selectedTrailingText &&
+        end &&
+        (node.data[end - 1] === ' ' || node.data[end - 1] === '\t')
+      ) {
+        if (textEndsAtBlockBoundary(node)) {
+          while (end && (node.data[end - 1] === ' ' || node.data[end - 1] === '\t')) {
+            end -= 1
+          }
+        }
+      }
+      writer.append(node.data.slice(0, end))
     }
     return
   }
   if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-    node.childNodes.forEach((child) => writeSelectionNode(child, writer, insideListItem))
+    node.childNodes.forEach((child) =>
+      writeSelectionNode(child, writer, insideListItem, selectedTrailingText)
+    )
     return
   }
   if (!(node instanceof Element)) {
@@ -105,7 +159,9 @@ function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListI
     )
     cells.forEach((cell, index) => {
       const cellWriter = new SelectionTextWriter()
-      cell.childNodes.forEach((child) => writeSelectionNode(child, cellWriter))
+      cell.childNodes.forEach((child) =>
+        writeSelectionNode(child, cellWriter, false, selectedTrailingText)
+      )
       writer.append(cellWriter.finish())
       if (index < cells.length - 1) {
         writer.append('\t')
@@ -118,19 +174,22 @@ function writeSelectionNode(node: Node, writer: SelectionTextWriter, insideListI
   const isLeafDiv =
     element.tagName === 'DIV' &&
     !Array.from(element.children).some((child) => selectionBlockTags.has(child.tagName))
+  const isLineBlock = element.tagName === 'BLOCKQUOTE' || element.tagName === 'LI' || isLeafDiv
   const paragraphLines = insideListItem ? 1 : 2
   if (selectionParagraphTags.has(element.tagName) && writer.hasContent) {
     writer.separate(1)
-  } else if ((element.tagName === 'LI' || isLeafDiv) && writer.hasContent) {
+  } else if (isLineBlock && writer.hasContent) {
     writer.separate(1)
   } else if ((element.tagName === 'UL' || element.tagName === 'OL') && insideListItem) {
     writer.separate(1)
   }
   const childInsideListItem = insideListItem || element.tagName === 'LI'
-  element.childNodes.forEach((child) => writeSelectionNode(child, writer, childInsideListItem))
+  element.childNodes.forEach((child) =>
+    writeSelectionNode(child, writer, childInsideListItem, selectedTrailingText)
+  )
   if (selectionParagraphTags.has(element.tagName)) {
     writer.separate(paragraphLines)
-  } else if (element.tagName === 'LI' || isLeafDiv) {
+  } else if (isLineBlock) {
     writer.separate(1)
   }
 }
@@ -165,6 +224,9 @@ export function markdownMathSelectionText(selection: Selection, root: Element): 
   if (last?.contains(range.endContainer)) {
     range.setEndAfter(last)
   }
+  const preserveTrailingRangeSpace =
+    range.endContainer instanceof Text &&
+    (range.endOffset < range.endContainer.length || !textEndsAtBlockBoundary(range.endContainer))
   const fragment = range.cloneContents()
   fragment.querySelectorAll<HTMLElement>('[data-math-source]').forEach((element) => {
     element.replaceWith(element.dataset.mathSource ?? '')
@@ -174,8 +236,23 @@ export function markdownMathSelectionText(selection: Selection, root: Element): 
       '.select-none, .sr-only, [aria-hidden="true"], button, input, script, style, svg'
     )
     .forEach((element) => element.remove())
+  let selectedTrailingText: Text | undefined
+  if (preserveTrailingRangeSpace) {
+    const walker = root.ownerDocument.createTreeWalker(fragment, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node instanceof Text) {
+        selectedTrailingText = node
+      }
+    }
+  }
+  let selectionRoot: Node = fragment
+  if (container.tagName === 'TR') {
+    const row = root.ownerDocument.createElement('tr')
+    row.append(fragment)
+    selectionRoot = row
+  }
   const writer = new SelectionTextWriter()
-  writeSelectionNode(fragment, writer)
+  writeSelectionNode(selectionRoot, writer, false, selectedTrailingText)
   return writer.finish()
 }
 
