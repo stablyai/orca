@@ -173,18 +173,19 @@ export function createCodexAppServerRecordDispatcher(input: {
       input.handlers.onUnhandledFrame?.('frame:oversized-request', payload)
       return
     }
-    if (classification.kind === 'notification') {
-      input.handlers.onUnhandledFrame?.('frame:oversized-notification', payload)
-      return
-    }
-    input.handlers.onUnhandledFrame?.('frame:oversized-unclassified', payload)
-    input.onProtocolFailure(
-      new Error(
-        classification.kind === 'response-unknown'
-          ? 'codex app-server emitted an oversized response with an unknown shape'
-          : 'codex app-server emitted an oversized unclassifiable JSONL record'
-      )
+    // Dropping a notification could lose a finished item or a turn's end, so the session ends.
+    const notification = classification.kind === 'notification'
+    input.handlers.onUnhandledFrame?.(
+      notification ? 'frame:oversized-notification' : 'frame:oversized-unclassified',
+      payload
     )
+    const oversized = new CodexAppServerFrameSizeError(
+      'method' in classification ? classification.method : null,
+      rejected.observedBytes,
+      rejected.maxLineBytes,
+      notification ? 'notification' : 'message'
+    )
+    input.onProtocolFailure(oversized)
   }
 
   return {
