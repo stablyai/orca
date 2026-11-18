@@ -65,7 +65,7 @@ export class SubscriberDeliveryLane {
   private active: LaneEntry | undefined
   private scheduled = false
   /** Live text the running delivery holds, whether a live-text entry or sent by ordered work. */
-  private delivering: object | undefined
+  private delivering: readonly AgentJournalRenderItem[] | undefined
   private readonly stop = new AbortController()
   readonly stopped = this.stop.signal
 
@@ -132,7 +132,7 @@ export class SubscriberDeliveryLane {
   }
 
   /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's share. */
-  sendsLiveText(items: object): boolean {
+  sendsLiveText(items: readonly AgentJournalRenderItem[]): boolean {
     if (this.stopped.aborted) {
       return false
     }

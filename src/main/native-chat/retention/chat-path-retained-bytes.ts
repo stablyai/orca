@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createRetainedBytesBudget, observeRetainedBytes } from '../../memory/retained-bytes-budget'
 
 /**
@@ -30,7 +31,7 @@ const sizes = new WeakMap<object, number>()
  * length; measured once per payload however many holders share it. A string sliced from a larger
  * one would keep more alive, but live text is parsed provider output, never such a slice.
  */
-export function heldBytesOf(payload: object): number {
+export function heldBytesOf(payload: readonly AgentJournalRenderItem[]): number {
   const cached = sizes.get(payload)
   if (cached !== undefined) {
     return cached
@@ -47,9 +48,9 @@ export function heldBytesOf(payload: object): number {
         stack.push(child)
       }
     } else if (value && typeof value === 'object') {
-      for (const key in value) {
+      for (const [key, child] of Object.entries(value)) {
         bytes += key.length * 2
-        stack.push(Reflect.get(value, key))
+        stack.push(child)
       }
     }
   }
@@ -63,7 +64,9 @@ const shared = new WeakMap<object, { holders: number; release: () => void }>()
  * Charges a live-text snapshot once while any subscriber holds it, released after the last.
  * Null when the chat budget is full: the holder ends its stream and the client resumes.
  */
-export function claimSharedLiveText(payload: object): (() => void) | null {
+export function claimSharedLiveText(
+  payload: readonly AgentJournalRenderItem[]
+): (() => void) | null {
   let claim = shared.get(payload)
   if (!claim) {
     const release = chatLiveTextRetainedBytes.claim(heldBytesOf(payload))
