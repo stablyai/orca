@@ -24,8 +24,11 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
-import type { AgentSessionConversationKeys } from './agent-session-conversation-key-index'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  nativeIdKeys,
+  scopeKeys,
+  type AgentSessionConversationKeys
+} from './agent-session-conversation-key-index'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
 import type {
@@ -124,14 +127,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       location
     )
   /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
-  conversationsKeyedBy = (
-    keys: AgentSessionConversationKeys,
-    key: string
-  ): AgentSessionConversationView[] =>
-    this.transactions.keyIndexes
-      .get(this.state, keys)
-      .sessionIds(key)
-      .flatMap((sessionId) => this.getConversation(sessionId) ?? [])
+  conversationsKeyedBy = (keys: AgentSessionConversationKeys, key: string) =>
+    this.transactions.keyIndexes.conversations(this.state, keys, key)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
   /** Sessions a committed /clear continued into this one, derived from every held conversation
    *  (unreadable leases still count) and rebuilt only when lineage changes. */
@@ -187,11 +184,6 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       throw new Error(`journal reader answered ${result.kind} for first-submitted-prompt`)
     }
     return result.first
-  }
-
-  listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
-    const scope = agentSessionScopeKey(location)
-    return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
 
   /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
@@ -385,8 +377,3 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
         })
     )
 }
-
-const nativeIdKeys: AgentSessionConversationKeys = (view) =>
-  view.providerHandleChain.map(({ handle }) => handle.nativeId)
-
-const scopeKeys: AgentSessionConversationKeys = (view) => [agentSessionScopeKey(view.location)]

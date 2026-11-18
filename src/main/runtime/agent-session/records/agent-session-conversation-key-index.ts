@@ -1,4 +1,5 @@
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { agentSessionScopeKey } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getAgentSessionConversation,
   listAgentSessionConversations,
@@ -8,6 +9,13 @@ import {
 /** The lookup keys one chat answers to. Pass a module-level function: the store keeps one index
  *  per function, so a fresh closure would build a fresh index on every call. */
 export type AgentSessionConversationKeys = (view: AgentSessionConversationView) => readonly string[]
+
+export const nativeIdKeys: AgentSessionConversationKeys = (view) =>
+  view.providerHandleChain.map(({ handle }) => handle.nativeId)
+
+export const scopeKeys: AgentSessionConversationKeys = (view) => [
+  agentSessionScopeKey(view.location)
+]
 
 type CommittedRecords = {
   upsert: readonly (readonly [string, string])[]
@@ -34,6 +42,17 @@ export class AgentSessionConversationKeyIndexes {
       this.indexes.set(keys, index)
     }
     return index
+  }
+
+  /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
+  conversations(
+    state: AgentSessionStoreState,
+    keys: AgentSessionConversationKeys,
+    key: string
+  ): AgentSessionConversationView[] {
+    return this.get(state, keys)
+      .sessionIds(key)
+      .flatMap((sessionId) => getAgentSessionConversation(state, sessionId) ?? [])
   }
 
   applyCommitted(
