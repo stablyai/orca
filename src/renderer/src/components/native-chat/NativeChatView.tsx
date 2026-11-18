@@ -1,4 +1,5 @@
 import { NativeChatSessionGate } from './host-access/NativeChatSessionGate'
+import { ChatBannerSlot } from '../terminal-pane/chat/ChatBannerSlot'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
@@ -53,39 +54,45 @@ function NativeChatBridgeView({
     terminalTabId,
     preferredPaneKey
   )
+  // The pane's top banners show above the chat while it covers the pane.
   return (
-    <NativeChatSessionGate
-      paneKey={paneKey}
-      launchAgent={launchAgent}
-      resolvedAgent={resolvedAgent}
-      agentStatusEntry={agentStatusEntry}
-      ptyId={targetPtyId}
-    >
-      {(resolution) => (
-        <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
-          <NativeChatMarkdownImageOwnerProvider
-            sessionId={resolution.sessionId}
-            tabId={terminalTabId}
-            isVisible={isVisible}
-          >
-            <NativeChatResolvedView
-              paneKey={resolution.paneKey}
-              agent={resolution.agent}
-              sessionId={resolution.sessionId}
-              transcriptPath={resolution.transcriptPath}
-              isVisible={isVisible}
-              isFocusedGroup={isFocusedGroup}
-              targetPtyId={targetPtyId}
-              terminalTabId={terminalTabId}
-              ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
-              onSwitchToTerminal={onSwitchToTerminal}
-              readTerminalScreen={readTerminalScreen}
-              readTerminalDraft={readTerminalDraft}
-              contextMenuActions={contextMenuActions}
-            />
-          </NativeChatMarkdownImageOwnerProvider>
-        </NativeChatFileLinkExistenceProvider>
-      )}
-    </NativeChatSessionGate>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {preferredPaneKey ? <ChatBannerSlot paneKey={preferredPaneKey} /> : null}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <NativeChatSessionGate
+          paneKey={paneKey}
+          launchAgent={launchAgent}
+          resolvedAgent={resolvedAgent}
+          agentStatusEntry={agentStatusEntry}
+          ptyId={targetPtyId}
+        >
+          {(resolution) => (
+            <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
+              <NativeChatMarkdownImageOwnerProvider
+                sessionId={resolution.sessionId}
+                tabId={terminalTabId}
+                isVisible={isVisible}
+              >
+                <NativeChatResolvedView
+                  paneKey={resolution.paneKey}
+                  agent={resolution.agent}
+                  sessionId={resolution.sessionId}
+                  transcriptPath={resolution.transcriptPath}
+                  isVisible={isVisible}
+                  isFocusedGroup={isFocusedGroup}
+                  targetPtyId={targetPtyId}
+                  terminalTabId={terminalTabId}
+                  ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
+                  onSwitchToTerminal={onSwitchToTerminal}
+                  readTerminalScreen={readTerminalScreen}
+                  readTerminalDraft={readTerminalDraft}
+                  contextMenuActions={contextMenuActions}
+                />
+              </NativeChatMarkdownImageOwnerProvider>
+            </NativeChatFileLinkExistenceProvider>
+          )}
+        </NativeChatSessionGate>
+      </div>
+    </div>
   )
 }
