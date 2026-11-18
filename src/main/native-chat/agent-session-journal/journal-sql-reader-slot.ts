@@ -190,6 +190,10 @@ export class ReaderSlot {
   }
 
   /** `chat` names a reservation step's chat, which its operation doesn't carry. */
+  runsOn(workers: readonly unknown[]): boolean {
+    return workers.includes(this.worker)
+  }
+
   request(
     operation: JournalSqlReaderOperation,
     chat?: string | null
@@ -295,10 +299,15 @@ export class ReaderSlot {
         chat: chat === undefined ? described.chat : chat,
         startedAt: Date.now(),
         queued,
-        threadId: 'threadId' in this.worker ? Number(this.worker.threadId) : null
+        threadId: workerThreadId(this.worker)
       }
     }
     this.running = { id, queued, request }
     recordJournalReaderRequest(this.record, request)
   }
+}
+
+/** A thread's id, including a hosted reader moved in-process; null inside the utility process. */
+function workerThreadId(worker: JournalSqlReaderWorker): number | null {
+  return 'threadId' in worker && typeof worker.threadId === 'number' ? worker.threadId : null
 }

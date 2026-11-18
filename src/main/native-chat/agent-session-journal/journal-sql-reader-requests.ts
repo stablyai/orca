@@ -14,7 +14,7 @@ export type JournalReaderRunningRequest = {
   startedAt: number
   /** Requests waiting behind this one on the same reader, kept current. */
   queued: number
-  /** Null for a reader hosted in the utility process. */
+  /** Null while the reader runs inside the utility process. */
   threadId: number | null
 }
 
@@ -58,8 +58,12 @@ export function recordJournalReaderRequest(
   }
 }
 
-export function readJournalReaderRequests(): (JournalReaderRunningRequest & { reader: number })[] {
-  return running.flatMap((request, reader) => (request ? [{ ...request, reader }] : []))
+export function readJournalReaderRequests(
+  onWorkers?: readonly unknown[]
+): (JournalReaderRunningRequest & { reader: number })[] {
+  return running.flatMap((request, reader) =>
+    request && (!onWorkers || owners[reader]?.runsOn(onWorkers)) ? [{ ...request, reader }] : []
+  )
 }
 
 /** Breadcrumb fields naming each reader's oldest unanswered read. */
