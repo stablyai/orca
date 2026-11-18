@@ -93,7 +93,7 @@
                         "keep": true,
                         "align": "center",
                         "gap": "sm",
-                        "inset": "=vars.newStyle ? null : 'end'"
+                        "inset": "=vars.newStyle ? 'hair' : 'end'"
                       },
                       "children": [{ "el": "Indicators" }]
                     },
