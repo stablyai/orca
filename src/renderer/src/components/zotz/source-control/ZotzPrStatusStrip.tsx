@@ -159,7 +159,7 @@ function StripWithPr({
           onClick={() => pr.url && openAppHttpLink(pr.url, { destination: 'system' })}
           className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-medium hover:bg-accent"
         >
-          PR #{pr.number}
+          {t('zotz.pr.number', 'PR #{{number}}', { number: pr.number })}
           <ArrowUpRight className="size-3" />
         </button>
         <button

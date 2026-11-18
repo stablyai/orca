@@ -26004,7 +26004,8 @@
       "createFailed": "Could not ask the agent to open the pull request",
       "merge": "Merge",
       "mergedToast": "Pull request #{{number}} merged",
-      "mergeFailed": "Could not merge the pull request"
+      "mergeFailed": "Could not merge the pull request",
+      "number": "PR #{{number}}"
     },
     "prChip": {
       "dismiss": "Hide the pull request bar"
