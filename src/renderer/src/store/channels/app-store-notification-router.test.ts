@@ -2,9 +2,14 @@ import { expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { createAppStoreNotificationRouter } from './app-store-notification-router'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these listeners read only `n`.
-const stateOf = (n: number) => ({ n }) as unknown as AppState
-const nOf = (state: AppState): unknown => Reflect.get(state, 'n')
+const numbers = new WeakMap<AppState, number>()
+function stateOf(n: number): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: listeners read states only through nOf.
+  const state = {} as AppState
+  numbers.set(state, n)
+  return state
+}
+const nOf = (state: AppState): number | undefined => numbers.get(state)
 
 function setup(skip: boolean) {
   let dispatch: ((state: AppState, previous: AppState) => void) | null = null
@@ -56,7 +61,7 @@ it('wakes every listener when skipping is off', () => {
 
 it('hands later listeners the state a nested write produced', () => {
   const { router, write } = setup(false)
-  const seen: unknown[][] = []
+  const seen: (number | undefined)[][] = []
   router.subscribe((state) => {
     if (nOf(state) === 1) {
       write(2)
