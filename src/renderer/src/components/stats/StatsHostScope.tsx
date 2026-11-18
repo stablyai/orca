@@ -1,8 +1,9 @@
-import { useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
 import { useRuntimeEnvironmentCapabilityAnswer } from '../../runtime/rpc/compatibility/use-runtime-environment-capability'
+import { subscribeRuntimeHostContactRegained } from '../../runtime/hosts/connections/runtime-host-contact-regained'
 import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -18,19 +19,31 @@ export function StatsHostScope({
   children
 }: {
   host: StatsHost
-  /** True only when the host answered that its Orca predates host-computed usage. */
-  children: (usageUnsupported: boolean) => React.ReactNode
+  /** `usageUnsupported` is true only when the host answered that its Orca predates host-computed usage. */
+  children: (usageUnsupported: boolean, contactGeneration: number) => React.ReactNode
 }): React.JSX.Element | null {
   const key = usageHostKey(host.target)
   const shownKey = useAppStore((state) => usageHostKey(state.statsHost))
   const setStatsHost = useAppStore((state) => state.setStatsHost)
+  const environmentId = host.target.kind === 'environment' ? host.target.environmentId : null
   const usageSupported = useRuntimeEnvironmentCapabilityAnswer(
-    host.target.kind === 'environment' ? host.target.environmentId : null,
+    environmentId,
     USAGE_ANALYTICS_RUNTIME_CAPABILITY
+  )
+  // A remote host has no usage connection events; its reads start again when contact returns.
+  const [contactGeneration, setContactGeneration] = useState(0)
+  useEffect(
+    () =>
+      environmentId
+        ? subscribeRuntimeHostContactRegained(environmentId, () =>
+            setContactGeneration((generation) => generation + 1)
+          )
+        : undefined,
+    [environmentId]
   )
   // Layout effect: children's mount effects must already read this host. Same-host calls are no-ops.
   useLayoutEffect(() => setStatsHost(host.target), [host.target, setStatsHost])
-  return shownKey === key ? <>{children(usageSupported === false)}</> : null
+  return shownKey === key ? <>{children(usageSupported === false, contactGeneration)}</> : null
 }
 
 export function StatsHostCaption({ name }: { name: string }): React.JSX.Element {

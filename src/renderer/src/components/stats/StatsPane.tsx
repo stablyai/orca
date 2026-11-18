@@ -119,11 +119,12 @@ const LOCAL_STATS_HOST: StatsHost = { target: { kind: 'local' }, name: null }
 export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): React.JSX.Element {
   return (
     <StatsHostScope host={host}>
-      {(usageUnsupported) => (
+      {(usageUnsupported, contactGeneration) => (
         <StatsPaneContent
           key={usageHostKey(host.target)}
           hostName={host.name}
           usageUnsupported={usageUnsupported}
+          contactGeneration={contactGeneration}
         />
       )}
     </StatsHostScope>
@@ -132,10 +133,13 @@ export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): Re
 
 function StatsPaneContent({
   hostName,
-  usageUnsupported
+  usageUnsupported,
+  contactGeneration
 }: {
   hostName: string | null
   usageUnsupported: boolean
+  /** Bumps when a remote host's contact returns, so its reads start again. */
+  contactGeneration: number
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -152,8 +156,11 @@ function StatsPaneContent({
 
   useEffect(() => {
     recordFeatureInteraction('usage-tracking')
+  }, [recordFeatureInteraction])
+
+  useEffect(() => {
     void fetchStatsSummary()
-  }, [fetchStatsSummary, recordFeatureInteraction])
+  }, [contactGeneration, fetchStatsSummary])
 
   return (
     <div className="space-y-5">
@@ -242,7 +249,7 @@ function StatsPaneContent({
         </div>
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
-        <div>
+        <div key={contactGeneration}>
           {usageUnsupported && hostName ? (
             <StatsHostTooOldNotice name={hostName} />
           ) : activeUsageTab === 'overview' ? (

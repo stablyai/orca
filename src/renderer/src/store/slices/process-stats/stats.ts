@@ -35,12 +35,14 @@ export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set
 
   fetchStatsSummary: async () => {
     const host = get().statsHost
+    const view = get().statsHostEpoch
     try {
       const summary =
         host.kind === 'local'
           ? await window.api.stats.getSummary()
           : await callRuntimeRpc<StatsSummary>(host, 'stats.summary')
-      if (usageHostKey(get().statsHost) === usageHostKey(host)) {
+      // An answer from an earlier view, even of the same host, is stale.
+      if (get().statsHostEpoch === view) {
         // A host without a stats collector answers `{}`.
         set({ statsSummary: typeof summary?.totalAgentsSpawned === 'number' ? summary : null })
       }
