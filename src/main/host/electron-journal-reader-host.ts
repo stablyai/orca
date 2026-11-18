@@ -24,10 +24,13 @@ export function installElectronJournalReaderHost(): void {
     ({ filename, name, workerData, inProcessWorkerData }) =>
       spawnWorkerThread(filename, {
         name,
-        workerData: { ...(workerData as object), ...inProcessWorkerData },
+        workerData:
+          inProcessWorkerData && typeof workerData === 'object'
+            ? { ...workerData, ...inProcessWorkerData }
+            : workerData,
         execArgv: []
       }),
-    // In-process readers take the same budget as shared credit instead.
+    // Hosted replies past this wait in the reader process; in-process readers use shared credit.
     JOURNAL_READER_REPLY_CREDIT_BYTES
   )
   setJournalSqlReaderSpawner((filename, workerData, inProcessWorkerData) =>
