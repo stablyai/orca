@@ -210,7 +210,8 @@ it('never appends onto a saved lone surrogate that reads back as U+FFFD', async 
   const { commit } = messageFixture(db)
   const base = 'x'.repeat(400)
   await commit(message(`${base}\ud83d`))
-  const text = `${base}� more`
+  // SQLite reads the stored lone surrogate's three bytes back as three U+FFFD.
+  const text = `${base}${'\uFFFD'.repeat(3)} more`
   await commit(message(text))
   expect(readText(db).detail).toEqual([{ type: 'text', text }])
   db.close()
