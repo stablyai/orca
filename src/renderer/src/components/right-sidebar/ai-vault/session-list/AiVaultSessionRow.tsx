@@ -31,7 +31,7 @@ import {
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'

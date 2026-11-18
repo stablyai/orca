@@ -1,7 +1,7 @@
 import type { AgentSessionHistoryResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { QueuePublication } from '../../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
-import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { RpcContext } from '../../../core'
 import {
   queuedCardHoldsImage,

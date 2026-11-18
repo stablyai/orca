@@ -15,7 +15,7 @@ import type {
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../../../shared/notifications/notification-settings-types'
-import { buildNotificationOptions } from '../../../ipc/notification-options'
+import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
 

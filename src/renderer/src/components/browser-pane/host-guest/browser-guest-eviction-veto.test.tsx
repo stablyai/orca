@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { hydrateBrowserRemoteViewerPages } from '../../../runtime/browser/ownership/browser-remote-viewer-store'
 import { browserGuestActivity, setBrowserGuestVisible } from './browser-guest-activity'
 import { registerPersistentWebview, unregisterPersistentWebview } from './webview-registry'
-import { useTerminalBrowserRetention } from '../../use-terminal-browser-retention'
+import { useTerminalBrowserRetention } from '../../terminal/workspace-mounting/use-terminal-browser-retention'
 import type { BrowserGuestIdleDiscardRequest } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 const state = vi.hoisted(() => ({ browserAudiblePageIds: {} }))

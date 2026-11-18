@@ -1,5 +1,5 @@
 import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import type { MobileNativeChatRowKeys } from '../projection/mobile-native-chat-row-keys'
 import {
   DRAW_AHEAD_SCREENS,

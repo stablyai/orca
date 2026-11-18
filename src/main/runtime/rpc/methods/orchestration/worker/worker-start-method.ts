@@ -139,9 +139,21 @@ export async function prepareWorkerStart(
   }
   const placement = params.worktree ?? 'current'
   if (
+    params.crossStoreParent &&
+    (orchestrationCaller?.kind !== 'peer' || placement !== 'new-child')
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "Only the paired Orca coordinating a Run names its own workspace as a new-child's parent. No effects were applied.",
+      { effectsApplied: false }
+    )
+  }
+  // A paired Orca's new-child nests under its own workspace, named by the parent it sends.
+  if (
     orchestrationCaller?.kind === 'peer' &&
     !followUp &&
     !params.terminal &&
+    !params.crossStoreParent &&
     /^(current|new-child)$/.test(placement)
   ) {
     throw new OrchestrationError(

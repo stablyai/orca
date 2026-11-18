@@ -29,7 +29,6 @@ import {
 } from '../../../../../shared/workspace/status/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
-import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
@@ -72,6 +71,8 @@ import {
   hydrateOneShotNoticesSeen,
   sanitizeTaskResumeState
 } from './ui-slice-hydration-values'
+import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
+import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -230,7 +231,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
           browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
           browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
-          browserDevToolsDock: normalizeBrowserDevToolsDockLayout(ui.browserDevToolsDock),
+          ...hydrateBrowserPaneLayout(ui),
           taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
           featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
           featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),
@@ -264,10 +265,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           usagePercentageDisplayChangeNoticeDismissed:
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
-          // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
-          usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
-          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
           ...hydrateOneShotNoticesSeen(ui),
+          ...hydrateWslMovedSection(ui),
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

@@ -7,7 +7,7 @@ import type {
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { JournalItemLinkageVisitor } from './journal-store-contracts'
 import type {
   JournalHistoryItem,
@@ -21,7 +21,7 @@ import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subage
 import type { JournalInputReader } from './journal-input-reads'
 import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import type { JournalStatusState } from './journal-status-state'
-import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   JournalStatusIndicatorRead,

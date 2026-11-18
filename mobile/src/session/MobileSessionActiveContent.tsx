@@ -5,7 +5,6 @@ import {
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
@@ -52,8 +51,8 @@ export function MobileSessionActiveContent({
     client,
     terminals,
     terminalTextScale,
-    setTerminalTextScale,
-    terminalTextScaleRevisionRef,
+    commitPinchedTextScale,
+    terminalFontStyle,
     activeHandle,
     terminalSplitActive,
     visibleTerminalHandles,
@@ -308,12 +307,8 @@ export function MobileSessionActiveContent({
               }
               terminalTheme={terminal.terminalTheme}
               textScale={terminalTextScale}
-              onTextScaleChange={(scale) => {
-                // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-                terminalTextScaleRevisionRef.current += 1
-                setTerminalTextScale(scale)
-                void saveTerminalTextScale(scale)
-              }}
+              fontStyle={terminalFontStyle}
+              onTextScaleChange={commitPinchedTextScale}
               onRef={setTerminalWebViewRef}
               onDocumentReleased={releaseTerminalDocument}
               onWebReady={handleTerminalWebReady}
