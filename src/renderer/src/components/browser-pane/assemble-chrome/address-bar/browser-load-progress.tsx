@@ -34,13 +34,13 @@ export function BrowserLoadProgress({
       return
     }
     const { transform, opacity } = getComputedStyle(bar)
-    bar.dataset.browserLoadProgress = IDLE
     // Still inside the show delay, or on a retained hidden page: nothing to fade.
-    if (
-      Number(opacity) === 0 ||
-      document.visibilityState !== 'visible' ||
-      !bar.checkVisibility({ opacityProperty: true, visibilityProperty: true })
-    ) {
+    const showsFade =
+      Number(opacity) > 0 &&
+      document.visibilityState === 'visible' &&
+      bar.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+    bar.dataset.browserLoadProgress = IDLE
+    if (!showsFade) {
       return
     }
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -58,8 +58,13 @@ export function BrowserLoadProgress({
 
   useLayoutEffect(() => {
     const bar = barRef.current
-    // Why: an animation outlives its removed element and keeps ticking until cancelled.
-    return () => bar?.getAnimations().forEach((animation) => animation.cancel())
+    // Why: a script animation outlives its removed element and keeps ticking until cancelled.
+    return () =>
+      bar?.getAnimations().forEach((animation) => {
+        if (!(animation instanceof CSSAnimation)) {
+          animation.cancel()
+        }
+      })
   }, [])
 
   return (

@@ -4185,7 +4185,6 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   opacity: 0;
 }
 
-/* While an agent drives the page, a soft inner glow breathes at its edge. */
 /* Electron reports no load percentage, so the line eases toward 90% and the real stop finishes it.
    CSS rather than script animation so retained hidden pages pause it like every other loop. */
 @keyframes browser-load-trickle {
@@ -4243,6 +4242,7 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   }
 }
 
+/* While an agent drives the page, a soft inner glow breathes at its edge. */
 .browser-agent-cursor-layer::before {
   content: '';
   position: absolute;
