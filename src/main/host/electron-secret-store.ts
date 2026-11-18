@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
-import type { SecretStore } from '../../shared/secure-storage/secret-store'
+import type { SecretSealing, SecretStore } from '../../shared/secure-storage/secret-store'
 
 export class ElectronSecretStore implements SecretStore {
   isEncryptionAvailable(): boolean {
@@ -17,6 +17,12 @@ export class ElectronSecretStore implements SecretStore {
 
   describeProtectionGap(): string | null {
     return assessSecretProtection().gap
+  }
+
+  describeSealing(): SecretSealing {
+    const gap = this.describeProtectionGap()
+    // Withheld, unavailable and basic_text all leave secrets readable without the OS keychain.
+    return gap === null ? { kind: 'os-keychain' } : { kind: 'none', reason: gap }
   }
 }
 

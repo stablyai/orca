@@ -139,11 +139,13 @@ export function RemoteBrowserPageContextMenu({
   contextMenu,
   onDismiss,
   onOpenLinkInOrcaBrowser,
+  history,
   onNavigate
 }: {
   contextMenu: RemoteBrowserContextMenu
   onDismiss: () => void
   onOpenLinkInOrcaBrowser: () => void
+  history: { canGoBack: boolean; canGoForward: boolean }
   onNavigate: (method: 'browser.back' | 'browser.forward' | 'browser.reload') => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -244,14 +246,16 @@ export function RemoteBrowserPageContextMenu({
         ) : null}
         <button
           role="menuitem"
-          className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+          className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/14"
+          disabled={!history.canGoBack}
           onClick={() => onNavigate('browser.back')}
         >
           {t('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
         </button>
         <button
           role="menuitem"
-          className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
+          className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/14"
+          disabled={!history.canGoForward}
           onClick={() => onNavigate('browser.forward')}
         >
           {t('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}

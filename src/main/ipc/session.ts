@@ -9,6 +9,8 @@ import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
+import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
+import { noteWindowSessionSaveUnchanged } from '../browser/extensions/tabs-and-windows/browser-extension-discarded-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type {
   WorkspaceSessionPatch,
@@ -59,14 +61,18 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    if (!isFenced(hostId)) {
-      store.patchWorkspaceSession(
-        ORCA_LAYOUT_OWNER_IS_MAIN
-          ? patchForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch'),
-        hostId
-      )
+    if (isFenced(hostId)) {
+      return
     }
+    const stored = store.getWorkspaceSession(hostId)
+    const save = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? patchForMain(args, hostId)
+      : windowSaveKeepingMainSleepRecords(stored, args, 'patch')
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
+      noteWindowSessionSaveUnchanged(hostId)
+      return
+    }
+    store.patchWorkspaceSession(save, hostId)
   })
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.

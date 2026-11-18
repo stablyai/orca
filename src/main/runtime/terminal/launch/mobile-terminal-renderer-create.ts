@@ -17,6 +17,7 @@ import { rendererPublicationThrottle } from '../../../window/visibility/renderer
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
+import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -262,6 +263,8 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         })
         if (this.isReadyMobileTerminalSurface(surface)) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          // The window spawned it outside this RPC, so the runtime's spawn point never saw the caller.
+          noteCallerOpenedTerminal(surface.tab.terminal)
           return surface
         }
         const readySurface = await this.waitForMobileTerminalSurface(worktreeId, reply.tabId, {
@@ -271,6 +274,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }).catch(() => null)
         if (readySurface) {
           this.deliverPendingStartupCommandToBareRendererPty(worktreeId, reply.tabId)
+          noteCallerOpenedTerminal(readySurface.tab.terminal)
           return readySurface
         }
         if (opts.signal?.aborted) {

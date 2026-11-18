@@ -126,6 +126,8 @@ patchedDependencies:
   minimatch@9.0.9: config/patches/minimatch@9.0.9.patch
   minimatch@10.2.5: config/patches/minimatch@10.2.5.patch
   minimatch@10.2.6: config/patches/minimatch@10.2.6.patch
+  picomatch@4.0.4: config/patches/picomatch@4.0.4.patch
+  picomatch@4.0.7: config/patches/picomatch@4.0.7.patch
 permissions:
   agent-browser:
     skills: false

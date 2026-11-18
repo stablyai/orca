@@ -34,7 +34,10 @@ import {
 } from '../../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import type { Store } from '../../loading-store/store'
 import { compareKeys } from '../../migrating-orcad-catalog/source/catalog/orcad-source-key-order'
-import { wslUncPathToLinux } from '../../../../shared/file-access/wsl-paths'
+import {
+  wslMoveSourcePathToLinux,
+  type WslMappedDrive
+} from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { withoutWindowsShellChoices } from '../desktop-state/wsl-move-windows-shell-choices'
 import { withoutDesktopFocus, withoutPtyBindings } from '../terminal-state/wsl-move-session-rewrite'
@@ -54,6 +57,8 @@ export type WslMoveManifestExportRequest = {
   folderWorkspaceIds: readonly string[]
   /** Slept panes' daemon history: their only copy of the scrollback. */
   daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
+  /** The plan's drives mapped into the distro; their paths export as the share's. */
+  mappedDrives?: readonly WslMappedDrive[]
 }
 
 export type WslMoveManifestExport = {
@@ -69,6 +74,8 @@ export type WslMoveManifestExport = {
   worktrees: { sourceWorktreeId: string; destinationWorktreeId: string }[]
   /** Moved disabled (the wire carries no enabled automation); re-enable on the host after commit. */
   automationsToReenable: string[]
+  /** The mapped drive letters the export's paths named: the only ones the move journals. */
+  mappedDriveLetters?: string[]
 }
 
 /** The plan names a project or folder that is no longer a local row of this distro. */
@@ -165,7 +172,10 @@ export function exportWslMoveManifest(
   const dormantState = workspaceSession
     ? { ...inspection.payload, workspaceSession }
     : inspection.payload
-  const rewriter = createUncToLinuxPathRewriter(request.distro)
+  const usedLetters = new Set<string>()
+  const rewriter = createUncToLinuxPathRewriter(request.distro, request.mappedDrives, {
+    onMappedDrive: (letter) => usedLetters.add(letter)
+  })
   const payload = rewriteOrcadMigrationPayloadPaths(
     { ...catalog, ...(hasDormantState(dormantState) ? { dormantState } : {}) },
     rewriter
@@ -210,13 +220,14 @@ export function exportWslMoveManifest(
       sourceWorktreeId,
       destinationWorktreeId: rewriteOrcadMigrationWorktreeId(sourceWorktreeId, rewriter)
     })),
-    automationsToReenable: inspection.automationsEnabledAtSource
+    automationsToReenable: inspection.automationsEnabledAtSource,
+    mappedDriveLetters: [...usedLetters].sort()
   }
 
   function isLocalRepo(repo: Repo): boolean {
     return (
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
-      wslUncPathToLinux(repo.path, request.distro) !== null
+      wslMoveSourcePathToLinux(repo.path, request.distro, request.mappedDrives) !== null
     )
   }
 }

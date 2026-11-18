@@ -12,6 +12,7 @@ import type { StructuredAgentSessionLogger } from '../host/structured-agent-sess
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { StructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
+import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
@@ -43,6 +44,9 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
+  /** Orca changed the bot's tools since this child launched and it owes no work (see
+   *  `StructuredAgentSessionHostDeps.launchTools.outdated`): the input needs a child that has them. */
+  launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -70,4 +74,5 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder
+  turnContext?: StructuredAgentSessionTurnContext | undefined
 }

@@ -34,7 +34,8 @@ it.each([{}, { claudeSubagentNavigationEnabled: true }])(
       reconcileConfig,
       ensurePlugin,
       listProfiles: async () => [profile],
-      loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config })
+      loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config }),
+      claudeOnPath: async () => true
     })
     await Promise.all(Array.from({ length: 100 }, () => service.reconcile(enabled)))
     expect(reconcileConfig).toHaveBeenCalledTimes(2)
@@ -89,7 +90,8 @@ it('cleans an owned shortcut in a cached login-shell config on a fresh disabled 
     reconcileConfig: reconcileClaudeAgentViewConfig,
     ensurePlugin: ensureClaudeAgentViewPluginAsync,
     listProfiles: async () => [],
-    loginEnv
+    loginEnv,
+    claudeOnPath: async () => true
   })
   await service.reconcile({ claudeSubagentNavigationEnabled: false })
   expect(claudeAgentViewChord(await readFile(bindings, 'utf8'))).toBeUndefined()
@@ -98,4 +100,23 @@ it('cleans an owned shortcut in a cached login-shell config on a fresh disabled 
   )
   expect(loginEnv.mock.calls).toEqual([[{ cachedOnly: true }]])
   expect(spawner).toHaveBeenCalledOnce()
+})
+
+it('leaves Claude config untouched when the Claude CLI is not on PATH (#43445)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-agent-view-no-claude-'))
+  roots.push(root)
+  const config = join(root, 'claude')
+  const service = new ClaudeAgentViewService(join(root, 'orca'), {
+    reconcileConfig: reconcileClaudeAgentViewConfig,
+    ensurePlugin: ensureClaudeAgentViewPluginAsync,
+    listProfiles: async () => [join(root, 'account')],
+    loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config }),
+    claudeOnPath: async () => false
+  })
+  await service.reconcile({})
+  await service.prepareProfile(join(root, 'new-account'))
+
+  await expect(readFile(join(config, 'keybindings.json'), 'utf8')).rejects.toThrow()
+  await expect(readFile(join(config, 'orca-agent-view.json'), 'utf8')).rejects.toThrow()
+  await expect(readFile(join(root, 'new-account', 'keybindings.json'), 'utf8')).rejects.toThrow()
 })

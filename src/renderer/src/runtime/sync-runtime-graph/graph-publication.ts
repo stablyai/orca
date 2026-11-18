@@ -15,6 +15,7 @@ import { withAcknowledgedBrowserPageInventory } from './browser-page-inventory'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
+import { deliveredAgentSenderRevision } from '../native-chat/agent-senders/agent-sender-publication-patch'
 import { getProjectSectionCatalogFromState } from './project-section-catalog'
 import {
   addMountedPanes,
@@ -71,7 +72,8 @@ export async function syncRuntimeGraph(): Promise<void> {
   const activeGroupByWorkspace = ORCA_LAYOUT_OWNER_IS_MAIN
     ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
     : undefined
-  const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
+  const senderWhole = state.agentSenderPublicationsByHost?.local?.['*']
+  const senderBase = senderWhole && deliveredAgentSenderRevision(senderWhole)
   const orchestrationBase = appliedOrchestrationRevision(state)
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],

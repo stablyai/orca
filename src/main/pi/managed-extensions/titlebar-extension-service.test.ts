@@ -235,5 +235,24 @@ describe('PiTitlebarExtensionService', () => {
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })
+
+    it('bare-shell prep leaves an existing Pi home alone when Pi is not on PATH (#43445)', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-pi-home-without-cli-'))
+      const piAgentDir = join(fakeHome, '.pi', 'agent')
+      mkdirSync(piAgentDir, { recursive: true })
+      homedirOverride.current = fakeHome
+      try {
+        const env = new PiTitlebarExtensionService().buildPtyEnv('pty-bare-pi', undefined, 'pi', {
+          materializeDefaultHome: false,
+          cliOnPath: false
+        })
+
+        expect(env).toEqual({})
+        expect(existsSync(join(piAgentDir, 'extensions'))).toBe(false)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
   })
 })

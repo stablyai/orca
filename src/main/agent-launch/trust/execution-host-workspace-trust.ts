@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from '../../qoder/workspace-trust'
+import { markQwenWorkspaceTrusted } from '../../qwen-code/workspace-trust'
 import {
   type AgentTrustPreset,
   markAntigravityWorkspaceTrusted,
@@ -31,6 +32,8 @@ export type WorkspaceTrustHost = {
   guestWorkspacePath?: string
   /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
   kimiHome?: string
+  /** The launched agent's env, for agents whose config root an env var moves (Qwen). */
+  agentEnv?: Record<string, string | undefined>
   deadlineMs: number
 }
 
@@ -49,6 +52,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   copilot: true,
   qoder: true,
   'qoder-cn': true,
+  'qwen-code': true,
   antigravity: false,
   kimi: false
 }
@@ -64,6 +68,7 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   copilot: false,
   qoder: false,
   'qoder-cn': false,
+  'qwen-code': false,
   antigravity: false,
   kimi: true
 }
@@ -106,6 +111,8 @@ async function writePreset(
       return markQoderWorkspaceTrusted(storedPath, host.agentHome, '.qoder-cn')
     case 'qoder':
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
+    case 'qwen-code':
+      return markQwenWorkspaceTrusted(storedPath, host.agentEnv ?? {}, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
     case 'kimi':

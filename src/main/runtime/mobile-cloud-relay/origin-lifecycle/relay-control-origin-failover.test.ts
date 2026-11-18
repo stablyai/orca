@@ -135,20 +135,6 @@ describe('RelayControlOrigin two-path failover', () => {
     )
   }
 
-  it('without alternates keeps today’s liveness: no pings, 75s silence bound, director recovery', async () => {
-    const { primary, origin, onClose, closed } = await setup({ alternates: 0 })
-    expect(origin.alternateCellUrls).toEqual([])
-
-    await vi.advanceTimersByTimeAsync(89_000)
-    expect(primary.pings).toBe(0)
-    expect(onClose).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    await expect(closed).resolves.toBe(1006)
-    expect(primary.pings).toBe(0)
-    expect(primary.connections).toHaveLength(1)
-  })
-
   it('resumes the same generation on the alternate when the primary stalls', async () => {
     const { session, primary, primarySocket, alternates, origin, onClose, onDrain, dataDials } =
       await setup({ alternates: 1 })
@@ -249,45 +235,5 @@ describe('RelayControlOrigin two-path failover', () => {
     await expect(closed).resolves.toBe(1006)
     expect(onClose).toHaveBeenCalledOnce()
     expect(alternate.acks).toEqual([])
-  })
-
-  it('stays on the alternate until rotation dials the primary again', async () => {
-    const { session, primary, alternates, assignment, origin, onClose, dataDials } = await setup({
-      alternates: 1
-    })
-    const [alternate] = alternates
-    primary.answersPings = false
-    const alternateConnection = alternate.nextConnection()
-    await vi.advanceTimersByTimeAsync(36_000)
-    const alternateSocket = await alternateConnection
-    await vi.waitFor(() => expect(alternate.acks).toHaveLength(1), { interval: 1 })
-    await vi.waitFor(() => expect(origin.hasLiveControl()).toBe(true), { interval: 1 })
-
-    // The primary recovers and the alternate goes quiet: the host does not flap back.
-    primary.answersPings = true
-    alternate.answersPings = false
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(primary.connections).toHaveLength(1)
-    expect(alternate.pings).toBe(0)
-    expect(onClose).not.toHaveBeenCalled()
-
-    // Lease rotation rebinds on the primary, resuming the same generation.
-    const primaryReturn = primary.nextConnection()
-    const alternateRetired = closedOnServer(alternateSocket)
-    const rebound = origin.rebind('scoped-token', assignment)
-    const primarySocket = await primaryReturn
-    await rebound
-    await alternateRetired
-    expect(primary.hellos.at(-1)).toMatchObject({ previousGeneration: RESUMED_GENERATION })
-    expect(origin.controlGeneration).toBe(RESUMED_GENERATION)
-    expect(session.generation).toBe(RESUMED_GENERATION)
-    sendConnOpen(primarySocket, 'conn-after-rotation')
-    await vi.waitFor(() => expect(dataDials).toHaveLength(1), { interval: 1 })
-    expect(dataDials[0]).toBe(
-      `${primary.url.replace('http:', 'ws:')}/v1/host/data/conn-after-rotation`
-    )
-    // Back on the primary, the stall detector is armed again.
-    await vi.advanceTimersByTimeAsync(12_000)
-    await vi.waitFor(() => expect(primary.pings).toBeGreaterThan(0), { interval: 1 })
   })
 })

@@ -69,10 +69,10 @@ function moved(from: 'working' | 'done', to: 'done' | 'needs-you'): AgentPaneCha
 function terminal(
   ctx: ReturnType<typeof setup>,
   current: { row: AgentStatusIpcPayload },
-  approvals: Partial<
+  overrides: Partial<
     Pick<
       ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
-      'takeOpenApproval' | 'markApprovalReported'
+      'takeOpenApproval' | 'markApprovalReported' | 'setTimer'
     >
   > = {}
 ) {
@@ -87,7 +87,7 @@ function terminal(
     getProcessIncarnation: () => null,
     takeOpenApproval: async () => null,
     markApprovalReported: () => {},
-    ...approvals,
+    ...overrides,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',
@@ -99,6 +99,17 @@ function terminal(
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
+
+/** The coordinator writes to the worker's Dispatch, and the worker takes the mail. */
+function writeAndTake(ctx: ReturnType<typeof setup>) {
+  const mail = ctx.db.insertMessage({
+    from: 'term_coordinator',
+    to: `dispatch:${ctx.dispatch.id}`,
+    subject: 'Keep going',
+    runId: ctx.run.id
+  })
+  ctx.db.markAsRead([mail.id])
+}
 
 describe('terminal worker turn stops', () => {
   it('drops a stop whose Dispatch was replaced before it was reported', async () => {
@@ -189,6 +200,46 @@ describe('terminal worker turn stops', () => {
     stop('turn-3', after)
     expect(ctx.mail()).toHaveLength(2)
   })
+
+  it('reports every idle stop after a write, though the write landed before the last report', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    const turn = async (stateStartedAt: number, during?: () => void) => {
+      current.row = hookRow({ state: 'working', stateStartedAt: stateStartedAt - 1 })
+      stops.observe({
+        kind: 'observed',
+        paneKey: PANE,
+        workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+        phase: 'working',
+        at: 1
+      })
+      current.row = hookRow({ stateStartedAt, lastAssistantMessage: 'Paused.' })
+      stops.observe(moved('working', 'done'))
+      // The coordinator's write lands in the quiet window, before Orca sees the worker resume.
+      during?.()
+      for (const run of quiet.splice(0)) {
+        run()
+      }
+      await settle()
+    }
+    await turn(200, () => writeAndTake(ctx))
+    await turn(300)
+    expect(ctx.mail()).toHaveLength(2)
+    writeAndTake(ctx)
+    await turn(400)
+    // Idle again with no new write: already told.
+    await turn(500)
+    expect(ctx.mail().map((m) => m.subject)).toEqual(
+      Array(3).fill('Worker stopped without reporting')
+    )
+  })
 })
 
 describe('chat worker turn stops', () => {
@@ -268,6 +319,27 @@ describe('chat worker turn stops', () => {
       { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
     ])
   })
+  it('reports every idle stop after a write, though the write landed before the last report', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const chat = chatWithTimers(ctx)
+    chat.finish('turn-1')
+    // The coordinator's write lands in the quiet window, before the stop is reported.
+    writeAndTake(ctx)
+    chat.runTimers()
+    chat.finish('turn-2')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(2)
+    writeAndTake(ctx)
+    chat.finish('turn-3')
+    chat.runTimers()
+    // Idle again with no new write: already told.
+    chat.finish('turn-4')
+    chat.runTimers()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(
+      Array(3).fill('Worker stopped without reporting')
+    )
+  })
+
   it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
     let finishRead!: (value: null) => void

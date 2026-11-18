@@ -297,14 +297,13 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                     event.currentTarget.dataset.imeComposing = 'true'
                   }}
                   onCompositionEnd={(event) => {
-                    commentIme.setComposing(false, event.data)
+                    commentIme.setComposing(false)
                     delete event.currentTarget.dataset.imeComposing
                   }}
                   onBlur={(event) => {
                     commentIme.reset()
                     delete event.currentTarget.dataset.imeComposing
                   }}
-                  onKeyUp={commentIme.onKeyUp}
                   onKeyDown={(event) => {
                     if (
                       commentIme.ownsKeyDown(event) ||
