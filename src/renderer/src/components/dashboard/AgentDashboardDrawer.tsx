@@ -13,12 +13,12 @@ import {
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../sidebar/workspace-chrome-metrics'
+} from '../../app-shell/chrome/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
-import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
+import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [

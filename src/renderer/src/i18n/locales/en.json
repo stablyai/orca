@@ -176,7 +176,8 @@
         "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
         "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
         "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
-        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes."
+        "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.",
+        "installLockWaitHolderGone": "The other Orca install in this distro stopped. Orca takes over in a few seconds."
       }
     },
     "agentSummary": {
@@ -1533,7 +1534,7 @@
     "uninstall": {
       "groupTitle": "Uninstall",
       "title": "Uninstall Orca",
-      "searchDescription": "Remove agent hooks, the orca command, the background service and hooks on SSH hosts.",
+      "searchDescription": "Remove agent hooks, the orca command, the orca serve server and hooks on SSH hosts.",
       "keywords": {
         "uninstall": "uninstall",
         "remove": "remove",
@@ -1557,14 +1558,16 @@
       "tryAgain": "Try again",
       "keeps": "Projects, worktrees and Orca settings stay.",
       "keepsShared": "{{name}} is also installed, so hooks it shares stay too.",
+      "closesTerminals": "Open terminals will close.",
       "removing": "Removing…",
       "button": "Uninstall",
       "uninstalling": "Uninstalling…",
       "rows": {
         "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
-        "service": "Background service",
-        "hookScripts": "Hook scripts"
+        "service": "<cmd>orca serve</cmd> server",
+        "hookScripts": "Hook scripts",
+        "terminalDaemon": "Terminal background process"
       },
       "retry": "Retry",
       "hookTargets": {
@@ -1581,12 +1584,13 @@
         "ssh": "SSH",
         "connected": "Connected",
         "notConnected": "Not connected.",
-        "notConnectedRun": "Not connected. Run <cmd>{{command}}</cmd> on the host."
+        "notConnectedRetry": "Not connected. Connect this host, then Retry."
       },
       "summary": {
         "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
-        "service": "a background service",
+        "service": "the <cmd>orca serve</cmd> server",
+        "terminalDaemon": "the terminal background process",
         "hookScripts": "hook scripts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",
@@ -18639,6 +18643,10 @@
                 }
               }
             }
+          },
+          "BrowserExtensionSidePanelDock": {
+            "close": "Close side panel",
+            "resize": "Resize side panel"
           }
         },
         "webauthn": {
@@ -20691,6 +20699,7 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "savedInOtherFolder": "This conversation was saved in another folder.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -20899,6 +20908,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "none": "None",
           "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
@@ -21646,18 +21656,42 @@
         "unavailable": "No preview for this page."
       },
       "usageLimitActions": {
-        "continueNow": "Continue Now",
-        "leadIn": "Continue this chat without waiting:",
-        "switchAccount": "Switch Account",
-        "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+        "switchAccount": "Switch account",
+        "addAccount": "Add account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead.",
+        "copyTruncated": "Copied text was shortened to fit {{count}} characters.",
+        "copyFailed": "Couldn't copy the error.",
+        "cancelAt": "Don't continue at {{time}}",
+        "wontContinue": "Won't continue automatically",
+        "autoContinueSettings": "Auto-continue settings",
+        "hideDetails": "Hide details",
+        "showDetails": "Show details",
+        "copyError": "Copy error",
+        "settingsMenu": "Auto-continue settings…",
+        "handOff": "Hand off to another agent",
+        "more": "More actions",
+        "statusUnknown": "Reset time unknown.",
+        "statusCanContinueAtAuto": "You can continue at {{time}}. Orca will continue this chat at {{autoTime}}.",
+        "statusCanContinueAtNoAuto": "You can continue at {{time}}. Orca won't continue this chat automatically.",
+        "statusCanContinueAt": "You can continue at {{time}}.",
+        "resetUnknown": "Reset time unknown",
+        "continuesAt": "Continues at {{time}}",
+        "autoContinuesAt": "Auto-continues at {{time}}",
+        "srSummary": "{{sentence}} {{status}}",
+        "canContinueAt": "Can continue at {{time}}",
+        "titleWeeklyReached": "{{agent}} weekly limit reached",
+        "titleExtraUsageReached": "{{agent}} extra usage limit reached",
+        "titleUsageReached": "{{agent}} usage limit reached",
+        "statusHasUsageAuto": "{{agent}} has usage again. Orca will continue this chat at {{time}}.",
+        "statusHasUsage": "{{agent}} has usage again.",
+        "titleHasUsage": "{{agent}} has usage again",
+        "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
+        "statusCanContinueNow": "{{agent}} can continue now.",
+        "titleCanContinueNow": "{{agent}} can continue now"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
-        "openSetting": "Continue automatically when limits reset",
-        "cancelled": "Orca won't continue this chat automatically.",
-        "scheduled": "Orca will continue this chat at {{time}}.",
-        "cancel": "Don't continue"
+        "scheduled": "Orca will continue this chat at {{time}}."
       },
       "settings": "Chat settings",
       "composerWorkspace": {
@@ -22260,6 +22294,10 @@
         "linkPreviewsCopy": "Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.",
         "linkPreviewsSearchUnfurl": "unfurl",
         "linkPreviewsSearchHover": "hover card",
+        "composerSpellcheckTitle": "Spellcheck and autocorrect",
+        "composerSpellcheckCopy": "Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.",
+        "composerSpellcheckSearchSpelling": "spellcheck",
+        "composerSpellcheckSearchAutocorrect": "autocorrect",
         "usageLimitContinueTitle": "Continue chats automatically when a usage limit resets",
         "usageLimitContinueCopy": "Orca sends \"Continue where you left off.\" when the limit resets. Applies to all chats with a known reset time.",
         "usageLimitContinueSearchLimit": "usage limit",
@@ -22283,7 +22321,11 @@
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
-        "turnDiffsSearchEdits": "edits"
+        "turnDiffsSearchEdits": "edits",
+        "promptSuggestionsTitle": "Suggested prompts",
+        "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
+        "promptSuggestionsSearchNext": "next prompt",
+        "promptSuggestionsSearchGhost": "ghost text"
       },
       "voice": {
         "dictationLanguage": {
@@ -22501,7 +22543,6 @@
         "previewFailed": "Couldn't check which workspaces this change matches.",
         "pinFailed": "Couldn't keep {{name}}.",
         "rules": {
-          "title": "Rules",
           "branchNote": "Merged branches are deleted with their workspace. Unmerged branches are kept.",
           "recommended": "Recommended",
           "inactiveDescription": "No activity for {{count}} days.",
@@ -22530,13 +22571,15 @@
           "inactiveDescription_other": "No activity for {{count}} days.",
           "matchesCount_one": "Matches 1 workspace now",
           "matchesCount_other": "Matches {{count}} workspaces now",
-          "checking": "Checking which workspaces match…"
+          "checking": "Checking which workspaces match…",
+          "checkFailed": "Couldn't check which workspaces match."
         },
         "protection": {
           "title": "Protection",
-          "alwaysKept": "Always kept: pinned workspaces, running agents or terminals, unsaved editor changes, uncommitted changes, unpushed commits.",
           "keepIgnoredFiles": "Keep workspaces with ignored files",
-          "keepIgnoredFilesDescription": "Files like .env and local config can't be recovered. node_modules and build output don't count."
+          "keepIgnoredFilesDescription": "Files like .env and local config can't be recovered. node_modules and build output don't count.",
+          "alwaysKeptLabel": "Always kept",
+          "alwaysKeptList": "Pinned workspaces, running agents or terminals, unsaved editor changes, uncommitted changes, unpushed commits."
         },
         "activity": {
           "loadFailed": "Couldn't load activity: {{error}}",
@@ -22607,15 +22650,13 @@
           "startup": "On startup",
           "hourly": "Hourly",
           "settings": "After a rule change",
-          "runNow": "Clean up now",
+          "runNow": "Run rules now",
           "cli": "From the CLI"
         },
         "search": {
           "cleanup": "cleanup",
           "cleanUp": "clean up",
           "delete": "delete",
-          "statusDescription": "Run the cleanup rules now, or review workspaces yourself.",
-          "reviewWorkspaces": "review workspaces",
           "automatic": "automatic",
           "pullRequest": "PR",
           "inactiveDescription": "No activity for a number of days.",
@@ -22630,9 +22671,13 @@
           "envFile": ".env",
           "chat": "chat",
           "transcripts": "transcripts",
-          "diskSpace": "disk space"
+          "diskSpace": "disk space",
+          "manual": "manual",
+          "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now.",
+          "runRulesNow": "run rules now",
+          "cleanUpNow": "clean up now",
+          "schedule": "schedule"
         },
-        "cleanUpNow": "Clean up now",
         "status": {
           "lastRunFailed": "Last run {{when}} couldn't finish: {{error}}",
           "lastRunNothing": "Last run {{when}} removed nothing.",
@@ -22640,13 +22685,7 @@
           "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
           "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
           "lastRunRemoved_other": "Last run {{when}} removed {{count}} workspaces.",
-          "offDetail": "Nothing is removed until you turn on a rule.",
-          "running": "Cleaning up now…",
           "nextRun": "Next run {{when}}.",
-          "on": "Automatic cleanup is on.",
-          "off": "Automatic cleanup is off.",
-          "review": "Review workspaces",
-          "turnOnHint": "Turn on a rule to use this.",
           "justNow": "just now",
           "inUnderAMinute": "in under a minute",
           "lastRunChats_one": "Last run {{when}} deleted 1 chat from a deleted workspace.",
@@ -22690,6 +22729,21 @@
           "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
           "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+        },
+        "manual": {
+          "title": "Manual cleanup",
+          "label": "Delete workspaces you pick",
+          "review": "Review workspaces",
+          "description": "See every workspace and choose which to delete."
+        },
+        "automatic": {
+          "offDetail": "Turn on a rule to remove workspaces on a schedule.",
+          "running": "Removing what your rules match…",
+          "title": "Automatic cleanup",
+          "on": "On",
+          "off": "Off",
+          "runningButton": "Running…",
+          "runNow": "Run rules now"
         }
       },
       "repository": {
@@ -25502,10 +25556,11 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
-    "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
-    "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
-    "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",
-    "catalogUnresolved": "{{agent}} models have not loaded. Close and reopen the agent picker to try again.",
+    "catalogLoadFailed": "Could not load {{agent}} models.",
+    "catalogSignInToLoad": "Sign in to {{agent}} to load its models.",
+    "catalogInstallToLoad": "Install {{agent}} on this host to load its models.",
+    "catalogNotLoaded": "{{agent}} models have not loaded.",
+    "retryModels": "Retry",
     "catalogEmpty": "{{agent}} has no available models.",
     "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
     "search": "Search, e.g. Opus 5.5…",

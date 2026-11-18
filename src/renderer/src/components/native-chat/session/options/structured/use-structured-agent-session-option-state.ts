@@ -65,7 +65,7 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     worktree
   } = args
-  const { permissionReport, launchPermissionMode, observation } =
+  const { permissionReport, launchPermissionMode, runningPermissionMode, observation } =
     useStructuredAgentSessionPermissionStatus(sessionId, target, fence)
   const [reader] = useState(() =>
     createStructuredAgentSessionOptionsReadOwner(
@@ -225,6 +225,7 @@ export function useStructuredAgentSessionOptionState(args: {
         permissionReport
       ),
       ...(launchPermissionMode === undefined ? {} : { launchPermissionMode }),
+      ...(runningPermissionMode === undefined ? {} : { runningPermissionMode }),
       permissionOwnSupported
     }),
     [
@@ -233,6 +234,7 @@ export function useStructuredAgentSessionOptionState(args: {
       controller,
       permissionReport,
       launchPermissionMode,
+      runningPermissionMode,
       fence,
       permissionOwnSupported
     ]

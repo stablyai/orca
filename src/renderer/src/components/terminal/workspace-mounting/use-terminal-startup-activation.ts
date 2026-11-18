@@ -9,7 +9,7 @@ import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/s
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/tabs/creation/terminal-tab-create-through-layout-owner'
-import type { TerminalColdActivationController } from '../../terminal-cold-activation'
+import type { TerminalColdActivationController } from './terminal-cold-activation'
 
 type TerminalStartupController = Pick<
   TerminalColdActivationController,

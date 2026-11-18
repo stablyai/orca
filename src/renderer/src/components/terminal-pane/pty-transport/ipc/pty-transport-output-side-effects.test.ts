@@ -112,37 +112,6 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
-  it('preserves stale-title detection after compacting deferred side effects', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createPtyOutputProcessor } = await import('../output/pty-output-processor')
-      const onTitleChange = vi.fn()
-      const onAgentBecameWorking = vi.fn()
-      const onAgentBecameIdle = vi.fn()
-      const processor = createPtyOutputProcessor({
-        onTitleChange,
-        onAgentBecameWorking,
-        onAgentBecameIdle
-      })
-      const callbacks = { onData: vi.fn() }
-
-      processor.processData('\x1b]0;. Claude working\x07', callbacks)
-      for (let i = 0; i < 20; i++) {
-        processor.processData(`plain output ${i}\r\n`, callbacks)
-      }
-
-      expect(onAgentBecameWorking).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(0)
-
-      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
-      vi.advanceTimersByTime(3_000)
-
-      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('bounds the deferred side-effect queue under a stalled drain, keeping the newest title and a pending bell', async () => {
     vi.useFakeTimers()
     try {

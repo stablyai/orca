@@ -23,6 +23,8 @@ export type BrowserWebviewMemoryProfile = {
 
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
 let dragListenersAttached = false
+// Retained client-page hosts are not registry webviews but still need native drags to pass through them.
+let dragListenerRetainers = 0
 let nativeDragPassthroughRelease: (() => void) | null = null
 const dragPassthroughPreviousPointerEvents = new Map<Electron.WebviewTag, string>()
 const rendererRecoveryPendingPageIds = new Set<string>()
@@ -209,8 +211,25 @@ export function unregisterPersistentWebview(browserTabId: string): void {
   }
   webviewRegistry.delete(browserTabId)
   unregisterBrowserGuestActivity(browserTabId)
-  if (webviewRegistry.size === 0) {
+  if (webviewRegistry.size === 0 && dragListenerRetainers === 0) {
     removeDragListeners()
+  }
+}
+
+/** Keep native-drag passthrough listening for a guest host outside this registry. */
+export function retainWebviewDragListeners(): () => void {
+  dragListenerRetainers += 1
+  ensureDragListeners()
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    dragListenerRetainers -= 1
+    if (webviewRegistry.size === 0 && dragListenerRetainers === 0) {
+      removeDragListeners()
+    }
   }
 }
 

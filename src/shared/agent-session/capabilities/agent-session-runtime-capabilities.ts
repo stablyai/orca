@@ -133,6 +133,10 @@ export const AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
   'agent-session.tool-output-append.v1' as const
 
+// The host takes `capabilities.promptSuggestions` on subscribe; older hosts' params predate it.
+export const AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY =
+  'agent-session.prompt-suggestions.v1' as const
+
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
@@ -190,5 +194,6 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
     AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PROMPT_SUGGESTIONS_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()

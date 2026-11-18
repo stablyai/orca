@@ -15,11 +15,8 @@ import {
   type RawListeningPort,
   type WorkspacePortScanOptions
 } from './local-workspace-port-scan-state'
-import {
-  dedupeRawPorts,
-  parseAddressWithPort,
-  parseProcAddress
-} from './local-workspace-port-address'
+import { dedupeRawPorts, parseAddressWithPort } from './local-workspace-port-address'
+import { parseProcNetTcp, type ProcNetListener } from './linux-proc-net-listeners'
 
 export function parseLsofListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
@@ -70,24 +67,6 @@ export function parseNetstatListeningOutput(output: string): RawListeningPort[] 
     ports.push({ ...parsed, pid: Number.isFinite(pid) ? pid : undefined })
   }
   return dedupeRawPorts(ports)
-}
-
-export function parseProcNetTcp(content: string): { host: string; port: number; inode: number }[] {
-  const results: { host: string; port: number; inode: number }[] = []
-  const lines = content.split('\n')
-  for (let i = 1; i < lines.length; i++) {
-    const fields = getProcessOutputFields(lines[i], 10)
-    if (fields.length < 10 || fields[3] !== '0A') {
-      continue
-    }
-    const parsed = parseProcAddress(fields[1])
-    const inode = Number.parseInt(fields[9], 10)
-    if (!parsed || !Number.isFinite(inode) || inode === 0) {
-      continue
-    }
-    results.push({ ...parsed, inode })
-  }
-  return results
 }
 
 export async function scanPlatformListeningPorts(
@@ -181,9 +160,10 @@ async function scanWindowsNetstatPorts(
 }
 
 async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
+  const ownUid = process.getuid?.()
   const [tcp4, tcp6] = await Promise.all([
-    readProcNet('/proc/net/tcp'),
-    readProcNet('/proc/net/tcp6')
+    readProcNet('/proc/net/tcp', ownUid),
+    readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
   const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
@@ -207,10 +187,11 @@ async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
 }
 
 async function readProcNet(
-  filePath: string
-): Promise<{ host: string; port: number; inode: number }[]> {
+  filePath: string,
+  ownUid: number | undefined
+): Promise<ProcNetListener[]> {
   try {
-    return parseProcNetTcp(await readFile(filePath, 'utf-8'))
+    return parseProcNetTcp(await readFile(filePath, 'utf-8'), ownUid)
   } catch {
     return []
   }

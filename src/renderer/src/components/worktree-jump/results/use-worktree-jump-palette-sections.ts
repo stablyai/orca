@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-results'
 import {
   bestPaletteQualityRank,

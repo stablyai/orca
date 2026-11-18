@@ -39,7 +39,7 @@ import {
   partialRuntimeStore,
   storeRepo,
   storeWorktreeMeta
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 const REPO_ID = 'repo-remote'
 const REPO_PATH = '/home/user/projects/app'

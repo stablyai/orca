@@ -46,6 +46,7 @@ export const LINT_STEPS = [
   'check:unproven-pty-retirement-ratchet',
   'check:daemon-blocking-call-ratchet',
   'check:main-sync-fs-ratchet',
+  'check:main-blocking-helper-ratchet',
   'check:recurring-timer-ratchet',
   'check:node-runtime-pin',
   'check:path-literal-ratchet',

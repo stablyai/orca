@@ -17,7 +17,10 @@ import type {
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
 import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
-import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../../record-transitions/keyed-record-transitions'
 
 /** The group a moved restored tab joins: the workspace's active one, else its first, else a new one. */
 export function restoredEditorTargetGroupId(

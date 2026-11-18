@@ -1,4 +1,5 @@
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { agentSessionLeaseMayBeHeld } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 
@@ -83,12 +84,12 @@ export function loadAgentSessionStoreRecordRow(
   const value = parsed.ok ? parsed.value : json
   if (parsed.ok && isReadableAgentSessionStoreRecord(sessionId, value)) {
     const { record } = decodePersistedAgentSessionRecord(value)
+    const lease = withoutRetiredLeaseLatches(record.lease)
+    // The same leases installation marks, so a retried installation agrees with this view.
     state.records.set(sessionId, {
       ...record,
-      lease: {
-        ...withoutRetiredLeaseLatches(record.lease),
-        ...(unreconciled ? { unreconciled: true } : {})
-      }
+      lease:
+        unreconciled && agentSessionLeaseMayBeHeld(lease) ? { ...lease, unreconciled: true } : lease
     })
     return
   }
@@ -162,23 +163,20 @@ export function loadAgentSessionStoreRows(
   return state
 }
 
-/** Installation invalidates prior authority without normalizing untouched saved records. */
+/** Installation invalidates prior authority without normalizing untouched saved records. A lease
+ *  nothing can hold stays as saved: restart adjudication would free it unchanged, and every older
+ *  build marks all leases itself when it opens. */
 export function installAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+  const state = loadAgentSessionStoreRows(db)
   const mark = db.prepare(`UPDATE agent_session_records
     SET record_json=json_set(record_json,'$.lease.unreconciled',json('true')) WHERE session_id=?`)
-  for (const row of db.prepare('SELECT session_id,record_json FROM agent_session_records').all()) {
-    const id = text(row, 'session_id')
-    const saved = parseJson(text(row, 'record_json'))
-    if (
-      id !== null &&
-      saved.ok &&
-      isReadableAgentSessionStoreRecord(id, saved.value) &&
-      !saved.value.lease.unreconciled
-    ) {
+  for (const [id, record] of state.records) {
+    if (!record.lease.unreconciled && agentSessionLeaseMayBeHeld(record.lease)) {
       mark.run(id)
+      state.records.set(id, { ...record, lease: { ...record.lease, unreconciled: true } })
     }
   }
-  return loadAgentSessionStoreRows(db)
+  return state
 }
 
 export function loadAgentSessionStoreTabs(

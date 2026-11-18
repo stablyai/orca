@@ -128,12 +128,15 @@ export async function abandonInstall(
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
   /** Remove only while the lock still names this owner, so a late cleanup spares a successor. */
-  owner?: InstallLockOwnerFile
+  owner?: InstallLockOwnerFile,
+  /** POSIX statement run first; it may end the command without removing the lock. */
+  releaseGate?: string
 ): Promise<boolean> {
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  const command = owner
+  const remove = owner
     ? removeOwnedInstallLockCommand(host, lock, owner)
     : removeRemoteTreeCommand(host, lock)
+  const command = releaseGate ? `${releaseGate} ${remove}` : remove
   return execHostCommand(conn, host, command).then(
     () => true,
     (error) => {

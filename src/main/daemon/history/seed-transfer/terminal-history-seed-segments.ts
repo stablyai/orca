@@ -3,7 +3,7 @@ import {
   PROCESS_BOUNDARY_GROUND,
   RESET_GRAPHIC_RENDITION
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 // Reset modes after seeding the daemon too, or downstream snapshots (including mobile) re-arm dead TUI state.
 
@@ -35,8 +35,8 @@ export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): r
   ]
 }
 
-// Why: the window blanks its viewport after painting a restore, but the daemon's seeded screen
-// did not, so a reattach showed the new shell's prompt beside the old one (`$ $`).
+// Why: match the window's fresh-shell start, or a reattach shows the new prompt beside the old one (`$ $`).
+// This runs on the PTY's own host, so its platform names the PTY backend.
 function freshShellViewport(restoreInfo: ColdRestoreInfo): string {
-  return buildFreshShellViewportBlankingSequence(restoreInfo.rows)
+  return buildFreshShellViewportSequence(restoreInfo.rows, process.platform === 'win32')
 }

@@ -4,7 +4,10 @@ import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/r
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { observeAgentPickerAcquisition } from './agent-launch-picker-acquisition'
+import {
+  observeAgentPickerAcquisition,
+  retryAgentPickerCatalog
+} from './agent-launch-picker-acquisition'
 import { AGENT_PICKER_CATALOG_RETRY_DELAYS_MS } from './agent-picker-catalog-jobs'
 import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
 
@@ -201,4 +204,54 @@ describe('agent picker catalog acquisition against a remote runtime', () => {
     expect(mocks.calls).toHaveLength(2)
     reopened.stop()
   })
+})
+
+const listed: AgentPickerEntry['catalog'] = {
+  origin: 'probe',
+  fetchedAt: 1,
+  listingNamesConfiguredModel: false,
+  models: [{ id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', isDefault: false, efforts: [] }]
+}
+
+const antigravity: AgentPickerEntry = {
+  agent: 'antigravity',
+  label: 'Antigravity',
+  rows: [{ kind: 'cli', agent: 'antigravity', chat: true }],
+  surfaces: ['chat', 'terminal'],
+  defaultSurface: 'chat',
+  terminal: {},
+  structured: {},
+  catalog: { origin: 'unknown' },
+  ownerKey: 'retry-test'
+}
+
+const settleReads = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+it('reads a failed catalog again while the picker stays open', async () => {
+  let reads = 0
+  let latest: AgentPickerEntry[] = []
+  const stop = observeAgentPickerAcquisition(
+    'retry-test',
+    [antigravity],
+    {
+      catalog: async () => {
+        reads += 1
+        if (reads === 1) {
+          throw new Error('agy models timed out')
+        }
+        return listed
+      },
+      support: async () => undefined
+    },
+    { publish: (entries) => (latest = entries), selected: () => undefined }
+  )
+  await settleReads()
+  expect(latest[0]?.catalogRead).toBe('failed')
+
+  retryAgentPickerCatalog('retry-test', 'antigravity')
+  await settleReads()
+  expect(reads).toBe(2)
+  expect(latest[0]?.catalogRead).toBe('settled')
+  expect(latest[0]?.catalog).toEqual(listed)
+  stop()
 })

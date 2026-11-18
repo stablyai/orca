@@ -3,7 +3,7 @@ import type {
   NeedsSetupProjectHostOption,
   ReadyProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
-import { HostRowIcon } from '../../host-row-icon'
+import { HostRowIcon } from '../../host-picker/host-row-icon'
 import { RunTargetRow } from './RunTargetComboboxRow'
 import { ConnectHostButton, NeedsSetupHostIcon, SetLocationButton } from './RunTargetRowActions'
 import { RecipesSubmenuRow } from './RunTargetSubmenus'

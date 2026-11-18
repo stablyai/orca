@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useAppStore } from '../../../store/index'
@@ -19,7 +19,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { getCodexResetProjection } from './codex-switcher-projection'
+import { getCodexOwnerUsageProjection, getCodexResetProjection } from './codex-switcher-projection'
 import { getCodexAccountSyncKey } from './provider-account-sync-key'
 import {
   getCodexStatusRuntimeKey,
@@ -36,10 +36,17 @@ import {
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
 import { signInCodexAccount } from './codex-sign-in-action'
+import {
+  getUsageOwnerHostScope,
+  type OwnerUsageRateLimits
+} from '../usage/use-owner-usage-rate-limits'
 
 const EMPTY_CODEX_ACCOUNTS: CodexRateLimitAccountsState = emptyCodexAccountsState()
 
-export function useCodexSwitcherController(codex: ProviderRateLimits) {
+export function useCodexSwitcherController(
+  codex: ProviderRateLimits,
+  ownerUsage?: OwnerUsageRateLimits
+) {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
@@ -58,13 +65,23 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
   const consumeCodexRateLimitResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
-  const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
-  const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
+  const localRateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const { target: focusedTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const usageOwner = ownerUsage?.remoteOwner
+  const runtimeTarget = useMemo(
+    () => (usageOwner === undefined ? focusedTarget : getUsageOwnerHostScope(usageOwner)),
+    [usageOwner, focusedTarget]
+  )
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
+  const { inactiveCodexAccounts, codexTarget, activeUsage } = getCodexOwnerUsageProjection(
+    codex,
+    localRateLimits,
+    ownerUsage?.rateLimits,
+    hasActiveRuntimeEnvironment
+  )
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
         ?.name ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
@@ -81,10 +98,17 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     setAccounts,
     loadAccounts,
     mountedRef: ownerMountedRef
-  } = useProviderAccountList('codex', runtimeTarget, codexAccountSyncKey, EMPTY_CODEX_ACCOUNTS)
+  } = useProviderAccountList(
+    'codex',
+    runtimeTarget,
+    codexAccountSyncKey,
+    EMPTY_CODEX_ACCOUNTS,
+    false,
+    !hasActiveRuntimeEnvironment
+  )
   const accountState = resolveCodexStatusAccountState(
     settings,
-    accounts,
+    hasActiveRuntimeEnvironment ? (ownerUsage?.accounts?.codex ?? EMPTY_CODEX_ACCOUNTS) : accounts,
     activeRuntimeEnvironmentId
   )
 
@@ -172,7 +196,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     const currentKey = getCodexStatusRuntimeKey(
       normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
     )
-    if (group.key === currentKey) {
+    if (hasActiveRuntimeEnvironment || group.key === currentKey) {
       return
     }
     try {
@@ -266,6 +290,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
 
   return {
     activeTarget,
+    activeUsage,
     handleConfirmReset,
     handleOpenChange,
     handleResetMenuSelect,
