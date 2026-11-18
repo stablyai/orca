@@ -6227,6 +6227,11 @@
           "notScannedYet": "Not scanned yet",
           "updatedAt": "Updated {{time}}",
           "unknownLocation": "Unknown location"
+        },
+        "StatsHostScope": {
+          "remoteCaption": "Stats and usage recorded on {{value0}}. Enable and Refresh act on {{value0}}.",
+          "tooOldTitle": "{{value0}} can't report usage yet",
+          "tooOldBody": "It runs an older version of Orca. Update Orca on {{value0}} to see its token usage here."
         }
       },
       "sparse": {
