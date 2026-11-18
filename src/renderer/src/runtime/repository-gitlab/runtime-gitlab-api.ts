@@ -9,7 +9,7 @@ import type { RuntimeCapability } from '../../../../shared/remote-runtime/protoc
 import {
   GITLAB_WEB_RPC_METHODS,
   type WebGitLabRuntimeMethod
-} from '@/web/preload-api/web-gitlab-routes'
+} from '@/web/preload-api/gitlab/web-gitlab-routes'
 import { mapRepoPathArg } from '../source-control/forge/runtime-repo-selector-params'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 

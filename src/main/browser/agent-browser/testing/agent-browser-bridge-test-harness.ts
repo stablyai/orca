@@ -73,6 +73,7 @@ export type MockWebContents = {
   getTitle: () => string
   loadURL: Mock<(nextUrl: string) => Promise<void>>
   isLoading: Mock<() => boolean>
+  isLoadingMainFrame: Mock<() => boolean>
   isWaitingForResponse: Mock<() => boolean>
   on: Mock<(event: string, listener: MockEmitterListener) => void>
   removeListener: Mock<(event: string, listener: MockEmitterListener) => void>
@@ -101,6 +102,7 @@ export function mockWebContents(
       currentUrl = nextUrl
     }),
     isLoading: vi.fn(() => false),
+    isLoadingMainFrame: vi.fn(() => false),
     isWaitingForResponse: vi.fn(() => false),
     on: vi.fn(),
     removeListener: vi.fn(),

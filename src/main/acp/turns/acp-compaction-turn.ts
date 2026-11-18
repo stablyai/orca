@@ -1,9 +1,9 @@
 // Consume /compact output; select its one result: an ordinary provider failure or the command's own row.
 
-import { agentSessionCompactCommandText } from '../../../shared/agent-session/agent-session-conversation-command'
+import { agentSessionCompactCommandText } from '../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import { providerDiagnostic } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../shared/agent-session/agent-session-compaction'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../shared/agent-session/conversation-context/agent-session-compaction'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import { structuredCompactionOutcome } from '../../native-chat/agent-session-wire/operations/structured-conversation-command-outcome'
 import type { AcpDialect, AcpTurnEnding } from '../acp-dialects/acp-dialect'
@@ -16,8 +16,8 @@ import {
 import type { AcpTurnFailures } from '../timeline/acp-turn-failures'
 import type { ContentBlock, SessionUpdate } from '../generated/acp-protocol.generated'
 
-export function acpCompactPrompt(instructions?: string): ContentBlock[] {
-  return [{ type: 'text', text: agentSessionCompactCommandText(instructions) }]
+export function acpCompactPrompt(instructions?: string, command?: string): ContentBlock[] {
+  return [{ type: 'text', text: agentSessionCompactCommandText(instructions, command) }]
 }
 
 export type AcpCompaction = { reply: string; failure?: AcpTurnFailureEvidence }

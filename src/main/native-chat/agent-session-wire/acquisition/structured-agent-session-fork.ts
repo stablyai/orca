@@ -3,14 +3,14 @@ import {
   type StructuredAgentSessionForkInput
 } from './structured-agent-session-fork-source'
 import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
-import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
+import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { AgentConversationCopyError } from '../../conversation-adoption/agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
+import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/ownership/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
 export async function prepareStructuredAgentSessionFork(

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join, sep } from 'node:path'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 const { readFileMock, realpathMock, statMock, wslHomeMock, wslHomeAsyncMock } = vi.hoisted(() => ({

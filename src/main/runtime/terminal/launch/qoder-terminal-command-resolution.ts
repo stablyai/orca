@@ -1,4 +1,4 @@
-import type { PreflightRuntimeContext } from '../../../ipc/preflight-runtime-target'
+import type { PreflightRuntimeContext } from '../../../ipc/preflight/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from '../../../preflight/agent-command-detection'
 import {
   getTuiAgentDetectCommands,

@@ -11,7 +11,7 @@ import { cancelSelect } from '../selection/selection-mode'
 import { resetEvictionCounter } from '../selection/selection-state-and-eviction'
 import { applyTerminalTheme } from '../engine/terminal-theme'
 import { init, resize, write } from '../engine/terminal-init'
-import { applyTextScale } from '../viewport/text-scaling'
+import { applyTerminalFontStyle, applyTextScale } from '../viewport/text-scaling'
 import { afterQueuedWrites, resetWriteQueue } from '../engine/write-queue'
 
 export type TerminalHostMessage = {
@@ -23,6 +23,9 @@ export type TerminalHostMessage = {
   initialData?: unknown
   terminalTheme?: Parameters<typeof applyTerminalTheme>[1]
   fontScale?: number
+  fontStyle?: unknown
+  // Native hosts only: the picked bundled face, which a WebView without an asset server cannot fetch.
+  fontFaceCss?: unknown
   preserveScroll?: boolean
   oscLinks?: unknown
   kittyKeyboardFlags?: unknown
@@ -66,7 +69,9 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       msg.fontScale,
       msg.preserveScroll!,
       msg.oscLinks,
-      msg.kittyKeyboardFlags
+      msg.kittyKeyboardFlags,
+      msg.fontStyle,
+      msg.fontFaceCss
     )
   } else if (msg.type === 'set-font-scale') {
     // Ignore the host echo of a pinch value so it cannot reset post-pinch state.
@@ -80,6 +85,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       scope.panY = 0
       applyTextScale(scope, msg.fontScale)
     }
+  } else if (msg.type === 'set-font-style') {
+    applyTerminalFontStyle(scope, msg.fontStyle, msg.fontFaceCss)
   } else if (msg.type === 'resize') {
     holdHostFrame(scope, msg)
     resize(scope, msg.cols!, msg.rows!)

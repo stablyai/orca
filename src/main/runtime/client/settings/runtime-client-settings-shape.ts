@@ -1,10 +1,11 @@
 // What a paired client reads and may write of this host's settings.
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { SourceControlAiActionDefaults } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { NativeChatDefaultSettings } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
@@ -16,6 +17,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
   | 'codexShareHistoryAcrossAccounts'
+  | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
@@ -51,6 +53,8 @@ export type RuntimeClientSettings = Pick<
   workspaceCleanupPolicy: WorkspaceCleanupRules
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
+  /** This host's Chat or CLI choice for new agents; null on a headless host nobody set one on. Absent on older hosts. */
+  nativeChatDefaults: NativeChatDefaultSettings | null
   /** Models directory and microphone stay host-private. */
   voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
 }

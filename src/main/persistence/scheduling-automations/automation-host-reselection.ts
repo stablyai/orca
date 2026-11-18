@@ -2,7 +2,7 @@ import type {
   Automation,
   AutomationUpdateInput
 } from '../../../shared/automations/automation-definition'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
@@ -14,7 +14,7 @@ import {
   AutomationOwnerConflictError
 } from '../../../shared/automations/ownership/automation-owner-conflict'
 import { findAutomationRepo } from '../../../shared/automations/ownership/automation-repo-target'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { areTaskSourceContextsEqual } from '../../../shared/work-items/task-source-context'
 
 /** Verify the original physical target in the same transaction that adopts its registration. */

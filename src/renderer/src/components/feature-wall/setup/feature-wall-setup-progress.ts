@@ -4,7 +4,7 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../../shared/feature-education/explore/feature-wall-setup-steps'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { selectWorktreesByRepo } from '../../../store/workspaces/catalog/workspace-record-fields'
 

@@ -413,7 +413,9 @@ export const rosterFableOnlyLowDetailed = rosterFixture(PRESETS.fableOnlyLow, 'u
 function revealFableTitles(frame: HTMLElement): void {
   const doc = frame.ownerDocument
   const titles = [
-    ...doc.querySelectorAll<HTMLElement>('[data-usage-scoped-only],[data-usage-scoped-urgent]')
+    ...doc.querySelectorAll<HTMLElement>(
+      '[data-usage-scoped-only],[data-usage-scoped-urgent],[data-usage-window][title]'
+    )
   ]
     .map((element) => element.title)
     .filter(Boolean)

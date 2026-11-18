@@ -3,7 +3,7 @@ import { useSourceControlScope } from '../../source-control/panel/worktree-scope
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails

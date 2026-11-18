@@ -9,7 +9,7 @@ import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
@@ -127,16 +127,6 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
   }
   await client.call('settings.update', { agentStatusHooksEnabled: enabled }, { timeoutMs: 10_000 })
   return true
-}
-
-/** The running app owns the live setting and removes its hooks; otherwise the profile on disk. */
-export async function persistAgentStatusHooksEnabled(
-  client: RuntimeClient,
-  enabled: boolean
-): Promise<void> {
-  if (!(await updateRunningRuntime(client, enabled))) {
-    await updateEnabledOnDisk(enabled)
-  }
 }
 
 /** Null when no runtime answers; a running app owns the live setting. */

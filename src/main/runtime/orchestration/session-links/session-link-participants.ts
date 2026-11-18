@@ -3,7 +3,7 @@ import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { isNativeLocalLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../../shared/execution-host/execution-host'
 import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
 import {
   conversationRecordReader,

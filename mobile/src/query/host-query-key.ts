@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 
 // `exec` is always set: workspace ids collide across servers, as in composeWorktreeHostIdentity.
 export type HostQueryTarget = { exec: ExecutionHostId; worktree?: string; repo?: string }

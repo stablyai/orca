@@ -10,7 +10,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/age
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   createStore,
@@ -23,7 +23,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import { idOf, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../../../agent-session/installation/structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
@@ -34,7 +34,7 @@ import {
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
 import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { scriptedCodexTransport } from '../../../orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { scriptedCodexTransport } from '../../../agent-session/testing/scripted-codex-transport.test-fixture'
 
 export const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 export const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'

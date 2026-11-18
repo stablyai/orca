@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { enrichRepoGitUsernames } from '../../workspaces/catalog/repo-git-username-enrichment'
 import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'

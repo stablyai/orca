@@ -4,8 +4,8 @@ import { ArrowUpRight } from 'lucide-react-native'
 import {
   agentMessageSendersShown,
   type AgentMessageSource
-} from '../../../../../../src/shared/agent-session/agent-session-message-source'
-import { agentMessageSenderCanOpen } from '../../../../../../src/shared/agent-session/agent-message-presentation'
+} from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
+import { agentMessageSenderCanOpen } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { styles } from './mobile-agent-message-card-styles'

@@ -1,0 +1,404 @@
+import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { Eye, ShieldAlert, Pin } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { TabHoverCard } from '../strip/TabHoverCard'
+import { basename } from '@/lib/path'
+import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
+import { renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import { useAppStore } from '@/store/index'
+import { STATUS_COLORS } from '../../../lib/source-control/paths/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../shared/git/status/git-status-labels'
+import { getUntitledFileRoot } from '@/components/editor/panel/untitled-rename/untitled-file-rename-path'
+import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  getTabRootStateClasses,
+  getTabStripBorderClasses
+} from '../strip/drop-indicator'
+import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
+import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
+import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
+import { useTranslate } from '@/i18n/use-translate'
+import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
+import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
+import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
+import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
+import type { EditorFileTabProps } from './editor-file-tab-props'
+
+export default function EditorFileTab({
+  file,
+  isActive,
+  isPinned,
+  hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
+  gitStatus: tabStatus,
+  onActivate,
+  onClose,
+  onCloseOthers,
+  onCloseToRight,
+  onCloseToLeft,
+  onCloseSplitPane,
+  onCloseAll,
+  onMakePermanent,
+  onTogglePin,
+  dragData,
+  dropIndicator,
+  includeTopTabBorder = true
+}: EditorFileTabProps): React.JSX.Element {
+  const t = useTranslate()
+  const placedElsewhere = useAppStore((state) =>
+    file.tabId
+      ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId
+      : false
+  )
+  const worktree = useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))
+  const repo = useAppStore((state) =>
+    worktree ? resolveReviewRepository(state.repos, worktree) : null
+  )
+  // Keep dragged tabs anchored; only the insertion bar moves.
+  const { attributes, listeners, setNodeRef } = useSortable({
+    // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
+    id: file.tabId ?? file.id,
+    data: dragData
+  })
+
+  const isConflictReview = file.mode === 'conflict-review'
+  const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const customEditor = useTabCustomEditor(file)
+  // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
+  const ModeIcon = getEditorFileTabModeIcon(file)
+  const tabIcon = (className: string): React.ReactNode => (
+    <PluginContributionIcon
+      url={customEditor?.iconUrl}
+      fallback={ModeIcon ?? <FileTypeIcon filePath={file.filePath} className={className} />}
+      className={className}
+    />
+  )
+  // Strike through missing paths only; changed content is explained by the editor’s on-disk banner.
+  const isMissingFileMutation =
+    file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
+  const resolvedLanguage =
+    file.mode === 'diff'
+      ? detectLanguage(file.relativePath)
+      : isConflictReview
+        ? 'plaintext'
+        : file.language
+  const canShowMarkdownPreview = canOpenMarkdownPreview({
+    language: resolvedLanguage,
+    mode: file.mode,
+    diffSource: file.diffSource
+  })
+  const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  // Why: the stored flag outlives the setting (sessions persist it, other windows change it), so preview-ness is derived, never reconciled.
+  const isPreviewTab = useAppStore(
+    (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
+  )
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameFocusFrameRef = useRef<number | null>(null)
+  const skipMenuFocusRestoreRef = useRef(false)
+  // Escape unmounts the input and triggers focusout; suppress that trailing blur so cancel cannot commit.
+  const renameCancelledRef = useRef(false)
+  // Rename only concrete editable files; virtual/diff/conflict views and agent-owned read-only artifacts cannot safely move.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
+
+  const openRenameInput = (): void => {
+    if (!canRename) {
+      return
+    }
+    renameCancelledRef.current = false
+    setIsRenaming(true)
+  }
+
+  const commitRename = (): void => {
+    if (renameCancelledRef.current) {
+      setIsRenaming(false)
+      return
+    }
+    const input = renameInputRef.current
+    if (!input) {
+      setIsRenaming(false)
+      return
+    }
+    const newName = input.value.trim()
+    // Consume Enter’s trailing blur so one action cannot rename twice against the old path.
+    renameCancelledRef.current = true
+    setIsRenaming(false)
+    const oldName = basename(file.filePath)
+    if (!newName || newName === oldName) {
+      return
+    }
+    const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
+    void renameFileOnDisk({
+      oldPath: file.filePath,
+      newName,
+      worktreeId: file.worktreeId,
+      worktreePath,
+      // Why: a file opened outside every project may be renamed to any path, wherever it lives.
+      documentScoped: editorTabDocumentFolderAccess(useAppStore.getState(), file) !== undefined
+    })
+  }
+
+  const setRenameInputElement = useCallback(
+    (input: HTMLInputElement | null) => {
+      if (renameFocusFrameRef.current !== null) {
+        cancelAnimationFrame(renameFocusFrameRef.current)
+        renameFocusFrameRef.current = null
+      }
+      renameInputRef.current = input
+      if (!input) {
+        return
+      }
+      // Wait for the input’s tab layout before focusing and selecting its text.
+      renameFocusFrameRef.current = requestAnimationFrame(() => {
+        renameFocusFrameRef.current = null
+        if (renameInputRef.current !== input) {
+          return
+        }
+        input.focus()
+        const name = basename(file.filePath)
+        const dotIndex = name.lastIndexOf('.')
+        if (dotIndex > 0) {
+          input.setSelectionRange(0, dotIndex)
+        } else {
+          input.select()
+        }
+      })
+    },
+    [file.filePath]
+  )
+
+  const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
+
+  useEffect(() => {
+    const closeMenu = (): void => setMenuOpen(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+  }, [])
+
+  // Webview clicks bypass renderer pointerdown, so window blur dismisses menus Radix cannot detect as outside clicks.
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    const dismiss = (): void => setMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [menuOpen])
+
+  const dragListeners = isRenaming ? undefined : listeners
+  const { onPointerDown, retirePendingActivation } = useTabStripPointerActivation({
+    onActivate,
+    disabled: isRenaming
+  })
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
+  const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
+
+  const tabRoot = (
+    <div
+      ref={setNodeRef}
+      data-tab-id={file.tabId ?? file.id}
+      data-active={isActive ? 'true' : 'false'}
+      data-pinned={isPinned ? 'true' : 'false'}
+      {...attributes}
+      {...dragListeners}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      onPointerDown={(e) => {
+        onPointerDown(
+          e,
+          dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
+        )
+      }}
+      onDoubleClick={() => {
+        if (isPreviewTab && onMakePermanent) {
+          onMakePermanent()
+        }
+      }}
+      onMouseDown={(e) => {
+        if (e.button === 1) {
+          e.preventDefault()
+        }
+      }}
+      onMouseUp={preventMiddleButtonDefault}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault()
+          e.stopPropagation()
+          if (isPinned) {
+            return
+          }
+          onClose()
+        }
+      }}
+    >
+      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isConflictReview ? (
+        <ShieldAlert
+          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
+        />
+      ) : isMarkdownPreviewTab ? (
+        <Eye
+          className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+        />
+      ) : (
+        tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
+      )}
+      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
+        {isRenaming ? (
+          <Input
+            ref={setRenameInputElement}
+            density="compact"
+            data-tab-rename-input="true"
+            aria-label={t(
+              'auto.components.tab.bar.EditorFileTab.3da7445c84',
+              'Rename file {{value0}}',
+              { value0: basename(file.filePath) }
+            )}
+            defaultValue={basename(file.filePath)}
+            className="mr-1 min-w-0 flex-1"
+            spellCheck={false}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              // IME candidate confirmation must not commit the rename.
+              if (isImeCompositionKeyDown(e)) {
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.stopPropagation()
+                commitRename()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                e.stopPropagation()
+                renameCancelledRef.current = true
+                setIsRenaming(false)
+              }
+            }}
+            onBlur={commitRename}
+          />
+        ) : (
+          <span
+            className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+            style={tabStatusColor ? { color: tabStatusColor } : undefined}
+            onDoubleClick={(e) => {
+              if (isPreviewTab && onMakePermanent) {
+                e.stopPropagation()
+                onMakePermanent()
+                return
+              }
+              // Preview double-click promotes the tab; rename filename text only after it is permanent.
+              if (!canRename) {
+                return
+              }
+              e.stopPropagation()
+              openRenameInput()
+            }}
+          >
+            {getEditorDisplayLabel(file, undefined, t)}
+            {placedElsewhere && repo ? ` · ${repo.displayName}` : ''}
+          </span>
+        )}
+        {isMissingFileMutation && !isRenaming && (
+          <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
+            {file.externalMutation}
+          </span>
+        )}
+        {tabStatus && !isRenaming && !isMissingFileMutation && (
+          <span
+            className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
+            style={{ color: tabStatusColor }}
+          >
+            {STATUS_LABELS[tabStatus]}
+          </span>
+        )}
+      </span>
+      {/* Share one dot/close slot so autosave cannot change tab width. */}
+      <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
+        {file.isDirty && (
+          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
+        )}
+        {!isPinned && (
+          <EditorFileTabCloseButton
+            fileIsDirty={file.isDirty}
+            showsSelectionChrome={isActive}
+            onClose={onClose}
+          />
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+      <ContextMenuTrigger asChild>
+        <div
+          {...slotProps}
+          onContextMenu={() => {
+            window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+            handleMenuOpenChange(true)
+          }}
+        >
+          {isRenaming || menuOpen ? (
+            tabRoot
+          ) : (
+            <TabHoverCard
+              title={`${getEditorDisplayLabel(file, undefined, t)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
+              programName={customEditor?.title ?? t('tabHoverCard.editor', 'Editor')}
+              icon={tabIcon('size-4')}
+              description={file.relativePath}
+            >
+              {tabRoot}
+            </TabHoverCard>
+          )}
+        </div>
+      </ContextMenuTrigger>
+
+      <EditorFileTabContextMenu
+        file={file}
+        unifiedTabId={dragData.unifiedTabId}
+        groupId={dragData.groupId}
+        isPinned={isPinned}
+        isRenaming={isRenaming}
+        hasTabsToRight={hasTabsToRight}
+        hasTabsToLeft={hasTabsToLeft}
+        tabCount={tabCount}
+        canRename={canRename}
+        canShowMarkdownPreview={canShowMarkdownPreview}
+        resolvedLanguage={resolvedLanguage}
+        repoConnectionId={repo?.connectionId ?? null}
+        skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
+        onActivate={onActivate}
+        onOpenRenameInput={openRenameInput}
+        onTogglePin={onTogglePin}
+        onClose={onClose}
+        onCloseOthers={onCloseOthers}
+        onCloseAll={onCloseAll}
+        onCloseToRight={onCloseToRight}
+        onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
+        onOpenMarkdownPreview={openMarkdownPreview}
+      />
+    </ContextMenu>
+  )
+}

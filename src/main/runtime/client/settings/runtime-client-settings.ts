@@ -13,17 +13,17 @@ import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catal
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/managed-agent-hook-controls'
-import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
@@ -43,6 +43,7 @@ import type {
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
+import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -60,7 +61,8 @@ export class RuntimeClientSettingsController {
       'getSettings' | 'updateSettings' | 'runDurableMutation'
     > | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined,
-    private readonly sharingServices: RuntimeSharingServicePresence | undefined = undefined
+    private readonly sharingServices: RuntimeSharingServicePresence | undefined = undefined,
+    private readonly isHeadless: () => boolean = () => false
   ) {}
 
   get(): RuntimeClientSettings {
@@ -116,6 +118,8 @@ export class RuntimeClientSettingsController {
         : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       workspaceCleanupPolicy: settings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules(),
+      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      deleteChatHistoryWithWorkspace: settings.deleteChatHistoryWithWorkspace === true,
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
@@ -135,6 +139,7 @@ export class RuntimeClientSettingsController {
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
+      nativeChatDefaults: hostNativeChatDefaults(settings, this.isHeadless()),
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })
