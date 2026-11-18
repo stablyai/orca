@@ -7,12 +7,7 @@ import {
   startBrowserPageAttach,
   waitForBrowserPageReady,
   reserveBrowserPageDiscard,
-  claimBrowserMemoryPage,
-  retainBrowserMemoryPageForAgent,
-  closeBrowserMemoryPage,
-  isRetiredBrowserGuest,
-  acknowledgeBrowserPageRemoval,
-  browserMemoryGeneration
+  closeBrowserMemoryPage
 } from './browser-page-memory'
 
 const { caller, throttle } = vi.hoisted(() => ({

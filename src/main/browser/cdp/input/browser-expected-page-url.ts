@@ -10,14 +10,20 @@ import {
 import { BrowserError } from '../../browser-error'
 import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 
-export function browserExpectedUrlMismatchError(
+export function redactBrowserExpectedUrlMismatch(
   mismatch: BrowserExpectedUrlMismatch
-): BrowserError {
-  mismatch = {
+): BrowserExpectedUrlMismatch {
+  return {
     ...mismatch,
     expectedUrl: clipUrlForMismatch(redactKagiSessionToken(mismatch.expectedUrl)),
     actualUrl: clipUrlForMismatch(redactKagiSessionToken(mismatch.actualUrl))
   }
+}
+
+export function browserExpectedUrlMismatchError(
+  mismatch: BrowserExpectedUrlMismatch
+): BrowserError {
+  mismatch = redactBrowserExpectedUrlMismatch(mismatch)
   return new BrowserError(
     BROWSER_EXPECTED_URL_MISMATCH_CODE,
     expectedUrlMismatchMessage(mismatch),

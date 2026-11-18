@@ -60,13 +60,12 @@ vi.mock('../../cdp/commands/cdp-bridge', async () => {
 })
 
 import { AgentBrowserBridge } from '../agent-browser-bridge'
-import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-navigation-settle'
+
 import {
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks,
-  succeedRecordingAgentBrowserSpawns
+  resetAgentBrowserBridgeMocks
 } from '../testing/agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
@@ -140,31 +139,4 @@ describe('AgentBrowserBridge', () => {
   type EarlySettledNavigation = { commit: (url: string) => void; emit: (event: string) => void }
 
   // Electron resolves loadURL on the old page's beforeunload replaceState while the request is open.
-  function mockEarlySettlingPage(
-    url: string,
-    settleLoad: (navigation: EarlySettledNavigation) => void
-  ) {
-    const wc = mockWebContents(100, url)
-    const events = new EventEmitter()
-    wc.on.mockImplementation((event, listener) => events.on(event, listener))
-    wc.removeListener.mockImplementation((event, listener) =>
-      events.removeListener(event, listener)
-    )
-    let committedUrl = url
-    wc.getURL = () => committedUrl
-    wc.loadURL.mockImplementation(async () => {
-      wc.isWaitingForResponse.mockReturnValue(true)
-      wc.isLoading.mockReturnValue(true)
-      settleLoad({
-        commit: (nextUrl) => {
-          committedUrl = nextUrl
-          wc.isWaitingForResponse.mockReturnValue(false)
-          events.emit('did-navigate')
-        },
-        emit: (event) => events.emit(event)
-      })
-    })
-    webContentsFromIdMock.mockReturnValue(wc)
-    return wc
-  }
 })

@@ -4,7 +4,6 @@ import { CdpWsProxy } from './cdp-ws-proxy'
 import {
   connect,
   createMockWebContents,
-  nextMessage,
   sendAndReceive,
   mockAsWebContents,
   type MockWebContents
@@ -32,20 +31,6 @@ describe('CdpWsProxy', () => {
   afterEach(async () => {
     await proxy.stop()
   })
-
-  async function attachPageSession(client: WebSocket, id: number): Promise<void> {
-    await sendAndReceive(client, {
-      id,
-      method: 'Target.attachToTarget',
-      params: { targetId: 'orca-proxy-target', flatten: true }
-    })
-  }
-
-  function expectPdfStreamHandle(response: Record<string, unknown>): string {
-    const result = response.result as Record<string, unknown>
-    expect(result.data).toBe('')
-    return result.stream as string
-  }
 
   it('publishes safe discovery for a retained private document', async () => {
     mock.webContents.getURL.mockReturnValue('https://kagi.com/search?token=discovery-secret&q=one')

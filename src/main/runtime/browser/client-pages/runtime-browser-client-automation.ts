@@ -1,3 +1,5 @@
+import { redactClientBrowserAutomationResult } from './browser-client-automation-result-metadata'
+import { browserClientNavigationFailure } from './browser-client-navigation-failure'
 import { redactBrowserMetadata } from '../../../../shared/browser/browser-metadata-redaction'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
@@ -158,9 +160,9 @@ async function issueOnClientPage(
   if (result.status === 'failed') {
     throw result.expectedUrlMismatch
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
-      : browserClientPageRefusal(result.errorCode, result.errorMessage)
+      : browserClientNavigationFailure(method, params, result.errorCode, result.errorMessage)
   }
-  return result.value
+  return redactClientBrowserAutomationResult(method, result.value, params)
 }
 
 async function resolveTargetPage(

@@ -83,14 +83,6 @@ vi.mock('../sessions/profiles/browser-session-registry', () => ({
 import { OffscreenBrowserBackend } from './offscreen-browser-backend'
 import { isWorkspaceDocPageId } from '../document-preview/doc-preview-guest-policy'
 
-function registerOffscreenGuestLikeBrowserManager({
-  browserPageId
-}: {
-  browserPageId: string
-}): boolean {
-  return !isWorkspaceDocPageId(browserPageId)
-}
-
 describe('OffscreenBrowserBackend lifecycle', () => {
   beforeEach(() => {
     mocks.windows.length = 0

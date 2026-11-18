@@ -11,19 +11,6 @@ vi.mock('../../routing/input-ownership/remote-cli-page-admission', () => ({
 
 // Real agent-browser 0.39.4 `snapshot --delta` replies.
 const UNCHANGED = { snapshot: { kind: 'unchanged', baseRevision: 1, revision: 2 } }
-const INVALID_LOGIN = {
-  snapshot: {
-    kind: 'delta',
-    baseRevision: 3,
-    revision: 4,
-    changes: [],
-    treeChange: {
-      startLine: 12,
-      deleteCount: 0,
-      lines: ['    - StaticText "Invalid username or password"']
-    }
-  }
-}
 
 function fakeGuest(url = 'http://127.0.0.1/login.html', title = 'Login') {
   const guest = Object.assign(new EventEmitter(), {

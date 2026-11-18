@@ -1,4 +1,3 @@
-import { BrowserRoutePageAvailability } from '../../routing/guest-authority/browser-route-page-availability'
 import { expect, it, vi } from 'vitest'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import { BrowserClientHostCommandDispatcher } from '../../client-hosts/commands/browser-client-host-command-dispatcher'
@@ -14,12 +13,6 @@ const create = (): BrowserClientHostCommandEvent =>
       initialUrl: 'https://example.internal/path'
     }
   })
-const close = (sequence: number): BrowserClientHostCommandEvent => ({
-  ...create(),
-  commandSequence: sequence,
-  commandId: `close-${sequence}`,
-  command: { type: 'closePage', targetAuthority: create() }
-})
 
 it('keeps the raw initializer command at the guest while returning and reconciling only safe URLs', async () => {
   const { dependencies } = createHarness()

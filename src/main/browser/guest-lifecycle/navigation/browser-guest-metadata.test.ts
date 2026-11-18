@@ -2,11 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import {
-  installBrowserGuestMetadata,
-  publishBrowserGuestMetadata,
-  readBrowserGuestMetadata
-} from './browser-guest-metadata'
+import { installBrowserGuestMetadata, readBrowserGuestMetadata } from './browser-guest-metadata'
 
 function fixture() {
   let url = 'https://example.test/start'
