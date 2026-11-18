@@ -31,7 +31,7 @@ const COMMIT = {
   subject: 'Retire PR recovery epochs',
   message: 'Retire PR recovery epochs',
   author: 'Jinjing',
-  timestamp: Date.now() - 2 * 3_600_000
+  timestamp: 1_763_000_000_000
 }
 
 const PAGE: GitHistoryResult = {
