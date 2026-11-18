@@ -24,6 +24,7 @@ import {
   type ZotzConversationStatus
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
+import { ZotzWorkingRipple } from './ZotzWorkingRipple'
 import { ZotzConversationMenu } from './ZotzConversationMenu'
 import { ZotzProjectMenu } from './ZotzProjectMenu'
 import HiddenProjectsSection from '../../sidebar/hidden-projects/HiddenProjectsSection'
@@ -73,7 +74,9 @@ function ConversationRow({
       )}
     >
       <span className="mt-1 flex size-3 shrink-0 items-center justify-center">
-        {status ? (
+        {status && (status.state === 'working' || status.state === 'monitoring') ? (
+          <ZotzWorkingRipple />
+        ) : status ? (
           <AgentStateDot
             state={status.state}
             unread={status.unread}
