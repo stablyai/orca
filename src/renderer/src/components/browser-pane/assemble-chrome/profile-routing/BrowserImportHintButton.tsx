@@ -3,8 +3,8 @@ import { Import } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
-import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from '@/components/settings/browser/profiles/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,

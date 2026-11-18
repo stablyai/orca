@@ -1,6 +1,9 @@
 import type { AppState } from '@/store/types'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 /** An older host's agent-prompt character cap, read from its live status; `null` for none. */

@@ -201,8 +201,9 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
     'no_active_sender_terminal',
     `This chat session has no orchestration identity of its own, so --${flagName} cannot be inferred, ` +
       `and no terminal handle names it — every live handle belongs to a different pane, and passing one ` +
-      `would consume that pane's mailbox. Drive a worker directly instead: create a worktree with ` +
-      `--agent to launch one in its first terminal, then use terminal send and terminal read.`
+      `would consume that pane's mailbox. To start other work, put its task in --prompt on ` +
+      `agent launch or worktree create --agent and follow it with agent read; otherwise tell the ` +
+      `user this chat cannot send Orca mail.`
   )
 }
 

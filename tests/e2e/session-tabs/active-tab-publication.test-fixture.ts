@@ -8,7 +8,7 @@ import {
   MOCK_GIT_WORKTREES,
   scanLocalRepoWorktreesForResolutionMock
 } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
-import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../../src/main/runtime/construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
   HEADLESS_LEAF_ID,
@@ -17,7 +17,7 @@ import {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../../src/main/runtime/construction/test-context/orca-runtime-test-fixtures.spec'
 
 export function createRuntimeFixture(attached = true) {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)

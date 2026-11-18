@@ -1,6 +1,6 @@
 import { act } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { FakeSession } from '../../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import {
   hookMount,
@@ -69,5 +69,25 @@ describe('useNewWorkspaceRepositories initial repo', () => {
     act(() => mounted?.update())
     await settleQueryNotifications()
     expect(picked).toMatchObject({ id: 'api', executionHostId: SERVER })
+  })
+})
+
+describe('useNewWorkspaceRepositories hidden projects', () => {
+  it('leaves hidden projects out of the picker and its default pick', async () => {
+    const web: MobileWorkspaceRepo = {
+      id: 'web',
+      displayName: 'web',
+      path: '/src/web',
+      kind: 'git'
+    }
+    const client = desktopListing([{ ...repo(), hiddenAt: 1 }, web])
+    let result: ReturnType<typeof useNewWorkspaceRepositories> | null = null
+    mounted = hookMount(() => {
+      result = useNewWorkspaceRepositories({ client, hostId: 'host-1', visible: true })
+    })
+    mounted.mount()
+    await settleQueryNotifications()
+    expect(result!.repos.map((entry) => entry.id)).toEqual(['web'])
+    expect(result!.selectedRepo?.id).toBe('web')
   })
 })

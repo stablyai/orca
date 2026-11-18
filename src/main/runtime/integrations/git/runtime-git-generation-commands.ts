@@ -1,7 +1,7 @@
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../../shared/text-generation-failure-copy'
+} from '../../../../shared/text-generation/text-generation-failure-copy'
 import type { CommitMessageDraftContext } from '../../../../shared/source-control/ai/generation/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/source-control/ai/generation/commit-message-host-key'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'

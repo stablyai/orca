@@ -56,6 +56,8 @@ export type MountedBottomDrawerProps = {
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
+  /** False leaves the screen behind undimmed, for a sheet whose changes show there. */
+  dimsBackground?: boolean
 }
 
 export function MountedBottomDrawer({
@@ -69,7 +71,8 @@ export function MountedBottomDrawer({
   interactive = true,
   dismissible = true,
   zIndex = 1000,
-  scrollResetKey = null
+  scrollResetKey = null,
+  dimsBackground = true
 }: MountedBottomDrawerProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -288,7 +291,9 @@ export function MountedBottomDrawer({
     >
       <GestureHandlerRootView style={styles.root}>
         {/* A pinned-under sheet keeps its dim, so a sheet stacked over it deepens the dim instead of flashing it. */}
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <Animated.View
+          style={[styles.backdrop, !dimsBackground && styles.backdropClear, backdropStyle]}
+        >
           {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
         </Animated.View>
 

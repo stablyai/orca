@@ -1,25 +1,22 @@
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type React from 'react'
 import type { AppState } from '@/store/types'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import type {
   PendingSidebarRowReveal,
   PendingSidebarWorktreeReveal
 } from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage
-} from '../../../../../../shared/worktree/lineage-types'
+import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
@@ -90,8 +87,8 @@ export type VirtualizedWorktreeViewportProps = {
   defaultHostId: ExecutionHostId
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  workspaceLineageByChildKey: Record<string, WorkspaceLineage>
-  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
+  /** selectSidebarChildrenByParentIdentity */
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
   // Full canonical repo-id order; must include hidden repos or a reorder silently drops them.
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void

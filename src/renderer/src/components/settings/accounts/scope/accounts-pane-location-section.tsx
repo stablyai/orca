@@ -6,7 +6,7 @@ import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/Setti
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { getHostRuntimeLabel } from '../../../../lib/provider-accounts/account-runtime-label'
 import { WSL_DEFAULT_DISTRO_KEY } from '../../../provider-accounts/provider-account-visibility'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 

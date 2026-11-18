@@ -3,8 +3,8 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
 import type { ResolvedWorktreeSnapshot } from '../../workspaces/catalog/runtime-resolved-worktree-cache'
 import type {

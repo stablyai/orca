@@ -1,5 +1,5 @@
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
-import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import { cleanAgentAnswer } from '../../text-generation/failures/source-control-agent-failure'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
-import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
+import { prepareCodexThreadSkills } from './codex-structured-skill-roots'
 import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 
 const VISUALS: NativeChatVisualsLaunch = {
@@ -38,17 +38,20 @@ describe('setting up a Codex app-server for a chat with visuals', () => {
       'config/read': configWithRoots(['/user/root', VISUALS.folder])
     })
     await expect(
-      prepareCodexThreadForVisuals(connection, {
+      prepareCodexThreadSkills(connection, {
         cwd: '/w',
         visuals: VISUALS,
         permissionPolicy: MANUAL
       })
     ).resolves.toEqual({
-      'sandbox_workspace_write.writable_roots': [
-        '/user/root',
-        VISUALS.folder,
-        VISUALS.temporaryFolder
-      ]
+      rootsTaken: true,
+      threadConfig: {
+        'sandbox_workspace_write.writable_roots': [
+          '/user/root',
+          VISUALS.folder,
+          VISUALS.temporaryFolder
+        ]
+      }
     })
   })
 })

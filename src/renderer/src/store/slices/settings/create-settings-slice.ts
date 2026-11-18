@@ -1,7 +1,7 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { toast } from 'sonner'
 import {
   clearRuntimeCompatibilityCache,
@@ -14,7 +14,7 @@ import { normalizeTerminalQuickCommands } from '../../../../../shared/terminal/q
 import { assertTerminalQuickCommandsStorable } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../../shared/work-items/task-providers'
-import { normalizeOpenInApplications } from '../../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../../shared/editor/launch/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -33,7 +33,7 @@ import {
 } from './worktree-visibility-owner-settings'
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
-import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type SettingsSlice = SettingsSearchState & {

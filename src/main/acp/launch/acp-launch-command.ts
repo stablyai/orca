@@ -27,7 +27,7 @@ export function resolveAcpLaunchCommand(
     homePath?: string
     dataDirectory: string | null
   }
-): StructuredAgentCommand {
+): StructuredAgentCommand & { version?: string } {
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
@@ -51,7 +51,7 @@ export function resolveAcpLaunchCommand(
   const root = options.dataDirectory && managedRuntime.root(options.dataDirectory)
   const release = root ? resolveInstalledRuntimeRelease(root, pin).release : null
   if (release) {
-    return resolve(release.folder)
+    return { ...resolve(release.folder), version: release.version }
   }
   const { command } = resolve(pathEnv)
   const pinned = command !== spec.command && copyBesidePinnedMembers(command, pin)
@@ -64,6 +64,37 @@ export function acpLaunchSpecForAccount(
   home: AgentSessionAccountHome
 ): AcpLaunchSpec {
   return spec.hostBackend?.pins(home) ? spec.hostBackend.spec : spec
+}
+
+// Model catalogs reuse the answer as long as the host check itself does (RECHECK_MS).
+const CATALOG_SELECTION_MS = 5 * 60_000
+const catalogSelections = new Map<
+  string,
+  { key: string; at: number; home: Promise<AgentSessionAccountHome | null> }
+>()
+
+/** The host answer for model catalogs; opening a picker reuses a recent one instead of probing. */
+export function selectAcpHostAccountHomeForCatalog(
+  spec: AcpLaunchSpec,
+  shellEnv: Readonly<Record<string, string>>,
+  stateDirectory: string,
+  settings: AcpHostBackendSettings,
+  now = Date.now()
+): Promise<AgentSessionAccountHome | null> {
+  const key = JSON.stringify([
+    stateDirectory,
+    settings,
+    spec.hostBackend?.selectionRevision?.(),
+    shellEnv.PATH ?? shellEnv.Path,
+    shellEnv.HOME ?? shellEnv.USERPROFILE
+  ])
+  const remembered = catalogSelections.get(spec.agent)
+  if (remembered?.key === key && now - remembered.at < CATALOG_SELECTION_MS) {
+    return remembered.home
+  }
+  const home = selectAcpHostAccountHome(spec, shellEnv, stateDirectory, settings)
+  catalogSelections.set(spec.agent, { key, at: now, home })
+  return home
 }
 
 /** The account home pinning a new chat to the compatible host program `env` finds, or null. */

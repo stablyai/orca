@@ -1,8 +1,9 @@
+import { assertBotLinkOpenAuthority } from '../../../../bots/bot-link-open-authority'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { resolveChatTabActivation } from '../../../agent-session/agent-session-tab-identity'
+import { resolveChatTabActivation } from '../../../session-tabs/chat/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { MovedPanePlacement } from '../../../session-tabs/headless-pane-move-to-new-tab'
+import type { MovedPanePlacement } from '../../../session-tabs/layout/headless-pane-move-to-new-tab'
 import { defineMethod } from '../../core'
 import {
   assertProjectedSessionTabVisible,
@@ -10,7 +11,7 @@ import {
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
 import {
-  ActivateTab,
+  BotLinkActivateTab,
   MovePaneToNewTab,
   MoveTab,
   SetTabProps,
@@ -21,8 +22,9 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.activate',
     permission: 'workspace',
-    params: ActivateTab,
+    params: BotLinkActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
+      const botLinkTarget = params.botLinkTarget
       const inventory = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
         includeAgentSenders: false
       })
@@ -32,6 +34,19 @@ export const SESSION_TAB_MUTATION_METHODS = [
         assertProjectedSessionTabVisible(visible, tabId)
       }
       const result = await runtime.activateMobileSessionTab(params.worktree, tabId, params.leafId, {
+        ...(botLinkTarget
+          ? {
+              beforeActivate: (target: { sessionId?: string; worktreeId: string }) => {
+                if (params.navigation !== 'caller' || !pairedDeviceId || !target.sessionId) {
+                  throw new Error('forbidden')
+                }
+                assertBotLinkOpenAuthority(runtime, botLinkTarget, {
+                  sessionId: target.sessionId,
+                  worktreeId: target.worktreeId
+                })
+              }
+            }
+          : {}),
         includeAgentSenders: clientKind !== 'mobile',
         notifyClients: params.notifyClients !== false,
         clientNavigationId: pairedDeviceId,

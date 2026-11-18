@@ -4,7 +4,7 @@ import { runtimeEnvironmentIdForWorkspaceOwner } from '../../workspace/ownership
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { writeWorkspaceFileDragSourceIfResolved } from './workspace-file-drag'
 
 /** Source-control rows list the live workspace, so the owner is resolved now

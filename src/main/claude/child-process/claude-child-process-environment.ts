@@ -38,6 +38,7 @@ export function buildClaudeChildProcessEnv(
   configuredEnv: Record<string, string> = {},
   options: {
     inheritedEnv?: NodeJS.ProcessEnv
+    envToDelete?: readonly string[]
     platform?: NodeJS.Platform
   } = {}
 ): Record<string, string> {
@@ -79,5 +80,9 @@ export function buildClaudeChildProcessEnv(
     )
   }
   stripInheritedAgentSessionEnv(env, { platform })
-  return { ...env, ...configuredEnv }
+  const configured = { ...env, ...configuredEnv }
+  for (const key of options.envToDelete ?? []) {
+    delete configured[key]
+  }
+  return configured
 }

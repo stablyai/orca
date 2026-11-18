@@ -1,0 +1,94 @@
+diff --git a/lib/parse.js b/lib/parse.js
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -280,7 +280,7 @@ const repeatedExtglobRecursion = pattern => {
+   return depth;
+ };
+ 
+-const analyzeRepeatedExtglob = (body, options) => {
++const analyzeRepeatedExtglob = (body, options, hasWildcard) => {
+   if (options.maxExtglobRecursion === false) {
+     return { risky: false };
+   }
+@@ -313,6 +313,38 @@ const analyzeRepeatedExtglob = (body, options) => {
+     }
+   }
+ 
++  if (hasWildcard) {
++    if (!options.capture && branches.length === 1 &&
++        /^[A-Za-z0-9 ._-]*\*[A-Za-z0-9 ._-]*$/.test(branches[0])) {
++      return { risky: false, collapse: true };
++    }
++
++    if (!options.capture && branches.length === 1 && body === branches[0]) {
++      const match = /^([A-Za-z0-9_-]+)\*([A-Za-z0-9 ,_-]+)\*$/.exec(body);
++      if (match) {
++        return { risky: true, twoStars: { prefix: match[1], middle: match[2] } };
++      }
++    }
++
++    // For (prefix*|c)*, with c distinct from prefix's first character, the
++    // first prefix* branch absorbs every later branch: c*(prefix*)?.
++    // The distinct first characters make the boundary unambiguous.
++    if (!options.capture && body === branches.join('|')) {
++      const wildcards = branches.filter(branch => /^[A-Za-z0-9_-]+\*$/.test(branch));
++      const literals = branches.filter(branch => /^[A-Za-z0-9_-]$/.test(branch));
++      if (wildcards.length === 1 && literals.length === branches.length - 1 && literals.length > 0) {
++        const prefix = wildcards[0].slice(0, -1);
++        const nocase = String(options.flags || (options.nocase ? 'i' : '')).includes('i');
++        const first = nocase ? prefix[0].toLowerCase() : prefix[0];
++        if (!literals.some(value => (nocase ? value.toLowerCase() : value) === first)) {
++          return { risky: true, trailingStar: { prefix, literals: [...new Set(literals)].join('') } };
++        }
++      }
++    }
++
++    return { risky: true };
++  }
++
+   return { risky: false };
+ };
+ 
+@@ -510,7 +542,30 @@ const parse = (input, options) => {
+   const extglobClose = token => {
+     const literal = input.slice(token.startIndex, state.index + 1);
+     const body = input.slice(token.startIndex + 2, state.index);
+-    const analysis = analyzeRepeatedExtglob(body, opts);
++    // Use the parser's actual tokens: a separate scan can disagree about
++    // unmatched brackets, escapes, quotes, or options such as nobracket.
++    const hasWildcard = tokens.slice(token.tokensIndex + 2).some((item, index, bodyTokens) =>
++      (item.type === 'star' || item.type === 'globstar') && item.value !== '' &&
++      !(bodyTokens[index + 1] && bodyTokens[index + 1].type === 'paren' && bodyTokens[index + 1].value === '(' && bodyTokens[index + 1].extglob === true)
++    );
++    const analysis = analyzeRepeatedExtglob(body, opts, hasWildcard);
++
++    if (analysis.twoStars && (token.type === 'plus' || token.type === 'star')) {
++      const prefix = utils.escapeRegex(analysis.twoStars.prefix);
++      const middle = utils.escapeRegex(analysis.twoStars.middle);
++      const unit = opts.bash === true ? '.' : QMARK;
++      const tail = opts.bash === true ? '.*?' : STAR;
++      const output = `${prefix}(?:(?!${middle})${unit})*${middle}${tail}`;
++      analysis.safeOutput = token.type === 'star' ? `(?:${output})?` : output;
++    }
++
++    if (analysis.trailingStar && (token.type === 'plus' || token.type === 'star')) {
++      const head = `[${utils.escapeRegex(analysis.trailingStar.literals)}]`;
++      const tail = utils.escapeRegex(analysis.trailingStar.prefix) + (opts.bash === true ? '.*?' : STAR);
++      analysis.safeOutput = token.type === 'star'
++        ? `${head}*(?:${tail})?`
++        : `(?:${head}*${tail}|${head}+)`;
++    }
+ 
+     if ((token.type === 'plus' || token.type === 'star') && analysis.risky) {
+       const safeOutput = analysis.safeOutput
+@@ -536,6 +591,10 @@ const parse = (input, options) => {
+       return;
+     }
+ 
++    if (analysis.collapse === true && (token.type === 'plus' || token.type === 'star')) {
++      token.close = token.type === 'plus' ? ')' : ')?';
++    }
++
+     let output = token.close + (opts.capture ? ')' : '');
+     let rest;
+ 

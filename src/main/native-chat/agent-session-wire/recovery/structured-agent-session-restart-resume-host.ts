@@ -91,6 +91,7 @@ export function createStructuredAgentSessionRestartResume(
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     getRecord: deps.store.getConversation,
     retryable: async (marker) => (await derive([marker], 'may-be-held')).candidates.length === 1,
+    deliveredSince: withdrawal.deliveredSince,
     savedByNewerOrca: newerOrca.has,
     logger: deps.logger,
     now: surfaces.now,

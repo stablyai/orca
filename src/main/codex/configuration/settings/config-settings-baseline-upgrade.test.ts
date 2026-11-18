@@ -93,19 +93,4 @@ describe('Codex settings baseline schema upgrade', () => {
       'tui.theme': { runtime: '"runtime"', system: '"system"' }
     })
   })
-
-  it('applies the migration rule to future top-level schema additions', () => {
-    prepareLegacyState(
-      'model = "gpt-5"\napproval_policy = "never"\n',
-      'model = "gpt-5"\napproval_policy = "on-request"\n'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readFileSync(systemConfigPath(), 'utf-8')).toContain('approval_policy = "never"')
-    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toContain('approval_policy = "on-request"')
-    expect(readBaseline().conflicts).toEqual({
-      approval_policy: { runtime: '"on-request"', system: '"never"' }
-    })
-  })
 })

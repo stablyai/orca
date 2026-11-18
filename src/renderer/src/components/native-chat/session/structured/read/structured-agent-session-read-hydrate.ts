@@ -8,7 +8,7 @@ import {
   oldestStructuredAgentSessionCursor,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'

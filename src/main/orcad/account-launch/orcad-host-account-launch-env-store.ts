@@ -7,7 +7,7 @@ import {
   type HostAccountLaunchEnv
 } from '../../../shared/agent-launch/startup/host-account-launch-env'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { createWslHostClaudeProfileRefresh } from './orcad-wsl-host-claude-profile-refresh'
 
 const FILE_NAME = 'host-account-launch-env.json'

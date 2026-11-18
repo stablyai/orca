@@ -143,6 +143,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.terminalExpandPane', 'Expand / collapse pane'),
   'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
+  'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
@@ -173,6 +174,7 @@ const GROUP_COPY = {
   Settings: () => translate('keybindings.group.settings', 'Settings'),
   'Terminal Panes': () => translate('keybindings.group.3492a954c8', 'Terminal panes'),
   Chat: () => translate('keybindings.group.chat', 'Chat'),
+  Bots: () => translate('keybindings.group.bots', 'Bots'),
   Agents: () => translate('keybindings.group.agents', 'Agents')
 } satisfies Record<string, () => string>
 

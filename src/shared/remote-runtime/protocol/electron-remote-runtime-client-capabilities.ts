@@ -1,6 +1,6 @@
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../source-control/runtime/git-graph-capabilities'
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../agent-session/structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../agent-session/capabilities/structured-agent-session-renderer-client-capabilities'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../terminal/images/terminal-image-viewer-capability'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from '../../browser/client-hosting/browser-client-host-request-protocol'
 import {

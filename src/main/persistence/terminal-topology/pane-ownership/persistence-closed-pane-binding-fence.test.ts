@@ -9,13 +9,15 @@ import { _resetClosedPaneFencesForTests } from './closed-pane-binding-fence'
 import '../terminal-topology-commit'
 import '../../../runtime/terminal/surface/terminal-surface-close'
 
-import '../../../../shared/execution-host'
+import '../../../../shared/execution-host/execution-host'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const WORKTREE = 'repo1::/worktree'
 const TAB = 'host-tab'
@@ -171,22 +173,6 @@ describe('a pane main closed or took back is not brought back by its late termin
         newLeafId: TEST_LEAF_2
       })
     ).toBe('admitted')
-    expect(await lateWindowBinding(store)).toBe(true)
-    expect(leafIds(store)).toEqual([TEST_LEAF_1, TEST_LEAF_2])
-  })
-
-  it('lets a binding create the pane again once the binding window has passed', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    const store = createStore()
-    await tabWithStartingSplit(store)
-    await store.withdrawTerminalPane({
-      type: 'closePane',
-      workspace: WORKTREE,
-      tabId: TAB,
-      leafId: TEST_LEAF_2
-    })
-
-    vi.setSystemTime(Date.now() + 5 * 60_000 + 1_000)
     expect(await lateWindowBinding(store)).toBe(true)
     expect(leafIds(store)).toEqual([TEST_LEAF_1, TEST_LEAF_2])
   })

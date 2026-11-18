@@ -5,7 +5,7 @@ import {
   backgroundTaskBlocks,
   withoutBackgroundTaskRows
 } from '../../input/task-lists/native-chat-background-task-row'
-import { isWordlessProviderFrameBlock } from '../../native-chat-provider-frame-summary'
+import { isWordlessProviderFrameBlock } from '../notices/native-chat-provider-frame-summary'
 import { isNativeChatProviderTurnStartBlock } from '../turns/native-chat-provider-turn-start'
 import {
   isReplacedSubagentGroupTwin,

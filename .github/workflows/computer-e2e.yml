@@ -47,13 +47,13 @@ on:
       - 'src/main/runtime/rpc/dispatcher.ts'
       - 'src/main/runtime/rpc/responses/rpc-response.ts'
       - 'src/main/runtime/rpc/methods/computer/computer*.ts'
-      - 'src/shared/computer-use-*.ts'
-      - 'tests/e2e/computer-linux.e2e.ts'
-      - 'tests/e2e/computer-windows.e2e.ts'
-      - 'tests/e2e/computer-windows-background.e2e.ts'
-      - 'tests/e2e/helpers/windows-semantic-controls-fixture.*'
-      - 'tests/e2e/helpers/computer-cli-driver.ts'
-      - 'tests/e2e/helpers/computer-driver.ts'
+      - 'src/shared/computer/computer-use-*.ts'
+      - 'tests/e2e/desktop/computer-use/computer-linux.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/computer-windows.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/computer-windows-background.e2e.ts'
+      - 'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.*'
+      - 'tests/e2e/desktop/computer-use/computer-cli-driver.ts'
+      - 'tests/e2e/desktop/computer-use/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
   workflow_dispatch:
   schedule:
@@ -127,7 +127,7 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
+      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/desktop/computer-use/computer-linux.e2e.ts
 
   windows:
     if: github.event_name != 'pull_request'
@@ -145,4 +145,4 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm run build:electron-vite:parallel
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-background.e2e.ts
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/desktop/computer-use/computer-windows.e2e.ts tests/e2e/desktop/computer-use/computer-windows-background.e2e.ts

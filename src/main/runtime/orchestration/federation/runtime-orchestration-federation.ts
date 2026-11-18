@@ -81,6 +81,10 @@ export class RuntimeOrchestrationFederation {
     return await this.transport.resolve(selector)
   }
 
+  async listWorkerServers(): Promise<readonly { environmentId: string; name: string }[]> {
+    return (await this.transport?.list?.()) ?? []
+  }
+
   async callWorkerServer(
     selector: string,
     method: string,
