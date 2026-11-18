@@ -38,30 +38,20 @@ type EventBuild = ReturnType<typeof buildActivityEvents>
 
 const EMPTY_THREADS: AgentPaneThread[] = []
 
-// Per-pane inputs besides the status map; when all keep identity, only journaled panes rebuild.
+// Every input but the status map is per-pane context (the worktree resolver reads store fields, not its
+// own identity); when all keep identity, only journaled panes rebuild.
 function samePaneInputs(previous: Inputs, next: Inputs): boolean {
-  const a = previous.storeData
-  const b = next.storeData
-  return (
-    previous.chatNames === next.chatNames &&
-    a.runtimeAgentOrchestrationByPaneKey === b.runtimeAgentOrchestrationByPaneKey &&
-    a.migrationUnsupportedByPtyId === b.migrationUnsupportedByPtyId &&
-    a.tabsByWorktree === b.tabsByWorktree &&
-    a.ptyIdsByTabId === b.ptyIdsByTabId &&
-    a.activityTabs === b.activityTabs &&
-    a.worktreeMap === b.worktreeMap &&
-    // The worktree resolver reads these through the store, not its own identity.
-    a.worktreesByRepo === b.worktreesByRepo &&
-    a.folderWorkspaces === b.folderWorkspaces &&
-    a.floatingWorkspacePath === b.floatingWorkspacePath &&
-    a.detectedWorktreesByRepo === b.detectedWorktreesByRepo &&
-    a.projectGroups === b.projectGroups &&
-    a.repoMap === b.repoMap &&
-    a.repos === b.repos &&
-    a.getKnownWorktreeById === b.getKnownWorktreeById &&
-    a.acknowledgedAgentsByPaneKey === b.acknowledgedAgentsByPaneKey &&
-    a.activityClearedAtByPaneKey === b.activityClearedAtByPaneKey
-  )
+  if (previous.chatNames !== next.chatNames) {
+    return false
+  }
+  const a: Record<string, unknown> = previous.storeData
+  const b: Record<string, unknown> = next.storeData
+  for (const key of Object.keys(b)) {
+    if (key !== 'agentStatusByPaneKey' && a[key] !== b[key]) {
+      return false
+    }
+  }
+  return true
 }
 
 function hasLiveActivity(storeData: AllAgentPaneThreadsStoreData, now: number): boolean {
