@@ -29329,5 +29329,10 @@
     "statusOne": "CLI update",
     "statusCount": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out"
+  },
+  "backgroundWorkerPaused": {
+    "title": "Some background work paused after crashing repeatedly",
+    "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
+    "retry": "Retry"
   }
 }
