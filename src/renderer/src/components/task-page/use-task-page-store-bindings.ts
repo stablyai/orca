@@ -10,6 +10,7 @@ import {
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
@@ -27,7 +28,7 @@ export function useTaskPageStoreBindings() {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)

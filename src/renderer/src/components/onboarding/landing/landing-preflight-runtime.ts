@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from 'react'
-import { useAppStore } from '../../../store/index'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
@@ -8,13 +7,15 @@ import {
   hasGitHubBackedProject,
   type PreflightIssue
 } from './landing-preflight-issues'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[] } {
   const repos = useAppStore((s) => s.repos)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
-  const activeRuntimeState = useAppStore((s) => {
+  const activeRuntimeState = useAppStoreWithChannels((s) => {
     const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
     if (!environmentId) {
       return 'local'

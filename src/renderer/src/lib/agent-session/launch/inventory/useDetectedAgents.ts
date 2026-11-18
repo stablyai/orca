@@ -4,6 +4,7 @@ import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-p
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import {
   useAppStateViewActive,
@@ -97,11 +98,10 @@ export function useDetectedAgents(
 
   // Why: a probe that failed while the host was down must re-run once contact returns, and only then.
   // 'down' only when the host's status says so; a never-asked host is still probed as before.
-  const runtimeContactEpoch = useAppStateValue((s) => {
+  const runtimeContactEpoch = useRuntimeHostStatusViewSelector(targetId, (entry) => {
     if (targetKind !== 'runtime' || !targetId) {
       return null
     }
-    const entry = s.runtimeStatusByEnvironmentId.get(targetId)
     if (!entry) {
       return null
     }

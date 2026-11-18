@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
@@ -15,6 +14,9 @@ import {
 } from '../../navigate/reopen-on-server/ReopenBrowserPageOnServerButton'
 import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
@@ -29,7 +31,7 @@ export function ClientHostedBrowserUnavailableNotice({
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const offlineHostName = useAppStore((s) => {
+  const offlineHostName = useAppStoreWithChannels((s) => {
     const entry = s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
     const state = runtimeHostConnectionStateForEntry(entry)
     // Revoked/refused pairings also read disconnected but cannot reconnect.
@@ -42,9 +44,8 @@ export function ClientHostedBrowserUnavailableNotice({
       : null
   })
   // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
-  const runtimeCanHostPage = useAppStore((s) => {
-    const capabilities =
-      s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.capabilities
+  const runtimeCanHostPage = useRuntimeHostStatusSelector(runtimeEnvironmentId, (entry) => {
+    const capabilities = entry?.status?.capabilities
     return !capabilities || capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   })
   const ownHostClientId = readBrowserClientHostId()

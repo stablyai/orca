@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -7,6 +6,8 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getEligibleFolderParents, storeAcceptsFolderParentIn } from './worktree-parent-candidates'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_FOLDER_PARENTS: Worktree[] = []
 
@@ -47,7 +48,7 @@ export function useEligibleFolderParents(child: Worktree | undefined, enabled = 
       ? s.workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey
       : undefined
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+  const runtimeStatusByEnvironmentId = useAppStoreWithChannels((s) =>
     enabled ? s.runtimeStatusByEnvironmentId : undefined
   )
   return useMemo(

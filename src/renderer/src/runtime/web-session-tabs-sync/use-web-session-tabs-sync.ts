@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '../../store'
 import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
 import { sessionTabsFreshnessKey } from './state'
 import { clearWebSessionTabsTrackingForEnvironment } from './tracking/tracking-lifecycle'
@@ -14,6 +13,8 @@ import {
   createWarmWorktreeSessionSubscriptions,
   type WarmWorktreeSessionSubscriptions
 } from './subscriptions/warm-worktree-subscriptions'
+import { useAppStore } from '../../store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Mount the paired-runtime tab mirrors and the selected-worktree stream. */
 export function useWebSessionTabsSync(): void {
@@ -45,21 +46,21 @@ export function useWebSessionTabsSync(): void {
     mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
   )
   // Reconnect may replace runtime under the same environment ID; restart scoped streams from last answered identity. Probe-unverifiable status is null even while delivery continues.
-  const activeWorktreeRuntimeId = useAppStore((state) => {
+  const activeWorktreeRuntimeId = useAppStoreWithChannels((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     return environmentId
       ? (lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
           ?.runtimeId ?? null)
       : null
   })
-  const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
+  const activeWorktreeRuntimeConnectionGeneration = useAppStoreWithChannels((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     return environmentId
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
       : 0
   })
   // Reconnect trigger only, not stream identity: outage-ended streams resend frames for the same connection.
-  const activeWorktreeRuntimeHostContactEpoch = useAppStore((state) => {
+  const activeWorktreeRuntimeHostContactEpoch = useAppStoreWithChannels((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     return environmentId
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)

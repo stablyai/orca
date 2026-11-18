@@ -2,7 +2,6 @@ import type { LinearIssueData } from '@/store/slices/linear/linear-issue-read'
 import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { linearStatus } from '@/runtime/linear/runtime-linear-client'
-import { useAppStore } from '@/store'
 import { getLinearStatusReadGeneration } from '@/store/slices/linear/linear-slice-request-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
@@ -15,6 +14,8 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
 import type { LinearConnectionStatus } from '../../../../../shared/linear/workspace-types'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store'
 
 type LinearSourceConnection = {
   status: LinearConnectionStatus | null
@@ -34,8 +35,8 @@ export function useLinearSourceConnection(args: {
 }): LinearSourceConnection {
   const runtimeSettings = getTaskSourceRuntimeSettings(args.sourceContext)
   const environmentId = runtimeSettings.activeRuntimeEnvironmentId
-  const runtimeRevision = useAppStore((state) => {
-    const runtime = environmentId ? state.runtimeStatusByEnvironmentId?.get(environmentId) : null
+  const runtimeRevision = useRuntimeHostStatusSelector(environmentId, (entry) => {
+    const runtime = environmentId ? entry : null
     return `${runtime?.connectionGeneration ?? 0}:${runtime?.hostContactEpoch ?? 0}`
   })
   const statusContextKey = getProviderRuntimeContextKey(runtimeSettings)

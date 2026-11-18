@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { resolveComposerSeedRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
@@ -14,6 +13,8 @@ import type { ComposerDecisions } from '../composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectAllKnownWorkspaceStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
 
 export type ComposerStateInput = {
   initialRepoId?: string
@@ -123,7 +124,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
 
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
 
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 

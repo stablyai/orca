@@ -13,13 +13,13 @@ import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { useAppStore } from '@/store/index'
 import {
   evaluateHostDetails,
   getHostDetailsDescription,
   getRuntimeServerConnectionState,
   type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type RuntimeServerRowState = {
   effectiveDetails: RuntimeHostDetails | undefined
@@ -44,7 +44,7 @@ export function useRuntimeServerRowState(
   details: RuntimeHostDetails | undefined
 ): RuntimeServerRowState {
   const t = useTranslate()
-  const runtimeStatusEntry = useAppStore((state) =>
+  const runtimeStatusEntry = useAppStoreWithChannels((state) =>
     state.runtimeStatusByEnvironmentId.get(environment.id)
   )
   // Share the host verdict across Settings surfaces: an unverifiable probe can leave transport connected, so raw entry.status would offer Connect while repository setup still reports reachability.

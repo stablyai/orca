@@ -22,6 +22,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
@@ -128,7 +129,7 @@ export function useWorktreeJumpPaletteStoreState({
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const hideDefaultBranchWorkspace = useAppStore((state) => state.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore(
     (state) => state.hideAutomationGeneratedWorkspaces

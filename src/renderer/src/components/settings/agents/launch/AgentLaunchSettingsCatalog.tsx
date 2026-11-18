@@ -1,4 +1,3 @@
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
@@ -71,6 +70,10 @@ import {
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  useAppStateValue,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -133,7 +136,7 @@ export function AgentLaunchSettingsCatalog({
     managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStateValue((state) => {
+  const chatOnlyKey = useAppStateValueWithChannels((state) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }

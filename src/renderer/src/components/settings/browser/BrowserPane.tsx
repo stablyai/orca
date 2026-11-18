@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing-copy'
@@ -48,6 +47,8 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '../../../store/index'
 
 type BrowserPaneProps = {
   settings: GlobalSettings
@@ -81,7 +82,7 @@ export function BrowserPane({
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
   const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)

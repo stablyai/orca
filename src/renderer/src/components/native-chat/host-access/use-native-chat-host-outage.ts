@@ -12,6 +12,7 @@ import {
   nativeChatHostOutageKind,
   type NativeChatHostOutage
 } from './native-chat-host-outage-latch'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 export {
@@ -26,15 +27,13 @@ export type {
 /** Use host connection state; the chat stream cannot establish host availability. */
 export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChatHostOutage | null {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const kind = useAppStore((s) =>
+  const kind = useRuntimeHostStatusSelector(environmentId, (entry) =>
     environmentId === null
       ? null
-      : nativeChatHostOutageKind(
-          runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(environmentId))
-        )
+      : nativeChatHostOutageKind(runtimeHostConnectionStateForEntry(entry))
   )
-  const refused = useAppStore((s) => {
-    const entry = environmentId === null ? null : s.runtimeStatusByEnvironmentId.get(environmentId)
+  const refused = useRuntimeHostStatusSelector(environmentId, (status) => {
+    const entry = environmentId === null ? null : status
     return entry?.snapshot
       ? runtimeHostContactFromSnapshot(entry.snapshot, entry.status).verdict === 'refused'
       : false

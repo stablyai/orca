@@ -7,7 +7,6 @@ import {
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { searchTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-search'
-import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -27,6 +26,8 @@ import {
   getTerminalQuickCommandHostOptions,
   shouldShowTerminalQuickCommandHostOwnership
 } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '../../../store/index'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
@@ -93,7 +94,7 @@ export function QuickCommandsPane({
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatuses = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatuses = useRuntimeStatusByEnvironmentId()
   const runtimeCommands = useAppStore((s) => s.runtimeTerminalQuickCommands)
   const loadRuntimeCommands = useAppStore((s) => s.loadRuntimeTerminalQuickCommands)
   const ownership = getSettingOwnershipSummary('terminalQuickCommands', t)

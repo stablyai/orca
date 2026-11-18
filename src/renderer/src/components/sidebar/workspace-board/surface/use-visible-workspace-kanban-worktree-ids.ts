@@ -42,7 +42,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const runtimeEnvironments = useAppStore((s) =>
     s.hideWorkspacesFromOtherDevices ? s.runtimeEnvironments : EMPTY_RUNTIME_ENVIRONMENTS
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+  const runtimeStatusByEnvironmentId = useAppStoreWithChannels((s) =>
     s.hideWorkspacesFromOtherDevices
       ? s.runtimeStatusByEnvironmentId
       : EMPTY_RUNTIME_STATUS_BY_ENVIRONMENT_ID

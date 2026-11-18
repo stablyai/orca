@@ -1,5 +1,4 @@
 import { useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getRuntimeEnvironmentRevision,
@@ -13,6 +12,8 @@ import {
 } from './native-chat-file-link-existence'
 import type { NativeChatFileLinkExistence } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-existence'
 import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-hooks'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store'
 
 const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
@@ -34,10 +35,8 @@ function useFileLinkHostEpoch(
     const state = connectionId ? s.sshConnectionStates.get(connectionId) : undefined
     return state?.status === 'connected' ? String(state.connectionGeneration ?? 0) : null
   })
-  const runtimeStatus = useAppStore((s) => {
-    const status = runtimeEnvironmentId
-      ? s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
-      : undefined
+  const runtimeStatus = useRuntimeHostStatusSelector(runtimeEnvironmentId, (entry) => {
+    const status = runtimeEnvironmentId ? entry : undefined
     return status ? `${status.connectionGeneration ?? 0}:${status.hostContactEpoch ?? 0}` : ''
   })
   const pairing = useSyncExternalStore(onRuntimeEnvironmentRevisionsChanged, () =>

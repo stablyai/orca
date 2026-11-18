@@ -8,7 +8,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
@@ -42,6 +41,8 @@ import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../../runtime-access/RuntimeRepairDialog'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '../../../store/index'
 
 export function SshStatusSegment({
   compact,
@@ -56,7 +57,7 @@ export function SshStatusSegment({
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const setActiveView = useAppStore((s) => s.setActiveView)

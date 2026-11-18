@@ -12,11 +12,8 @@ import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import {
-  resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform
-} from '@/runtime/hosts/platform/execution-host-facts'
-import { useAppStore } from '@/store/index'
+// oxfmt-ignore
+import { resolveExecutionHostAgentStartupShell, resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { repoIsRemote } from '../../../../../shared/agent-launch/startup/agent-launch-remote'
 import { buildProjectHostSetupOptions } from '@/lib/workspace/creation/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/workspace/creation/new-workspace-project-options'
@@ -27,6 +24,8 @@ import type { ComposerRuntimeTargetSelectionInput } from '../composer-target-inp
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import { pickerRepos } from '../../../../../shared/project/catalog/hidden-projects'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {
@@ -156,7 +155,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     : null
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {

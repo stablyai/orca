@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { buildNotificationSourceOptions } from '@/attention/notification-sources'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useNotificationSourceOptions() {
-  const state = useAppStore(
+  const state = useAppStoreWithChannels(
     useShallow((s) => ({
       sshTargetLabels: s.sshTargetLabels,
       sshConnectionStates: s.sshConnectionStates,

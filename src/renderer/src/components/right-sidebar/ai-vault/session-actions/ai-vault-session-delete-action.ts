@@ -16,6 +16,7 @@ import {
   aiVaultSessionRuntimeEnvironmentId,
   type AiVaultSessionDeleteHost
 } from './ai-vault-session-deletability'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
@@ -27,11 +28,11 @@ export function useAiVaultSessionDeleteHost(
   )
   const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
   // Subscribe to the host's verified status so an in-place host update re-enables Delete.
-  const deleteSupported = useAppStore((s) => {
+  const deleteSupported = useRuntimeHostStatusSelector(environmentId, (entry) => {
     if (!environmentId) {
       return true
     }
-    const status = lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId?.get(environmentId))
+    const status = lastVerifiedRuntimeStatus(entry)
     return status?.capabilities
       ? status.capabilities.includes(AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY)
       : null

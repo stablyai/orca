@@ -1,5 +1,4 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from '../events/activity-event-builder'
 import { createActivityEventBuildCache } from '@/components/activity/events/activity-event-build-cache'
@@ -30,6 +29,7 @@ import type {
   ThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import { useAppStore } from '@/store'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
@@ -159,7 +159,7 @@ export function useAgentPaneThreads(args: {
   const runtimeEnvironments = useAppStore((s) =>
     s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+  const runtimeStatusByEnvironmentId = useAppStoreWithChannels((s) =>
     s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
   )
   const pairedDeviceIdsByEnvironment = useMemo(

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { useAppStore } from '@/store/index'
 import type {
   SkillInstallDestination,
   SkillInstallPreview,
@@ -35,6 +34,8 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
 
 export function SkillInstallDialog({
   open,
@@ -47,7 +48,7 @@ export function SkillInstallDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatus = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatus = useRuntimeStatusByEnvironmentId()
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const repos = useAppStore((state) => state.repos)
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))

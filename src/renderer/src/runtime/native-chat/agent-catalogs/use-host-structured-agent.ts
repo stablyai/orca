@@ -1,4 +1,3 @@
-import { useAppViewExternalStore, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback } from 'react'
 import type { AgentSessionRegisteredAgent } from '../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -12,6 +11,8 @@ import {
   subscribeHostStructuredAgents
 } from './host-structured-agents'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 
 /** Whether a chat may carry images: what its session's options report said, else what its host
  *  registered for the agent, else what every build has always sent the agents it ships. An unlisted
@@ -32,10 +33,8 @@ export function useHostStructuredAgent(
   agent: string
 ): AgentSessionRegisteredAgent | undefined {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const runtimeId = useAppStateValue((state) =>
-    environmentId === null
-      ? null
-      : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))?.runtimeId
+  const runtimeId = useRuntimeHostStatusViewSelector(environmentId, (entry) =>
+    environmentId === null ? null : lastVerifiedRuntimeStatus(entry)?.runtimeId
   )
   const executionHostId =
     environmentId === null ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(environmentId)

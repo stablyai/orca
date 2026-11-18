@@ -1,13 +1,15 @@
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../types'
 
-/** High-rate fields a background agent update writes; their readers subscribe through a channel. */
+/** High-rate fields background agent and host updates write; their readers subscribe through a channel. */
 const CHANNEL_FIELDS = [
   'agentStatusByPaneKey',
   'agentStatusEpoch',
   // Sort epochs stay root: about 25 writers across worktrees, repos and tabs bump them, and live
   // status writes change them only on ordering transitions.
-  'agentConversationsByPaneKey'
+  'agentConversationsByPaneKey',
+  // Host verification republishes per attempt; keyed readers go through runtime-status-subscriptions.
+  'runtimeStatusByEnvironmentId'
 ] as const satisfies readonly (keyof AppState)[]
 
 export type AppStoreChannelField = (typeof CHANNEL_FIELDS)[number]

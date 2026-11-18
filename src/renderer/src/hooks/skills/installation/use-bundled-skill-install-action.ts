@@ -22,8 +22,8 @@ import {
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
 } from '../discovery/installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from '../runtime/useActiveProjectSkillRuntime'
-import { useAppStore } from '@/store/index'
 import { getManagedOrcadSshTargetId } from '../../../../../shared/execution-host/managed-orcad-execution-host'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** `unknown`: the owning host's check failed. */
 export type BundledSkillInstallActionState =
@@ -46,7 +46,7 @@ export function useBundledSkillInstallAction(
   const activeTarget = useActiveProjectSkillRuntime().bundledSkillTarget
   const target = options.target === undefined ? activeTarget : options.target
   const targetKey = target ? bundledSkillTargetKey(target) : null
-  const unavailable = useAppStore((state) => {
+  const unavailable = useAppStoreWithChannels((state) => {
     if (target?.kind !== 'environment') {
       return null
     }

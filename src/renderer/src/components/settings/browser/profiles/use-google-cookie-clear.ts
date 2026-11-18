@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -14,6 +13,8 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store'
 
 export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string, label?: string) {
   const t = useTranslate()
@@ -35,11 +36,9 @@ export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string,
     const environment = s.runtimeEnvironments.find((entry) => entry.id === environmentId)
     return environment?.pairingRevision ?? environment?.createdAt
   })
-  const supported = useAppStore((s) =>
+  const supported = useRuntimeHostStatusSelector(environmentId, (entry) =>
     environmentId
-      ? s.runtimeStatusByEnvironmentId
-          .get(environmentId)
-          ?.status?.capabilities?.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) === true
+      ? entry?.status?.capabilities?.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY) === true
       : false
   )
   const [available, setAvailable] = useState<boolean | undefined>()

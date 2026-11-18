@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
@@ -8,6 +7,8 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
@@ -38,7 +39,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
     (s) => s.restoredRuntimeHostIdByWorkspaceSessionKey
   )

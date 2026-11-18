@@ -11,7 +11,6 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { useAppStore } from '@/store'
 import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
@@ -22,6 +21,7 @@ import {
   translateHostDisplayLabel
 } from '@/runtime/hosts/display/execution-host-label'
 import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]
@@ -129,7 +129,7 @@ export function useTerminalQuickCommandHosts(
     remoteState,
     runtimeEnvironments,
     settings
-  } = useAppStore(
+  } = useAppStoreWithChannels(
     useShallow((state): TerminalQuickCommandHostState => {
       if (!enabled) {
         return DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE

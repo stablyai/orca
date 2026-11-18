@@ -9,7 +9,6 @@ import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
-import { useAppStore } from '@/store/index'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   captureHostIdentityFence,
@@ -20,10 +19,12 @@ import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getTerminalLimitSearchKeywords } from '../platform/terminal-advanced-platform-search'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): React.JSX.Element {
   const environmentId = scope.target.kind === 'environment' ? scope.target.environmentId : null
-  const revision = useAppStore((state) => {
+  const revision = useAppStoreWithChannels((state) => {
     const host = state.runtimeEnvironments.find((item) => item.id === environmentId)
     const pairing = host?.pairingRevision ?? host?.createdAt ?? 0
     const connection = environmentId ? getRuntimeEnvironmentConnectionGeneration(environmentId) : 0
@@ -31,11 +32,9 @@ export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): R
       state.runtimeStatusByEnvironmentId.get(environmentId ?? '')?.hostContactEpoch ?? 0
     return `${pairing}:${connection}:${contactEpoch}`
   })
-  const contacted = useAppStore(
-    (state) =>
-      environmentId === null ||
-      runtimeHostContactForEntry(state.runtimeStatusByEnvironmentId.get(environmentId)).verdict ===
-        'live'
+  const contacted = useRuntimeHostStatusSelector(
+    environmentId,
+    (entry) => environmentId === null || runtimeHostContactForEntry(entry).verdict === 'live'
   )
   const available = scope.available && contacted
   return (

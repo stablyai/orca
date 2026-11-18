@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
@@ -21,6 +20,8 @@ import {
 } from './native-chat-host-command-terminal'
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -169,7 +170,7 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStore((s) => {
+  const shell = useAppStoreWithChannels((s) => {
     const status =
       input.target.kind === 'environment'
         ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))

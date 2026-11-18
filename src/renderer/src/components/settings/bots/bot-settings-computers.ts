@@ -17,6 +17,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
@@ -48,7 +49,7 @@ export type BotSettingsAccount = {
 export function useBotSettingsComputers(): BotSettingsComputer[] {
   const listed = useSyncExternalStore(subscribeToBotChanges, readBotHostIds)
   const tooOld = useSyncExternalStore(subscribeToBotChanges, readUpdateNeededBotHosts)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const names = useAppStoreWithChannels((state) =>
     [...listed, ...tooOld]
       .map((hostId) => selectExecutionHostDisplayLabel(state, hostId))

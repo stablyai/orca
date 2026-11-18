@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadSshTargetId } from '../../../../../shared/execution-host/managed-orcad-execution-host'
@@ -8,6 +7,8 @@ import type {
   AutomationCatalogSshSource,
   AutomationHostCatalogSource
 } from './automation-host-catalog-source'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
 
 /** Centralize live mirrored SSH/runtime subscriptions whose reference identities drive catalog memoization. */
 
@@ -31,7 +32,7 @@ export function useAutomationHostCatalogSourceState({
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetsHydrated = useAppStore((s) => s.sshTargetsHydrated)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const runtimeCatalogSettled = useAppStore((s) => s.runtimeEnvironmentCatalogSettled)
 
   const desktopSsh = useMemo(

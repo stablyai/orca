@@ -6,7 +6,6 @@ import { botHostTarget } from '@/lib/bot-hosts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { BOTS_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
@@ -17,6 +16,8 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store'
 
 /** `offline`: not connected. `no-bots`: its Orca can't make bots. */
 export type BotCreateHostBlock = 'offline' | 'no-bots'
@@ -154,7 +155,7 @@ export function useBotCreateHost(
   initialHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): BotCreateHostChoice {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const ownEmail = useAppStore((s) =>
     s.orcaProfileAuthStatus?.state === 'connected'
       ? s.orcaProfileAuthStatus.cloud?.email

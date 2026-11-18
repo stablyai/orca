@@ -1,10 +1,10 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { useAppStore } from '@/store'
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
@@ -41,7 +41,7 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
-  const agentTargetGuardedHosts = useAppStore((s) =>
+  const agentTargetGuardedHosts = useAppStoreWithChannels((s) =>
     agentSendPopoverTargetMode
       ? selectSendApprovalGuardEnvironmentIds(s.runtimeStatusByEnvironmentId)
       : NO_GUARDED_HOSTS
