@@ -1,5 +1,4 @@
-import { renameSync } from 'node:fs'
-import { chmod, lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AntigravityChatSignInIntent } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
@@ -80,12 +79,12 @@ export async function antigravitySignInHome(
   }
 }
 
-/** Validate before the final cancellation check, then commit and publish without yielding. */
+/** Validate before the final cancellation check; the returned commit runs after it. */
 export async function antigravitySignInCredentialCommit(
   stageHome: string,
   home: string,
   method: AntigravityChatAuthConfig['method']
-): Promise<() => void> {
+): Promise<() => Promise<void>> {
   const tokenName = method === 'oauth-business' ? 'acp_business_token.json' : 'acp_token.json'
   const token = join(stageHome, 'antigravity-acp', tokenName)
   try {
@@ -100,9 +99,9 @@ export async function antigravitySignInCredentialCommit(
       { cause }
     )
   }
-  return () => {
+  return async () => {
     try {
-      renameSync(token, join(home, 'antigravity-acp', tokenName))
+      await rename(token, join(home, 'antigravity-acp', tokenName))
     } catch (cause) {
       throw new AntigravitySignInSentence(
         'Antigravity could not save the new Chat sign-in. Check that Orca can write its data folder and start sign-in again.',

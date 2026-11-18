@@ -55,6 +55,8 @@ type Flow = {
   pending?: { url: string } & AntigravitySignInPending
   callbackSent?: boolean
   forwarding?: Promise<void>
+  /** Past the final cancellation check: the replacement's own result decides the phase. */
+  committing?: boolean
 }
 
 export type AntigravityChatSignInHost = {
@@ -86,6 +88,9 @@ function publish(
   const { value } = antigravityChatSignIn.get()
   const shown = value.flow
   if (shown?.flowId !== current.id || (settled(shown.phase) && !cleanupFailed)) {
+    return
+  }
+  if (current.committing && (next.phase === 'cancelled' || next.phase === 'expired')) {
     return
   }
   const shownNext = { ...next, flowId: current.id, owner: current.owner, intent: current.intent }
@@ -220,8 +225,8 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     if (replacement) {
       const commit = await antigravitySignInCredentialCommit(target.home, home, method)
       closed()
-      // Commit and publish in one turn so cancellation cannot relabel a replaced login.
-      commit()
+      current.committing = true
+      await commit()
       answerAntigravityChatAuth(true)
     }
     publishModels(accountHome, started, live)
