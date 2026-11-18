@@ -25,6 +25,7 @@ import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-c
 import { StatsCollector } from '../stats/collector'
 import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
+import { feedPullRequestStats } from '../stats/pull-request-stats-feed'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
@@ -197,6 +198,7 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
+  state.unsubscribePullRequestStats = feedPullRequestStats(state.stats, () => store.getRepos())
   const usageWorktrees = new UsageWorktreeHistory(
     store,
     join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')

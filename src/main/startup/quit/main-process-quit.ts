@@ -179,6 +179,8 @@ function installWillQuitHandler(): void {
     wslHookRelayManager.disposeAll()
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
+    state.unsubscribePullRequestStats?.()
+    state.unsubscribePullRequestStats = null
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
     const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
