@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  botGroupMissing,
-  botGroupPickOrder,
-  botGroupUnchanged
-} from './bot-group-pick'
+import { botGroupMissing, botGroupPickOrder, botGroupUnchanged } from './bot-group-pick'
 
 describe('botGroupPickOrder', () => {
   it('keeps saved members where they were, then adds new picks in pick order', () => {
