@@ -109,7 +109,7 @@ export function MobileNativeChatComposer({
   const orca = useMobileNativeChatOrcaCommands({
     structured,
     agent,
-    draftScopeKey,
+    sendSurfaceId,
     editing: editSession !== undefined,
     clearDraft: () => onChangeText('')
   })

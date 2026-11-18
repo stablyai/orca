@@ -1,11 +1,8 @@
 // `/usage` on the phone: the desktop card's account and usage windows for this chat's Codex account.
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import type {
-  AgentSessionAccountUsage,
-  AgentSessionUsageAccount
-} from '../../../../../src/shared/agent-session/lifecycle/accounts/agent-session-account-usage'
-import { getManagedAccountInlineLabel } from '../../../../../src/shared/agent-accounts/managed-account-display-names'
+import type { AgentSessionAccountUsage } from '../../../../../src/shared/agent-session/lifecycle/accounts/agent-session-account-usage'
+import { agentSessionUsageAccountLabel } from '../../../../../src/shared/agent-session/lifecycle/accounts/agent-session-usage-account-label'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { ListRow } from '../../../components/list/ListGroup'
@@ -18,21 +15,6 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { MobileStructuredAccountUsage } from './use-mobile-structured-account-usage'
-
-function chatAccountLabel(account: AgentSessionUsageAccount, t: Translate): string {
-  switch (account.kind) {
-    case 'system':
-      return t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
-    case 'managed':
-      return account.email
-        ? getManagedAccountInlineLabel(account)
-        : t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
-    case 'shared':
-      return (
-        account.email || t('components.native-chat.usage.sharedAccount', 'Current shared account')
-      )
-  }
-}
 
 function unavailableMessage(
   result: Exclude<AgentSessionAccountUsage, { status: 'ok' }>,
@@ -109,7 +91,7 @@ function AccountUsageBody({
               {t('components.native-chat.usage.account', 'Account used by this chat')}
             </Text>
             <Text style={styles.account} numberOfLines={1}>
-              {chatAccountLabel(result.account, t)}
+              {agentSessionUsageAccountLabel(result.account, t)}
             </Text>
             <ProviderUsageWindows limits={result.rateLimits} now={now} />
             <UsageStatusNote limits={result.rateLimits} />
