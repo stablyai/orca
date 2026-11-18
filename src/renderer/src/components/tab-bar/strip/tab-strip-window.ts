@@ -149,6 +149,7 @@ export function useNotifyTabStripScrollAfterCommit(
   stripRef: RefObject<HTMLElement | null>,
   listenersRef: RefObject<Set<() => void>>
 ): void {
+  // Why start at 0, not the mount offset: a mount that revealed the active tab already scrolled and must notify.
   const seenScrollLeftRef = useRef(0)
   // Why track user scrolls too: a commit that scrolls back to the last notified offset must still notify.
   useLayoutEffect(() => {
@@ -156,7 +157,6 @@ export function useNotifyTabStripScrollAfterCommit(
     if (!strip) {
       return
     }
-    seenScrollLeftRef.current = strip.scrollLeft
     const onScroll = (): void => {
       seenScrollLeftRef.current = strip.scrollLeft
     }
