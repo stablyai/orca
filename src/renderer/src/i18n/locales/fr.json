@@ -815,6 +815,13 @@
     "groupHooks": {
       "invalidSetup": "Le fichier est présent, mais Orca n'a pas trouvé de script de setup valide.",
       "supportedKeys": "Définissez uniquement les clés prises en charge : `scripts` et `setup`."
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Chaque nuit après 3 h, ou dès que cet ordinateur est réveillé",
+        "everyWeekLine": "Une fois par semaine après 3 h, ou dès que cet ordinateur est réveillé",
+        "everyDescriptionAwake": "Si cet ordinateur est en veille à ce moment-là, le rangement a lieu dès qu’il est réveillé. Uniquement après les nuits avec de nouvelles discussions. Chaque rangement utilise ton forfait {{agent}}, comme une courte discussion."
+      }
     }
   },
   "menu": {
@@ -1739,7 +1746,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Emplacement du projet non défini"
+        "locationNotSet": "Emplacement du projet non défini",
+        "hostLocalGitProject": "Ce projet n'a pas de dépôt Git distant correspondant",
+        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",
@@ -5377,8 +5386,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Fermer",
           "64c71cf7b9": "Orca n'a encore installé aucun skill sur cette machine.",
-          "0900db719a": "— déconnecté",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Cet ordinateur",
           "3677ae58e7": "Skills installés par Orca depuis un lien. Réinstallez-les, revenez à une version antérieure ou supprimez-les.",
           "44d118a8f7": "Installés par Orca",
@@ -5413,8 +5420,6 @@
           "a4dfd33095": "Un seul espace de travail",
           "c779621aa0": "Skills globaux",
           "63cc9e31fe": "Destination",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— déconnecté",
           "0785d0a503": "— mise à jour requise",
           "8562dd1e6e": "Cet ordinateur",
           "b8a0b706ad": "Machine"
@@ -6069,12 +6074,12 @@
           "removeDescriptionSsh": "Ceci retire uniquement {{name}} d'Orca. Ses fichiers restent sur {{host}} — rajoutez cet hôte SSH pour le récupérer.",
           "removeDescriptionLocal": "Ceci retire uniquement {{name}} d'Orca. Il est toujours sur votre disque.",
           "removeDescriptionVmRecipe": "Ceci retire {{name}} d'Orca. Sa recette de VM détermine si l'environnement et ses fichiers sont définitivement supprimés.",
+          "linkedWorkspaceWarning_one": "{{count}} espace de travail de ce projet sera aussi retiré d'Orca.",
+          "linkedWorkspaceWarning_other": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
+          "linkedWorkspaceWarning_many": "{{count}} espaces de travail de ce projet seront aussi retirés d'Orca.",
           "openTerminalWarning_one": "{{count}} terminal ouvert dans ce projet sera fermé.",
           "openTerminalWarning_other": "{{count}} terminaux ouverts dans ce projet seront fermés.",
           "openTerminalWarning_many": "{{count}} terminaux ouverts dans ce projet seront fermés."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Révéler l'espace de travail actif"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "Masquer de la barre latérale",
@@ -8680,7 +8685,7 @@
           "112f3b934f": "IA du contrôle de code source"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Révoquer l'accès ici n'empêche pas une personne ayant un accès SSH à cet ordinateur de s'associer de nouveau. Pour la bloquer, retirez son accès SSH.",
+          "sshAccessCaveat": "Révoquer un lien révoque aussi les liens créés dans les terminaux qu'il a ouverts. Toute personne ayant un terminal sur cet ordinateur, via SSH ou un lien, peut toujours s'associer de nouveau.",
           "6f6d5188ed": "Révoquer {{value0}}",
           "434e4a6af6": "Lien actuel",
           "df142657a5": "Pas encore utilisé",
@@ -21417,6 +21422,16 @@
       "confirm": "Ajustez les filtres et révélez",
       "cancel": "Conserver les filtres"
     },
+    "revealCurrent": {
+      "label": "Afficher l’élément actuel",
+      "noWorkspace": "Rien n’est ouvert",
+      "fullPageView": "Cette page n’a pas de ligne dans la barre latérale",
+      "archived": "Les espaces de travail archivés ne sont pas listés dans la barre latérale",
+      "botsOff": "Les bots sont désactivés, ce bot n’est donc pas listé",
+      "botHidden": "Ce bot est en pause et masqué par les options des bots",
+      "renameBotPage": "La page d’un bot ou d’un groupe n’est pas un worktree. Pour le renommer, utilisez Renommer dans le menu de sa ligne.",
+      "renameUnlisted": "Cet espace de travail n’est pas listé dans la barre latérale pour le moment, il ne peut donc pas y être renommé."
+    },
     "wslMoved": {
       "movedToHost": "Déplacé vers l'hôte {{distro}}",
       "sectionTitle": "Déplacés vers des hôtes WSL ({{count}})",
@@ -23371,6 +23386,7 @@
     }
   },
   "nativeChat": {
+    "linkedMessageMissing": "Impossible de trouver ce message.",
     "math": {
       "scrollDisplayEquation": "Faire défiler l'équation affichée"
     }
@@ -24235,6 +24251,50 @@
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
     "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "Cette conversation n'est pas ouverte sur cet ordinateur."
+    },
+    "activity": {
+      "title": "Activité"
+    },
+    "connectors": {
+      "tab": "Connecteurs"
+    },
+    "files": {
+      "tab": "Fichiers"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
+      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
+      "lookDueNow": "Prévu maintenant · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",
+      "description": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions",
+      "scopedPlaceholder": "Rechercher des bots...",
+      "scopedLabel": "Rechercher des bots",
+      "scopeHint": "Tapez @ pour n’afficher que les bots",
+      "chip": "Bots",
+      "chipLabel": "Bots, tout afficher",
+      "searchEverything": "Tout rechercher pour « {{text}} »",
+      "searchBotsFor": "Rechercher des bots pour « {{text}} »",
+      "noMatch": "Aucun bot ne correspond à « {{text}} »",
+      "noBotsYet": "Aucun bot pour l’instant",
+      "filtersPaused": "Les filtres s’appliquent aux espaces de travail, pas aux bots",
+      "showEverything": "Tout afficher",
+      "footerBots": "Bots",
+      "matchesPurpose": "Correspond à son rôle.",
+      "scopedStatus_one": "Bots uniquement. {{count}} résultat trouvé.",
+      "scopedStatus_other": "Bots uniquement. {{count}} résultats trouvés.",
+      "scopedStatus_many": "Bots uniquement. {{count}} résultats trouvés.",
+      "sidebarSearchLabel": "Rechercher parmi les bots, les espaces de travail et les onglets du navigateur",
+      "section": "Bots"
+    },
+    "templates": {
+      "browse": "Parcourir les modèles"
+    }
   },
   "checks": {
     "gitlabAllowedFailure": "Échec autorisé"

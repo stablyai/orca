@@ -18,6 +18,10 @@
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
       "weeklyWindow": "7 Tage"
+    },
+    "claude": {
+      "usageSignInLabel": "Erneut anmelden",
+      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
     }
   },
   "agentHistory": {
@@ -696,7 +700,9 @@
     "retry": "Erneut versuchen",
     "save": "Speichern",
     "settings": "Einstellungen",
-    "unknown": "Unbekannt"
+    "unknown": "Unbekannt",
+    "waitingForHost": "Warten auf Host…",
+    "connectingToHost": "Verbindung zum Host wird hergestellt…"
   },
   "components": {
     "accountsSnapshot": {
@@ -706,7 +712,7 @@
       "copyFailed": "Kopieren fehlgeschlagen",
       "copyPrompt": "Prompt kopieren",
       "statusUnreadable": "Der Status dieses Hosts konnte nicht gelesen werden. Erneuter Versuch…",
-      "updateRequired": "Orca auf dem Computer aktualisieren, um einen Agenten vom Smartphone aus zu starten."
+      "updateRequired": "Orca auf diesem Host aktualisieren, um einen Agenten vom Smartphone aus zu starten."
     },
     "agentSpinner": {
       "monitoring": "Hintergrundaufgaben werden überwacht",
@@ -837,7 +843,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "{{count}} ungesendete Notiz",
       "unsentNotes_other": "{{count}} ungesendete Notizen",
-      "updateRequired": "Orca auf dem Computer aktualisieren"
+      "updateRequired": "Orca auf diesem Host aktualisieren"
     },
     "diffReviewFileSummary": {
       "changed": "Geändert",
@@ -901,7 +907,7 @@
       "connectHint": "Die Jira-Site in Orca auf dem Computer unter Einstellungen → Integrationen hinzufügen und anschließend erneut prüfen.",
       "connectOnDesktop": "Jira auf dem Computer verbinden",
       "credentialUnreadable": "Die Jira-Zugangsdaten sind gespeichert, können aber nicht gelesen werden: {{credentialError}}",
-      "updateDesktop": "Orca auf dem Computer aktualisieren"
+      "updateDesktop": "Orca auf diesem Host aktualisieren"
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
@@ -967,23 +973,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
-      "desktopTooOldBody": "Die gekoppelte Desktop-App ist für die aktuelle Version von Orca Mobile zu alt. Orca auf dem Computer aktualisieren und dann erneut mit diesem Host verbinden.",
+      "desktopTooOldBody": "Orca auf diesem Host ist für die aktuelle Version von Orca Mobile zu alt. Orca dort aktualisieren und dann erneut mit diesem Host verbinden.",
       "getVersion": "Orca {{version}} herunterladen",
-      "mobileTooOldAppStore": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
-      "mobileTooOldGooglePlay": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
-      "mobileTooOldGitHubReleases": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden.",
+      "mobileTooOldAppStore": "Dieser Host benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "mobileTooOldGooglePlay": "Dieser Host benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
+      "mobileTooOldGitHubReleases": "Dieser Host benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden.",
       "openAppStore": "App Store öffnen",
       "openGooglePlay": "Google Play öffnen",
       "openGitHubReleases": "GitHub Releases öffnen",
       "refreshRecoveryNote": "Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
-      "refreshWorkspaceBody": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als von der Desktop-App erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen.",
+      "refreshWorkspaceBody": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als vom Host erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen.",
       "refreshWorkspaceTitle": "Mobilen Arbeitsbereich aktualisieren",
-      "updateDesktopTitle": "Orca auf dem Computer aktualisieren",
+      "updateDesktopTitle": "Orca auf diesem Host aktualisieren",
       "updateMobileTitle": "Orca Mobile aktualisieren",
       "updateRecoveryNote": "Bereits aktualisiert? Zu „Hosts“ zurückkehren und die Verbindung erneuern. Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
-      "workspaceNeedsUpdateAppStore": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
-      "workspaceNeedsUpdateGooglePlay": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
-      "workspaceNeedsUpdateGitHubReleases": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden."
+      "workspaceNeedsUpdateAppStore": "Der mobile Arbeitsbereich dieses Hosts benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "workspaceNeedsUpdateGooglePlay": "Der mobile Arbeitsbereich dieses Hosts benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
+      "workspaceNeedsUpdateGitHubReleases": "Der mobile Arbeitsbereich dieses Hosts benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden."
     },
     "richMarkdownEditor": {
       "imageUrl": "Bild-URL",
@@ -1129,6 +1135,9 @@
       "composer": {
         "planMode": "Planen",
         "exitPlanMode": "Planungsmodus verlassen"
+      },
+      "goal": {
+        "sentAsGoal": "Als Ziel gesendet"
       }
     }
   },
@@ -1394,12 +1403,10 @@
     "fileExplorerPanel": {
       "backToSession": "Zurück zur Sitzung",
       "closeFiles": "Dateien schließen",
-      "connecting": "Verbindung zum Desktop wird hergestellt…",
       "emptyState": "Keine Dateien gefunden",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
-      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
-      "waiting": "Warten auf den Desktop…"
+      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
@@ -1429,8 +1436,7 @@
     "fileMediaPreview": {
       "downloading": "Download: {{bytes}} von {{total}}",
       "loadFailed": "Medien konnten nicht geladen werden.",
-      "loading": "Medien werden geladen…",
-      "waiting": "Warten auf den Desktop…"
+      "loading": "Medien werden geladen…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "SSH-Verbindung konnte nicht überprüft werden. Host neu verbinden und erneut versuchen."
@@ -1469,8 +1475,7 @@
       "saveArtifact": "Terminal-Artefakt speichern",
       "saveFailed": "Datei konnte nicht gespeichert werden.",
       "stay": "Bleiben",
-      "title": "Vorschau",
-      "waiting": "Warten auf den Desktop…"
+      "title": "Vorschau"
     },
     "filePreviewSourceText": {
       "previewLabel": "Dateivorschau",
@@ -1702,13 +1707,13 @@
       "localWindows": "Lokales Windows",
       "projectOrder": "Projektreihenfolge",
       "projects": "Projekte",
-      "savingToDesktop": "Wird in der Desktop-App gespeichert",
+      "savingToDesktop": "Wird auf dem Host gespeichert",
       "show": "Anzeigen",
       "showProperties": "Eigenschaften anzeigen",
       "sortBy": "Sortieren nach",
       "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "thisComputer": "Dieser Computer",
-      "waitingForDesktop": "Es wird noch auf den Desktop gewartet",
+      "waitingForDesktop": "Es wird noch auf den Host gewartet",
       "workspaceOptions": "Arbeitsbereichsoptionen"
     },
     "workspaceRenameSheet": {
@@ -2092,7 +2097,7 @@
       "committedChangesFailed": "Committete Änderungen konnten nicht geladen werden.",
       "committedChangesUnavailable": "Committete Änderungen nicht verfügbar",
       "committedDiffUnavailable": "Diff der committeten Änderungen ist nicht verfügbar.",
-      "desktopUpdateRequired": "Orca auf dem Desktop aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
+      "desktopUpdateRequired": "Orca auf diesem Host aktualisieren, um Änderungen auf dem Mobilgerät zu prüfen.",
       "diffLoadFailed": "Diff konnte nicht geladen werden.",
       "reviewNotesLoadFailed": "Review-Notizen konnten nicht geladen werden."
     },
@@ -2341,7 +2346,7 @@
       "emptyPrompt": "Der gespeicherte Prompt dieser Aktion ist leer. Die KI-Einstellungen der Quellcodeverwaltung auf dem Computer aktualisieren.",
       "loadFailed": "Die verfügbaren Agenten konnten nicht geladen werden.",
       "promptNotSent": "Der Agent wurde gestartet, aber der Prompt wurde nicht gesendet.",
-      "updateRequired": "Orca auf dem Computer aktualisieren, um einen Agenten vom Smartphone aus zu starten."
+      "updateRequired": "Orca auf diesem Host aktualisieren, um einen Agenten vom Smartphone aus zu starten."
     },
     "prSidebarState": {
       "loadFailed": "Pull Request konnte nicht geladen werden"
@@ -2536,26 +2541,21 @@
       "noteAdded": "Notiz hinzugefügt",
       "notesCopied": "Notizen kopiert",
       "saveNoteFailed": "Notiz konnte nicht gespeichert werden",
-      "saveNotesFailed": "Review-Notizen konnten nicht gespeichert werden",
-      "waitingForDesktop": "Warten auf Desktop…"
+      "saveNotesFailed": "Review-Notizen konnten nicht gespeichert werden"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "Review konnte nicht gespeichert werden",
-      "saveStateFailed": "Review-Status konnte nicht gespeichert werden",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "saveStateFailed": "Review-Status konnte nicht gespeichert werden"
     },
     "useDiffReviewController": {
       "loadFailed": "Review konnte nicht geladen werden",
-      "missingWorktree": "Worktree fehlt",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "missingWorktree": "Worktree fehlt"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "Diff konnte nicht geladen werden",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "loadFailed": "Diff konnte nicht geladen werden"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen"
     },
     "useDiffReviewInteractions": {
       "openFailed": "Konnte nicht in der Sitzung geöffnet werden"
@@ -2569,8 +2569,7 @@
       "notesSentWithWarning": "Review-Notizen gesendet. {{warning}}",
       "promptNotSent": "Der Agent wurde gestartet, aber die Notizen wurden nicht gesendet. Zum Einfügen „Notizen kopieren“ verwenden.",
       "sendFailed": "Notizen konnten nicht gesendet werden",
-      "startingAgent": "Agent wird gestartet…",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "startingAgent": "Agent wird gestartet…"
     },
     "useImageAttachment": {
       "attachFailed": "Anhängen fehlgeschlagen",
@@ -2609,8 +2608,7 @@
       "presetsUnavailable": "Agenten-Voreinstellungen nicht verfügbar"
     },
     "usePrAiTriage": {
-      "launchFailed": "Agent konnte nicht gestartet werden",
-      "waitingForDesktop": "Warten auf Desktop…"
+      "launchFailed": "Agent konnte nicht gestartet werden"
     },
     "usePrCommentActions": {
       "actionFailed": "Kommentaraktion fehlgeschlagen"
@@ -2648,7 +2646,7 @@
       "disconnected": "Einfügen fehlgeschlagen (Verbindung getrennt)",
       "imageTooLarge": "Bild zu groß zum Einfügen",
       "pasteFailed": "Einfügen fehlgeschlagen",
-      "pasteTooLarge": "Einzufügender Inhalt zu groß (max. 256 KiB)",
+      "pasteTooLarge": "Der einzufügende Inhalt ist zu groß.",
       "terminalChanged": "Einfügen abgebrochen (Terminal gewechselt)"
     },
     "worktreeLabel": {
@@ -2778,6 +2776,9 @@
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
     }
   },
   "settings": {
@@ -2861,7 +2862,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Zustellungseinstellungen konnten nicht geladen werden. Für einen neuen Versuch diese Ansicht erneut öffnen.",
       "saveFailed": "Zustellungseinstellungen konnten nicht gespeichert werden. Erneut versuchen.",
-      "updateDesktopHint": "Einen Desktop mit aktueller Orca-Version koppeln, um auf diesem Smartphone Benachrichtigungen zu erhalten."
+      "updateDesktopHint": "Einen Host mit aktueller Orca-Version koppeln, um auf diesem Smartphone Benachrichtigungen zu erhalten."
     },
     "notificationDisplayTest": {
       "accepted": "Vom Push-Dienst von Orca angenommen. Prüfen, ob die Benachrichtigung angekommen ist.",
@@ -2950,8 +2951,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "Kein Basis-Branch für den Rebase vorhanden",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "noBaseBranch": "Kein Basis-Branch für den Rebase vorhanden"
     },
     "actions": {
       "checkingReviewStatus": "Review-Status wird geprüft.",
@@ -3114,8 +3114,7 @@
       "loadFilesFailed": "Commit-Dateien konnten nicht geladen werden.",
       "noCommits": "Keine Commits.",
       "noFileChanges": "Keine Dateiänderungen",
-      "retryFiles": "Commit-Dateien erneut laden",
-      "waitingForDesktop": "Warten auf Desktop…"
+      "retryFiles": "Commit-Dateien erneut laden"
     },
     "gitStatus": {
       "conflicts": "Konflikte"
@@ -3180,10 +3179,8 @@
       "changes": "Änderungen"
     },
     "loaders": {
-      "connectingToDesktop": "Verbindung zum Desktop wird hergestellt…",
       "loadFailed": "Quellcodeverwaltung konnte nicht geladen werden.",
-      "updateDesktop": "Orca auf dem Desktop aktualisieren, um die Quellcodeverwaltung mobil zu nutzen.",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "updateDesktop": "Orca auf diesem Host aktualisieren, um die Quellcodeverwaltung mobil zu nutzen."
     },
     "modals": {
       "currentBranch": "aktuell",
@@ -3368,8 +3365,7 @@
       "windowsBatchUnsafeArguments": "{{label}} wird über ein Windows-Batchskript ausgeführt, das den mehrzeiligen Prompt nicht als Argument annehmen kann. In den Einstellungen die ausführbare Datei des Agenten angeben oder einen benutzerdefinierten Befehl ohne {prompt} verwenden, damit Orca den Prompt über stdin sendet."
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "Agent konnte nicht gestartet werden.",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "launchFailed": "Agent konnte nicht gestartet werden."
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit-Nachricht konnte nicht generiert werden."
@@ -3377,8 +3373,7 @@
     "useMobileGitRequests": {
       "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",
       "branchUnavailable": "Branch-Status nicht verfügbar",
-      "commitFailed": "Commit fehlgeschlagen",
-      "waitingForDesktop": "Warten auf den Desktop…"
+      "commitFailed": "Commit fehlgeschlagen"
     },
     "conflictActions": {
       "needsNewerHost": "Aktualisiere Orca auf dem Computer, auf dem dieser Arbeitsbereich ausgeführt wird, um Merge-Konflikte auf deinem Smartphone zu lösen.",
@@ -3395,15 +3390,7 @@
       "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
       "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
       "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
-      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
-      "merged": "Zusammengeführt",
-      "closed": "Geschlossen",
-      "conflicts": "Konflikte",
-      "behind": "Nicht aktuell",
-      "blocked": "Blockiert",
-      "checksPending": "Prüfungen ausstehend",
-      "ableToMerge": "Zusammenführen möglich",
-      "unknown": "Unbekannt"
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?"
     },
     "pagination": {
       "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
@@ -3579,8 +3566,8 @@
       "connectLinearMessage": "Dir zugewiesene Linear-Issues direkt unter „Aufgaben“ durchsuchen und die Arbeit daran starten.",
       "connectLinearTitle": "Linear-Konto verbinden",
       "jiraStatusFailed": "Jira-Status konnte nicht gelesen werden.",
-      "updateDesktopMessage": "Diese mobile Aufgabenansicht benötigt eine neuere Version von Orca auf dem Desktop.",
-      "updateDesktopTitle": "Orca-Desktop-App aktualisieren"
+      "updateDesktopMessage": "Diese mobile Aufgabenansicht benötigt eine neuere Version von Orca auf diesem Host.",
+      "updateDesktopTitle": "Orca auf diesem Host aktualisieren"
     },
     "options": {
       "all": "Alle",
@@ -3808,7 +3795,6 @@
       "title": "Aufgaben"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, z. B. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Projektansicht durchsuchen…",
       "providerPlaceholder": "{{provider}}-Aufgaben suchen…"
     },
@@ -4250,7 +4236,134 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC",
+        "jiraTextMatchesNotice": "Texttreffer werden angezeigt. Jira konnte diese Suche nicht als JQL ausführen."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Abgebrochen"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Gemergt",
+              "4f976d3450": "Geschlossen",
+              "1f8eb81c0e": "Genehmigung erforderlich",
+              "c606463dc2": "Änderungen angefordert",
+              "7e8bbe3cd7": "Konflikte",
+              "b169f943e1": "Mergen, sobald möglich",
+              "autoMergeOn": "Auto-Merge aktiviert",
+              "039c072f94": "Im Rückstand",
+              "bf5e4c6c92": "Blockiert",
+              "87fa36ac83": "Checks fehlgeschlagen",
+              "4e2507176b": "Checks ausstehend",
+              "def355ff38": "Merge möglich",
+              "f958920f3a": "Wird geprüft"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Gemergt",
+                  "88d044c42f": "Geschlossen",
+                  "96b05e374c": "Konflikte",
+                  "5105b0e584": "Genehmigung erforderlich",
+                  "893a999c8c": "Änderungen angefordert",
+                  "01ab632a21": "Ungelöste Diskussionen",
+                  "bf628700f6": "Checks müssen erfolgreich sein",
+                  "65c847ad1e": "Checks ausstehend",
+                  "382c70faeb": "Im Rückstand",
+                  "195917574e": "Wird geprüft",
+                  "4ecc0d90ee": "Blockiert",
+                  "49ac4fec10": "Checks fehlgeschlagen",
+                  "04a3015a12": "Merge möglich"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira konnte diese JQL-Abfrage nicht ausführen. Syntax prüfen und erneut versuchen."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "Keine Nutzungsdaten von {{server}}",
+            "remoteOwnerNotConfigured": "Auf {{server}} nicht konfiguriert",
+            "claudeUnknownOnHost": "Die Claude-Nutzung ist von {{server}} nicht verfügbar. Claude ist dort möglicherweise nicht angemeldet oder verwendet die Abrechnung per API-Schlüssel.",
+            "remoteOwnerSignInSavedHere": "Die Anmeldung ist nur auf diesem Computer gespeichert.",
+            "f8b8dbed85": "Nutzung nicht verfügbar",
+            "e2c6a4f917": "Grok zum Aktualisieren ausführen",
+            "f90b3d7a16": "Kimi zum Aktualisieren ausführen",
+            "0d8d7cfe15": "Warten auf Claude-Sitzung",
+            "claude": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Claude läuft",
+                "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
+              }
+            },
+            "1804cd8c3f": "Anmeldung wird aktualisiert",
+            "bf2e739f18": "Anmeldung nicht verfügbar",
+            "f8f0f9d8cc": "Netzwerkproblem",
+            "minimax": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "apiKey": "Der MiniMax-API-Schlüssel ist abgelaufen. In den Einstellungen ersetzen.",
+                "cookie": "Das MiniMax-Sitzungscookie ist abgelaufen. In den Einstellungen ersetzen."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "message": "cursor-agent login in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und anschließend den Abruf der Nutzung erneut versuchen."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Kein Abonnement"
+              }
+            },
+            "7ad719c4bf": "Begrenzt",
+            "e740f92596": "Aktualisierung fehlgeschlagen",
+            "2c35eca8d4": "Nutzung konnte nicht abgerufen werden",
+            "d1b7f509ac": "grok in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Falls erforderlich, die Anmeldung abschließen und anschließend den Abruf der Nutzung erneut versuchen. Es muss keine Chatnachricht gesendet werden.",
+            "a37e8c15d4": "kimi in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Anschließend den Abruf der Nutzung erneut versuchen.",
+            "3d3c9c0c1f": "Die Claude-Nutzung wird aktualisiert, nachdem das aktive Claude-Terminal seine Zugangsdaten erneuert hat.",
+            "42fdd4da1d": "Die Claude-Anmeldung wird aktualisiert. Agentensitzungen sind möglicherweise weiterhin angemeldet.",
+            "c06c1d215d": "Die Claude-Nutzung konnte nicht aktualisiert werden, da die Netzwerkanfrage fehlgeschlagen ist.",
+            "cabdc2a9e0": "Die Zugangsdaten für die Claude-Anmeldung konnten nicht gelesen werden.",
+            "a7517cccb6": "Die Claude-Nutzung ist derzeit nicht verfügbar.",
+            "8418ec448d": "Die Nutzung von {{value0}} konnte nicht aktualisiert werden. Agentensitzungen sind möglicherweise weiterhin angemeldet."
+          }
+        }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Computer koppeln",
+      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen.",
+      "pairAction": "Computer koppeln",
+      "openFailed": "Link konnte nicht geöffnet werden",
+      "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",
+      "computer": "deinem Computer",
+      "updateNeeded": "Aktualisiere Orca auf {{names}}, um diesen Link zu öffnen.",
+      "unreachable": "{{names}} sind nicht erreichbar. Starte Orca auf einem davon und versuche es erneut.",
+      "missing": "Keiner deiner gekoppelten Computer hat diesen Bot.",
+      "offline": "{{name}} ist offline. Öffne den Link erneut, sobald der Computer wieder online ist.",
+      "chatOpenFailed": "{{name}} konnte diesen Chat nicht öffnen. Versuche es erneut.",
+      "unreachableSingle": "{{name}} ist nicht erreichbar. Starte Orca dort und versuche es erneut.",
+      "workspaceDeleted": "Der Arbeitsbereich dieses Chats wurde auf {{name}} gelöscht."
     }
   }
 }

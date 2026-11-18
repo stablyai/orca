@@ -133,7 +133,7 @@ export function createAssignCrossStoreWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['assignCrossStoreWorktreeParent'] {
-  return async (children, parent) => {
+  return async (children, parent, options) => {
     const routes = children.map((child) => ({
       child,
       target: hostRouteForWorktreeOwner(get(), child.id, child.hostId).target
@@ -150,7 +150,13 @@ export function createAssignCrossStoreWorktreeParent(
           callRuntimeRpc(
             target,
             'worktree.set',
-            { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
+            {
+              worktree: toRuntimeWorktreeSelector(child.id),
+              crossStoreParent,
+              ...(options?.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: options.ifParentWorkspace }
+                : {})
+            },
             { timeoutMs: 15_000 }
           )
         )

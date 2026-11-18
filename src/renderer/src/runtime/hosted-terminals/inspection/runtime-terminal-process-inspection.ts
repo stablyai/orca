@@ -49,7 +49,12 @@ function normalizeInspectionResult(
 
 export async function inspectRuntimeTerminalProcess(
   ptyId: string,
-  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
+  options?: {
+    expectedIncarnationId?: string
+    scanChildProcesses?: boolean
+    steadyState?: boolean
+    jobMembershipOnly?: boolean
+  }
 ): Promise<RuntimeTerminalProcessInspection> {
   const owner = getRemoteRuntimePtyOwner(ptyId)
   const remote = isRemoteInspectionPtyId(ptyId)

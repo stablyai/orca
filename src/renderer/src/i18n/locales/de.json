@@ -97,6 +97,16 @@
       "confirm": "Filter anpassen und anzeigen",
       "cancel": "Filter beibehalten"
     },
+    "revealCurrent": {
+      "label": "Aktuelles anzeigen",
+      "noWorkspace": "Nichts ist geöffnet",
+      "fullPageView": "Diese Seite hat keine Zeile in der Seitenleiste",
+      "archived": "Archivierte Arbeitsbereiche werden in der Seitenleiste nicht aufgeführt",
+      "botsOff": "Bots sind ausgeschaltet, daher wird dieser Bot nicht aufgeführt",
+      "botHidden": "Dieser Bot ist pausiert und durch die Bot-Optionen ausgeblendet",
+      "renameBotPage": "Die Seite eines Bots oder einer Gruppe ist kein Worktree. Zum Umbenennen „Umbenennen“ im Menü der Zeile verwenden.",
+      "renameUnlisted": "Dieser Arbeitsbereich wird gerade nicht in der Seitenleiste aufgeführt und kann dort daher nicht umbenannt werden."
+    },
     "wslMoved": {
       "movedToHost": "Auf den {{distro}}-Host verschoben",
       "sectionTitle": "Auf WSL-Hosts verschoben ({{count}})",
@@ -1066,6 +1076,13 @@
       "saving": "Wird gespeichert…",
       "save": "Formatierer speichern",
       "710343e374": "Formatierungsbefehl"
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Jede Nacht nach 3 Uhr oder sobald dieser Computer wach ist",
+        "everyWeekLine": "Einmal pro Woche nach 3 Uhr oder sobald dieser Computer wach ist",
+        "everyDescriptionAwake": "Schläft dieser Computer zu dieser Zeit, läuft es, sobald er wach ist. Nur nach Nächten mit neuen Chats. Jedes Aufräumen nutzt deinen {{agent}}-Tarif wie ein kurzer Chat."
+      }
     }
   },
   "menu": {
@@ -1989,7 +2006,9 @@
         }
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "Projektverzeichnis nicht festgelegt"
+        "locationNotSet": "Projektverzeichnis nicht festgelegt",
+        "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -5590,8 +5609,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Schließen",
           "64c71cf7b9": "Orca hat auf diesem Rechner noch keine Skills installiert.",
-          "0900db719a": "— nicht verbunden",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Dieser Computer",
           "3677ae58e7": "Skills, die Orca über einen Link installiert hat. Erneut installieren, zu einer früheren Version zurückkehren oder entfernen.",
           "44d118a8f7": "Von Orca installiert",
@@ -5625,8 +5642,6 @@
           "a4dfd33095": "Ein Arbeitsbereich",
           "c779621aa0": "Globale Skills",
           "63cc9e31fe": "Ziel",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— nicht verbunden",
           "0785d0a503": "— Aktualisierung erforderlich",
           "8562dd1e6e": "Dieser Computer",
           "b8a0b706ad": "Rechner"
@@ -6244,11 +6259,10 @@
           "removeDescriptionSsh": "Dies entfernt {{name}} nur aus Orca. Die Dateien bleiben auf {{host}} — zum Wiederherstellen diesen SSH-Host erneut hinzufügen.",
           "removeDescriptionLocal": "Dies entfernt {{name}} nur aus Orca. Es bleibt auf dem Datenträger erhalten.",
           "removeDescriptionVmRecipe": "Dies entfernt {{name}} aus Orca. Das zugehörige VM-Rezept legt fest, ob die Umgebung und ihre Dateien dauerhaft gelöscht werden.",
+          "linkedWorkspaceWarning_one": "{{count}} Arbeitsbereich in diesem Projekt wird ebenfalls aus Orca entfernt.",
+          "linkedWorkspaceWarning_other": "{{count}} Arbeitsbereiche in diesem Projekt werden ebenfalls aus Orca entfernt.",
           "openTerminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
           "openTerminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Aktiven Arbeitsbereich anzeigen"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "Aus der Seitenleiste ausblenden",
@@ -8817,7 +8831,7 @@
           "112f3b934f": "KI für die Quellcodeverwaltung"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Ein Widerruf hier verhindert nicht, dass sich jemand mit SSH-Zugriff auf diesen Computer erneut koppelt. Um den Zugriff vollständig zu entziehen, muss der SSH-Zugriff entfernt werden.",
+          "sshAccessCaveat": "Wenn du einen Link widerrufst, werden auch Links widerrufen, die in von ihm geöffneten Terminals erstellt wurden. Wer auf diesem Computer ein Terminal nutzen kann, per SSH oder über einen Link, kann sich weiterhin erneut koppeln.",
           "6f6d5188ed": "Zugriff für {{value0}} widerrufen",
           "434e4a6af6": "Aktueller Link",
           "df142657a5": "Noch nicht verwendet",
@@ -22822,6 +22836,7 @@
     "controlledByHost": "Gesteuert von {{host}}"
   },
   "nativeChat": {
+    "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden.",
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"
     }
@@ -23657,6 +23672,46 @@
   "wslDistroHold": {
     "terminalStopped": "Die WSL-Distribution {{distro}} ist gestoppt, daher hat Orca dieses Terminal nicht gestartet. Starte die Distribution und versuche es dann erneut.",
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
+  },
+  "bots": {
+    "activity": {
+      "title": "Aktivität"
+    },
+    "connectors": {
+      "tab": "Konnektoren"
+    },
+    "files": {
+      "tab": "Dateien"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
+      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
+      "lookDueNow": "Jetzt fällig · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",
+      "description": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen",
+      "scopedPlaceholder": "Bots suchen…",
+      "scopedLabel": "Bots suchen",
+      "scopeHint": "@ eingeben, um nur Bots anzuzeigen",
+      "chip": "Bots",
+      "chipLabel": "Bots, alles anzeigen",
+      "searchEverything": "Überall nach „{{text}}“ suchen",
+      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
+      "noMatch": "Keine Bots passen zu „{{text}}“",
+      "noBotsYet": "Noch keine Bots",
+      "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
+      "showEverything": "Alles anzeigen",
+      "footerBots": "Bots",
+      "matchesPurpose": "Passt zum Zweck.",
+      "scopedStatus_one": "Nur Bots werden angezeigt. {{count}} Ergebnis gefunden.",
+      "scopedStatus_other": "Nur Bots werden angezeigt. {{count}} Ergebnisse gefunden.",
+      "sidebarSearchLabel": "Bots, Arbeitsbereiche und Browser-Tabs durchsuchen",
+      "section": "Bots"
+    },
+    "templates": {
+      "browse": "Vorlagen durchsuchen"
+    }
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",

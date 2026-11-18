@@ -14,12 +14,14 @@ import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from '../../automations/automation-runtime-capabilities'
+import { BOT_RUNTIME_CAPABILITIES } from '../../bot-runtime-capabilities'
 import { BROWSER_RUNTIME_CAPABILITIES } from '../../browser/runtime/browser-runtime-capabilities'
 import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
 } from '../pairing/device-key-capability'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from '../pairing/ticket-exchange-capability'
+import { PAIRING_OFFER_CREATOR_RUNTIME_CAPABILITY } from '../pairing/pairing-offer-creator-capability'
 import { FILES_RUNTIME_CAPABILITIES } from '../../file-access/files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
@@ -78,6 +80,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...DEVICE_KEY_RUNTIME_CAPABILITIES,
     E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY,
     ...PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES,
+    PAIRING_OFFER_CREATOR_RUNTIME_CAPABILITY,
     ...MOBILE_RUNTIME_CAPABILITIES,
     ...ORCAD_RUNTIME_CAPABILITIES,
     ...ORCHESTRATION_RUNTIME_CAPABILITIES,
@@ -97,7 +100,8 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...BROWSER_RUNTIME_CAPABILITIES,
     ...SOURCE_CONTROL_RUNTIME_CAPABILITIES,
     ...TASK_SOURCE_RUNTIME_CAPABILITIES,
-    ...AI_VAULT_RUNTIME_CAPABILITIES
+    ...AI_VAULT_RUNTIME_CAPABILITIES,
+    ...BOT_RUNTIME_CAPABILITIES
   ] as const)()
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

@@ -19,6 +19,7 @@ import {
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
+import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
@@ -49,6 +50,8 @@ export type RemoteServerUpdateEntry = {
   error: string | null
   /** This desktop updates it over SSH, not through the host's own updater. */
   managedOverSsh?: boolean
+  /** This app's version when it was compared; read through getRemoteServerNewerThanClientVersion. */
+  clientVersion?: string | null
 }
 
 export type RemoteServerUpdateTransport = {
@@ -128,8 +131,14 @@ export async function inspectRemoteServerUpdate(
   const versionComparable =
     currentVersion !== null && isValidAppVersion(currentVersion) && isValidAppVersion(clientVersion)
   const outdated = versionComparable && compareAppVersions(currentVersion, clientVersion) < 0
+  // A newer server is not heading to this app's version; offering it would read as a downgrade.
+  const comparedTarget =
+    getRemoteServerNewerThanClientVersion({ currentVersion, clientVersion }) === null
+      ? clientVersion
+      : currentVersion
   const statusFields = {
     currentVersion,
+    clientVersion,
     runtimeId: status.runtimeId,
     liveTabCount: status.liveTabCount,
     liveLeafCount: status.liveLeafCount,
@@ -141,7 +150,7 @@ export async function inspectRemoteServerUpdate(
       ...base,
       ...statusFields,
       phase: versionComparable && !outdated ? 'current' : 'manual',
-      targetVersion: versionComparable ? clientVersion : null
+      targetVersion: versionComparable ? comparedTarget : null
     }
   }
 
@@ -188,7 +197,7 @@ export async function inspectRemoteServerUpdate(
     ...base,
     ...statusFields,
     phase: versionComparable && !outdated ? 'current' : 'available',
-    targetVersion: clientVersion
+    targetVersion: comparedTarget
   }
 }
 

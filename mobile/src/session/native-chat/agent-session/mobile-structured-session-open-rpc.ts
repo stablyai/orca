@@ -64,3 +64,17 @@ export const structuredOpenTabs = openingRead(
     )
   })
 )
+
+export const structuredSessionWorkers = openingRead(
+  'orchestration.sessionWorkers',
+  z.object({
+    workers: z.array(
+      z.looseObject({
+        host: z.enum(['local', 'remote']),
+        dispatchId: z.string().min(1),
+        chatSessionId: z.string().nullable(),
+        worktreeId: z.string().nullable()
+      })
+    )
+  })
+)

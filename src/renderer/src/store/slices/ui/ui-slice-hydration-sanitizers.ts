@@ -7,8 +7,7 @@ import type {
   ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
-  VisibleWorkspaceHostIds,
-  StatusBarItem
+  VisibleWorkspaceHostIds
 } from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 import {
@@ -20,7 +19,6 @@ import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-sta
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -226,18 +224,6 @@ export function presetToQuery(presetId: TaskViewPresetId | null): string {
     case null:
       return 'is:issue is:open'
   }
-}
-
-export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
-  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
-  const out: string[] = []
-  for (const id of source) {
-    const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
-    if (!out.includes(mapped)) {
-      out.push(mapped)
-    }
-  }
-  return out as StatusBarItem[]
 }
 
 export function hydrateUnexpectedSignoutDismissal(

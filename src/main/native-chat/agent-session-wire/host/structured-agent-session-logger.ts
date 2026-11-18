@@ -5,7 +5,7 @@ import {
   providerDiagnostic,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { redactString } from '../../../observability/redactor'
+import { redactString } from '../../../../shared/observability/redactor'
 import { startSpan } from '../../../observability/tracer'
 import { createStructuredAgentSessionLogRepeats } from './structured-agent-session-log-repeats'
 
