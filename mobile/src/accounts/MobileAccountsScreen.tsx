@@ -35,6 +35,7 @@ import {
   getCodexResetCreditSummary
 } from './usage/codex-reset-credit'
 import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
+import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
@@ -255,11 +256,7 @@ export function MobileAccountsScreen() {
                       isFetching={isFetching}
                       showEmptyWindows
                     />
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
+                    {usage ? <UsageStatusNote limits={usage} /> : null}
                   </>
                 }
                 accessory={busyAccountId === account.id ? spinner : undefined}
@@ -305,11 +302,7 @@ export function MobileAccountsScreen() {
               detail={
                 <>
                   <ProviderUsageWindows limits={limits} now={now} />
-                  {limits.error ? (
-                    <Text style={styles.errorText} numberOfLines={1}>
-                      {limits.error}
-                    </Text>
-                  ) : null}
+                  <UsageStatusNote limits={limits} />
                 </>
               }
             />

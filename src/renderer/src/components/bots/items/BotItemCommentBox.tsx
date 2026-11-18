@@ -1,0 +1,403 @@
+// The item view's comment box: chat's prompt editor and attachment pieces in a small box. Like the chat
+// composer, Enter sends and Shift+Enter adds a line; images paste, drop or attach as thumbnails with an
+// "Image #N" pill at the caret, other files as `@path` pills. Uploads go to the item's chat on the bot's
+// host, which then holds them as its own.
+// While the bot's question is open the box names it, since the question may have scrolled away.
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref
+} from 'react'
+import { ArrowUp, CornerDownRight } from 'lucide-react'
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
+import { NativeChatAttachButton } from '../../native-chat/composer/controls/NativeChatAttachButton'
+import { NativeChatComposerNotices } from '../../native-chat/composer/controls/NativeChatComposerNotices'
+import { useNativeChatComposerNotice } from '../../native-chat/composer/controls/use-native-chat-composer-notice'
+import { NativeChatPromptEditor } from '../../native-chat/composer/editor/NativeChatPromptEditor'
+import { useNativeChatComposerKeyDown } from '../../native-chat/composer/editor/use-native-chat-composer-keydown'
+import { NativeChatMentionMenu } from '../../native-chat/composer/pickers/NativeChatAutocompleteMenus'
+import { useNativeChatPickerState } from '../../native-chat/composer/pickers/use-native-chat-picker-state'
+import { useNativeChatComposerMentions } from '../../native-chat/native-chat-composer-room'
+import type { ComposerAutocomplete } from '../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import type { SlashCommandSuggestion } from '../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import type { NativeChatComposerInput } from '../../native-chat/composer/editor/native-chat-composer-input'
+import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
+import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
+import type { NativeChatComposerHandle } from '../../native-chat/composer/native-chat-composer-types'
+import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
+import { useNativeChatComposerAttachments } from '../../native-chat/attachments/chips/use-native-chat-composer-attachments'
+import { useNativeChatFileDrops } from '../../native-chat/attachments/intake/use-native-chat-file-drops'
+import type { NativeChatAttachmentOwner } from '../../native-chat/attachments/uploads/native-chat-attachment-owner'
+import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
+import {
+  clearNativeChatComposerDraftIfUnchanged,
+  readNativeChatComposerDraft
+} from '../../native-chat/drafts/native-chat-composer-draft-store'
+import {
+  admitNativeChatPastedText,
+  projectNativeChatPastedText
+} from '../../native-chat/paste/native-chat-composer-pasted-text-references'
+import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import type { Bot } from '../../../../../shared/bot-types'
+import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
+import { botRefKey } from '@/lib/bot-hosts'
+import { botErrorMessage } from '../bot-presentation'
+import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
+import { commentOnBotItem } from './use-bot-items'
+import {
+  useBotItemCommentAttachments,
+  type BotItemCommentAttachTarget
+} from './use-bot-item-comment-attachments'
+
+export type BotItemCommentBoxHandle = {
+  focus: () => void
+  /** Focus the box and type `text` at its caret. */
+  type: (text: string) => void
+}
+
+const NO_TARGET = () => null
+const NO_COMMANDS: readonly SlashCommandSuggestion[] = []
+const NO_PICK = () => {}
+const CLOSED: ComposerAutocomplete = { mode: 'none' }
+
+export function BotItemCommentBox({
+  bot,
+  item,
+  attachTo,
+  onSent,
+  ref
+}: {
+  bot: Bot
+  item: BotItem
+  /** The bot's folder workspace and host, which file drops and uploads resolve against. */
+  attachTo: BotItemCommentAttachTarget | null
+  onSent?: () => void
+  ref?: Ref<BotItemCommentBoxHandle>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const scopeKey = `bot-item-comment:${botRefKey(bot)}:${item.uid}`
+  const ime = useImeEnterGestureOwnership()
+  const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(scopeKey, ime.isComposing)
+  const [caret, setCaret] = useState(draft.length)
+  const [sending, setSending] = useState(false)
+  const { notices, setNotice } = useNativeChatComposerNotice()
+  const box = useRef<HTMLDivElement | null>(null)
+  const input = useRef<NativeChatComposerInput | null>(null)
+  const composer = useRef<NativeChatComposerHandle | null>(null)
+  const lift = useClearOfFloatingTrigger(box)
+  const access = useBotItemCommentAttachments(bot, item, attachTo)
+  const [activeSuggestion, setActiveSuggestion] = useState(0)
+  // Chat's picker and `@` list: workspace files from the bot's folder. A comment runs no commands,
+  // so only the `@` menu opens.
+  const picker = useNativeChatPickerState({
+    agent: bot.agent,
+    terminalTabId: scopeKey,
+    draftScopeKey: scopeKey,
+    draft,
+    caret,
+    agentCommands: NO_COMMANDS,
+    recalledFromHistory: false,
+    disabled: false,
+    isComposing: ime.isComposing,
+    textareaRef: input,
+    setDraft,
+    setCaret,
+    setActiveSuggestion
+  })
+  const mentionPicker = useMemo(
+    () => ({
+      autocomplete: picker.autocomplete.mode === 'mention' ? picker.autocomplete : CLOSED,
+      completeMention: picker.completeMention
+    }),
+    [picker.autocomplete, picker.completeMention]
+  )
+  const mentions = useNativeChatComposerMentions(undefined, draft, mentionPicker, {
+    terminalTabId: scopeKey,
+    structuredWorktreeId: attachTo?.worktreeId,
+    caret
+  })
+
+  const attachments = useNativeChatComposerAttachments({
+    attachmentScopeKey: scopeKey,
+    allowWithoutTarget: true,
+    imageReferences: true,
+    caret,
+    disabled: false,
+    isComposing: ime.isComposing,
+    resolveTarget: NO_TARGET,
+    textareaRef: input,
+    setCaret,
+    setDraft,
+    setNotice
+  })
+  const fileDrops = useNativeChatFileDrops({
+    paneKey: scopeKey,
+    draftScopeKey: scopeKey,
+    targetPtyId: null,
+    terminalTabId: scopeKey,
+    structuredWorktreeId: access.session ? attachTo?.worktreeId : undefined,
+    structuredSession: access.session ?? undefined,
+    disabled: !access.session,
+    attachResolvedPaths: attachments.attachResolvedPaths,
+    pendingChips: attachments.pendingChips,
+    setNotice
+  })
+  const { blocked } = access
+  const ownerOfSession = fileDrops.resolveAttachmentOwner
+  // Pastes say why nothing attaches where the item's chat can't take files.
+  const resolveAttachmentOwner = useCallback(
+    (): NativeChatAttachmentOwner =>
+      blocked ? { kind: 'not-ready', notice: blocked } : ownerOfSession(),
+    [blocked, ownerOfSession]
+  )
+  const handlePaste = useNativeChatComposerHandle(composer, {
+    attachmentScopeKey: scopeKey,
+    textareaRef: input,
+    isComposing: ime.isComposing,
+    caret,
+    setDraft,
+    setCaret,
+    setActiveSuggestion,
+    targetKey: JSON.stringify([scopeKey, access.session?.sessionId]),
+    disabled: false,
+    resolveAttachmentOwner,
+    attachResolvedPaths: attachments.attachResolvedPaths,
+    attachCopiedFiles: fileDrops.attachExternalPaths,
+    captureCopiedFiles: fileDrops.captureCopiedFiles,
+    captureExternalPaths: fileDrops.captureExternalPaths,
+    beginPendingImageAttachment: attachments.beginPendingImageAttachment,
+    resolvePendingImageAttachment: attachments.pendingChips.resolve,
+    revealPendingImageAttachment: attachments.revealPendingImageAttachment,
+    dropPendingImageAttachment: attachments.dropPendingImageAttachment,
+    pastedTextEditor: attachments.scopeEditor,
+    // A paste past the comment's limit becomes a "Pasted text" file instead of being refused.
+    longPasteThreshold: BOT_ITEM_LIMITS.text,
+    setNotice
+  })
+  const events = useNativeChatDraftEvents({
+    draft,
+    setDraft,
+    setCaret,
+    setActiveSuggestion,
+    handleDraftOrCaretChange: picker.handleDraftOrCaretChange,
+    flushDraftAppends,
+    flushPendingAttachments: attachments.flushPendingAttachments
+  })
+  // The draft changes outside the editor too (a send clears it); the editor shows the store's text.
+  // `shown` is the editor's last published text too: a pill's node view can render before it publishes.
+  const shown = useRef(draft)
+  useLayoutEffect(() => {
+    const node = input.current
+    if (node && !ime.isComposing() && draft !== shown.current && node.value !== draft) {
+      node.value = draft
+    }
+    shown.current = draft
+  }, [draft, ime])
+
+  useImperativeHandle(ref, () => ({
+    focus: () => input.current?.focus(),
+    type: (typed) => void composer.current?.insertTypedText(typed)
+  }))
+
+  const images = attachments.imageAttachments
+  // The thumbnails' order numbers their pills, as in chat.
+  const imageRow = useMemo(() => images.map(({ id }) => id), [images])
+  const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
+  const empty = !draft.trim() && images.length === 0
+  const send = (): void => {
+    if (empty || pending || sending) {
+      return
+    }
+    if (!admitNativeChatPastedText(scopeKey, draft, setNotice)) {
+      return
+    }
+    const submitted = readNativeChatComposerDraft(scopeKey)
+    const sent = images.filter((image) => image.path)
+    // Chips become the [Image #N] of the images sent, as chat numbers them.
+    const text = imageReferencesToPromptMarkers(
+      projectNativeChatPastedText(draft, submitted.pastedTextFiles),
+      sent.map((image) => image.id)
+    ).trim()
+    const paths = sent.map((image) => image.path)
+    setSending(true)
+    void commentOnBotItem(bot, item.uid, text, paths)
+      .then(() => {
+        if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
+          attachments.clearImageAttachments()
+        }
+        setNotice(null)
+        onSent?.()
+      })
+      .catch((error: unknown) => toast.error(botErrorMessage(error)))
+      .finally(() => setSending(false))
+  }
+  // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
+  const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
+    shown.current = node.value
+    events.onDraftChange(node.value, node)
+  })
+  const editorSelect = useLatestHandler(events.onTextareaSelect)
+  const editorPaste = useLatestHandler(handlePaste)
+  const editorKeyUp = useLatestHandler(ime.onKeyUp)
+  // Chat's keys: the `@` list's arrows and picks, Enter sends, Shift+Enter adds a line.
+  const keyDown = useNativeChatComposerKeyDown({
+    autocomplete: mentions.autocomplete,
+    mentionFiles: mentions.mentionFiles,
+    completeMention: mentions.chooseMention,
+    mentionKey: mentions.handleKey,
+    activeSuggestion,
+    draft,
+    hasAttachments: images.length > 0,
+    isComposing: ime.isComposing,
+    completePickerItem: NO_PICK,
+    dispatchPickerCommand: NO_PICK,
+    dismissPicker: picker.dismiss,
+    interrupt: undefined,
+    send: () => send(),
+    setActiveSuggestion: picker.navigateSuggestion,
+    setDraft,
+    setCaret
+  })
+  const editorKeyDown = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
+    // An empty box leaves Escape to the item pane, which goes back; with text or an `@` list it stays.
+    if (event.key === 'Escape' && empty && mentions.autocomplete.mode === 'none') {
+      return
+    }
+    // An IME's composing Enter commits its text, never the comment.
+    if (!ime.ownsKeyDown(event)) {
+      keyDown(event)
+    }
+  })
+  const settle = (): void => {
+    if (input.current) {
+      events.onImeSettled(input.current)
+    }
+  }
+  const editorCompositionStart = useLatestHandler(() => ime.setComposing(true))
+  const editorCompositionEnd = useLatestHandler((event: React.CompositionEvent<HTMLDivElement>) => {
+    ime.setComposing(false, event.data)
+    settle()
+  })
+  const editorBlur = useLatestHandler(() => {
+    const composing = ime.isComposing()
+    ime.reset()
+    if (composing) {
+      settle()
+    }
+  })
+  const focusAtEnd = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const node = input.current
+    const target = event.target
+    const control =
+      target instanceof Element
+        ? target.closest(
+            '[contenteditable], textarea, button, a, input, select, [role="button"], [tabindex]'
+          )
+        : null
+    if (
+      !node ||
+      // Only controls inside the card keep the click; the item pane around it is focusable too.
+      (control && event.currentTarget.contains(control)) ||
+      window.getSelection()?.toString()
+    ) {
+      return
+    }
+    node.focus()
+    node.setSelectionRange(node.value.length, node.value.length)
+  }
+  return (
+    // Click-to-focus for the padding; the editor itself stays the keyboard target.
+    <div
+      ref={box}
+      data-native-chat-composer-scope={scopeKey}
+      onClick={focusAtEnd}
+      className="mx-3 mb-3 mt-2 shrink-0 cursor-text rounded-[10px] border border-border bg-background p-1.5 focus-within:border-foreground/20"
+      style={lift > 0 ? { marginBottom: 12 + lift } : undefined}
+    >
+      {mentions.autocomplete.mode === 'mention' ? (
+        <NativeChatMentionMenu
+          mention={mentions.listed}
+          activeIndex={mentions.activeIndex ?? activeSuggestion}
+          listboxId={picker.listboxId}
+          onChoose={mentions.chooseMention}
+        />
+      ) : null}
+      <NativeChatComposerNotices notices={notices} className="mb-1.5 px-1" />
+      {item.question ? (
+        <div className="mb-1.5 mt-0.5 flex min-w-0 items-center gap-1.5 px-1 text-2xs text-muted-foreground">
+          <CornerDownRight className="size-3 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            {t('bots.items.comment.answering', 'Answering:')}{' '}
+            <b className="font-medium text-foreground/80">{item.question.text}</b>
+          </span>
+        </div>
+      ) : null}
+      {images.length > 0 ? (
+        // Two rows of chips, then they scroll, so the text and send button stay reachable.
+        <div className="scrollbar-sleek mb-1 flex max-h-[128px] flex-wrap gap-2 overflow-y-auto px-1 pt-1">
+          {images.map((attachment, index) => (
+            <NativeChatImageAttachmentPreview
+              key={attachment.id}
+              attachment={attachment}
+              hostEnvironmentId={attachTo?.runtimeEnvironmentId ?? undefined}
+              number={index + 1}
+              onRemove={attachments.removeImageAttachment}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div className="flex items-end gap-1">
+        {access.session ? (
+          <NativeChatAttachButton disabled={sending} onAttach={fileDrops.pickAttachments} />
+        ) : (
+          <span className="w-1" />
+        )}
+        {/* The editor styles its own element; this wrapper takes the row's width. */}
+        <div className="min-w-0 flex-1">
+          <NativeChatPromptEditor
+            key={scopeKey}
+            scopeKey={scopeKey}
+            imageRow={imageRow}
+            inputRef={input}
+            isComposing={ime.isComposing}
+            initialValue={draft}
+            disabled={false}
+            aria-label={t('bots.items.comment.label', 'Comment')}
+            aria-expanded={mentions.autocomplete.mode !== 'none'}
+            aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
+            placeholder={t('bots.items.comment.add', 'Add a comment…')}
+            onChange={editorChange}
+            onSelect={editorSelect}
+            onPasteCapture={editorPaste}
+            onKeyDownCapture={editorKeyDown}
+            onKeyUp={editorKeyUp}
+            onCompositionStart={editorCompositionStart}
+            onCompositionEnd={editorCompositionEnd}
+            onBlur={editorBlur}
+            // 8 lines of 19 px, then it scrolls.
+            className="scrollbar-sleek my-1.5 block max-h-[152px] min-h-[19px] w-full overflow-y-auto bg-transparent text-[13px] leading-[19px] text-foreground outline-none"
+          />
+        </div>
+        {/* Centred in the + button's row height, so it sits level with the + and the last line. */}
+        <div className="flex h-8 shrink-0 items-center pointer-coarse:h-11">
+          <NativeChatComposerPrimaryButton
+            size="compact"
+            aria-label={t('bots.items.comment.submit', 'Comment')}
+            disabled={empty || pending || sending}
+            onClick={send}
+          >
+            <ArrowUp className="size-3.5" />
+          </NativeChatComposerPrimaryButton>
+        </div>
+      </div>
+    </div>
+  )
+}

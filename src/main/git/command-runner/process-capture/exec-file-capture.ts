@@ -11,6 +11,7 @@ import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { spawnedExecFile, workerExecFile } from './worker-exec-file'
+import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
   canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
@@ -31,25 +32,11 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   spawnOnWorkerThread?: boolean
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
+  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
+  canStart?: () => boolean
 }
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
-
-function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
-  return options.encoding === 'buffer' || options.encoding === null ? Buffer.alloc(0) : ''
-}
-
-function isExecFileResultObject(
-  value: unknown
-): value is { stdout: string | Buffer; stderr: string | Buffer } {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Buffer.isBuffer(value) &&
-    'stdout' in value &&
-    'stderr' in value
-  )
-}
 
 /** A second, passive stderr listener: execFile still captures every byte. */
 function observeStderr(
@@ -226,6 +213,11 @@ export function execFileCapture(
           if (settled) {
             return
           }
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           child = spawnedExecFile(command, captureOptions, complete, () =>
             spawnNativeProcess(
               program,
@@ -236,6 +228,11 @@ export function execFileCapture(
             )
           )
         } else {
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
           // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
           const workerOptions =
             process.platform === 'win32'

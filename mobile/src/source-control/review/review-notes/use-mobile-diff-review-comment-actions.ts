@@ -11,6 +11,7 @@ import { interpretOrThrowRefusalMessage } from '../../../transport/rpc/rpc-refus
 import { sessionWorktreeNotesWrite } from './mobile-review-notes-operations'
 import {
   addMobileDiffComment,
+  droppedAddedMobileDiffComment,
   normalizeMobileDiffComments,
   removeMobileDiffComments
 } from './mobile-diff-comments'
@@ -95,13 +96,15 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
         diffCommentsBase: [...base],
         mobileDiffReview: reviewState
       })
-      return interpretOrThrowRefusalMessage(
+      const record = interpretOrThrowRefusalMessage(
         () => sessionWorktreeNotesWrite.interpret(response),
         translate(
           'session.useDiffReviewCommentActions.saveStateFailed',
           'Failed to save review state'
         )
-      )?.diffComments
+      )
+      // A readable record without a note list means the host holds no notes.
+      return record === undefined ? undefined : (record.diffComments ?? [])
     },
     [client, connState, worktreeId]
   )
@@ -121,17 +124,22 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       const seq = ++saveSeqRef.current
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
-        const saved = await persistMetadata(
-          comments,
-          previous.kind === 'ready' ? previous.comments : comments,
-          reviewState
-        )
+        const base = previous.kind === 'ready' ? previous.comments : comments
+        const saved = await persistMetadata(comments, base, reviewState)
         if (saved !== undefined) {
+          const savedComments = normalizeMobileDiffComments(saved, worktreeId)
+          // Why: an older host drops a note list it can't parse and still answers with its old list.
+          if (droppedAddedMobileDiffComment(base, comments, savedComments)) {
+            throw new Error(
+              translate(
+                'session.useDiffReviewCommentActions.saveStateFailed',
+                'Failed to save review state'
+              )
+            )
+          }
           // Why: the host kept notes other devices changed; show its list unless a later save moved on.
           updateReadyState((state) =>
-            state.comments === comments
-              ? { ...state, comments: normalizeMobileDiffComments(saved, worktreeId) }
-              : state
+            state.comments === comments ? { ...state, comments: savedComments } : state
           )
         }
         triggerSuccess()
