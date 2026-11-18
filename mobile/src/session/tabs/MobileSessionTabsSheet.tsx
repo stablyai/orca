@@ -136,7 +136,6 @@ function MobileSessionTabsSheetContent({
             accessibilityLabel={[
               isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
               row.detail,
-              row.unread ? t('agents.list.unread', 'Unread') : null,
               time
             ]
               .filter(Boolean)

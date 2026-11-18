@@ -18,7 +18,6 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
-import { listedAgentVerdict } from '../../../agents/agent-list-rows'
 import { useSharedNow } from '../../../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree-agent-child-rows'
 
@@ -162,7 +161,6 @@ export function WorktreeAgentList({
         <WorktreeAgentSummary
           agents={summaryAgents}
           expanded={expanded}
-          unread={agents.some((agent) => listedAgentVerdict(agent)?.unread)}
           now={now}
           onToggle={() => setExpanded((value) => !value)}
         />

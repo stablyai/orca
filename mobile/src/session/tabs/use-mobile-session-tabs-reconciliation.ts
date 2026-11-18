@@ -155,11 +155,15 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
       if (!client || !controller || connState !== 'connected') {
         return
       }
-      let unsubscribe = (): void => {}
+      let unsubscribe: (() => void) | null = null
       const updatePresence = (active: boolean): void => {
-        unsubscribe()
-        unsubscribe = () => {}
         if (!active) {
+          unsubscribe?.()
+          unsubscribe = null
+          return
+        }
+        // Already holding: a repeated 'active' must not restart the stream.
+        if (unsubscribe) {
           return
         }
         resetPendingTerminalRecovery()
@@ -174,14 +178,14 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
           stop()
         }
       }
-      // The host treats this subscription as viewing the workspace, including retained screens.
+      // The host counts this stream as the phone viewing the workspace, so hold it only while the screen is in front.
       updatePresence(AppState.currentState === 'active')
       const appStateSubscription = AppState.addEventListener('change', (state) => {
         updatePresence(state === 'active')
       })
       return () => {
         appStateSubscription.remove()
-        unsubscribe()
+        updatePresence(false)
       }
     }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
   )

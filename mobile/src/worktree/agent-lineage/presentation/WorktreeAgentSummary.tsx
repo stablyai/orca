@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'
@@ -8,21 +8,17 @@ import { agentDotState } from '../agent-row-display'
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 
-import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-
 const MAX_VISIBLE_AGENTS = 3
 
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
   expanded: boolean
-  unread: boolean
   now: number
   onToggle: () => void
 }
 
-export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }: Props) {
+export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
   useMobileColorScheme()
-  const t = useMobileTranslation()
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
   const subject = `${agents.length} agents`
@@ -35,12 +31,7 @@ export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }
         pressed && styles.summaryPressed
       ]}
       accessibilityRole="button"
-      accessibilityLabel={[
-        `${expanded ? 'Collapse' : 'Expand'} ${subject}`,
-        unread ? t('agents.list.unread', 'Unread') : null
-      ]
-        .filter(Boolean)
-        .join(', ')}
+      accessibilityLabel={`${expanded ? 'Collapse' : 'Expand'} ${subject}`}
       accessibilityState={{ expanded }}
       onPress={(event) => {
         event.stopPropagation()
@@ -60,14 +51,6 @@ export function WorktreeAgentSummary({ agents, expanded, unread, now, onToggle }
           {hiddenCount > 0 ? <Text style={styles.hiddenCount}>+{hiddenCount}</Text> : null}
         </View>
       )}
-      {unread ? (
-        <Bell
-          size={12}
-          color={colors.statusAmber}
-          fill={colors.statusAmber}
-          accessibilityLabel={t('agents.list.unread', 'Unread')}
-        />
-      ) : null}
       {expanded ? (
         <ChevronDown size={12} color={colors.textMuted} />
       ) : (
