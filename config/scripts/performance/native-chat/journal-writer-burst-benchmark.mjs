@@ -36,6 +36,7 @@ const arms = String(args.arms ?? 'head=HEAD')
   .split(',')
   .map((entry) => entry.split('='))
 const TEMPLATE_ITEMS = 300
+const STREAMS = Math.max(...sessionCounts)
 // --db runs against an existing file (an APFS clone of a real chat database) instead of seeding one.
 const filename = args.db ? resolve(args.db) : join(dir, 'bench-domain.db')
 const journal = 'src/main/native-chat/agent-session-journal'
@@ -102,20 +103,18 @@ const stepsCommand = (sessionId, steps) => ({
 })
 
 async function seed(arm) {
-  if (args.db) {
+  const marker = `${filename}.seeded-${rows}`
+  // An existing file (a clone, or an earlier seed) only needs this run's streaming chats.
+  if (args.db || existsSync(marker)) {
     const { db } = arm.openJournalDomainDatabase(filename)
     const chat = db.prepare(
       `INSERT OR IGNORE INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('w',?,'epoch',1,1)`
     )
-    for (let index = 0; index < 64; index++) {
+    for (let index = 0; index < STREAMS; index++) {
       chat.run(`burst-${index}`)
     }
     chat.run('probe')
     db.close()
-    return
-  }
-  const marker = `${filename}.seeded-${rows}`
-  if (existsSync(marker)) {
     return
   }
   for (const suffix of ['', '-wal', '-shm']) {
@@ -126,7 +125,7 @@ async function seed(arm) {
     `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('w',?,'epoch',1,1)`
   )
   chat.run('template')
-  for (let index = 0; index < 64; index++) {
+  for (let index = 0; index < STREAMS; index++) {
     chat.run(`burst-${index}`)
   }
   chat.run('probe')
@@ -207,9 +206,11 @@ function stream(owner, sessionId, stopAt, onWrite) {
     const startedAt = performance.now()
     owner
       .write(stepsCommand(sessionId, steps))
-      .catch(() => undefined)
+      .then(
+        () => onWrite(performance.now() - startedAt),
+        () => onWrite(null)
+      )
       .finally(() => {
-        onWrite(performance.now() - startedAt)
         inflight = false
         if (Date.now() < stopAt) {
           pump()
@@ -285,9 +286,12 @@ async function run(arm, sessions) {
   const timings = []
   owner.onTiming = (roundTripMs, timing) => timings.push({ roundTripMs, ...timing })
   const streamWrites = []
+  let failures = 0
   const stopAt = Date.now() + seconds * 1000
   const stops = Array.from({ length: sessions }, (_, index) =>
-    stream(owner, `burst-${index}`, stopAt, (ms) => streamWrites.push(ms))
+    stream(owner, `burst-${index}`, stopAt, (ms) =>
+      ms === null ? failures++ : streamWrites.push(ms)
+    )
   )
   const probe = []
   const chain = []
@@ -336,7 +340,9 @@ async function run(arm, sessions) {
     turnItemMs: summary(probe),
     receiptMs: summary(chain),
     streamWriteMs: summary(streamWrites),
-    writesPerSecond: Math.round(timings.length / seconds),
+    // Counted from completions, so builds without writer timing still report throughput.
+    writesPerSecond: Math.round((streamWrites.length + 3 * probe.length) / seconds),
+    failedWrites: failures,
     ...(instrumented
       ? {
           writerWaitMs: summary(timings.map((timing) => timing.waitMs)),

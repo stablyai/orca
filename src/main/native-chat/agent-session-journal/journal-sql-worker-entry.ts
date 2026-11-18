@@ -12,7 +12,6 @@ import {
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
-import { takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
 import { applyJournalWriterEffect } from './journal-writer-effects'
 import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
@@ -20,7 +19,8 @@ import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { journalSqlTimedGate, journalSqlTimingOp } from './journal-sql-writer-timing'
-import { enqueueJournalSqlRequest, promoteJournalSqlSession } from './journal-sql-urgent-queue'
+import { JournalSqlWriterQueue } from './journal-sql-writer-queue'
+import { JournalSqlWalParking } from './journal-sql-wal-parking'
 
 installWorkerSendLedger('orca-journal-sql-writer')
 
@@ -44,10 +44,10 @@ let readOnly = true
 let fault: unknown
 let closing = false
 let scheduled = false
-const queue: JournalSqlRequest[] = []
-const receivedAt = new Map<number, number>()
+const queue = new JournalSqlWriterQueue()
+let parking: JournalSqlWalParking | undefined
+const received = new Map<number, { at: number; parked: { bulk: number; urgent: number } }>()
 const gate = { ms: 0 }
-let urgentArrival = Promise.withResolvers<void>()
 
 async function open(): Promise<void> {
   try {
@@ -65,6 +65,7 @@ async function open(): Promise<void> {
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
       checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+      parking = new JournalSqlWalParking(checkpoint)
     }
     batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))
     reply({ type: 'ready', readOnly })
@@ -84,8 +85,8 @@ void open()
 
 port.on('message', (request: JournalSqlRequest) => {
   if (request.command.type === 'promote') {
-    if (promoteJournalSqlSession(queue, request.command.sessionId)) {
-      wakeForUrgent()
+    if (queue.promote(request.command.sessionId)) {
+      parking?.interrupt()
     }
     return
   }
@@ -103,9 +104,12 @@ port.on('message', (request: JournalSqlRequest) => {
     checkpointClosing = checkpoint?.close()
     void checkpointClosing?.catch(() => undefined)
   }
-  receivedAt.set(request.id, performance.now())
-  if (enqueueJournalSqlRequest(queue, request)) {
-    wakeForUrgent()
+  received.set(request.id, {
+    at: performance.now(),
+    parked: parking?.mark() ?? { bulk: 0, urgent: 0 }
+  })
+  if (queue.push(request)) {
+    parking?.interrupt()
   }
   if (!scheduled) {
     scheduled = true
@@ -115,33 +119,30 @@ port.on('message', (request: JournalSqlRequest) => {
   }
 })
 
-function wakeForUrgent(): void {
-  urgentArrival.resolve()
-  urgentArrival = Promise.withResolvers<void>()
-}
-
 function reply(response: JournalSqlResponse): void {
   port.postMessage(response)
 }
 
 type WriteRequest = {
   id: number
+  urgent?: true
   command: Exclude<JournalSqlRequest['command'], { type: 'close' } | { type: 'promote' }>
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
 type TimedResponse = CommitResponse | Extract<JournalSqlResponse, { type: 'failed' }>
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
-  const head = queue[0]
-  if (head && head.command.type !== 'close' && checkpoint && !checkpoint.admits(!!head.urgent)) {
+  const bulkAdmitted = checkpoint?.admits(false) ?? true
+  const head = queue.peek(bulkAdmitted)
+  if (head && head.command.type !== 'close' && parking && !checkpoint!.admits(!!head.urgent)) {
     // Waiting for WAL room must not hold the writer while a send's urgent write queues behind it.
-    await Promise.race([checkpoint.beforeWrite(!!head.urgent), urgentArrival.promise])
+    await parking.park(!!head.urgent)
     scheduleNextDrain()
     return
   }
-  const depth = queue.length
+  const depth = queue.size
   const startedAt = performance.now()
-  const pending = takeJournalSqlReadyBatch(queue)
+  const pending = queue.take(bulkAdmitted)
   const urgent = pending.every((request) => request.urgent)
   const writes = pending.filter(
     (request): request is WriteRequest =>
@@ -232,8 +233,7 @@ async function drain(): Promise<void> {
         timing: {
           op: journalSqlTimingOp(request.command),
           depth,
-          waitMs: startedAt - (receivedAt.get(request.id) ?? startedAt),
-          gateMs: gate.ms,
+          ...queuedTiming(request, startedAt),
           runMs,
           batch: writes.length,
           walFrames
@@ -243,7 +243,7 @@ async function drain(): Promise<void> {
     gate.ms = 0
   }
   for (const request of pending) {
-    receivedAt.delete(request.id)
+    received.delete(request.id)
   }
   if (close) {
     try {
@@ -266,10 +266,23 @@ async function drain(): Promise<void> {
   scheduleNextDrain()
 }
 
+/** Time parked for WAL room while this request queued counts as gate time, not queue wait. */
+function queuedTiming(request: WriteRequest, startedAt: number) {
+  const queued = received.get(request.id)
+  const parked = queued
+    ? (parking?.parkedMs[request.urgent ? 'urgent' : 'bulk'] ?? 0) -
+      queued.parked[request.urgent ? 'urgent' : 'bulk']
+    : 0
+  return {
+    waitMs: startedAt - (queued?.at ?? startedAt) - parked,
+    gateMs: gate.ms + parked
+  }
+}
+
 function scheduleNextDrain(): void {
   scheduled = false
   // Requests admitted while this drain awaited its commands start the next drain.
-  if (queue.length > 0 && db) {
+  if (queue.size > 0 && db) {
     scheduled = true
     setImmediate(() => {
       void drain()
