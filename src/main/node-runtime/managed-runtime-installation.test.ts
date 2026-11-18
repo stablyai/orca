@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,8 @@ import type * as ReleaseModule from './managed-runtime-release'
 import {
   ManagedRuntimeStartError,
   RUNTIME_RELEASE_RECEIPT,
-  type ManagedRuntime
+  type ManagedRuntime,
+  type ManagedRuntimePin
 } from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
 
@@ -134,4 +135,42 @@ it.each([
   expect(operation?.error).not.toContain('ghp_')
   expect(installedVersion).toBeNull()
   expect(await readdir(root)).toEqual([])
+})
+
+it('installs a single-file release that is only known after looking up the latest', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const root = join(dataDirectory, 'agent-runtimes', 'agent')
+  const binary = 'binary bytes'
+  let latest: ManagedRuntimePin | null = null
+  const runtime: ManagedRuntime = {
+    label: 'Agent',
+    root: () => root,
+    pin: () => latest,
+    refreshPin: async () => {
+      latest = {
+        version: '2.0',
+        url: 'https://example.test/2.0/agent',
+        archiveSha256: sha256(binary),
+        archiveBytes: 12,
+        format: 'file',
+        members: [{ path: 'agent', sha256: sha256(binary), bytes: 12 }]
+      }
+    }
+  }
+  const installation = new ManagedRuntimeInstallation('agent', runtime, {
+    dataDirectory,
+    findExternal: async () => false,
+    fence: (work) => work(),
+    fetcher: async () => new Response(binary)
+  })
+  installation.install()
+  await vi.waitFor(async () =>
+    expect((await installation.status()).operation?.phase).toBe('succeeded')
+  )
+  expect(await installation.status()).toMatchObject({
+    installedVersion: '2.0',
+    installedCurrent: true
+  })
+  expect(await readFile(join(root, '2.0', 'agent'), 'utf8')).toBe(binary)
 })

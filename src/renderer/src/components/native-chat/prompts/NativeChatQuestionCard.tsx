@@ -5,7 +5,7 @@ import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { NativeChatQuestionHeader } from './NativeChatQuestionHeader'
+import { NativeChatQuestionCardHeader } from './NativeChatQuestionCardHeader'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
@@ -251,7 +251,8 @@ export function NativeChatQuestionCard({
       role="group"
       aria-label={q.question}
       tabIndex={-1}
-      className="shrink-0 bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      // Capped against the chat pane (not the window) so the words that led to the question stay in view.
+      className="flex max-h-[max(14rem,min(32rem,50%))] min-h-0 shrink-0 flex-col bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
@@ -268,7 +269,7 @@ export function NativeChatQuestionCard({
         }
       }}
     >
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
+      <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
         <NativeChatQuestionSteps
           questions={prompt.questions}
           index={index}
@@ -277,44 +278,38 @@ export function NativeChatQuestionCard({
           answered={prompt.questions.map((_, i) => answerFor(i).length > 0)}
         />
 
-        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
-        <div
-          className={cn(
-            'overflow-hidden rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm',
-            heading && 'flex max-h-[75vh] flex-col'
-          )}
-        >
-          <NativeChatQuestionHeader
-            question={q.question}
-            heading={heading}
-            context={context}
-            disabled={blocked}
-            isCancelling={isCancelling}
-            onCancel={onCancel ? cancel : undefined}
-            onCollapse={collapse}
-          />
+        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up.
+            The box scrolls as a last resort, when a tall typed answer outgrows the pane's cap. */}
+        <div className="flex min-h-0 flex-col overflow-y-auto rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm scrollbar-sleek">
+          {/* Question and options scroll together; only the answer row stays pinned, so a short pane still reaches every option. */}
+          <div className="min-h-24 shrink overflow-y-auto scrollbar-sleek">
+            <NativeChatQuestionCardHeader
+              question={q.question}
+              heading={heading}
+              context={context}
+              isSubmitting={blocked}
+              isCancelling={isCancelling}
+              onCollapse={collapse}
+              onCancel={onCancel ? cancel : undefined}
+            />
 
-          {/* Option rings are inset, so the scroll clip cannot cut them. */}
-          <div
-            className={cn(
-              'flex max-h-[50vh] flex-col gap-1.5 overflow-y-auto px-3.5 pb-3 scrollbar-sleek',
-              heading && 'shrink-0'
-            )}
-          >
-            {q.options.map((opt, i) => (
-              <NativeChatQuestionOption
-                key={`${i}:${opt.label}`}
-                badge={String(i + 1)}
-                initialFocus={i === 0}
-                label={opt.label}
-                description={opt.description}
-                preview={opt.preview}
-                selected={(selections[index] ?? []).includes(i)}
-                disabled={blocked}
-                onSelect={() => pickOption(i)}
-                onEnter={() => pickOption(i, 'enter')}
-              />
-            ))}
+            {/* Option rings are inset, so the scroll clip cannot cut them. */}
+            <div className="flex flex-col gap-1.5 px-3.5 pb-3">
+              {q.options.map((opt, i) => (
+                <NativeChatQuestionOption
+                  key={`${i}:${opt.label}`}
+                  badge={String(i + 1)}
+                  initialFocus={i === 0}
+                  label={opt.label}
+                  description={opt.description}
+                  preview={opt.preview}
+                  selected={(selections[index] ?? []).includes(i)}
+                  disabled={blocked}
+                  onSelect={() => pickOption(i)}
+                  onEnter={() => pickOption(i, 'enter')}
+                />
+              ))}
+            </div>
           </div>
           <div
             className={cn(
@@ -416,7 +411,7 @@ export function NativeChatQuestionCard({
         </div>
 
         {total > 1 ? (
-          <p className="mt-2 text-right text-xs text-muted-foreground">
+          <p className="mt-2 shrink-0 text-right text-xs text-muted-foreground">
             {index + 1}/{total}
           </p>
         ) : null}

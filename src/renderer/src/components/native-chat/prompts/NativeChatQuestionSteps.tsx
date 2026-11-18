@@ -21,7 +21,7 @@ export function NativeChatQuestionSteps({
     return null
   }
   return (
-    <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
+    <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1 scrollbar-sleek">
       {questions.map((qq, i) => (
         <button
           key={i}

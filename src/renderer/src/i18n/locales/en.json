@@ -6860,14 +6860,31 @@
           "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
-          "dismissError": "Dismiss error",
           "dismissing": "Dismissing…",
           "aed1623b1e": "Close",
           "eab8b45238": "Copy error",
           "a23b22d16f": "Copied",
           "74fc00776f": "Error details",
           "ca3b225195": "Branch auto-name failed",
-          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message."
+          "couldNotGenerateBranchName": "Orca couldn't generate a branch name for <name>{{name}}</name> from the first agent message.",
+          "dismiss": "Dismiss",
+          "tryAgain": "Try again",
+          "namingBranch": "Naming branch…",
+          "errorDetailsAt": "Error details · {{time}}",
+          "reasonNothingYet": "No changes to name this branch from yet.",
+          "reasonBranchChanged": "The branch changed while Orca was naming it.",
+          "reasonProjectMoving": "A project move is in progress.",
+          "reasonHistoryUnreadable": "Orca couldn't read this workspace's history. Try again.",
+          "reasonInterrupted": "Orca couldn't finish naming the branch. Try again.",
+          "reasonBranchPushed": "The branch was pushed, so Orca kept its name.",
+          "reasonBranchRenamed": "The branch was renamed, so Orca kept its name.",
+          "reasonNameChosen": "This branch name was chosen by hand, so Orca kept it.",
+          "reasonSettingOff": "Branch auto-naming is off in Settings.",
+          "reasonNoDistinctName": "The generated name matched the current one.",
+          "reasonFirstMessageUnavailable": "Orca couldn't find this workspace's first message.",
+          "reasonAlreadyNamed": "This workspace was already renamed.",
+          "reasonUnavailable": "Orca can't name this branch anymore.",
+          "branchNameKept": "Branch name kept"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choose parent folder...",
@@ -12819,7 +12836,8 @@
           "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca servers",
-          "e4e5937469": "Check for server updates"
+          "e4e5937469": "Check for server updates",
+          "newerCount": "{{value0}} newer than this app"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
@@ -13927,7 +13945,8 @@
           "settingUpInBackground": "Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.",
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
-          "overYourSsh": "Over your SSH connection"
+          "overYourSsh": "Over your SSH connection",
+          "newerThanApp": "Newer than this app (v{{version}})"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -22669,9 +22688,6 @@
           "history": "history",
           "runs": "runs",
           "envFile": ".env",
-          "chat": "chat",
-          "transcripts": "transcripts",
-          "diskSpace": "disk space",
           "manual": "manual",
           "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now.",
           "runRulesNow": "run rules now",
@@ -22722,13 +22738,7 @@
           "label": "Pin and keep"
         },
         "chatHistory": {
-          "title": "Chat history",
-          "updateFailed": "Couldn't update the setting on {{host}}.",
-          "unsupported": "Update Orca on {{host}} to use this setting there.",
-          "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
-          "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "title": "Chat history"
         },
         "manual": {
           "title": "Manual cleanup",
@@ -22784,6 +22794,24 @@
         "confirmCheckHomeFolder": "No other machine sharing this home folder is running Orca",
         "details": "Details",
         "clearing": "Clearing…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "Couldn't update the setting on {{host}}.",
+          "recommended": "Recommended",
+          "unsupported": "Update Orca on {{host}} to use this setting there.",
+          "confirmTitle": "Delete agent history from deleted workspaces?",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "cancel": "Cancel",
+          "turnOn": "Turn on",
+          "title": "Delete agent history when a workspace is deleted",
+          "description": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered.",
+          "chat": "chat",
+          "transcripts": "transcripts",
+          "diskSpace": "disk space",
+          "cleanup": "cleanup",
+          "chatHistory": "delete chat history"
+        }
       }
     },
     "agentChildRow": {
