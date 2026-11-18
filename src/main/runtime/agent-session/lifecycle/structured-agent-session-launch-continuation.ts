@@ -23,7 +23,7 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   >
   store: Pick<AgentSessionRecordStore, 'listHeldSessionIds' | 'replacedRuntime'>
   /** The run before this one; only its own crash is read back, older ones had their start. */
-  previousRun: () => { runtime: string; end?: AgentSessionOrcaStopCause } | null
+  previousRun: () => Promise<{ runtime: string; end?: AgentSessionOrcaStopCause } | null>
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
   resumeWorkOnRestart: () => boolean
@@ -32,7 +32,7 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
 export async function continueStructuredAgentSessionsAtLaunch(
   deps: StructuredAgentSessionLaunchContinuationDeps
 ): Promise<StructuredAgentSessionLaunchContinuation> {
-  const previous = deps.previousRun()
+  const previous = await deps.previousRun()
   if (previous?.end === 'crash') {
     const held = deps.store
       .listHeldSessionIds()

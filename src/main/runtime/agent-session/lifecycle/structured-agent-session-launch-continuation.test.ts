@@ -22,7 +22,7 @@ function launch(resumeWorkOnRestart: boolean, end: 'crash' | 'quit' = 'crash') {
         runtime: sessionId === 'chat-1' ? 'runtime-crashed' : 'runtime-older'
       })
     },
-    previousRun: () => ({ runtime: 'runtime-crashed', end }),
+    previousRun: async () => ({ runtime: 'runtime-crashed', end }),
     startedAt: 5,
     resumeWorkOnRestart: () => resumeWorkOnRestart
   })

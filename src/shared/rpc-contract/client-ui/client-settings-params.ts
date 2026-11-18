@@ -137,6 +137,7 @@ export const SettingsUpdate = z
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
     nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
+    nativeChatResumeWorkOnRestart: z.boolean().optional(),
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
     prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional(),

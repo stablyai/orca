@@ -2,9 +2,13 @@
 // Only a recorded start without end implies crash; missing/unreadable/pruned records leave cause unknown.
 
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
-import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
+import {
+  readNodeFileSyncWithinLimit,
+  readNodeFileWithinLimit
+} from '../../../../shared/file-content/node-bounded-file-reader'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
 import {
   AGENT_SESSION_RESUME_TRIGGERS,
@@ -107,18 +111,11 @@ function readTrigger(value: unknown): AgentSessionResumeTrigger | undefined {
   return AGENT_SESSION_RESUME_TRIGGERS.find((trigger) => trigger === value)
 }
 
-function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
-  return readRecordedRun(path, runtime)?.end
-}
+type RecordedRun = { startedAt: number; end?: AgentSessionOrcaStopCause }
 
-function readRecordedRun(
-  path: string,
-  runtime: string
-): { startedAt: number; end?: AgentSessionOrcaStopCause } | undefined {
+function parseRecordedRun(text: string, runtime: string): RecordedRun | undefined {
   try {
-    const parsed: unknown = JSON.parse(
-      readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8')
-    )
+    const parsed: unknown = JSON.parse(text)
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
@@ -143,29 +140,38 @@ function readRecordedRun(
   }
 }
 
+function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCause | undefined {
+  try {
+    const text = readNodeFileSyncWithinLimit(path, MAX_RUNTIME_RECORD_BYTES).buffer.toString('utf8')
+    return parseRecordedRun(text, runtime)?.end
+  } catch {
+    return undefined
+  }
+}
+
 /** The run before this one: the latest recorded start other than this runtime's own. */
-export function readPreviousAgentSessionRuntime(
+export async function readPreviousAgentSessionRuntime(
   stateDirectory: string,
   current: string
-): { runtime: string; end?: AgentSessionOrcaStopCause } | null {
+): Promise<{ runtime: string; end?: AgentSessionOrcaStopCause } | null> {
   const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
   let names: string[]
   try {
-    names = readdirSync(directory)
+    names = await readdir(directory)
   } catch {
     return null
   }
-  let previous: { runtime: string; startedAt: number; end?: AgentSessionOrcaStopCause } | null =
-    null
+  let previous: ({ runtime: string } & RecordedRun) | null = null
   for (const name of names) {
     const runtime = RECORD_FILE.exec(name)?.[1]
-    const run = runtime ? readRecordedRun(join(directory, name), runtime) : undefined
-    if (
-      runtime &&
-      runtime !== current &&
-      run &&
-      (!previous || run.startedAt > previous.startedAt)
-    ) {
+    if (!runtime || runtime === current) {
+      continue
+    }
+    const run = await readNodeFileWithinLimit(join(directory, name), MAX_RUNTIME_RECORD_BYTES).then(
+      (read) => parseRecordedRun(read.buffer.toString('utf8'), runtime),
+      () => undefined
+    )
+    if (run && (!previous || run.startedAt > previous.startedAt)) {
       previous = { runtime, ...run }
     }
   }
