@@ -43,7 +43,9 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabStrip
     }
   }
   // A restored workspace renders the legacy strip before its groups hydrate.
-  legacyOrder.forEach(add)
+  if (groups.length === 0) {
+    legacyOrder.forEach(add)
+  }
   return ranks
 }
 

@@ -211,4 +211,29 @@ describe('orderByVisibleTabs', () => {
     // Assert
     expect(ordered.map((row) => row.name)).toEqual(['agent on bravo', 'agent on alpha'])
   })
+
+  it('ignores the legacy strip order once the groups hydrate', () => {
+    // Arrange
+    const rows: Row[] = [
+      { name: 'agent with no tab' },
+      { name: 'agent on stale-tab', tabId: 'stale-tab' },
+      { name: 'agent on yankee', tabId: 'yankee' }
+    ]
+    const strip = {
+      tabs: [terminal({ id: 'yankee', groupId: 'main' })],
+      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['yankee'] })],
+      layout: { type: 'leaf' as const, groupId: 'main' },
+      legacyOrder: ['stale-tab', 'yankee']
+    }
+
+    // Act
+    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+
+    // Assert
+    expect(ordered.map((row) => row.name)).toEqual([
+      'agent on yankee',
+      'agent with no tab',
+      'agent on stale-tab'
+    ])
+  })
 })
