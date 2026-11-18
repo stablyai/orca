@@ -272,9 +272,7 @@ export function MobileCommitDetailPage({
           files.error !== null ? null : connected ? (
             <ActivityIndicator style={styles.loading} size="small" color={colors.textSecondary} />
           ) : (
-            <Text style={styles.note}>
-              {t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')}
-            </Text>
+            <Text style={styles.note}>{t('common.waitingForHost', 'Waiting for host…')}</Text>
           )
         ) : loadedFiles.length === 0 ? (
           <Text style={styles.note}>

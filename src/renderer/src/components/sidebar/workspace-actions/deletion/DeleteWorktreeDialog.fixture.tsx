@@ -5,6 +5,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 
 const repo: Repo = {
@@ -120,8 +121,10 @@ function dialogFixture(
     batch?: boolean
     unsaved?: boolean
     incomplete?: boolean
+    /** Git status resolves with readError, as a worktree folder removed outside Orca does. */
+    statusReadFailed?: boolean
     ignored?: boolean
-    localFiles?: WorktreeAtRiskLocalFiles | 'pending'
+    localFiles?: WorktreeAtRiskLocalFiles | 'pending' | 'unsupported'
     heightClassName?: string
     deleteState?: WorktreeDeleteState
   } = {},
@@ -130,12 +133,13 @@ function dialogFixture(
   const target = options.target ?? worktree
   const entries = options.entries ?? dirtyEntries
   const all = options.batch ? [target, shortWorktree, thirdWorktree] : [target]
+  const unchecked = options.incomplete || options.statusReadFailed
   return defineFixture({
     width: 640,
     store: {
       repos: [repo],
       worktreesByRepo: { [repo.id]: all },
-      gitStatusByWorktree: options.incomplete
+      gitStatusByWorktree: unchecked
         ? {}
         : Object.fromEntries(all.map((item) => [item.id, entries])),
       openFiles: options.unsaved
@@ -153,16 +157,31 @@ function dialogFixture(
         ? async () => {
             throw new Error('Fixture: Git scan unavailable')
           }
-        : defaultGitStatus
+        : options.statusReadFailed
+          ? async () => ({
+              entries: [],
+              conflictOperation: 'unknown',
+              readError: 'fatal: not a git repository'
+            })
+          : defaultGitStatus
       window.api.git.atRiskLocalFiles = () => {
         if (options.localFiles === 'pending') {
           return new Promise(() => {})
+        }
+        if (options.localFiles === 'unsupported') {
+          return Promise.reject(
+            new RuntimeRpcCallError({
+              id: 'fixture',
+              ok: false,
+              error: { code: 'method_not_found', message: 'Fixture: older runtime' }
+            })
+          )
         }
         return Promise.resolve(
           options.localFiles ?? {
             count: options.ignored ? 2 : 0,
             samplePaths: options.ignored ? ['.env', 'node_modules/'] : [],
-            complete: !options.incomplete
+            complete: !unchecked
           }
         )
       }
@@ -180,6 +199,8 @@ function dialogFixture(
 export const dirty = dialogFixture({ target: shortWorktree })
 
 export const clean = dialogFixture({ target: shortWorktree, entries: [] })
+
+export const statusReadFailed = dialogFixture({ target: shortWorktree, statusReadFailed: true })
 
 export const dirtyWithUnsavedFiles = dialogFixture({ target: shortWorktree, unsaved: true })
 
@@ -245,6 +266,7 @@ export const forceDelete = dialogFixture({
 })
 
 export const checking = dialogFixture({ entries: [], localFiles: 'pending' })
+export const ignoredFilesUnchecked = dialogFixture({ entries: [], localFiles: 'unsupported' })
 export const ignoredFiles = dialogFixture({ entries: [], localFiles: atRiskLocalFiles })
 export const ignoredFilesOpen = dialogFixture({ entries: [], localFiles: atRiskLocalFiles }, () => {
   document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()

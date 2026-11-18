@@ -44,6 +44,16 @@ import type {
 } from './projects/project-row-content'
 import type { PRRefreshState, PRRefreshStateClearToken } from './refresh/pr-refresh-state'
 
+/** One repo in a work-item fan-out. */
+export type GitHubWorkItemRepoArg = {
+  repoId: string
+  path: string
+  executionHostId?: string | null
+  sourceContext?: TaskSourceContext | null
+  /** Its host is known unreachable: answer as that request's failure without dialling. */
+  hostUnreachable?: boolean
+}
+
 export type GitHubSlice = {
   githubSourceCollections: GitHubSourceCollections
   githubTaskCache: GitHubTaskRecordCache
@@ -197,12 +207,7 @@ export type GitHubSlice = {
   ) => Promise<readonly GitHubWorkItem[] | undefined>
   /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -218,12 +223,7 @@ export type GitHubSlice = {
   >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -239,12 +239,7 @@ export type GitHubSlice = {
   >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     query: string,
     perRepoLimit: number,
     options?: Pick<FetchOptions, 'wakeWslDistro'>

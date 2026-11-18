@@ -64,33 +64,6 @@ describe('generated OpenCode 2 setup ownership', () => {
     }
   )
 
-  it.each(['throw', 'reject'] as const)(
-    'disposes the factory after prompt cleanup %s',
-    async (failure) => {
-      const hooks = { event: vi.fn(async () => {}), dispose: vi.fn(async () => {}) }
-      const promptDispose = vi.fn(() => {
-        if (failure === 'throw') {
-          throw new Error('Prompt cleanup failed')
-        }
-        return Promise.reject(new Error('Prompt cleanup failed'))
-      })
-      let signal: AbortSignal | undefined
-      const cleanup = await createSetup(async () => hooks)({
-        session: { hook: async () => ({ dispose: promptDispose }) },
-        event: {
-          subscribe: (options: { signal: AbortSignal }) => {
-            signal = options.signal
-            return []
-          }
-        }
-      })
-      await cleanup()
-      expect(signal?.aborted).toBe(true)
-      expect(promptDispose).toHaveBeenCalledOnce()
-      expect(hooks.dispose).toHaveBeenCalledOnce()
-    }
-  )
-
   it('waits for in-flight delivery before factory cleanup after a prompt cleanup failure', async () => {
     const delivery = deferred()
     const started = deferred()

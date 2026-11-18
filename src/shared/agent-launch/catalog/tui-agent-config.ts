@@ -254,12 +254,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmdAliases: ['mistral-vibe'],
     promptInjectionMode: 'stdin-after-start'
   },
-  'qwen-code': {
-    detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start',
-    // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
-    submitRetryDelayMs: 1200
-  },
+  // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
+  // prettier-ignore
+  'qwen-code': { detectCmd: 'qwen', promptInjectionMode: 'stdin-after-start', preflightTrust: 'qwen-code', submitRetryDelayMs: 1200 },
   rovo: {
     // Rovo is an acli subcommand; passing an instruction there would run one-shot.
     detectCmd: 'acli',
@@ -299,7 +296,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'muse',
     launchCmd: 'muse --trust-workspace',
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: Windows Muse reads console input records (crossterm), so an Enter landing mid-paste stays in its draft (#43126).
+    windowsInputRecordPasteNewline: 'alt-enter'
   },
   dsh: {
     detectCmd: 'dsh-tui',

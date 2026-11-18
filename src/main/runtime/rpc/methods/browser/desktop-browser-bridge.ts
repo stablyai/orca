@@ -2,8 +2,8 @@ import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
+  DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
 } from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
@@ -46,9 +46,7 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
         enforcesExpectUrl:
           context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY) ??
           false,
-        readsTabAnnotations:
-          context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY) ??
-          false,
+        capabilities: context.clientCapabilities ?? [],
         emit
       })
       let release = (): void => {}
@@ -79,6 +77,17 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
       } finally {
         signal?.removeEventListener('abort', cleanup)
         cleanup()
+      }
+    }
+  }),
+  defineMethod({
+    name: 'desktopBrowserBridge.resultChunk',
+    permission: 'workspace',
+    params: DesktopBrowserBridgeResultChunkParams,
+    handler: (params, context) => {
+      const caller = requireBridgeCaller(context)
+      return {
+        accepted: getDesktopBrowserBridgeRegistry(context.runtime).appendResultChunk(caller, params)
       }
     }
   }),
