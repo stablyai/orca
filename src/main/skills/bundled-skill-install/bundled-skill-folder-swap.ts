@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
+import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 
 export type BundledSkillFile = { path: string; text: string }
 
@@ -153,7 +154,7 @@ export async function updateBundledSkillFile(
   }
   try {
     await filesystem.linkFile(staged, target).catch(async (error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      if (filesystemErrorCode(error) === 'EEXIST') {
         throw new BundledSkillChangedError(target)
       }
       // No hard links here: a rename can only overwrite a save from this instant.
