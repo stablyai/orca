@@ -15,7 +15,7 @@ import type { AgentSessionRecordReader } from '../runtime/orchestration/addressi
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { structuredWorkerProcessIncarnation } from '../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { listBotChats } from '../runtime/rpc/methods/bots-chats'
-import { readBotChatTree, type BotChatTreeHost } from './bot-chat-tree-host'
+import { openEmptyBotChat, readBotChatTree, type BotChatTreeHost } from './bot-chat-tree-host'
 import { BotLookAroundStore } from './bot-look-around-store'
 import { makeTestBot } from './bot.test-fixture'
 
@@ -437,5 +437,40 @@ describe('bot chats tree: a chat worker in its own workspace', () => {
     expect(byId.get('chat-alpha')?.running.map((worker) => worker.key)).toEqual([
       'worker:ctx-chat-worker'
     ])
+  })
+})
+
+describe('bot chats tree: empty side chats', () => {
+  /** A side chat New chat made and nobody wrote in: no turn, no name, no provider session. */
+  function emptyRecord(sessionId: string): AgentSessionRecord {
+    const { lastTurn: _lastTurn, conversationName: _name, ...record } = chatRecord(sessionId)
+    return { ...record, providerHandleChain: [] }
+  }
+
+  function emptyChatsHost(openTabs: readonly string[]): BotChatTreeHost {
+    const store = storeOf([
+      chatRecord('chat-said'),
+      emptyRecord('chat-open'),
+      emptyRecord('chat-closed')
+    ])
+    return {
+      ...treeHost(store, openDb()),
+      chatTabs: async () => openTabs.map((sessionId) => ({ sessionId, title: 'Claude Chat' }))
+    }
+  }
+
+  it('lists an empty chat only while its tab is open', async () => {
+    const tree = await readBotChatTree(emptyChatsHost(['chat-open']), { botId: bot.id })
+
+    expect(
+      tree.chats.flatMap((chat) => (chat.origin === 'side' ? [chat.chatId] : [])).toSorted()
+    ).toEqual(['chat-open', 'chat-said'])
+  })
+
+  it('opens the empty chat whose tab is open again instead of a new one', async () => {
+    expect(await openEmptyBotChat(emptyChatsHost(['chat-open']), { ...bot, agent: 'claude' })).toBe(
+      'chat-open'
+    )
+    expect(await openEmptyBotChat(emptyChatsHost([]), { ...bot, agent: 'claude' })).toBeNull()
   })
 })
