@@ -5533,6 +5533,9 @@
       "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open"
+    },
+    "chat": {
+      "nothingToReport": "Nothing to report"
     }
   },
   "mobileWebShell": {

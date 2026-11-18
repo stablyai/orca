@@ -82,5 +82,7 @@ export const CONNECTOR_LIMITS = {
   // and files capped; what doesn't fit is marked as not carried.
   maxEarlierOwnMessages: 10,
   maxEarlierOwnText: 4000,
-  maxEarlierOwnFiles: 10
+  maxEarlierOwnFiles: 10,
+  // Orca's note on where a bot was asked (asker.note).
+  maxAskerNoteLength: 4000
 } as const
