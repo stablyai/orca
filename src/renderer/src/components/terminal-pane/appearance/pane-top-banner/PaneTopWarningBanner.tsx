@@ -79,19 +79,10 @@ const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: s
   }
 }
 
-/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
-export function PaneTopWarningBanner({
-  title,
-  body,
-  tone = 'warning',
-  icon,
-  badge,
-  primaryAction,
-  onDismiss,
-  onDontShowAgain,
-  onShown
-}: {
+export type PaneTopBannerProps = {
   title: string
+  /** What a screen reader announces instead of the title; set it when the title ticks. */
+  announcement?: string
   body?: React.ReactNode
   tone?: PaneTopBannerTone
   /** Replaces the warning icon; neutral and accent show none without it. */
@@ -102,9 +93,33 @@ export function PaneTopWarningBanner({
   onDismiss?: () => void
   onDontShowAgain?: () => void
   onShown?: () => void
+}
+
+/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
+export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Element {
+  const ref = useReservePaneTopSpace()
+  return <PaneTopBanner {...props} ref={ref} className="pane-top-banner" />
+}
+
+/** The pane-top banner's look without the terminal's height reservation, for panes that lay it out in flow. */
+export function PaneTopBanner({
+  title,
+  announcement,
+  body,
+  tone = 'warning',
+  icon,
+  badge,
+  primaryAction,
+  onDismiss,
+  onDontShowAgain,
+  onShown,
+  ref,
+  className
+}: PaneTopBannerProps & {
+  ref?: React.Ref<HTMLDivElement>
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const ref = useReservePaneTopSpace()
   useEffect(() => {
     onShown?.()
   }, [onShown])
@@ -114,13 +129,19 @@ export function PaneTopWarningBanner({
   return (
     <div
       ref={ref}
-      role="status"
+      role={announcement === undefined ? 'status' : undefined}
       // Why pr-24: an agent pane floats four controls (hand off, chat, split, close) over its top-right corner.
       className={cn(
-        'pane-top-banner @container border-b py-2 pr-24 pl-3 text-xs',
-        toneClasses.stripClass
+        '@container border-b py-2 pr-24 pl-3 text-xs',
+        toneClasses.stripClass,
+        className
       )}
     >
+      {announcement === undefined ? null : (
+        <span role="status" className="sr-only">
+          {announcement}
+        </span>
+      )}
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
