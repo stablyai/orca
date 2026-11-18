@@ -111,12 +111,7 @@ export class SubscriberDeliveryLane {
     if (this.stopped.aborted) {
       return
     }
-    const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
-    const replaced = index === -1 ? undefined : this.pending.splice(index, 1)[0]
-    if (replaced?.kind === 'live-text') {
-      replaced.release()
-    }
-    const since = replaced?.since ?? this.runners.now()
+    const since = this.dropWaitingLiveText() ?? this.runners.now()
     // A stream holding more than its share ends itself; the shared budget only refuses a newcomer.
     const delivering = this.delivering ? heldBytesOf(this.delivering) : 0
     if (heldBytesOf(liveText.items) + delivering > CHAT_LIVE_TEXT_SUBSCRIBER_BYTES) {
@@ -138,16 +133,32 @@ export class SubscriberDeliveryLane {
 
   /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's share. */
   sendsLiveText(items: object): boolean {
+    const adopts = this.active?.kind === 'ordered'
+    if (adopts) {
+      // It sends the current live text, at least as new as any waiting, which would only repeat it.
+      this.dropWaitingLiveText()
+    }
     const waiting = this.pending.find((entry) => entry.kind === 'live-text')
     const queued = waiting?.kind === 'live-text' ? heldBytesOf(waiting.liveText.items) : 0
     if (heldBytesOf(items) + queued > CHAT_LIVE_TEXT_SUBSCRIBER_BYTES) {
       this.refuse()
       return false
     }
-    if (this.active?.kind === 'ordered') {
+    if (adopts) {
       this.delivering = items
     }
     return true
+  }
+
+  /** Returns when the dropped live text started waiting. */
+  private dropWaitingLiveText(): number | undefined {
+    const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
+    const dropped = index === -1 ? undefined : this.pending.splice(index, 1)[0]
+    if (dropped?.kind !== 'live-text') {
+      return undefined
+    }
+    dropped.release()
+    return dropped.since
   }
 
   private refuse(): void {

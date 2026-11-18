@@ -26,9 +26,21 @@ async function collect(): Promise<void> {
   }
 }
 
+function textItem(text: string, revision = 1, sequence = 0): AgentJournalRenderItem {
+  return {
+    itemId: 'orca:text',
+    revision,
+    sequence,
+    observedAt: revision - 1,
+    turnScope: { kind: 'thread' },
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
+  }
+}
+
 async function blockedSubscriber(
   sessionId = SESSION,
-  readLiveText?: () => readonly AgentJournalRenderItem[]
+  readLiveText?: () => readonly AgentJournalRenderItem[],
+  whileOpening?: (publish: (index: number, characters?: number) => void) => void
 ) {
   const journal = await journals.open({
     identity: {
@@ -45,6 +57,15 @@ async function blockedSubscriber(
   const transport = Promise.withResolvers<void>()
   let blocked = false
   const events: AgentSessionSubscribeEvent[] = []
+  const snapshots: WeakRef<object>[] = []
+  // Distinct growing text, as a streaming reply publishes it.
+  const publish = (index: number, characters = 32 * 1024): void => {
+    const items = [
+      textItem(`${index}:`.padEnd(characters, 'x'), index + 1, journal.cursor().sequence)
+    ]
+    snapshots.push(new WeakRef(items))
+    subscribers.publishLiveText(sessionId, journal, 1, items)
+  }
   const close = subscribers.open({
     id: 'pane',
     sessionId,
@@ -59,28 +80,9 @@ async function blockedSubscriber(
       return event
     }
   })
+  whileOpening?.(publish)
   await vi.waitFor(() => expect(events.length).toBeGreaterThan(0))
   blocked = true
-  const snapshots: WeakRef<object>[] = []
-  // Distinct growing text, as a streaming reply publishes it.
-  const publish = (index: number, characters = 32 * 1024): void => {
-    const items: AgentJournalRenderItem[] = [
-      {
-        itemId: 'orca:text',
-        revision: index + 1,
-        sequence: journal.cursor().sequence,
-        observedAt: index,
-        turnScope: { kind: 'thread' },
-        body: {
-          kind: 'message',
-          role: 'assistant',
-          blocks: [{ type: 'text', text: `${index}:`.padEnd(characters, 'x') }]
-        }
-      }
-    ]
-    snapshots.push(new WeakRef(items))
-    subscribers.publishLiveText(sessionId, journal, 1, items)
-  }
   const alive = async (): Promise<number> => {
     await collect()
     return snapshots.filter((ref) => ref.deref() !== undefined).length
@@ -166,21 +168,25 @@ it('ends a stream whose one live text alone outgrows its share', async () => {
 })
 
 it('ends a stream whose opening would send live text past its share', async () => {
-  const text: AgentJournalRenderItem = {
-    itemId: 'orca:text',
-    revision: 1,
-    sequence: 0,
-    observedAt: 0,
-    turnScope: { kind: 'thread' },
-    body: {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'x'.repeat(5_000_000) }]
-    }
-  }
+  const text = textItem('x'.repeat(5_000_000))
   const pane = await blockedSubscriber('opening-session', () => [text])
   try {
     await vi.waitFor(() => expect(pane.ends).toHaveLength(1))
+  } finally {
+    pane.release()
+  }
+})
+
+it('counts live text an opening sends once, not again for the copy waiting behind it', async () => {
+  // 3M characters each: the opening's text plus the waiting copy would pass 8 MiB together.
+  const text = textItem('x'.repeat(3_000_000))
+  const pane = await blockedSubscriber(
+    'adopting-session',
+    () => [text],
+    (publish) => publish(0, 3_000_000)
+  )
+  try {
+    expect(pane.ends).toHaveLength(0)
   } finally {
     pane.release()
   }
