@@ -186,6 +186,14 @@ it('counts live text an opening sends once, not again for the copy waiting behin
     (publish) => publish(0, 3_000_000)
   )
   try {
+    await vi.waitFor(() =>
+      expect(pane.events).toContainEqual(
+        expect.objectContaining({
+          type: 'batch',
+          batch: expect.objectContaining({ items: [text] })
+        })
+      )
+    )
     expect(pane.ends).toHaveLength(0)
   } finally {
     pane.release()

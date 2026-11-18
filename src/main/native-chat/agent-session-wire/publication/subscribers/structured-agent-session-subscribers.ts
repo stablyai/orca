@@ -21,7 +21,7 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { publishSubscriberLiveText } from './agent-session-live-publications'
+import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
@@ -110,7 +110,7 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         journal,
         fence: input.fence,
-        items: this.sentLiveText(subscriber, input.sessionId),
+        items: this.sentLiveText(subscriber, input.sessionId, journal),
         subscribers: [subscriber],
         hostNow
       })
@@ -204,7 +204,7 @@ export class AgentSessionSubscribers {
           sessionId,
           journal,
           fence,
-          items: this.sentLiveText(subscriber, sessionId),
+          items: this.sentLiveText(subscriber, sessionId, journal),
           subscribers: [subscriber],
           hostNow
         })
@@ -248,8 +248,12 @@ export class AgentSessionSubscribers {
   }
 
   /** Live text an opening or snapshot sends itself counts against its subscriber's share. */
-  private sentLiveText(subscriber: Subscriber, sessionId: string) {
+  private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
+    // Sending nothing leaves any waiting live text for after the subscriber catches up.
+    if (items.length === 0 || !subscriberAtHead(subscriber, journal)) {
+      return []
+    }
     return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
   }
 
