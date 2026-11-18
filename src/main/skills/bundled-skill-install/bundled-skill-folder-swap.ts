@@ -114,9 +114,11 @@ export async function putBundledSkillFolder(
   }
 }
 
-/** Hidden, not a .md, and filtered by classification, so agents and plans ignore an interrupted update's stage. */
+const FILE_STAGE = /^\.SKILL\.md\.orca-stage-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u
+
+/** Exactly the name updateBundledSkillFile writes, so a user's look-alike file is never hidden or deleted. */
 export function isBundledSkillFileStage(entryName: string): boolean {
-  return bundledSkillSiblingKind(SKILL_FILE, entryName) === 'stage'
+  return FILE_STAGE.test(entryName)
 }
 
 /** Replaces only SKILL.md, by an atomic rename within the folder; every other entry is the user's and stays untouched. */
