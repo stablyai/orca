@@ -1,11 +1,11 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type {
   AgentJournalThreadGoal,
   AgentJournalToolCallItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
@@ -100,7 +100,8 @@ export type AcpDialectNotification =
       started?: boolean
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
-      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
+      /** Replaces the update that reported it. */
+      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -187,6 +188,8 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
+  /** The cause, when this agent text only announces a retry of a failed model call. */
+  providerRetry?(text: string): string | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
     error: AcpAgentError,
@@ -197,9 +200,13 @@ export type AcpDialect = {
   sessionLost?(error: AcpAgentError, sessionId: string): boolean
   /** The agent refused to reopen this session from `cwd` because it keeps it in another folder. */
   sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
+  /** Reopening moves a session into the folder it is reopened from, so reopen it where it is listed. */
+  reopenMovesSession?: true
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own command for /compact. */
+  compactCommand?: string
   /** The agent's own model command resolves selections its model option cannot name. */
   modelCommand?: {
     /** Only the model option's own "unknown model" refusal sends the value to the command. */

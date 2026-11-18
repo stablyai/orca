@@ -1,7 +1,7 @@
 import {
   agentSessionMcpFailureMessage,
   type AgentSessionMcpResult
-} from '../../../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { AgentSessionMcpParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-mcp-params'

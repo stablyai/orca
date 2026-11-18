@@ -1,12 +1,11 @@
 import type { vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import '../../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import type {
-  FirstWorkBranchRenameDeps,
-  FirstWorkBranchRenameEvent
-} from '../first-work-branch-rename'
+import type { FirstWorkBranchRenameDeps } from '../first-work-branch-rename'
+import type { FirstWorkBranchRenameEvent } from '../first-work-branch-rename-event'
 
 export const REPO_ID = 'repo1'
 export const WORKTREE_ID = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt`
@@ -63,14 +62,18 @@ export function makeBranchRenameDeps(
   const setDisplayName = mockFn()
   const renameWorktreeFolder = mockFn(async () => false)
   const setRenameError = mockFn()
-  const settings = { autoRenameBranchFromWork: true } as unknown as GlobalSettings
-  const repo = { id: REPO_ID, path: '/repo', connectionId: undefined } as unknown as Repo
+  const settings: GlobalSettings = {
+    ...getDefaultSettings('/tmp/orca-first-work-test'),
+    autoRenameBranchFromWork: true
+  }
+  const repo: Repo = { id: REPO_ID, path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
   return {
     onRenamed,
     setDisplayName,
     renameWorktreeFolder,
     setRenameError,
     deps: {
+      readIncarnation: (worktreeId) => worktreeId,
       getSettings: () => settings,
       getRepo: () => repo,
       getAgentEnvResolvers: () => undefined,

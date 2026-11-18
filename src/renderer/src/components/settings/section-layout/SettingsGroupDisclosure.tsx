@@ -13,6 +13,11 @@ type SettingsGroupDisclosureProps = {
   /** A muted line under the label, for a disclosure that stands as a card row of its own. */
   summary?: React.ReactNode
   forceOpen?: boolean
+  /** Owns the open state when set; a click or a settings jump reports through onOpenChange. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Lines its rows up with the card's other rows instead of one step in. */
+  flush?: boolean
   children: React.ReactNode
 }
 
@@ -22,10 +27,20 @@ export function SettingsGroupDisclosure({
   description,
   summary,
   forceOpen = false,
+  open: controlledOpen,
+  onOpenChange,
+  flush = false,
   children
 }: SettingsGroupDisclosureProps): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = controlledOpen ?? ownOpen
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) {
+      setOwnOpen(next)
+    }
+    onOpenChange?.(next)
+  }
   const expanded = open || forceOpen
   const revealRef = useSettingsTargetReveal<HTMLDivElement>(() => setOpen(true))
 
@@ -34,7 +49,7 @@ export function SettingsGroupDisclosure({
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => setOpen(!open)}
         // Unsaved edits must remain reachable.
         disabled={forceOpen}
         className={cn(
@@ -56,19 +71,20 @@ export function SettingsGroupDisclosure({
             </span>
           </span>
         ) : (
-          <>
-            {label ??
-              t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+          // A description too long for the line wraps under the label instead of being cut off.
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
+            <span>
+              {label ??
+                t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+            </span>
             {description ? (
-              <span className="truncate text-xs font-normal text-muted-foreground">
-                {description}
-              </span>
+              <span className="text-xs font-normal text-muted-foreground">{description}</span>
             ) : null}
-          </>
+          </span>
         )}
       </button>
       {/* Stays mounted while collapsed so a settings jump can find and reveal its rows. */}
-      <div hidden={!expanded} className={SETTINGS_GROUP_NESTED_INSET_CLASS}>
+      <div hidden={!expanded} className={flush ? undefined : SETTINGS_GROUP_NESTED_INSET_CLASS}>
         {children}
       </div>
     </div>

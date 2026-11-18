@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from '../session-list/ai-vault-session-identity'

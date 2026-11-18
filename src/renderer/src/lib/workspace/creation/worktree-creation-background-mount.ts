@@ -5,7 +5,7 @@ import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/ini
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { useAppStore } from '@/store/index'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 
 /** Mount startup-owing tabs without activating: hidden workspaces otherwise never run renderer agent/setup/issue startup despite announcing readiness. */
 export function mountCreatedWorktreeStartupTabsInBackground(worktreeId: string): void {

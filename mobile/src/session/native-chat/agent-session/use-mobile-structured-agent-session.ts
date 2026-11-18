@@ -23,7 +23,7 @@ import type {
 import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredStopPress } from '../composer/delivery/use-mobile-structured-stop-press'
-import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
+import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-execution'
 import { useMobileStructuredPromptResponses } from '../input/prompts/use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'

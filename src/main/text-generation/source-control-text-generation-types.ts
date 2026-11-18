@@ -1,7 +1,8 @@
+import type { GenerationArgument } from '../../shared/source-control/ai/generation/generation-argument'
 import type { ProviderChild } from '../provider-process/provider-child'
 import type { ChildProcess } from 'node:child_process'
 import type { EventEmitter } from 'node:events'
-import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../shared/agent-session/failures/agent-session-availability'
 import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,
@@ -121,6 +122,7 @@ export type SourceControlAgentSpawnInput = {
   // WSL applies these in the guest; native callers already merge them into env.
   commandEnv?: Record<string, string>
   preparation?: { script: string; args: string[] }
+  literalArgIndices?: number[]
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
 }
@@ -130,7 +132,7 @@ export type SpawnSourceControlAgent = (
 ) => SpawnedSourceControlAgentProcess
 
 export type LocalSourceControlPlanInput = {
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   cwd: string
   env: NodeJS.ProcessEnv | undefined
   operation: TextGenerationOperation

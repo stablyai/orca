@@ -1,10 +1,10 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import {
   getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
-} from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { nativeChatPickerScannedSkills } from '../../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,

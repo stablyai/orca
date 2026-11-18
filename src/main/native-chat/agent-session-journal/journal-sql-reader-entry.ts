@@ -13,6 +13,10 @@ import {
   journalLegacyChatRevision,
   openJournalLegacySource
 } from './database/journal-legacy-source'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
+
+installWorkerSendLedger('orca-journal-sql-reader')
 
 if (
   !parentPort ||
@@ -27,7 +31,8 @@ let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
-  port.postMessage(message)
+  // An oversized reply fails its request instead of the receiving thread running out of memory.
+  port.postMessage(limitJournalReaderReply(message))
 }
 try {
   db = new Database(workerData.filename, { readonly: true, fileMustExist: true, timeout: 5000 })

@@ -19,7 +19,7 @@ import type {
   LinearCollectionResult,
   LinearTeam
 } from '../../../../../shared/linear/workspace-types'
-import { clearLinearMetadataCache } from '../../../hooks/useIssueMetadata'
+import { clearLinearMetadataCache } from '../../../lib/work-items/linear/useIssueMetadata'
 
 export type InflightLinearIssueRequest = LinearIssueRequest<LinearIssue | null>
 export type InflightLinearListRequest = LinearIssueRequest<LinearIssue[]>

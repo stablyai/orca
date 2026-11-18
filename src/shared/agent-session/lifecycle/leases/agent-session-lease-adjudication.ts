@@ -151,6 +151,18 @@ export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
   return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null
 }
 
+/** False only for a lease restart adjudication would free unchanged: no owner, reservation or handoff. */
+export function agentSessionLeaseMayBeHeld(lease: AgentSessionLease): boolean {
+  return (
+    lease.unreconciled ||
+    lease.claimStatus !== 'released' ||
+    lease.ownerProcess !== null ||
+    lease.reservedSpawnToken !== null ||
+    lease.handoffStage !== null ||
+    lease.handoffOperationId !== null
+  )
+}
+
 /** True when the recorded owner may write right now. Used by every mutating path in later parts. */
 export function agentSessionLeaseAdmitsWriter(lease: AgentSessionLease): boolean {
   return agentSessionOwnerObservationIsLive(lease)
@@ -249,7 +261,7 @@ export function evaluateAgentSessionAcquisition(args: {
   return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
 }
 
-/** Every loaded lease starts unreconciled and grants no writer until restart reconciliation finishes. */
+/** A lease that may be held loads unreconciled and grants no writer until restart reconciliation finishes. */
 export function adjudicateAgentSessionRestart(args: {
   lease: AgentSessionLease
   probe: AgentSessionOwnerProbe

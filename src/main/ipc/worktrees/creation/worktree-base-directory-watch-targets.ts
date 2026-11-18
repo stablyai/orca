@@ -1,9 +1,12 @@
 import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
@@ -16,8 +19,8 @@ import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
   workspaceRootMirrorsIntoWsl
-} from '../../worktree-logic'
-import { shouldEmitBoundedWarning } from '../../bounded-warning-dedupe'
+} from '../paths/worktree-logic'
+import { shouldEmitBoundedWarning } from '../bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,

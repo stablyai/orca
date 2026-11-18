@@ -102,6 +102,33 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
     ]
   },
+  composerSpellcheck: {
+    targetSectionId: 'chat-composer-spellcheck',
+    title: translate(
+      'components.settings.nativeChat.composerSpellcheckTitle',
+      'Spellcheck and autocorrect'
+    ),
+    description: translate(
+      'components.settings.nativeChat.composerSpellcheckCopy',
+      'Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.composerSpellcheckSearchSpelling', 'spellcheck'),
+      translate('components.settings.nativeChat.composerSpellcheckSearchAutocorrect', 'autocorrect')
+    ]
+  },
+  promptSuggestions: {
+    targetSectionId: 'chat-prompt-suggestions',
+    title: translate('components.settings.nativeChat.promptSuggestionsTitle', 'Suggested prompts'),
+    description: translate(
+      'components.settings.nativeChat.promptSuggestionsCopy',
+      'After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.promptSuggestionsSearchNext', 'next prompt'),
+      translate('components.settings.nativeChat.promptSuggestionsSearchGhost', 'ghost text')
+    ]
+  },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
     title: translate(

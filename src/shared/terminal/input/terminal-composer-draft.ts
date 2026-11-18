@@ -106,7 +106,7 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
   return isCodexFooterRow(context, status) ? status : -1
 }
 
-// Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).
+// Codex before 0.152 rotated these composer and side-chat placeholders.
 const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
   'Ask Codex to do anything',
   'Ask a follow-up question',

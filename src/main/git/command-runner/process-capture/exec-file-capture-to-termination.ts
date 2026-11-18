@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
+import { createAbortError } from './abort-error'
 import type { ExecFileCaptureOptions } from './exec-file-capture'
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -23,6 +24,10 @@ export async function execFileCaptureToTermination(
   } catch (error) {
     options.onChildTerminated?.()
     throw error
+  }
+  if (options.canStart?.() === false) {
+    options.onChildTerminated?.()
+    throw createAbortError()
   }
   const captureBytes = options.encoding === 'buffer'
   const pending = runProcess({

@@ -36,7 +36,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Usage scan worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
 }
 
 let sharedClient: UsageScanWorkerClient | null = null

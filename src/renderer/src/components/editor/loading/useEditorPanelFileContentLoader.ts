@@ -16,7 +16,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
   type EditorPanelFileContentLoader,

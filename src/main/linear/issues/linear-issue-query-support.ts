@@ -1,7 +1,6 @@
 import { sortByUpdatedAtDescending } from '../../../shared/collections/updated-at-order'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
-import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../../shared/linear/issue-read-limits'
 import { buildLinearListIssueFilter } from './issue-list-filter'
 import { mapLinearIssue } from './linear-issue-mapping'
 import {
@@ -16,7 +15,6 @@ import {
 } from './linear-issue-query-documents'
 import type { LinearClientForWorkspace } from '../accounts/linear-account-client'
 import type { LinearListFilter } from './linear-issue-listing'
-import { linearConnectionHasNextPage } from './context/linear-connection-pages'
 
 export async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
@@ -95,33 +93,6 @@ export function mapRawIssueForWorkspace(
   }
 }
 
-export async function readIssueConnectionPages(
-  entry: LinearClientForWorkspace,
-  limit: number,
-  loadConnection: LinearIssueConnectionLoader
-): Promise<{ items: LinearIssue[]; hasMore: boolean }> {
-  const items: LinearIssue[] = []
-  let after: string | undefined
-  let hasMore = false
-
-  while (items.length < limit) {
-    // Walk capped backend pages to satisfy larger read limits.
-    const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
-    const connection = await loadConnection(after ? { first, after } : { first })
-    const nodes = connection?.nodes ?? []
-    items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = linearConnectionHasNextPage(connection)
-
-    const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
-      break
-    }
-    after = nextCursor
-  }
-
-  return { items, hasMore }
-}
-
 export function getOldestIssueTime(issues: LinearIssue[]): number {
   const oldestIssue = issues.at(-1)
   return oldestIssue ? new Date(oldestIssue.updatedAt).getTime() : Number.POSITIVE_INFINITY
@@ -133,7 +104,7 @@ export function getListIssueConnectionLoader(
   options?: LinearIssueListOptions
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
-  const variables = { orderBy }
+  const variables = { orderBy, detail: options?.summaryOnly !== true }
   // Filter before pagination so hasMore describes matching issues.
   const filterInput = buildLinearListIssueFilter({
     filter,

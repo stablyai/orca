@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
 import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type {
@@ -13,7 +13,7 @@ import {
 import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -130,6 +130,8 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   const fieldIdPrefix = useId()
   const draftScope = useAgentPickerDraftScope(setupDiscardSignal)
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
+  // The picker's Permissions and Arguments need the card's full width, under its header row.
+  const [launchFields, setLaunchFields] = useState<HTMLDivElement | null>(null)
   const templateDirty =
     hasUnsavedChanges ?? JSON.stringify(draftValue) !== JSON.stringify(baseValue)
   const agentArgsPlaceholder =
@@ -162,6 +164,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
           {isLaunchAction ? (
             <SourceControlActionAgentPicker
               draftScope={draftScope}
+              launchDefaultsContainer={launchFields}
               agent={selectedAgent && !isCustomAgentId(selectedAgent) ? selectedAgent : null}
               surface={surface}
               disabled={isSavingTemplate}
@@ -211,6 +214,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         </div>
       </div>
       <div className="mt-3 grid min-w-0 grid-cols-1 items-start gap-3">
+        {isLaunchAction ? <div ref={setLaunchFields} className="min-w-0 empty:hidden" /> : null}
         {!isLaunchAction ? (
           <SourceControlActionOptionField
             label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
