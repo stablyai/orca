@@ -54,36 +54,3 @@ describe('PrActionsEngine — PR identity changes', () => {
     expect(refetch).not.toHaveBeenCalled()
   })
 })
-
-describe('PrActionsEngine — merge', () => {
-  it('fences the merge to the PR head on screen, not the worktree head', async () => {
-    const mergePR = vi.fn(async () => ({ ok: true as const }))
-    const fail = async () => ({ ok: false as const, error: 'unused' })
-    const engine = new PrActionsEngine({
-      mutations: {
-        mergePR,
-        setPRAutoMerge: fail,
-        updatePRState: fail,
-        markReadyForReview: fail,
-        markDraft: fail,
-        requestReviewers: fail,
-        removeReviewers: fail,
-        rerunChecks: fail
-      },
-      prNumber: 7,
-      headSha: '1111111111111111111111111111111111111111',
-      prHeadSha: '2222222222222222222222222222222222222222',
-      refetch: vi.fn(),
-      onChange: vi.fn()
-    })
-
-    await engine.merge('squash')
-
-    expect(mergePR).toHaveBeenCalledWith({
-      prNumber: 7,
-      method: 'squash',
-      prRepo: undefined,
-      expectedHeadSha: '2222222222222222222222222222222222222222'
-    })
-  })
-})

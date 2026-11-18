@@ -34,8 +34,6 @@ export type PrActionsEngineConfig = {
   mutations: PrActionMutations
   prNumber: number
   headSha?: string | null
-  /** The PR's head as last read from GitHub, not the worktree's; merges are fenced to it. */
-  prHeadSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
   /** Re-reads what the settled action changed. */
   refetch: (action: PrActionBusyKey) => void | Promise<void>
@@ -178,9 +176,10 @@ export class PrActionsEngine {
     this.setError(outcome.error)
   }
 
-  async merge(method?: GitHubPRMergeMethod): Promise<boolean> {
+  /** `expectedHeadSha`: the PR head the user saw when choosing to merge; GitHub refuses if it moved. */
+  async merge(method?: GitHubPRMergeMethod, expectedHeadSha?: string | null): Promise<boolean> {
     const { cfg, identity } = this
-    const { prNumber, prRepo, prHeadSha: expectedHeadSha } = cfg
+    const { prNumber, prRepo } = cfg
     this.setBusy({ kind: 'merge' })
     this.setError(null)
     try {

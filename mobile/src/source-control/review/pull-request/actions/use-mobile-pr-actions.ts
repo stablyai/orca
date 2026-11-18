@@ -26,7 +26,6 @@ export type PrActionsInput = {
   worktreeId: string
   prNumber: number
   headSha?: string | null
-  prHeadSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
   refetch: (action: PrActionBusyKey) => void | Promise<void>
   mutations?: PrActionMutations
@@ -47,7 +46,7 @@ function realMutations(client: UnvalidatedRpcRequestPort, worktreeId: string): P
 
 export function useMobilePrActions(input: PrActionsInput) {
   useMobileTranslation()
-  const { client, connState, worktreeId, prNumber, headSha, prHeadSha, prRepo, refetch } = input
+  const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 
   const engineRef = useRef<PrActionsEngine | null>(null)
@@ -56,7 +55,6 @@ export function useMobilePrActions(input: PrActionsInput) {
       mutations: input.mutations ?? (client ? realMutations(client, worktreeId) : noopMutations()),
       prNumber,
       headSha,
-      prHeadSha,
       prRepo,
       refetch,
       onChange: forceRender
@@ -69,12 +67,11 @@ export function useMobilePrActions(input: PrActionsInput) {
       mutations: input.mutations ?? (client ? realMutations(client, worktreeId) : noopMutations()),
       prNumber,
       headSha,
-      prHeadSha,
       prRepo,
       refetch,
       onChange: forceRender
     })
-  }, [engine, input.mutations, client, worktreeId, prNumber, headSha, prHeadSha, prRepo, refetch])
+  }, [engine, input.mutations, client, worktreeId, prNumber, headSha, prRepo, refetch])
 
   const ready = input.mutations !== undefined || (client !== null && connState === 'connected')
 
@@ -86,8 +83,8 @@ export function useMobilePrActions(input: PrActionsInput) {
     clearError: useCallback(() => engine.clearError(), [engine]),
     clearBlocked: useCallback(() => engine.clearBlocked(), [engine]),
     merge: useCallback(
-      (method?: Parameters<PrActionsEngine['merge']>[0]): Promise<boolean> =>
-        ready ? engine.merge(method) : Promise.resolve(false),
+      (...args: Parameters<PrActionsEngine['merge']>): Promise<boolean> =>
+        ready ? engine.merge(...args) : Promise.resolve(false),
       [engine, ready]
     ),
     setAutoMerge: useCallback(

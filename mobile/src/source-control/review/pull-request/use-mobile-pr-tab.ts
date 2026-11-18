@@ -114,7 +114,6 @@ export function useMobilePrTab(input: Input) {
     worktreeId,
     prNumber,
     headSha: input.headSha,
-    prHeadSha: state.kind === 'ready' ? state.data.pr.headSha : null,
     prRepo,
     refetch: rereadAfterAction
   })
