@@ -1,6 +1,7 @@
 import type { vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import '../../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { FirstWorkBranchRenameDeps } from '../first-work-branch-rename'
@@ -61,8 +62,11 @@ export function makeBranchRenameDeps(
   const setDisplayName = mockFn()
   const renameWorktreeFolder = mockFn(async () => false)
   const setRenameError = mockFn()
-  const settings = { autoRenameBranchFromWork: true } as unknown as GlobalSettings
-  const repo = { id: REPO_ID, path: '/repo', connectionId: undefined } as unknown as Repo
+  const settings: GlobalSettings = {
+    ...getDefaultSettings('/tmp/orca-first-work-test'),
+    autoRenameBranchFromWork: true
+  }
+  const repo: Repo = { id: REPO_ID, path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
   return {
     onRenamed,
     setDisplayName,

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -128,7 +128,11 @@ export function firstWorkRenameDeps(
               store.migrateWorktreeIdentity!(target, newId),
             notifyWorktreeRenamed: (repoId, oldId, newId) =>
               runtime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
-            pathExists: async (candidate) => existsSync(candidate),
+            pathExists: (candidate) =>
+              access(candidate).then(
+                () => true,
+                () => false
+              ),
             moveWorktree
           })
       : undefined,
