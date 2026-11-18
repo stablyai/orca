@@ -13,6 +13,8 @@ export class RuntimeTerminalViewSubscribers {
   private readonly silenceableRemoteViews = new Map<string, Set<SilenceableRemoteView>>()
   private readonly rawCounts = new Map<string, number>()
   private readonly paneReportingRemoteViews = new Map<string, Set<PaneReportingRemoteView>>()
+  /** Remote views whose client would show a dead pane if the host replaced its terminal. */
+  private readonly respawnBlindCounts = new Map<string, number>()
 
   constructor(private readonly deps: RuntimeTerminalViewSubscriberDependencies) {}
 
@@ -21,10 +23,19 @@ export class RuntimeTerminalViewSubscribers {
     this.silenceableRemoteViews.delete(ptyId)
     this.rawCounts.delete(ptyId)
     this.paneReportingRemoteViews.delete(ptyId)
+    this.respawnBlindCounts.delete(ptyId)
   }
 
-  registerRemote(ptyId: string, isSilent?: () => boolean, isHidden?: () => boolean): () => void {
+  registerRemote(
+    ptyId: string,
+    isSilent?: () => boolean,
+    isHidden?: () => boolean,
+    followsHostRespawn = false
+  ): () => void {
     this.remoteCounts.set(ptyId, (this.remoteCounts.get(ptyId) ?? 0) + 1)
+    if (!followsHostRespawn) {
+      this.respawnBlindCounts.set(ptyId, (this.respawnBlindCounts.get(ptyId) ?? 0) + 1)
+    }
     const view = isSilent ? { isSilent } : null
     if (view) {
       const views = this.silenceableRemoteViews.get(ptyId) ?? new Set()
@@ -41,6 +52,9 @@ export class RuntimeTerminalViewSubscribers {
     this.deps.notifyPresenceChanged(ptyId)
     return this.releaseOnce(() => {
       this.decrement(this.remoteCounts, ptyId)
+      if (!followsHostRespawn) {
+        this.decrement(this.respawnBlindCounts, ptyId)
+      }
       const views = this.silenceableRemoteViews.get(ptyId)
       if (view && views?.delete(view) && views.size === 0) {
         this.silenceableRemoteViews.delete(ptyId)
@@ -51,6 +65,11 @@ export class RuntimeTerminalViewSubscribers {
       }
       this.deps.notifyPresenceChanged(ptyId)
     })
+  }
+
+  /** No remote view of this PTY would be left on a dead pane if the host replaced its terminal. */
+  everyRemoteViewFollowsHostRespawn(ptyId: string): boolean {
+    return !this.respawnBlindCounts.has(ptyId)
   }
 
   /** A remote client is displaying this PTY's pane right now. */
